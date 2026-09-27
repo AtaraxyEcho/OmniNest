@@ -15,5 +15,6 @@ abstract final class AppErrorCodes {
   static const passwordInvalid = 'PASSWORD_INVALID';
   static const oldPasswordInvalid = 'OLD_PASSWORD_INVALID';
   static const sharePasswordRequired = 'SHARE_PASSWORD_REQUIRED';
+  static const forbidden = 'FORBIDDEN';
   static const other = 'OTHER';
 }

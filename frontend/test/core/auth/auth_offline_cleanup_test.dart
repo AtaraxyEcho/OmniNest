@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -152,6 +153,133 @@ void main() {
       isFalse,
     );
   });
+
+  test('清理步骤挂起时仍会完成登出并释放单飞标记', () async {
+    AuthSessionNotifier.cleanupStepTimeout = const Duration(milliseconds: 40);
+    addTearDown(() {
+      AuthSessionNotifier.cleanupStepTimeout = const Duration(seconds: 5);
+    });
+    final sessionStore = _HangingSessionStore();
+    final container = ProviderContainer(
+      overrides: [
+        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionStoreProvider.overrideWithValue(sessionStore),
+        offlineDataLifecycleProvider.overrideWithValue(
+          _HangingOfflineDataLifecycle(),
+        ),
+        authClientProvider.overrideWithValue(_HangingAuthClient()),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(authSessionProvider.future);
+    final notifier = container.read(authSessionProvider.notifier);
+
+    await notifier.clearSession().timeout(const Duration(seconds: 2));
+
+    expect(
+      container.read(authSessionProvider).requireValue.isAuthenticated,
+      isFalse,
+    );
+
+    // 单飞标记不得被悬挂清理永久占住，后续登出必须能再次执行。
+    await notifier.clearSession().timeout(const Duration(seconds: 2));
+    expect(
+      container.read(authSessionProvider).requireValue.isAuthenticated,
+      isFalse,
+    );
+  });
+
+  test('会话状态先于清理落地，存储清理失败不影响未认证结果', () async {
+    final sessionStore = _RecordingSessionStore(shouldFailClear: true);
+    final container = ProviderContainer(
+      overrides: [
+        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionStoreProvider.overrideWithValue(sessionStore),
+        offlineDataLifecycleProvider.overrideWithValue(
+          _RecordingOfflineDataLifecycle(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(authSessionProvider.future);
+    final notifier = container.read(authSessionProvider.notifier);
+    final stateChanges = <bool>[];
+    final sub = container.listen(authSessionProvider, (previous, next) {
+      final value = next.asData?.value;
+      if (value != null) {
+        stateChanges.add(value.isAuthenticated);
+      }
+    });
+
+    await notifier.clearSession();
+    sub.close();
+
+    expect(stateChanges, contains(false));
+    expect(
+      container.read(authSessionProvider).requireValue.isAuthenticated,
+      isFalse,
+    );
+  });
+
+  test('登出后在途会话刷新不得写回已登录', () async {
+    final sessionStore = _RecordingSessionStore(refreshToken: 'refresh-1');
+    final authClient = _SlowRefreshAuthClient(
+      delay: const Duration(milliseconds: 80),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionStoreProvider.overrideWithValue(sessionStore),
+        offlineDataLifecycleProvider.overrideWithValue(
+          _RecordingOfflineDataLifecycle(),
+        ),
+        authClientProvider.overrideWithValue(authClient),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(authSessionProvider.future);
+    final notifier = container.read(authSessionProvider.notifier);
+
+    final inFlightRefresh = notifier.refreshSession();
+    await notifier.clearSession();
+    final refreshed = await inFlightRefresh;
+
+    expect(refreshed, isFalse);
+    expect(authClient.refreshCalls, 1);
+    expect(
+      container.read(authSessionProvider).requireValue.isAuthenticated,
+      isFalse,
+    );
+  });
+
+  test('清理期间资料重拉不得写回已登录', () async {
+    final sessionStore = _RecordingSessionStore();
+    final authClient = _SlowProfileAuthClient(
+      delay: const Duration(milliseconds: 80),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionStoreProvider.overrideWithValue(sessionStore),
+        offlineDataLifecycleProvider.overrideWithValue(
+          _RecordingOfflineDataLifecycle(),
+        ),
+        authClientProvider.overrideWithValue(authClient),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(authSessionProvider.future);
+    final notifier = container.read(authSessionProvider.notifier);
+
+    final inFlightReload = notifier.reloadProfile();
+    await notifier.clearSession();
+    await inFlightReload;
+
+    expect(
+      container.read(authSessionProvider).requireValue.isAuthenticated,
+      isFalse,
+    );
+  });
 }
 
 class _AuthenticatedSessionNotifier extends AuthSessionNotifier {
@@ -164,13 +292,17 @@ class _AuthenticatedSessionNotifier extends AuthSessionNotifier {
 }
 
 class _RecordingSessionStore implements AuthSessionStore {
-  _RecordingSessionStore({this.refreshToken});
+  _RecordingSessionStore({this.refreshToken, this.shouldFailClear = false});
 
   final String? refreshToken;
+  final bool shouldFailClear;
   bool cleared = false;
 
   @override
   Future<void> clear() async {
+    if (shouldFailClear) {
+      throw const FormatException('测试存储清理失败');
+    }
     cleared = true;
   }
 
@@ -221,5 +353,71 @@ class _RecordingOfflineDataLifecycle implements OfflineDataLifecycle {
     if (shouldFail) {
       throw const FormatException('测试清理失败');
     }
+  }
+}
+
+/// 永不完成，用于验证清理步骤超时后登出仍能结束。
+class _HangingSessionStore implements AuthSessionStore {
+  @override
+  Future<void> clear() => Completer<void>().future;
+
+  @override
+  String? readAccessToken() => null;
+
+  @override
+  Future<String?> readRefreshToken() => Completer<String?>().future;
+
+  @override
+  Future<void> saveAccessToken(String? accessToken) async {}
+
+  @override
+  Future<void> saveSession(AuthTokenResponse session) async {}
+}
+
+class _HangingOfflineDataLifecycle implements OfflineDataLifecycle {
+  @override
+  Future<void> clearUser(String userId) => Completer<void>().future;
+}
+
+class _HangingAuthClient extends AuthClient {
+  _HangingAuthClient() : super(Dio());
+
+  @override
+  Future<void> logout({String? refreshToken}) => Completer<void>().future;
+}
+
+class _SlowRefreshAuthClient extends AuthClient {
+  _SlowRefreshAuthClient({required this.delay}) : super(Dio());
+
+  final Duration delay;
+  int refreshCalls = 0;
+
+  @override
+  Future<AuthTokenResponse> refresh({String? refreshToken}) async {
+    refreshCalls += 1;
+    await Future<void>.delayed(delay);
+    return AuthTokenResponse(
+      tokenType: 'Bearer',
+      accessToken: 'access-late',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      refreshToken: 'refresh-late',
+      user: UserProfile(id: 'user-1', username: 'reader', role: 'MEMBER'),
+    );
+  }
+}
+
+class _SlowProfileAuthClient extends AuthClient {
+  _SlowProfileAuthClient({required this.delay}) : super(Dio());
+
+  final Duration delay;
+
+  @override
+  Future<UserProfile> currentUser() async {
+    await Future<void>.delayed(delay);
+    return UserProfile(
+      id: 'user-1',
+      username: 'reader-renamed',
+      role: 'MEMBER',
+    );
   }
 }

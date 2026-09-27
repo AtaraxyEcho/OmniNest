@@ -96,12 +96,16 @@ INSERT INTO omni.auth_roles (id, code, name, description, built_in, enabled) VAL
     ('4e302a1e-3af2-4e23-8702-5475f5448025', 'SUPER_ADMIN', '超级管理员', '系统最高权限角色。', true, true),
     ('00621191-231c-423c-831a-2e18e1d29af8', 'ADMIN', '管理员', '负责用户和系统日常管理。', true, true),
     ('53e2e138-59b7-4fa6-988f-58554f34b8d3', 'MEMBER', '成员', '拥有个人空间常规读写权限。', true, true),
-    ('e8eb254a-cf7f-4792-9b64-d354fb901e69', 'GUEST', '访客', '拥有有限只读权限。', true, true);
+    ('e8eb254a-cf7f-4792-9b64-d354fb901e69', 'GUEST', '访客', '内容只读的体验账号：可浏览播放并维护本人进度与偏好，不可贡献内容。', true, true);
 
 -- 内置权限。
 INSERT INTO omni.auth_permissions (id, code, name, module, description, enabled) VALUES
     ('bdf881c9-a30b-4e30-813e-2a3e310b56c2', 'profile:read', '读取个人资料', 'profile', '允许读取当前用户资料。', true),
     ('a1b2c3d4-1111-1111-1111-111111111111', 'profile:write', '修改个人资料', 'profile', '允许修改当前用户资料。', true),
+    ('c3d4e5f6-1111-4111-8111-111111111111', 'activity:read', '读取本人活动', 'activity', '允许读取本人进度、历史、队列、书签与收藏。', true),
+    ('c3d4e5f6-2222-4222-8222-222222222222', 'activity:write', '维护本人活动', 'activity', '允许维护本人进度、历史、队列、书签、收藏与通知已读。', true),
+    ('c3d4e5f6-3333-4333-8333-333333333333', 'preference:read', '读取本人偏好', 'preference', '允许读取本人界面与播放偏好。', true),
+    ('c3d4e5f6-4444-4444-8444-444444444444', 'preference:write', '维护本人偏好', 'preference', '允许维护本人界面与播放偏好。', true),
     ('1accd3e9-6768-4439-af41-298d1dbe1df3', 'file:read', '读取文件', 'file', '允许查看文件和目录。', true),
     ('eba7e050-1054-42f3-8a1d-996e802964cc', 'file:write', '管理文件', 'file', '允许创建和修改文件。', true),
     ('18a388e5-b0a7-4ca3-a18e-5f798ac78277', 'media:read', '读取媒体', 'media', '允许查看媒体内容。', true),
@@ -119,31 +123,40 @@ INSERT INTO omni.auth_permissions (id, code, name, module, description, enabled)
     ('27d7dcd5-92a6-459c-9a7d-48c458dfc8c6', 'system:user:read', '读取用户', 'system', '允许查看系统用户。', true),
     ('d07f3eef-8369-454f-830d-5d45d722934f', 'system:user:manage', '管理用户', 'system', '允许维护系统用户。', true);
 
--- 访客只读权限。
+-- 访客：内容只读 + 本人体验状态可维护。
 INSERT INTO omni.auth_role_permissions (role_id, permission_id)
 SELECT 'e8eb254a-cf7f-4792-9b64-d354fb901e69', permission.id
 FROM omni.auth_permissions permission
-WHERE permission.code IN ('profile:read', 'file:read', 'media:read', 'photo:read');
+WHERE permission.code IN (
+    'profile:read', 'profile:write', 'activity:read', 'activity:write',
+    'preference:read', 'preference:write',
+    'file:read', 'media:read', 'photo:read', 'backdrop:read'
+);
 
--- 成员个人空间权限。
+-- 成员：访客能力 + 内容贡献 + 本人任务。
 INSERT INTO omni.auth_role_permissions (role_id, permission_id)
 SELECT '53e2e138-59b7-4fa6-988f-58554f34b8d3', permission.id
 FROM omni.auth_permissions permission
 WHERE permission.code IN (
-    'profile:read', 'profile:write', 'file:read', 'file:write',
-    'media:read', 'media:write', 'photo:read', 'photo:write', 'task:read',
-    'backdrop:read', 'backdrop:write'
+    'profile:read', 'profile:write', 'activity:read', 'activity:write',
+    'preference:read', 'preference:write',
+    'file:read', 'file:write', 'media:read', 'media:write',
+    'photo:read', 'photo:write', 'backdrop:read', 'backdrop:write',
+    'task:read'
 );
 
--- 管理员包含成员权限和用户管理权限，但不包含系统配置修改权限。
+-- 管理员：成员权限 + 运维策展，不含系统配置写。
 INSERT INTO omni.auth_role_permissions (role_id, permission_id)
 SELECT '00621191-231c-423c-831a-2e18e1d29af8', permission.id
 FROM omni.auth_permissions permission
 WHERE permission.code IN (
-    'profile:read', 'profile:write', 'file:read', 'file:write',
-    'media:read', 'media:write', 'photo:read', 'photo:write', 'photo:admin', 'task:read', 'task:admin',
-    'media:library:manage', 'system:config:read', 'system:user:read', 'system:user:manage',
-    'backdrop:read', 'backdrop:write'
+    'profile:read', 'profile:write', 'activity:read', 'activity:write',
+    'preference:read', 'preference:write',
+    'file:read', 'file:write', 'media:read', 'media:write',
+    'photo:read', 'photo:write', 'photo:admin',
+    'backdrop:read', 'backdrop:write',
+    'task:read', 'task:admin', 'media:library:manage',
+    'system:config:read', 'system:user:read', 'system:user:manage'
 );
 
 -- 超级管理员拥有当前目录中的全部权限。

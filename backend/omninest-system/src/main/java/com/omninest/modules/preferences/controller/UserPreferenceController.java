@@ -33,14 +33,14 @@ public class UserPreferenceController {
 
     @Operation(summary = "查询用户偏好", description = "根据作用域查询当前用户的偏好设置")
     @GetMapping("/api/v1/preferences/{scope}")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.PREFERENCE_READ + "')")
     ApiResponse<UserPreferenceDto> get(@PathVariable String scope) {
         return ApiResponse.success(userPreferenceService.get(currentUserContext.requireCurrentUserId(), scope));
     }
 
     @Operation(summary = "增量更新用户偏好", description = "按版本增量更新当前用户指定作用域的顶层偏好")
     @PatchMapping("/api/v1/preferences/{scope}")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.PREFERENCE_WRITE + "')")
     ApiResponse<UserPreferenceDto> patch(
             @PathVariable String scope,
             @Valid @RequestBody UserPreferencePatchRequest request
@@ -50,7 +50,7 @@ public class UserPreferenceController {
 
     @Operation(summary = "删除用户偏好", description = "按版本删除当前用户指定作用域的偏好")
     @DeleteMapping("/api/v1/preferences/{scope}")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.PREFERENCE_WRITE + "')")
     ApiResponse<Void> delete(
             @PathVariable String scope,
             @RequestParam Long baseVersion

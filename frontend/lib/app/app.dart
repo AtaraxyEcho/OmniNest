@@ -25,10 +25,12 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
+import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_host.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
+import 'package:omninest/features/search/search_ui.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
 import 'package:omninest/core/deep_link/deep_link_service.dart';
 import 'package:omninest/features/tasks/application/task_notification_service.dart';
@@ -104,65 +106,74 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
         final sessionValue = session.asData?.value;
         final definitelySignedOut =
             sessionValue != null && !sessionValue.isAuthenticated;
-        final currentPath = router.routeInformationProvider.value.uri.path;
-        if (definitelySignedOut &&
-            gatesUnauthenticatedRender(
-              isAuthenticated: false,
-              path: currentPath,
-            )) {
-          return ColoredBox(
-            color: Theme.of(context).colorScheme.surface,
-            child: const Center(child: AppLoading()),
-          );
-        }
-        final mediaQuery = MediaQuery.of(context);
-        final systemScaler = mediaQuery.textScaler;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
-          value: SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            systemNavigationBarColor: Theme.of(context).colorScheme.surface,
-            statusBarIconBrightness:
-                isDark ? Brightness.light : Brightness.dark,
-            systemNavigationBarIconBrightness:
-                isDark ? Brightness.light : Brightness.dark,
-          ),
-          child: AppBackdropHost(child: child ?? const SizedBox.shrink()),
-        );
-        // 应用字体档位根部生效。缩放一律经 ComposedScaler：跟随系统档位时
-        // （preset.scale == null）也要吃到 ComposedScaler.maxScale 封顶，
-        // 且 scaler 类型不随档位翻转变化，整棵路由子树不会因此重挂
-        // （丢失滚动状态并打断背景视频会话）。
-        final effectiveScaler = ComposedScaler(
-          systemScaler,
-          fontScalePreset.scale ?? 1,
-        );
-        content = MediaQuery(
-          data: mediaQuery.copyWith(textScaler: effectiveScaler),
-          child: content,
-        );
-        // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
-        // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
-        // 设备例外，让它们直接走模块窄屏布局。
-        final mobileForm = shouldUseResponsiveMobileShell(
-          mobilePlatform: isMobilePlatform,
-          width: mediaQuery.size.width,
-        );
-        final hoverCapable =
-            PlatformCapabilities.current().supportsHoverPointer;
-        return FontScaleScope(
-          // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
-          // 会与实际渲染字号在超大无障碍档位下分叉。
-          systemScaler: ComposedScaler(systemScaler, 1),
-          child: NotificationForegroundToast(
-            child: DesktopFormMinWidth(
-              mobileForm: mobileForm,
-              hoverCapable: hoverCapable,
-              child: content,
-            ),
-          ),
+        return UnauthenticatedRenderGate(
+          // 监听 routerDelegate：redirect 完成后 delegate 同步更新
+          // currentConfiguration 并 notify。routeInformationProvider 的
+          // value 回报走 post-frame 且不 notify，不能用来解除遮挡。
+          routeListenable: router.routerDelegate,
+          shouldGate:
+              () =>
+                  definitelySignedOut &&
+                  gatesUnauthenticatedRender(
+                    isAuthenticated: false,
+                    path: router.routerDelegate.currentConfiguration.uri.path,
+                  ),
+          child: _buildRouterContent(context, child, fontScalePreset),
         );
       },
+    );
+  }
+
+  /// 根 builder 的正常内容（路由子树外的缩放、通知与桌面宽度护栏）。
+  Widget _buildRouterContent(
+    BuildContext context,
+    Widget? child,
+    FontScalePreset fontScalePreset,
+  ) {
+    final mediaQuery = MediaQuery.of(context);
+    final systemScaler = mediaQuery.textScaler;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Theme.of(context).colorScheme.surface,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
+      ),
+      child: AppBackdropHost(child: child ?? const SizedBox.shrink()),
+    );
+    // 应用字体档位根部生效。缩放一律经 ComposedScaler：跟随系统档位时
+    // （preset.scale == null）也要吃到 ComposedScaler.maxScale 封顶，
+    // 且 scaler 类型不随档位翻转变化，整棵路由子树不会因此重挂
+    // （丢失滚动状态并打断背景视频会话）。
+    final effectiveScaler = ComposedScaler(
+      systemScaler,
+      fontScalePreset.scale ?? 1,
+    );
+    content = MediaQuery(
+      data: mediaQuery.copyWith(textScaler: effectiveScaler),
+      child: content,
+    );
+    // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
+    // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
+    // 设备例外，让它们直接走模块窄屏布局。
+    final mobileForm = shouldUseResponsiveMobileShell(
+      mobilePlatform: isMobilePlatform,
+      width: mediaQuery.size.width,
+    );
+    final hoverCapable = PlatformCapabilities.current().supportsHoverPointer;
+    return FontScaleScope(
+      // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
+      // 会与实际渲染字号在超大无障碍档位下分叉。
+      systemScaler: ComposedScaler(systemScaler, 1),
+      child: NotificationForegroundToast(
+        child: DesktopFormMinWidth(
+          mobileForm: mobileForm,
+          hoverCapable: hoverCapable,
+          child: content,
+        ),
+      ),
     );
   }
 
@@ -183,17 +194,17 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     return false;
   }
 
-  /// Ctrl/Cmd+K 打开全局搜索；未认证或已在搜索页时不重复入栈。
+  /// Ctrl/Cmd+K 打开全局搜索浮层；仅在明确未认证时拦截。
   void _openSearch() {
     final session = ref.read(authSessionProvider).asData?.value;
-    if (session == null || !session.isAuthenticated) {
+    if (session != null && !session.isAuthenticated) {
       return;
     }
-    final router = ref.read(appRouterProvider);
-    if (router.routeInformationProvider.value.uri.path == '/search') {
+    final navigatorContext = desktopCloseNavigatorKey.currentContext ?? context;
+    if (!navigatorContext.mounted) {
       return;
     }
-    router.push('/search');
+    unawaited(showGlobalSearchDialog(navigatorContext));
   }
 
   void _toggleGlobalFullscreen() {
@@ -223,4 +234,83 @@ bool gatesUnauthenticatedRender({
       path == '/boot' ||
       path.startsWith('/shared/photos/') ||
       path.startsWith('/s/'));
+}
+
+/// 未认证渲染遮挡层。
+///
+/// 门控时必须保留 [child]（Router）在树上：若直接丢弃 child，Router 会
+/// dispose，refreshListenable 触发的 redirect 无法执行，路径永不更新，
+/// 遮罩将永久停在加载页。用不透明层遮挡旧受保护页画面，child 始终挂在
+/// 同一 Stack 槽位，门控开关不会重挂路由子树。
+///
+/// [routeListenable] 通常为 GoRouter.routerDelegate。delegate 可能在子树
+/// 构建过程中 notify，因此状态刷新一律延到帧后，避免构建期 markNeedsBuild。
+class UnauthenticatedRenderGate extends StatefulWidget {
+  const UnauthenticatedRenderGate({
+    super.key,
+    required this.shouldGate,
+    required this.routeListenable,
+    required this.child,
+  });
+
+  final bool Function() shouldGate;
+  final Listenable routeListenable;
+  final Widget child;
+
+  @override
+  State<UnauthenticatedRenderGate> createState() =>
+      _UnauthenticatedRenderGateState();
+}
+
+class _UnauthenticatedRenderGateState extends State<UnauthenticatedRenderGate> {
+  bool _refreshScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.routeListenable.addListener(_onRouteChanged);
+  }
+
+  @override
+  void didUpdateWidget(UnauthenticatedRenderGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeListenable != widget.routeListenable) {
+      oldWidget.routeListenable.removeListener(_onRouteChanged);
+      widget.routeListenable.addListener(_onRouteChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.routeListenable.removeListener(_onRouteChanged);
+    super.dispose();
+  }
+
+  void _onRouteChanged() {
+    if (!mounted || _refreshScheduled) {
+      return;
+    }
+    _refreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshScheduled = false;
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        if (widget.shouldGate())
+          ColoredBox(
+            color: Theme.of(context).colorScheme.surface,
+            child: const Center(child: AppLoading()),
+          ),
+      ],
+    );
+  }
 }

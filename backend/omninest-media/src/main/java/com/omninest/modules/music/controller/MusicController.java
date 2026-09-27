@@ -138,7 +138,7 @@ public class MusicController {
         return ApiResponse.success(musicLibraryService.search(currentUserContext.requireCurrentUserId(), q));
     }
 
-    @Operation(summary = "分页查询曲目", description = "按白名单字段分页列出当前用户可见的曲目")
+    @Operation(summary = "分页查询曲目", description = "按白名单字段分页列出当前用户可见的曲目；列表不含歌词，歌词经单曲详情接口获取")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/tracks")
     ApiResponse<PageResponse<MusicTrackDto>> tracks(
@@ -151,6 +151,16 @@ public class MusicController {
                 result.getNumber(),
                 result.getSize(),
                 result.getTotalElements()));
+    }
+
+    @Operation(summary = "查询单曲详情", description = "返回含歌词的完整曲目投影，供播放前补拉歌词与详情展示")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/tracks/{trackId}")
+    ApiResponse<MusicTrackDto> track(@PathVariable UUID trackId) {
+        return ApiResponse.success(musicLibraryService.getTrack(
+                currentUserContext.requireCurrentUserId(),
+                trackId
+        ));
     }
 
     @Operation(summary = "分页查询专辑", description = "按白名单字段分页列出至少包含一个活动曲目的专辑")
@@ -199,19 +209,19 @@ public class MusicController {
                 currentUserContext.requireCurrentUserId(), artistId));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/favorites")
     ApiResponse<List<MusicTrackDto>> favorites() {
         return ApiResponse.success(musicLibraryService.favorites(currentUserContext.requireCurrentUserId()));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/recent")
     ApiResponse<List<MusicTrackDto>> recent() {
         return ApiResponse.success(musicLibraryService.recent(currentUserContext.requireCurrentUserId()));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/recent-items")
     ApiResponse<List<MusicRecentItemDto>> recentItems() {
         return ApiResponse.success(musicLibraryService.recentItems(currentUserContext.requireCurrentUserId()));
@@ -227,7 +237,7 @@ public class MusicController {
     }
 
     @Operation(summary = "分页查询播放历史", description = "按播放时间倒序分页返回当前用户的播放历史")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/history")
     ApiResponse<PageResponse<MusicPlayHistoryDto>> history(
             @RequestParam(defaultValue = "0") int page,
@@ -276,54 +286,54 @@ public class MusicController {
         return ApiResponse.success(FilePurgeTaskDto.queued(taskId));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/music/tracks/{trackId}/favorite")
     ApiResponse<MusicTrackDto> favorite(@PathVariable UUID trackId) {
         return ApiResponse.success(musicLibraryService.favorite(currentUserContext.requireCurrentUserId(), trackId));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/music/tracks/{trackId}/favorite")
     ApiResponse<MusicTrackDto> removeFavorite(@PathVariable UUID trackId) {
         return ApiResponse.success(musicLibraryService.removeFavorite(currentUserContext.requireCurrentUserId(), trackId));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/music/tracks/{trackId}/play-history")
     ApiResponse<Void> playHistory(@PathVariable UUID trackId, @RequestBody(required = false) MusicPlayHistoryRequest request) {
         musicLibraryService.recordPlayHistory(currentUserContext.requireCurrentUserId(), trackId, request);
         return ApiResponse.success();
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/music/play-history")
     ApiResponse<Void> playHistory(@Valid @RequestBody RecordMusicPlayHistoryRequest request) {
         musicLibraryService.recordPlayHistory(currentUserContext.requireCurrentUserId(), request);
         return ApiResponse.success();
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/last-played")
     ApiResponse<MusicTrackDto> lastPlayed() {
         MusicTrackDto track = musicLibraryService.getLastPlayed(currentUserContext.requireCurrentUserId());
         return ApiResponse.success(track);
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/last-position")
     ApiResponse<PlaybackPositionDto> lastPosition() {
         PlaybackPositionDto position = playbackService.getLastPosition(currentUserContext.requireCurrentUserId());
         return ApiResponse.success(position);
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/music/position")
     ApiResponse<Void> savePosition(@RequestBody SavePositionRequest request) {
         playbackService.savePosition(currentUserContext.requireCurrentUserId(), request.trackId(), request.positionSeconds());
         return ApiResponse.success();
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/progress")
     ApiResponse<MusicPlaybackProgressDto> musicProgress(
             @RequestParam @Size(max = 512) String playableKey
@@ -334,7 +344,7 @@ public class MusicController {
         ));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/music/progress")
     ApiResponse<MusicPlaybackProgressDto> saveMusicProgress(
             @Valid @RequestBody SaveMusicPlaybackProgressRequest request
@@ -346,7 +356,7 @@ public class MusicController {
     }
 
     @Operation(summary = "获取上次音乐播放队列")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/music/playback-queue")
     ApiResponse<MusicPlaybackQueueDto> playbackQueue() {
         return ApiResponse.success(playbackQueueService.load(
@@ -355,7 +365,7 @@ public class MusicController {
     }
 
     @Operation(summary = "保存当前音乐播放队列")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/music/playback-queue")
     ApiResponse<MusicPlaybackQueueDto> savePlaybackQueue(
             @Valid @RequestBody SaveMusicPlaybackQueueRequest request
@@ -469,7 +479,8 @@ public class MusicController {
                     fileId
             );
             MusicCoverService.CoverStreamDescriptor descriptor = thumbnail.descriptor();
-            StreamingResponseBody body = outputStream -> musicCoverService.streamCover(descriptor, outputStream);
+            StreamingResponseBody body = outputStream ->
+                    musicCoverService.streamThumbnail(thumbnail, outputStream);
             response.setHeader(HttpHeaders.CACHE_CONTROL, coverCacheControl(thumbnail.freshness()));
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(descriptor.contentType()))

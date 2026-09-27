@@ -179,7 +179,7 @@ public class ReaderLibraryController {
      * 更新阅读进度。
      */
     @Operation(summary = "更新阅读进度", description = "更新指定阅读条目的阅读进度（Upsert 语义）")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/reader/items/{itemId}/progress")
     ApiResponse<Void> updateProgress(@PathVariable UUID itemId, @Valid @RequestBody UpdateProgressRequest request) {
         readerProgressService.updateProgress(currentUserContext.requireCurrentUserId(), itemId, request);
@@ -192,7 +192,7 @@ public class ReaderLibraryController {
      * 列出指定条目的所有书签。
      */
     @Operation(summary = "获取书签列表", description = "返回指定阅读条目的所有书签")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/reader/items/{itemId}/bookmarks")
     ApiResponse<List<ReaderBookmarkDto>> listBookmarks(@PathVariable UUID itemId) {
         return ApiResponse.success(readerBookmarkService.listBookmarks(currentUserContext.requireCurrentUserId(), itemId));
@@ -202,7 +202,7 @@ public class ReaderLibraryController {
      * 创建书签。
      */
     @Operation(summary = "创建书签", description = "在指定阅读条目中创建书签")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/bookmarks")
     ApiResponse<ReaderBookmarkDto> createBookmark(@PathVariable UUID itemId, @Valid @RequestBody CreateBookmarkRequest request) {
         return ApiResponse.success(readerBookmarkService.createBookmark(currentUserContext.requireCurrentUserId(), itemId, request));
@@ -212,7 +212,7 @@ public class ReaderLibraryController {
      * 删除书签。
      */
     @Operation(summary = "删除书签", description = "删除指定的书签")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/reader/bookmarks/{bookmarkId}")
     ApiResponse<Void> deleteBookmark(@PathVariable UUID bookmarkId) {
         readerBookmarkService.deleteBookmark(currentUserContext.requireCurrentUserId(), bookmarkId);
@@ -225,7 +225,7 @@ public class ReaderLibraryController {
      * 列出指定条目的所有批注。
      */
     @Operation(summary = "获取批注列表", description = "返回指定阅读条目的所有批注（高亮 + 附注）")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/reader/items/{itemId}/annotations")
     ApiResponse<List<ReaderAnnotationDto>> listAnnotations(@PathVariable UUID itemId) {
         return ApiResponse.success(readerAnnotationService.listAnnotations(currentUserContext.requireCurrentUserId(), itemId));
@@ -235,7 +235,7 @@ public class ReaderLibraryController {
      * 创建批注。
      */
     @Operation(summary = "创建批注", description = "在指定阅读条目中创建高亮批注")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/annotations")
     ApiResponse<ReaderAnnotationDto> createAnnotation(
             @PathVariable UUID itemId,
@@ -248,7 +248,7 @@ public class ReaderLibraryController {
      * 更新批注（仅允许更新备注和颜色）。
      */
     @Operation(summary = "更新批注", description = "更新指定批注的备注和颜色")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/reader/annotations/{annotationId}")
     ApiResponse<ReaderAnnotationDto> updateAnnotation(@PathVariable UUID annotationId, @Valid @RequestBody UpdateAnnotationRequest request) {
         return ApiResponse.success(readerAnnotationService.updateAnnotation(currentUserContext.requireCurrentUserId(), annotationId, request));
@@ -258,7 +258,7 @@ public class ReaderLibraryController {
      * 删除批注。
      */
     @Operation(summary = "删除批注", description = "删除指定的批注")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/reader/annotations/{annotationId}")
     ApiResponse<Void> deleteAnnotation(@PathVariable UUID annotationId) {
         readerAnnotationService.deleteAnnotation(currentUserContext.requireCurrentUserId(), annotationId);
@@ -271,7 +271,7 @@ public class ReaderLibraryController {
      * 列出指定条目的所有笔记。
      */
     @Operation(summary = "获取笔记列表", description = "返回指定阅读条目的所有笔记")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/reader/items/{itemId}/notes")
     ApiResponse<List<ReaderNoteDto>> listNotes(@PathVariable UUID itemId) {
         return ApiResponse.success(readerNoteService.listNotes(currentUserContext.requireCurrentUserId(), itemId));
@@ -281,7 +281,7 @@ public class ReaderLibraryController {
      * 创建笔记。
      */
     @Operation(summary = "创建笔记", description = "在指定阅读条目中创建笔记")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/notes")
     ApiResponse<ReaderNoteDto> createNote(@PathVariable UUID itemId, @Valid @RequestBody CreateNoteRequest request) {
         return ApiResponse.success(readerNoteService.createNote(currentUserContext.requireCurrentUserId(), itemId, request));
@@ -291,7 +291,7 @@ public class ReaderLibraryController {
      * 更新笔记。
      */
     @Operation(summary = "更新笔记", description = "更新指定笔记的内容")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/reader/notes/{noteId}")
     ApiResponse<ReaderNoteDto> updateNote(@PathVariable UUID noteId, @Valid @RequestBody UpdateNoteRequest request) {
         return ApiResponse.success(readerNoteService.updateNote(currentUserContext.requireCurrentUserId(), noteId, request));
@@ -301,7 +301,7 @@ public class ReaderLibraryController {
      * 删除笔记。
      */
     @Operation(summary = "删除笔记", description = "删除指定的笔记")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/reader/notes/{noteId}")
     ApiResponse<Void> deleteNote(@PathVariable UUID noteId) {
         readerNoteService.deleteNote(currentUserContext.requireCurrentUserId(), noteId);
@@ -314,7 +314,7 @@ public class ReaderLibraryController {
      * 切换书架状态：已存在则移除，不存在则添加。
      */
     @Operation(summary = "切换书架状态", description = "将指定阅读条目添加到书架或从书架移除")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/bookshelf")
     ApiResponse<Boolean> toggleBookshelf(@PathVariable UUID itemId) {
         return ApiResponse.success(readerBookshelfService.toggleBookshelf(currentUserContext.requireCurrentUserId(), itemId));
@@ -326,7 +326,7 @@ public class ReaderLibraryController {
      * 记录一次阅读会话。
      */
     @Operation(summary = "记录阅读会话", description = "记录用户的一次阅读会话（时长、起止时间）")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/sessions")
     ApiResponse<Void> recordSession(
             @PathVariable UUID itemId,

@@ -5,11 +5,18 @@ import java.util.Set;
 /**
  * 系统权限编码常量。
  *
+ * <p>内容贡献写（file/media/photo:write）与本人体验状态（activity/preference）分离：
+ * 进度、队列、收藏、书签、通知已读归 activity，UI/播放偏好归 preference。</p>
+ *
  * @author OmniNest
  */
 public final class Permissions {
     public static final String PROFILE_READ = "profile:read";
     public static final String PROFILE_WRITE = "profile:write";
+    public static final String ACTIVITY_READ = "activity:read";
+    public static final String ACTIVITY_WRITE = "activity:write";
+    public static final String PREFERENCE_READ = "preference:read";
+    public static final String PREFERENCE_WRITE = "preference:write";
     public static final String FILE_READ = "file:read";
     public static final String FILE_WRITE = "file:write";
     public static final String MEDIA_READ = "media:read";
@@ -30,6 +37,10 @@ public final class Permissions {
     public static final Set<String> SUPER_ADMIN_PERMISSIONS = Set.of(
             PROFILE_READ,
             PROFILE_WRITE,
+            ACTIVITY_READ,
+            ACTIVITY_WRITE,
+            PREFERENCE_READ,
+            PREFERENCE_WRITE,
             FILE_READ,
             FILE_WRITE,
             MEDIA_READ,

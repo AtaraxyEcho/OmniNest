@@ -95,7 +95,16 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   /// 启动门控永久停留在引导页。
   static const _restoreTimeout = Duration(seconds: 12);
 
+  /// 登出清理单步超时。存储读写、离线数据清理或吊销接口悬挂时不得
+  /// 拖死退出流程，也不得让单飞标记永久占住后续登出。
+  @visibleForTesting
+  static Duration cleanupStepTimeout = const Duration(seconds: 5);
+
   Timer? _refreshTimer;
+
+  /// 登出意图标记：置位后禁止在途刷新、资料重拉和存储写入把状态写回
+  /// 已登录。clearSession 先落地未认证再清理，窗口变长，必须挡住竞态。
+  bool _rejectSessionWrites = false;
 
   @override
   Future<AuthSessionState> build() async {
@@ -135,7 +144,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     }
     try {
       final profile = await ref.read(authClientProvider).currentUser();
-      if (!ref.mounted) {
+      if (!ref.mounted || _rejectSessionWrites) {
         return;
       }
       state = AsyncData(
@@ -205,6 +214,8 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   }
 
   Future<void> _applySession(AuthTokenResponse session) async {
+    // 登录建立新会话：放行后续写入，并撤销可能仍在途的登出拒绝。
+    _rejectSessionWrites = false;
     await _saveSession(session);
     final authState = _toState(session);
     _scheduleRefresh(authState.expiresAt);
@@ -215,6 +226,9 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   /// 会话；瞬时网络故障保留本地会话与凭据，避免抖动被放大为登出。
   Future<bool> refreshSession() async {
     final result = await _refreshWithStoredToken();
+    if (_rejectSessionWrites) {
+      return false;
+    }
     final session = result.session;
     if (session != null) {
       state = AsyncData(session);
@@ -249,34 +263,57 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   Future<void> _clearSessionInternal() async {
     _refreshTimer?.cancel();
     _refreshTimer = null;
-    // 先吊销服务端会话（Web 端同时清 HttpOnly Cookie），失败不阻断本地清理；
-    // 仅在确实持有会话时请求，避免登出后的级联清理反复打接口触发限流。
+    // 先拒绝在途写入并落地未认证：后续吊销与本地清理不得阻塞退出登录的
+    // 界面切换，也不得被并发刷新写回已登录。
+    _rejectSessionWrites = true;
     final store = ref.read(authSessionStoreProvider);
     final wasAuthenticated = state.asData?.value.isAuthenticated ?? false;
-    final storedRefreshToken = await store.readRefreshToken();
+    final userId = state.asData?.value.user?.id;
+    state = const AsyncData(AuthSessionState.unauthenticated());
+
+    String? storedRefreshToken;
+    try {
+      storedRefreshToken = await store.readRefreshToken().timeout(
+        cleanupStepTimeout,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        devLog('读取刷新令牌失败: ${error.runtimeType}');
+      }
+    }
+    // 吊销服务端会话（Web 端同时清 HttpOnly Cookie），失败不阻断本地清理；
+    // 仅在确实持有会话时请求，避免登出后的级联清理反复打接口触发限流。
     if (wasAuthenticated || (storedRefreshToken ?? '').isNotEmpty) {
       try {
         await ref
             .read(authClientProvider)
-            .logout(refreshToken: storedRefreshToken);
+            .logout(refreshToken: storedRefreshToken)
+            .timeout(cleanupStepTimeout);
       } catch (error) {
         if (kDebugMode) {
           devLog('服务端会话吊销失败: ${error.runtimeType}');
         }
       }
     }
-    final userId = state.asData?.value.user?.id;
     if (userId != null) {
       try {
-        await ref.read(offlineDataLifecycleProvider).clearUser(userId);
+        await ref
+            .read(offlineDataLifecycleProvider)
+            .clearUser(userId)
+            .timeout(cleanupStepTimeout);
       } catch (error) {
         if (kDebugMode) {
           devLog('离线数据清理失败: ${error.runtimeType}');
         }
       }
     }
-    await store.clear();
-    state = const AsyncData(AuthSessionState.unauthenticated());
+    try {
+      await store.clear().timeout(cleanupStepTimeout);
+    } catch (error) {
+      if (kDebugMode) {
+        devLog('认证存储清理失败: ${error.runtimeType}');
+      }
+    }
   }
 
   void _scheduleRefresh(DateTime? expiresAt) {
@@ -364,6 +401,9 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   }
 
   Future<void> _saveSession(AuthTokenResponse session) {
+    if (_rejectSessionWrites) {
+      return Future<void>.value();
+    }
     return ref.read(authSessionStoreProvider).saveSession(session);
   }
 

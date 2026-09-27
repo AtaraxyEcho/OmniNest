@@ -7,6 +7,7 @@ import com.omninest.common.preferences.UserPreferenceQuery;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.security.Permissions;
 import com.omninest.modules.weather.dto.UserLocationDto;
 import com.omninest.modules.weather.dto.WeatherDto;
 import com.omninest.modules.weather.service.UserLocationService;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -57,6 +59,7 @@ public class WeatherController {
      */
     @Operation(summary = "获取实时天气", description = "根据用户位置获取实时天气信息，位置优先级：Redis GPS > 前端坐标 > 用户偏好城市 > 默认值")
     @GetMapping("/realtime")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<WeatherDto> getRealtimeWeather(
             @RequestParam(required = false) String location,
             HttpServletRequest httpRequest) {
@@ -131,6 +134,7 @@ public class WeatherController {
      */
     @Operation(summary = "上报地理位置", description = "移动端/桌面端获取到 GPS 坐标后调用此接口上报，天气查询时自动使用最近上报的位置")
     @PostMapping("/location")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     public ApiResponse<Void> reportLocation(
             @Valid @RequestBody UserLocationDto dto,
             HttpServletRequest httpRequest) {

@@ -47,10 +47,12 @@ extension AppErrorCodeL10n on AppLocalizations {
         return errorConflict;
       case 'UNAUTHORIZED':
         return errorUnauthorized;
-      case 'FORBIDDEN':
+      case AppErrorCodes.forbidden:
         return errorForbidden;
       case 'VALIDATION_FAILED':
         return errorInvalidResponse;
+      case 'MUSIC_LYRICS_LOAD_FAILED':
+        return musicLyricsLoadFailed;
       default:
         return (fallback != null && fallback.isNotEmpty)
             ? fallback

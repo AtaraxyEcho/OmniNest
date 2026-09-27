@@ -34,7 +34,9 @@ public class NotificationController {
 
     @Operation(summary = "分页查询通知列表", description = "分页查询当前用户的站内通知列表")
     @GetMapping("/api/v1/notifications")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
+    @PreAuthorize(
+            "hasAuthority('" + Permissions.ACTIVITY_READ + "') or hasAuthority('" + Permissions.PROFILE_READ + "')"
+    )
     ApiResponse<PageResponse<NotificationDto>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
@@ -47,7 +49,9 @@ public class NotificationController {
 
     @Operation(summary = "查询未读通知数", description = "获取当前用户的未读通知数量")
     @GetMapping("/api/v1/notifications/unread-count")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
+    @PreAuthorize(
+            "hasAuthority('" + Permissions.ACTIVITY_READ + "') or hasAuthority('" + Permissions.PROFILE_READ + "')"
+    )
     ApiResponse<Long> unreadCount() {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(notificationService.unreadCount(userId));
@@ -55,7 +59,7 @@ public class NotificationController {
 
     @Operation(summary = "标记通知已读", description = "批量标记指定通知为已读状态")
     @PutMapping("/api/v1/notifications/read")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<Void> markRead(@RequestBody Map<String, List<UUID>> body) {
         UUID userId = currentUserContext.requireCurrentUserId();
         List<UUID> ids = body.get("ids");
@@ -68,7 +72,7 @@ public class NotificationController {
 
     @Operation(summary = "标记全部已读", description = "将当前用户的所有未读通知标记为已读")
     @PutMapping("/api/v1/notifications/read-all")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<Void> markAllRead() {
         UUID userId = currentUserContext.requireCurrentUserId();
         notificationService.markAllRead(userId);
@@ -77,7 +81,7 @@ public class NotificationController {
 
     @Operation(summary = "删除通知", description = "删除当前用户的指定通知")
     @DeleteMapping("/api/v1/notifications/{notificationId}")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<Void> delete(@PathVariable UUID notificationId) {
         UUID userId = currentUserContext.requireCurrentUserId();
         notificationService.delete(userId, notificationId);
@@ -86,7 +90,7 @@ public class NotificationController {
 
     @Operation(summary = "清空通知", description = "清空当前用户的全部站内通知")
     @DeleteMapping("/api/v1/notifications")
-    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<Void> clearAll() {
         UUID userId = currentUserContext.requireCurrentUserId();
         notificationService.clearAll(userId);

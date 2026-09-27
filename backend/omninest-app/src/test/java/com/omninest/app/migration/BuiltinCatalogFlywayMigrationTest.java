@@ -42,7 +42,7 @@ class BuiltinCatalogFlywayMigrationTest {
     @Test
     void catalogContainsRequiredRolesPermissionsAndMappings() throws SQLException {
         Assertions.assertThat(countObjects("SELECT count(*) FROM omni.auth_roles")).isEqualTo(4);
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.auth_permissions")).isEqualTo(18);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.auth_permissions")).isEqualTo(22);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -64,6 +64,10 @@ class BuiltinCatalogFlywayMigrationTest {
                     VALUES
                         ('profile:read'),
                         ('profile:write'),
+                        ('activity:read'),
+                        ('activity:write'),
+                        ('preference:read'),
+                        ('preference:write'),
                         ('file:read'),
                         ('file:write'),
                         ('media:read'),
@@ -99,10 +103,10 @@ class BuiltinCatalogFlywayMigrationTest {
                 SELECT count(*)
                 FROM (
                     VALUES
-                        ('GUEST', 4),
-                        ('MEMBER', 11),
-                        ('ADMIN', 17),
-                        ('SUPER_ADMIN', 18)
+                        ('GUEST', 10),
+                        ('MEMBER', 15),
+                        ('ADMIN', 21),
+                        ('SUPER_ADMIN', 22)
                 ) expected(role_code, permission_count)
                 LEFT JOIN (
                     SELECT role_definition.code AS role_code, count(*)::integer AS permission_count

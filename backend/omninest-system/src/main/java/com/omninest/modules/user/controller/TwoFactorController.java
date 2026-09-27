@@ -2,6 +2,7 @@ package com.omninest.modules.user.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.security.Permissions;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorDisableRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorEnableRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorEnableResponse;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,6 +38,7 @@ public class TwoFactorController {
 
     @Operation(summary = "两步验证状态", description = "返回当前用户是否已开启以及策略是否强制要求开启")
     @GetMapping("/api/v1/me/2fa/status")
+    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
     ApiResponse<TwoFactorStatusResponse> status() {
         UUID userId = currentUserContext.requireCurrentUserId();
         boolean enabled = twoFactorService.isEnabled(userId);
@@ -45,6 +48,7 @@ public class TwoFactorController {
 
     @Operation(summary = "生成两步验证秘钥", description = "密码复核后生成 TOTP 秘钥与扫码 URI，重复调用覆盖未确认秘钥")
     @PostMapping("/api/v1/me/2fa/setup")
+    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<TwoFactorSetupResponse> setup(@Valid @RequestBody TwoFactorSetupRequest request) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(twoFactorService.startSetup(userId, request.password()));
@@ -52,6 +56,7 @@ public class TwoFactorController {
 
     @Operation(summary = "确认开启两步验证", description = "校验认证器验证码后启用，返回一次性备份码")
     @PostMapping("/api/v1/me/2fa/enable")
+    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<TwoFactorEnableResponse> enable(@Valid @RequestBody TwoFactorEnableRequest request) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(new TwoFactorEnableResponse(twoFactorService.enable(userId, request.code())));
@@ -59,6 +64,7 @@ public class TwoFactorController {
 
     @Operation(summary = "关闭两步验证", description = "密码复核后关闭并清除全部凭据与备份码")
     @PostMapping("/api/v1/me/2fa/disable")
+    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<Void> disable(@Valid @RequestBody TwoFactorDisableRequest request) {
         UUID userId = currentUserContext.requireCurrentUserId();
         twoFactorService.disable(userId, request.password());

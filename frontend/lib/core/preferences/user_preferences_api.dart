@@ -1,11 +1,16 @@
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/preferences/preference_snapshot.dart';
 
 class UserPreferencesApi {
   const UserPreferencesApi(this.apiClient);
 
   final ApiClient apiClient;
+
+  /// 当前会话是否可维护本人偏好（远端同步）。
+  bool get canWritePreferences =>
+      apiClient.hasPermission(preferenceWritePermission);
 
   Future<PreferenceSnapshot> getSnapshot(String scope) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(

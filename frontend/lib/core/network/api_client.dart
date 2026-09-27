@@ -2,11 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
 typedef AccessTokenReader = String? Function();
 typedef SessionRefresher = Future<bool> Function();
+typedef PermissionReader = Set<String> Function();
 
 class ApiClient {
   ApiClient(
@@ -14,10 +17,12 @@ class ApiClient {
     AuthSessionStore? sessionStore,
     AccessTokenReader? readAccessToken,
     SessionRefresher? refreshSession,
+    PermissionReader? readPermissions,
     HttpClientAdapter? httpClientAdapter,
   }) : _sessionStore = sessionStore,
        _readAccessToken = readAccessToken,
        _refreshSession = refreshSession,
+       _readPermissions = readPermissions,
        dio = Dio(
          BaseOptions(
            baseUrl: environment.apiBaseUrl,
@@ -161,8 +166,35 @@ class ApiClient {
   final AuthSessionStore? _sessionStore;
   final AccessTokenReader? _readAccessToken;
   final SessionRefresher? _refreshSession;
+  final PermissionReader? _readPermissions;
   String? _manualAccessToken;
   Future<bool>? _refreshing;
+
+  /// 当前会话是否持有指定权限码。
+  ///
+  /// data 层 API 用它在发请求前做能力预检（autoSkip 静默跳过 / strict 抛
+  /// FORBIDDEN）。未注入读取器（如单元测试直接构造 ApiClient）时视为有
+  /// 权限放行，由后端 @PreAuthorize 兜底，保持既有测试行为不变。
+  bool hasPermission(String code) {
+    final reader = _readPermissions;
+    if (reader == null) {
+      return true;
+    }
+    return reader().contains(code);
+  }
+
+  /// strict 写预检：无权限时抛 FORBIDDEN，由 error_code_l10n 映射用户文案。
+  ///
+  /// 用户主动写（收藏 / 书签 / 删历史 / 通知等）必须在发请求前调用，
+  /// 禁止依赖后端 403 兜底呈现「无权限」。
+  void requirePermission(String code) {
+    if (!hasPermission(code)) {
+      throw const AppException(
+        code: AppErrorCodes.forbidden,
+        message: '没有权限执行该操作',
+      );
+    }
+  }
 
   void setAccessToken(String? token) {
     _manualAccessToken = token;

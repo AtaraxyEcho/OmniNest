@@ -30,6 +30,15 @@ class PreferenceSyncService {
       final pendingDeletionVersion = await _localStore
           .readPendingDeletionVersion(userId, scope);
       try {
+        if (!_api.canWritePreferences) {
+          // 无写能力：不发网络，维持本地快照与待重放标记。
+          return local.copyWith(
+            syncState:
+                pending == null && pendingDeletionVersion == null
+                    ? local.syncState
+                    : PreferenceSyncState.pending,
+          );
+        }
         return await _synchronizeRemote(
           userId: userId,
           scope: scope,
@@ -56,6 +65,14 @@ class PreferenceSyncService {
       final pending = await _localStore.readPending(userId, scope);
       final pendingDeletionVersion = await _localStore
           .readPendingDeletionVersion(userId, scope);
+      if (!_api.canWritePreferences) {
+        // 无写能力：不强制远端同步，由 load 路径维持本地状态；
+        // 有能力时的远端失败保持上报语义，不在此吞异常。
+        final local =
+            await _localStore.readSnapshot(userId, scope) ??
+            PreferenceSnapshot.empty(scope);
+        return local;
+      }
       return _synchronizeRemote(
         userId: userId,
         scope: scope,
@@ -96,6 +113,10 @@ class PreferenceSyncService {
       await _localStore.clearPendingDeletion(userId, scope);
 
       try {
+        if (!_api.canWritePreferences) {
+          // 无写能力：保留 pending 供获得权限后重放，本地 optimistic 即最终展示。
+          return optimistic;
+        }
         return await _patchRemote(
           userId: userId,
           scope: scope,
@@ -132,6 +153,10 @@ class PreferenceSyncService {
         ),
       );
       await _localStore.clearPending(userId, scope);
+      if (!_api.canWritePreferences) {
+        // 无写能力：删除标记保留，待获得权限后重放。
+        return;
+      }
       try {
         await _deleteRemote(userId: userId, scope: scope, baseVersion: version);
       } on Exception {
