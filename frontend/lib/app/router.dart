@@ -47,7 +47,6 @@ import 'package:omninest/features/reader/presentation/pages/reader_metadata_edit
 import 'package:omninest/features/reader/presentation/pages/comic_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/pdf_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_import_confirm_page.dart';
-import 'package:omninest/features/search/presentation/pages/search_page.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:omninest/features/setup/presentation/pages/initial_setup_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
@@ -99,12 +98,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/activity',
         redirect: (context, state) => '/notifications',
-      ),
-      _animatedRoute(
-        '/search',
-        (state) => SearchPage(
-          initialScope: state.uri.queryParameters['scope'] ?? 'all',
-        ),
       ),
       GoRoute(
         path: '/settings',

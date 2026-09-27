@@ -22,6 +22,12 @@
   "searchGroupVideo": "Videos",
   "searchGroupMusic": "Music",
   "searchGroupPhoto": "Photos",
+  "searchGroupCommand": "Commands",
+  "searchPaletteHint": "Search media, music, books, files, or type a command…",
+  "searchFooterNavigate": "Navigate",
+  "searchFooterSelect": "Select",
+  "searchFooterFilter": "Filter",
+  "searchFooterClose": "Close",
   "tasksTimeMinutesAgo": "{count} min ago",
   "@tasksTimeMinutesAgo": {
     "placeholders": {
@@ -354,10 +360,13 @@
   "filesMoveToShared": "Move to Shared Space",
   "filesMoveToSharedConfirm": "Move to Shared Space",
   "filesMoveToSharedMessage": "Move \"{name}\" to shared space? All users will see it.",
+  "filesMoveToSharedSuccess": "Moved to shared space",
   "filesMoveToPersonal": "Move to Personal Space",
   "filesMoveToPersonalConfirm": "Move to Personal Space",
   "filesMoveToPersonalMessage": "Move \"{name}\" to personal space?",
   "filesMoveToPersonalLabel": "Move back",
+  "filesMoveToPersonalSuccess": "Moved back to personal space",
+  "filesMoveSpaceFailed": "Space migration failed. Please try again later.",
   "@filesMoveToSharedMessage": {
     "placeholders": {
       "name": {}
@@ -699,8 +708,10 @@
   "filesConnectionCredentials": "Connection Credentials",
   "filesExistingSecretPreserved": "Passwords, secrets, and tokens are never returned. Leave them blank to keep the saved values.",
   "filesKeepExistingSecretHint": "Leave blank to keep the saved value",
+  "filesOAuthAppMissing": "This type requires the administrator to configure an OAuth app under Admin - External Storage first. It is not configured yet, so creating is unavailable.",
   "filesS3Provider": "S3 Provider",
   "filesEndpointRequired": "Endpoint (required)",
+  "filesEndpoint": "Endpoint",
   "filesEndpointHint": "e.g. http://omninest-minio:9000",
   "filesRegion": "Region",
   "filesRegionHint": "e.g. us-east-1 (optional)",
@@ -1661,8 +1672,49 @@
   "statusPhaseReview": "Review phase",
   "statusPhaseApply": "Apply phase",
   "adminLibrarySourceAdd": "Add library source",
-  "adminLibrarySourcesEmpty": "No library sources yet. Create one on an enabled storage location.",
-  "adminLibrarySourcesSubtitle": "Create movie, series and anime sources on enabled storage locations.",
+  "adminLibrarySourcesEmpty": "No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.",
+  "adminLibrarySourcesSubtitle": "Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.",
+  "adminMountLibraryScanAll": "Scan all",
+  "adminMountLibraryScanAllSuccess": "Discovery scan started for {count} library sources",
+  "@adminMountLibraryScanAllSuccess": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminMountLibraryScanAllPartial": "Started {success} scans, {failed} failed",
+  "@adminMountLibraryScanAllPartial": {
+    "placeholders": {
+      "success": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "adminLibraryAdvancedAdd": "Advanced: add library source",
+  "adminMountLibraryScanAllHint": "Run discovery for movie, TV, and anime library sources together",
+  "adminMountLibraryProvisionSuccess": "Media library enabled. Put files under Movie / TV / Anime, then choose Scan all to import.",
+  "adminLibrarySourceCountLabel": "{count} total",
+  "adminLibrarySourceManaged": "Mount catalog",
+  "adminLibrarySourceCustom": "Custom",
+  "adminListRangeLabel": "{start}–{end} of {total}",
+  "@adminLibrarySourceCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@adminListRangeLabel": {
+    "placeholders": {
+      "start": {},
+      "end": {},
+      "total": {}
+    }
+  },
   "adminLibraryReviewSubtitle": "Pick a source to review the scan results and apply them.",
   "adminStorageStatusHealthy": "Healthy",
   "adminStorageFilterAll": "All",
@@ -1707,13 +1759,13 @@
   "adminObjectBuckets": "Object Buckets",
   "adminObjectBucketsSubtitle": "From backend MinIO config.",
   "adminNoBucketConfig": "No bucket config.",
-  "adminExternalStorageIntegration": "External Storage Integration",
-  "adminExternalStorageSubtitle": "Govern remote connection health; create and import connections under Files → Remote Import.",
+  "adminExternalStorageIntegration": "External Storage",
+  "adminExternalStorageSubtitle": "Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.",
   "adminOAuthAppsTitle": "OAuth apps",
-  "adminOAuthAppsSubtitle": "Configure instance-level OAuth apps (BYOA) for OneDrive / Google connectors.",
+  "adminOAuthAppsSubtitle": "Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.",
+  "adminOAuthRedirectHint": "Must exactly match the redirect URI registered in the provider console; usually this site's callback URL.",
   "adminNoOAuthApps": "No OAuth apps configured yet.",
   "adminNewConnection": "New Connection",
-  "adminNewExternalStorage": "New External Storage",
   "adminType": "Type",
   "adminExternalStorageClientId": "Client ID",
   "adminExternalStorageClientSecret": "Client Secret",
@@ -1730,7 +1782,8 @@
   "adminDisabled": "Disabled",
   "adminPausedSync": "Paused sync",
   "adminConnectionList": "Connection List",
-  "adminConnectionListSubtitle": "Credentials managed by backend, frontend only shows connection metadata.",
+  "adminConnectionListSubtitle": "Supervision only: enable or disable any user connection. Create and manage under Files - External Storage.",
+  "adminExternalStorageOwner": "Owner",
   "adminNoExternalStorage": "No external storage connections.",
   "adminDeactivate": "Deactivate",
   "adminActivate": "Activate",
@@ -1751,10 +1804,31 @@
   "adminConfigDescription": "Description",
   "adminStorageOpenDetail": "Details",
   "adminStorageColumnType": "Type",
-  "adminStorageMountsSection": "Local mount locations",
+  "adminStorageMountsSection": "Underlying storage locations (read-only)",
   "adminTrustedMountsTitle": "Trusted mounts",
-  "adminTrustedMountsSubtitle": "Mount keys registered in deployment config and their availability on this node. They back mount locations and mount-direct creation.",
+  "adminTrustedMountsSubtitle": "Mount keys registered in deployment config and their availability on this node. Enabling a mount provisions Movie / TV / Anime library sources under the agreed folders.",
   "adminTrustedMountsEmpty": "No mounts registered in deployment config",
+  "adminMountLibraryEnable": "Enable media library",
+  "adminMountLibraryEnableHint": "Creates three libraries at the mount root: Movie, TV, and Anime. Drop files into those folders to be scanned and classified.",
+  "adminMountLibraryEnableHintOff": "Not enabled yet. Enabling creates libraries for Movie, TV, and Anime folders automatically.",
+  "adminMountLibraryAutoImport": "Auto-import after scan",
+  "adminMountLibraryAutoImportHint": "On: matched files join the library after scan. Off: review and import from Library Sources first.",
+  "adminMountLibraryStatusOff": "Disabled",
+  "adminMountLibraryStatusOn": "Enabled",
+  "adminMountLibraryStatusPartial": "Incomplete",
+  "adminMountLibraryCatalogLabel": "Folders",
+  "adminMountLibraryCatalogMovie": "Movie",
+  "adminMountLibraryCatalogTv": "TV",
+  "adminMountLibraryCatalogAnime": "Anime",
+  "adminMountLibraryPartialHint": "Only {count}/3 type libraries exist. Turn on Enable media library to create the missing ones.",
+  "@adminMountLibraryPartialHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminMountLibraryProvisionFailed": "Failed to configure mount media library",
   "adminLibraryOrphanLocation": "{count} mount location(s) no longer referenced by any library source. Clean them up in the list above.",
   "adminLibraryCleanupOrphan": "Clean up mount location",
   "adminLibraryColumnName": "Name",
@@ -2033,7 +2107,7 @@
   "adminConfigSubtitle": "Manage system config items, feature flags and hot update release status.",
   "adminStorageTitle": "Storage Management",
   "adminStorageSubtitle": "Manage MinIO buckets, capacity, and index maintenance.",
-  "adminExternalStorageTitle": "External Storage Integration",
+  "adminExternalStorageTitle": "External Storage",
   "adminRefresh": "Refresh",
   "adminRecalculate": "Recalculate",
   "adminRecalculateDone": "Updated storage for {count} users",
@@ -2660,7 +2734,10 @@
   "videoFavorite": "Favorite",
   "videoSubtitle": "Subtitles",
   "videoAudio": "Audio",
-  "videoMovedToRecycleBin": "Media item and source file permanently deleted",
+  "videoItemPermanentlyDeleted": "Media item and source file permanently deleted",
+  "videoMetadataStatusComplete": "Complete info",
+  "videoMetadataStatusNeedsWork": "Needs organizing",
+  "videoMetadataStatusIssue": "Has issues",
   "videoDelete": "Delete",
   "videoDeleteItemTitle": "Delete media item?",
   "videoDeleteItemMessage": "\"{title}\" and its source file will be permanently deleted. This cannot be undone.",
@@ -2806,7 +2883,7 @@
   "videoRequestFailed": "Request failed, please try again later",
   "videoOperationFailed": "Operation failed, please try again later",
   "videoProcessing": "Processing",
-  "videoHistorySubtitle": "Complete playback records with filtering by watched, unwatched and time range.",
+  "videoHistorySubtitle": "Complete playback records.",
   "videoClearHistory": "Clear History",
   "videoNoWatchHistory": "No watch history.",
   "videoMoreFilters": "More Filters",
@@ -3555,6 +3632,8 @@
     }
   },
   "musicCoverPick": "Select Cover Image",
+  "musicCoverRemove": "Remove Cover",
+  "musicLyricsClear": "Clear Lyrics",
   "musicLyricsFile": "Lyrics File",
   "musicLyricsPick": "Select Lyrics File (LRC / TXT / SRT / VTT)",
   "musicAddToPlaylistSuccess": "Added to \"{name}\"",
@@ -3621,6 +3700,8 @@
   "musicLyricsApply": "Apply Lyrics",
   "musicLyricsNoResult": "No matching lyrics found",
   "musicLyricsOnlineSource": "Online lyrics",
+  "musicLyricsExisting": "Existing lyrics (replaceable)",
+  "musicLyricsLoadFailed": "Failed to load lyrics",
   "musicLyricsApplied": "Lyrics applied to \"{title}\"",
   "@musicLyricsApplied": {
     "placeholders": {
@@ -4148,7 +4229,7 @@
   "adminAddLocalStorageLocation": "Add mount location",
   "adminLocalStorageLocations": "Local storage locations",
   "adminReadOnlyMediaMounts": "Read-only media mounts",
-  "adminLocalStorageLocationsSubtitle": "Only deployment allowlisted mount keys and relative directories are stored; host absolute paths are not persisted.",
+  "adminLocalStorageLocationsSubtitle": "Locations registered automatically for diagnostics and cleanup. Enable or disable media libraries under Trusted mounts above.",
   "adminNoLocalStorageLocations": "No read-only local storage location has been configured.",
   "adminDeleteLocalStorageLocation": "Delete storage location",
   "adminMountKey": "Mount key",
@@ -4338,9 +4419,9 @@
   "videoRedesignStatusPending": "Pending",
   "videoRedesignStatusFailed": "Failed",
   "videoRedesignFilterAll": "All",
-  "videoRedesignFilterMatched": "Matched",
-  "videoRedesignFilterPending": "Pending",
-  "videoRedesignFilterFailed": "Failed",
+  "videoRedesignFilterMatched": "Complete info",
+  "videoRedesignFilterPending": "Needs organizing",
+  "videoRedesignFilterFailed": "Has issues",
   "videoRedesignDetail": "Detail",
   "videoRedesignPlayNow": "Play now",
   "videoRedesignNoMatches": "No matching items",
@@ -4387,6 +4468,42 @@
   "videoDetailEdit": "EDIT",
   "videoDetailSave": "SAVE",
   "videoDetailPlay": "PLAY",
+  "videoDetailContinueWatching": "Continue",
+  "videoDetailPlayNextEpisode": "Play next episode",
+  "videoDetailNoPlayableEpisode": "No playable episodes in this series",
+  "videoEpisodeFileMissing": "File missing",
+  "videoEpisodeFileChanged": "File changed",
+  "videoEpisodeSourceUnavailable": "Source unavailable",
+  "videoEpisodeCheckLibrarySource": "Check library source",
+  "videoProgressSyncDeferred": "Progress was not synced and kept on this device",
+  "readerTtsUnavailable": "Read aloud is unavailable. Check system TTS or try again later",
+  "videoEmptyImportMedia": "Import media",
+  "videoSearchScopeLoadedOnly": "Filtering only {count} loaded titles",
+  "videoSearchNoHitsLoadMore": "Not found in loaded results. Load more or clear filters",
+  "@videoSearchScopeLoadedOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerGoToLibrary": "Go to library",
+  "readerSearchTruncated": "Showing first 100 matches only. Narrow your search",
+  "readerShortcutsTouchTitle": "Touch gestures",
+  "readerShortcutTapSides": "Tap left/right edges to turn pages",
+  "readerShortcutDragScroll": "Drag to scroll content",
+  "videoContinueViewAll": "View all",
+  "videoEpisodeShortLabel": "S{season}E{episode}",
+  "@videoEpisodeShortLabel": {
+    "placeholders": {
+      "season": {
+        "type": "int"
+      },
+      "episode": {
+        "type": "int"
+      }
+    }
+  },
   "videoDetailTabOverview": "Overview",
   "videoDetailTabVersions": "Versions",
   "videoDetailTabSubtitles": "Subtitles",

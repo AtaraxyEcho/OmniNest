@@ -22,6 +22,12 @@
   "searchGroupVideo": "视频",
   "searchGroupMusic": "音乐",
   "searchGroupPhoto": "照片",
+  "searchGroupCommand": "命令",
+  "searchPaletteHint": "搜索媒体、音乐、书籍、文件，或输入命令…",
+  "searchFooterNavigate": "导航",
+  "searchFooterSelect": "选择",
+  "searchFooterFilter": "筛选",
+  "searchFooterClose": "关闭",
   "tasksTimeMinutesAgo": "{count} 分钟前",
   "@tasksTimeMinutesAgo": {
     "placeholders": {
@@ -354,10 +360,13 @@
   "filesMoveToShared": "移到共享空间",
   "filesMoveToSharedConfirm": "移到共享空间",
   "filesMoveToSharedMessage": "将 \"{name}\" 移到共享空间？所有用户将可见。",
+  "filesMoveToSharedSuccess": "已移到共享空间",
   "filesMoveToPersonal": "移回个人空间",
   "filesMoveToPersonalConfirm": "移回个人空间",
   "filesMoveToPersonalMessage": "将 \"{name}\" 移回个人空间？",
   "filesMoveToPersonalLabel": "移回",
+  "filesMoveToPersonalSuccess": "已移回个人空间",
+  "filesMoveSpaceFailed": "空间迁移失败，请稍后重试",
   "@filesMoveToSharedMessage": {
     "placeholders": {
       "name": {}
@@ -588,8 +597,10 @@
   "filesConnectionCredentials": "连接凭据",
   "filesExistingSecretPreserved": "密码、密钥和令牌不会回传；保持为空将继续使用已保存的值。",
   "filesKeepExistingSecretHint": "留空以保留已保存的值",
+  "filesOAuthAppMissing": "该类型需要管理员先在管理后台的外部存储页面配置 OAuth 应用，当前尚未配置，暂不能创建。",
   "filesS3Provider": "S3 提供商",
   "filesEndpointRequired": "端点地址（必填）",
+  "filesEndpoint": "端点地址",
   "filesEndpointHint": "如 http://omninest-minio:9000",
   "filesRegion": "区域",
   "filesRegionHint": "如 us-east-1（可选）",
@@ -1536,8 +1547,35 @@
   "statusPhaseReview": "审阅阶段",
   "statusPhaseApply": "应用阶段",
   "adminLibrarySourceAdd": "新建库源",
-  "adminLibrarySourcesEmpty": "尚无库源，点击\"新建库源\"在已启用的存储位置上建立",
-  "adminLibrarySourcesSubtitle": "在已启用的存储位置上建立电影、剧集与动漫库源。",
+  "adminLibrarySourcesEmpty": "尚无库源。请先在上方「可信挂载点」启用媒体库，系统会自动建立电影/剧集/动漫三类库源。",
+  "adminLibrarySourcesSubtitle": "启用挂载媒体库后自动出现的三类库源；也可在高级设置中手动新建自定义库源。",
+  "adminMountLibraryScanAll": "扫描全部",
+  "adminMountLibraryScanAllSuccess": "已对 {count} 个库源发起发现扫描",
+  "@adminMountLibraryScanAllSuccess": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminMountLibraryScanAllPartial": "已发起 {success} 个扫描，{failed} 个失败",
+  "@adminMountLibraryScanAllPartial": {
+    "placeholders": {
+      "success": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "adminLibraryAdvancedAdd": "高级：新建库源",
+  "adminMountLibraryScanAllHint": "对电影、剧集、动漫三个库源一并发起发现扫描",
+  "adminMountLibraryProvisionSuccess": "媒体库已启用。资源放入 Movie / TV / Anime 目录后，点击「扫描全部」即可入库。",
+  "adminLibrarySourceCountLabel": "共 {count} 条",
+  "adminLibrarySourceManaged": "挂载约定",
+  "adminLibrarySourceCustom": "自定义",
+  "adminListRangeLabel": "第 {start}–{end} 条 / 共 {total} 条",
   "adminLibraryReviewSubtitle": "选择库源后审阅扫描结果并应用入库。",
   "adminStorageStatusHealthy": "健康",
   "adminStorageFilterAll": "全部",
@@ -1582,13 +1620,13 @@
   "adminObjectBuckets": "对象桶",
   "adminObjectBucketsSubtitle": "来自后端 MinIO 配置。",
   "adminNoBucketConfig": "当前没有桶配置。",
-  "adminExternalStorageIntegration": "外部存储集成",
-  "adminExternalStorageSubtitle": "治理远程来源连接状态；连接创建与导入请在文件模块的远程导入中操作。",
+  "adminExternalStorageIntegration": "外部存储",
+  "adminExternalStorageSubtitle": "监管全部用户的外部存储连接并配置实例级 OAuth 应用；连接的创建与导入由用户在文件 → 外部存储完成。",
   "adminOAuthAppsTitle": "OAuth 应用",
-  "adminOAuthAppsSubtitle": "为 OneDrive / Google 等连接器配置实例级 OAuth 应用（BYOA）。",
+  "adminOAuthAppsSubtitle": "实例级集成配置：为 OneDrive / Google 等连接器登记应用凭据，用户连接的 OAuth 授权依赖此项。",
+  "adminOAuthRedirectHint": "需与提供方控制台注册的重定向 URI 完全一致，通常为本站回调地址。",
   "adminNoOAuthApps": "尚未配置 OAuth 应用。",
   "adminNewConnection": "新增连接",
-  "adminNewExternalStorage": "新增外部存储",
   "adminType": "类型",
   "adminExternalStorageClientId": "客户端 ID",
   "adminExternalStorageClientSecret": "客户端密钥",
@@ -1605,7 +1643,8 @@
   "adminDisabled": "停用",
   "adminPausedSync": "暂停同步",
   "adminConnectionList": "连接列表",
-  "adminConnectionListSubtitle": "凭据由后端托管，前端只展示连接元数据。",
+  "adminConnectionListSubtitle": "仅监管：启用或停用任意用户的连接。创建与管理入口在文件 → 外部存储。",
+  "adminExternalStorageOwner": "所有者",
   "adminNoExternalStorage": "当前没有外部存储连接。",
   "adminDeactivate": "停用",
   "adminActivate": "启用",
@@ -1626,10 +1665,45 @@
   "adminConfigDescription": "说明",
   "adminStorageOpenDetail": "详情",
   "adminStorageColumnType": "类型",
-  "adminStorageMountsSection": "本地挂载位置",
+  "adminStorageMountsSection": "底层存储位置（只读）",
   "adminTrustedMountsTitle": "可信挂载点",
-  "adminTrustedMountsSubtitle": "部署配置登记的挂载键及其在当前节点的可用状态，是挂载位置与挂载直达创建的来源。",
+  "adminTrustedMountsSubtitle": "部署配置登记的挂载键及其在当前节点的可用状态。启用后按 Movie / TV / Anime 约定目录自动建立三类影视库源。",
   "adminTrustedMountsEmpty": "未在部署配置中登记挂载",
+  "adminMountLibraryEnable": "启用媒体库",
+  "adminMountLibraryEnableHint": "开启后在挂载根下建立三类影视库：电影 / 剧集 / 动漫。资源放入对应目录即可被扫描归类。",
+  "adminMountLibraryEnableHintOff": "尚未启用。开启后按 Movie、TV、Anime 目录自动建库，无需再手动新建库源。",
+  "adminMountLibraryAutoImport": "扫描后自动入库",
+  "adminMountLibraryAutoImportHint": "开启：扫描到匹配文件后自动加入媒体库。关闭：先到「库源」审阅再入库。",
+  "adminMountLibraryStatusOff": "未启用",
+  "adminMountLibraryStatusOn": "已启用",
+  "adminMountLibraryStatusPartial": "库不完整",
+  "adminMountLibraryCatalogLabel": "约定目录",
+  "adminMountLibraryCatalogMovie": "电影",
+  "adminMountLibraryCatalogTv": "剧集",
+  "adminMountLibraryCatalogAnime": "动漫",
+  "adminMountLibraryPartialHint": "当前仅有 {count}/3 个类型库。打开「启用媒体库」会补齐缺失目录并统一启用。",
+  "@adminLibrarySourceCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@adminListRangeLabel": {
+    "placeholders": {
+      "start": {},
+      "end": {},
+      "total": {}
+    }
+  },
+  "@adminMountLibraryPartialHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminMountLibraryProvisionFailed": "挂载媒体库配置失败",
   "adminLibraryOrphanLocation": "有 {count} 个挂载位置已无库源引用，可在上方列表中清理",
   "adminLibraryCleanupOrphan": "清理挂载位置",
   "adminLibraryColumnName": "库名称",
@@ -1908,7 +1982,7 @@
   "adminConfigSubtitle": "管理系统配置项、功能开关和热更新发布状态。",
   "adminStorageTitle": "存储管理",
   "adminStorageSubtitle": "管理 MinIO 桶、容量与索引维护。",
-  "adminExternalStorageTitle": "外部存储集成",
+  "adminExternalStorageTitle": "外部存储",
   "adminRefresh": "刷新",
   "adminRecalculate": "重算用量",
   "adminRecalculateDone": "已更新 {count} 位用户的存储用量",
@@ -2535,7 +2609,10 @@
   "videoFavorite": "收藏",
   "videoSubtitle": "字幕",
   "videoAudio": "音频",
-  "videoMovedToRecycleBin": "影片及源文件已永久删除",
+  "videoItemPermanentlyDeleted": "影片及源文件已永久删除",
+  "videoMetadataStatusComplete": "信息完整",
+  "videoMetadataStatusNeedsWork": "待整理",
+  "videoMetadataStatusIssue": "有问题",
   "videoDelete": "删除",
   "videoDeleteItemTitle": "删除影视条目？",
   "videoDeleteItemMessage": "\"{title}\" 及其源文件将被永久删除，此操作无法撤销。",
@@ -2681,7 +2758,7 @@
   "videoRequestFailed": "请求失败，请稍后重试",
   "videoOperationFailed": "操作失败，请稍后重试",
   "videoProcessing": "处理中",
-  "videoHistorySubtitle": "完整播放记录支持按已看完、未看完和时间范围筛选。",
+  "videoHistorySubtitle": "完整播放记录。",
   "videoClearHistory": "清空历史",
   "videoNoWatchHistory": "暂无观看历史。",
   "videoMoreFilters": "更多筛选",
@@ -3430,6 +3507,8 @@
     }
   },
   "musicCoverPick": "选择封面图片",
+  "musicCoverRemove": "移除封面",
+  "musicLyricsClear": "清空歌词",
   "musicLyricsFile": "歌词文件",
   "musicLyricsPick": "选择歌词文件（LRC / TXT / SRT / VTT）",
   "musicAddToPlaylistSuccess": "已加入「{name}」",
@@ -3496,6 +3575,8 @@
   "musicLyricsApply": "应用歌词",
   "musicLyricsNoResult": "未找到匹配歌词",
   "musicLyricsOnlineSource": "在线歌词",
+  "musicLyricsExisting": "已有歌词（可替换）",
+  "musicLyricsLoadFailed": "歌词加载失败",
   "musicLyricsApplied": "歌词已应用到「{title}」",
   "@musicLyricsApplied": {
     "placeholders": {
@@ -4023,7 +4104,7 @@
   "adminAddLocalStorageLocation": "添加挂载位置",
   "adminLocalStorageLocations": "本地存储位置",
   "adminReadOnlyMediaMounts": "只读媒体挂载",
-  "adminLocalStorageLocationsSubtitle": "仅登记部署白名单中的挂载键和相对目录，不保存宿主机绝对路径。",
+  "adminLocalStorageLocationsSubtitle": "系统按挂载自动登记的底层位置，仅供排查与清理。启用/停用媒体库请在上方「可信挂载点」操作。",
   "adminNoLocalStorageLocations": "尚未配置本地只读存储位置。",
   "adminDeleteLocalStorageLocation": "删除存储位置",
   "adminMountKey": "挂载键",
@@ -4213,9 +4294,9 @@
   "videoRedesignStatusPending": "待刮削",
   "videoRedesignStatusFailed": "失败",
   "videoRedesignFilterAll": "全部",
-  "videoRedesignFilterMatched": "已匹配",
-  "videoRedesignFilterPending": "待刮削",
-  "videoRedesignFilterFailed": "失败",
+  "videoRedesignFilterMatched": "信息完整",
+  "videoRedesignFilterPending": "待整理",
+  "videoRedesignFilterFailed": "有问题",
   "videoRedesignDetail": "详情",
   "videoRedesignPlayNow": "立即播放",
   "videoRedesignNoMatches": "无匹配条目",
@@ -4262,6 +4343,42 @@
   "videoDetailEdit": "编辑",
   "videoDetailSave": "保存",
   "videoDetailPlay": "播放",
+  "videoDetailContinueWatching": "继续观看",
+  "videoDetailPlayNextEpisode": "播放下一集",
+  "videoDetailNoPlayableEpisode": "当前系列没有可播放的分集",
+  "videoEpisodeFileMissing": "文件缺失",
+  "videoEpisodeFileChanged": "文件已变更",
+  "videoEpisodeSourceUnavailable": "来源不可用",
+  "videoEpisodeCheckLibrarySource": "检查库源",
+  "videoProgressSyncDeferred": "进度未能同步，已暂存本机",
+  "readerTtsUnavailable": "朗读不可用，请检查系统 TTS 或稍后重试",
+  "videoEmptyImportMedia": "导入媒体",
+  "videoSearchScopeLoadedOnly": "仅筛选已加载的 {count} 部",
+  "videoSearchNoHitsLoadMore": "未在已加载结果中找到，可继续加载更多或清空筛选",
+  "@videoSearchScopeLoadedOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerGoToLibrary": "去书库",
+  "readerSearchTruncated": "仅显示前 100 条，请缩小范围",
+  "readerShortcutsTouchTitle": "触控手势",
+  "readerShortcutTapSides": "点击左右侧翻页",
+  "readerShortcutDragScroll": "拖动滚动正文",
+  "videoContinueViewAll": "查看全部",
+  "videoEpisodeShortLabel": "S{season}E{episode}",
+  "@videoEpisodeShortLabel": {
+    "placeholders": {
+      "season": {
+        "type": "int"
+      },
+      "episode": {
+        "type": "int"
+      }
+    }
+  },
   "videoDetailTabOverview": "简介",
   "videoDetailTabVersions": "版本",
   "videoDetailTabSubtitles": "字幕",

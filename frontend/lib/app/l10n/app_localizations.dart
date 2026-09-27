@@ -230,6 +230,42 @@ abstract class AppLocalizations {
   /// **'Photos'**
   String get searchGroupPhoto;
 
+  /// No description provided for @searchGroupCommand.
+  ///
+  /// In en, this message translates to:
+  /// **'Commands'**
+  String get searchGroupCommand;
+
+  /// No description provided for @searchPaletteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search media, music, books, files, or type a command…'**
+  String get searchPaletteHint;
+
+  /// No description provided for @searchFooterNavigate.
+  ///
+  /// In en, this message translates to:
+  /// **'Navigate'**
+  String get searchFooterNavigate;
+
+  /// No description provided for @searchFooterSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get searchFooterSelect;
+
+  /// No description provided for @searchFooterFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get searchFooterFilter;
+
+  /// No description provided for @searchFooterClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get searchFooterClose;
+
   /// No description provided for @tasksTimeMinutesAgo.
   ///
   /// In en, this message translates to:
@@ -2012,6 +2048,12 @@ abstract class AppLocalizations {
   /// **'Move \"{name}\" to shared space? All users will see it.'**
   String filesMoveToSharedMessage(Object name);
 
+  /// No description provided for @filesMoveToSharedSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to shared space'**
+  String get filesMoveToSharedSuccess;
+
   /// No description provided for @filesMoveToPersonal.
   ///
   /// In en, this message translates to:
@@ -2035,6 +2077,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Move back'**
   String get filesMoveToPersonalLabel;
+
+  /// No description provided for @filesMoveToPersonalSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved back to personal space'**
+  String get filesMoveToPersonalSuccess;
+
+  /// No description provided for @filesMoveSpaceFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Space migration failed. Please try again later.'**
+  String get filesMoveSpaceFailed;
 
   /// No description provided for @filesCount.
   ///
@@ -3241,6 +3295,12 @@ abstract class AppLocalizations {
   /// **'Leave blank to keep the saved value'**
   String get filesKeepExistingSecretHint;
 
+  /// No description provided for @filesOAuthAppMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This type requires the administrator to configure an OAuth app under Admin - External Storage first. It is not configured yet, so creating is unavailable.'**
+  String get filesOAuthAppMissing;
+
   /// No description provided for @filesS3Provider.
   ///
   /// In en, this message translates to:
@@ -3252,6 +3312,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Endpoint (required)'**
   String get filesEndpointRequired;
+
+  /// No description provided for @filesEndpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint'**
+  String get filesEndpoint;
 
   /// No description provided for @filesEndpointHint.
   ///
@@ -7408,14 +7474,74 @@ abstract class AppLocalizations {
   /// No description provided for @adminLibrarySourcesEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No library sources yet. Create one on an enabled storage location.'**
+  /// **'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.'**
   String get adminLibrarySourcesEmpty;
 
   /// No description provided for @adminLibrarySourcesSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Create movie, series and anime sources on enabled storage locations.'**
+  /// **'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.'**
   String get adminLibrarySourcesSubtitle;
+
+  /// No description provided for @adminMountLibraryScanAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan all'**
+  String get adminMountLibraryScanAll;
+
+  /// No description provided for @adminMountLibraryScanAllSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Discovery scan started for {count} library sources'**
+  String adminMountLibraryScanAllSuccess(int count);
+
+  /// No description provided for @adminMountLibraryScanAllPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Started {success} scans, {failed} failed'**
+  String adminMountLibraryScanAllPartial(int success, int failed);
+
+  /// No description provided for @adminLibraryAdvancedAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced: add library source'**
+  String get adminLibraryAdvancedAdd;
+
+  /// No description provided for @adminMountLibraryScanAllHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Run discovery for movie, TV, and anime library sources together'**
+  String get adminMountLibraryScanAllHint;
+
+  /// No description provided for @adminMountLibraryProvisionSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Media library enabled. Put files under Movie / TV / Anime, then choose Scan all to import.'**
+  String get adminMountLibraryProvisionSuccess;
+
+  /// No description provided for @adminLibrarySourceCountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} total'**
+  String adminLibrarySourceCountLabel(int count);
+
+  /// No description provided for @adminLibrarySourceManaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount catalog'**
+  String get adminLibrarySourceManaged;
+
+  /// No description provided for @adminLibrarySourceCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get adminLibrarySourceCustom;
+
+  /// No description provided for @adminListRangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{start}–{end} of {total}'**
+  String adminListRangeLabel(Object start, Object end, Object total);
 
   /// No description provided for @adminLibraryReviewSubtitle.
   ///
@@ -7600,13 +7726,13 @@ abstract class AppLocalizations {
   /// No description provided for @adminExternalStorageIntegration.
   ///
   /// In en, this message translates to:
-  /// **'External Storage Integration'**
+  /// **'External Storage'**
   String get adminExternalStorageIntegration;
 
   /// No description provided for @adminExternalStorageSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Govern remote connection health; create and import connections under Files → Remote Import.'**
+  /// **'Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.'**
   String get adminExternalStorageSubtitle;
 
   /// No description provided for @adminOAuthAppsTitle.
@@ -7618,8 +7744,14 @@ abstract class AppLocalizations {
   /// No description provided for @adminOAuthAppsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Configure instance-level OAuth apps (BYOA) for OneDrive / Google connectors.'**
+  /// **'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.'**
   String get adminOAuthAppsSubtitle;
+
+  /// No description provided for @adminOAuthRedirectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Must exactly match the redirect URI registered in the provider console; usually this site\'s callback URL.'**
+  String get adminOAuthRedirectHint;
 
   /// No description provided for @adminNoOAuthApps.
   ///
@@ -7632,12 +7764,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New Connection'**
   String get adminNewConnection;
-
-  /// No description provided for @adminNewExternalStorage.
-  ///
-  /// In en, this message translates to:
-  /// **'New External Storage'**
-  String get adminNewExternalStorage;
 
   /// No description provided for @adminType.
   ///
@@ -7738,8 +7864,14 @@ abstract class AppLocalizations {
   /// No description provided for @adminConnectionListSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Credentials managed by backend, frontend only shows connection metadata.'**
+  /// **'Supervision only: enable or disable any user connection. Create and manage under Files - External Storage.'**
   String get adminConnectionListSubtitle;
+
+  /// No description provided for @adminExternalStorageOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get adminExternalStorageOwner;
 
   /// No description provided for @adminNoExternalStorage.
   ///
@@ -7864,7 +7996,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminStorageMountsSection.
   ///
   /// In en, this message translates to:
-  /// **'Local mount locations'**
+  /// **'Underlying storage locations (read-only)'**
   String get adminStorageMountsSection;
 
   /// No description provided for @adminTrustedMountsTitle.
@@ -7876,7 +8008,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminTrustedMountsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Mount keys registered in deployment config and their availability on this node. They back mount locations and mount-direct creation.'**
+  /// **'Mount keys registered in deployment config and their availability on this node. Enabling a mount provisions Movie / TV / Anime library sources under the agreed folders.'**
   String get adminTrustedMountsSubtitle;
 
   /// No description provided for @adminTrustedMountsEmpty.
@@ -7884,6 +8016,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No mounts registered in deployment config'**
   String get adminTrustedMountsEmpty;
+
+  /// No description provided for @adminMountLibraryEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable media library'**
+  String get adminMountLibraryEnable;
+
+  /// No description provided for @adminMountLibraryEnableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Creates three libraries at the mount root: Movie, TV, and Anime. Drop files into those folders to be scanned and classified.'**
+  String get adminMountLibraryEnableHint;
+
+  /// No description provided for @adminMountLibraryEnableHintOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enabled yet. Enabling creates libraries for Movie, TV, and Anime folders automatically.'**
+  String get adminMountLibraryEnableHintOff;
+
+  /// No description provided for @adminMountLibraryAutoImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-import after scan'**
+  String get adminMountLibraryAutoImport;
+
+  /// No description provided for @adminMountLibraryAutoImportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'On: matched files join the library after scan. Off: review and import from Library Sources first.'**
+  String get adminMountLibraryAutoImportHint;
+
+  /// No description provided for @adminMountLibraryStatusOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get adminMountLibraryStatusOff;
+
+  /// No description provided for @adminMountLibraryStatusOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get adminMountLibraryStatusOn;
+
+  /// No description provided for @adminMountLibraryStatusPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Incomplete'**
+  String get adminMountLibraryStatusPartial;
+
+  /// No description provided for @adminMountLibraryCatalogLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders'**
+  String get adminMountLibraryCatalogLabel;
+
+  /// No description provided for @adminMountLibraryCatalogMovie.
+  ///
+  /// In en, this message translates to:
+  /// **'Movie'**
+  String get adminMountLibraryCatalogMovie;
+
+  /// No description provided for @adminMountLibraryCatalogTv.
+  ///
+  /// In en, this message translates to:
+  /// **'TV'**
+  String get adminMountLibraryCatalogTv;
+
+  /// No description provided for @adminMountLibraryCatalogAnime.
+  ///
+  /// In en, this message translates to:
+  /// **'Anime'**
+  String get adminMountLibraryCatalogAnime;
+
+  /// No description provided for @adminMountLibraryPartialHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only {count}/3 type libraries exist. Turn on Enable media library to create the missing ones.'**
+  String adminMountLibraryPartialHint(int count);
+
+  /// No description provided for @adminMountLibraryProvisionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to configure mount media library'**
+  String get adminMountLibraryProvisionFailed;
 
   /// No description provided for @adminLibraryOrphanLocation.
   ///
@@ -8942,7 +9158,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminExternalStorageTitle.
   ///
   /// In en, this message translates to:
-  /// **'External Storage Integration'**
+  /// **'External Storage'**
   String get adminExternalStorageTitle;
 
   /// No description provided for @adminRefresh.
@@ -11183,11 +11399,29 @@ abstract class AppLocalizations {
   /// **'Audio'**
   String get videoAudio;
 
-  /// No description provided for @videoMovedToRecycleBin.
+  /// No description provided for @videoItemPermanentlyDeleted.
   ///
   /// In en, this message translates to:
   /// **'Media item and source file permanently deleted'**
-  String get videoMovedToRecycleBin;
+  String get videoItemPermanentlyDeleted;
+
+  /// No description provided for @videoMetadataStatusComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete info'**
+  String get videoMetadataStatusComplete;
+
+  /// No description provided for @videoMetadataStatusNeedsWork.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs organizing'**
+  String get videoMetadataStatusNeedsWork;
+
+  /// No description provided for @videoMetadataStatusIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Has issues'**
+  String get videoMetadataStatusIssue;
 
   /// No description provided for @videoDelete.
   ///
@@ -11792,7 +12026,7 @@ abstract class AppLocalizations {
   /// No description provided for @videoHistorySubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Complete playback records with filtering by watched, unwatched and time range.'**
+  /// **'Complete playback records.'**
   String get videoHistorySubtitle;
 
   /// No description provided for @videoClearHistory.
@@ -14903,6 +15137,18 @@ abstract class AppLocalizations {
   /// **'Select Cover Image'**
   String get musicCoverPick;
 
+  /// No description provided for @musicCoverRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Cover'**
+  String get musicCoverRemove;
+
+  /// No description provided for @musicLyricsClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Lyrics'**
+  String get musicLyricsClear;
+
   /// No description provided for @musicLyricsFile.
   ///
   /// In en, this message translates to:
@@ -15196,6 +15442,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Online lyrics'**
   String get musicLyricsOnlineSource;
+
+  /// No description provided for @musicLyricsExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing lyrics (replaceable)'**
+  String get musicLyricsExisting;
+
+  /// No description provided for @musicLyricsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load lyrics'**
+  String get musicLyricsLoadFailed;
 
   /// No description provided for @musicLyricsApplied.
   ///
@@ -17035,7 +17293,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminLocalStorageLocationsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Only deployment allowlisted mount keys and relative directories are stored; host absolute paths are not persisted.'**
+  /// **'Locations registered automatically for diagnostics and cleanup. Enable or disable media libraries under Trusted mounts above.'**
   String get adminLocalStorageLocationsSubtitle;
 
   /// No description provided for @adminNoLocalStorageLocations.
@@ -17719,19 +17977,19 @@ abstract class AppLocalizations {
   /// No description provided for @videoRedesignFilterMatched.
   ///
   /// In en, this message translates to:
-  /// **'Matched'**
+  /// **'Complete info'**
   String get videoRedesignFilterMatched;
 
   /// No description provided for @videoRedesignFilterPending.
   ///
   /// In en, this message translates to:
-  /// **'Pending'**
+  /// **'Needs organizing'**
   String get videoRedesignFilterPending;
 
   /// No description provided for @videoRedesignFilterFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed'**
+  /// **'Has issues'**
   String get videoRedesignFilterFailed;
 
   /// No description provided for @videoRedesignDetail.
@@ -17979,6 +18237,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'PLAY'**
   String get videoDetailPlay;
+
+  /// No description provided for @videoDetailContinueWatching.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get videoDetailContinueWatching;
+
+  /// No description provided for @videoDetailPlayNextEpisode.
+  ///
+  /// In en, this message translates to:
+  /// **'Play next episode'**
+  String get videoDetailPlayNextEpisode;
+
+  /// No description provided for @videoDetailNoPlayableEpisode.
+  ///
+  /// In en, this message translates to:
+  /// **'No playable episodes in this series'**
+  String get videoDetailNoPlayableEpisode;
+
+  /// No description provided for @videoEpisodeFileMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'File missing'**
+  String get videoEpisodeFileMissing;
+
+  /// No description provided for @videoEpisodeFileChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'File changed'**
+  String get videoEpisodeFileChanged;
+
+  /// No description provided for @videoEpisodeSourceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Source unavailable'**
+  String get videoEpisodeSourceUnavailable;
+
+  /// No description provided for @videoEpisodeCheckLibrarySource.
+  ///
+  /// In en, this message translates to:
+  /// **'Check library source'**
+  String get videoEpisodeCheckLibrarySource;
+
+  /// No description provided for @videoProgressSyncDeferred.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress was not synced and kept on this device'**
+  String get videoProgressSyncDeferred;
+
+  /// No description provided for @readerTtsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Read aloud is unavailable. Check system TTS or try again later'**
+  String get readerTtsUnavailable;
+
+  /// No description provided for @videoEmptyImportMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Import media'**
+  String get videoEmptyImportMedia;
+
+  /// No description provided for @videoSearchScopeLoadedOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Filtering only {count} loaded titles'**
+  String videoSearchScopeLoadedOnly(int count);
+
+  /// No description provided for @videoSearchNoHitsLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Not found in loaded results. Load more or clear filters'**
+  String get videoSearchNoHitsLoadMore;
+
+  /// No description provided for @readerGoToLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to library'**
+  String get readerGoToLibrary;
+
+  /// No description provided for @readerSearchTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing first 100 matches only. Narrow your search'**
+  String get readerSearchTruncated;
+
+  /// No description provided for @readerShortcutsTouchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Touch gestures'**
+  String get readerShortcutsTouchTitle;
+
+  /// No description provided for @readerShortcutTapSides.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap left/right edges to turn pages'**
+  String get readerShortcutTapSides;
+
+  /// No description provided for @readerShortcutDragScroll.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to scroll content'**
+  String get readerShortcutDragScroll;
+
+  /// No description provided for @videoContinueViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get videoContinueViewAll;
+
+  /// No description provided for @videoEpisodeShortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'S{season}E{episode}'**
+  String videoEpisodeShortLabel(int season, int episode);
 
   /// No description provided for @videoDetailTabOverview.
   ///

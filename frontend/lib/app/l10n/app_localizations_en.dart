@@ -76,6 +76,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchGroupPhoto => 'Photos';
 
   @override
+  String get searchGroupCommand => 'Commands';
+
+  @override
+  String get searchPaletteHint =>
+      'Search media, music, books, files, or type a command…';
+
+  @override
+  String get searchFooterNavigate => 'Navigate';
+
+  @override
+  String get searchFooterSelect => 'Select';
+
+  @override
+  String get searchFooterFilter => 'Filter';
+
+  @override
+  String get searchFooterClose => 'Close';
+
+  @override
   String tasksTimeMinutesAgo(Object count) {
     return '$count min ago';
   }
@@ -1048,6 +1067,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get filesMoveToSharedSuccess => 'Moved to shared space';
+
+  @override
   String get filesMoveToPersonal => 'Move to Personal Space';
 
   @override
@@ -1060,6 +1082,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesMoveToPersonalLabel => 'Move back';
+
+  @override
+  String get filesMoveToPersonalSuccess => 'Moved back to personal space';
+
+  @override
+  String get filesMoveSpaceFailed =>
+      'Space migration failed. Please try again later.';
 
   @override
   String get filesCount => 'files';
@@ -1737,10 +1766,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Leave blank to keep the saved value';
 
   @override
+  String get filesOAuthAppMissing =>
+      'This type requires the administrator to configure an OAuth app under Admin - External Storage first. It is not configured yet, so creating is unavailable.';
+
+  @override
   String get filesS3Provider => 'S3 Provider';
 
   @override
   String get filesEndpointRequired => 'Endpoint (required)';
+
+  @override
+  String get filesEndpoint => 'Endpoint';
 
   @override
   String get filesEndpointHint => 'e.g. http://omninest-minio:9000';
@@ -4020,11 +4056,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminLibrarySourcesEmpty =>
-      'No library sources yet. Create one on an enabled storage location.';
+      'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.';
 
   @override
   String get adminLibrarySourcesSubtitle =>
-      'Create movie, series and anime sources on enabled storage locations.';
+      'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.';
+
+  @override
+  String get adminMountLibraryScanAll => 'Scan all';
+
+  @override
+  String adminMountLibraryScanAllSuccess(int count) {
+    return 'Discovery scan started for $count library sources';
+  }
+
+  @override
+  String adminMountLibraryScanAllPartial(int success, int failed) {
+    return 'Started $success scans, $failed failed';
+  }
+
+  @override
+  String get adminLibraryAdvancedAdd => 'Advanced: add library source';
+
+  @override
+  String get adminMountLibraryScanAllHint =>
+      'Run discovery for movie, TV, and anime library sources together';
+
+  @override
+  String get adminMountLibraryProvisionSuccess =>
+      'Media library enabled. Put files under Movie / TV / Anime, then choose Scan all to import.';
+
+  @override
+  String adminLibrarySourceCountLabel(int count) {
+    return '$count total';
+  }
+
+  @override
+  String get adminLibrarySourceManaged => 'Mount catalog';
+
+  @override
+  String get adminLibrarySourceCustom => 'Custom';
+
+  @override
+  String adminListRangeLabel(Object start, Object end, Object total) {
+    return '$start–$end of $total';
+  }
 
   @override
   String get adminLibraryReviewSubtitle =>
@@ -4124,27 +4200,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminNoBucketConfig => 'No bucket config.';
 
   @override
-  String get adminExternalStorageIntegration => 'External Storage Integration';
+  String get adminExternalStorageIntegration => 'External Storage';
 
   @override
   String get adminExternalStorageSubtitle =>
-      'Govern remote connection health; create and import connections under Files → Remote Import.';
+      'Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.';
 
   @override
   String get adminOAuthAppsTitle => 'OAuth apps';
 
   @override
   String get adminOAuthAppsSubtitle =>
-      'Configure instance-level OAuth apps (BYOA) for OneDrive / Google connectors.';
+      'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.';
+
+  @override
+  String get adminOAuthRedirectHint =>
+      'Must exactly match the redirect URI registered in the provider console; usually this site\'s callback URL.';
 
   @override
   String get adminNoOAuthApps => 'No OAuth apps configured yet.';
 
   @override
   String get adminNewConnection => 'New Connection';
-
-  @override
-  String get adminNewExternalStorage => 'New External Storage';
 
   @override
   String get adminType => 'Type';
@@ -4196,7 +4273,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminConnectionListSubtitle =>
-      'Credentials managed by backend, frontend only shows connection metadata.';
+      'Supervision only: enable or disable any user connection. Create and manage under Files - External Storage.';
+
+  @override
+  String get adminExternalStorageOwner => 'Owner';
 
   @override
   String get adminNoExternalStorage => 'No external storage connections.';
@@ -4259,18 +4339,67 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageColumnType => 'Type';
 
   @override
-  String get adminStorageMountsSection => 'Local mount locations';
+  String get adminStorageMountsSection =>
+      'Underlying storage locations (read-only)';
 
   @override
   String get adminTrustedMountsTitle => 'Trusted mounts';
 
   @override
   String get adminTrustedMountsSubtitle =>
-      'Mount keys registered in deployment config and their availability on this node. They back mount locations and mount-direct creation.';
+      'Mount keys registered in deployment config and their availability on this node. Enabling a mount provisions Movie / TV / Anime library sources under the agreed folders.';
 
   @override
   String get adminTrustedMountsEmpty =>
       'No mounts registered in deployment config';
+
+  @override
+  String get adminMountLibraryEnable => 'Enable media library';
+
+  @override
+  String get adminMountLibraryEnableHint =>
+      'Creates three libraries at the mount root: Movie, TV, and Anime. Drop files into those folders to be scanned and classified.';
+
+  @override
+  String get adminMountLibraryEnableHintOff =>
+      'Not enabled yet. Enabling creates libraries for Movie, TV, and Anime folders automatically.';
+
+  @override
+  String get adminMountLibraryAutoImport => 'Auto-import after scan';
+
+  @override
+  String get adminMountLibraryAutoImportHint =>
+      'On: matched files join the library after scan. Off: review and import from Library Sources first.';
+
+  @override
+  String get adminMountLibraryStatusOff => 'Disabled';
+
+  @override
+  String get adminMountLibraryStatusOn => 'Enabled';
+
+  @override
+  String get adminMountLibraryStatusPartial => 'Incomplete';
+
+  @override
+  String get adminMountLibraryCatalogLabel => 'Folders';
+
+  @override
+  String get adminMountLibraryCatalogMovie => 'Movie';
+
+  @override
+  String get adminMountLibraryCatalogTv => 'TV';
+
+  @override
+  String get adminMountLibraryCatalogAnime => 'Anime';
+
+  @override
+  String adminMountLibraryPartialHint(int count) {
+    return 'Only $count/3 type libraries exist. Turn on Enable media library to create the missing ones.';
+  }
+
+  @override
+  String get adminMountLibraryProvisionFailed =>
+      'Failed to configure mount media library';
 
   @override
   String adminLibraryOrphanLocation(Object count) {
@@ -4859,7 +4988,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Manage MinIO buckets, capacity, and index maintenance.';
 
   @override
-  String get adminExternalStorageTitle => 'External Storage Integration';
+  String get adminExternalStorageTitle => 'External Storage';
 
   @override
   String get adminRefresh => 'Refresh';
@@ -6117,8 +6246,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoAudio => 'Audio';
 
   @override
-  String get videoMovedToRecycleBin =>
+  String get videoItemPermanentlyDeleted =>
       'Media item and source file permanently deleted';
+
+  @override
+  String get videoMetadataStatusComplete => 'Complete info';
+
+  @override
+  String get videoMetadataStatusNeedsWork => 'Needs organizing';
+
+  @override
+  String get videoMetadataStatusIssue => 'Has issues';
 
   @override
   String get videoDelete => 'Delete';
@@ -6445,8 +6583,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoProcessing => 'Processing';
 
   @override
-  String get videoHistorySubtitle =>
-      'Complete playback records with filtering by watched, unwatched and time range.';
+  String get videoHistorySubtitle => 'Complete playback records.';
 
   @override
   String get videoClearHistory => 'Clear History';
@@ -8136,6 +8273,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicCoverPick => 'Select Cover Image';
 
   @override
+  String get musicCoverRemove => 'Remove Cover';
+
+  @override
+  String get musicLyricsClear => 'Clear Lyrics';
+
+  @override
   String get musicLyricsFile => 'Lyrics File';
 
   @override
@@ -8297,6 +8440,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicLyricsOnlineSource => 'Online lyrics';
+
+  @override
+  String get musicLyricsExisting => 'Existing lyrics (replaceable)';
+
+  @override
+  String get musicLyricsLoadFailed => 'Failed to load lyrics';
 
   @override
   String musicLyricsApplied(Object title) {
@@ -9327,7 +9476,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminLocalStorageLocationsSubtitle =>
-      'Only deployment allowlisted mount keys and relative directories are stored; host absolute paths are not persisted.';
+      'Locations registered automatically for diagnostics and cleanup. Enable or disable media libraries under Trusted mounts above.';
 
   @override
   String get adminNoLocalStorageLocations =>
@@ -9714,13 +9863,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoRedesignFilterAll => 'All';
 
   @override
-  String get videoRedesignFilterMatched => 'Matched';
+  String get videoRedesignFilterMatched => 'Complete info';
 
   @override
-  String get videoRedesignFilterPending => 'Pending';
+  String get videoRedesignFilterPending => 'Needs organizing';
 
   @override
-  String get videoRedesignFilterFailed => 'Failed';
+  String get videoRedesignFilterFailed => 'Has issues';
 
   @override
   String get videoRedesignDetail => 'Detail';
@@ -9848,6 +9997,72 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoDetailPlay => 'PLAY';
+
+  @override
+  String get videoDetailContinueWatching => 'Continue';
+
+  @override
+  String get videoDetailPlayNextEpisode => 'Play next episode';
+
+  @override
+  String get videoDetailNoPlayableEpisode =>
+      'No playable episodes in this series';
+
+  @override
+  String get videoEpisodeFileMissing => 'File missing';
+
+  @override
+  String get videoEpisodeFileChanged => 'File changed';
+
+  @override
+  String get videoEpisodeSourceUnavailable => 'Source unavailable';
+
+  @override
+  String get videoEpisodeCheckLibrarySource => 'Check library source';
+
+  @override
+  String get videoProgressSyncDeferred =>
+      'Progress was not synced and kept on this device';
+
+  @override
+  String get readerTtsUnavailable =>
+      'Read aloud is unavailable. Check system TTS or try again later';
+
+  @override
+  String get videoEmptyImportMedia => 'Import media';
+
+  @override
+  String videoSearchScopeLoadedOnly(int count) {
+    return 'Filtering only $count loaded titles';
+  }
+
+  @override
+  String get videoSearchNoHitsLoadMore =>
+      'Not found in loaded results. Load more or clear filters';
+
+  @override
+  String get readerGoToLibrary => 'Go to library';
+
+  @override
+  String get readerSearchTruncated =>
+      'Showing first 100 matches only. Narrow your search';
+
+  @override
+  String get readerShortcutsTouchTitle => 'Touch gestures';
+
+  @override
+  String get readerShortcutTapSides => 'Tap left/right edges to turn pages';
+
+  @override
+  String get readerShortcutDragScroll => 'Drag to scroll content';
+
+  @override
+  String get videoContinueViewAll => 'View all';
+
+  @override
+  String videoEpisodeShortLabel(int season, int episode) {
+    return 'S${season}E$episode';
+  }
 
   @override
   String get videoDetailTabOverview => 'Overview';

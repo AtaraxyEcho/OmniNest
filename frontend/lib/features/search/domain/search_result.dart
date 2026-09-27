@@ -5,6 +5,8 @@ class SearchResult {
     required this.subtitle,
     required this.type,
     this.thumbnailUrl,
+    this.seriesId,
+    this.mediaType,
   });
 
   factory SearchResult.fromJson(Map<String, dynamic> json) {
@@ -14,6 +16,8 @@ class SearchResult {
       subtitle: json['subtitle']?.toString() ?? '',
       type: json['type']?.toString() ?? '',
       thumbnailUrl: json['thumbnailUrl']?.toString(),
+      seriesId: json['seriesId']?.toString(),
+      mediaType: json['mediaType']?.toString(),
     );
   }
 
@@ -22,4 +26,8 @@ class SearchResult {
   final String subtitle;
   final String type;
   final String? thumbnailUrl;
+
+  /// 影视分集所属系列 id；用于进剧集详情选集。
+  final String? seriesId;
+  final String? mediaType;
 }

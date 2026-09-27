@@ -75,6 +75,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchGroupPhoto => '照片';
 
   @override
+  String get searchGroupCommand => '命令';
+
+  @override
+  String get searchPaletteHint => '搜索媒体、音乐、书籍、文件，或输入命令…';
+
+  @override
+  String get searchFooterNavigate => '导航';
+
+  @override
+  String get searchFooterSelect => '选择';
+
+  @override
+  String get searchFooterFilter => '筛选';
+
+  @override
+  String get searchFooterClose => '关闭';
+
+  @override
   String tasksTimeMinutesAgo(Object count) {
     return '$count 分钟前';
   }
@@ -994,6 +1012,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get filesMoveToSharedSuccess => '已移到共享空间';
+
+  @override
   String get filesMoveToPersonal => '移回个人空间';
 
   @override
@@ -1006,6 +1027,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesMoveToPersonalLabel => '移回';
+
+  @override
+  String get filesMoveToPersonalSuccess => '已移回个人空间';
+
+  @override
+  String get filesMoveSpaceFailed => '空间迁移失败，请稍后重试';
 
   @override
   String get filesCount => '个文件';
@@ -1673,10 +1700,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesKeepExistingSecretHint => '留空以保留已保存的值';
 
   @override
+  String get filesOAuthAppMissing =>
+      '该类型需要管理员先在管理后台的外部存储页面配置 OAuth 应用，当前尚未配置，暂不能创建。';
+
+  @override
   String get filesS3Provider => 'S3 提供商';
 
   @override
   String get filesEndpointRequired => '端点地址（必填）';
+
+  @override
+  String get filesEndpoint => '端点地址';
 
   @override
   String get filesEndpointHint => '如 http://omninest-minio:9000';
@@ -3879,10 +3913,51 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminLibrarySourceAdd => '新建库源';
 
   @override
-  String get adminLibrarySourcesEmpty => '尚无库源，点击\"新建库源\"在已启用的存储位置上建立';
+  String get adminLibrarySourcesEmpty =>
+      '尚无库源。请先在上方「可信挂载点」启用媒体库，系统会自动建立电影/剧集/动漫三类库源。';
 
   @override
-  String get adminLibrarySourcesSubtitle => '在已启用的存储位置上建立电影、剧集与动漫库源。';
+  String get adminLibrarySourcesSubtitle =>
+      '启用挂载媒体库后自动出现的三类库源；也可在高级设置中手动新建自定义库源。';
+
+  @override
+  String get adminMountLibraryScanAll => '扫描全部';
+
+  @override
+  String adminMountLibraryScanAllSuccess(int count) {
+    return '已对 $count 个库源发起发现扫描';
+  }
+
+  @override
+  String adminMountLibraryScanAllPartial(int success, int failed) {
+    return '已发起 $success 个扫描，$failed 个失败';
+  }
+
+  @override
+  String get adminLibraryAdvancedAdd => '高级：新建库源';
+
+  @override
+  String get adminMountLibraryScanAllHint => '对电影、剧集、动漫三个库源一并发起发现扫描';
+
+  @override
+  String get adminMountLibraryProvisionSuccess =>
+      '媒体库已启用。资源放入 Movie / TV / Anime 目录后，点击「扫描全部」即可入库。';
+
+  @override
+  String adminLibrarySourceCountLabel(int count) {
+    return '共 $count 条';
+  }
+
+  @override
+  String get adminLibrarySourceManaged => '挂载约定';
+
+  @override
+  String get adminLibrarySourceCustom => '自定义';
+
+  @override
+  String adminListRangeLabel(Object start, Object end, Object total) {
+    return '第 $start–$end 条 / 共 $total 条';
+  }
 
   @override
   String get adminLibraryReviewSubtitle => '选择库源后审阅扫描结果并应用入库。';
@@ -3980,27 +4055,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminNoBucketConfig => '当前没有桶配置。';
 
   @override
-  String get adminExternalStorageIntegration => '外部存储集成';
+  String get adminExternalStorageIntegration => '外部存储';
 
   @override
   String get adminExternalStorageSubtitle =>
-      '治理远程来源连接状态；连接创建与导入请在文件模块的远程导入中操作。';
+      '监管全部用户的外部存储连接并配置实例级 OAuth 应用；连接的创建与导入由用户在文件 → 外部存储完成。';
 
   @override
   String get adminOAuthAppsTitle => 'OAuth 应用';
 
   @override
   String get adminOAuthAppsSubtitle =>
-      '为 OneDrive / Google 等连接器配置实例级 OAuth 应用（BYOA）。';
+      '实例级集成配置：为 OneDrive / Google 等连接器登记应用凭据，用户连接的 OAuth 授权依赖此项。';
+
+  @override
+  String get adminOAuthRedirectHint => '需与提供方控制台注册的重定向 URI 完全一致，通常为本站回调地址。';
 
   @override
   String get adminNoOAuthApps => '尚未配置 OAuth 应用。';
 
   @override
   String get adminNewConnection => '新增连接';
-
-  @override
-  String get adminNewExternalStorage => '新增外部存储';
 
   @override
   String get adminType => '类型';
@@ -4051,7 +4126,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConnectionList => '连接列表';
 
   @override
-  String get adminConnectionListSubtitle => '凭据由后端托管，前端只展示连接元数据。';
+  String get adminConnectionListSubtitle =>
+      '仅监管：启用或停用任意用户的连接。创建与管理入口在文件 → 外部存储。';
+
+  @override
+  String get adminExternalStorageOwner => '所有者';
 
   @override
   String get adminNoExternalStorage => '当前没有外部存储连接。';
@@ -4114,17 +4193,64 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageColumnType => '类型';
 
   @override
-  String get adminStorageMountsSection => '本地挂载位置';
+  String get adminStorageMountsSection => '底层存储位置（只读）';
 
   @override
   String get adminTrustedMountsTitle => '可信挂载点';
 
   @override
   String get adminTrustedMountsSubtitle =>
-      '部署配置登记的挂载键及其在当前节点的可用状态，是挂载位置与挂载直达创建的来源。';
+      '部署配置登记的挂载键及其在当前节点的可用状态。启用后按 Movie / TV / Anime 约定目录自动建立三类影视库源。';
 
   @override
   String get adminTrustedMountsEmpty => '未在部署配置中登记挂载';
+
+  @override
+  String get adminMountLibraryEnable => '启用媒体库';
+
+  @override
+  String get adminMountLibraryEnableHint =>
+      '开启后在挂载根下建立三类影视库：电影 / 剧集 / 动漫。资源放入对应目录即可被扫描归类。';
+
+  @override
+  String get adminMountLibraryEnableHintOff =>
+      '尚未启用。开启后按 Movie、TV、Anime 目录自动建库，无需再手动新建库源。';
+
+  @override
+  String get adminMountLibraryAutoImport => '扫描后自动入库';
+
+  @override
+  String get adminMountLibraryAutoImportHint =>
+      '开启：扫描到匹配文件后自动加入媒体库。关闭：先到「库源」审阅再入库。';
+
+  @override
+  String get adminMountLibraryStatusOff => '未启用';
+
+  @override
+  String get adminMountLibraryStatusOn => '已启用';
+
+  @override
+  String get adminMountLibraryStatusPartial => '库不完整';
+
+  @override
+  String get adminMountLibraryCatalogLabel => '约定目录';
+
+  @override
+  String get adminMountLibraryCatalogMovie => '电影';
+
+  @override
+  String get adminMountLibraryCatalogTv => '剧集';
+
+  @override
+  String get adminMountLibraryCatalogAnime => '动漫';
+
+  @override
+  String adminMountLibraryPartialHint(int count) {
+    return '当前仅有 $count/3 个类型库。打开「启用媒体库」会补齐缺失目录并统一启用。';
+  }
+
+  @override
+  String get adminMountLibraryProvisionFailed => '挂载媒体库配置失败';
 
   @override
   String adminLibraryOrphanLocation(Object count) {
@@ -4696,7 +4822,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageSubtitle => '管理 MinIO 桶、容量与索引维护。';
 
   @override
-  String get adminExternalStorageTitle => '外部存储集成';
+  String get adminExternalStorageTitle => '外部存储';
 
   @override
   String get adminRefresh => '刷新';
@@ -5922,7 +6048,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoAudio => '音频';
 
   @override
-  String get videoMovedToRecycleBin => '影片及源文件已永久删除';
+  String get videoItemPermanentlyDeleted => '影片及源文件已永久删除';
+
+  @override
+  String get videoMetadataStatusComplete => '信息完整';
+
+  @override
+  String get videoMetadataStatusNeedsWork => '待整理';
+
+  @override
+  String get videoMetadataStatusIssue => '有问题';
 
   @override
   String get videoDelete => '删除';
@@ -6243,7 +6378,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoProcessing => '处理中';
 
   @override
-  String get videoHistorySubtitle => '完整播放记录支持按已看完、未看完和时间范围筛选。';
+  String get videoHistorySubtitle => '完整播放记录。';
 
   @override
   String get videoClearHistory => '清空历史';
@@ -7892,6 +8027,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicCoverPick => '选择封面图片';
 
   @override
+  String get musicCoverRemove => '移除封面';
+
+  @override
+  String get musicLyricsClear => '清空歌词';
+
+  @override
   String get musicLyricsFile => '歌词文件';
 
   @override
@@ -8045,6 +8186,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicLyricsOnlineSource => '在线歌词';
+
+  @override
+  String get musicLyricsExisting => '已有歌词（可替换）';
+
+  @override
+  String get musicLyricsLoadFailed => '歌词加载失败';
 
   @override
   String musicLyricsApplied(Object title) {
@@ -9041,7 +9188,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminLocalStorageLocationsSubtitle =>
-      '仅登记部署白名单中的挂载键和相对目录，不保存宿主机绝对路径。';
+      '系统按挂载自动登记的底层位置，仅供排查与清理。启用/停用媒体库请在上方「可信挂载点」操作。';
 
   @override
   String get adminNoLocalStorageLocations => '尚未配置本地只读存储位置。';
@@ -9413,13 +9560,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoRedesignFilterAll => '全部';
 
   @override
-  String get videoRedesignFilterMatched => '已匹配';
+  String get videoRedesignFilterMatched => '信息完整';
 
   @override
-  String get videoRedesignFilterPending => '待刮削';
+  String get videoRedesignFilterPending => '待整理';
 
   @override
-  String get videoRedesignFilterFailed => '失败';
+  String get videoRedesignFilterFailed => '有问题';
 
   @override
   String get videoRedesignDetail => '详情';
@@ -9545,6 +9692,67 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoDetailPlay => '播放';
+
+  @override
+  String get videoDetailContinueWatching => '继续观看';
+
+  @override
+  String get videoDetailPlayNextEpisode => '播放下一集';
+
+  @override
+  String get videoDetailNoPlayableEpisode => '当前系列没有可播放的分集';
+
+  @override
+  String get videoEpisodeFileMissing => '文件缺失';
+
+  @override
+  String get videoEpisodeFileChanged => '文件已变更';
+
+  @override
+  String get videoEpisodeSourceUnavailable => '来源不可用';
+
+  @override
+  String get videoEpisodeCheckLibrarySource => '检查库源';
+
+  @override
+  String get videoProgressSyncDeferred => '进度未能同步，已暂存本机';
+
+  @override
+  String get readerTtsUnavailable => '朗读不可用，请检查系统 TTS 或稍后重试';
+
+  @override
+  String get videoEmptyImportMedia => '导入媒体';
+
+  @override
+  String videoSearchScopeLoadedOnly(int count) {
+    return '仅筛选已加载的 $count 部';
+  }
+
+  @override
+  String get videoSearchNoHitsLoadMore => '未在已加载结果中找到，可继续加载更多或清空筛选';
+
+  @override
+  String get readerGoToLibrary => '去书库';
+
+  @override
+  String get readerSearchTruncated => '仅显示前 100 条，请缩小范围';
+
+  @override
+  String get readerShortcutsTouchTitle => '触控手势';
+
+  @override
+  String get readerShortcutTapSides => '点击左右侧翻页';
+
+  @override
+  String get readerShortcutDragScroll => '拖动滚动正文';
+
+  @override
+  String get videoContinueViewAll => '查看全部';
+
+  @override
+  String videoEpisodeShortLabel(int season, int episode) {
+    return 'S${season}E$episode';
+  }
 
   @override
   String get videoDetailTabOverview => '简介';
