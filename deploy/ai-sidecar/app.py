@@ -3,6 +3,7 @@ OmniNest 图像识别侧车服务。
 提供人脸检测、人脸嵌入和人脸聚类功能。
 """
 
+import hashlib
 import hmac
 import io
 import logging
@@ -46,6 +47,41 @@ def _has_required_face_models(candidate) -> bool:
         return False
     models = getattr(candidate, "models", None)
     return models is not None and all(module in models for module in REQUIRED_FACE_MODULES)
+
+
+def _sha256_of(path: str) -> str:
+    """流式计算文件 sha256，避免大模型文件整体载入内存。"""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_model_checksums(insightface_root: str) -> None:
+    """按 INSIGHTFACE_MODEL_SHA256 校验模型文件，未配置时记录实际摘要供运维核对。
+
+    环境变量格式：逗号分隔的 ``文件名:sha256`` 对，文件位于
+    ``{INSIGHTFACE_ROOT}/models/buffalo_l``。校验失败抛出异常，
+    由生命周期捕获后禁用人脸功能（fail-closed），不加载不可信模型。
+    """
+    model_dir = os.path.join(insightface_root, "models", "buffalo_l")
+    expected = os.environ.get("INSIGHTFACE_MODEL_SHA256", "").strip()
+    if not expected:
+        if os.path.isdir(model_dir):
+            for name in sorted(os.listdir(model_dir)):
+                if name.endswith(".onnx"):
+                    logger.info("模型文件摘要（未配置校验）: %s=%s", name, _sha256_of(os.path.join(model_dir, name)))
+        return
+    for pair in expected.split(","):
+        name, _, digest = pair.partition(":")
+        name, digest = name.strip(), digest.strip().lower()
+        path = os.path.join(model_dir, name)
+        if not os.path.isfile(path):
+            raise RuntimeError(f"模型文件缺失: {name}")
+        actual = _sha256_of(path)
+        if actual != digest:
+            raise RuntimeError(f"模型校验失败: {name} 期望 {digest} 实际 {actual}")
 
 
 def _face_recognition_ready() -> bool:
@@ -131,6 +167,7 @@ async def lifespan(app: FastAPI):
             providers=["CPUExecutionProvider"],
         )
         loaded_face_app.prepare(ctx_id=-1, det_size=(640, 640))
+        _verify_model_checksums(insightface_root)
         if not _has_required_face_models(loaded_face_app):
             raise RuntimeError("InsightFace detection/recognition models are incomplete")
         face_app = loaded_face_app

@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -39,10 +39,27 @@ import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignReque
  * @author OmniNest
  */
 @Component
-@RequiredArgsConstructor
 public class MinioObjectStorageClient implements ObjectStorageClient {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
+    private final S3Presigner dockerS3Presigner;
+
+    /**
+     * 创建对象存储客户端。
+     *
+     * @param s3Client 服务端视角 S3 客户端
+     * @param s3Presigner 服务端视角签名器
+     * @param dockerS3Presigner 容器网络视角签名器（转码/探测容器访问用）
+     */
+    public MinioObjectStorageClient(
+            S3Client s3Client,
+            @Qualifier("s3Presigner") S3Presigner s3Presigner,
+            @Qualifier("dockerS3Presigner") S3Presigner dockerS3Presigner
+    ) {
+        this.s3Client = s3Client;
+        this.s3Presigner = s3Presigner;
+        this.dockerS3Presigner = dockerS3Presigner;
+    }
 
     /**
      * {@inheritDoc}
@@ -58,6 +75,19 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
                 .putObjectRequest(putObjectRequest)
                 .build());
         return toUri(presignedRequest.url());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public URI createContainerDownloadUrl(ObjectStorageKey key, Duration ttl) {
+        return toUri(dockerS3Presigner.presignGetObject(builder -> builder
+                        .signatureDuration(ttl)
+                        .getObjectRequest(request -> request
+                                .bucket(key.bucket())
+                                .key(key.objectKey())))
+                .url());
     }
 
     /**

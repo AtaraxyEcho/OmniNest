@@ -19,6 +19,7 @@ class RedisActiveSessionRegistryTest {
 
     private StringRedisTemplate redis;
     private ValueOperations<String, String> valueOperations;
+    private org.springframework.beans.factory.ObjectProvider<ActiveSessionFallbackLookup> fallbackProvider;
     private RedisActiveSessionRegistry registry;
 
     @SuppressWarnings("unchecked")
@@ -27,7 +28,8 @@ class RedisActiveSessionRegistryTest {
         redis = Mockito.mock(StringRedisTemplate.class);
         valueOperations = Mockito.mock(ValueOperations.class);
         Mockito.when(redis.opsForValue()).thenReturn(valueOperations);
-        registry = new RedisActiveSessionRegistry(redis);
+        fallbackProvider = Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        registry = new RedisActiveSessionRegistry(redis, fallbackProvider);
     }
 
     @Test
@@ -62,6 +64,32 @@ class RedisActiveSessionRegistryTest {
         Mockito.when(redis.opsForValue()).thenThrow(new IllegalStateException("Redis unavailable"));
 
         Optional<UUID> result = registry.find(UUID.randomUUID(), "web");
+
+        Assertions.assertThat(result).isEmpty();
+    }
+
+    @Test
+    void findFallsBackToPersistentLookupWhenRedisFails() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        Mockito.when(valueOperations.get("session:active:" + userId + ":web"))
+                .thenThrow(new IllegalStateException("redis down"));
+        ActiveSessionFallbackLookup fallback = (uid, platform) -> Optional.of(sessionId);
+        Mockito.when(fallbackProvider.getIfAvailable()).thenReturn(fallback);
+
+        Optional<UUID> result = registry.find(userId, "web");
+
+        Assertions.assertThat(result).contains(sessionId);
+    }
+
+    @Test
+    void findReturnsEmptyWhenRedisFailsWithoutFallback() {
+        UUID userId = UUID.randomUUID();
+        Mockito.when(valueOperations.get("session:active:" + userId + ":web"))
+                .thenThrow(new IllegalStateException("redis down"));
+        Mockito.when(fallbackProvider.getIfAvailable()).thenReturn(null);
+
+        Optional<UUID> result = registry.find(userId, "web");
 
         Assertions.assertThat(result).isEmpty();
     }

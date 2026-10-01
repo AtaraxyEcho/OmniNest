@@ -490,6 +490,22 @@ public class FileQueryService {
     }
 
     /**
+     * 创建当前用户拥有的、容器网络视角可读取的进程输入。
+     * 供转码/探测等容器化进程使用；归属校验与 {@link #createOwnedProcessInput} 一致。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param fileId 文件节点 ID
+     * @return 进程输入
+     */
+    public FileProcessInput createOwnedContainerProcessInput(UUID ownerUserId, UUID fileId) {
+        FileNode node = findActiveNode(ownerUserId, fileId);
+        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件节点没有可读取内容");
+        }
+        return fileContentAccessService.createContainerProcessInput(node);
+    }
+
+    /**
      * 打开当前用户拥有的文件内容流。
      *
      * <p>调用方必须关闭返回句柄。该接口用于进程内模块协作，避免业务模块直接访问文件 Repository。

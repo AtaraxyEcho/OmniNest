@@ -63,6 +63,10 @@ public class FileContentAccessService {
      * @param node 已完成权限校验的文件节点
      * @return 进程输入
      */
+    public FileProcessInput createContainerProcessInput(FileNode node) {
+        return requireProvider(node).createContainerProcessInput(node);
+    }
+
     public FileProcessInput createProcessInput(FileNode node) {
         return requireProvider(node).createProcessInput(node);
     }

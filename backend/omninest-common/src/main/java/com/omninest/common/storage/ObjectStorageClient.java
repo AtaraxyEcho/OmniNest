@@ -32,6 +32,18 @@ public interface ObjectStorageClient {
     URI createDownloadUrl(ObjectStorageKey key, Duration ttl);
 
     /**
+     * 创建供容器/进程网络视角读取的下载地址（如转码容器访问对象存储）。
+     * 默认与普通下载地址一致；对象存储实现覆写为容器网络可达端点的签名。
+     *
+     * @param key 对象存储键
+     * @param ttl 地址有效期
+     * @return 下载地址
+     */
+    default URI createContainerDownloadUrl(ObjectStorageKey key, Duration ttl) {
+        return createDownloadUrl(key, ttl);
+    }
+
+    /**
      * 创建对象下载地址，可覆盖响应 Content-Type 与 Content-Disposition。
      * 用于把浏览器会执行的类型（HTML/SVG 等）强制为附件下载。
      *

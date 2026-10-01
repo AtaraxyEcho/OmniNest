@@ -58,7 +58,8 @@ curl http://127.0.0.1:8090/ready
 | --- | --- | --- |
 | `OMNINEST_AI_SIDECAR_SECRET` | 空 | 受保护接口共享密钥；生产环境必须显式设置 |
 | `INSIGHTFACE_ROOT` | `/app/models/insightface` | InsightFace 模型目录 |
-| `AI_MAX_IMAGE_BYTES` | `33554432` | 单张图片最大字节数 |
+| `AI_MAX_IMAGE_BYTES` | `67108864` | 单张图片最大字节数（代码默认 64MB，历史文档误写 32MB 已更正） |
+| `INSIGHTFACE_MODEL_SHA256` | 空 | 模型完整性校验：逗号分隔的 `文件名:sha256` 对（位于 `models/buffalo_l`）。未配置时启动日志会打印各 onnx 实际摘要供运维留档；配置后校验失败将禁用人脸功能（fail-closed） |
 | `AI_MAX_IMAGE_WIDTH` | `30000` | 图片最大宽度 |
 | `AI_MAX_IMAGE_HEIGHT` | `30000` | 图片最大高度 |
 | `AI_MAX_IMAGE_PIXELS` | `100000000` | 图片最大像素数 |

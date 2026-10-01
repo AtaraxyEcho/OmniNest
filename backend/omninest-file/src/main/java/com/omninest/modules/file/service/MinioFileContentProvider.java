@@ -11,6 +11,7 @@ import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.repository.FileObjectRepository;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -90,7 +91,7 @@ public class MinioFileContentProvider implements FileContentProvider {
     /**
      * 危险类型强制附件下载；普通类型维持内联语义以保留在线预览能力。
      */
-    private java.net.URI createSafeDownloadUrl(String fileName, FileObject object) {
+    private URI createSafeDownloadUrl(String fileName, FileObject object) {
         ObjectStorageKey key = new ObjectStorageKey(object.getBucketName(), object.getObjectKey());
         String mimeType = object.getMimeType() == null ? "" : object.getMimeType().toLowerCase(Locale.ROOT);
         if (!INLINE_EXECUTABLE_TYPES.contains(mimeType)) {
@@ -108,6 +109,16 @@ public class MinioFileContentProvider implements FileContentProvider {
     @Override
     public FileProcessInput createProcessInput(FileNode node) {
         return new FileProcessInput(node.getId(), PROVIDER_TYPE, createDownloadUrl(node).downloadUrl());
+    }
+
+    @Override
+    public FileProcessInput createContainerProcessInput(FileNode node) {
+        FileObject object = requireObject(node);
+        URI url = objectStorageClient.createContainerDownloadUrl(
+                new ObjectStorageKey(object.getBucketName(), object.getObjectKey()),
+                DOWNLOAD_URL_TTL
+        );
+        return new FileProcessInput(node.getId(), PROVIDER_TYPE, url.toString());
     }
 
     @Override

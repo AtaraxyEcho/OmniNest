@@ -66,6 +66,15 @@ public interface FileContentProvider {
     FileProcessInput createProcessInput(FileNode node);
 
     /**
+     * 创建容器/进程网络视角可读取的输入地址。
+     * 默认与 {@link #createProcessInput(FileNode)} 一致（本地只读路径本就容器可达）；
+     * 对象存储提供者覆写为容器网络端点的签名 URL，业务模块不再自行改签。
+     */
+    default FileProcessInput createContainerProcessInput(FileNode node) {
+        return createProcessInput(node);
+    }
+
+    /**
      * 返回可直接处理 Range 的本地资源。
      *
      * @param node 文件节点
