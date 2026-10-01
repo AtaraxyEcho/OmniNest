@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
+import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 import 'package:omninest/app/route/boot_page.dart';
 import 'package:omninest/app/web_initial_location.dart';
@@ -11,7 +12,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
-import 'package:omninest/features/admin/domain/admin_console_access.dart';
+import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
@@ -63,6 +64,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     authRefreshListenable.value++;
   });
   ref.listen(serverConfigProvider, (previous, next) {
+    authRefreshListenable.value++;
+  });
+  // 手机形态变化（分屏、折叠屏开合）影响管理台可达性：触发守卫对当前
+  // 路由重估，避免已在 /admin 时形态切换后停留在不可达页面。
+  ref.listen(phoneFormFactorProvider, (previous, next) {
     authRefreshListenable.value++;
   });
   // Web 引擎的 defaultRouteName 恒为 '/'，且 Dart 侧 Uri.base 在 isolate
@@ -458,8 +464,7 @@ String? _redirect(Ref ref, GoRouterState state) {
     isSetupChecking: setupState.isLoading,
     setupRequired: setupState.asData?.value.setupRequired ?? false,
     location: location,
-    userRole: authState.asData?.value.user?.role,
-    userPermissions: authState.asData?.value.user?.permissions,
+    canAccessAdminConsole: ref.read(canAccessAdminConsoleProvider),
   );
 }
 
@@ -510,14 +515,17 @@ String _serverSetupLocation(Uri uri) {
   ).toString();
 }
 
+/// 认证与安装门控决策；返回 null 表示放行。
+///
+/// [canAccessAdminConsole] 由调用方经 `canAccessAdminConsoleProvider` 求得
+/// （权限与手机形态的统一事实源），本函数只做路由侧决策。
 String? authRedirectPath({
   required bool isChecking,
   required bool isAuthenticated,
   required String location,
+  required bool canAccessAdminConsole,
   bool isSetupChecking = false,
   bool setupRequired = false,
-  String? userRole,
-  Set<String>? userPermissions,
 }) {
   if (isChecking || isSetupChecking) {
     // 认证/安装检查在途：仅放行公开路径，受保护路径停泊到引导页。
@@ -571,12 +579,10 @@ String? authRedirectPath({
     ).toString();
   }
 
-  // 管理页面：具备任一管理端入口权限即可进入；分区细粒度由页面权限校验
+  // 管理页面：入口判定统一走 canAccessAdminConsoleProvider（权限 +
+  // 手机形态）；分区细粒度由页面权限校验
   if (isAuthenticated && path.startsWith('/admin')) {
-    if (!canAccessAdminConsole(
-      userRole: userRole,
-      userPermissions: userPermissions,
-    )) {
+    if (!canAccessAdminConsole) {
       return '/portal';
     }
   }

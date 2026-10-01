@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/movie_detail_action_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';

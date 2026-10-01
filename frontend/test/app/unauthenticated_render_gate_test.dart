@@ -76,6 +76,7 @@ void main() {
         return authRedirectPath(
           isChecking: session == null,
           isAuthenticated: session?.isAuthenticated ?? false,
+          canAccessAdminConsole: false,
           location: state.uri.toString(),
         );
       },

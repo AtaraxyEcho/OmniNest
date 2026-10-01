@@ -12,6 +12,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/admin',
       ),
       '/login?redirect=%2Fadmin',
@@ -23,6 +24,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: true,
+        canAccessAdminConsole: true,
         location: '/login',
       ),
       '/portal',
@@ -34,6 +36,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: true,
+        canAccessAdminConsole: true,
         location: '/login?redirect=%2Fadmin%2Fusers',
       ),
       '/admin/users',
@@ -45,12 +48,18 @@ void main() {
       authRedirectPath(
         isChecking: true,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/portal',
       ),
       '/boot?redirect=%2Fportal',
     );
     expect(
-      authRedirectPath(isChecking: true, isAuthenticated: false, location: '/'),
+      authRedirectPath(
+        isChecking: true,
+        isAuthenticated: false,
+        canAccessAdminConsole: true,
+        location: '/',
+      ),
       '/boot?redirect=%2Fportal',
     );
   });
@@ -60,6 +69,7 @@ void main() {
       authRedirectPath(
         isChecking: true,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/login',
       ),
       isNull,
@@ -68,6 +78,7 @@ void main() {
       authRedirectPath(
         isChecking: true,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/s/tok-1',
       ),
       isNull,
@@ -76,6 +87,7 @@ void main() {
       authRedirectPath(
         isChecking: true,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/shared/photos/item/tok-1',
       ),
       isNull,
@@ -84,6 +96,7 @@ void main() {
       authRedirectPath(
         isChecking: true,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/boot',
       ),
       isNull,
@@ -95,6 +108,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: true,
+        canAccessAdminConsole: true,
         location: '/boot?redirect=%2Fadmin%2Fusers',
       ),
       '/admin/users',
@@ -103,6 +117,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/boot?redirect=%2Fportal',
       ),
       '/login?redirect=%2Fportal',
@@ -111,6 +126,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: true,
+        canAccessAdminConsole: true,
         location: '/boot',
       ),
       '/portal',
@@ -122,6 +138,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         isSetupChecking: true,
         location: '/portal',
       ),
@@ -134,6 +151,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         setupRequired: true,
         location: '/login',
       ),
@@ -143,6 +161,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         setupRequired: true,
         location: '/setup',
       ),
@@ -155,6 +174,7 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: false,
+        canAccessAdminConsole: true,
         location: '/setup',
       ),
       '/login',
@@ -163,84 +183,44 @@ void main() {
       authRedirectPath(
         isChecking: false,
         isAuthenticated: true,
+        canAccessAdminConsole: true,
         location: '/setup',
       ),
       '/portal',
     );
   });
 
-  test('普通用户访问管理页面时跳转到门户', () {
-    expect(
-      authRedirectPath(
-        isChecking: false,
-        isAuthenticated: true,
-        location: '/admin/users',
-        userRole: 'MEMBER',
-      ),
-      '/portal',
-    );
+  // 管理台可达性（权限与手机形态）由 canAccessAdminConsoleProvider 统一求值，
+  // 路由侧只按布尔决策；权限与形态的推导变体见 test/app/phone_form_factor_test.dart
+  // 与 admin 模块既有 domain 测试。
+  test('管理台入口不可达时已认证用户被重定向到门户', () {
+    for (final location in ['/admin', '/admin/users', '/admin/config']) {
+      expect(
+        authRedirectPath(
+          isChecking: false,
+          isAuthenticated: true,
+          canAccessAdminConsole: false,
+          location: location,
+        ),
+        '/portal',
+        reason: location,
+      );
+    }
   });
 
-  test('持有 task:admin 的非管理员角色可进入管理端', () {
-    expect(
-      authRedirectPath(
-        isChecking: false,
-        isAuthenticated: true,
-        location: '/admin/tasks',
-        userRole: 'MEMBER',
-        userPermissions: {'task:read', 'task:admin'},
-      ),
-      isNull,
-    );
-  });
-
-  test('仅持有 task:read 的成员不可进入管理端', () {
-    expect(
-      authRedirectPath(
-        isChecking: false,
-        isAuthenticated: true,
-        location: '/admin/tasks',
-        userRole: 'MEMBER',
-        userPermissions: {'task:read', 'media:write'},
-      ),
-      '/portal',
-    );
-  });
-
-  test('管理员访问管理页面时允许通过', () {
-    expect(
-      authRedirectPath(
-        isChecking: false,
-        isAuthenticated: true,
-        location: '/admin/users',
-        userRole: 'ADMIN',
-      ),
-      isNull,
-    );
-  });
-
-  test('超级管理员访问管理页面时允许通过', () {
-    expect(
-      authRedirectPath(
-        isChecking: false,
-        isAuthenticated: true,
-        location: '/admin/config',
-        userRole: 'SUPER_ADMIN',
-      ),
-      isNull,
-    );
-  });
-
-  test('未指定角色的已认证用户访问管理页面时跳转到门户', () {
-    expect(
-      authRedirectPath(
-        isChecking: false,
-        isAuthenticated: true,
-        location: '/admin',
-        userRole: null,
-      ),
-      '/portal',
-    );
+  test('管理台入口可达时管理页面放行', () {
+    for (final location in ['/admin', '/admin/users', '/admin/config']) {
+      expect(
+        authRedirectPath(
+          isChecking: false,
+          isAuthenticated: true,
+          canAccessAdminConsole: true,
+          location: location,
+        ),
+        isNull,
+        reason: location,
+      );
+    }
   });
 
   test('认证状态刷新时保持同一个路由实例', () async {

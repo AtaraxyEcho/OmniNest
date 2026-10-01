@@ -14,6 +14,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/desktop_tray_locale_binding.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
+import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
@@ -185,10 +186,12 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       // 会与实际渲染字号在超大无障碍档位下分叉。
       systemScaler: ComposedScaler(systemScaler, 1),
       child: NotificationForegroundToast(
-        child: DesktopFormMinWidth(
-          mobileForm: mobileForm,
-          hoverCapable: hoverCapable,
-          child: content,
+        child: DeviceFormFactorListener(
+          child: DesktopFormMinWidth(
+            mobileForm: mobileForm,
+            hoverCapable: hoverCapable,
+            child: content,
+          ),
         ),
       ),
     );

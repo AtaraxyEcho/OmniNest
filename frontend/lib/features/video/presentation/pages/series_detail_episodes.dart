@@ -121,8 +121,11 @@ class _SeasonEpisodeList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 「检查库源」深链进 /admin/storage：须管理台可达（手机形态隐藏，与
+    // 全局入口同源）；库管理能力本身不受此收敛。
     final canManageLibrary =
-        ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
+        ref.watch(userCapabilitiesProvider).canManageMediaLibrary &&
+        ref.watch(canAccessAdminConsoleProvider);
     final episodesAsync = ref.watch(
       movieSeasonDetailProvider(
         SeasonKey(seriesId: seriesId, seasonNumber: seasonNumber),

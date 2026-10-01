@@ -6,13 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
-import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
 /// 右上角头像下拉菜单组件。
 ///
@@ -183,11 +183,12 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
                   label: l10n.coreStorage,
                   onTap: () => _closeAndRun(() => _go('/files')),
                 ),
-                // 管理后台以表格为主、无窄屏降级，手机形态不暴露入口；
-                // 平板与桌面仍可达（见 docs/2026-09-23/002 决策 D2）。
+                // 管理台入口：手机形态不暴露（shortestSide 判定，旋转不变），
+                // 平板、桌面与 Web 端仍可达（docs/2026-09-23/002 决策 D2）。
+                // core 组件不得 import 业务模块（架构守卫 CORE_FEATURE_DEPENDENCY），
+                // 权限沿用本菜单既有角色判定；路由守卫仍是可达性的最终裁决。
                 if ((role == 'SUPER_ADMIN' || role == 'ADMIN') &&
-                    MediaQuery.sizeOf(context).width >=
-                        ResponsiveBreakpoints.mobile)
+                    !ref.watch(phoneFormFactorProvider))
                   _MenuActionRow(
                     icon: Icons.admin_panel_settings_outlined,
                     label: l10n.coreAdmin,

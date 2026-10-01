@@ -196,11 +196,13 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _AdminTextAction(
-          label: l10n.videoAdminLibrarySources,
-          // 库源管理在 Admin 控制台 storage 分区（/admin/:section 深链）。
-          onTap: () => context.go('/admin/storage'),
-        ),
+        // 库源管理在 Admin 控制台 storage 分区（/admin/:section 深链）：
+        // 手机形态管理台不可达，入口同步隐藏（与全局判定同源）。
+        if (ref.watch(canAccessAdminConsoleProvider))
+          _AdminTextAction(
+            label: l10n.videoAdminLibrarySources,
+            onTap: () => context.go('/admin/storage'),
+          ),
         _AdminTextAction(
           label:
               activeTaskCount > 0
