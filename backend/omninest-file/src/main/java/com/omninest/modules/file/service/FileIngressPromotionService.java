@@ -196,7 +196,9 @@ public class FileIngressPromotionService {
         }
         ObjectStorageKey quarantineKey = quarantineKey(item);
         ObjectStorageKey targetKey = new ObjectStorageKey(item.getTargetBucket(), item.getTargetObjectKey());
-        objectStorageClient.copyObject(quarantineKey, targetKey);
+        // 以服务端核实的魔数类型重写对象元数据：下载侧判定与存储层直出行为一致，
+        // 关闭"申报 text/html 而魔数判为 text/plain"时按存储 Content-Type 内联直出的窗口
+        objectStorageClient.copyObject(quarantineKey, targetKey, item.getMimeType());
         FileObject savedObject = fileObjectRepository.save(toFileObject(item, sha256));
         FileNode promotedNode = event.asVersionOfFileId() != null
                 ? promoteAsVersion(item, event.asVersionOfFileId(), savedObject)

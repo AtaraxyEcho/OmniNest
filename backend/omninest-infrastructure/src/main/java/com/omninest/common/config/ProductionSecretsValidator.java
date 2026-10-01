@@ -35,7 +35,9 @@ public class ProductionSecretsValidator implements ApplicationRunner {
             "CHANGE_ME_ARIA2_RPC_SECRET",
             "CHANGE_ME_RCLONE_RC_PASS",
             "CHANGE_ME_JWT_SECRET_AT_LEAST_32_BYTES",
-            "CHANGE_ME_AI_SIDECAR_SECRET"
+            "CHANGE_ME_AI_SIDECAR_SECRET",
+            // dev 模板公开的 32 零字节 Base64 KEK：是合法 AES-256 密钥，必须点名拒绝
+            "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
     );
 
     private static final Map<String, String> REQUIRED_SECRETS = new LinkedHashMap<>();

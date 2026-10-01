@@ -62,7 +62,12 @@ public class FileNodeSupport {
                     FileNode shared = fileNodeRepository
                             .findByIdAndSpaceTypeAndDeletedFalse(fileId, SpaceType.SHARED)
                             .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-                    sharedSpaceService.validatePermission(userId, SharedSpacePermission.Action.CAN_BROWSE);
+                    try {
+                        sharedSpaceService.validatePermission(userId, SharedSpacePermission.Action.CAN_BROWSE);
+                    } catch (BusinessException exception) {
+                        // 无浏览权限按不存在处理，避免 403/404 差异成为共享文件存在性探测 oracle
+                        throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
+                    }
                     return shared;
                 });
     }

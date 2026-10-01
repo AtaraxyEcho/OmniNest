@@ -205,6 +205,7 @@ services:
     container_name: omninest-ai-sidecar
     environment:
       INSIGHTFACE_ROOT: /app/models/insightface
+      INSIGHTFACE_MODEL_SHA256: ${INSIGHTFACE_MODEL_SHA256:-}
       OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:-change-me-ai-sidecar-random-secret}
       OMP_NUM_THREADS: ${AI_CPU_THREADS:-2}
       TZ: Asia/Shanghai

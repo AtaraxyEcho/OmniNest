@@ -141,6 +141,19 @@ public interface ObjectStorageClient {
     void copyObject(ObjectStorageKey source, ObjectStorageKey target);
 
     /**
+     * 复制对象并以 REPLACE 元数据指令写入目标 Content-Type。
+     * 供晋升链把服务端核实的魔数类型固化到对象元数据，
+     * 使下载侧的类型判定与存储层直出行为一致。
+     *
+     * @param source 源对象键
+     * @param target 目标对象键
+     * @param contentType 目标 Content-Type
+     */
+    default void copyObject(ObjectStorageKey source, ObjectStorageKey target, String contentType) {
+        copyObject(source, target);
+    }
+
+    /**
      * 获取对象输入流。
      *
      * @param key 对象存储键

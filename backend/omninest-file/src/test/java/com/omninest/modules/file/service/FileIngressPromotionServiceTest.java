@@ -128,7 +128,8 @@ class FileIngressPromotionServiceTest {
         verify(ingressLifecycleService).markScanning(INGRESS_ID);
         verify(ingressLifecycleService).markClean(INGRESS_ID, SHA256);
         verify(ingressLifecycleService).markAvailable(eq(INGRESS_ID), any(UUID.class));
-        verify(objectStorageClient).copyObject(any(), any());
+        // 晋升复制携带服务端核实的 MIME（REPLACE 元数据）
+        verify(objectStorageClient).copyObject(any(), any(), eq("application/pdf"));
         verify(objectStorageClient).removeObject(any(ObjectStorageKey.class));
         verify(storageQuotaService).settleReservation("UPLOAD", SESSION_ID, 512L);
         verify(postProcessingTaskService).enqueueMediaAutoImport(any());
@@ -189,7 +190,7 @@ class FileIngressPromotionServiceTest {
         assertThat(session.getQuotaReservationId()).isNull();
         verify(storageQuotaService).releaseReservation("UPLOAD", SESSION_ID);
         verify(notificationPublisher).notifyOrLog(any(), anyString(), anyString(), anyString(), any());
-        verify(objectStorageClient, never()).copyObject(any(), any());
+        verify(objectStorageClient, never()).copyObject(any(), any(), any());
         verify(fileNodeRepository, never()).save(any());
     }
 
@@ -207,7 +208,7 @@ class FileIngressPromotionServiceTest {
 
         verify(ingressLifecycleService).markFailed(eq(INGRESS_ID), eq(false), anyString(), anyString());
         assertThat(session.getStatus()).isEqualTo("REJECTED");
-        verify(objectStorageClient, never()).copyObject(any(), any());
+        verify(objectStorageClient, never()).copyObject(any(), any(), any());
     }
 
     @Test
@@ -318,7 +319,7 @@ class FileIngressPromotionServiceTest {
                 .isInstanceOf(FileIngressRejectedException.class)
                 .hasMessageContaining("实际大小");
         assertThat(session.getStatus()).isEqualTo("REJECTED");
-        verify(objectStorageClient, never()).copyObject(any(), any());
+        verify(objectStorageClient, never()).copyObject(any(), any(), any());
     }
 
     @Test

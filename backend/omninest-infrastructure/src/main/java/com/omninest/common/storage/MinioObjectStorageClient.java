@@ -22,6 +22,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.MetadataDirective;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -277,17 +278,36 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
      */
     @Override
     public void copyObject(ObjectStorageKey source, ObjectStorageKey target) {
-        String copySource = URLEncoder.encode(
-                        source.bucket() + "/" + source.objectKey(),
-                        StandardCharsets.UTF_8
-                )
-                .replace("%2F", "/")
-                .replace("+", "%20");
+        String copySource = copySource(source);
         s3Client.copyObject(CopyObjectRequest.builder()
                 .copySource(copySource)
                 .destinationBucket(target.bucket())
                 .destinationKey(target.objectKey())
                 .build());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void copyObject(ObjectStorageKey source, ObjectStorageKey target, String contentType) {
+        String copySource = copySource(source);
+        s3Client.copyObject(CopyObjectRequest.builder()
+                .copySource(copySource)
+                .destinationBucket(target.bucket())
+                .destinationKey(target.objectKey())
+                .metadataDirective(MetadataDirective.REPLACE)
+                .contentType(contentType)
+                .build());
+    }
+
+    private String copySource(ObjectStorageKey source) {
+        return URLEncoder.encode(
+                        source.bucket() + "/" + source.objectKey(),
+                        StandardCharsets.UTF_8
+                )
+                .replace("%2F", "/")
+                .replace("+", "%20");
     }
 
     /**

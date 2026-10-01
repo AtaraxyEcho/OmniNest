@@ -840,6 +840,22 @@ public class ExternalImportExecutionService {
         });
     }
 
+    /**
+     * 导入任务终态结算：共享任务按实际已导入字节（transferredBytes）计入共享用量
+     * ——目录导入逐文件独立提交，部分成功后失败/取消时这些字节已真实占用共享空间，
+     * 不能因任务未完成而漏记；个人任务沿用预留结算（失败路径即释放差额）。
+     */
+    private void settleImportQuota(StorageImportTask task) {
+        long importedBytes = task.getTransferredBytes();
+        if (SpaceType.SHARED == resolveSpaceType(task)) {
+            if (importedBytes > 0) {
+                sharedSpaceQuotaService.increaseUsage(importedBytes);
+            }
+            return;
+        }
+        storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), importedBytes);
+    }
+
     private boolean isDirectoryTask(StorageImportTask task) {
         return ImportSourceKind.DIRECTORY == ImportSourceKind.fromValue(task.getSourceKind());
     }
@@ -887,11 +903,7 @@ public class ExternalImportExecutionService {
     private void markCancelled(UUID taskId) {
         transactionTemplate.executeWithoutResult(status -> {
             StorageImportTask task = requireTask(taskId);
-            storageQuotaService.settleReservation(
-                    "EXTERNAL_IMPORT",
-                    task.getId(),
-                    task.getTransferredBytes()
-            );
+            settleImportQuota(task);
             task.setStatus(ImportTaskStatus.CANCELLED.getValue());
             task.setSpeedBytes(0L);
             importTaskRepository.save(task);
@@ -909,11 +921,7 @@ public class ExternalImportExecutionService {
             if (ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
                 return;
             }
-            storageQuotaService.settleReservation(
-                    "EXTERNAL_IMPORT",
-                    task.getId(),
-                    task.getTransferredBytes()
-            );
+            settleImportQuota(task);
             task.setStatus(ImportTaskStatus.FAILED.getValue());
             task.setSpeedBytes(0L);
             task.setErrorSummary(errorSummary);

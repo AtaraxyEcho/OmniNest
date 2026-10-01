@@ -52,7 +52,16 @@ public class RedisActiveSessionRegistry implements ActiveSessionRegistry {
     public Optional<UUID> find(UUID userId, String platform) {
         try {
             String sessionId = redis.opsForValue().get(key(userId, platform));
-            return sessionId == null ? Optional.empty() : Optional.of(UUID.fromString(sessionId));
+            if (sessionId == null) {
+                // 键缺失无法区分“无会话”与“Redis 丢失/写失败”：咨询持久层回退，
+                // 覆盖 Redis 重启清空或 register 写失败导致的互斥失联窗口
+                ActiveSessionFallbackLookup fallback = fallbackLookup.getIfAvailable();
+                if (fallback != null) {
+                    return fallback.findActiveSessionId(userId, platform);
+                }
+                return Optional.empty();
+            }
+            return Optional.of(UUID.fromString(sessionId));
         } catch (RuntimeException exception) {
             ActiveSessionFallbackLookup fallback = fallbackLookup.getIfAvailable();
             if (fallback != null) {

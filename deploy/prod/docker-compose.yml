@@ -440,6 +440,7 @@ services:
       dockerfile: Dockerfile
     environment:
       INSIGHTFACE_ROOT: /app/models/insightface
+      INSIGHTFACE_MODEL_SHA256: ${INSIGHTFACE_MODEL_SHA256:-}
       OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:?OMNINEST_AI_SIDECAR_SECRET 必须显式配置}
       OMP_NUM_THREADS: ${AI_CPU_THREADS:-1}
       TZ: Asia/Shanghai

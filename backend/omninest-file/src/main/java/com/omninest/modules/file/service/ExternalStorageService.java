@@ -16,6 +16,7 @@ import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileItemDto;
 import com.omninest.modules.file.dto.ExternalFileListDto;
+import com.omninest.modules.file.dto.ExternalStorageTestResultDto;
 import com.omninest.modules.file.dto.ExternalSpaceDto;
 import com.omninest.modules.file.dto.ExternalStorageConnectorDto;
 import com.omninest.modules.file.dto.ImportTaskDto;
@@ -215,7 +216,7 @@ public class ExternalStorageService {
      * @param accountId 账户 ID
      * @return 测试结果
      */
-    public com.omninest.modules.file.dto.ExternalStorageTestResultDto testConnection(
+    public ExternalStorageTestResultDto testConnection(
             UUID ownerUserId,
             UUID accountId
     ) {
@@ -227,7 +228,7 @@ public class ExternalStorageService {
             account.setLastErrorCode(null);
             account.setLastCheckedAt(Instant.now());
             accountRepository.save(account);
-            return new com.omninest.modules.file.dto.ExternalStorageTestResultDto(
+            return new ExternalStorageTestResultDto(
                     true, null, "连接正常", account.getLastCheckedAt());
         } catch (RuntimeException exception) {
             String code = "CONNECTION_FAILED";
@@ -238,7 +239,7 @@ public class ExternalStorageService {
             account.setLastCheckedAt(Instant.now());
             accountRepository.save(account);
             log.warn("外部存储连接测试失败: accountId={}", accountId, exception);
-            return new com.omninest.modules.file.dto.ExternalStorageTestResultDto(
+            return new ExternalStorageTestResultDto(
                     false, code, message, account.getLastCheckedAt());
         }
     }

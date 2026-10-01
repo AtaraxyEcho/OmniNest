@@ -1,6 +1,7 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.user.domain.AuditLog;
@@ -314,7 +315,7 @@ public class AdminOperationsPagingService {
 
     private int normalizePageSize(int size) {
         int requested = size <= 0 ? DEFAULT_PAGE_SIZE : size;
-        return com.omninest.common.api.PageClamps.safeSize(requested, 100);
+        return PageClamps.safeSize(requested, 100);
     }
 
     private String normalizeFilter(String value, boolean uppercase) {

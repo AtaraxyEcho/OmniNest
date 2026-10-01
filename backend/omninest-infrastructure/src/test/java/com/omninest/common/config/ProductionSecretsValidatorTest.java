@@ -107,7 +107,7 @@ class ProductionSecretsValidatorTest {
                         "omninest.rclone.password", "rclone-secret-0123456789ab",
                         "omninest.aria2.rpc-secret", "aria2-secret-0123456789abcd",
                         "omninest.security.credential-encryption-key",
-                                "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+                                "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
                         "omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!"
                 )
         ));
@@ -131,7 +131,7 @@ class ProductionSecretsValidatorTest {
         environment.setProperty("omninest.rclone.password", "rclone-secret-0123456789ab");
         environment.setProperty("omninest.aria2.rpc-secret", "aria2-secret-0123456789abcd");
         environment.setProperty("omninest.security.credential-encryption-key",
-                "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
+                "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
         environment.setProperty("omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!");
         environment.setProperty("photo.ai.secret", "ai-sidecar-secret-0123456789");
         environment.setProperty("omninest.setup.enabled", "false");

@@ -1,6 +1,8 @@
 package com.omninest.modules.user.repository;
 
 import com.omninest.modules.user.domain.AuthActiveSession;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -143,6 +145,7 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
     /**
      * 通过会话 ID 查询（含已撤销）。
      */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<AuthActiveSession> findByIdAndUserId(UUID sessionId, UUID userId);
 
     /**

@@ -67,10 +67,12 @@ class OfflineDownloadExecutionServiceTest {
     private final FileIngressSafetyService ingressSafetyService = Mockito.mock(FileIngressSafetyService.class);
     private final FileIngressLifecycleService ingressLifecycleService =
             Mockito.mock(FileIngressLifecycleService.class);
+    private final SharedSpaceQuotaService sharedSpaceQuotaService =
+            Mockito.mock(SharedSpaceQuotaService.class);
 
     private final OfflineDownloadExecutionService service = new OfflineDownloadExecutionService(
             offlineTaskRepository, fileNodeRepository, fileObjectRepository,
-            storageQuotaService, objectStorageClient, domainEventPublisher, postProcessingTaskService,
+            storageQuotaService, sharedSpaceQuotaService, objectStorageClient, domainEventPublisher, postProcessingTaskService,
             sourceResolver, offlineDownloadGateway, objectStorageBuckets,
             transactionTemplate, notificationService, taskRecordService, safeUrlValidator,
             fileTreeScanner, ingressSafetyService, ingressLifecycleService

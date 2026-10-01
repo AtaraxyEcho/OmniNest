@@ -77,6 +77,7 @@ public class OfflineDownloadExecutionService {
     private final FileNodeRepository fileNodeRepository;
     private final FileObjectRepository fileObjectRepository;
     private final StorageQuotaService storageQuotaService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final ObjectStorageClient objectStorageClient;
     private final DomainEventPublisher domainEventPublisher;
     private final FilePostProcessingTaskService postProcessingTaskService;
@@ -377,17 +378,27 @@ public class OfflineDownloadExecutionService {
                 return;
             }
             long totalSize = totalSize(completedFiles);
-            storageQuotaService.reserve(
-                    task.getOwnerUserId(),
-                    "OFFLINE_DOWNLOAD",
-                    task.getId(),
-                    totalSize,
-                    Instant.now().plus(Duration.ofHours(24))
-            );
-            FileNode targetParent = resolveParent(task.getOwnerUserId(), task.getTargetParentId());
+            boolean sharedTarget = resolveSpaceType(task) == SpaceType.SHARED;
+            if (sharedTarget) {
+                // 共享空间无预留机制：入库前复核容量，完成时按实际计入共享用量
+                sharedSpaceQuotaService.checkQuota(totalSize);
+            } else {
+                storageQuotaService.reserve(
+                        task.getOwnerUserId(),
+                        "OFFLINE_DOWNLOAD",
+                        task.getId(),
+                        totalSize,
+                        Instant.now().plus(Duration.ofHours(24))
+                );
+            }
+            FileNode targetParent = resolveParent(task.getOwnerUserId(), task.getTargetParentId(), resolveSpaceType(task));
             FileNode importRoot = createImportRootIfNeeded(task, targetParent, status, completedFiles);
             FileNode completedNode = importFiles(task, taskDirectory, targetParent, importRoot, completedFiles);
-            storageQuotaService.settleReservation("OFFLINE_DOWNLOAD", task.getId(), totalSize);
+            if (sharedTarget) {
+                sharedSpaceQuotaService.increaseUsage(totalSize);
+            } else {
+                storageQuotaService.settleReservation("OFFLINE_DOWNLOAD", task.getId(), totalSize);
+            }
             task.setStatus(TaskStatus.COMPLETED.getValue());
             task.setTotalBytes(totalSize);
             task.setCompletedBytes(totalSize);
@@ -689,14 +700,23 @@ public class OfflineDownloadExecutionService {
         return Optional.ofNullable(status.displayName()).filter(name -> !name.isBlank());
     }
 
-    private FileNode resolveParent(UUID ownerUserId, UUID parentId) {
+    private FileNode resolveParent(UUID ownerUserId, UUID parentId, SpaceType spaceType) {
         if (parentId == null) {
             return null;
         }
         FileNode parent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(parentId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+                .orElseGet(() -> spaceType == SpaceType.SHARED
+                        ? fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(parentId, SpaceType.SHARED)
+                                .orElse(null)
+                        : null);
+        if (parent == null) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在");
+        }
         if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+        }
+        if (parent.getSpaceType() != spaceType) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级目录与目标空间类型不一致");
         }
         return parent;
     }

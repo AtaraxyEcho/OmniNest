@@ -31,7 +31,8 @@ docker compose -f "${COMPOSE_FILE}" exec -T postgres \
 echo "[2/3] MinIO 数据卷打包 (omninest-minio)..."
 docker run --rm --volumes-from "${PROJECT_NAME}-minio-1" \
     -v "$(cd "${BACKUP_DIR}" && pwd):/backup" alpine \
-    sh -c "tar czf /backup/minio-data.tar.gz -C /data ."
+    sh -c "umask 077 && tar czf /backup/minio-data.tar.gz -C /data ."
+    chmod 600 "${BACKUP_DIR}/minio-data.tar.gz" 2>/dev/null || true
 
 echo "[3/3] 写入清单..."
 {

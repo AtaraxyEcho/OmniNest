@@ -21,7 +21,8 @@ String _csvRow(List<String> cells) {
 }
 
 String _csvCell(String value) {
-  var normalized = value.replaceAll('\r\n', '\n');
+  // CRLF 与孤立 CR 一并归一为 LF，裸 CR 落入未引用字段会被 Excel 当行终止符拆行
+  var normalized = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   // 公式注入中和：= + - @ 等开头的单元格前置单引号，
   // 避免 Excel/WPS 把用户可控内容（文件名、用户名等）当作公式或 DDE 执行
   if (normalized.isNotEmpty &&
