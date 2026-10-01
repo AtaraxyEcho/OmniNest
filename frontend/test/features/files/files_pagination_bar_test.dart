@@ -97,6 +97,42 @@ void main() {
     );
   });
 
+  testWidgets('语义开启下菜单开合与跳页不产生语义树异常', (tester) async {
+    final semanticsHandle = tester.ensureSemantics();
+    var tappedPage = -1;
+    var rowsChanged = -1;
+    await tester.pumpWidget(
+      host(
+        currentPage: 0,
+        totalPages: 12,
+        totalElements: 120,
+        rowsPerPage: 10,
+        onPageChanged: (page) => tappedPage = page,
+        onRowsPerPageChanged: (size) => rowsChanged = size,
+      ),
+    );
+
+    // 每页条数菜单（根 Overlay 挂载）在语义树在场时开合。
+    await tester.tap(find.text('10'));
+    await tester.pumpAndSettle();
+    final item20 = find.descendant(
+      of: find.byType(MenuItemButton),
+      matching: find.text('20'),
+    );
+    expect(item20, findsOneWidget);
+    await tester.tap(item20);
+    await tester.pumpAndSettle();
+    expect(rowsChanged, 20);
+
+    // 跳页输入提交。
+    await tester.enterText(find.byType(TextField), '9');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(tappedPage, 8);
+    semanticsHandle.dispose();
+    expect(tester.takeException(), isNull, reason: '语义更新不得抛框架异常');
+  });
+
   testWidgets('计数组与翻页组整体靠左，不两端铺开', (tester) async {
     await tester.pumpWidget(
       host(currentPage: 0, totalPages: 12, totalElements: 120, rowsPerPage: 10),

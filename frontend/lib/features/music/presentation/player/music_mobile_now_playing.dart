@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
@@ -410,6 +411,8 @@ class _MobileArtworkView extends StatelessWidget {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 260),
                 switchInCurve: Curves.easeOutCubic,
+                // 退场子树排除语义，避免与入场子树同批更新触发桥失败。
+                layoutBuilder: excludeExitingSemanticsStack,
                 child: SizedBox.square(
                   key: ValueKey<String?>('mobile-cover-${track?.id}'),
                   dimension: coverSize,
@@ -614,6 +617,8 @@ class _MobileTrackHeader extends StatelessWidget {
             onPressed: onToggleFavorite,
             icon: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
+              // 退场子树排除语义，避免与入场子树同批更新触发桥失败。
+              layoutBuilder: excludeExitingSemanticsStack,
               child: Icon(
                 track?.favorite == true
                     ? Icons.favorite_rounded

@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -250,6 +251,10 @@ class _MusicMobileMiniPlayerSlotState
                                         duration: const Duration(
                                           milliseconds: 160,
                                         ),
+                                        // 退场子树排除语义，避免与入场子树
+                                        // 同批更新触发桥失败。
+                                        layoutBuilder:
+                                            excludeExitingSemanticsStack,
                                         child: Icon(
                                           track.favorite
                                               ? Icons.favorite_rounded

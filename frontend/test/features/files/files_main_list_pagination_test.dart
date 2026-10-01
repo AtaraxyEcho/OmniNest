@@ -90,6 +90,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('语义开启下翻页过渡不产生语义树异常', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semanticsHandle = tester.ensureSemantics();
+
+    final controller = _PagedMainListController(<int>[]);
+    final container = ProviderContainer.test(
+      overrides: [fileBrowserControllerProvider.overrideWith(() => controller)],
+    );
+    addTearDown(container.dispose);
+
+    final router = GoRouter(
+      initialLocation: '/files',
+      routes: [
+        GoRoute(
+          path: '/files',
+          builder:
+              (context, state) => const FileBrowserPage(
+                initialSection: FileManagerSection.allFiles,
+              ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          theme: OmniNestTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 语义树在场时连续翻页：视图切换淡入与页码窗口滑动同帧更新语义。
+    await tester.tap(find.text('2'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3'));
+    await tester.pumpAndSettle();
+    expect(find.text('共 3000 条'), findsOneWidget);
+    semanticsHandle.dispose();
+    expect(tester.takeException(), isNull, reason: '语义更新不得抛框架异常');
+  });
+
   testWidgets('单页目录也常驻渲染分页条', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;

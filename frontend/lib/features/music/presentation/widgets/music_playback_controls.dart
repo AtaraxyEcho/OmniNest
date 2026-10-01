@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music 播放按钮的视觉层级。
@@ -146,6 +147,9 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
                   child: Center(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 150),
+                      // 退场子树排除语义，避免与入场子树同批更新触发
+                      // Windows 桥 AXTree 更新失败。
+                      layoutBuilder: excludeExitingSemanticsStack,
                       transitionBuilder:
                           (child, animation) => FadeTransition(
                             opacity: animation,
@@ -379,6 +383,8 @@ class _MusicPlayModeButtonState extends State<MusicPlayModeButton> {
               child: AnimatedSwitcher(
                 duration: duration,
                 switchInCurve: Curves.easeOutCubic,
+                // 退场子树排除语义，避免与入场子树同批更新触发桥失败。
+                layoutBuilder: excludeExitingSemanticsStack,
                 child: Icon(
                   MusicPlayModeButton.iconFor(widget.playMode),
                   key: ValueKey<MusicPlayMode>(widget.playMode),

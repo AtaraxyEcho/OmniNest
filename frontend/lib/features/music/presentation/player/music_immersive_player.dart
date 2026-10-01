@@ -13,6 +13,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
