@@ -7,7 +7,6 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_hero_flight_shuttle.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
@@ -755,10 +754,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                       imageUrl != null && imageUrl.isNotEmpty
                           ? Hero(
                             tag: 'photo-cover-${photo.id}',
-                            // 方向感知飞行载体：进入时瓦片图打底 + 封面档
-                            // 清晰图交叉淡入；退出时直接飞查看器清晰图。
-                            // 不带 Material 底，规避默认 flight 与
-                            // InteractiveViewer 叠加的对角线白缝。
+                            // Default Material flight + InteractiveViewer
+                            // Transform can leave a diagonal white seam.
+                            // Fly the destination child without extra chrome.
                             flightShuttleBuilder:
                                 (
                                   flightContext,
@@ -766,15 +764,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                                   flightDirection,
                                   fromHeroContext,
                                   toHeroContext,
-                                ) => PhotoHeroFlightShuttle(
-                                  photo: photo,
-                                  animation: animation,
-                                  flightDirection: flightDirection,
-                                  fromChild:
-                                      (fromHeroContext.widget as Hero).child,
-                                  coverDecodeWidth:
-                                      viewerDecodeWidths(flightContext).cover,
-                                ),
+                                ) => (toHeroContext.widget as Hero).child,
                             child: ClipRect(
                               child: InteractiveViewer(
                                 minScale: 1,
@@ -913,10 +903,6 @@ class _ProgressivePhotoImageState
   /// 原图层异步就绪后的短淡入时长；仅异步加载播放，同步缓存命中不播。
   static const Duration _sourceFadeIn = Duration(milliseconds: 220);
 
-  /// 封面层异步就绪后的短淡入：柔化 Hero 落位后封面才完成解码的直出跳变；
-  /// 同步缓存命中（含预取与飞行层共享解码）不播，保证落位无缝接管。
-  static const Duration _coverFadeIn = Duration(milliseconds: 120);
-
   int _retryTick = 0;
   bool _recovering = false;
 
@@ -971,7 +957,6 @@ class _ProgressivePhotoImageState
             imageUrl: coverUrl,
             cacheKey: '${photo.coverCacheKey}$retrySuffix',
             memCacheWidth: coverDecodeWidth,
-            fadeInDuration: _coverFadeIn,
             onError: _handleImageError,
           ),
         _ViewerNetworkImage(

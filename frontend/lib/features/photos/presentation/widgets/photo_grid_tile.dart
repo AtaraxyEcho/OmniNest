@@ -67,38 +67,27 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
               Localizations.localeOf(context).toString(),
             ).format(date);
 
-    // 悬停时图内微放大：缩放只作用于图片本体，超出部分由本层
-    // ClipRRect 裁剪；遮罩文案与选择控件保持原尺寸，也不影响
-    // 瀑布流布局。300ms easeOutCubic 与地点/影集卡的既有悬停
-    // 缩放手感一致，过短会显得生硬。
-    //
-    // Hero 子树只含图片本体：进入详情的飞行载体不携带遮罩文案、
-    // 选择控件与选中描边；ClipRRect 随子树进入飞行，继续裁剪
-    // 飞行期间 1.05 放大的溢出。
-    final imageContent = ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: AnimatedScale(
-        scale: _hovering && animationsEnabled ? 1.05 : 1.0,
-        duration: MotionToken.normal,
-        curve: MotionToken.curve,
-        child:
-            photo.hasCover
-                ? PhotoThumbImage(
-                  imageUrl: photo.coverUrl!,
-                  cacheKey: photo.coverCacheKey,
-                )
-                : const _Placeholder(),
-      ),
-    );
-
     final body = ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          widget.enableHero
-              ? Hero(tag: 'photo-cover-${photo.id}', child: imageContent)
-              : imageContent,
+          // 悬停时图内微放大：缩放只作用于图片本体，超出部分由本层
+          // ClipRRect 裁剪；遮罩文案与选择控件保持原尺寸，也不影响
+          // 瀑布流布局。300ms easeOutCubic 与地点/影集卡的既有悬停
+          // 缩放手感一致，过短会显得生硬。
+          AnimatedScale(
+            scale: _hovering && animationsEnabled ? 1.05 : 1.0,
+            duration: MotionToken.normal,
+            curve: MotionToken.curve,
+            child:
+                photo.hasCover
+                    ? PhotoThumbImage(
+                      imageUrl: photo.coverUrl!,
+                      cacheKey: photo.coverCacheKey,
+                    )
+                    : const _Placeholder(),
+          ),
 
           // 悬停/多选/选中时的遮罩层
           Positioned.fill(
@@ -202,7 +191,10 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
         excludeFromSemantics: true,
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
-        child: body,
+        child:
+            widget.enableHero
+                ? Hero(tag: 'photo-cover-${photo.id}', child: body)
+                : body,
       ),
     );
 
