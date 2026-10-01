@@ -27,6 +27,8 @@ class FileNode {
     this.mimeType,
     this.spaceType = SpaceType.personal,
     this.uploadedBy,
+    this.uploaderName,
+    this.coverFileId,
     this.mediaAutoImportTaskId,
   });
 
@@ -41,6 +43,12 @@ class FileNode {
   final DateTime? updatedAt;
   final SpaceType spaceType;
   final String? uploadedBy;
+
+  /// 上传者显示名（后端解析；个人空间即所有者，共享空间为实际上传者）。
+  final String? uploaderName;
+
+  /// 媒体封面文件节点 ID（音乐/影视/阅读库反查；无封面为空）。
+  final String? coverFileId;
   final String? mediaAutoImportTaskId;
 }
 

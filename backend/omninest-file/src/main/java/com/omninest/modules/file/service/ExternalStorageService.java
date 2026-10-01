@@ -91,6 +91,16 @@ public class ExternalStorageService {
      * DB 查询在 findAccount 内完成，rclone 网络 IO 在事务外执行。
      */
     public ExternalFileListDto browse(UUID ownerUserId, UUID accountId, String path) {
+        return browse(ownerUserId, accountId, path, 0, Integer.MAX_VALUE);
+    }
+
+    /**
+     * 分页浏览外部存储目录：网盘单目录条目可达数千，前端子表分页消费。
+     *
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     */
+    public ExternalFileListDto browse(UUID ownerUserId, UUID accountId, String path, int page, int size) {
         StorageExternalAccount account = findAccount(ownerUserId, accountId);
         ensureActive(account);
         prepareUsableRemote(account);
@@ -109,7 +119,19 @@ public class ExternalStorageService {
                             entry.hash()
                     ))
                     .toList();
-            return new ExternalFileListDto(items, path);
+            int total = items.size();
+            int safePage = Math.max(page, 0);
+            int safeSize = Math.max(size, 1);
+            int from = (int) Math.min((long) safePage * safeSize, total);
+            int to = (int) Math.min((long) from + safeSize, total);
+            return new ExternalFileListDto(
+                    items.subList(from, to),
+                    path,
+                    safePage,
+                    safeSize,
+                    total,
+                    (total + safeSize - 1) / safeSize
+            );
         } catch (IllegalStateException e) {
             String message = e.getMessage();
             if (message != null && message.contains("directory not found")) {

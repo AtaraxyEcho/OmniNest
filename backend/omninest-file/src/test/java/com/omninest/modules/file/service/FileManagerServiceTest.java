@@ -15,6 +15,8 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.modules.file.port.MediaCoverDirectory;
+import com.omninest.modules.user.port.UserNameDirectory;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.user.UserAccountQuery;
@@ -43,6 +45,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -67,6 +70,8 @@ class FileManagerServiceTest {
     private static final UUID SHARE_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
     private static final UUID OBJECT_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
 
+    private final MediaCoverDirectory mediaCovers = (owner, ids) -> Map.of();
+    private final UserNameDirectory userNamesById = userIds -> Map.of();
     private final FileNodeRepository fileNodeRepository = Mockito.mock(FileNodeRepository.class);
     private final FileAccessRecordRepository accessRecordRepository =
             Mockito.mock(FileAccessRecordRepository.class);
@@ -102,7 +107,8 @@ class FileManagerServiceTest {
         return null;
     });
 
-    private final FileNodeSupport fileNodeSupport = new FileNodeSupport(fileNodeRepository);
+    private final FileNodeSupport fileNodeSupport =
+            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository);
     private final FileSyncEventWriter syncEventWriter = new FileSyncEventWriter(syncEventRecorder);
     private final FileFavoriteService fileFavoriteService = new FileFavoriteService(
             favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter);

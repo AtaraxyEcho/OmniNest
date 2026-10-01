@@ -6,6 +6,17 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 /// 避免列表滚动反复签名，同时不违背 Family Provider 生命周期测试约定。
 final Map<String, String?> _downloadUrlCache = {};
 final Map<String, DateTime> _downloadUrlCacheAt = {};
+
+/// 下载地址签名失败登记（负缓存时间戳），30 秒内抑制重试。
+final Map<String, DateTime> _downloadUrlFailedAt = {};
+
+/// 会话级 URL 缓存写入口（批量预热回填）；同时清除该 ID 的失败登记。
+void prewarmDownloadUrl(String fileId, String url, DateTime at) {
+  _downloadUrlCache[fileId] = url;
+  _downloadUrlCacheAt[fileId] = at;
+  _downloadUrlFailedAt.remove(fileId);
+}
+
 final Map<String, String> _textPreviewCache = {};
 final Map<String, DateTime> _textPreviewCacheAt = {};
 
@@ -47,13 +58,22 @@ final fileDownloadUrlProvider = FutureProvider.autoDispose
       if (cached != null) {
         return cached;
       }
+      // 负缓存：签名失败（如共享空间非属主封面）30 秒内不再重试，
+      // 避免列表页反复发出注定失败的签名请求。
+      final failedAt = _downloadUrlFailedAt[fileId];
+      if (failedAt != null &&
+          DateTime.now().difference(failedAt) < const Duration(seconds: 30)) {
+        return null;
+      }
       final repository = ref.read(fileRepositoryProvider);
       try {
         final url = await repository.downloadUrl(fileId);
         _downloadUrlCache[fileId] = url;
         _downloadUrlCacheAt[fileId] = DateTime.now();
+        _downloadUrlFailedAt.remove(fileId);
         return url;
       } catch (_) {
+        _downloadUrlFailedAt[fileId] = DateTime.now();
         return null;
       }
     });

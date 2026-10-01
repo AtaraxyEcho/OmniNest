@@ -171,7 +171,10 @@ class _FakeFileBrowserController extends FileBrowserController {
   Future<FileBrowserState> build() async => initialState;
 
   @override
-  Future<void> loadSection(FileManagerSection section) async {
+  Future<void> loadSection(
+    FileManagerSection section, {
+    bool background = false,
+  }) async {
     // 测试假体：仅记录分区切换，不发网络请求。
     state = AsyncData(state.asData?.value ?? initialState);
   }

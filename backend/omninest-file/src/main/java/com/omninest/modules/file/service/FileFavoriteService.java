@@ -51,12 +51,12 @@ public class FileFavoriteService {
                 .stream()
                 .filter(node -> !node.isDeleted())
                 .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left, LinkedHashMap::new));
-        List<FileNodeDto> items = favoriteNodeIds.getContent()
+        List<FileNode> nodes = favoriteNodeIds.getContent()
                 .stream()
                 .map(nodesById::get)
                 .filter(Objects::nonNull)
-                .map(fileNodeSupport::toNodeDto)
                 .toList();
+        List<FileNodeDto> items = fileNodeSupport.toNodeDtos(nodes);
         return new PageImpl<>(items, pageable, favoriteNodeIds.getTotalElements());
     }
 

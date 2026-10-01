@@ -2,19 +2,64 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 
 /// 文件缩略图组件。
 /// 图片文件显示实际缩略图，其他文件显示类型图标。
-class FileThumbnail extends ConsumerWidget {
-  const FileThumbnail({required this.file, this.size = 40, super.key});
+class FileThumbnail extends ConsumerStatefulWidget {
+  const FileThumbnail({
+    required this.file,
+    this.size = 40,
+    this.borderRadius,
+    this.zoomOnHover = false,
+    super.key,
+  });
 
   final FileNode file;
   final double size;
 
+  /// 图片圆角；为空时沿用历史 8px 圆角，工位皮肤传 [BorderRadius.zero]。
+  final BorderRadius? borderRadius;
+
+  /// 悬停时图片内容放大（Photos 照片卡同构的裁切缩放，卡片视图启用）：
+  /// 缩略图外框钉死，放大只作用于图片内部；图标类条目不受影响。
+  final bool zoomOnHover;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FileThumbnail> createState() => _FileThumbnailState();
+}
+
+class _FileThumbnailState extends ConsumerState<FileThumbnail> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final file = widget.file;
+    final size = widget.size;
+    // 三级降级：媒体库封面（音乐/影视/阅读）→ 图片自身内容 → 类型图标。
+    final coverFileId = file.coverFileId;
+    if (!file.isFolder && coverFileId != null && coverFileId.isNotEmpty) {
+      final coverUrl =
+          ref.watch(fileDownloadUrlProvider(coverFileId)).asData?.value;
+      if (coverUrl != null && coverUrl.isNotEmpty) {
+        return ClipRRect(
+          borderRadius: widget.borderRadius ?? BorderRadius.zero,
+          child: CachedNetworkImage(
+            imageUrl: coverUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            memCacheWidth: (size * 2).toInt(),
+            placeholder: (context, url) => _FileIcon(file: file, size: size),
+            errorWidget:
+                (context, url, error) => _FileIcon(file: file, size: size),
+          ),
+        );
+      }
+      return _FileIcon(file: file, size: size);
+    }
     if (file.isFolder || !_isImageMimeType(file.mimeType)) {
       return _FileIcon(file: file, size: size);
     }
@@ -25,18 +70,38 @@ class FileThumbnail extends ConsumerWidget {
         if (url == null || url.isEmpty) {
           return _FileIcon(file: file, size: size);
         }
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: CachedNetworkImage(
-            imageUrl: url,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            memCacheWidth: (size * 2).toInt(),
-            placeholder: (context, url) => _FileIcon(file: file, size: size),
-            errorWidget:
-                (context, url, error) => _FileIcon(file: file, size: size),
+        Widget image = ClipRRect(
+          // 工位皮肤统一直角；需要圆角的旧场景经 borderRadius 显式传入。
+          borderRadius: widget.borderRadius ?? BorderRadius.zero,
+          child: AnimatedScale(
+            // 内容裁切缩放：卡片视图悬停时放大图片内部像素。
+            scale:
+                widget.zoomOnHover &&
+                        _hovered &&
+                        !MediaQuery.disableAnimationsOf(context)
+                    ? 1.04
+                    : 1.0,
+            duration: MotionToken.normal,
+            curve: MotionToken.curve,
+            child: CachedNetworkImage(
+              imageUrl: url,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              memCacheWidth: (size * 2).toInt(),
+              placeholder: (context, url) => _FileIcon(file: file, size: size),
+              errorWidget:
+                  (context, url, error) => _FileIcon(file: file, size: size),
+            ),
           ),
+        );
+        if (!widget.zoomOnHover) {
+          return image;
+        }
+        return MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: image,
         );
       },
       loading: () => _FileIcon(file: file, size: size),

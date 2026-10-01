@@ -8,6 +8,7 @@ import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.service.FileNodeSupport;
 import com.omninest.modules.file.dto.MoveToSpaceRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SharedSpaceController {
 
     private final SharedSpaceService sharedSpaceService;
+    private final FileNodeSupport fileNodeSupport;
     private final SharedSpaceQuotaService quotaService;
     private final RuntimeConfigCommand runtimeConfigCommand;
     private final CurrentUserContext currentUserContext;
@@ -142,20 +144,7 @@ public class SharedSpaceController {
     }
 
     private FileNodeDto toDto(FileNode node) {
-        return new FileNodeDto(
-                node.getId(),
-                node.getParentId(),
-                node.getNodeType(),
-                node.getName(),
-                node.getNormalizedPath(),
-                node.getMimeType(),
-                node.getSizeBytes(),
-                node.isShared(),
-                node.getSharedAt(),
-                node.getUpdatedAt(),
-                node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
-                node.getUploadedBy()
-        );
+        return fileNodeSupport.toNodeDto(node);
     }
 
     /**

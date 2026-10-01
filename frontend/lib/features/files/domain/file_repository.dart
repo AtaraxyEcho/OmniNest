@@ -11,14 +11,27 @@ abstract interface class FileRepository {
     String? parentId,
     String? category,
     int page = 0,
-    int size = 100,
+    int size = 10,
   });
 
   Future<List<FileNode>> listRecycleBin({String spaceType = 'PERSONAL'});
 
+  /// 分页变体：分区页码控件消费。
+  Future<FileNodePage> listRecycleBinPage({
+    String spaceType = 'PERSONAL',
+    int page = 0,
+    int size = 50,
+  });
+
   Future<List<FileNode>> listRecentFiles();
 
+  /// 分页变体：分区页码控件消费。
+  Future<FileNodePage> listRecentFilesPage({int page = 0, int size = 50});
+
   Future<List<FileNode>> listFavoriteFiles();
+
+  /// 分页变体：分区页码控件消费。
+  Future<FileNodePage> listFavoriteFilesPage({int page = 0, int size = 50});
 
   Future<FileNode> createFolder({String? parentId, required String name});
 
@@ -39,6 +52,9 @@ abstract interface class FileRepository {
   });
 
   Future<String> downloadUrl(String fileId);
+
+  /// 探测文件媒体元数据（视频时长/分辨率，图片尺寸）。
+  Future<FileMediaInfo> mediaInfo(String fileId);
 
   Future<String> loadTextPreview(String fileId);
 
@@ -68,7 +84,19 @@ abstract interface class FileRepository {
 
   Future<List<SharedFileItem>> listSharedWithMe();
 
+  /// 分页获取共享给我列表：子表页码控件消费。
+  Future<FilesSubPage<SharedFileItem>> listSharedWithMePage({
+    int page = 0,
+    int size = 10,
+  });
+
   Future<List<FileShareLink>> listMyShares();
+
+  /// 分页获取我的分享链接：子表页码控件消费。
+  Future<FilesSubPage<FileShareLink>> listMySharesPage({
+    int page = 0,
+    int size = 10,
+  });
 
   Future<List<FileShareLink>> listShareLinks();
 
@@ -96,6 +124,11 @@ abstract interface class FileRepository {
   Future<FileUploadPolicy> uploadPolicy();
 
   Future<List<FileUploadQueueItem>> listUploadQueue();
+
+  Future<FilesSubPage<FileUploadQueueItem>> listUploadQueuePage({
+    int page = 0,
+    int size = 10,
+  });
 
   Future<FileUploadSession> createUploadSession({
     String? parentId,
@@ -132,6 +165,11 @@ abstract interface class FileRepository {
 
   Future<List<OfflineDownloadTask>> listOfflineDownloads();
 
+  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
+    int page = 0,
+    int size = 10,
+  });
+
   Future<OfflineDownloadTask> createOfflineDownload({
     required String sourceUri,
     String? targetParentId,
@@ -165,6 +203,15 @@ abstract interface class FileRepository {
     String path,
   );
 
+  /// 分页浏览外部存储目录：子表页码控件消费。
+  Future<({List<ExternalFileItem> items, FilesSubPageMeta meta})>
+  browseExternalStoragePage(
+    String accountId,
+    String path, {
+    int page = 0,
+    int size = 10,
+  });
+
   Future<ImportTask> createImportTask(
     String accountId, {
     required String sourcePath,
@@ -174,6 +221,11 @@ abstract interface class FileRepository {
   });
 
   Future<List<ImportTask>> listImportTasks();
+
+  Future<FilesSubPage<ImportTask>> listImportTasksPage({
+    int page = 0,
+    int size = 10,
+  });
 
   Future<void> cancelImportTask(String taskId);
 
@@ -199,7 +251,7 @@ abstract interface class FileRepository {
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
     int page = 0,
-    int size = 100,
+    int size = 10,
   });
 
   /// 在共享空间创建文件夹

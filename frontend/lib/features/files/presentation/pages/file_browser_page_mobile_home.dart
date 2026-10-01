@@ -159,10 +159,12 @@ class _HomeSpaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.filesColors;
     return Material(
-      color: selected ? c.primaryContainer.withValues(alpha: 0.55) : c.surface,
-      borderRadius: BorderRadius.circular(12),
+      color: selected ? c.sidebarSelectedBg : c.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: selected ? c.outlineVariant : c.outlineVariant),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -170,8 +172,8 @@ class _HomeSpaceCard extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                size: 22,
-                color: selected ? c.primary : c.onSurfaceVariant,
+                size: 20,
+                color: selected ? c.onSurface : c.onSurfaceVariant,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -202,7 +204,7 @@ class _HomeSpaceCard extends StatelessWidget {
                 ),
               ),
               if (selected)
-                Icon(Icons.check_circle_rounded, size: 18, color: c.primary),
+                Icon(Icons.check_rounded, size: 18, color: c.storageAccent),
             ],
           ),
         ),
@@ -237,16 +239,18 @@ class _HomeSectionCard extends StatelessWidget {
     final glyph = icon ?? section!.icon;
     return Material(
       color: c.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: c.outlineVariant),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(glyph, size: 26, color: c.primary),
+              Icon(glyph, size: 24, color: c.onSurfaceVariant),
               const SizedBox(height: 10),
               Text(
                 title,

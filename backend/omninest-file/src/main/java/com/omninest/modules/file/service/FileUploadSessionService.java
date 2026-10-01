@@ -856,6 +856,8 @@ public class FileUploadSessionService {
                 node.getUpdatedAt(),
                 node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
                 node.getUploadedBy(),
+                null,
+                null,
                 mediaAutoImportTaskId
         );
     }

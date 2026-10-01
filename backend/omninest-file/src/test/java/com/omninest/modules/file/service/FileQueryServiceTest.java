@@ -35,6 +35,7 @@ import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -80,7 +81,10 @@ class FileQueryServiceTest {
             fileLifecycleGuard,
             eventPublisher,
             fileSearchIndexService,
-            syncEventRecorder
+            syncEventRecorder,
+            userIds -> Map.of(),
+            new MediaProbeService(),
+            (owner, ids) -> Map.of()
     );
 
     @Test

@@ -11,12 +11,17 @@ class _FileMobileCreateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.filesColors;
     return FloatingActionButton.small(
       tooltip: AppLocalizations.of(context).portalQuickActions,
-      backgroundColor: context.mobileColors.musicAccent,
-      foregroundColor: context.mobileColors.pageMask,
+      backgroundColor: colors.onSurface,
+      foregroundColor: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: colors.selectedBorder),
+      ),
       onPressed: () => _showActions(context),
-      child: Icon(Icons.add_rounded),
+      child: const Icon(Icons.add_rounded),
     );
   }
 
@@ -31,10 +36,8 @@ class _FileMobileCreateButton extends StatelessWidget {
         !state.isBusy;
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: context.mobileColors.surfaceRaised,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: context.filesColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       // 横屏手机上默认 sheet 高度（9/16 屏高）放不下 6 行操作，列表项会被
       // 裁到不可达；改为可滚动并按屏高上限封顶。
       isScrollControlled: true,
@@ -53,11 +56,8 @@ class _FileMobileCreateButton extends StatelessWidget {
                     children: [
                       Container(
                         width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: context.mobileColors.outline,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                        height: 2,
+                        color: context.filesColors.outlineVariant,
                       ),
                       const SizedBox(height: 8),
                       ListTile(
@@ -108,13 +108,10 @@ class _FileMobileCreateButton extends StatelessWidget {
                             canWrite
                                 ? () {
                                   Navigator.of(sheetContext).pop();
-                                  unawaited(
-                                    _showNameDialog(
-                                      context: context,
-                                      title: l10n.filesNewFolder,
-                                      actionLabel: l10n.filesCreate,
-                                      labelText: l10n.filesFolderName,
-                                      onSubmit: controller.createFolder,
+                                  controller.beginFolderCreation(
+                                    dedupeFolderName(
+                                      l10n.filesNewFolderDefault,
+                                      state.files,
                                     ),
                                   );
                                 }

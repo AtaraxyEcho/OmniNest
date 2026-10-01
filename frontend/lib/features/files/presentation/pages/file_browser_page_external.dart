@@ -1,276 +1,5 @@
 part of 'file_browser_page.dart';
 
-class _ExternalStorageWorkspace extends ConsumerWidget {
-  const _ExternalStorageWorkspace({required this.state});
-
-  final FileBrowserState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final controller = ref.read(fileBrowserControllerProvider.notifier);
-    final enabled = !state.isBusy;
-    final browsingAccountId = state.externalBrowseAccountId;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SimpleListSurface(
-          title: FileManagerSection.externalStorage.labelOf(l10n),
-          subtitle: FileManagerSection.externalStorage.descriptionOf(l10n),
-          emptyText: l10n.filesNoExternalStorage,
-          actions: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 40),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: AppTypography.bodyLarge,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              onPressed:
-                  enabled
-                      ? () => unawaited(
-                        _addExternalStorage(
-                          context: context,
-                          ref: ref,
-                          controller: controller,
-                        ),
-                      )
-                      : null,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(l10n.filesAddMount),
-            ),
-          ],
-          children:
-              state.externalAccounts
-                  .map(
-                    (account) => _InfoRow(
-                      icon: Icons.cloud_queue_rounded,
-                      title: account.displayName,
-                      subtitle:
-                          account.lastErrorCode == null
-                              ? '${account.provider} · ${account.status}'
-                              : '${account.provider} · ${account.status} · ${account.lastErrorCode}',
-                      trailingWidget: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: l10n.filesEdit,
-                            onPressed:
-                                enabled
-                                    ? () => _showExternalStorageDialog(
-                                      context: context,
-                                      ref: ref,
-                                      account: account,
-                                      onSubmit: ({
-                                        required String provider,
-                                        required String displayName,
-                                        required String encryptedCredentials,
-                                      }) async {
-                                        await controller.updateExternalStorage(
-                                          accountId: account.id,
-                                          displayName: displayName,
-                                          encryptedCredentials:
-                                              encryptedCredentials,
-                                        );
-                                        return account;
-                                      },
-                                    )
-                                    : null,
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(
-                            tooltip: l10n.filesTestConnection,
-                            onPressed:
-                                enabled
-                                    ? () => unawaited(
-                                      _runFileAction(
-                                        context,
-                                        () => controller
-                                            .testExternalStorageConnection(
-                                              account.id,
-                                            ),
-                                      ),
-                                    )
-                                    : null,
-                            icon: const Icon(Icons.wifi_tethering_rounded),
-                          ),
-                          if (_isOAuthProvider(account.provider))
-                            IconButton(
-                              tooltip: l10n.filesAuthorizeAccount,
-                              onPressed:
-                                  enabled
-                                      ? () => unawaited(
-                                        _startOAuthAuthorize(
-                                          context,
-                                          ref,
-                                          controller,
-                                          account,
-                                        ),
-                                      )
-                                      : null,
-                              icon: const Icon(Icons.open_in_new_rounded),
-                            ),
-                          IconButton(
-                            tooltip: l10n.filesBrowseRemote,
-                            onPressed:
-                                enabled
-                                    ? () => unawaited(
-                                      _runFileAction(
-                                        context,
-                                        () => controller.browseExternalStorage(
-                                          account.id,
-                                        ),
-                                      ),
-                                    )
-                                    : null,
-                            icon: const Icon(Icons.folder_open_rounded),
-                          ),
-                          IconButton(
-                            tooltip: l10n.filesDisableMount,
-                            onPressed:
-                                enabled
-                                    ? () => _confirmAndRun(
-                                      context,
-                                      title: l10n.filesDisableMountConfirm,
-                                      message: l10n.filesDisableMountMessage(
-                                        account.displayName,
-                                      ),
-                                      confirmLabel: l10n.filesDisableMount,
-                                      action:
-                                          () => controller
-                                              .disableExternalStorage(account),
-                                    )
-                                    : null,
-                            icon: const Icon(Icons.block_rounded),
-                          ),
-                          IconButton(
-                            tooltip: l10n.filesDeleteMount,
-                            onPressed:
-                                enabled
-                                    ? () => _confirmAndRun(
-                                      context,
-                                      title: l10n.filesDeleteMountConfirm,
-                                      message: l10n.filesDeleteMountMessage(
-                                        account.displayName,
-                                      ),
-                                      confirmLabel: l10n.filesDelete,
-                                      action:
-                                          () => controller
-                                              .deleteExternalStorage(account),
-                                    )
-                                    : null,
-                            icon: Icon(
-                              Icons.delete_outline_rounded,
-                              color: context.filesColors.error,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-        ),
-        if (browsingAccountId != null) ...[
-          const SizedBox(height: 20),
-          _ExternalBrowsePanel(state: state),
-        ],
-      ],
-    );
-  }
-
-  bool _isOAuthProvider(String provider) {
-    final code = provider.toUpperCase();
-    return code == 'ONEDRIVE' ||
-        code == 'GDRIVE' ||
-        code == 'GOOGLE_DRIVE' ||
-        code == 'DROPBOX';
-  }
-
-  /// 新建外部存储连接；OAuth 类型保存成功后立即引导用户完成授权。
-  Future<void> _addExternalStorage({
-    required BuildContext context,
-    required WidgetRef ref,
-    required FileBrowserController controller,
-  }) async {
-    final account = await _showExternalStorageDialog(
-      context: context,
-      ref: ref,
-      onSubmit: controller.createExternalStorage,
-    );
-    if (account == null || !context.mounted) {
-      return;
-    }
-    if (_isOAuthProvider(account.provider)) {
-      await _startOAuthAuthorize(context, ref, controller, account);
-    }
-  }
-
-  Future<void> _startOAuthAuthorize(
-    BuildContext context,
-    WidgetRef ref,
-    FileBrowserController controller,
-    ExternalStorageAccount account,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final url = await controller.startExternalOAuth(
-        connectorCode: account.provider,
-        accountId: account.id,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      await showDialog<void>(
-        context: context,
-        builder:
-            (dialogContext) => AlertDialog(
-              title: Text(l10n.filesAuthorizeAccount),
-              content: SelectableText('${l10n.filesAuthorizeHint}\n\n$url'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: Text(l10n.filesCancel),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final copied = await copyTextToClipboard(url);
-                    if (!copied) {
-                      if (dialogContext.mounted) {
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(content: Text(l10n.clipboardCopyFailed)),
-                        );
-                      }
-                      return;
-                    }
-                    if (dialogContext.mounted) {
-                      Navigator.of(dialogContext).pop();
-                    }
-                  },
-                  child: Text(l10n.filesCopyLink),
-                ),
-              ],
-            ),
-      );
-      if (context.mounted) {
-        await controller.showExternalStorage();
-      }
-    } on Exception catch (error) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(describeUserFacingError(error).message)),
-      );
-    }
-  }
-}
-
 class _ExternalBrowsePanel extends ConsumerWidget {
   const _ExternalBrowsePanel({required this.state});
 
@@ -438,6 +167,30 @@ class _ExternalBrowsePanel extends ConsumerWidget {
                   ],
                 ),
               ),
+          WorkstationPaginationBar(
+            currentPage: state.externalMeta.page,
+            totalPages: state.externalMeta.totalPages,
+            totalElements: state.externalMeta.totalElements,
+            rowsPerPage: state.externalMeta.size,
+            busy: state.isExternalBrowseLoading,
+            onPageChanged:
+                (page) => unawaited(
+                  controller.browseExternalStorage(
+                    accountId,
+                    path: state.externalBrowsePath ?? '/',
+                    page: page,
+                  ),
+                ),
+            onRowsPerPageChanged:
+                (size) => unawaited(
+                  controller.browseExternalStorage(
+                    accountId,
+                    path: state.externalBrowsePath ?? '/',
+                    page: 0,
+                    size: size,
+                  ),
+                ),
+          ),
         ],
       ),
     );
@@ -559,7 +312,7 @@ class _ExternalSpaceCard extends StatelessWidget {
         color: Theme.of(
           context,
         ).colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.zero,
         border: Border.all(
           color: Theme.of(
             context,
@@ -589,7 +342,7 @@ class _ExternalSpaceCard extends StatelessWidget {
           LinearProgressIndicator(
             value: space.usagePercent,
             minHeight: 6,
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.zero,
           ),
           const SizedBox(height: 8),
           Text(
@@ -623,7 +376,7 @@ class _BreadcrumbChip extends StatelessWidget {
           color: Theme.of(
             context,
           ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.zero,
         ),
         child: Text(
           label,
@@ -639,243 +392,17 @@ class _BreadcrumbChip extends StatelessWidget {
   }
 }
 
-class _ImportTasksWorkspace extends ConsumerWidget {
-  const _ImportTasksWorkspace({required this.state});
-
-  final FileBrowserState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final controller = ref.read(fileBrowserControllerProvider.notifier);
-    final enabled = !state.isBusy;
-    return _SimpleListSurface(
-      title: FileManagerSection.importTasks.labelOf(l10n),
-      subtitle: FileManagerSection.importTasks.descriptionOf(l10n),
-      emptyText: l10n.filesNoImportTasks,
-      children:
-          state.importTasks
-              .map(
-                (task) => _ImportTaskTile(
-                  task: task,
-                  enabled: enabled,
-                  onCancel:
-                      () => _confirmAndRun(
-                        context,
-                        title: l10n.filesCancelImportConfirm,
-                        message: l10n.filesCancelImportMessage(
-                          task.fileName ?? task.sourcePath,
-                        ),
-                        confirmLabel: l10n.filesCancel,
-                        action: () => controller.cancelImportTask(task),
-                      ),
-                  onDelete:
-                      () => _confirmAndRun(
-                        context,
-                        title: l10n.filesDeleteImportConfirm,
-                        message: l10n.filesDeleteImportMessage(
-                          task.fileName ?? task.sourcePath,
-                        ),
-                        confirmLabel: l10n.filesDelete,
-                        action: () => controller.deleteImportTask(task),
-                      ),
-                ),
-              )
-              .toList(),
-    );
-  }
-}
-
-String _importTaskSubtitle(ImportTask task, AppLocalizations l10n) {
-  final status = switch (task.status.toUpperCase()) {
-    'QUEUED' => l10n.filesImportQueued,
-    'SCANNING' => l10n.filesImportScanning,
-    'TRANSFERRING' => l10n.filesImportTransferring,
-    'IMPORTING' => l10n.filesImportWriting,
-    'RUNNING' => l10n.filesImportRunning,
-    'CANCELLING' => l10n.filesImportCancelling,
-    'CANCELLED' => l10n.filesImportCancelled,
-    'COMPLETED' => l10n.filesStatusCompleted,
-    'FAILED' => l10n.filesStatusFailed,
-    _ => task.status,
-  };
-  final errorText =
-      task.errorSummary == null || task.errorSummary!.isEmpty
-          ? ''
-          : ' · ${task.errorSummary}';
-  final waitingForWorker =
-      task.status.toUpperCase() == 'QUEUED' &&
-      task.updatedAt != null &&
-      DateTime.now().difference(task.updatedAt!).inSeconds >= 20;
-  final waitingText =
-      waitingForWorker ? ' · ${l10n.filesImportWaitingWorker}' : '';
-  return '$status$waitingText$errorText';
-}
-
-String _importTaskTrailing(ImportTask task) {
-  final speed =
-      task.speedBytes > 0 ? ' · ${formatFileSize(task.speedBytes)}/s' : '';
-  if (task.totalBytes <= 0) {
-    return speed.isEmpty ? '' : '${formatFileSize(task.speedBytes)}/s';
-  }
-  return '${(task.progress * 100).toStringAsFixed(0)}% · '
-      '${formatFileSize(task.transferredBytes)} / ${formatFileSize(task.totalBytes)}'
-      '$speed';
-}
-
-class _ImportTaskTile extends StatelessWidget {
-  const _ImportTaskTile({
-    required this.task,
-    required this.enabled,
-    required this.onCancel,
-    required this.onDelete,
-  });
-
-  final ImportTask task;
-  final bool enabled;
-  final VoidCallback onCancel;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final status = task.status.toUpperCase();
-    final hasByteProgress = task.totalBytes > 0;
-    final isIndeterminate = task.isActive && !hasByteProgress;
-    final currentFile = task.currentFileName;
-    final fileProgress =
-        task.totalFiles > 0
-            ? l10n.filesImportFileProgress(task.completedFiles, task.totalFiles)
-            : null;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            task.isDirectory
-                ? Icons.folder_copy_outlined
-                : Icons.cloud_download_outlined,
-            color: context.filesColors.primary,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.fileName ?? task.sourcePath,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _importTaskSubtitle(task, l10n),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color:
-                        status == 'FAILED'
-                            ? context.filesColors.error
-                            : context.filesColors.onSurfaceVariant,
-                  ),
-                ),
-                if (task.isActive || hasByteProgress) ...[
-                  const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    value: isIndeterminate ? null : task.progress,
-                    minHeight: 6,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ],
-                if (fileProgress != null || currentFile != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    [
-                      if (fileProgress != null) fileProgress,
-                      if (currentFile != null && currentFile.isNotEmpty)
-                        l10n.filesImportCurrentFile(currentFile),
-                    ].join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: context.filesColors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                if (_importTaskTrailing(task).isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    _importTaskTrailing(task),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip:
-                task.canCancel ? l10n.filesCancelTask : l10n.filesDeleteRecord,
-            onPressed: enabled ? (task.canCancel ? onCancel : onDelete) : null,
-            icon: Icon(
-              task.canCancel ? Icons.close_rounded : Icons.delete_outline,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SimpleListSurface extends StatelessWidget {
-  const _SimpleListSurface({
-    required this.title,
-    required this.subtitle,
-    required this.emptyText,
-    required this.children,
-    this.actions = const [],
-  });
-
-  final String title;
-  final String subtitle;
-  final String emptyText;
-  final List<Widget> children;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _PageHeader(title: title, subtitle: subtitle, actions: actions),
-        const SizedBox(height: 20),
-        WorkbenchPanel(
-          backgroundColor: context.filesColors.surfaceContainer,
-          padding: const EdgeInsets.all(20),
-          child:
-              children.isEmpty
-                  ? _EmptyPanel(text: emptyText)
-                  : Column(children: children),
-        ),
-      ],
-    );
-  }
-}
-
 class _InfoRow extends StatefulWidget {
   const _InfoRow({
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.trailing,
     this.trailingWidget,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final String? trailing;
   final Widget? trailingWidget;
 
   @override
@@ -891,7 +418,7 @@ class _InfoRowState extends State<_InfoRow> {
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MotionToken.fast,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color:
@@ -900,7 +427,7 @@ class _InfoRowState extends State<_InfoRow> {
                     context,
                   ).colorScheme.onSurfaceVariant.withValues(alpha: 0.06)
                   : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.zero,
         ),
         child: Row(
           children: [
@@ -911,7 +438,7 @@ class _InfoRowState extends State<_InfoRow> {
                 color: Theme.of(
                   context,
                 ).colorScheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.zero,
               ),
               child: Icon(
                 widget.icon,
@@ -945,13 +472,7 @@ class _InfoRowState extends State<_InfoRow> {
                 ],
               ),
             ),
-            if (widget.trailingWidget != null)
-              widget.trailingWidget!
-            else if (widget.trailing != null)
-              Text(
-                widget.trailing!,
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
+            if (widget.trailingWidget != null) widget.trailingWidget!,
           ],
         ),
       ),
@@ -970,7 +491,7 @@ class _EmptyPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 56),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.zero,
         border: Border.all(
           color: Theme.of(
             context,
@@ -989,5 +510,94 @@ class _EmptyPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// OAuth 型外部存储提供商判定。
+bool _isOAuthProvider(String provider) {
+  final code = provider.toUpperCase();
+  return code == 'ONEDRIVE' ||
+      code == 'GDRIVE' ||
+      code == 'GOOGLE_DRIVE' ||
+      code == 'DROPBOX';
+}
+
+Future<void> _addExternalStorage({
+  required BuildContext context,
+  required WidgetRef ref,
+  required FileBrowserController controller,
+}) async {
+  final account = await _showExternalStorageDialog(
+    context: context,
+    ref: ref,
+    onSubmit: controller.createExternalStorage,
+  );
+  if (account == null || !context.mounted) {
+    return;
+  }
+  if (_isOAuthProvider(account.provider)) {
+    await _startOAuthAuthorize(context, ref, controller, account);
+  }
+}
+
+Future<void> _startOAuthAuthorize(
+  BuildContext context,
+  WidgetRef ref,
+  FileBrowserController controller,
+  ExternalStorageAccount account,
+) async {
+  final l10n = AppLocalizations.of(context);
+  try {
+    final url = await controller.startExternalOAuth(
+      connectorCode: account.provider,
+      accountId: account.id,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    await showFilesDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(l10n.filesAuthorizeAccount),
+            content: SelectableText('${l10n.filesAuthorizeHint}\n\n$url'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(l10n.filesCancel),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final copied = await copyTextToClipboard(url);
+                  if (!copied) {
+                    if (dialogContext.mounted) {
+                      showOmniFeedback(
+                        dialogContext,
+                        l10n.clipboardCopyFailed,
+                        severity: OmniFeedbackSeverity.error,
+                      );
+                    }
+                    return;
+                  }
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+                child: Text(l10n.filesCopyLink),
+              ),
+            ],
+          ),
+    );
+    if (context.mounted) {
+      await controller.showExternalStorage();
+    }
+  } on Exception catch (error) {
+    if (context.mounted) {
+      showOmniFeedback(
+        context,
+        describeUserFacingError(error).message,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
   }
 }

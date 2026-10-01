@@ -91,12 +91,16 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   Future<void> browseExternalStorage(
     String accountId, {
     String path = '/',
+    int? page,
+    int? size,
   }) async {
     await _loadExternalDirectory(
       accountId,
       path,
       operationLabel: FileOperation.browseRemoteDirectory,
       loadSpace: true,
+      page: page,
+      size: size,
     );
   }
 
@@ -131,6 +135,8 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     String path, {
     required FileOperation operationLabel,
     bool loadSpace = false,
+    int? page,
+    int? size,
   }) async {
     final current = _currentState;
     if (current == null) {
@@ -156,9 +162,17 @@ extension FileBrowserIntegrationActions on FileBrowserController {
                 : Future<ExternalSpaceUsage?>.value(
                   _currentState?.externalSpace,
                 );
-        final files = await _repository
-            .browseExternalStorage(accountId, path)
+        final externalMeta =
+            _currentState?.externalMeta ?? const FilesSubPageMeta();
+        final browseResult = await _repository
+            .browseExternalStoragePage(
+              accountId,
+              path,
+              page: page ?? 0,
+              size: size ?? externalMeta.size,
+            )
             .timeout(_externalBrowseTimeout);
+        final files = browseResult.items;
         final space = await spaceFuture;
         if (requestGeneration != _externalBrowseRequestGeneration) {
           return;
@@ -176,6 +190,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
         _emitState(
           latest.copyWith(
             externalFiles: files,
+            externalMeta: browseResult.meta,
             externalBrowsePath: path,
             externalBrowseAccountId: accountId,
             externalSpace: space,
@@ -259,13 +274,23 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     await showImportTasks();
   }
 
-  Future<void> showImportTasks() async {
+  Future<void> showImportTasks({int? page, int? size}) async {
     await _runAction(FileOperation.loadImportTasks, () async {
       final current = _currentState;
-      final tasks = await _repository.listImportTasks();
+      final meta = current?.importMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listImportTasksPage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       _emitState(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          importTasks: tasks,
+          importTasks: result.items,
+          importMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
           section: FileManagerSection.importTasks,
         ),
       );

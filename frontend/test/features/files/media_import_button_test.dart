@@ -87,6 +87,9 @@ void main() {
     expect(button.style?.foregroundColor?.resolve({}), const Color(0xFF123456));
     expect(find.text('导入文件'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('文件选择期间禁止重复打开原生选择器', (tester) async {
@@ -126,6 +129,9 @@ void main() {
     expect(find.text('导入失败'), findsOneWidget);
     expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('选择器返回不支持的格式时显示明确反馈且不启动导入', (tester) async {
@@ -153,6 +159,9 @@ void main() {
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('关闭导入错误弹窗时保留嵌套导航中的业务页面', (tester) async {
@@ -184,6 +193,9 @@ void main() {
     expect(find.byType(MediaImportButton), findsOneWidget);
     expect(find.byType(Dialog), findsNothing);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('导入完成后关闭弹窗并且只刷新一次业务页面', (tester) async {
@@ -212,6 +224,9 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expect(refreshCount, 1);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('导入完成后先关闭进度弹窗再等待页面刷新', (tester) async {
@@ -246,6 +261,9 @@ void main() {
     expect(find.textContaining('已导入 1 个文件'), findsOneWidget);
     expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('导入完成后的列表刷新失败时显示独立反馈', (tester) async {
@@ -272,6 +290,9 @@ void main() {
     expect(find.text('文件已导入，但列表刷新失败。'), findsOneWidget);
     expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('页面退出会取消仍在进行的媒体导入且不访问已卸载状态', (tester) async {
@@ -300,6 +321,9 @@ void main() {
 
     expect(service.cancellationToken?.isCancelled, isTrue);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('队列模式禁止共享空间时直接以个人空间回调', (tester) async {
@@ -328,6 +352,9 @@ void main() {
     expect(picked, <String>['PERSONAL']);
     expect(find.byType(Dialog), findsNothing);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('队列模式允许共享空间时弹出空间选择并回传选择结果', (tester) async {
@@ -368,6 +395,9 @@ void main() {
 
     expect(picked, <String>['SHARED']);
     expect(tester.takeException(), isNull);
+    // toast 计时器需要在用例结束前冲刷，避免残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 }
 

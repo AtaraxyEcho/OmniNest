@@ -26,7 +26,6 @@ String filesOperationLabel(AppLocalizations l10n, FileOperation operation) {
     FileOperation.navigateToRoot => l10n.filesOpNavigateToRoot,
     FileOperation.changeDirectory => l10n.filesOpChangeDirectory,
     FileOperation.filterFileType => l10n.filesOpFilterFileType,
-    FileOperation.loadMore => l10n.filesOpLoadMore,
     FileOperation.createFolder => l10n.filesOpCreateFolder,
     FileOperation.rename => l10n.filesOpRename,
     FileOperation.copy => l10n.filesOpCopy,

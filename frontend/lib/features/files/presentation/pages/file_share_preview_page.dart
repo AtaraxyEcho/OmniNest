@@ -10,6 +10,8 @@ import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
+import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 文件分享预览页面（公开，无需登录即可查看）。
 class FileSharePreviewPage extends ConsumerStatefulWidget {
@@ -106,19 +108,19 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
 
     switch (result) {
       case ShareAcceptSuccess():
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).filesSavedToMyFiles),
-          ),
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).filesSavedToMyFiles,
+          severity: OmniFeedbackSeverity.success,
         );
         context.go('/files');
       case ShareAcceptDuplicate(:final message):
-        showDialog<void>(
+        showFilesDialog<void>(
           context: context,
           builder:
-              (ctx) => AlertDialog(
-                title: Text(AppLocalizations.of(context).filesFileExists),
-                content: Text(
+              (ctx) => FilesDialogFrame(
+                title: AppLocalizations.of(context).filesFileExists,
+                body: Text(
                   AppLocalizations.of(
                     context,
                   ).messageForErrorCode(message, fallback: message),
@@ -132,16 +134,14 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
               ),
         );
       case ShareAcceptError(:final message):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context).filesSaveFailed(
-                AppLocalizations.of(
-                  context,
-                ).messageForErrorCode(message, fallback: message),
-              ),
-            ),
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).filesSaveFailed(
+            AppLocalizations.of(
+              context,
+            ).messageForErrorCode(message, fallback: message),
           ),
+          severity: OmniFeedbackSeverity.error,
         );
     }
   }
@@ -190,7 +190,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: context.filesColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.zero,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -267,7 +267,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: context.filesColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.zero,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -319,9 +319,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
                   ),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.zero),
               ),
               onSubmitted: (v) {
                 if (v.isNotEmpty) widget.onSubmit(v);
@@ -365,16 +363,11 @@ class _PreviewCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16),
         constraints: BoxConstraints(maxWidth: 436),
         padding: const EdgeInsets.all(32),
+        // 工位规范：hairline 边框替代投影。
         decoration: BoxDecoration(
           color: context.filesColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          borderRadius: BorderRadius.zero,
+          border: Border.all(color: context.filesColors.outlineVariant),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -387,7 +380,7 @@ class _PreviewCard extends StatelessWidget {
                 color: Theme.of(
                   context,
                 ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.zero,
               ),
               child: Icon(
                 _fileIcon(preview.mimeType, preview.resourceType),

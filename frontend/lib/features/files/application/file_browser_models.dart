@@ -128,12 +128,21 @@ class FileBrowserState {
     this.uploadSessions = const [],
     this.recentFiles = const [],
     this.favoriteFiles = const [],
-    this.sharedSpaceFiles = const [],
     this.sharedSpaceBreadcrumbs = const [],
     this.sharedSpaceUsage,
     this.sharedWithMe = const [],
+    this.sharedWithMeMeta = const FilesSubPageMeta(),
     this.myShares = const [],
     this.shareLinks = const [],
+    this.sharesMeta = const FilesSubPageMeta(),
+    this.uploadQueueMeta = const FilesSubPageMeta(),
+    this.offlineMeta = const FilesSubPageMeta(),
+    this.importMeta = const FilesSubPageMeta(),
+    this.externalMeta = const FilesSubPageMeta(),
+    this.recentMeta = const FilesSubPageMeta(),
+    this.favoritesMeta = const FilesSubPageMeta(),
+    this.recycleMeta = const FilesSubPageMeta(),
+    this.shareScopeAll = false,
     this.uploadQueue = const [],
     this.localUploadTasks = const [],
     this.offlineTasks = const [],
@@ -152,33 +161,48 @@ class FileBrowserState {
     this.searchQuery = '',
     this.viewMode = FileBrowserViewMode.list,
     this.sortBy = FileBrowserSortBy.name,
+    this.sortAscending = true,
     this.fileCategory = FileBrowserFileCategory.all,
     this.selectedFileIds = const {},
+    this.inspectedFileId,
+    this.inspectorOpen = true,
+    this.draftFolderName,
     this.filePage = 0,
-    this.filePageSize = 100,
+    this.filePageSize = 10,
     this.fileTotalElements = 0,
     this.fileTotalPages = 0,
-    this.isLoadingMoreFiles = false,
     this.activeActionCount = 0,
     this.activeOperation,
     this.lastActionError,
+    this.backgroundRefresh = false,
   });
 
   final List<FileNode> files;
   final List<FileNode> recycleBin;
-  final List<FileNode> sharedSpaceFiles;
   final List<FileNode> sharedSpaceBreadcrumbs;
   final SharedSpaceUsage? sharedSpaceUsage;
   final List<FileNode> breadcrumbs;
   final List<FileUploadSession> uploadSessions;
   final List<FileNode> recentFiles;
   final List<FileNode> favoriteFiles;
+
+  /// 已收藏节点 id 集（表格/网格行内星标依据，跨分区一致）。
+  Set<String> get favoriteIdSet => favoriteFiles.map((f) => f.id).toSet();
+
   final List<SharedFileItem> sharedWithMe;
+  final FilesSubPageMeta sharedWithMeMeta;
   final List<FileShareLink> myShares;
+
   final List<FileShareLink> shareLinks;
+  final FilesSubPageMeta sharesMeta;
+
+  /// 合并分享页当前作用域：false=我的创建，true=全部链接（管理视角）。
+  final bool shareScopeAll;
   final List<FileUploadQueueItem> uploadQueue;
+  final FilesSubPageMeta uploadQueueMeta;
   final List<FileUploadClientTask> localUploadTasks;
   final List<OfflineDownloadTask> offlineTasks;
+  final FilesSubPageMeta offlineMeta;
   final List<ExternalStorageAccount> externalAccounts;
   final List<ExternalFileItem> externalFiles;
   final String? externalBrowsePath;
@@ -187,6 +211,13 @@ class FileBrowserState {
   final bool isExternalBrowseLoading;
   final String? externalBrowseError;
   final List<ImportTask> importTasks;
+  final FilesSubPageMeta importMeta;
+  final FilesSubPageMeta externalMeta;
+
+  /// 最近/收藏/回收站分区各自的分页元数据。
+  final FilesSubPageMeta recentMeta;
+  final FilesSubPageMeta favoritesMeta;
+  final FilesSubPageMeta recycleMeta;
   final FileStorageStats? storageStats;
   final String? parentId;
   final FileManagerSection section;
@@ -194,16 +225,31 @@ class FileBrowserState {
   final String searchQuery;
   final FileBrowserViewMode viewMode;
   final FileBrowserSortBy sortBy;
+
+  /// 排序方向：true 升序；点击已激活表头时切换。
+  final bool sortAscending;
   final FileBrowserFileCategory fileCategory;
   final Set<String> selectedFileIds;
+
+  /// Inspector 检视中的节点 id；null 表示未检视。
+  final String? inspectedFileId;
+
+  /// 详情栏开关（宽屏常驻并排 / 窄屏贴底抽屉共用）。
+  final bool inspectorOpen;
+
+  /// 就地新建文件夹草稿名；null 表示未处于新建态。
+  final String? draftFolderName;
+
   final int filePage;
   final int filePageSize;
   final int fileTotalElements;
   final int fileTotalPages;
-  final bool isLoadingMoreFiles;
   final int activeActionCount;
   final FileOperation? activeOperation;
   final FileBrowserActionError? lastActionError;
+
+  /// 后台（实时同步触发）刷新中：不切换 loading 占位符，内容原地换新。
+  final bool backgroundRefresh;
 
   static const Set<String> _terminalUploadStatuses = {
     'COMPLETED',
@@ -283,10 +329,31 @@ class FileBrowserState {
   bool get hasSelection => selectedFileIds.isNotEmpty;
   int get selectionCount => selectedFileIds.length;
 
+  /// 当前检视节点：在可见集合与各分区缓存中解析，找不到返回 null。
+  FileNode? get inspectedNode {
+    final id = inspectedFileId;
+    if (id == null) {
+      return null;
+    }
+    final pools = [
+      files,
+      recycleBin,
+      recentFiles,
+      favoriteFiles,
+      sharedSpaceBreadcrumbs,
+    ];
+    for (final pool in pools) {
+      for (final node in pool) {
+        if (node.id == id) {
+          return node;
+        }
+      }
+    }
+    return null;
+  }
+
   /// 判断指定文件是否处于选中状态。
   bool isSelected(String fileId) => selectedFileIds.contains(fileId);
-
-  bool get hasMoreFiles => filePage + 1 < fileTotalPages;
 
   /// 基于当前状态创建仅替换指定字段的新状态。
   FileBrowserState copyWith({
@@ -296,16 +363,20 @@ class FileBrowserState {
     List<FileUploadSession>? uploadSessions,
     List<FileNode>? recentFiles,
     List<FileNode>? favoriteFiles,
-    List<FileNode>? sharedSpaceFiles,
     List<FileNode>? sharedSpaceBreadcrumbs,
     SharedSpaceUsage? sharedSpaceUsage,
     bool clearSharedSpaceUsage = false,
     List<SharedFileItem>? sharedWithMe,
+    FilesSubPageMeta? sharedWithMeMeta,
     List<FileShareLink>? myShares,
     List<FileShareLink>? shareLinks,
+    FilesSubPageMeta? sharesMeta,
+    bool? shareScopeAll,
     List<FileUploadQueueItem>? uploadQueue,
+    FilesSubPageMeta? uploadQueueMeta,
     List<FileUploadClientTask>? localUploadTasks,
     List<OfflineDownloadTask>? offlineTasks,
+    FilesSubPageMeta? offlineMeta,
     List<ExternalStorageAccount>? externalAccounts,
     List<ExternalFileItem>? externalFiles,
     Object? externalBrowsePath = _copyWithUnset,
@@ -316,6 +387,11 @@ class FileBrowserState {
     String? externalBrowseError,
     bool clearExternalBrowseError = false,
     List<ImportTask>? importTasks,
+    FilesSubPageMeta? importMeta,
+    FilesSubPageMeta? externalMeta,
+    FilesSubPageMeta? recentMeta,
+    FilesSubPageMeta? favoritesMeta,
+    FilesSubPageMeta? recycleMeta,
     FileStorageStats? storageStats,
     Object? parentId = _copyWithUnset,
     FileManagerSection? section,
@@ -323,17 +399,21 @@ class FileBrowserState {
     String? searchQuery,
     FileBrowserViewMode? viewMode,
     FileBrowserSortBy? sortBy,
+    bool? sortAscending,
     FileBrowserFileCategory? fileCategory,
     Set<String>? selectedFileIds,
+    Object? inspectedFileId = _copyWithUnset,
+    bool? inspectorOpen,
+    Object? draftFolderName = _copyWithUnset,
     int? filePage,
     int? filePageSize,
     int? fileTotalElements,
     int? fileTotalPages,
-    bool? isLoadingMoreFiles,
     int? activeActionCount,
     FileOperation? activeOperation,
     bool clearActiveOperationLabel = false,
     FileBrowserActionError? lastActionError,
+    bool? backgroundRefresh,
     bool clearLastActionError = false,
   }) {
     return FileBrowserState(
@@ -343,7 +423,6 @@ class FileBrowserState {
       uploadSessions: uploadSessions ?? this.uploadSessions,
       recentFiles: recentFiles ?? this.recentFiles,
       favoriteFiles: favoriteFiles ?? this.favoriteFiles,
-      sharedSpaceFiles: sharedSpaceFiles ?? this.sharedSpaceFiles,
       sharedSpaceBreadcrumbs:
           sharedSpaceBreadcrumbs ?? this.sharedSpaceBreadcrumbs,
       sharedSpaceUsage:
@@ -351,11 +430,16 @@ class FileBrowserState {
               ? null
               : (sharedSpaceUsage ?? this.sharedSpaceUsage),
       sharedWithMe: sharedWithMe ?? this.sharedWithMe,
+      sharedWithMeMeta: sharedWithMeMeta ?? this.sharedWithMeMeta,
       myShares: myShares ?? this.myShares,
       shareLinks: shareLinks ?? this.shareLinks,
+      sharesMeta: sharesMeta ?? this.sharesMeta,
+      shareScopeAll: shareScopeAll ?? this.shareScopeAll,
       uploadQueue: uploadQueue ?? this.uploadQueue,
+      uploadQueueMeta: uploadQueueMeta ?? this.uploadQueueMeta,
       localUploadTasks: localUploadTasks ?? this.localUploadTasks,
       offlineTasks: offlineTasks ?? this.offlineTasks,
+      offlineMeta: offlineMeta ?? this.offlineMeta,
       externalAccounts: externalAccounts ?? this.externalAccounts,
       externalFiles: externalFiles ?? this.externalFiles,
       externalBrowsePath:
@@ -375,6 +459,11 @@ class FileBrowserState {
               ? null
               : externalBrowseError ?? this.externalBrowseError,
       importTasks: importTasks ?? this.importTasks,
+      importMeta: importMeta ?? this.importMeta,
+      externalMeta: externalMeta ?? this.externalMeta,
+      recentMeta: recentMeta ?? this.recentMeta,
+      favoritesMeta: favoritesMeta ?? this.favoritesMeta,
+      recycleMeta: recycleMeta ?? this.recycleMeta,
       storageStats: storageStats ?? this.storageStats,
       parentId:
           identical(parentId, _copyWithUnset)
@@ -385,13 +474,22 @@ class FileBrowserState {
       searchQuery: searchQuery ?? this.searchQuery,
       viewMode: viewMode ?? this.viewMode,
       sortBy: sortBy ?? this.sortBy,
+      sortAscending: sortAscending ?? this.sortAscending,
       fileCategory: fileCategory ?? this.fileCategory,
       selectedFileIds: selectedFileIds ?? this.selectedFileIds,
+      inspectedFileId:
+          identical(inspectedFileId, _copyWithUnset)
+              ? this.inspectedFileId
+              : inspectedFileId as String?,
+      inspectorOpen: inspectorOpen ?? this.inspectorOpen,
+      draftFolderName:
+          identical(draftFolderName, _copyWithUnset)
+              ? this.draftFolderName
+              : draftFolderName as String?,
       filePage: filePage ?? this.filePage,
       filePageSize: filePageSize ?? this.filePageSize,
       fileTotalElements: fileTotalElements ?? this.fileTotalElements,
       fileTotalPages: fileTotalPages ?? this.fileTotalPages,
-      isLoadingMoreFiles: isLoadingMoreFiles ?? this.isLoadingMoreFiles,
       activeActionCount: activeActionCount ?? this.activeActionCount,
       activeOperation:
           clearActiveOperationLabel
@@ -399,6 +497,7 @@ class FileBrowserState {
               : activeOperation ?? this.activeOperation,
       lastActionError:
           clearLastActionError ? null : lastActionError ?? this.lastActionError,
+      backgroundRefresh: backgroundRefresh ?? this.backgroundRefresh,
     );
   }
 
@@ -406,15 +505,24 @@ class FileBrowserState {
     if (left.isFolder != right.isFolder) {
       return left.isFolder ? -1 : 1;
     }
-    return switch (sortBy) {
+    var result = switch (sortBy) {
       FileBrowserSortBy.name => left.name.toLowerCase().compareTo(
         right.name.toLowerCase(),
       ),
-      FileBrowserSortBy.updatedAt => (right.updatedAt ?? DateTime(0)).compareTo(
-        left.updatedAt ?? DateTime(0),
+      FileBrowserSortBy.updatedAt => (left.updatedAt ?? DateTime(0)).compareTo(
+        right.updatedAt ?? DateTime(0),
       ),
-      FileBrowserSortBy.size => right.sizeBytes.compareTo(left.sizeBytes),
+      FileBrowserSortBy.size => left.sizeBytes.compareTo(right.sizeBytes),
     };
+    // 升序方向下时间与大小按业务习惯倒序查看（最新/最大在前）。
+    final effectiveAscending = switch (sortBy) {
+      FileBrowserSortBy.updatedAt || FileBrowserSortBy.size => !sortAscending,
+      _ => sortAscending,
+    };
+    if (!effectiveAscending) {
+      result = -result;
+    }
+    return result;
   }
 }
 

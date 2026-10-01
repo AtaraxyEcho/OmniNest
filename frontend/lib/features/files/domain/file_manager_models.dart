@@ -181,6 +181,30 @@ class FileSharePreview {
   final bool hasPassword;
 }
 
+/// 文件媒体元数据（ffprobe 探测；字段缺失为 null）。
+class FileMediaInfo {
+  const FileMediaInfo({this.durationSeconds, this.width, this.height});
+
+  final double? durationSeconds;
+  final int? width;
+  final int? height;
+
+  /// mm:ss / h:mm:ss 展示；无时长返回 null。
+  String? get durationLabel {
+    final seconds = durationSeconds;
+    if (seconds == null || seconds <= 0) {
+      return null;
+    }
+    final total = seconds.round();
+    final h = total ~/ 3600;
+    final m = (total % 3600) ~/ 60;
+    final s = total % 60;
+    final mm = m.toString().padLeft(2, '0');
+    final ss = s.toString().padLeft(2, '0');
+    return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
+  }
+}
+
 class SharedFileItem {
   const SharedFileItem({
     required this.shareId,
@@ -538,4 +562,74 @@ int _asInt(Object? value) {
     final String text => int.tryParse(text) ?? 0,
     _ => 0,
   };
+}
+
+/// 子页列表分页：WorkstationPaginationBar 消费。
+class FilesSubPage<T> {
+  const FilesSubPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+    required this.totalPages,
+  });
+
+  factory FilesSubPage.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) decode,
+  ) {
+    final rawItems = json['items'];
+    return FilesSubPage(
+      items:
+          rawItems is List
+              ? rawItems
+                  .whereType<Map<String, dynamic>>()
+                  .map(decode)
+                  .toList(growable: false)
+              : <T>[],
+      page: (json['page'] as num?)?.toInt() ?? 0,
+      size: (json['size'] as num?)?.toInt() ?? 10,
+      totalElements: (json['totalElements'] as num?)?.toInt() ?? 0,
+      totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final List<T> items;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  bool get hasMore => page + 1 < totalPages;
+}
+
+/// 子表分页元数据：WorkstationPaginationBar 消费，per 分区一份。
+class FilesSubPageMeta {
+  const FilesSubPageMeta({
+    this.page = 0,
+    this.size = 10,
+    this.totalElements = 0,
+    this.totalPages = 0,
+  });
+
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  bool get hasMore => page + 1 < totalPages;
+
+  FilesSubPageMeta copyWith({
+    int? page,
+    int? size,
+    int? totalElements,
+    int? totalPages,
+  }) {
+    return FilesSubPageMeta(
+      page: page ?? this.page,
+      size: size ?? this.size,
+      totalElements: totalElements ?? this.totalElements,
+      totalPages: totalPages ?? this.totalPages,
+    );
+  }
 }

@@ -38,8 +38,27 @@ class FileSyncHandler implements RealtimeScopeHandler {
     _auxiliaryRevisions.markCompleted(auxiliary);
     // 文件浏览模块从未激活时无状态可刷，首次打开自取最新数据。
     if (!ref.exists(fileBrowserControllerProvider)) return true;
+    // 收藏自回落抑制：本机乐观更新已与服务端一致，全量刷新只会让
+    // 列表闪烁；仅当批次内全部失效都命中本地收藏回声窗口时跳过，
+    /// 混入任何其他变更（重命名/上传/他端收藏）仍走完整刷新。
+    final notifier = ref.read(fileBrowserControllerProvider.notifier);
+    final echoIds = <String>{
+      for (final invalidation in invalidations)
+        if (invalidation.resourceType == 'FILE_NODE' &&
+            invalidation.resourceId != null)
+          invalidation.resourceId!,
+    };
+    final allNodePayloads = invalidations.every(
+      (invalidation) => invalidation.resourceType == 'FILE_NODE',
+    );
+    if (allNodePayloads &&
+        echoIds.isNotEmpty &&
+        notifier.matchesRecentFileEchoes(echoIds)) {
+      _auxiliaryRevisions.clear(invalidations);
+      return true;
+    }
     await ref.read(fileBrowserControllerProvider.future);
-    await ref.read(fileBrowserControllerProvider.notifier).refreshForRealtime();
+    await notifier.refreshForRealtime();
     _auxiliaryRevisions.clear(invalidations);
     return true;
   }

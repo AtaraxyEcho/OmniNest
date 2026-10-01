@@ -1,100 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
+import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
+import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
+/// 卡片网格视图：纯平直角卡片 + 1px hairline 边框 + ✔ 文本复选框。
+///
+/// 卡片内容水平内边距固定 16px，与工作区一体化工具栏的全选框保持
+/// 中轴线像素级对齐。
 class FileGrid extends StatelessWidget {
   const FileGrid({
     required this.files,
     required this.showingRecycleBin,
     required this.enabled,
-    required this.onRename,
-    required this.onDelete,
-    required this.onPurge,
-    required this.onRestore,
-    required this.onOpen,
-    this.onCopy,
-    this.onMove,
-    this.onMoveToSharedSpace,
-    this.onMoveToPersonalSpace,
-    this.onDownload,
-    this.onShare,
-    this.onPreview,
-    this.onToggleFavorite,
-    this.onShowVersions,
+    required this.actions,
     this.selectedFileIds = const {},
-    this.onToggleSelection,
+    this.inspectedFileId,
     this.selectionActive = false,
     this.showingFavorites = false,
+    this.favoriteIds = const {},
+    this.draftFolderName,
+    this.onDraftFolderSubmit,
+    this.onDraftFolderCancel,
     super.key,
   });
 
   final List<FileNode> files;
   final bool showingRecycleBin;
   final bool enabled;
-  final ValueChanged<FileNode> onRename;
-  final ValueChanged<FileNode> onDelete;
-  final ValueChanged<FileNode> onPurge;
-  final ValueChanged<FileNode> onRestore;
-  final ValueChanged<FileNode> onOpen;
-  final ValueChanged<FileNode>? onCopy;
-  final ValueChanged<FileNode>? onMove;
-  final ValueChanged<FileNode>? onMoveToSharedSpace;
-  final ValueChanged<FileNode>? onMoveToPersonalSpace;
-  final ValueChanged<FileNode>? onDownload;
-  final ValueChanged<FileNode>? onShare;
-  final ValueChanged<FileNode>? onPreview;
-  final ValueChanged<FileNode>? onToggleFavorite;
-  final ValueChanged<FileNode>? onShowVersions;
-  final Set<String> selectedFileIds;
-  final ValueChanged<String>? onToggleSelection;
+  final FileNodeActionCallbacks actions;
 
-  /// 多选模式是否激活：激活时才显示 Checkbox，卡片点击切换选中。
+  final Set<String> selectedFileIds;
+
+  /// Inspector 检视中的节点 id。
+  final String? inspectedFileId;
+
+  /// 多选模式是否激活：激活时才显示复选框，卡片点击切换选中。
   final bool selectionActive;
 
   /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
   final bool showingFavorites;
 
+  /// 已收藏节点 id 集：卡片星标按实际收藏态呈现，与表格一致。
+  final Set<String> favoriteIds;
+
+  /// 就地新建文件夹草稿名；非空时网格首格渲染草稿输入。
+  final String? draftFolderName;
+  final ValueChanged<String>? onDraftFolderSubmit;
+  final VoidCallback? onDraftFolderCancel;
+
   @override
   Widget build(BuildContext context) {
-    if (files.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 64),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: context.filesColors.outlineVariant.withValues(alpha: 0.32),
-          ),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              showingRecycleBin
-                  ? Icons.delete_sweep_outlined
-                  : Icons.folder_open_outlined,
-              color: context.filesColors.primary,
-              size: 38,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              showingRecycleBin
-                  ? AppLocalizations.of(context).filesRecycleBinEmpty
-                  : AppLocalizations.of(context).filesEmpty,
-            ),
-          ],
-        ),
-      );
+    if (files.isEmpty && draftFolderName == null) {
+      return FileNodeEmptyState(showingRecycleBin: showingRecycleBin);
     }
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        // 多选态卡片行内要并排 Checkbox(48) + 缩略图 + 菜单钮(48)，两列时内容
-        // 宽度不足会溢出；手机宽度改单列，既不裁控件也不缩小命中区。
+        // 多选态卡片行内要并排复选框 + 缩略图 + 菜单钮，两列时内容宽度
+        // 不足会溢出；手机宽度改单列，既不裁控件也不缩小命中区。
         final crossAxisCount =
             selectionActive && width < 640
                 ? 1
@@ -106,43 +77,36 @@ class FileGrid extends StatelessWidget {
                 ? 3
                 : 2;
         return GridView.builder(
-          // 作为滚动主体时参与虚拟化；嵌套在外层滚动体内才使用 shrinkWrap。
           shrinkWrap: false,
           physics: const AlwaysScrollableScrollPhysics(),
-          itemCount: files.length,
+          itemCount: files.length + (draftFolderName == null ? 0 : 1),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
             childAspectRatio: 1.34,
           ),
-          itemBuilder:
-              (context, index) => _FileTile(
-                file: files[index],
-                showingRecycleBin: showingRecycleBin,
-                enabled: enabled,
-                onRename: onRename,
-                onDelete: onDelete,
-                onPurge: onPurge,
-                onRestore: onRestore,
-                onOpen: onOpen,
-                onCopy: onCopy,
-                onShowVersions: onShowVersions,
-                onMove: onMove,
-                onMoveToSharedSpace: onMoveToSharedSpace,
-                onMoveToPersonalSpace: onMoveToPersonalSpace,
-                onDownload: onDownload,
-                onShare: onShare,
-                onPreview: onPreview,
-                onToggleFavorite: onToggleFavorite,
-                showingFavorites: showingFavorites,
-                selected: selectedFileIds.contains(files[index].id),
-                selectionMode: selectionActive,
-                onToggleSelection:
-                    onToggleSelection != null
-                        ? () => onToggleSelection!(files[index].id)
-                        : null,
-              ),
+          itemBuilder: (context, index) {
+            if (draftFolderName != null && index == 0) {
+              return FileDraftFolderRow(
+                defaultName: draftFolderName!,
+                onSubmit: onDraftFolderSubmit ?? (_) {},
+                onCancel: onDraftFolderCancel ?? () {},
+              );
+            }
+            final file = files[draftFolderName == null ? index : index - 1];
+            return _FileTile(
+              file: file,
+              showingRecycleBin: showingRecycleBin,
+              enabled: enabled,
+              actions: actions,
+              showingFavorites: showingFavorites,
+              selected: selectedFileIds.contains(file.id),
+              inspected: inspectedFileId == file.id,
+              selectionMode: selectionActive,
+              favoriteIds: favoriteIds,
+            );
+          },
         );
       },
     );
@@ -154,49 +118,23 @@ class _FileTile extends StatefulWidget {
     required this.file,
     required this.showingRecycleBin,
     required this.enabled,
-    required this.onRename,
-    required this.onDelete,
-    required this.onPurge,
-    required this.onRestore,
-    required this.onOpen,
-    this.onCopy,
-    this.onMove,
-    this.onMoveToSharedSpace,
-    this.onMoveToPersonalSpace,
-    this.onDownload,
-    this.onShare,
-    this.onPreview,
-    this.onToggleFavorite,
-    this.onShowVersions,
-    this.showingFavorites = false,
+    required this.actions,
+    required this.showingFavorites,
     this.selected = false,
+    this.inspected = false,
     this.selectionMode = false,
-    this.onToggleSelection,
+    this.favoriteIds = const {},
   });
 
   final FileNode file;
   final bool showingRecycleBin;
   final bool enabled;
-  final ValueChanged<FileNode> onRename;
-  final ValueChanged<FileNode> onDelete;
-  final ValueChanged<FileNode> onPurge;
-  final ValueChanged<FileNode> onRestore;
-  final ValueChanged<FileNode> onOpen;
-  final ValueChanged<FileNode>? onCopy;
-  final ValueChanged<FileNode>? onMove;
-  final ValueChanged<FileNode>? onMoveToSharedSpace;
-  final ValueChanged<FileNode>? onMoveToPersonalSpace;
-  final ValueChanged<FileNode>? onDownload;
-  final ValueChanged<FileNode>? onShare;
-  final ValueChanged<FileNode>? onPreview;
-  final ValueChanged<FileNode>? onToggleFavorite;
-  final ValueChanged<FileNode>? onShowVersions;
-  final bool selected;
-  final bool selectionMode;
-  final VoidCallback? onToggleSelection;
-
-  /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
+  final FileNodeActionCallbacks actions;
   final bool showingFavorites;
+  final bool selected;
+  final bool inspected;
+  final bool selectionMode;
+  final Set<String> favoriteIds;
 
   @override
   State<_FileTile> createState() => _FileTileState();
@@ -208,33 +146,38 @@ class _FileTileState extends State<_FileTile> {
 
   @override
   Widget build(BuildContext context) {
-    final accent =
-        widget.file.isFolder
-            ? context.filesColors.tertiary
-            : context.filesColors.primary;
+    final colors = context.filesColors;
+    final actions = widget.actions;
+    final file = widget.file;
     final bool selectionToggleable =
-        widget.selectionMode && widget.onToggleSelection != null;
+        widget.selectionMode && actions.onToggleSelection != null;
     final VoidCallback? activate =
-        selectionToggleable
-            ? () => widget.onToggleSelection!()
-            : widget.enabled && !widget.showingRecycleBin
-            ? widget.file.isFolder
-                ? () => widget.onOpen(widget.file)
-                : widget.onPreview != null
-                ? () => widget.onPreview!(widget.file)
+        widget.enabled && !widget.showingRecycleBin
+            ? file.isFolder
+                ? () => actions.onOpen?.call(file)
+                : actions.onPreview != null
+                ? () => actions.onPreview!(file)
                 : null
             : null;
+    // 单击 = 检视（再次单击已检视条目 Toggle 收起）；双击 = 打开/预览；
+    // 多选态下单击仍是切换勾选。
+    final VoidCallback? singleTap =
+        selectionToggleable
+            ? () => actions.onToggleSelection!(file.id)
+            : widget.enabled && actions.onInspect != null
+            ? () => actions.onInspect!(file.id)
+            : null;
     final VoidCallback? longPress =
-        widget.enabled && widget.onToggleSelection != null
+        widget.enabled && actions.onToggleSelection != null
             ? () {
               HapticFeedback.mediumImpact();
-              widget.onToggleSelection!();
+              actions.onToggleSelection!(file.id);
             }
             : null;
     return Semantics(
       button: activate != null,
       enabled: activate != null,
-      label: widget.file.name,
+      label: file.name,
       onTap: activate,
       onLongPress: longPress,
       child: FocusableActionDetector(
@@ -261,97 +204,119 @@ class _FileTileState extends State<_FileTile> {
                   : SystemMouseCursors.basic,
           child: GestureDetector(
             excludeFromSemantics: true,
-            onTap: activate,
+            onTap: singleTap,
+            onDoubleTap: activate,
             onLongPress: longPress,
+            onSecondaryTapUp:
+                widget.enabled
+                    ? (details) => showFileNodeMenuAt(
+                      context,
+                      details.globalPosition,
+                      file: file,
+                      actions: actions,
+                      showingRecycleBin: widget.showingRecycleBin,
+                      showingFavorites: widget.showingFavorites,
+                    )
+                    : null,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
+              duration: MotionToken.fast,
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color:
                     widget.selected
-                        ? context.filesColors.primary.withValues(alpha: 0.12)
+                        ? colors.sidebarSelectedBg
                         : _hovering || _focused
-                        ? context.filesColors.surfaceContainerHigh.withValues(
-                          alpha: 0.78,
-                        )
-                        : context.filesColors.surfaceContainerHigh.withValues(
-                          alpha: 0.58,
-                        ),
-                borderRadius: BorderRadius.circular(8),
+                        ? colors.surfaceContainerHigh
+                        : colors.surfaceContainerLow,
                 border: Border.all(
                   color:
                       widget.selected
-                          ? context.filesColors.primary.withValues(alpha: 0.6)
+                          ? colors.selectedBorder
                           : _hovering || _focused
-                          ? accent.withValues(alpha: 0.36)
-                          : context.filesColors.outlineVariant.withValues(
-                            alpha: 0.26,
-                          ),
+                          ? colors.selectedBorder
+                          : colors.outlineVariant,
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (widget.selectionMode)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Checkbox(
-                              value: widget.selected,
-                              onChanged:
-                                  widget.onToggleSelection != null
-                                      ? (_) => widget.onToggleSelection!()
-                                      : null,
-                            ),
-                          ),
-                        FileThumbnail(file: widget.file, size: 42),
-                        const Spacer(),
-                        _FileTileMenu(
-                          file: widget.file,
-                          showingRecycleBin: widget.showingRecycleBin,
-                          enabled: widget.enabled,
-                          onRename: widget.onRename,
-                          onDelete: widget.onDelete,
-                          onPurge: widget.onPurge,
-                          onRestore: widget.onRestore,
-                          onOpen: widget.onOpen,
-                          onCopy: widget.onCopy,
-                          onMove: widget.onMove,
-                          onMoveToSharedSpace: widget.onMoveToSharedSpace,
-                          onMoveToPersonalSpace: widget.onMoveToPersonalSpace,
-                          onDownload: widget.onDownload,
-                          onShare: widget.onShare,
-                          onPreview: widget.onPreview,
-                          onToggleFavorite: widget.onToggleFavorite,
-                          onShowVersions: widget.onShowVersions,
-                          showingFavorites: widget.showingFavorites,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (widget.selectionMode) ...[
+                        FilesCheckMark(
+                          value: widget.selected,
+                          onChanged:
+                              actions.onToggleSelection != null
+                                  ? (_) => actions.onToggleSelection!(file.id)
+                                  : null,
                         ),
+                        const SizedBox(width: 8),
                       ],
-                    ),
-                    const Spacer(),
-                    Text(
-                      widget.file.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      FileThumbnail(file: file, size: 40, zoomOnHover: true),
+                      const Spacer(),
+                      if (widget.enabled)
+                        if (!widget.showingRecycleBin &&
+                            !file.isFolder &&
+                            actions.onToggleFavorite != null)
+                          _GridFavoriteStar(
+                            favorited: widget.favoriteIds.contains(file.id),
+                            onToggle: () => actions.onToggleFavorite!(file),
+                          ),
+                      PopupMenuButton<FileNodeMenuAction>(
+                        style: const ButtonStyle(
+                          minimumSize: WidgetStatePropertyAll(Size(44, 44)),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        tooltip: AppLocalizations.of(context).filesFileActions,
+                        icon: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 18,
+                          color: colors.onSurfaceVariant,
+                        ),
+                        itemBuilder:
+                            (context) => buildFileNodeMenuItems(
+                              context,
+                              file: file,
+                              actions: actions,
+                              showingRecycleBin: widget.showingRecycleBin,
+                              showingFavorites: widget.showingFavorites,
+                              favorited: widget.favoriteIds.contains(file.id),
+                            ),
+                        onSelected:
+                            (action) => dispatchFileNodeMenuAction(
+                              action,
+                              file,
+                              actions,
+                            ),
                       ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    file.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.bodyMedium,
+                      fontWeight:
+                          widget.selected ? FontWeight.w700 : FontWeight.w600,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      widget.file.isFolder
-                          ? AppLocalizations.of(context).filesFolder
-                          : formatFileSize(widget.file.sizeBytes),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: context.filesColors.onSurfaceVariant,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    file.isFolder
+                        ? AppLocalizations.of(context).filesFolder
+                        : formatFileSize(file.sizeBytes),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: AppTypography.monoFamily,
+                      fontFamilyFallback: AppTypography.monoFamilyFallback,
+                      fontSize: AppTypography.labelSmall,
+                      color: colors.onSurfaceVariant,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -361,193 +326,53 @@ class _FileTileState extends State<_FileTile> {
   }
 }
 
-class _FileTileMenu extends StatelessWidget {
-  const _FileTileMenu({
-    required this.file,
-    required this.showingRecycleBin,
-    required this.enabled,
-    required this.onRename,
-    required this.onDelete,
-    required this.onPurge,
-    required this.onRestore,
-    required this.onOpen,
-    this.onCopy,
-    this.onMove,
-    this.onMoveToSharedSpace,
-    this.onMoveToPersonalSpace,
-    this.onDownload,
-    this.onShare,
-    this.onPreview,
-    this.onToggleFavorite,
-    this.onShowVersions,
-    this.showingFavorites = false,
-  });
+/// 网格卡片内联收藏星标：与表格行内星标同图标语义（实心=已收藏），
+/// 28px 命中区、悬停提示，点击切换收藏。
+class _GridFavoriteStar extends StatefulWidget {
+  const _GridFavoriteStar({required this.favorited, required this.onToggle});
 
-  final FileNode file;
-  final bool showingRecycleBin;
-  final bool enabled;
-  final ValueChanged<FileNode> onRename;
-  final ValueChanged<FileNode> onDelete;
-  final ValueChanged<FileNode> onPurge;
-  final ValueChanged<FileNode> onRestore;
-  final ValueChanged<FileNode> onOpen;
-  final ValueChanged<FileNode>? onCopy;
-  final ValueChanged<FileNode>? onMove;
-  final ValueChanged<FileNode>? onMoveToSharedSpace;
-  final ValueChanged<FileNode>? onMoveToPersonalSpace;
-  final ValueChanged<FileNode>? onDownload;
-  final ValueChanged<FileNode>? onShare;
-  final ValueChanged<FileNode>? onPreview;
-  final ValueChanged<FileNode>? onToggleFavorite;
-  final ValueChanged<FileNode>? onShowVersions;
+  final bool favorited;
+  final VoidCallback onToggle;
 
-  /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
-  final bool showingFavorites;
+  @override
+  State<_GridFavoriteStar> createState() => _GridFavoriteStarState();
+}
+
+class _GridFavoriteStarState extends State<_GridFavoriteStar> {
+  bool _hovering = false;
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<_FileAction>(
-      tooltip: AppLocalizations.of(context).filesFileActions,
-      icon: const Icon(Icons.more_horiz_rounded),
-      enabled: enabled,
-      onSelected: (action) {
-        switch (action) {
-          case _FileAction.open:
-            onOpen(file);
-          case _FileAction.rename:
-            onRename(file);
-          case _FileAction.copy:
-            onCopy?.call(file);
-          case _FileAction.move:
-            onMove?.call(file);
-          case _FileAction.moveToShared:
-            onMoveToSharedSpace?.call(file);
-          case _FileAction.moveToPersonal:
-            onMoveToPersonalSpace?.call(file);
-          case _FileAction.download:
-            onDownload?.call(file);
-          case _FileAction.share:
-            onShare?.call(file);
-          case _FileAction.favorite:
-            onToggleFavorite?.call(file);
-          case _FileAction.preview:
-            onPreview?.call(file);
-          case _FileAction.delete:
-            onDelete(file);
-          case _FileAction.purge:
-            onPurge(file);
-          case _FileAction.restore:
-            onRestore(file);
-          case _FileAction.versions:
-            onShowVersions?.call(file);
-        }
-      },
-      itemBuilder:
-          (context) => [
-            if (!showingRecycleBin && file.isFolder)
-              PopupMenuItem(
-                value: _FileAction.open,
-                child: Text(AppLocalizations.of(context).filesOpen),
-              ),
-            if (showingRecycleBin)
-              PopupMenuItem(
-                value: _FileAction.restore,
-                child: Text(AppLocalizations.of(context).filesRestore),
-              )
-            else ...[
-              PopupMenuItem(
-                value: _FileAction.rename,
-                child: Text(AppLocalizations.of(context).filesRename),
-              ),
-              if (onCopy != null && !file.isFolder)
-                PopupMenuItem(
-                  value: _FileAction.versions,
-                  child: ListTile(
-                    leading: const Icon(Icons.history_outlined),
-                    title: Text(
-                      AppLocalizations.of(context).filesVersionsTitle,
-                    ),
-                    dense: true,
-                  ),
-                ),
-              if (onCopy != null && !file.isFolder)
-                PopupMenuItem(
-                  value: _FileAction.copy,
-                  child: ListTile(
-                    leading: const Icon(Icons.file_copy_outlined),
-                    title: Text(
-                      AppLocalizations.of(context).filesCopyToEllipsis,
-                    ),
-                    dense: true,
-                  ),
-                ),
-              if (onMove != null)
-                PopupMenuItem(
-                  value: _FileAction.move,
-                  child: Text(AppLocalizations.of(context).filesMoveToEllipsis),
-                ),
-              if (onMoveToSharedSpace != null)
-                PopupMenuItem(
-                  value: _FileAction.moveToShared,
-                  child: Text(AppLocalizations.of(context).filesMoveToShared),
-                ),
-              if (onMoveToPersonalSpace != null)
-                PopupMenuItem(
-                  value: _FileAction.moveToPersonal,
-                  child: Text(AppLocalizations.of(context).filesMoveToPersonal),
-                ),
-              if (onDownload != null && !file.isFolder)
-                PopupMenuItem(
-                  value: _FileAction.download,
-                  child: Text(AppLocalizations.of(context).filesDownload),
-                ),
-              if (onShare != null && !file.isFolder)
-                PopupMenuItem(
-                  value: _FileAction.share,
-                  child: Text(AppLocalizations.of(context).filesShare),
-                ),
-              if (onToggleFavorite != null && !file.isFolder)
-                PopupMenuItem(
-                  value: _FileAction.favorite,
-                  child: Text(
-                    showingFavorites
-                        ? AppLocalizations.of(context).filesRemoveFavorite
-                        : AppLocalizations.of(context).filesAddFavorite,
-                  ),
-                ),
-              if (onPreview != null && !file.isFolder)
-                PopupMenuItem(
-                  value: _FileAction.preview,
-                  child: Text(AppLocalizations.of(context).filesPreview),
-                ),
-              PopupMenuItem(
-                value: _FileAction.delete,
-                child: Text(AppLocalizations.of(context).filesMoveToRecycleBin),
-              ),
-            ],
-            if (showingRecycleBin)
-              PopupMenuItem(
-                value: _FileAction.purge,
-                child: Text(AppLocalizations.of(context).filesPurge),
-              ),
-          ],
+    final l10n = AppLocalizations.of(context);
+    final colors = context.filesColors;
+    return Tooltip(
+      message:
+          widget.favorited ? l10n.filesRemoveFavorite : l10n.filesAddFavorite,
+      waitDuration: const Duration(milliseconds: 400),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onToggle,
+          child: Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            color:
+                _hovering ? colors.surfaceContainerHighest : Colors.transparent,
+            child: Icon(
+              widget.favorited ? Icons.star_rounded : Icons.star_border_rounded,
+              size: 16,
+              color:
+                  widget.favorited
+                      ? FilesWorkstationPalette.amber
+                      : colors.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
     );
   }
-}
-
-enum _FileAction {
-  versions,
-  open,
-  favorite,
-  copy,
-  rename,
-  move,
-  moveToShared,
-  moveToPersonal,
-  download,
-  share,
-  preview,
-  delete,
-  purge,
-  restore,
 }

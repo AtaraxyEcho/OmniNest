@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
+import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 
 FileNode _file(String id) {
   return FileNode(
@@ -45,12 +46,14 @@ void main() {
         files: [_file('file-1')],
         showingRecycleBin: false,
         enabled: true,
-        onRename: (_) {},
-        onDelete: (_) {},
-        onPurge: (_) {},
-        onRestore: (_) {},
-        onOpen: (_) {},
-        onToggleFavorite: (file) => toggled = file,
+        actions: FileNodeActionCallbacks(
+          onRename: (_) {},
+          onDelete: (_) {},
+          onPurge: (_) {},
+          onRestore: (_) {},
+          onOpen: (_) {},
+          onToggleFavorite: (file) => toggled = file,
+        ),
       ),
     );
 
@@ -70,12 +73,15 @@ void main() {
         showingRecycleBin: false,
         enabled: true,
         showingFavorites: true,
-        onRename: (_) {},
-        onDelete: (_) {},
-        onPurge: (_) {},
-        onRestore: (_) {},
-        onOpen: (_) {},
-        onToggleFavorite: (_) {},
+        favoriteIds: const {'file-1'},
+        actions: FileNodeActionCallbacks(
+          onRename: (_) {},
+          onDelete: (_) {},
+          onPurge: (_) {},
+          onRestore: (_) {},
+          onOpen: (_) {},
+          onToggleFavorite: (_) {},
+        ),
       ),
     );
 
@@ -96,12 +102,14 @@ void main() {
           files: [_file('file-1')],
           showingRecycleBin: false,
           enabled: true,
-          onRename: (_) {},
-          onDelete: (_) {},
-          onPurge: (_) {},
-          onRestore: (_) {},
-          onOpen: (_) {},
-          onToggleFavorite: (file) => toggled = file,
+          actions: FileNodeActionCallbacks(
+            onRename: (_) {},
+            onDelete: (_) {},
+            onPurge: (_) {},
+            onRestore: (_) {},
+            onOpen: (_) {},
+            onToggleFavorite: (file) => toggled = file,
+          ),
         ),
       ),
     );

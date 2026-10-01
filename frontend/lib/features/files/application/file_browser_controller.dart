@@ -42,7 +42,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   FileRepository get _repository => ref.read(fileRepositoryProvider);
 
   /// 文件仓储（展示层版本历史对话框直接读取）。
-  FileRepository get repository => _repository;
   FileBrowserState? get _currentState => state.asData?.value;
 
   void _emitState(FileBrowserState nextState) {
@@ -86,11 +85,20 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     } on Exception {
       // 上传队列获取失败不影响主初始化
     }
+    List<FileNode> favoriteFiles = const [];
+    try {
+      // 预载收藏列表：任意分区的行内星标都需要已收藏状态。
+      favoriteFiles = await _repository.listFavoriteFiles();
+    } on Object {
+      // 收藏列表获取失败（含测试假体 UnimplementedError 属 Error 非
+      // Exception）不影响主初始化。
+    }
     return FileBrowserState(
       files: filesPage.items,
       recycleBin: const [],
       storageStats: stats,
       uploadQueue: uploadQueue,
+      favoriteFiles: favoriteFiles,
       filePage: filesPage.page,
       filePageSize: filesPage.size,
       fileTotalElements: filesPage.totalElements,
@@ -115,7 +123,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     FileOperation operation,
     Future<T> Function() action,
   ) async {
-    _setBusy(operation);
+    _setBusy(operation, background: _backgroundLoad);
     try {
       final result = await action();
       _clearBusy();
@@ -127,7 +135,49 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
   }
 
-  void _setBusy(FileOperation operation) {
+  /// 最近本地文件变更的自回声记录：fileId -> 过期时刻。
+  /// 后端为每次节点变更（建夹/重命名/删除/恢复/移动/复制/收藏…）记录
+  /// FILES 作用域同步事件，事件经实时通道回到本机会触发 FileSyncHandler
+  /// 全量刷新；本地动作自身已完成状态收敛，这份“自回落”只会造成列表
+  /// 闪烁刷新，须按窗口抑制。其他设备的变更没有本地记录，仍走全量刷新。
+  final Map<String, DateTime> _recentFileEchoes = {};
+
+  static const Duration _fileEchoWindow = Duration(seconds: 15);
+
+  /// 登记一次本地文件变更（供实时回声抑制查询）。
+  void registerFileEcho(Iterable<String> fileIds) {
+    final expiry = DateTime.now().add(_fileEchoWindow);
+    for (final fileId in fileIds) {
+      _recentFileEchoes[fileId] = expiry;
+    }
+  }
+
+  /// 判断一批资源是否全部命中本地回声窗口；
+  /// 顺带清理过期条目。空集返回 false（保守走刷新）。
+  bool matchesRecentFileEchoes(Set<String> fileIds) {
+    final now = DateTime.now();
+    _recentFileEchoes.removeWhere((_, expiry) => expiry.isBefore(now));
+    if (fileIds.isEmpty) {
+      return false;
+    }
+    return fileIds.every(_recentFileEchoes.containsKey);
+  }
+
+  /// 静默快操作：不进入 busy 门控（避免 0→1→0 双次全量状态发射造成
+  /// 工具栏禁用态闪烁与全列表重建），仅记录失败；成功后的状态更新由
+  /// 动作体自身发出（如收藏缓存刷新）。适用于毫秒级本地感知操作。
+  Future<void> _runQuietAction(
+    FileOperation operation,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (error) {
+      _recordActionError(operation, error);
+    }
+  }
+
+  void _setBusy(FileOperation operation, {bool background = false}) {
     final current = state.asData?.value;
     if (current == null) {
       return;
@@ -137,6 +187,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         activeActionCount: current.activeActionCount + 1,
         activeOperation: operation,
         clearLastActionError: true,
+        backgroundRefresh: background,
       ),
     );
   }
@@ -152,6 +203,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       current.copyWith(
         activeActionCount: nextCount,
         clearActiveOperationLabel: nextCount == 0,
+        backgroundRefresh: nextCount > 0 && current.backgroundRefresh,
       ),
     );
   }
@@ -173,7 +225,9 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
-  /// 刷新文件列表数据，保留当前分区、目录、筛选条件与已加载分页窗口。
+  /// 刷新文件列表数据，保留当前分区、目录、筛选条件与当前页窗；只拉
+  /// 目标页（跳页不再 0..N 串行重放，列表与分页条范围一一对应），
+  /// 目标页越界（他端删尽末页）时回退到新的末页。
   Future<void> refreshFiles() async {
     await _runAction(FileOperation.refresh, () async {
       final current = state.asData?.value;
@@ -181,41 +235,20 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
       final isShared = current?.spaceType == 'SHARED';
       final spaceType = isShared ? 'SHARED' : 'PERSONAL';
-      final pageSize = current?.filePageSize ?? 100;
+      final pageSize = current?.filePageSize ?? 10;
       final targetPage = current?.filePage ?? 0;
 
-      final firstPage = await _listFilePageForSpace(
-        spaceType: spaceType,
-        parentId: parentId,
-        category: category,
-        page: 0,
-        size: pageSize,
-      );
-      final items = List<FileNode>.of(firstPage.items);
-      var lastLoadedPage = firstPage.page;
-      var totalPages = firstPage.totalPages;
-      var totalElements = firstPage.totalElements;
-      for (
-        var page = 1;
-        page <= targetPage && page < firstPage.totalPages;
-        page++
-      ) {
-        final nextPage = await _listFilePageForSpace(
+      final result = await _fetchSectionPage(
+        (page, size) => _listFilePageForSpace(
           spaceType: spaceType,
           parentId: parentId,
           category: category,
           page: page,
-          size: pageSize,
-        );
-        final existingIds = items.map((file) => file.id).toSet();
-        items.addAll(nextPage.items.where((file) => existingIds.add(file.id)));
-        lastLoadedPage = nextPage.page;
-        totalPages = nextPage.totalPages;
-        totalElements = nextPage.totalElements;
-        if (lastLoadedPage >= totalPages - 1) {
-          break;
-        }
-      }
+          size: size,
+        ),
+        page: targetPage,
+        size: pageSize,
+      );
 
       final latest = state.asData?.value;
       if (latest != null &&
@@ -227,52 +260,104 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          files: items,
+          files: result.items,
           fileCategory: category,
-          filePage: lastLoadedPage,
-          filePageSize: pageSize,
-          fileTotalElements: totalElements,
-          fileTotalPages: totalPages,
+          filePage: result.page,
+          filePageSize: result.size,
+          fileTotalElements: result.totalElements,
+          fileTotalPages: result.totalPages,
         ),
       );
     });
   }
 
-  /// 按当前分区刷新文件节点列表，不改变导航分区。
+  /// 按当前分区刷新文件节点列表，不改变导航分区。最近/收藏/回收站
+  /// 与主列表一样走分页接口并同步 meta，避免列表与分页条元数据发散。
   Future<void> refreshFileNodesForCurrentSection() async {
     final section = _currentState?.section;
     switch (section) {
       case FileManagerSection.recent:
-        final recentFiles = await _repository.listRecentFiles();
-        final current = _currentState;
-        if (current != null) {
-          _emitState(current.copyWith(recentFiles: recentFiles));
-        }
-      case FileManagerSection.favorites:
-        final favoriteFiles = await _repository.listFavoriteFiles();
-        final current = _currentState;
-        if (current != null) {
-          _emitState(current.copyWith(favoriteFiles: favoriteFiles));
-        }
-      case FileManagerSection.recycleBin:
-        final spaceType = _currentState?.spaceType ?? 'PERSONAL';
-        final recycleBin = await _repository.listRecycleBin(
-          spaceType: spaceType,
+        final meta = _currentState?.recentMeta ?? const FilesSubPageMeta();
+        final result = await _fetchSectionPage(
+          (page, size) =>
+              _repository.listRecentFilesPage(page: page, size: size),
+          page: meta.page,
+          size: meta.size,
         );
         final current = _currentState;
         if (current != null) {
-          _emitState(current.copyWith(recycleBin: recycleBin));
+          _emitState(
+            current.copyWith(
+              recentFiles: result.items,
+              recentMeta: _metaOfNodePage(result),
+            ),
+          );
+        }
+      case FileManagerSection.favorites:
+        final meta = _currentState?.favoritesMeta ?? const FilesSubPageMeta();
+        final result = await _fetchSectionPage(
+          (page, size) =>
+              _repository.listFavoriteFilesPage(page: page, size: size),
+          page: meta.page,
+          size: meta.size,
+        );
+        final current = _currentState;
+        if (current != null) {
+          _emitState(
+            current.copyWith(
+              favoriteFiles: result.items,
+              favoritesMeta: _metaOfNodePage(result),
+            ),
+          );
+        }
+      case FileManagerSection.recycleBin:
+        final meta = _currentState?.recycleMeta ?? const FilesSubPageMeta();
+        final spaceType = _currentState?.spaceType ?? 'PERSONAL';
+        final result = await _fetchSectionPage(
+          (page, size) => _repository.listRecycleBinPage(
+            spaceType: spaceType,
+            page: page,
+            size: size,
+          ),
+          page: meta.page,
+          size: meta.size,
+        );
+        final current = _currentState;
+        if (current != null) {
+          _emitState(
+            current.copyWith(
+              recycleBin: result.items,
+              recycleMeta: _metaOfNodePage(result),
+            ),
+          );
         }
       default:
         await refreshFiles();
     }
   }
 
+  /// 按页窗拉取分区分页数据；末页条目被删尽导致请求页越界时，回退到
+  /// 新的末页重拉，避免分页条停留并展示空页。
+  Future<FileNodePage> _fetchSectionPage(
+    Future<FileNodePage> Function(int page, int size) fetch, {
+    required int page,
+    required int size,
+  }) async {
+    var result = await fetch(page, size);
+    if (result.items.isEmpty &&
+        result.page > 0 &&
+        result.page >= result.totalPages) {
+      final lastPage = result.totalPages > 0 ? result.totalPages - 1 : 0;
+      result = await fetch(lastPage, size);
+    }
+    return result;
+  }
+
   /// 按当前分区刷新远端数据，不改变目录、视图模式和筛选条件。
   Future<void> refreshForRealtime() async {
     final current = state.asData?.value;
     if (current == null) return;
-    await loadSection(current.section);
+    await loadSection(current.section, background: true);
   }
 
   Future<void> showFiles() async {
@@ -286,17 +371,21 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   /// 切换个人空间/共享空间。
   Future<void> switchSpace(String newSpaceType) async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.switchSpace, () async {
       final current = state.asData?.value;
       if (current == null) return;
 
       final FileNodePage filesPage;
       SharedSpaceUsage? usage;
+      // 空间切换回第 0 页，但保留用户已选的每页条数。
       if (newSpaceType == 'SHARED') {
-        filesPage = await _repository.listSharedSpaceFilesPage();
+        filesPage = await _repository.listSharedSpaceFilesPage(
+          size: current.filePageSize,
+        );
         usage = await _repository.getSharedSpaceUsage();
       } else {
-        filesPage = await _repository.listFilesPage();
+        filesPage = await _repository.listFilesPage(size: current.filePageSize);
       }
 
       state = AsyncData(
@@ -318,7 +407,22 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
-  Future<void> loadSection(FileManagerSection section) async {
+  Future<void> loadSection(
+    FileManagerSection section, {
+    bool background = false,
+  }) async {
+    _backgroundLoad = background;
+    try {
+      await _loadSectionInner(section);
+    } finally {
+      _backgroundLoad = false;
+    }
+  }
+
+  /// 当前分区加载是否处于后台（实时触发）模式，供各 show* 动作读取。
+  bool _backgroundLoad = false;
+
+  Future<void> _loadSectionInner(FileManagerSection section) async {
     switch (section) {
       case FileManagerSection.allFiles:
         await showFiles();
@@ -349,14 +453,20 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
   }
 
-  Future<void> showRecentFiles() async {
+  Future<void> showRecentFiles({int? page, int? size}) async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.loadRecent, () async {
       final current = state.asData?.value;
-      final recentFiles = await _repository.listRecentFiles();
+      final meta = current?.recentMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listRecentFilesPage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          recentFiles: recentFiles,
+          recentFiles: result.items,
+          recentMeta: _metaOfNodePage(result),
           section: FileManagerSection.recent,
           searchQuery: '',
         ),
@@ -364,14 +474,20 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
-  Future<void> showFavoriteFiles() async {
+  Future<void> showFavoriteFiles({int? page, int? size}) async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.loadFavorites, () async {
       final current = state.asData?.value;
-      final favoriteFiles = await _repository.listFavoriteFiles();
+      final meta = current?.favoritesMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listFavoriteFilesPage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          favoriteFiles: favoriteFiles,
+          favoriteFiles: result.items,
+          favoritesMeta: _metaOfNodePage(result),
           section: FileManagerSection.favorites,
           searchQuery: '',
         ),
@@ -379,15 +495,22 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
-  Future<void> showRecycleBin() async {
+  Future<void> showRecycleBin({int? page, int? size}) async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.loadRecycleBin, () async {
       final current = state.asData?.value;
       final spaceType = current?.spaceType ?? 'PERSONAL';
-      final recycleBin = await _repository.listRecycleBin(spaceType: spaceType);
+      final meta = current?.recycleMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listRecycleBinPage(
+        spaceType: spaceType,
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          recycleBin: recycleBin,
+          recycleBin: result.items,
+          recycleMeta: _metaOfNodePage(result),
           section: FileManagerSection.recycleBin,
           searchQuery: '',
         ),
@@ -395,13 +518,32 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
-  Future<void> showSharedWithMe() async {
+  FilesSubPageMeta _metaOfNodePage(FileNodePage page) {
+    return FilesSubPageMeta(
+      page: page.page,
+      size: page.size,
+      totalElements: page.totalElements,
+      totalPages: page.totalPages,
+    );
+  }
+
+  Future<void> showSharedWithMe({int? page, int? size}) async {
     await _runAction(FileOperation.loadShared, () async {
       final current = state.asData?.value;
-      final sharedWithMe = await _repository.listSharedWithMe();
+      final meta = current?.sharedWithMeMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listSharedWithMePage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedWithMe: sharedWithMe,
+          sharedWithMe: result.items,
+          sharedWithMeMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
           section: FileManagerSection.sharedWithMe,
         ),
       );
@@ -410,13 +552,12 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> showSharedSpace() async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.loadSharedSpace, () async {
       final current = state.asData?.value;
-      final files = await _repository.listSharedSpaceFiles();
       final usage = await _repository.getSharedSpaceUsage();
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceFiles: files,
           sharedSpaceUsage: usage,
           sharedSpaceBreadcrumbs: [],
           section: FileManagerSection.sharedSpace,
@@ -428,13 +569,12 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> openSharedSpaceFolder(FileNode folder) async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.openSharedFolder, () async {
       final current = state.asData?.value;
-      final files = await _repository.listSharedSpaceFiles(parentId: folder.id);
       final currentBreadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceFiles: files,
           sharedSpaceBreadcrumbs: [...currentBreadcrumbs, folder],
         ),
       );
@@ -443,17 +583,14 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> goToSharedSpaceBreadcrumb(int index) async {
     _clearSelection();
+    _clearInspection();
     final current = state.asData?.value;
     final breadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
     if (index < 0 || index > breadcrumbs.length) return;
     final targetBreadcrumbs = breadcrumbs.sublist(0, index);
-    final parentId =
-        targetBreadcrumbs.isEmpty ? null : targetBreadcrumbs.last.id;
     await _runAction(FileOperation.navigateSharedUp, () async {
-      final files = await _repository.listSharedSpaceFiles(parentId: parentId);
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceFiles: files,
           sharedSpaceBreadcrumbs: targetBreadcrumbs,
         ),
       );
@@ -482,11 +619,9 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
               ? null
               : current!.sharedSpaceBreadcrumbs.last.id;
       await _repository.createSharedFolder(parentId: parentId, name: name);
-      final files = await _repository.listSharedSpaceFiles(parentId: parentId);
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceFiles: files,
-        ),
+        (current ?? const FileBrowserState(files: [], recycleBin: []))
+            .copyWith(),
       );
     });
   }
@@ -495,42 +630,61 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     await _runAction(FileOperation.deleteSharedFile, () async {
       await _repository.deleteSharedFile(file.id);
       final current = state.asData?.value;
-      final parentId =
-          current?.sharedSpaceBreadcrumbs.isEmpty ?? true
-              ? null
-              : current!.sharedSpaceBreadcrumbs.last.id;
-      final files = await _repository.listSharedSpaceFiles(parentId: parentId);
       final usage = await _repository.getSharedSpaceUsage();
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceFiles: files,
           sharedSpaceUsage: usage,
         ),
       );
     });
   }
 
-  Future<void> showMyShares() async {
+  Future<void> showMyShares({int? page, int? size}) async {
     await _runAction(FileOperation.loadMyShares, () async {
       final current = state.asData?.value;
-      final myShares = await _repository.listMyShares();
+      final meta = current?.sharesMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listMySharesPage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          myShares: myShares,
+          myShares: result.items,
+          sharesMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
           section: FileManagerSection.myShares,
+          shareScopeAll: false,
         ),
       );
     });
   }
 
-  Future<void> showShareLinks() async {
+  /// 合并分享页的“全部链接”作用域：与我的分享同页共存，
+  /// 只切数据域不切 section，避免页面跳转闪烁。
+  Future<void> showShareLinks({int? page, int? size}) async {
     await _runAction(FileOperation.loadShareLinks, () async {
       final current = state.asData?.value;
-      final shareLinks = await _repository.listShareLinks();
+      final meta = current?.sharesMeta ?? const FilesSubPageMeta();
+      // 全部链接与我的分享同端点同 service：直接复用分页查询。
+      final result = await _repository.listMySharesPage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          shareLinks: shareLinks,
-          section: FileManagerSection.shareManagement,
+          shareLinks: result.items,
+          sharesMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
+          section: FileManagerSection.myShares,
+          shareScopeAll: true,
         ),
       );
     });
@@ -549,26 +703,46 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
-  Future<void> showUploadQueue() async {
+  Future<void> showUploadQueue({int? page, int? size}) async {
     await _runAction(FileOperation.loadUploadQueue, () async {
       final current = state.asData?.value;
-      final uploadQueue = await _repository.listUploadQueue();
+      final meta = current?.uploadQueueMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listUploadQueuePage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          uploadQueue: uploadQueue,
+          uploadQueue: result.items,
+          uploadQueueMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
           section: FileManagerSection.uploadQueue,
         ),
       );
     });
   }
 
-  Future<void> showOfflineDownloads() async {
+  Future<void> showOfflineDownloads({int? page, int? size}) async {
     await _runAction(FileOperation.loadOfflineDownloads, () async {
       final current = state.asData?.value;
-      final offlineTasks = await _repository.listOfflineDownloads();
+      final meta = current?.offlineMeta ?? const FilesSubPageMeta();
+      final result = await _repository.listOfflineDownloadsPage(
+        page: page ?? 0,
+        size: size ?? meta.size,
+      );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          offlineTasks: offlineTasks,
+          offlineTasks: result.items,
+          offlineMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
           section: FileManagerSection.offlineDownloads,
         ),
       );
@@ -594,6 +768,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.openFolder, () async {
       final current = state.asData?.value;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
@@ -601,6 +776,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         spaceType: current?.spaceType ?? 'PERSONAL',
         parentId: folder.id,
         category: category,
+        size: current?.filePageSize ?? 10,
       );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
@@ -621,12 +797,14 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> goToRoot() async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.navigateToRoot, () async {
       final current = state.asData?.value;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
       final filesPage = await _listFilePageForSpace(
         spaceType: current?.spaceType ?? 'PERSONAL',
         category: category,
+        size: current?.filePageSize ?? 10,
       );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
@@ -663,6 +841,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.changeDirectory, () async {
       final currentState = state.asData?.value;
       if (currentState == null ||
@@ -675,6 +854,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         spaceType: currentState.spaceType,
         parentId: target.id,
         category: currentState.fileCategory,
+        size: currentState.filePageSize,
       );
       state = AsyncData(
         currentState.copyWith(
@@ -694,6 +874,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> setFileCategory(FileBrowserFileCategory category) async {
     _clearSelection();
+    _clearInspection();
     await _runAction(FileOperation.filterFileType, () async {
       final current = state.asData?.value;
       final categoryForRequest = category;
@@ -701,6 +882,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         spaceType: current?.spaceType ?? 'PERSONAL',
         parentId: current?.parentId,
         category: categoryForRequest,
+        size: current?.filePageSize ?? 10,
       );
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
@@ -721,7 +903,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     required FileBrowserFileCategory category,
     String? parentId,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) {
     if (spaceType == 'SHARED') {
       return _repository.listSharedSpaceFilesPage(
@@ -738,52 +920,29 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
-  Future<void> loadMoreFiles() async {
+  /// 跳转到主列表指定页：refreshFiles 按目标页重放窗口（向前收缩、
+  /// 向后扩页），页式导航语义；正在加载或分区不符时忽略。
+  Future<void> goToFilePage(int page) async {
     final current = state.asData?.value;
     if (current == null ||
-        current.isLoadingMoreFiles ||
-        !current.hasMoreFiles ||
-        current.section != FileManagerSection.allFiles) {
+        current.isBusy ||
+        page < 0 ||
+        page >= current.fileTotalPages ||
+        page == current.filePage) {
       return;
     }
-    state = AsyncData(current.copyWith(isLoadingMoreFiles: true));
-    try {
-      final page = await _listFilePageForSpace(
-        spaceType: current.spaceType,
-        parentId: current.parentId,
-        category: current.fileCategory,
-        page: current.filePage + 1,
-        size: current.filePageSize,
-      );
-      final latest = state.asData?.value;
-      if (latest == null ||
-          latest.parentId != current.parentId ||
-          latest.spaceType != current.spaceType ||
-          latest.fileCategory != current.fileCategory) {
-        return;
-      }
-      final existingIds = latest.files.map((file) => file.id).toSet();
-      state = AsyncData(
-        latest.copyWith(
-          files: [
-            ...latest.files,
-            ...page.items.where((file) => existingIds.add(file.id)),
-          ],
-          filePage: page.page,
-          filePageSize: page.size,
-          fileTotalElements: page.totalElements,
-          fileTotalPages: page.totalPages,
-          isLoadingMoreFiles: false,
-        ),
-      );
-    } catch (error) {
-      final latest = state.asData?.value;
-      if (latest != null) {
-        state = AsyncData(latest.copyWith(isLoadingMoreFiles: false));
-      }
-      _recordActionError(FileOperation.loadMore, error);
-      rethrow;
+    state = AsyncData(current.copyWith(filePage: page));
+    await refreshFiles();
+  }
+
+  /// 调整主列表每页条数：回到第 0 页重放。
+  Future<void> setFilePageSize(int size) async {
+    final current = state.asData?.value;
+    if (current == null || current.isBusy || size == current.filePageSize) {
+      return;
     }
+    state = AsyncData(current.copyWith(filePageSize: size, filePage: 0));
+    await refreshFiles();
   }
 }
 

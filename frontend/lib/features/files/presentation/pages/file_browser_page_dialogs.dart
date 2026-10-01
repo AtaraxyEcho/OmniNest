@@ -1,83 +1,5 @@
 part of 'file_browser_page.dart';
 
-class _PageHeader extends StatelessWidget {
-  const _PageHeader({
-    required this.title,
-    required this.subtitle,
-    this.actions = const [],
-  });
-
-  final String title;
-  final String subtitle;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final titleBlock = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                fontSize: AppTypography.headlineLarge,
-                height: 40 / 32,
-                color: context.filesColors.primary,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: AppTypography.bodyLarge,
-                height: 21 / 14,
-                color: context.filesColors.onSurfaceVariant,
-              ),
-            ),
-          ],
-        );
-        if (constraints.maxWidth < 780 || actions.isEmpty) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleBlock,
-              if (actions.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Wrap(spacing: 10, runSpacing: 10, children: actions),
-              ],
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: titleBlock),
-            const SizedBox(width: 20),
-            Wrap(spacing: 10, runSpacing: 10, children: actions),
-          ],
-        );
-      },
-    );
-  }
-}
-
-ButtonStyle _fileHeaderActionButtonStyle() {
-  return ButtonStyle(
-    minimumSize: const WidgetStatePropertyAll(Size(132, 44)),
-    padding: const WidgetStatePropertyAll(
-      EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-    ),
-    shape: WidgetStatePropertyAll(
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ),
-    textStyle: const WidgetStatePropertyAll(
-      TextStyle(fontSize: AppTypography.bodyLarge, fontWeight: FontWeight.w700),
-    ),
-  );
-}
-
 class _FileActionStatusBar extends StatelessWidget {
   const _FileActionStatusBar({
     required this.error,
@@ -96,7 +18,7 @@ class _FileActionStatusBar extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: theme.colorScheme.errorContainer.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.zero,
         border: Border.all(
           color: theme.colorScheme.error.withValues(alpha: 0.32),
         ),
@@ -112,13 +34,19 @@ class _FileActionStatusBar extends StatelessWidget {
               children: [
                 Text(
                   filesOperationLabel(l10n, error.operation),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),
+                // 服务端错误链可能极长（嵌套异常全文），无行数上限会把
+                // 壳层主 Column 撑到数千像素高并溢出；封顶截断展示。
                 Text(
                   error.displayMessage,
+                  maxLines: 6,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: context.filesColors.onSurface,
                   ),
@@ -137,34 +65,25 @@ class _FileActionStatusBar extends StatelessWidget {
   }
 }
 
-Future<void> _runFileAction(
+Future<bool> _runFileAction(
   BuildContext context,
-  Future<void> Function() action,
-) async {
-  final messenger = ScaffoldMessenger.of(context);
-  await _runFileActionWithMessenger(messenger, action);
-}
-
-Future<bool> _runFileActionWithMessenger(
-  ScaffoldMessengerState messenger,
   Future<void> Function() action,
 ) async {
   try {
     await action();
     return true;
   } catch (error) {
-    if (!messenger.mounted) {
+    if (!context.mounted) {
       return false;
     }
     final resolved = describeUserFacingError(
       error,
-      l10n: AppLocalizations.of(messenger.context),
+      l10n: AppLocalizations.of(context),
     );
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('${resolved.title}：${resolved.displayMessage}'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    showOmniFeedback(
+      context,
+      '${resolved.title}：${resolved.displayMessage}',
+      severity: OmniFeedbackSeverity.error,
     );
     return false;
   }
@@ -177,17 +96,38 @@ Future<void> _confirmAndRun(
   required String confirmLabel,
   required Future<void> Function() action,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
-  final confirmed = await confirmDestructiveAction(
+  final confirmed = await showFilesConfirmDialog(
     context,
     title: title,
     message: message,
     confirmLabel: confirmLabel,
   );
-  if (!confirmed) {
+  if (!confirmed || !context.mounted) {
     return;
   }
-  await _runFileActionWithMessenger(messenger, action);
+  await _runFileAction(context, action);
+}
+
+/// 高危破坏性确认（粉碎等不可逆操作）：键入实体短语后才能执行。
+Future<void> _confirmTypedAndRun(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmPhrase,
+  required String confirmLabel,
+  required Future<void> Function() action,
+}) async {
+  final confirmed = await showFilesDestructiveConfirm(
+    context,
+    title: title,
+    message: message,
+    confirmPhrase: confirmPhrase,
+    confirmLabel: confirmLabel,
+  );
+  if (!confirmed || !context.mounted) {
+    return;
+  }
+  await _runFileAction(context, action);
 }
 
 Future<void> _downloadFile(
@@ -195,39 +135,29 @@ Future<void> _downloadFile(
   FileBrowserController controller,
   FileNode file,
 ) async {
-  final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context);
   try {
     final url = await controller.downloadUrl(file);
-    if (!messenger.mounted) return;
+    if (!context.mounted) return;
     // Web 直接开新标签下载；桌面与移动无浏览器上下文时退回复制链接。
     if (openDownloadUrl(url)) {
-      if (!messenger.mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(l10n.filesDownloadOpened),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (!context.mounted) return;
+      showOmniFeedback(context, l10n.filesDownloadOpened);
       return;
     }
     final copied = await copyTextToClipboard(url);
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (!context.mounted) return;
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+      severity: OmniFeedbackSeverity.error,
     );
   } catch (e) {
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('${l10n.filesDownloadFailed}: $e'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (!context.mounted) return;
+    showOmniFeedback(
+      context,
+      '${l10n.filesDownloadFailed}: $e',
+      severity: OmniFeedbackSeverity.error,
     );
   }
 }
@@ -238,21 +168,19 @@ Future<void> _showCopyDialog({
   required FileBrowserController controller,
   required FileNode file,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context);
-  final targetId = await showDialog<String>(
+  final targetId = await showFilesDialog<String>(
     context: context,
     builder: (ctx) => _FolderPickerDialog(excludeIds: {file.id}),
   );
-  if (targetId == null || !messenger.mounted) return;
-  await _runFileActionWithMessenger(messenger, () async {
+  if (targetId == null || !context.mounted) return;
+  await _runFileAction(context, () async {
     await controller.copyFile(file, targetId.isEmpty ? null : targetId);
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(l10n.filesCopiedFile(file.name)),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (!context.mounted) return;
+    showOmniFeedback(
+      context,
+      l10n.filesCopiedFile(file.name),
+      severity: OmniFeedbackSeverity.success,
     );
   });
 }
@@ -262,21 +190,19 @@ Future<void> _showMoveDialog({
   required FileBrowserController controller,
   required FileNode file,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context);
-  final targetId = await showDialog<String>(
+  final targetId = await showFilesDialog<String>(
     context: context,
     builder: (ctx) => _FolderPickerDialog(excludeIds: {file.id}),
   );
-  if (targetId == null || !messenger.mounted) return;
-  await _runFileActionWithMessenger(messenger, () async {
+  if (targetId == null || !context.mounted) return;
+  await _runFileAction(context, () async {
     await controller.moveFile(file, targetId);
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(l10n.filesMovedFile(file.name)),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (!context.mounted) return;
+    showOmniFeedback(
+      context,
+      l10n.filesMovedFile(file.name),
+      severity: OmniFeedbackSeverity.success,
     );
   });
 }
@@ -288,17 +214,17 @@ Future<void> _showVersionsDialog({
   required FileNode file,
 }) async {
   final l10n = AppLocalizations.of(context);
-  final repository = controller.repository;
-  await showDialog<void>(
+  await showFilesDialog<void>(
     context: context,
     builder: (ctx) {
-      return AlertDialog(
-        title: Text(l10n.filesVersionsTitle),
-        content: SizedBox(
+      return FilesDialogFrame(
+        title: l10n.filesVersionsTitle,
+        headerLabel: file.isFolder ? 'FOLDER' : file.nodeType,
+        body: SizedBox(
           width: 420,
           height: 360,
           child: FutureBuilder<List<FileVersion>>(
-            future: repository.listFileVersions(file.id),
+            future: controller.listFileVersions(file.id),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const Center(child: CircularProgressIndicator());
@@ -330,9 +256,8 @@ Future<void> _showVersionsDialog({
                             : TextButton(
                               onPressed: () async {
                                 final navigator = Navigator.of(ctx);
-                                final messenger = ScaffoldMessenger.of(context);
-                                final ok = await _runFileActionWithMessenger(
-                                  messenger,
+                                final ok = await _runFileAction(
+                                  context,
                                   () async {
                                     await controller.restoreFileVersion(
                                       file,
@@ -343,12 +268,11 @@ Future<void> _showVersionsDialog({
                                 if (!ok) {
                                   return;
                                 }
-                                if (messenger.mounted) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(l10n.filesVersionsRestored),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
+                                if (context.mounted) {
+                                  showOmniFeedback(
+                                    context,
+                                    l10n.filesVersionsRestored,
+                                    severity: OmniFeedbackSeverity.success,
                                   );
                                 }
                                 if (navigator.canPop()) {
@@ -366,27 +290,21 @@ Future<void> _showVersionsDialog({
         actions: [
           TextButton(
             onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
               final navigator = Navigator.of(ctx);
               // file_selector 的 XFile 在 Web 下没有 path 但可流式读取，与常规
               // 上传走同一条链路；FilePicker 取 path 在 Web 会静默失败。
               final picked = await openFile();
-              if (picked == null) {
+              if (picked == null || !context.mounted) {
                 return;
               }
-              final ok = await _runFileActionWithMessenger(messenger, () async {
+              final ok = await _runFileAction(context, () async {
                 await controller.replaceFileWithNewVersion(file, picked);
               });
               if (!ok) {
                 return;
               }
-              if (messenger.mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.filesOpSaveVersion),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+              if (context.mounted) {
+                showOmniFeedback(context, l10n.filesOpSaveVersion);
               }
               if (navigator.canPop()) {
                 navigator.pop();
@@ -410,236 +328,21 @@ Future<void> _showBatchMoveDialog({
   required int count,
   required Set<String> excludeIds,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context);
-  final targetId = await showDialog<String>(
+  final targetId = await showFilesDialog<String>(
     context: context,
     builder: (ctx) => _FolderPickerDialog(excludeIds: excludeIds),
   );
-  if (targetId == null || !messenger.mounted) return;
-  await _runFileActionWithMessenger(messenger, () async {
+  if (targetId == null || !context.mounted) return;
+  await _runFileAction(context, () async {
     await controller.batchMoveFiles(targetId);
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(l10n.filesMovedCount(count)),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (!context.mounted) return;
+    showOmniFeedback(
+      context,
+      l10n.filesMovedCount(count),
+      severity: OmniFeedbackSeverity.success,
     );
   });
-}
-
-class _FolderPickerDialog extends ConsumerStatefulWidget {
-  const _FolderPickerDialog({this.excludeIds = const {}});
-  final Set<String> excludeIds;
-
-  @override
-  ConsumerState<_FolderPickerDialog> createState() =>
-      _FolderPickerDialogState();
-}
-
-class _FolderPickerDialogState extends ConsumerState<_FolderPickerDialog> {
-  String? _currentParentId;
-  final List<_FolderBreadcrumb> _breadcrumbs = [];
-  List<FileNode> _folders = [];
-  bool _loading = true;
-  int _loadGeneration = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFolders();
-  }
-
-  Future<void> _loadFolders() async {
-    final generation = ++_loadGeneration;
-    final parentId = _currentParentId;
-    final repo = ref.read(fileRepositoryProvider);
-    setState(() => _loading = true);
-    try {
-      final files = await repo.listFiles(parentId: parentId);
-      if (!mounted || generation != _loadGeneration) {
-        return;
-      }
-      setState(() {
-        _folders = files.where((f) => f.isFolder).toList();
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted || generation != _loadGeneration) {
-        return;
-      }
-      setState(() {
-        _folders = [];
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _loadGeneration++;
-    super.dispose();
-  }
-
-  void _enterFolder(FileNode folder) {
-    setState(() {
-      _breadcrumbs.add(_FolderBreadcrumb(id: folder.id, name: folder.name));
-      _currentParentId = folder.id;
-    });
-    _loadFolders();
-  }
-
-  void _goToBreadcrumb(int index) {
-    setState(() {
-      if (index < 0) {
-        _breadcrumbs.clear();
-        _currentParentId = null;
-      } else {
-        _breadcrumbs.removeRange(index + 1, _breadcrumbs.length);
-        _currentParentId = _breadcrumbs[index].id;
-      }
-    });
-    _loadFolders();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final currentName =
-        _breadcrumbs.isEmpty ? l10n.filesRootDirectory : _breadcrumbs.last.name;
-    return AlertDialog(
-      title: Text(l10n.filesSelectTargetFolder),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 380),
-        child: SizedBox(
-          width: 420,
-          height: 380,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 面包屑导航
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    ActionChip(
-                      label: Text(l10n.filesRootDirectory),
-                      avatar: Icon(
-                        Icons.home_outlined,
-                        size: 16,
-                        color:
-                            _breadcrumbs.isEmpty
-                                ? context.filesColors.primary
-                                : null,
-                      ),
-                      onPressed: () => _goToBreadcrumb(-1),
-                    ),
-                    for (int i = 0; i < _breadcrumbs.length; i++) ...[
-                      const Icon(Icons.chevron_right_rounded, size: 16),
-                      ActionChip(
-                        label: Text(_breadcrumbs[i].name),
-                        onPressed: () => _goToBreadcrumb(i),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              // 文件夹列表
-              Expanded(
-                child:
-                    _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _folders.isEmpty
-                        ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.folder_open_outlined,
-                                size: 36,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.5),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                l10n.filesFolderEmpty,
-                                style: TextStyle(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                        : ListView.builder(
-                          itemCount: _folders.length,
-                          itemBuilder: (context, index) {
-                            final folder = _folders[index];
-                            final excluded = widget.excludeIds.contains(
-                              folder.id,
-                            );
-                            return ListTile(
-                              leading: Icon(
-                                Icons.folder_rounded,
-                                color:
-                                    excluded
-                                        ? Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant
-                                            .withValues(alpha: 0.3)
-                                        : context.filesColors.tertiary,
-                              ),
-                              title: Text(
-                                folder.name,
-                                style: TextStyle(
-                                  color:
-                                      excluded
-                                          ? Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant
-                                              .withValues(alpha: 0.4)
-                                          : null,
-                                ),
-                              ),
-                              trailing:
-                                  excluded
-                                      ? null
-                                      : const Icon(Icons.chevron_right_rounded),
-                              enabled: !excluded,
-                              onTap:
-                                  excluded ? null : () => _enterFolder(folder),
-                            );
-                          },
-                        ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.filesCancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _currentParentId ?? ''),
-          child: Text(l10n.filesMoveToFolder(currentName)),
-        ),
-      ],
-    );
-  }
-}
-
-class _FolderBreadcrumb {
-  const _FolderBreadcrumb({required this.id, required this.name});
-  final String id;
-  final String name;
 }
 
 /// 拍照后直传入库。
@@ -647,7 +350,6 @@ Future<void> _pickPhotoFromCamera(
   BuildContext context,
   FileBrowserController controller,
 ) async {
-  final messenger = ScaffoldMessenger.of(context);
   final failureText = AppLocalizations.of(context).filesUploadDone;
   try {
     final shot = await ImagePicker().pickImage(
@@ -659,9 +361,11 @@ Future<void> _pickPhotoFromCamera(
     }
     await _uploadFiles(context, controller, [shot]);
   } on PlatformException catch (error) {
-    if (messenger.mounted) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('$failureText: ${error.code}')),
+    if (context.mounted) {
+      showOmniFeedback(
+        context,
+        '$failureText: ${error.code}',
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -672,7 +376,6 @@ Future<void> _pickVideoFromCamera(
   BuildContext context,
   FileBrowserController controller,
 ) async {
-  final messenger = ScaffoldMessenger.of(context);
   final failureText = AppLocalizations.of(context).filesUploadDone;
   try {
     final shot = await ImagePicker().pickVideo(source: ImageSource.camera);
@@ -681,9 +384,11 @@ Future<void> _pickVideoFromCamera(
     }
     await _uploadFiles(context, controller, [shot]);
   } on PlatformException catch (error) {
-    if (messenger.mounted) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('$failureText: ${error.code}')),
+    if (context.mounted) {
+      showOmniFeedback(
+        context,
+        '$failureText: ${error.code}',
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -705,11 +410,10 @@ Future<void> _uploadFiles(
   FileBrowserController controller,
   List<XFile> files,
 ) async {
-  final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context);
-  await _runFileActionWithMessenger(messenger, () async {
+  await _runFileAction(context, () async {
     final result = await controller.uploadFiles(files);
-    if (!messenger.mounted) {
+    if (!context.mounted) {
       return;
     }
     final message =
@@ -721,9 +425,7 @@ Future<void> _uploadFiles(
               result.failed,
               result.paused,
             );
-    messenger.showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
+    showOmniFeedback(context, message);
   });
 }
 
@@ -736,55 +438,102 @@ Future<void> _showNameDialog({
   String? hintText,
   String initialValue = '',
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
-  final textController = TextEditingController(text: initialValue);
-  final result = await showDialog<String>(
+  final result = await showFilesDialog<String>(
     context: context,
     builder:
-        (context) => StatefulBuilder(
-          builder:
-              (context, setDialogState) => AlertDialog(
-                title: Text(title),
-                content: TextField(
-                  controller: textController,
-                  autofocus: true,
-                  minLines: hintText == null ? 1 : 2,
-                  maxLines: hintText == null ? 1 : 3,
-                  textInputAction: TextInputAction.done,
-                  decoration: InputDecoration(
-                    labelText: labelText,
-                    hintText: hintText,
-                  ),
-                  onChanged: (_) => setDialogState(() {}),
-                  onSubmitted: (value) {
-                    if (value.trim().isNotEmpty) {
-                      Navigator.of(context).pop(value);
-                    }
-                  },
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(AppLocalizations.of(context).filesCancel),
-                  ),
-                  FilledButton(
-                    onPressed:
-                        textController.text.trim().isEmpty
-                            ? null
-                            : () =>
-                                Navigator.of(context).pop(textController.text),
-                    child: Text(actionLabel),
-                  ),
-                ],
-              ),
+        (context) => _NameDialogFrame(
+          title: title,
+          actionLabel: actionLabel,
+          labelText: labelText,
+          hintText: hintText,
+          initialValue: initialValue,
         ),
   );
-  textController.dispose();
   final value = result?.trim();
-  if (value == null || value.isEmpty) {
+  if (value == null || value.isEmpty || !context.mounted) {
     return;
   }
-  await _runFileActionWithMessenger(messenger, () => onSubmit(value));
+  await _runFileAction(context, () => onSubmit(value));
+}
+
+/// 命名对话框（重命名/新建文件夹/离线下载等共用）。
+///
+/// 输入控制器由弹窗组件自持：showFilesDialog 的 Future 在 pop 调用瞬间
+/// 完成，而路由退场动画期间组件仍在树上，此时外部 dispose 控制器会触发
+/// “TextEditingController was used after being disposed”并级联污染路由
+/// 卸载（Overlay _dependents 断言、ErrorWidget 铺满全屏）。随 State 生命周期
+/// dispose 则自然落在动画结束、组件真正卸载之后。
+class _NameDialogFrame extends StatefulWidget {
+  const _NameDialogFrame({
+    required this.title,
+    required this.actionLabel,
+    required this.labelText,
+    this.hintText,
+    this.initialValue = '',
+  });
+
+  final String title;
+  final String actionLabel;
+  final String labelText;
+  final String? hintText;
+  final String initialValue;
+
+  @override
+  State<_NameDialogFrame> createState() => _NameDialogFrameState();
+}
+
+class _NameDialogFrameState extends State<_NameDialogFrame> {
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FilesDialogFrame(
+      title: widget.title,
+      body: TextField(
+        controller: _textController,
+        autofocus: true,
+        minLines: widget.hintText == null ? 1 : 2,
+        maxLines: widget.hintText == null ? 1 : 3,
+        textInputAction: TextInputAction.done,
+        decoration: filesWorkstationInputDecoration(
+          context,
+          hintText: widget.hintText ?? widget.labelText,
+          prefixIcon: Icons.edit_outlined,
+        ),
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (value) {
+          if (value.trim().isNotEmpty) {
+            Navigator.of(context).pop(value);
+          }
+        },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(AppLocalizations.of(context).filesCancel),
+        ),
+        FilledButton(
+          onPressed:
+              _textController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.of(context).pop(_textController.text),
+          child: Text(widget.actionLabel),
+        ),
+      ],
+    );
+  }
 }
 
 Future<ExternalStorageAccount?> _showExternalStorageDialog({
@@ -798,14 +547,13 @@ Future<ExternalStorageAccount?> _showExternalStorageDialog({
   ExternalStorageAccount? account,
   required WidgetRef ref,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
   List<ExternalStorageConnector> connectors = const [];
   if (account == null) {
     try {
-      connectors = await ref
-          .read(fileRepositoryProvider)
-          .listExternalConnectors()
-          .timeout(const Duration(seconds: 10));
+      final controller = ref.read(fileBrowserControllerProvider.notifier);
+      connectors = await controller.listExternalConnectors().timeout(
+        const Duration(seconds: 10),
+      );
     } on Exception {
       connectors = const [];
     }
@@ -813,7 +561,7 @@ Future<ExternalStorageAccount?> _showExternalStorageDialog({
   if (!context.mounted) {
     return null;
   }
-  final result = await showDialog<
+  final result = await showFilesDialog<
     ({String provider, String displayName, String credentialsJson})
   >(
     context: context,
@@ -823,11 +571,11 @@ Future<ExternalStorageAccount?> _showExternalStorageDialog({
           connectors: connectors,
         ),
   );
-  if (result == null) {
+  if (result == null || !context.mounted) {
     return null;
   }
   ExternalStorageAccount? submitted;
-  final ok = await _runFileActionWithMessenger(messenger, () async {
+  final ok = await _runFileAction(context, () async {
     submitted = await onSubmit(
       provider: result.provider,
       displayName: result.displayName,

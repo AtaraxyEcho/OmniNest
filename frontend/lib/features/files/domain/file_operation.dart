@@ -26,7 +26,6 @@ enum FileOperation {
   navigateToRoot,
   changeDirectory,
   filterFileType,
-  loadMore,
   createFolder,
   rename,
   copy,

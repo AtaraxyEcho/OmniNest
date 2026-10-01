@@ -2,12 +2,20 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.FileTypeCategories;
+import java.util.HashMap;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.port.MediaCoverDirectory;
+import com.omninest.modules.user.port.UserNameDirectory;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +29,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class FileNodeSupport {
+    private final UserNameDirectory userNameDirectory;
+    private final MediaCoverDirectory mediaCoverDirectory;
     private final FileNodeRepository fileNodeRepository;
 
     /**
@@ -110,6 +120,93 @@ public class FileNodeSupport {
      * @return 文件节点 DTO
      */
     public FileNodeDto toNodeDto(FileNode node) {
+        Map<UUID, UUID> covers = resolveAliveCovers(java.util.List.of(node));
+        return toNodeDto(
+                node,
+                resolveUploaderNames(java.util.List.of(node)),
+                covers.get(node.getId())
+        );
+    }
+
+    /**
+     * 将文件节点映射为对外 DTO，上传者显示名一次批量解析，避免列表页逐节点查询。
+     *
+     * @param nodes 文件节点列表
+     * @return 文件节点 DTO 列表
+     */
+    public List<FileNodeDto> toNodeDtos(List<FileNode> nodes) {
+        Map<UUID, String> names = resolveUploaderNames(nodes);
+        Map<UUID, UUID> covers = resolveAliveCovers(nodes);
+        return nodes.stream()
+                .map(node -> toNodeDto(node, names, covers.get(node.getId())))
+                .toList();
+    }
+
+    /**
+     * 解析本批节点的媒体封面并校验存活：仅对媒体类 FILE 节点发起反查
+     * （文件夹/普通文档零查询），封面节点已删除或缺失的剔除（防悬空
+     * 引用漏到前端造成无效签名请求）。
+     */
+    private Map<UUID, UUID> resolveAliveCovers(List<FileNode> nodes) {
+        UUID ownerUserId = null;
+        Set<UUID> mediaFileIds = new HashSet<>();
+        for (FileNode node : nodes) {
+            if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+                continue;
+            }
+            if (!isMediaCategory(node)) {
+                continue;
+            }
+            if (ownerUserId == null) {
+                ownerUserId = node.getOwnerUserId();
+            }
+            mediaFileIds.add(node.getId());
+        }
+        if (ownerUserId == null || mediaFileIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, UUID> covers = mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds);
+        if (covers.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> aliveIds = new HashSet<>();
+        for (FileNode coverNode : fileNodeRepository.findAllById(covers.values())) {
+            if (!coverNode.isDeleted() && NodeType.FILE.getValue().equals(coverNode.getNodeType())) {
+                aliveIds.add(coverNode.getId());
+            }
+        }
+        Map<UUID, UUID> alive = new HashMap<>();
+        for (Map.Entry<UUID, UUID> entry : covers.entrySet()) {
+            if (aliveIds.contains(entry.getValue())) {
+                alive.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return alive;
+    }
+
+    /** 媒体类判定：视频/音频/小说/漫画分类的文件才可能持有库封面。 */
+    private boolean isMediaCategory(FileNode node) {
+        String category = FileTypeCategories.resolve(
+                node.getName(), node.getMimeType(), node.getNodeType());
+        return FileTypeCategories.VIDEO.equals(category)
+                || FileTypeCategories.AUDIO.equals(category)
+                || FileTypeCategories.NOVEL.equals(category)
+                || FileTypeCategories.COMIC.equals(category);
+    }
+
+    private Map<UUID, String> resolveUploaderNames(List<FileNode> nodes) {
+        Set<UUID> uploaderIds = new HashSet<>();
+        for (FileNode node : nodes) {
+            UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
+            if (uploaderId != null) {
+                uploaderIds.add(uploaderId);
+            }
+        }
+        return userNameDirectory.resolveDisplayNames(uploaderIds);
+    }
+
+    private FileNodeDto toNodeDto(FileNode node, Map<UUID, String> uploaderNames, UUID coverFileId) {
+        UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
         return new FileNodeDto(
                 node.getId(),
                 node.getParentId(),
@@ -122,7 +219,9 @@ public class FileNodeSupport {
                 node.getSharedAt(),
                 node.getUpdatedAt(),
                 node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
-                node.getUploadedBy()
+                node.getUploadedBy(),
+                uploaderNames.get(uploaderId),
+                coverFileId
         );
     }
 

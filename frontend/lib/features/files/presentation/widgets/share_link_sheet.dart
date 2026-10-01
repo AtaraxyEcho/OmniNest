@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -9,23 +10,58 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 密码模式。
 enum _PasswordMode { custom, random }
 
 /// 分享链接创建/查看底部弹窗。
 class ShareLinkSheet extends ConsumerStatefulWidget {
-  const ShareLinkSheet({required this.file, this.existingShare, super.key});
+  const ShareLinkSheet({
+    required this.file,
+    this.existingShare,
+    this.embedded = false,
+    super.key,
+  });
 
   final FileNode file;
   final FileShareLink? existingShare;
+
+  /// true 时作为直角弹窗 Body 嵌入（桌面端），不再渲染抽屉把手与圆角。
+  final bool embedded;
 
   static Future<void> show(
     BuildContext context, {
     required FileNode file,
     FileShareLink? existingShare,
   }) {
+    final l10n = AppLocalizations.of(context);
+    final desktop =
+        MediaQuery.sizeOf(context).width >= 600 &&
+        !MobileShellScope.isHosted(context);
+    if (desktop) {
+      return showFilesDialog<void>(
+        context: context,
+        builder:
+            (_) => FilesDialogFrame(
+              title: l10n.filesShare,
+              headerLabel: file.isFolder ? 'FOLDER' : file.nodeType,
+              width: 520,
+              body: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: ShareLinkSheet(
+                  file: file,
+                  existingShare: existingShare,
+                  embedded: true,
+                ),
+              ),
+            ),
+      );
+    }
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -61,8 +97,9 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
       if (mounted) {
         setState(() => _shareBaseUrl = baseUrl);
       }
-    } on Exception {
-      // 环境未配置等异常由分享创建流程暴露，这里保持占位。
+    } on Object {
+      // 环境未配置（StateError 属 Error 而非 Exception，on Exception
+      // 接不住）与读取失败都由分享创建流程暴露，这里保持占位。
     }
   }
 
@@ -79,30 +116,41 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     final existing =
         widget.existingShare ?? (shareState.hasValue ? shareState.value : null);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.filesColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHandle(),
-            const SizedBox(height: 16),
-            _buildHeader(),
-            const SizedBox(height: 16),
-            if (existing != null) ...[
-              _buildShareInfo(existing),
-            ] else ...[
-              _buildCreateSection(shareState),
+    return Material(
+      color: context.filesColors.surfaceContainer,
+      child: Container(
+        decoration: BoxDecoration(
+          // 桌面嵌入弹窗形态由外层弹窗壳描边，内层再加边框会形成双线；
+          // 仅贴底抽屉形态保留顶部分隔线。
+          border:
+              widget.embedded
+                  ? null
+                  : Border(
+                    top: BorderSide(color: context.filesColors.outlineVariant),
+                  ),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!widget.embedded) ...[
+                _buildHandle(),
+                const SizedBox(height: 14),
+              ],
+              _buildHeader(),
+              const SizedBox(height: 16),
+              if (existing != null) ...[
+                _buildShareInfo(existing),
+              ] else ...[
+                _buildCreateSection(shareState),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -117,7 +165,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
           color: Theme.of(
             context,
           ).colorScheme.outlineVariant.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.zero,
         ),
       ),
     );
@@ -145,14 +193,16 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
             ),
           ),
         ),
-        IconButton(
-          tooltip: AppLocalizations.of(context).coreClose,
-          icon: const Icon(Icons.close, size: 20),
-          onPressed: () {
-            ref.read(shareLinkControllerProvider.notifier).reset();
-            Navigator.of(context).pop();
-          },
-        ),
+        // 弹窗嵌入形态由弹窗壳统一提供 X；贴底抽屉保留自带关闭钮。
+        if (!widget.embedded)
+          IconButton(
+            tooltip: AppLocalizations.of(context).coreClose,
+            icon: const Icon(Icons.close, size: 20),
+            onPressed: () {
+              ref.read(shareLinkControllerProvider.notifier).reset();
+              Navigator.of(context).pop();
+            },
+          ),
       ],
     );
   }
@@ -259,37 +309,44 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          title: Text(l10n.filesSetPassword),
-          subtitle: Text(
-            _enablePassword
-                ? l10n.filesPasswordRequired
-                : l10n.filesNoPasswordAnyone,
-            style: TextStyle(
-              fontSize: AppTypography.bodySmall,
-              color: context.filesColors.onSurfaceVariant,
-            ),
-          ),
+        // 方形开关行：与工位弹窗框架同一设计语言（M3 胶囊开关
+        // 无法经主题直角化，见 workstation_skin switchTheme 注释）。
+        WorkstationToggle(
           value: _enablePassword,
           onChanged: (v) => setState(() => _enablePassword = v),
+          label: l10n.filesSetPassword,
+          subtitle:
+              _enablePassword
+                  ? l10n.filesPasswordRequired
+                  : l10n.filesNoPasswordAnyone,
         ),
         if (_enablePassword) ...[
           const SizedBox(height: 8),
-          SegmentedButton<_PasswordMode>(
-            segments: [
-              ButtonSegment(
-                value: _PasswordMode.random,
-                label: Text(l10n.filesRandomGenerate),
+          // SegmentedButton 高度只有 40/32 两档可达（minimumSize 在段内
+          // 不生效），取 compact 32 后在 36/44 输入框槽位内垂直居中，
+          // 保证控件节奏与相邻字段一致。
+          SizedBox(
+            height: AppControlTokens.fieldHeight,
+            child: Center(
+              child: SegmentedButton<_PasswordMode>(
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                segments: [
+                  ButtonSegment(
+                    value: _PasswordMode.random,
+                    label: Text(l10n.filesRandomGenerate),
+                  ),
+                  ButtonSegment(
+                    value: _PasswordMode.custom,
+                    label: Text(l10n.filesCustomPassword),
+                  ),
+                ],
+                selected: {_passwordMode},
+                onSelectionChanged:
+                    (v) => setState(() => _passwordMode = v.first),
               ),
-              ButtonSegment(
-                value: _PasswordMode.custom,
-                label: Text(l10n.filesCustomPassword),
-              ),
-            ],
-            selected: {_passwordMode},
-            onSelectionChanged: (v) => setState(() => _passwordMode = v.first),
+            ),
           ),
           if (_passwordMode == _PasswordMode.custom) ...[
             const SizedBox(height: 8),
@@ -324,7 +381,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
             color: Theme.of(
               context,
             ).colorScheme.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.zero,
             border: Border.all(
               color: Theme.of(
                 context,
@@ -353,7 +410,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                         shareUrl == null
                             ? null
                             : () => _copyToClipboard(shareUrl),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.zero,
                     child: Padding(
                       padding: const EdgeInsets.all(4),
                       child: Icon(
@@ -388,7 +445,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                     const SizedBox(width: 6),
                     InkWell(
                       onTap: () => _copyToClipboard(share.generatedPassword!),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.zero,
                       child: Padding(
                         padding: const EdgeInsets.all(3),
                         child: Icon(
@@ -439,25 +496,22 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            if (hasPassword && shareUrl != null)
+        // 纯复制链接与链接行右侧复制 icon 完全重复，已删；
+        // 仅保留“含密码复制”（组合了提取码，功能独立）。
+        if (hasPassword && shareUrl != null) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
               _buildCapsuleButton(
                 l10n.filesCopyLinkWithPassword,
                 Icons.copy,
                 () => _copyToClipboard(shareUrl),
               ),
-            if (shareUrl != null)
-              _buildCapsuleButton(
-                hasPassword ? l10n.filesCopyLinkOnly : l10n.filesCopyLink,
-                Icons.link,
-                () => _copyToClipboard(shareUrl),
-              ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -469,7 +523,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.zero,
       ),
       child: Text(
         label,
@@ -511,9 +565,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
       if (_passwordMode == _PasswordMode.custom) {
         password = _passwordController.text.trim();
         if (password.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.filesEnterCustomPassword)),
-          );
+          showOmniFeedback(context, l10n.filesEnterCustomPassword);
           return;
         }
       } else {
@@ -534,19 +586,18 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
   }
 
   Future<void> _copyToClipboard(String text) async {
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
     final copied = await copyTextToClipboard(text);
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            copied ? l10n.filesCopiedClipboard : l10n.clipboardCopyFailed,
-          ),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+    if (!mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesCopiedClipboard : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+      duration: const Duration(seconds: 1),
+    );
   }
 
   Future<void> _pickExpiryDate() async {

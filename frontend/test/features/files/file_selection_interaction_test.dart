@@ -9,6 +9,8 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
+import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
 
 void main() {
   test('桌面文件浏览器提供上传入口和文件拖放且不显示队列角标', () {
@@ -29,45 +31,59 @@ void main() {
     expect(RegExp('FileDropUploadSurface\\(').allMatches(pageSource).length, 2);
     expect(pageSource, contains('openFiles()'));
     expect(pageSource, isNot(contains('_FileNavBadge')));
-    expect(pageSource, contains('_fileHeaderActionButtonStyle()'));
-    expect(pageSource, contains('controller.goToParent'));
+    expect(pageSource, contains('_BreadcrumbActionStrip('));
+    expect(pageSource, contains('controller.goToBreadcrumb'));
     expect(pageSource, contains('state.viewMode.name'));
     expect(pageSource, contains('state.viewMode == FileBrowserViewMode.list'));
     expect(pageSource, isNot(contains('Widget _buildFileList(')));
     expect(dropSource, contains('whereType<DropItemFile>()'));
   });
 
-  testWidgets('列表常态点击打开且多选态由长按进入', (tester) async {
+  testWidgets('列表常态单击检视双击打开且多选态由长按进入', (tester) async {
     FileNode? opened;
     FileNode? previewed;
     String? selectedId;
+    final inspected = <String>[];
     await tester.pumpWidget(
       _filesApp(
         FileList(
           files: _files,
           showingRecycleBin: false,
           enabled: true,
-          onRename: (_) {},
-          onDelete: (_) {},
-          onPurge: (_) {},
-          onRestore: (_) {},
-          onOpen: (file) => opened = file,
-          onPreview: (file) => previewed = file,
-          onToggleSelection: (id) => selectedId = id,
+          actions: FileNodeActionCallbacks(
+            onRename: (_) {},
+            onDelete: (_) {},
+            onPurge: (_) {},
+            onRestore: (_) {},
+            onOpen: (file) => opened = file,
+            onPreview: (file) => previewed = file,
+            onToggleSelection: (id) => selectedId = id,
+            onInspect: inspected.add,
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    // 常态：无 Checkbox，点击直接打开/预览。
-    expect(find.byType(Checkbox), findsNothing);
+    // 常态：无复选框，单击进入检视（Toggle 语义由 controller 实现）。
+    expect(find.byType(FilesCheckMark), findsNothing);
     await tester.tap(find.text('Documents'));
-    expect(opened?.id, 'folder-1');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(inspected, ['folder-1']);
+    expect(opened, isNull);
     expect(selectedId, isNull);
 
     await tester.tap(find.text('notes.txt'));
-    expect(previewed?.id, 'file-1');
-    expect(selectedId, isNull);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(inspected, ['folder-1', 'file-1']);
+    expect(previewed, isNull);
+
+    // 双击 = 打开/预览。
+    await tester.tap(find.text('Documents'), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Documents'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(opened?.id, 'folder-1');
 
     // 长按行进入多选：触发选择回调，Checkbox 尚未渲染（由页面状态驱动）。
     await tester.longPress(find.text('notes.txt'));
@@ -85,46 +101,7 @@ void main() {
           enabled: true,
           selectionActive: true,
           selectedFileIds: const {'file-1'},
-          onRename: (_) {},
-          onDelete: (_) {},
-          onPurge: (_) {},
-          onRestore: (_) {},
-          onOpen: (file) => opened = file,
-          onPreview: (_) {},
-          onToggleSelection: (id) => selectedId = id,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(Checkbox), findsNWidgets(2));
-    expect(
-      tester.widget<Checkbox>(find.byType(Checkbox).last).value,
-      isTrue,
-      reason: 'file-1 已选中',
-    );
-
-    // 多选态下点击行 = 切换选择而不是打开。
-    await tester.tap(find.text('Documents'));
-    expect(selectedId, 'folder-1');
-    expect(opened, isNull);
-
-    await tester.tap(find.byType(Checkbox).first);
-    expect(selectedId, 'folder-1');
-  });
-
-  testWidgets('网格卡片点击文件夹时不会误触多选', (tester) async {
-    FileNode? opened;
-    String? selectedId;
-    await tester.pumpWidget(
-      _filesApp(
-        SizedBox(
-          width: 900,
-          height: 500,
-          child: FileGrid(
-            files: _files,
-            showingRecycleBin: false,
-            enabled: true,
+          actions: FileNodeActionCallbacks(
             onRename: (_) {},
             onDelete: (_) {},
             onPurge: (_) {},
@@ -136,10 +113,65 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FilesCheckMark), findsNWidgets(2));
+    expect(
+      tester.widget<FilesCheckMark>(find.byType(FilesCheckMark).last).value,
+      isTrue,
+      reason: 'file-1 已选中',
+    );
+
+    // 多选态下点击行 = 切换选择而不是打开。
+    await tester.tap(find.text('Documents'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(selectedId, 'folder-1');
+    expect(opened, isNull);
+
+    await tester.tap(find.byType(FilesCheckMark).first);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(selectedId, 'folder-1');
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('网格卡片单击检视不误触多选，双击打开', (tester) async {
+    FileNode? opened;
+    String? selectedId;
+    final inspected = <String>[];
+    await tester.pumpWidget(
+      _filesApp(
+        SizedBox(
+          width: 900,
+          height: 500,
+          child: FileGrid(
+            files: _files,
+            showingRecycleBin: false,
+            enabled: true,
+            actions: FileNodeActionCallbacks(
+              onRename: (_) {},
+              onDelete: (_) {},
+              onPurge: (_) {},
+              onRestore: (_) {},
+              onOpen: (file) => opened = file,
+              onPreview: (_) {},
+              onToggleSelection: (id) => selectedId = id,
+              onInspect: inspected.add,
+            ),
+          ),
+        ),
+      ),
+    );
 
     await tester.tap(find.text('Documents'));
-    expect(opened?.id, 'folder-1');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(inspected, ['folder-1']);
     expect(selectedId, isNull);
+
+    await tester.tap(find.text('Documents'), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Documents'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(opened?.id, 'folder-1');
 
     await tester.longPress(find.text('Documents'));
     expect(selectedId, 'folder-1');
@@ -153,11 +185,13 @@ void main() {
           files: [_files.first],
           showingRecycleBin: false,
           enabled: true,
-          onRename: (_) {},
-          onDelete: (_) {},
-          onPurge: (_) {},
-          onRestore: (_) {},
-          onOpen: (file) => opened = file,
+          actions: FileNodeActionCallbacks(
+            onRename: (_) {},
+            onDelete: (_) {},
+            onPurge: (_) {},
+            onRestore: (_) {},
+            onOpen: (file) => opened = file,
+          ),
         ),
       ),
     );
@@ -176,11 +210,13 @@ void main() {
             files: [_files.first],
             showingRecycleBin: false,
             enabled: true,
-            onRename: (_) {},
-            onDelete: (_) {},
-            onPurge: (_) {},
-            onRestore: (_) {},
-            onOpen: (file) => opened = file,
+            actions: FileNodeActionCallbacks(
+              onRename: (_) {},
+              onDelete: (_) {},
+              onPurge: (_) {},
+              onRestore: (_) {},
+              onOpen: (file) => opened = file,
+            ),
           ),
         ),
       ),

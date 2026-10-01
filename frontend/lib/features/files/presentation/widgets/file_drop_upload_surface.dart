@@ -60,7 +60,7 @@ class _FileDropUploadSurfaceState extends State<FileDropUploadSurface> {
                     color: context.filesColors.surfaceContainerHigh.withValues(
                       alpha: 0.94,
                     ),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.zero,
                     border: Border.all(
                       color: context.filesColors.primary,
                       width: 2,

@@ -16,7 +16,11 @@ import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.dto.FileMediaInfoDto;
 import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.port.MediaCoverDirectory;
+import com.omninest.modules.user.port.UserNameDirectory;
 import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
@@ -26,6 +30,9 @@ import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.search.service.FileSearchIndexService;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HashMap;
+
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -60,6 +67,9 @@ public class FileQueryService {
     private final ApplicationEventPublisher eventPublisher;
     private final FileSearchIndexService fileSearchIndexService;
     private final UserSyncEventRecorder syncEventRecorder;
+    private final UserNameDirectory userNameDirectory;
+    private final MediaProbeService mediaProbeService;
+    private final MediaCoverDirectory mediaCoverDirectory;
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId) {
@@ -70,11 +80,15 @@ public class FileQueryService {
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId, String category) {
         String normalizedCategory = normalizeCategory(category);
         List<FileNode> nodes = listNodesForView(ownerUserId, parentId, normalizedCategory);
-        return nodes.stream()
+        List<FileNode> sorted = nodes.stream()
                 .filter(node -> matchesCategory(node, normalizedCategory))
                 .sorted(Comparator.comparing(FileNode::getNodeType).reversed()
                         .thenComparing(FileNode::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(this::toDto)
+                .toList();
+        Map<UUID, String> uploaderNames = resolveUploaderNames(sorted);
+        Map<UUID, UUID> coverMap = resolveAliveCovers(sorted);
+        return sorted.stream()
+                .map(node -> toDto(node, uploaderNames, coverMap.get(node.getId())))
                 .toList();
     }
 
@@ -112,7 +126,9 @@ public class FileQueryService {
                     normalizedCategory,
                     pageable);
         }
-        return nodes.map(this::toDto);
+        Map<UUID, String> uploaderNames = resolveUploaderNames(nodes.getContent());
+        Map<UUID, UUID> covers = resolveAliveCovers(nodes.getContent());
+        return nodes.map(node -> toDto(node, uploaderNames, covers.get(node.getId())));
     }
 
     private String resolveSubtreePrefix(UUID ownerUserId, UUID parentId) {
@@ -234,7 +250,9 @@ public class FileQueryService {
         Page<FileNode> nodes = spaceType == SpaceType.SHARED
                 ? fileNodeRepository.findSharedRecyclePage(ownerUserId, spaceType, pageable)
                 : fileNodeRepository.findPersonalRecyclePage(ownerUserId, spaceType, pageable);
-        return nodes.map(this::toDto);
+        Map<UUID, String> uploaderNames = resolveUploaderNames(nodes.getContent());
+        Map<UUID, UUID> covers = resolveAliveCovers(nodes.getContent());
+        return nodes.map(node -> toDto(node, uploaderNames, covers.get(node.getId())));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -561,6 +579,27 @@ public class FileQueryService {
         return fileContentAccessService.createDownloadUrl(node);
     }
 
+    /**
+     * 探测文件媒体元数据（时长/分辨率）：仅 FILE 且 video/* 或 image/*，
+     * 结果按内容对象缓存；探测失败返回空对象而非报错。
+     */
+    @Transactional(readOnly = true)
+    public FileMediaInfoDto mediaInfo(UUID ownerUserId, UUID fileId) {
+        FileNode node = findActiveNode(ownerUserId, fileId);
+        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹没有媒体元数据");
+        }
+        String mime = node.getMimeType() == null ? "" : node.getMimeType();
+        if (!mime.startsWith("video/") && !mime.startsWith("image/")) {
+            return new FileMediaInfoDto(null, null, null);
+        }
+        if (node.getCurrentObjectId() == null) {
+            return new FileMediaInfoDto(null, null, null);
+        }
+        FileDownloadUrlDto url = fileContentAccessService.createDownloadUrl(node);
+        return mediaProbeService.probe(node.getCurrentObjectId().toString(), url.downloadUrl());
+    }
+
     private FileNode findActiveNode(UUID ownerUserId, UUID fileId) {
         return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
@@ -736,6 +775,20 @@ public class FileQueryService {
     }
 
     private FileNodeDto toDto(FileNode node) {
+        Map<UUID, UUID> covers = resolveAliveCovers(java.util.List.of(node));
+        return toDto(node, resolveUploaderNames(java.util.List.of(node)), covers.get(node.getId()));
+    }
+
+    /**
+     * 上传者显示名：共享空间取实际上传者，其余取所有者；
+     * 未知用户不填充，由前端按缺省呈现。
+     */
+    private FileNodeDto toDto(
+            FileNode node,
+            Map<UUID, String> uploaderNames,
+            UUID coverFileId
+    ) {
+        UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
         return new FileNodeDto(
                 node.getId(),
                 node.getParentId(),
@@ -748,8 +801,70 @@ public class FileQueryService {
                 node.getSharedAt(),
                 node.getUpdatedAt(),
                 node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
-                node.getUploadedBy()
+                node.getUploadedBy(),
+                uploaderNames.get(uploaderId),
+                coverFileId
         );
+    }
+
+    /**
+     * 批量解析本组节点的存活媒体封面（媒体类 FILE 节点才发起反查）。
+     */
+    private Map<UUID, UUID> resolveAliveCovers(List<FileNode> nodes) {
+        UUID ownerUserId = null;
+        Set<UUID> mediaFileIds = new HashSet<>();
+        for (FileNode node : nodes) {
+            if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+                continue;
+            }
+            String category = FileTypeCategories.resolve(
+                    node.getName(), node.getMimeType(), node.getNodeType());
+            boolean mediaCategory = FileTypeCategories.VIDEO.equals(category)
+                    || FileTypeCategories.AUDIO.equals(category)
+                    || FileTypeCategories.NOVEL.equals(category)
+                    || FileTypeCategories.COMIC.equals(category);
+            if (!mediaCategory) {
+                continue;
+            }
+            if (ownerUserId == null) {
+                ownerUserId = node.getOwnerUserId();
+            }
+            mediaFileIds.add(node.getId());
+        }
+        if (ownerUserId == null || mediaFileIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, UUID> covers = mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds);
+        if (covers.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> aliveIds = new HashSet<>();
+        for (FileNode coverNode : fileNodeRepository.findAllById(covers.values())) {
+            if (!coverNode.isDeleted() && NodeType.FILE.getValue().equals(coverNode.getNodeType())) {
+                aliveIds.add(coverNode.getId());
+            }
+        }
+        Map<UUID, UUID> alive = new HashMap<>();
+        for (Map.Entry<UUID, UUID> entry : covers.entrySet()) {
+            if (aliveIds.contains(entry.getValue())) {
+                alive.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return alive;
+    }
+
+    /**
+     * 批量解析一批节点的上传者显示名，供列表接口一次查询填充。
+     */
+    private Map<UUID, String> resolveUploaderNames(List<FileNode> nodes) {
+        Set<UUID> uploaderIds = new java.util.HashSet<>();
+        for (FileNode node : nodes) {
+            UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
+            if (uploaderId != null) {
+                uploaderIds.add(uploaderId);
+            }
+        }
+        return userNameDirectory.resolveDisplayNames(uploaderIds);
     }
 
     private void recordFileEvent(UUID ownerUserId, UUID fileId, SyncAction action) {

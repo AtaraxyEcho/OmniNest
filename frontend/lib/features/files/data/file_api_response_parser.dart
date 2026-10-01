@@ -99,9 +99,29 @@ class FileApiResponseParser {
     return _parseShareLink(parseData(body));
   }
 
+  /// 公开单条解码：FilesSubPage.fromJson 消费。
+  SharedFileItem decodeSharedItem(Map<String, dynamic> json) =>
+      _parseSharedItem(json);
+
+  /// 公开单条解码：FilesSubPage.fromJson 消费。
+  FileShareLink decodeShareLink(Map<String, dynamic> json) =>
+      _parseShareLink(json);
+
   List<SharedFileItem> parseSharedItemPageResponse(Map<String, dynamic>? body) {
     return parsePageItems(body).map(_parseSharedItem).toList();
   }
+
+  ExternalFileItem decodeExternalFile(Map<String, dynamic> json) =>
+      parseExternalFileItem(json);
+
+  FileUploadQueueItem decodeUploadQueueItem(Map<String, dynamic> json) =>
+      _parseUploadQueueItem(json);
+
+  OfflineDownloadTask decodeOfflineTask(Map<String, dynamic> json) =>
+      _parseOfflineTask(json);
+
+  ImportTask decodeImportTask(Map<String, dynamic> json) =>
+      parseImportTask(json);
 
   List<FileUploadQueueItem> parseUploadQueuePageResponse(
     Map<String, dynamic>? body,
@@ -219,6 +239,19 @@ class FileApiResponseParser {
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
     );
+  }
+
+  double? asDouble(Object? value) {
+    if (value is double) {
+      return value;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value);
+    }
+    return null;
   }
 
   int asInt(Object? value) {

@@ -21,9 +21,13 @@ import 'package:omninest/features/files/domain/file_type_utils.dart';
 
 /// 全屏文件预览页面。
 class FilePreviewPage extends ConsumerStatefulWidget {
-  const FilePreviewPage({required this.file, super.key});
+  const FilePreviewPage({required this.file, this.embedded = false, super.key});
 
   final FileNode file;
+
+  /// 桌面弹窗嵌入形态：不渲染 Scaffold/AppBar（标题、大小与操作钮由
+  /// 弹窗壳统一提供），仅输出预览内容本体。
+  final bool embedded;
 
   @override
   ConsumerState<FilePreviewPage> createState() => _FilePreviewPageState();
@@ -36,7 +40,6 @@ class _FilePreviewPageState extends ConsumerState<FilePreviewPage> {
       widget.file.mimeType,
       widget.file.name,
     );
-    final compact = MediaQuery.sizeOf(context).width < 600;
     final preview = switch (previewType) {
       FilePreviewType.image => _ImagePreview(file: widget.file),
       FilePreviewType.video => _VideoPreview(file: widget.file),
@@ -45,6 +48,11 @@ class _FilePreviewPageState extends ConsumerState<FilePreviewPage> {
       FilePreviewType.pdf => _PdfPreview(file: widget.file),
       FilePreviewType.unsupported => _UnsupportedPreview(file: widget.file),
     };
+    if (widget.embedded) {
+      // 嵌入形态：弹窗壳负责标题/操作钮，这里只输出内容底色与本体。
+      return ColoredBox(color: context.filesColors.surface, child: preview);
+    }
+    final compact = MediaQuery.sizeOf(context).width < 600;
 
     return Scaffold(
       backgroundColor:

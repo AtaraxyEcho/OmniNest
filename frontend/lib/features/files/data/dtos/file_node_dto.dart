@@ -12,6 +12,8 @@ class FileNodeDto {
     this.mimeType,
     this.spaceType = SpaceType.personal,
     this.uploadedBy,
+    this.uploaderName,
+    this.coverFileId,
     this.mediaAutoImportTaskId,
   });
 
@@ -34,6 +36,8 @@ class FileNodeDto {
         json['spaceType']?.toString() ?? 'PERSONAL',
       ),
       uploadedBy: json['uploadedBy']?.toString(),
+      uploaderName: json['uploadedByName']?.toString(),
+      coverFileId: json['coverFileId']?.toString(),
       mediaAutoImportTaskId: json['mediaAutoImportTaskId']?.toString(),
     );
   }
@@ -48,6 +52,8 @@ class FileNodeDto {
   final DateTime? updatedAt;
   final SpaceType spaceType;
   final String? uploadedBy;
+  final String? uploaderName;
+  final String? coverFileId;
   final String? mediaAutoImportTaskId;
 
   FileNode toDomain() {
@@ -63,6 +69,8 @@ class FileNodeDto {
       updatedAt: updatedAt,
       spaceType: spaceType,
       uploadedBy: uploadedBy,
+      uploaderName: uploaderName,
+      coverFileId: coverFileId,
       mediaAutoImportTaskId: mediaAutoImportTaskId,
     );
   }

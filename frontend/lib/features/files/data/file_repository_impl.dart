@@ -21,7 +21,7 @@ class FileRepositoryImpl implements FileRepository {
     String? parentId,
     String? category,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) {
     return fileApi.listFilesPage(
       parentId: parentId,
@@ -37,13 +37,36 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<FileNodePage> listRecycleBinPage({
+    String spaceType = 'PERSONAL',
+    int page = 0,
+    int size = 50,
+  }) {
+    return fileApi.listRecycleBinPage(
+      spaceType: spaceType,
+      page: page,
+      size: size,
+    );
+  }
+
+  @override
   Future<List<FileNode>> listRecentFiles() {
     return fileApi.listRecentFiles();
   }
 
   @override
+  Future<FileNodePage> listRecentFilesPage({int page = 0, int size = 50}) {
+    return fileApi.listRecentFilesPage(page: page, size: size);
+  }
+
+  @override
   Future<List<FileNode>> listFavoriteFiles() {
     return fileApi.listFavoriteFiles();
+  }
+
+  @override
+  Future<FileNodePage> listFavoriteFilesPage({int page = 0, int size = 50}) {
+    return fileApi.listFavoriteFilesPage(page: page, size: size);
   }
 
   @override
@@ -85,6 +108,11 @@ class FileRepositoryImpl implements FileRepository {
   @override
   Future<String> downloadUrl(String fileId) {
     return fileApi.downloadUrl(fileId);
+  }
+
+  @override
+  Future<FileMediaInfo> mediaInfo(String fileId) {
+    return fileApi.mediaInfo(fileId);
   }
 
   @override
@@ -153,8 +181,24 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<FilesSubPage<SharedFileItem>> listSharedWithMePage({
+    int page = 0,
+    int size = 10,
+  }) {
+    return fileApi.listSharedWithMePage(page: page, size: size);
+  }
+
+  @override
   Future<List<FileShareLink>> listMyShares() {
     return fileApi.listMyShares();
+  }
+
+  @override
+  Future<FilesSubPage<FileShareLink>> listMySharesPage({
+    int page = 0,
+    int size = 10,
+  }) {
+    return fileApi.listMySharesPage(page: page, size: size);
   }
 
   @override
@@ -217,6 +261,14 @@ class FileRepositoryImpl implements FileRepository {
   @override
   Future<List<FileUploadQueueItem>> listUploadQueue() {
     return fileApi.listUploadQueue();
+  }
+
+  @override
+  Future<FilesSubPage<FileUploadQueueItem>> listUploadQueuePage({
+    int page = 0,
+    int size = 10,
+  }) {
+    return fileApi.listUploadQueuePage(page: page, size: size);
   }
 
   @override
@@ -296,6 +348,14 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
+    int page = 0,
+    int size = 10,
+  }) {
+    return fileApi.listOfflineDownloadsPage(page: page, size: size);
+  }
+
+  @override
   Future<OfflineDownloadTask> createOfflineDownload({
     required String sourceUri,
     String? targetParentId,
@@ -368,6 +428,22 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<({List<ExternalFileItem> items, FilesSubPageMeta meta})>
+  browseExternalStoragePage(
+    String accountId,
+    String path, {
+    int page = 0,
+    int size = 10,
+  }) {
+    return fileApi.browseExternalStoragePage(
+      accountId,
+      path,
+      page: page,
+      size: size,
+    );
+  }
+
+  @override
   Future<ImportTask> createImportTask(
     String accountId, {
     required String sourcePath,
@@ -387,6 +463,14 @@ class FileRepositoryImpl implements FileRepository {
   @override
   Future<List<ImportTask>> listImportTasks() {
     return fileApi.listImportTasks();
+  }
+
+  @override
+  Future<FilesSubPage<ImportTask>> listImportTasksPage({
+    int page = 0,
+    int size = 10,
+  }) {
+    return fileApi.listImportTasksPage(page: page, size: size);
   }
 
   @override
@@ -428,7 +512,7 @@ class FileRepositoryImpl implements FileRepository {
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) {
     return fileApi.listSharedSpaceFilesPage(
       parentId: parentId,

@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
+import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 
 /// 卡片行内的固定控件（Checkbox 48 + 缩略图 42 + 菜单钮 48）在手机两列卡片里
 /// 超过内容宽度，多选态会在 RenderFlex 溢出。
@@ -34,12 +35,14 @@ Future<void> _pumpGrid(
             enabled: true,
             selectionActive: selectionActive,
             selectedFileIds: const {'file-1'},
-            onRename: (_) {},
-            onDelete: (_) {},
-            onPurge: (_) {},
-            onRestore: (_) {},
-            onOpen: (_) {},
-            onToggleSelection: (_) {},
+            actions: FileNodeActionCallbacks(
+              onRename: (_) {},
+              onDelete: (_) {},
+              onPurge: (_) {},
+              onRestore: (_) {},
+              onOpen: (_) {},
+              onToggleSelection: (_) {},
+            ),
           ),
         ),
       ),
@@ -50,12 +53,20 @@ Future<void> _pumpGrid(
 
 void main() {
   testWidgets('手机宽度常态网格不溢出', (tester) async {
-    await _pumpGrid(tester, surface: const Size(360, 800), selectionActive: false);
+    await _pumpGrid(
+      tester,
+      surface: const Size(360, 800),
+      selectionActive: false,
+    );
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('手机宽度多选态网格不溢出', (tester) async {
-    await _pumpGrid(tester, surface: const Size(360, 800), selectionActive: true);
+    await _pumpGrid(
+      tester,
+      surface: const Size(360, 800),
+      selectionActive: true,
+    );
     expect(tester.takeException(), isNull);
   });
 

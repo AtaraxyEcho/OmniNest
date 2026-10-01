@@ -170,7 +170,7 @@ void main() {
     expect(adapter.lastQueryParameters, {
       'category': 'video',
       'page': 0,
-      'size': 100,
+      'size': 200,
     });
   });
 
@@ -200,7 +200,7 @@ void main() {
 
     await api.listFiles(category: 'all');
 
-    expect(adapter.lastQueryParameters, {'page': 0, 'size': 100});
+    expect(adapter.lastQueryParameters, {'page': 0, 'size': 200});
   });
 
   test('presigned upload sends mapped byte stream as binary content', () async {

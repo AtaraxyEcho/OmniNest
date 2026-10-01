@@ -9,11 +9,14 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
+
 import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
+
+part 'file_upload_test_paged_fakes.dart';
 
 void main() {
   test('paused upload resumes from next unfinished part', () async {
@@ -409,13 +412,13 @@ void main() {
     );
   });
 
-  test('file pagination appends the next page without duplicates', () async {
+  test('goToFilePage fetches only the target page', () async {
     final first = _fileNode('file-1', 'one.txt');
     final second = _fileNode('file-2', 'two.txt');
     final repository =
         _FakeFileRepository()
           ..personalFilesByPage[0] = [first]
-          ..personalFilesByPage[1] = [first, second];
+          ..personalFilesByPage[1] = [second];
     final container = ProviderContainer.test(
       overrides: [fileRepositoryProvider.overrideWithValue(repository)],
     );
@@ -423,11 +426,120 @@ void main() {
     final controller = container.read(fileBrowserControllerProvider.notifier);
     await container.read(fileBrowserControllerProvider.future);
 
-    await controller.loadMoreFiles();
+    await controller.goToFilePage(1);
 
-    final files = container.read(fileBrowserControllerProvider).value!.files;
-    expect(files.map((file) => file.id), ['file-1', 'file-2']);
+    final state = container.read(fileBrowserControllerProvider).value!;
+    // 只拉目标页：列表内容与分页条范围一一对应。
+    expect(state.files.map((file) => file.id), ['file-2']);
+    expect(state.filePage, 1);
+    // build 无参预载走仓储默认每页 10 条。
+    expect(state.filePageSize, 10);
+    // build 预载页 0 后，跳页仅请求目标页 1，不再 0..N 串行重放。
     expect(repository.personalPageRequests, [0, 1]);
+  });
+
+  test('main list falls back to the new last page when depleted', () async {
+    final first = _fileNode('file-1', 'one.txt');
+    final second = _fileNode('file-2', 'two.txt');
+    final repository =
+        _FakeFileRepository()
+          ..personalFilesByPage[0] = [first]
+          ..personalFilesByPage[1] = [second];
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await controller.goToFilePage(1);
+    // 他端删尽末页：仅剩页 0。
+    repository.personalFilesByPage.remove(1);
+
+    await controller.refreshFiles();
+
+    final state = container.read(fileBrowserControllerProvider).value!;
+    // 越界空页回退到新末页，分页条不停留在空页。
+    expect(state.files.map((file) => file.id), ['file-1']);
+    expect(state.filePage, 0);
+    expect(repository.personalPageRequests, [0, 1, 1, 0]);
+  });
+
+  test('folder navigation keeps the chosen rows per page', () async {
+    final repository = _FakeFileRepository();
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await controller.setFilePageSize(50);
+    await controller.openFolder(_folderNode('folder-1', 'docs'));
+
+    final state = container.read(fileBrowserControllerProvider).value!;
+    // 目录导航回到第 0 页，但每页条数沿用用户已选值而非默认。
+    expect(state.filePage, 0);
+    expect(state.filePageSize, 50);
+    expect(state.parentId, 'folder-1');
+  });
+
+  test('mutation refresh keeps recycle list and meta in sync', () async {
+    final first = _fileNode('trashed-1', 'one.txt');
+    final second = _fileNode('trashed-2', 'two.txt');
+    final repository =
+        _RecyclePagedRepository()
+          ..recyclePages[0] = [first]
+          ..recyclePages[1] = [second]
+          ..totalElements = 2;
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await controller.showRecycleBin(page: 1, size: 1);
+    await controller.refreshFileNodesForCurrentSection();
+
+    final state = container.read(fileBrowserControllerProvider).value!;
+    // 按原页窗（页 1）重拉并同步 meta，不再全量拉取覆盖分页条口径。
+    expect(state.recycleBin.map((file) => file.id), ['trashed-2']);
+    expect(state.recycleMeta.page, 1);
+    expect(state.recycleMeta.totalElements, 2);
+    expect(repository.recyclePageRequests, [1, 1]);
+    expect(repository.recycleFullListRequests, 0);
+  });
+
+  test('mutation refresh falls back when the last page is depleted', () async {
+    final first = _fileNode('trashed-1', 'one.txt');
+    final second = _fileNode('trashed-2', 'two.txt');
+    final repository =
+        _RecyclePagedRepository()
+          ..recyclePages[0] = [first]
+          ..recyclePages[1] = [second]
+          ..totalElements = 2;
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+
+    await controller.showRecycleBin(page: 1, size: 1);
+    // 末页唯一条目被删除：仅剩页 0。
+    repository
+      ..recyclePages.remove(1)
+      ..totalElements = 1;
+
+    await controller.refreshFileNodesForCurrentSection();
+
+    final state = container.read(fileBrowserControllerProvider).value!;
+    // 越界空页回退到新末页，分页条不停留在空页。
+    expect(state.recycleBin.map((file) => file.id), ['trashed-1']);
+    expect(state.recycleMeta.page, 0);
+    expect(state.recycleMeta.totalElements, 1);
+    expect(repository.recyclePageRequests, [1, 1, 0]);
   });
 
   test('shared space mutations use shared-space repository methods', () async {
@@ -540,10 +652,17 @@ void main() {
   );
 }
 
-class _FakeFileRepository implements FileRepository {
+class _FakeFileRepository
+    with UploadTestPagedRepositoryFakes
+    implements FileRepository {
+  @override
+  Future<FileMediaInfo> mediaInfo(String fileId) async => const FileMediaInfo();
+  @override
   List<FileUploadQueueItem> uploadQueue = const [];
+  @override
   List<OfflineDownloadTask> offlineTasks = const [];
   List<ExternalStorageAccount> externalAccounts = const [];
+  @override
   List<ExternalFileItem> externalFiles = const [];
   List<FileNode> recycleBin = const [];
   final purgedFileIds = <String>[];
@@ -569,6 +688,7 @@ class _FakeFileRepository implements FileRepository {
   Completer<void>? deleteFileCompleter;
   Completer<List<ExternalFileItem>>? externalBrowseCompleter;
   Object? deleteFileError;
+  @override
   Object? externalBrowseError;
 
   @override
@@ -582,7 +702,7 @@ class _FakeFileRepository implements FileRepository {
     String? parentId,
     String? category,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) async {
     personalPageRequests.add(page);
     final files = personalFilesByPage[page] ?? const [];
@@ -962,7 +1082,7 @@ class _FakeFileRepository implements FileRepository {
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) async {
     sharedParentRequests.add(parentId);
     final files = sharedFilesByParent[parentId] ?? const [];
@@ -1007,6 +1127,37 @@ class _FakeFileRepository implements FileRepository {
   @override
   Future<SharedSpaceUsage> getSharedSpaceUsage() async =>
       const SharedSpaceUsage(usedBytes: 0, maxBytes: -1, fileCount: 0);
+}
+
+/// 分页回收站 fake：变更后刷新必须继续走分页接口并同步 meta，
+/// 不得回退到全量 listRecycleBin。
+class _RecyclePagedRepository extends _FakeFileRepository {
+  final recyclePages = <int, List<FileNode>>{};
+  final recyclePageRequests = <int>[];
+  int recycleFullListRequests = 0;
+  int totalElements = 0;
+
+  @override
+  Future<FileNodePage> listRecycleBinPage({
+    String spaceType = 'PERSONAL',
+    int page = 0,
+    int size = 50,
+  }) async {
+    recyclePageRequests.add(page);
+    return FileNodePage(
+      items: recyclePages[page] ?? const [],
+      page: page,
+      size: size,
+      totalElements: totalElements,
+      totalPages: recyclePages.length,
+    );
+  }
+
+  @override
+  Future<List<FileNode>> listRecycleBin({String spaceType = 'PERSONAL'}) async {
+    recycleFullListRequests += 1;
+    return recyclePages.values.expand((items) => items).toList();
+  }
 }
 
 class _BatchFileRepository extends _FakeFileRepository {

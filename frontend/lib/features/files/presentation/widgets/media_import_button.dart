@@ -13,6 +13,8 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/space_selector_sheet.dart';
 import 'package:omninest/features/files/application/media_import_file_picker.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
+import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 导入按钮样式。
 enum ImportButtonStyle { textButton, iconButton, filledButton, outlinedButton }
@@ -147,16 +149,14 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     if (_busy) return;
     setState(() => _busy = true);
     final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final files = await _pickImportFiles(l10n);
       if (files.isEmpty || !mounted) return;
 
       final unsupportedFiles = _unsupportedFiles(files);
       if (unsupportedFiles.isNotEmpty) {
-        if (!mounted || !messenger.mounted) return;
+        if (!mounted || !context.mounted) return;
         _showSnack(
-          messenger,
           l10n.importUnsupportedFormat(
             _unsupportedFileNames(unsupportedFiles),
             _supportedExtensionNames(),
@@ -191,7 +191,6 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
           files: files,
           spaceType: spaceType,
           l10n: l10n,
-          messenger: messenger,
         );
       } else {
         await _showProgressDialog(
@@ -200,12 +199,11 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
           files: files,
           spaceType: spaceType,
           l10n: l10n,
-          messenger: messenger,
         );
       }
     } on Object {
-      if (mounted && messenger.mounted) {
-        _showSnack(messenger, l10n.importFailed);
+      if (mounted && context.mounted) {
+        _showSnack(l10n.importFailed);
       }
     } finally {
       if (mounted) {
@@ -214,11 +212,8 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     }
   }
 
-  /// 先 clearSnackBars 再弹出，避免同文案 SnackBar Hero tag 重复断言。
-  void _showSnack(ScaffoldMessengerState messenger, String message) {
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+  void _showSnack(String message) {
+    showOmniFeedback(context, message);
   }
 
   Future<List<XFile>> _pickImportFiles(AppLocalizations l10n) async {
@@ -286,7 +281,6 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     required List<XFile> files,
     required String spaceType,
     required AppLocalizations l10n,
-    required ScaffoldMessengerState messenger,
   }) async {
     _routeClosing = false;
     final result = await showModalBottomSheet<MediaImportBatchResult>(
@@ -306,7 +300,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
             onClose: () => _closeProgressRoute(sheetContext),
           ),
     );
-    await _handleImportComplete(result, l10n, messenger);
+    await _handleImportComplete(result, l10n);
   }
 
   Future<void> _showProgressDialog(
@@ -315,30 +309,28 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     required List<XFile> files,
     required String spaceType,
     required AppLocalizations l10n,
-    required ScaffoldMessengerState messenger,
   }) async {
     _routeClosing = false;
-    final result = await showDialog<MediaImportBatchResult>(
+    final result = await showFilesDialog<MediaImportBatchResult>(
       context: context,
-      barrierDismissible: false,
+      dismissible: false,
       builder:
-          (dialogContext) => Dialog(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: _ImportProgressContent(
-                importService: importService,
-                files: files,
-                subsystemDirectory: widget.subsystemDirectory,
-                spaceType: spaceType,
-                reuseExistingFiles: widget.reuseExistingFiles,
-                l10n: l10n,
-                onComplete: (result) => _completeImport(dialogContext, result),
-                onClose: () => _closeProgressRoute(dialogContext),
-              ),
+          (dialogContext) => FilesDialogFrame(
+            width: 360,
+            title: l10n.filesImportRunning,
+            body: _ImportProgressContent(
+              importService: importService,
+              files: files,
+              subsystemDirectory: widget.subsystemDirectory,
+              spaceType: spaceType,
+              reuseExistingFiles: widget.reuseExistingFiles,
+              l10n: l10n,
+              onComplete: (result) => _completeImport(dialogContext, result),
+              onClose: () => _closeProgressRoute(dialogContext),
             ),
           ),
     );
-    await _handleImportComplete(result, l10n, messenger);
+    await _handleImportComplete(result, l10n);
   }
 
   void _closeProgressRoute<T>(BuildContext routeContext, [T? result]) {
@@ -360,7 +352,6 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
   Future<void> _handleImportComplete(
     MediaImportBatchResult? result,
     AppLocalizations l10n,
-    ScaffoldMessengerState messenger,
   ) async {
     if (result == null || result.imported.isEmpty || !mounted) {
       return;
@@ -370,13 +361,12 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       if (callback != null) {
         final completionState = await callback(result);
         if (completionState == MediaImportCompletionState.processing) {
-          if (!mounted || !messenger.mounted) return;
+          if (!mounted || !context.mounted) return;
           final failureSuffix =
               result.failures.isEmpty
                   ? ''
                   : ' (${result.failures.take(2).map(_failureSummary).join('; ')})';
           _showSnack(
-            messenger,
             '${l10n.importProcessing(result.imported.length)}$failureSuffix',
           );
           return;
@@ -387,18 +377,17 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       } else {
         await widget.onImportComplete();
       }
-      if (!mounted || !messenger.mounted) return;
+      if (!mounted || !context.mounted) return;
       final failureSuffix =
           result.failures.isEmpty
               ? ''
               : ' (${result.failures.take(2).map(_failureSummary).join('; ')})';
       _showSnack(
-        messenger,
         '${l10n.importComplete(result.imported.length)}$failureSuffix',
       );
     } on Object {
-      if (!mounted || !messenger.mounted) return;
-      _showSnack(messenger, l10n.importRefreshFailed);
+      if (!mounted || !context.mounted) return;
+      _showSnack(l10n.importRefreshFailed);
     }
   }
 

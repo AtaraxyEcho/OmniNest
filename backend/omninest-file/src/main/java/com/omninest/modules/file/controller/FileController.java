@@ -23,6 +23,7 @@ import com.omninest.modules.file.dto.CreateOfflineDownloadRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.ExternalStorageAccountDto;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.dto.FileMediaInfoDto;
 import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FilePermissionDto;
@@ -409,6 +410,18 @@ public class FileController {
         response.setHeader("Content-Disposition", "attachment; filename=\"omninest-batch.zip\"");
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         fileManagerService.packAsZip(ownerUserId, body.fileIds(), response.getOutputStream());
+    }
+
+    /**
+     * 探测文件媒体元数据（时长/分辨率）；仅 video/* 与 image/*，
+     * 其余类型与探测失败返回空字段。
+     */
+    @Operation(summary = "探测文件媒体元数据", description = "返回视频时长与分辨率（图片为尺寸），探测失败字段为空")
+    @GetMapping("/api/v1/files/{fileId}/media-info")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<FileMediaInfoDto> mediaInfo(@PathVariable UUID fileId) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(fileQueryService.mediaInfo(ownerUserId, fileId));
     }
 
     @Operation(summary = "获取下载链接", description = "为指定文件生成临时下载链接")

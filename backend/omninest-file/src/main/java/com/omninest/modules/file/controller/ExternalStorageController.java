@@ -82,10 +82,13 @@ public class ExternalStorageController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<ExternalFileListDto> browse(
             @PathVariable UUID accountId,
-            @RequestParam(required = false, defaultValue = "/") String path
+            @RequestParam(required = false, defaultValue = "/") String path,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(externalStorageService.browse(ownerUserId, accountId, path));
+        return ApiResponse.success(
+                externalStorageService.browse(ownerUserId, accountId, path, page, size));
     }
 
     @Operation(summary = "获取空间使用情况", description = "查询指定外部存储账户的空间使用量和配额")

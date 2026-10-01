@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
+import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 
 /// 行内操作钮原先固定 34×34，低于移动端 48 命中标准；命中区等于自身布局盒，
 /// 抬高会同时改变行高与横排占位，故在手机宽度与多选态下实测。
@@ -34,12 +35,14 @@ Future<void> _pumpList(
             enabled: true,
             selectionActive: selectionActive,
             selectedFileIds: const {'file-1'},
-            onRename: (_) {},
-            onDelete: (_) {},
-            onPurge: (_) {},
-            onRestore: (_) {},
-            onOpen: (_) {},
-            onToggleSelection: (_) {},
+            actions: FileNodeActionCallbacks(
+              onRename: (_) {},
+              onDelete: (_) {},
+              onPurge: (_) {},
+              onRestore: (_) {},
+              onOpen: (_) {},
+              onToggleSelection: (_) {},
+            ),
           ),
         ),
       ),
@@ -54,7 +57,7 @@ Size _targetSize(WidgetTester tester, String tooltip) {
 }
 
 void main() {
-  testWidgets('手机宽度行内打开钮命中区达 48', (tester) async {
+  testWidgets('手机宽度行内打开钮命中区达 44', (tester) async {
     await _pumpList(
       tester,
       surface: const Size(360, 800),
@@ -62,14 +65,14 @@ void main() {
     );
 
     final size = _targetSize(tester, '打开');
-    expect(size.width, greaterThanOrEqualTo(48));
-    expect(size.height, greaterThanOrEqualTo(48));
+    expect(size.width, greaterThanOrEqualTo(44));
+    expect(size.height, greaterThanOrEqualTo(44));
     // 与同行更多钮同尺寸，行高不因单颗按钮被抬高而错位。
     expect(size, _targetSize(tester, '更多操作'));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('手机宽度多选态行内打开钮命中区达 48 且不横向溢出', (tester) async {
+  testWidgets('手机宽度多选态行内打开钮命中区达 44 且不横向溢出', (tester) async {
     await _pumpList(
       tester,
       surface: const Size(360, 800),
@@ -77,8 +80,8 @@ void main() {
     );
 
     final size = _targetSize(tester, '打开');
-    expect(size.width, greaterThanOrEqualTo(48));
-    expect(size.height, greaterThanOrEqualTo(48));
+    expect(size.width, greaterThanOrEqualTo(44));
+    expect(size.height, greaterThanOrEqualTo(44));
     expect(tester.takeException(), isNull);
   });
 
@@ -98,7 +101,7 @@ void main() {
           .last,
     );
 
-    // 行 = 纵向留白 2×2 + 48 命中盒，与抬上前同为 52。
+    // 行 = 纵向留白 2×4 + 44 命中盒，与表格行同密度（52）。
     expect(rowOf('Documents').height, 52);
     expect(rowOf('notes.txt').height, 52);
   });

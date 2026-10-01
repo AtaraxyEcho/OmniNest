@@ -9,6 +9,7 @@ import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/files/data/file_api_response_parser.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
@@ -30,15 +31,67 @@ class FileApi {
   void close() => _uploadDio.close(force: true);
 
   Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
-    final page = await listFilesPage(parentId: parentId, category: category);
+    // 非分页遗留入口（全局搜索兜底等）按后端分页上限取近似全量首页。
+    final page = await listFilesPage(
+      parentId: parentId,
+      category: category,
+      size: 200,
+    );
+    prewarmCoverUrls(page.items);
     return page.items;
+  }
+
+  /// 封面预热：本页含媒体封面的节点一次批量签齐下载地址，回填会话级
+  /// 缓存，列表首屏零逐条签名请求。失败静默（逐条 provider 兜底）。
+  void prewarmCoverUrls(List<FileNode> nodes) {
+    final coverIds = <String>{
+      for (final node in nodes)
+        if (!node.isFolder &&
+            node.coverFileId != null &&
+            node.coverFileId!.isNotEmpty)
+          node.coverFileId!,
+    };
+    if (coverIds.isEmpty) {
+      return;
+    }
+    unawaited(
+      _prewarmCoverRequest(
+        coverIds.toList(growable: false),
+      ).catchError((Object _) {}),
+    );
+  }
+
+  Future<void> _prewarmCoverRequest(List<String> fileIds) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/files/download-urls',
+      data: {'fileIds': fileIds},
+    );
+    final data = parseData(response.data);
+    final items = data['items'];
+    if (items is! List) {
+      return;
+    }
+    final now = DateTime.now();
+    for (final item in items) {
+      if (item is! Map<String, dynamic>) {
+        continue;
+      }
+      final fileId = item['fileId']?.toString();
+      final url = item['downloadUrl']?.toString();
+      if (fileId != null &&
+          fileId.isNotEmpty &&
+          url != null &&
+          url.isNotEmpty) {
+        prewarmDownloadUrl(fileId, url, now);
+      }
+    }
   }
 
   Future<FileNodePage> listFilesPage({
     String? parentId,
     String? category,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/files',
@@ -61,18 +114,63 @@ class FileApi {
     return parseFilePageResponse(response.data).items;
   }
 
+  /// 分页获取回收站：分区页码控件消费。
+  Future<FileNodePage> listRecycleBinPage({
+    String spaceType = 'PERSONAL',
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/recycle-bin',
+      queryParameters: {'spaceType': spaceType, 'page': page, 'size': size},
+    );
+    return parseFilePageResponse(response.data);
+  }
+
   Future<List<FileNode>> listRecentFiles() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/files/recent',
     );
-    return parseFilePageResponse(response.data).items;
+    final items = parseFilePageResponse(response.data).items;
+    prewarmCoverUrls(items);
+    return items;
+  }
+
+  /// 分页获取最近文件：分区页码控件消费。
+  Future<FileNodePage> listRecentFilesPage({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/recent',
+      queryParameters: {'page': page, 'size': size},
+    );
+    final result = parseFilePageResponse(response.data);
+    prewarmCoverUrls(result.items);
+    return result;
   }
 
   Future<List<FileNode>> listFavoriteFiles() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/files/favorites',
     );
-    return parseFilePageResponse(response.data).items;
+    final items = parseFilePageResponse(response.data).items;
+    prewarmCoverUrls(items);
+    return items;
+  }
+
+  /// 分页获取收藏文件：分区页码控件消费。
+  Future<FileNodePage> listFavoriteFilesPage({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/favorites',
+      queryParameters: {'page': page, 'size': size},
+    );
+    final result = parseFilePageResponse(response.data);
+    prewarmCoverUrls(result.items);
+    return result;
   }
 
   Future<FileNode> createFolder({
@@ -337,11 +435,41 @@ class FileApi {
     return parseSharedItemPageResponse(response.data);
   }
 
+  /// 分页获取共享给我列表：子表页码控件消费。
+  Future<FilesSubPage<SharedFileItem>> listSharedWithMePage({
+    int page = 0,
+    int size = 10,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/shared-with-me',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return FilesSubPage.fromJson(
+      parseData(response.data),
+      _responseParser.decodeSharedItem,
+    );
+  }
+
   Future<List<FileShareLink>> listMyShares() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/files/shares',
     );
     return parseShareLinkPageResponse(response.data);
+  }
+
+  /// 分页获取我的分享链接：子表页码控件消费。
+  Future<FilesSubPage<FileShareLink>> listMySharesPage({
+    int page = 0,
+    int size = 10,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/shares',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return FilesSubPage.fromJson(
+      parseData(response.data),
+      _responseParser.decodeShareLink,
+    );
   }
 
   Future<List<FileShareLink>> listShareLinks() async {
@@ -378,6 +506,21 @@ class FileApi {
       '/files/shares/$shareId',
     );
     parseEmptyResponse(response.data);
+  }
+
+  /// 探测文件媒体元数据（视频时长/分辨率，图片尺寸）。
+  Future<FileMediaInfo> mediaInfo(String fileId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/$fileId/media-info',
+    );
+    final data = parseData(response.data);
+    int? asIntOrNull(Object? value) =>
+        value == null ? null : _responseParser.asInt(value);
+    return FileMediaInfo(
+      durationSeconds: _responseParser.asDouble(data['durationSeconds']),
+      width: asIntOrNull(data['width']),
+      height: asIntOrNull(data['height']),
+    );
   }
 
   Future<FileSharePreview> previewShare(
@@ -457,6 +600,21 @@ class FileApi {
       '/uploads/sessions',
     );
     return parseUploadQueuePageResponse(response.data);
+  }
+
+  /// 分页获取上传会话队列：子表页码控件消费。
+  Future<FilesSubPage<FileUploadQueueItem>> listUploadQueuePage({
+    int page = 0,
+    int size = 10,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/uploads/sessions',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return FilesSubPage.fromJson(
+      parseData(response.data),
+      _responseParser.decodeUploadQueueItem,
+    );
   }
 
   Future<FileUploadSession> createUploadSession({
@@ -563,6 +721,21 @@ class FileApi {
       '/offline-downloads',
     );
     return parseOfflineTaskPageResponse(response.data);
+  }
+
+  /// 分页获取离线下载任务：子表页码控件消费。
+  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
+    int page = 0,
+    int size = 10,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/offline-downloads',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return FilesSubPage.fromJson(
+      parseData(response.data),
+      _responseParser.decodeOfflineTask,
+    );
   }
 
   Future<OfflineDownloadTask> createOfflineDownload({
@@ -681,6 +854,39 @@ class FileApi {
         .toList();
   }
 
+  /// 分页浏览外部存储目录：返回页内容与分页元数据，子表页码控件消费。
+  Future<({List<ExternalFileItem> items, FilesSubPageMeta meta})>
+  browseExternalStoragePage(
+    String accountId,
+    String path, {
+    int page = 0,
+    int size = 10,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/external-storages/$accountId/browse',
+      queryParameters: {'path': path, 'page': page, 'size': size},
+      options: Options(receiveTimeout: _externalStorageTimeout),
+    );
+    final data = parseData(response.data);
+    final rawItems = data['items'];
+    final items =
+        rawItems is List
+            ? rawItems
+                .whereType<Map<String, dynamic>>()
+                .map(_responseParser.decodeExternalFile)
+                .toList(growable: false)
+            : const <ExternalFileItem>[];
+    return (
+      items: items,
+      meta: FilesSubPageMeta(
+        page: (data['page'] as num?)?.toInt() ?? page,
+        size: (data['size'] as num?)?.toInt() ?? size,
+        totalElements: (data['totalElements'] as num?)?.toInt() ?? items.length,
+        totalPages: (data['totalPages'] as num?)?.toInt() ?? 1,
+      ),
+    );
+  }
+
   Future<ImportTask> createImportTask(
     String accountId, {
     required String sourcePath,
@@ -708,6 +914,21 @@ class FileApi {
         .parsePageItems(response.data)
         .map(_responseParser.parseImportTask)
         .toList();
+  }
+
+  /// 分页获取外部存储导入任务：子表页码控件消费。
+  Future<FilesSubPage<ImportTask>> listImportTasksPage({
+    int page = 0,
+    int size = 10,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/external-storages/import-tasks',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return FilesSubPage.fromJson(
+      parseData(response.data),
+      _responseParser.decodeImportTask,
+    );
   }
 
   Future<void> cancelImportTask(String taskId) async {
@@ -841,14 +1062,15 @@ class FileApi {
 
   /// 浏览共享空间目录
   Future<List<FileNode>> listSharedSpaceFiles({String? parentId}) async {
-    final page = await listSharedSpaceFilesPage(parentId: parentId);
+    // 非分页遗留入口按后端分页上限取近似全量首页。
+    final page = await listSharedSpaceFilesPage(parentId: parentId, size: 200);
     return page.items;
   }
 
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
     int page = 0,
-    int size = 100,
+    int size = 10,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/shared-space/files',

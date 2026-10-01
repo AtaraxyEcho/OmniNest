@@ -25,6 +25,15 @@ extension FileBrowserSelectionActions on FileBrowserController {
     _emitState(current.copyWith(sortBy: sortBy));
   }
 
+  /// 切换排序方向（表头点击已激活字段时触发）。
+  void toggleSortAscending() {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    _emitState(current.copyWith(sortAscending: !current.sortAscending));
+  }
+
   void toggleSelection(String fileId) {
     final current = _currentState;
     if (current == null) {
@@ -67,22 +76,93 @@ extension FileBrowserSelectionActions on FileBrowserController {
     _emitState(current.copyWith(selectedFileIds: const {}));
   }
 
+  /// 检视节点：再次检视当前节点时 Toggle 取消并收起详情栏。
+  void inspectNode(String? fileId) {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    if (fileId == null || fileId == current.inspectedFileId) {
+      _emitState(current.copyWith(inspectedFileId: null));
+      return;
+    }
+    _emitState(current.copyWith(inspectedFileId: fileId, inspectorOpen: true));
+  }
+
+  /// 详情栏显隐开关（不改变检视中的节点）。
+  void toggleInspector() {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    _emitState(current.copyWith(inspectorOpen: !current.inspectorOpen));
+  }
+
+  /// 设置详情栏开关（宽屏常驻栏自动展开使用）。
+  void setInspectorOpen(bool open) {
+    final current = _currentState;
+    if (current == null || current.inspectorOpen == open) {
+      return;
+    }
+    _emitState(current.copyWith(inspectorOpen: open));
+  }
+
+  void clearInspection() {
+    final current = _currentState;
+    if (current == null || current.inspectedFileId == null) {
+      return;
+    }
+    _emitState(current.copyWith(inspectedFileId: null));
+  }
+
+  /// 分区/空间/目录切换时同步清空检视态。
+  void _clearInspection() {
+    final current = _currentState;
+    if (current == null || current.inspectedFileId == null) {
+      return;
+    }
+    _emitState(current.copyWith(inspectedFileId: null));
+  }
+
+  /// 拉取节点版本历史（Inspector 版本页共用，展示层不直连仓储）。
+  Future<List<FileVersion>> listFileVersions(String fileId) {
+    return _repository.listFileVersions(fileId);
+  }
+
+  /// 拉取目录选择器可进入的文件夹列表（展示层不直连仓储）。
+  Future<List<FileNode>> listFolderOptions(String? parentId) {
+    return _repository.listFiles(parentId: parentId);
+  }
+
+  /// 拉取外部存储可用连接器列表（展示层不直连仓储）。
+  Future<List<ExternalStorageConnector>> listExternalConnectors() {
+    return _repository.listExternalConnectors();
+  }
+
   Future<void> createFolder(String name) async {
+    // 回声登记放行内（新节点 ID 在响应后才知道，用父目录宽登记：
+    // 建夹事件的 resourceId 是新 ID，须在 repository 响应里拿到再补记）。
     await _runAction(FileOperation.createFolder, () async {
       final current = _currentState;
       if (current?.spaceType == 'SHARED') {
-        await _repository.createSharedFolder(
+        final created = await _repository.createSharedFolder(
           parentId: current?.parentId,
           name: name,
         );
+        registerFileEcho([created.id]);
       } else {
-        await _repository.createFolder(parentId: current?.parentId, name: name);
+        final created = await _repository.createFolder(
+          parentId: current?.parentId,
+          name: name,
+        );
+        registerFileEcho([created.id]);
       }
       await refreshFileNodesForCurrentSection();
     });
   }
 
   Future<void> renameFile(FileNode file, String name) async {
+    registerFileEcho([file.id]);
     await _runAction(FileOperation.rename, () async {
       final current = _currentState;
       if (current?.spaceType == 'SHARED') {
@@ -96,6 +176,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
 
   /// 复制文件到目标目录（null 表示根目录）。
   Future<void> copyFile(FileNode file, String? targetParentId) async {
+    registerFileEcho([file.id]);
     await _runAction(FileOperation.copy, () async {
       await _repository.copyFile(
         fileId: file.id,
@@ -118,6 +199,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> moveFile(FileNode file, String targetParentId) async {
+    registerFileEcho([file.id]);
     await _runAction(FileOperation.move, () async {
       await _repository.moveFile(fileId: file.id, parentId: targetParentId);
       _clearSelection();
@@ -130,6 +212,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> deleteFile(FileNode file) async {
+    registerFileEcho([file.id]);
     await _runAction(FileOperation.moveToRecycleBin, () async {
       final current = _currentState;
       if (current?.spaceType == 'SHARED') {
@@ -143,6 +226,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> restoreFile(FileNode file) async {
+    registerFileEcho([file.id]);
     await _runAction(FileOperation.restore, () async {
       await _repository.restoreFile(file.id);
       await showRecycleBin();
@@ -177,17 +261,61 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> addFavorite(FileNode file) async {
-    await _runAction(FileOperation.addFavorite, () async {
-      await _repository.addFavorite(file.id);
-      await _refreshFavoritesData();
+    // 乐观更新：星标/列表即时翻转，不等两次网络往返（此前 ~1s 延迟
+    // 正是 addFavorite + listFavoriteFiles 串行造成的）。
+    registerFileEcho([file.id]);
+    await _runQuietAction(FileOperation.addFavorite, () async {
+      _applyLocalFavoriteChange(file.id, added: true);
+      try {
+        await _repository.addFavorite(file.id);
+      } on Object {
+        await _refreshFavoritesData();
+        rethrow;
+      }
     });
   }
 
   Future<void> removeFavorite(FileNode file) async {
-    await _runAction(FileOperation.removeFavorite, () async {
-      await _repository.removeFavorite(file.id);
-      await _refreshFavoritesData();
+    registerFileEcho([file.id]);
+    await _runQuietAction(FileOperation.removeFavorite, () async {
+      _applyLocalFavoriteChange(file.id, added: false);
+      try {
+        await _repository.removeFavorite(file.id);
+      } on Object {
+        await _refreshFavoritesData();
+        rethrow;
+      }
     });
+  }
+
+  /// 本地收藏集乐观变更：立即发射一次仅 favoriteFiles 变化的状态。
+  /// 添加时若无法在已加载列表中找到节点（如未加载的分页），跳过本地
+  /// 更新等待服务端刷新；移除直接剔除。失败路径由调用方回滚重拉。
+  void _applyLocalFavoriteChange(String fileId, {required bool added}) {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    final favorites = current.favoriteFiles.toList();
+    if (added) {
+      if (favorites.any((f) => f.id == fileId)) {
+        return;
+      }
+      FileNode? node;
+      for (final candidate in current.visibleNodes) {
+        if (candidate.id == fileId) {
+          node = candidate;
+          break;
+        }
+      }
+      if (node == null) {
+        return;
+      }
+      favorites.add(node);
+    } else {
+      favorites.removeWhere((f) => f.id == fileId);
+    }
+    _emitState(current.copyWith(favoriteFiles: favorites));
   }
 
   Future<void> _refreshFavoritesData() async {
@@ -205,6 +333,8 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> batchDeleteFiles() async {
+    final echoIds = _currentState?.selectedFileIds.toList() ?? const <String>[];
+    registerFileEcho(echoIds);
     final ids = _currentState?.selectedFileIds;
     if (ids == null || ids.isEmpty) {
       return;
@@ -217,6 +347,8 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> batchRestoreFiles() async {
+    final echoIds = _currentState?.selectedFileIds.toList() ?? const <String>[];
+    registerFileEcho(echoIds);
     final ids = _currentState?.selectedFileIds;
     if (ids == null || ids.isEmpty) {
       return;
@@ -242,6 +374,8 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> batchMoveFiles(String targetParentId) async {
+    final echoIds = _currentState?.selectedFileIds.toList() ?? const <String>[];
+    registerFileEcho(echoIds);
     final ids = _currentState?.selectedFileIds;
     if (ids == null || ids.isEmpty) {
       return;
@@ -301,5 +435,54 @@ extension FileBrowserSelectionActions on FileBrowserController {
         await showMyShares();
       }
     });
+  }
+}
+
+/// 同级目录内去重命名：重名时以数字递增补充（新建文件夹 / 新建文件夹 2 ...）。
+String dedupeFolderName(String base, Iterable<FileNode> siblings) {
+  final names = siblings.where((n) => n.isFolder).map((n) => n.name).toSet();
+  if (!names.contains(base)) {
+    return base;
+  }
+  var index = 2;
+  while (names.contains('$base $index')) {
+    index++;
+  }
+  return '$base $index';
+}
+
+/// 就地新建文件夹草稿态。
+extension FileBrowserFolderDraftActions on FileBrowserController {
+  /// 进入新建态：[baseName] 为本地化默认名（调用侧先经 dedupeFolderName 去重）。
+  void beginFolderCreation(String baseName) {
+    final current = _currentState;
+    if (current == null || current.draftFolderName != null) {
+      return;
+    }
+    _emitState(current.copyWith(draftFolderName: baseName));
+  }
+
+  void cancelFolderCreation() {
+    final current = _currentState;
+    if (current == null || current.draftFolderName == null) {
+      return;
+    }
+    _emitState(current.copyWith(draftFolderName: null));
+  }
+
+  /// 提交新建：空名回落默认名，提交前按当前同级再次去重。
+  Future<void> commitFolderCreation(String name) async {
+    final current = _currentState;
+    if (current == null || current.draftFolderName == null) {
+      return;
+    }
+    final base = current.draftFolderName!;
+    final trimmed = name.trim();
+    final finalName = dedupeFolderName(
+      trimmed.isEmpty ? base : trimmed,
+      current.files,
+    );
+    _emitState(current.copyWith(draftFolderName: null));
+    await createFolder(finalName);
   }
 }

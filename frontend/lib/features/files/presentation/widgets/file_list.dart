@@ -5,264 +5,97 @@ import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
+import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
-enum _FileListAction {
-  favorite,
-  copy,
-  rename,
-  move,
-  moveToShared,
-  moveToPersonal,
-  download,
-  share,
-  delete,
-  restore,
-  purge,
-  versions,
-}
-
-class FileList extends StatefulWidget {
+/// 列表视图：hairline 行线 + 纯平直角行 + ✔ 文本复选框。
+///
+/// 入场动画由外层视图切换 180ms 淡入微移统一承担，行级 stagger 移除。
+class FileList extends StatelessWidget {
   const FileList({
     required this.files,
     required this.showingRecycleBin,
     required this.enabled,
-    required this.onRename,
-    required this.onDelete,
-    required this.onPurge,
-    required this.onRestore,
-    required this.onOpen,
-    this.onCopy,
-    this.onMove,
-    this.onMoveToSharedSpace,
-    this.onMoveToPersonalSpace,
-    this.onDownload,
-    this.onShare,
-    this.onPreview,
-    this.onToggleFavorite,
-    this.onShowVersions,
+    required this.actions,
     this.selectedFileIds = const {},
-    this.onToggleSelection,
+    this.inspectedFileId,
     this.selectionActive = false,
     this.showingFavorites = false,
+    this.favoriteIds = const {},
+    this.draftFolderName,
+    this.onDraftFolderSubmit,
+    this.onDraftFolderCancel,
     super.key,
   });
 
   final List<FileNode> files;
   final bool showingRecycleBin;
   final bool enabled;
-  final ValueChanged<FileNode> onRename;
-  final ValueChanged<FileNode> onDelete;
-  final ValueChanged<FileNode> onPurge;
-  final ValueChanged<FileNode> onRestore;
-  final ValueChanged<FileNode> onOpen;
-  final ValueChanged<FileNode>? onCopy;
-  final ValueChanged<FileNode>? onShowVersions;
-  final ValueChanged<FileNode>? onMove;
-  final ValueChanged<FileNode>? onMoveToSharedSpace;
-  final ValueChanged<FileNode>? onMoveToPersonalSpace;
-  final ValueChanged<FileNode>? onDownload;
-  final ValueChanged<FileNode>? onShare;
-  final ValueChanged<FileNode>? onPreview;
-  final ValueChanged<FileNode>? onToggleFavorite;
-  final Set<String> selectedFileIds;
-  final ValueChanged<String>? onToggleSelection;
+  final FileNodeActionCallbacks actions;
 
-  /// 多选模式是否激活：激活时才显示 Checkbox，行点击切换选中。
+  final Set<String> selectedFileIds;
+
+  /// Inspector 检视中的节点 id。
+  final String? inspectedFileId;
+
+  /// 多选模式是否激活：激活时才显示复选框，行点击切换选中。
   final bool selectionActive;
 
   /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
   final bool showingFavorites;
 
-  @override
-  State<FileList> createState() => _FileListState();
-}
+  /// 已收藏节点 id 集：菜单收藏项随实际态呈现。
+  final Set<String> favoriteIds;
 
-class _FileListState extends State<FileList>
-    with SingleTickerProviderStateMixin {
-  /// 入场 stagger 仅作用于前若干行，避免长列表为动画重建全部行。
-  static const int _staggerVisibleLimit = 12;
-
-  late AnimationController _staggerController;
-  int _staggerCount = 0;
-
-  /// 标记当前是否为刷新/切换（非首次加载）
-  bool _isRefresh = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _staggerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _runStagger();
-  }
-
-  @override
-  void didUpdateWidget(FileList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 仅在列表从空变为非空、或文件列表实际变化时播放动画
-    // selectedFileIds 变化不应触发重新动画
-    final wasEmpty = oldWidget.files.isEmpty;
-    final isEmpty = widget.files.isEmpty;
-    final filesChanged =
-        wasEmpty ||
-        isEmpty ||
-        widget.files.length != oldWidget.files.length ||
-        widget.files.first.id != oldWidget.files.first.id;
-    if (!isEmpty && filesChanged) {
-      _isRefresh = !wasEmpty;
-      _runStagger();
-    }
-  }
-
-  void _runStagger() {
-    _staggerCount =
-        widget.files.length < _staggerVisibleLimit
-            ? widget.files.length
-            : _staggerVisibleLimit;
-    // 首次加载 400ms，刷新/切换 600ms（更丝滑的淡入淡出）
-    _staggerController.duration = Duration(
-      milliseconds: _isRefresh ? 600 : 400,
-    );
-    _staggerController.reset();
-    if (_staggerCount > 0) {
-      _staggerController.forward();
-    }
-    _isRefresh = false;
-  }
-
-  @override
-  void dispose() {
-    _staggerController.dispose();
-    super.dispose();
-  }
+  /// 就地新建文件夹草稿名；非空时列表首行渲染草稿输入行。
+  final String? draftFolderName;
+  final ValueChanged<String>? onDraftFolderSubmit;
+  final VoidCallback? onDraftFolderCancel;
 
   @override
   Widget build(BuildContext context) {
-    if (widget.files.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 64),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: Theme.of(
-              context,
-            ).colorScheme.outlineVariant.withValues(alpha: 0.32),
-          ),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              widget.showingRecycleBin
-                  ? Icons.delete_sweep_outlined
-                  : Icons.folder_open_outlined,
-              color: context.filesColors.primary,
-              size: 38,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              widget.showingRecycleBin
-                  ? AppLocalizations.of(context).filesRecycleBinEmpty
-                  : AppLocalizations.of(context).filesEmpty,
-            ),
-          ],
-        ),
-      );
+    if (files.isEmpty && draftFolderName == null) {
+      return FileNodeEmptyState(showingRecycleBin: showingRecycleBin);
     }
-
-    final files = widget.files;
     final mobile =
         Theme.of(context).platform == TargetPlatform.android ||
         Theme.of(context).platform == TargetPlatform.iOS;
     return ListView.builder(
-      itemCount: files.length,
+      itemCount: files.length + (draftFolderName == null ? 0 : 1),
       itemBuilder: (context, index) {
-        final file = files[index];
-        final animate = index < _staggerCount;
+        if (draftFolderName != null && index == 0) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FileDraftFolderRow(
+                defaultName: draftFolderName!,
+                onSubmit: onDraftFolderSubmit ?? (_) {},
+                onCancel: onDraftFolderCancel ?? () {},
+              ),
+              Divider(height: 1),
+            ],
+          );
+        }
+        final file = files[draftFolderName == null ? index : index - 1];
         final row = _FileRow(
           file: file,
-          showingRecycleBin: widget.showingRecycleBin,
-          enabled: widget.enabled,
-          onRename: widget.onRename,
-          onDelete: widget.onDelete,
-          onPurge: widget.onPurge,
-          onRestore: widget.onRestore,
-          onOpen: widget.onOpen,
-          onCopy: widget.onCopy,
-          onShowVersions: widget.onShowVersions,
-          onMove: widget.onMove,
-          onMoveToSharedSpace: widget.onMoveToSharedSpace,
-          onMoveToPersonalSpace: widget.onMoveToPersonalSpace,
-          onDownload: widget.onDownload,
-          onShare: widget.onShare,
-          onPreview: widget.onPreview,
-          onToggleFavorite: widget.onToggleFavorite,
-          showingFavorites: widget.showingFavorites,
-          selected: widget.selectedFileIds.contains(file.id),
-          selectionMode: widget.selectionActive,
+          showingRecycleBin: showingRecycleBin,
+          enabled: enabled,
+          actions: actions,
+          showingFavorites: showingFavorites,
+          selected: selectedFileIds.contains(file.id),
+          inspected: inspectedFileId == file.id,
+          selectionMode: selectionActive,
           swipeActionsEnabled: mobile,
-          onToggleSelection:
-              widget.onToggleSelection != null
-                  ? () => widget.onToggleSelection!(file.id)
-                  : null,
+          favoriteIds: favoriteIds,
         );
         return Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            if (animate)
-              _StaggeredFileRow(
-                index: index,
-                totalCount: _staggerCount,
-                animation: _staggerController,
-                child: row,
-              )
-            else
-              row,
-            const Divider(height: 1),
-          ],
+          children: [row, const Divider(height: 1)],
         );
       },
-    );
-  }
-}
-
-/// Stagger 入场动画包装器 — 每行从右侧滑入 + 淡入
-class _StaggeredFileRow extends StatelessWidget {
-  const _StaggeredFileRow({
-    required this.index,
-    required this.totalCount,
-    required this.animation,
-    required this.child,
-  });
-
-  final int index;
-  final int totalCount;
-  final Animation<double> animation;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // 每行延迟比例：0.0 ~ 1.0，间隔 50ms 对应的比例
-    final delay = (index * 50.0 / (totalCount * 50.0 + 200.0)).clamp(0.0, 0.8);
-    final end = (delay + 0.4).clamp(0.0, 1.0);
-
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Interval(delay, end, curve: Curves.easeOutCubic),
-    );
-
-    return AnimatedBuilder(
-      animation: curved,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(24 * (1.0 - curved.value), 0),
-          child: Opacity(opacity: curved.value, child: child),
-        );
-      },
-      child: child,
     );
   }
 }
@@ -272,53 +105,26 @@ class _FileRow extends StatefulWidget {
     required this.file,
     required this.showingRecycleBin,
     required this.enabled,
-    required this.onRename,
-    required this.onDelete,
-    required this.onPurge,
-    required this.onRestore,
-    required this.onOpen,
-    this.onCopy,
-    this.onShowVersions,
-    this.onMove,
-    this.onMoveToSharedSpace,
-    this.onMoveToPersonalSpace,
-    this.onDownload,
-    this.onShare,
-    this.onPreview,
-    this.onToggleFavorite,
-    this.showingFavorites = false,
+    required this.actions,
+    required this.showingFavorites,
     this.selected = false,
+    this.inspected = false,
     this.selectionMode = false,
     this.swipeActionsEnabled = false,
-    this.onToggleSelection,
+    this.favoriteIds = const {},
   });
 
   final FileNode file;
   final bool showingRecycleBin;
   final bool enabled;
-  final ValueChanged<FileNode> onRename;
-  final ValueChanged<FileNode> onDelete;
-  final ValueChanged<FileNode> onPurge;
-  final ValueChanged<FileNode> onRestore;
-  final ValueChanged<FileNode> onOpen;
-  final ValueChanged<FileNode>? onCopy;
-  final ValueChanged<FileNode>? onShowVersions;
-  final ValueChanged<FileNode>? onMove;
-  final ValueChanged<FileNode>? onMoveToSharedSpace;
-  final ValueChanged<FileNode>? onMoveToPersonalSpace;
-  final ValueChanged<FileNode>? onDownload;
-  final ValueChanged<FileNode>? onShare;
-  final ValueChanged<FileNode>? onPreview;
-  final ValueChanged<FileNode>? onToggleFavorite;
+  final FileNodeActionCallbacks actions;
+  final bool showingFavorites;
   final bool selected;
+  final bool inspected;
   final bool selectionMode;
   final bool swipeActionsEnabled;
-  final VoidCallback? onToggleSelection;
+  final Set<String> favoriteIds;
 
-  /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
-  final bool showingFavorites;
-
-  /// 是否允许左滑操作（非回收站模式下允许）
   bool get swipeable => swipeActionsEnabled && !showingRecycleBin && enabled;
 
   @override
@@ -329,208 +135,35 @@ class _FileRowState extends State<_FileRow> {
   bool _hovering = false;
   bool _focused = false;
 
-  void _onMenuAction(FileNode file, _FileListAction action) {
-    switch (action) {
-      case _FileListAction.rename:
-        widget.onRename(file);
-      case _FileListAction.versions:
-        widget.onShowVersions?.call(file);
-      case _FileListAction.copy:
-        widget.onCopy?.call(file);
-      case _FileListAction.move:
-        widget.onMove?.call(file);
-      case _FileListAction.moveToShared:
-        widget.onMoveToSharedSpace?.call(file);
-      case _FileListAction.moveToPersonal:
-        widget.onMoveToPersonalSpace?.call(file);
-      case _FileListAction.download:
-        widget.onDownload?.call(file);
-      case _FileListAction.share:
-        widget.onShare?.call(file);
-      case _FileListAction.favorite:
-        widget.onToggleFavorite?.call(file);
-      case _FileListAction.delete:
-        widget.onDelete(file);
-      case _FileListAction.restore:
-        widget.onRestore(file);
-      case _FileListAction.purge:
-        widget.onPurge(file);
-    }
-  }
-
-  List<PopupMenuEntry<_FileListAction>> _buildActionMenuItems(
-    BuildContext context,
-    FileNode file,
-  ) {
-    if (widget.showingRecycleBin) {
-      return [
-        PopupMenuItem(
-          value: _FileListAction.restore,
-          child: ListTile(
-            leading: Icon(Icons.restore_rounded),
-            title: Text(AppLocalizations.of(context).filesRestore),
-            dense: true,
-          ),
-        ),
-        PopupMenuItem(
-          value: _FileListAction.purge,
-          child: ListTile(
-            leading: Icon(
-              Icons.delete_forever_outlined,
-              color: context.filesColors.error,
-            ),
-            title: Text(
-              AppLocalizations.of(context).filesPurge,
-              style: TextStyle(color: context.filesColors.error),
-            ),
-            dense: true,
-          ),
-        ),
-      ];
-    }
-    return [
-      PopupMenuItem(
-        value: _FileListAction.rename,
-        child: ListTile(
-          leading: Icon(Icons.drive_file_rename_outline),
-          title: Text(AppLocalizations.of(context).filesRename),
-          dense: true,
-        ),
-      ),
-      if (widget.onShowVersions != null && !file.isFolder)
-        PopupMenuItem(
-          value: _FileListAction.versions,
-          child: ListTile(
-            leading: const Icon(Icons.history_outlined),
-            title: Text(AppLocalizations.of(context).filesVersionsTitle),
-            dense: true,
-          ),
-        ),
-      if (widget.onCopy != null && !file.isFolder)
-        PopupMenuItem(
-          value: _FileListAction.copy,
-          child: ListTile(
-            leading: const Icon(Icons.file_copy_outlined),
-            title: Text(AppLocalizations.of(context).filesCopyToEllipsis),
-            dense: true,
-          ),
-        ),
-      if (widget.onMove != null)
-        PopupMenuItem(
-          value: _FileListAction.move,
-          child: ListTile(
-            leading: Icon(Icons.drive_file_move_outlined),
-            title: Text(AppLocalizations.of(context).filesMoveToEllipsis),
-            dense: true,
-          ),
-        ),
-      if (widget.onMoveToSharedSpace != null)
-        PopupMenuItem(
-          value: _FileListAction.moveToShared,
-          child: ListTile(
-            leading: Icon(Icons.workspaces_outlined),
-            title: Text(AppLocalizations.of(context).filesMoveToShared),
-            dense: true,
-          ),
-        ),
-      if (widget.onMoveToPersonalSpace != null)
-        PopupMenuItem(
-          value: _FileListAction.moveToPersonal,
-          child: ListTile(
-            leading: Icon(Icons.person_outline),
-            title: Text(AppLocalizations.of(context).filesMoveToPersonal),
-            dense: true,
-          ),
-        ),
-      if (widget.onDownload != null && !file.isFolder)
-        PopupMenuItem(
-          value: _FileListAction.download,
-          child: ListTile(
-            leading: Icon(Icons.download_outlined),
-            title: Text(AppLocalizations.of(context).filesDownload),
-            dense: true,
-          ),
-        ),
-      if (widget.onShare != null && !file.isFolder)
-        PopupMenuItem(
-          value: _FileListAction.share,
-          child: ListTile(
-            leading: Icon(Icons.share_outlined),
-            title: Text(AppLocalizations.of(context).filesShare),
-            dense: true,
-          ),
-        ),
-      if (widget.onToggleFavorite != null && !file.isFolder)
-        PopupMenuItem(
-          value: _FileListAction.favorite,
-          child: ListTile(
-            leading: Icon(
-              widget.showingFavorites
-                  ? Icons.star_border_rounded
-                  : Icons.star_rounded,
-            ),
-            title: Text(
-              widget.showingFavorites
-                  ? AppLocalizations.of(context).filesRemoveFavorite
-                  : AppLocalizations.of(context).filesAddFavorite,
-            ),
-            dense: true,
-          ),
-        ),
-      PopupMenuItem(
-        value: _FileListAction.delete,
-        child: ListTile(
-          leading: Icon(
-            Icons.delete_outline_rounded,
-            color: context.filesColors.error,
-          ),
-          title: Text(
-            AppLocalizations.of(context).filesDelete,
-            style: TextStyle(color: context.filesColors.error),
-          ),
-          dense: true,
-        ),
-      ),
-    ];
-  }
-
-  Future<void> _showContextMenuAt(BuildContext context, Offset global) async {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final action = await showMenu<_FileListAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromLTWH(global.dx, global.dy, 0, 0),
-        Offset.zero & overlay.size,
-      ),
-      items: _buildActionMenuItems(context, widget.file),
-    );
-    if (action == null || !mounted) {
-      return;
-    }
-    _onMenuAction(widget.file, action);
-  }
-
   @override
   Widget build(BuildContext context) {
     final file = widget.file;
+    final colors = context.filesColors;
+    final actions = widget.actions;
     final bool selectionToggleable =
-        widget.selectionMode && widget.onToggleSelection != null;
+        widget.selectionMode && actions.onToggleSelection != null;
     final VoidCallback? activate =
-        selectionToggleable
-            ? () => widget.onToggleSelection!()
-            : widget.enabled && !widget.showingRecycleBin
+        widget.enabled && !widget.showingRecycleBin
             ? file.isFolder
-                ? () => widget.onOpen(file)
-                : widget.onPreview != null
-                ? () => widget.onPreview!(file)
+                ? () => actions.onOpen?.call(file)
+                : actions.onPreview != null
+                ? () => actions.onPreview!(file)
                 : null
             : null;
-    // 长按是进入多选的触屏入口（与 Photos 手势一致），多选态由页面状态驱动。
+    // 单击 = 检视（再次单击已检视条目 Toggle 收起）；双击 = 打开/预览；
+    // 多选态下单击仍是切换勾选。
+    final VoidCallback? singleTap =
+        selectionToggleable
+            ? () => actions.onToggleSelection!(file.id)
+            : widget.enabled && actions.onInspect != null
+            ? () => actions.onInspect!(file.id)
+            : null;
+    // 长按是进入多选的触屏入口，多选态由页面状态驱动。
     final VoidCallback? longPress =
-        widget.enabled && widget.onToggleSelection != null
+        widget.enabled && actions.onToggleSelection != null
             ? () {
               HapticFeedback.mediumImpact();
-              widget.onToggleSelection!();
+              actions.onToggleSelection!(file.id);
             }
             : null;
     final row = Semantics(
@@ -563,52 +196,56 @@ class _FileRowState extends State<_FileRow> {
                   : SystemMouseCursors.basic,
           child: GestureDetector(
             excludeFromSemantics: true,
-            onTap: activate,
+            onTap: singleTap,
+            onDoubleTap: activate,
             onLongPress: longPress,
-            // 桌面右键与行内「更多」共用同一操作菜单。
             onSecondaryTapUp:
                 widget.enabled
-                    ? (details) =>
-                        _showContextMenuAt(context, details.globalPosition)
+                    ? (details) => showFileNodeMenuAt(
+                      context,
+                      details.globalPosition,
+                      file: file,
+                      actions: actions,
+                      showingRecycleBin: widget.showingRecycleBin,
+                      showingFavorites: widget.showingFavorites,
+                      favorited: widget.favoriteIds.contains(file.id),
+                    )
                     : null,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              // 行内操作钮命中盒 48，纵向留白相应收到 2，行高与抬上前一致（52）。
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              duration: MotionToken.fast,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color:
                     widget.selected
-                        ? Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.08)
+                        ? colors.sidebarSelectedBg
                         : _hovering || _focused
-                        ? Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.06)
+                        ? colors.sidebarHoverBg
                         : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
                 border:
-                    _focused
+                    _focused || widget.inspected
                         ? Border.all(
-                          color: context.filesColors.primary,
-                          width: 1.5,
+                          color:
+                              _focused
+                                  ? colors.onSurface
+                                  : colors.selectedBorder,
+                          width: 1,
                         )
                         : null,
               ),
               child: Row(
                 children: [
                   if (widget.selectionMode) ...[
-                    Checkbox(
+                    FilesCheckMark(
                       value: widget.selected,
                       onChanged:
-                          widget.onToggleSelection != null
-                              ? (_) => widget.onToggleSelection!()
+                          actions.onToggleSelection != null
+                              ? (_) => actions.onToggleSelection!(file.id)
                               : null,
                     ),
                     const SizedBox(width: 4),
                   ],
-                  FileThumbnail(file: file, size: 40),
-                  const SizedBox(width: 14),
+                  FileThumbnail(file: file, size: 32),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,56 +254,61 @@ class _FileRowState extends State<_FileRow> {
                           file.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: AppTypography.bodyLarge,
+                          style: TextStyle(
+                            fontSize: AppTypography.bodyMedium,
+                            height: 18 / AppTypography.bodyMedium,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
                           '${file.isFolder ? AppLocalizations.of(context).filesFolder : formatFileSize(file.sizeBytes)}  ·  ${file.normalizedPath}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: context.filesColors.onSurfaceVariant,
+                          style: TextStyle(
+                            fontFamily: AppTypography.monoFamily,
+                            fontFamilyFallback:
+                                AppTypography.monoFamilyFallback,
+                            fontSize: AppTypography.labelSmall,
+                            color: colors.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // 文件夹：打开按钮 + 更多菜单
                   if (!widget.showingRecycleBin && file.isFolder)
                     _RowIconButton(
                       tooltip: AppLocalizations.of(context).filesOpenTooltip,
                       icon: Icons.chevron_right_rounded,
                       enabled: widget.enabled,
-                      onTap: () => widget.onOpen(file),
+                      onTap: () => actions.onOpen?.call(file),
                     ),
-                  // 更多操作菜单
-                  PopupMenuButton<_FileListAction>(
+                  PopupMenuButton<FileNodeMenuAction>(
                     enabled: widget.enabled,
-                    // IconButton 的外层命中盒已由 kMinInteractiveDimension 撑到
-                    // 48，但按钮自身盒只有 40；钉 minimumSize 让两颗按钮的可视
-                    // 尺寸与行内对齐一致。
-                    style: ButtonStyle(
-                      minimumSize: WidgetStatePropertyAll<Size>(
-                        const Size(48, 48),
-                      ),
-                    ),
-                    icon: Icon(
-                      Icons.more_vert_rounded,
-                      size: 20,
-                      color: context.filesColors.onSurfaceVariant,
+                    // 钉最小尺寸：与行内打开钮同为 44 命中盒，避免被
+                    // kMinInteractiveDimension 抬到 48 撑高行。
+                    style: const ButtonStyle(
+                      minimumSize: WidgetStatePropertyAll(Size(44, 44)),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     tooltip: AppLocalizations.of(context).filesMoreActions,
+                    icon: Icon(
+                      Icons.more_vert_rounded,
+                      size: 18,
+                      color: colors.onSurfaceVariant,
+                    ),
                     itemBuilder:
-                        (context) =>
-                            _buildActionMenuItems(context, widget.file),
-                    onSelected: (action) {
-                      _onMenuAction(widget.file, action);
-                    },
+                        (context) => buildFileNodeMenuItems(
+                          context,
+                          file: file,
+                          actions: actions,
+                          showingRecycleBin: widget.showingRecycleBin,
+                          showingFavorites: widget.showingFavorites,
+                          favorited: widget.favoriteIds.contains(file.id),
+                        ),
+                    onSelected:
+                        (action) =>
+                            dispatchFileNodeMenuAction(action, file, actions),
                   ),
                 ],
               ),
@@ -676,33 +318,32 @@ class _FileRowState extends State<_FileRow> {
       ),
     );
 
-    // 非回收站且启用时，包裹 _SwipeableRow 实现左滑操作
     if (!widget.swipeable) return row;
 
-    final actions = <Widget>[
-      if (widget.onShare != null && !file.isFolder)
+    final swipeActions = <Widget>[
+      if (actions.onShare != null && !file.isFolder)
         _SwipeAction(
           icon: Icons.share_rounded,
           label: AppLocalizations.of(context).filesShare,
-          color: context.filesColors.tertiary,
-          onTap: () => widget.onShare!(file),
+          color: colors.onSurface,
+          onTap: () => actions.onShare!(file),
         ),
       _SwipeAction(
         icon: Icons.delete_outline_rounded,
         label: AppLocalizations.of(context).filesDelete,
-        color: context.filesColors.error,
-        onTap: () => widget.onDelete(file),
+        color: colors.error,
+        onTap: () => actions.onDelete?.call(file),
       ),
     ];
 
-    return _SwipeableRow(actions: actions, child: row);
+    return _SwipeableRow(actions: swipeActions, child: row);
   }
 }
 
-/// 左滑保持展开的行包装器
+/// 左滑保持展开的行包装器。
 ///
-/// 左滑露出操作按钮，松手后 Q 弹展开并保持。
-/// 点击操作按钮执行动作并收回；点击行内容区域收回。
+/// 左滑露出操作按钮，松手后展开并保持；点击操作按钮执行动作并收回；
+/// 点击行内容区域收回。
 class _SwipeableRow extends StatefulWidget {
   const _SwipeableRow({required this.child, required this.actions});
 
@@ -718,7 +359,6 @@ class _SwipeableRowState extends State<_SwipeableRow>
   late AnimationController _controller;
   bool _isOpen = false;
 
-  /// 操作按钮区域总宽度（每个 56 + 间距 12 + 右侧 padding 16）
   double get _actionWidth =>
       widget.actions.length * 56.0 + (widget.actions.length - 1) * 12.0 + 16.0;
 
@@ -727,7 +367,7 @@ class _SwipeableRowState extends State<_SwipeableRow>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: MotionToken.pageSwitch,
     );
   }
 
@@ -739,7 +379,6 @@ class _SwipeableRowState extends State<_SwipeableRow>
 
   void _handleDragUpdate(DragUpdateDetails details) {
     final delta = details.primaryDelta ?? 0;
-    // 仅响应左滑（负值 → controller value 增大）
     if (delta >= 0 && _controller.value <= 0) return;
     final newValue = (_controller.value - delta / _actionWidth).clamp(0.0, 1.0);
     _controller.value = newValue;
@@ -755,7 +394,7 @@ class _SwipeableRowState extends State<_SwipeableRow>
   void _animateTo(double target) {
     _controller.animateTo(
       target,
-      duration: const Duration(milliseconds: 400),
+      duration: MotionToken.pageSwitch,
       curve: Curves.easeOutCubic,
     );
   }
@@ -775,7 +414,6 @@ class _SwipeableRowState extends State<_SwipeableRow>
       behavior: HitTestBehavior.opaque,
       child: Stack(
         children: [
-          // 操作按钮层 — 固定在右侧，被行内容遮盖
           Positioned(
             top: 0,
             bottom: 0,
@@ -793,7 +431,6 @@ class _SwipeableRowState extends State<_SwipeableRow>
               ),
             ),
           ),
-          // 行内容 — 左滑时左移，露出操作按钮
           AnimatedBuilder(
             animation: _controller,
             builder: (context, child) {
@@ -804,7 +441,6 @@ class _SwipeableRowState extends State<_SwipeableRow>
                 ),
               );
             },
-            // 不透明背景 — 遮盖底层操作按钮
             child: DecoratedBox(
               decoration: BoxDecoration(color: context.filesColors.surface),
               child: widget.child,
@@ -829,7 +465,6 @@ class _SwipeableRowState extends State<_SwipeableRow>
   }
 }
 
-/// 左滑操作按钮
 class _SwipeAction extends StatelessWidget {
   const _SwipeAction({
     required this.icon,
@@ -847,16 +482,15 @@ class _SwipeAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 56,
-      // 与行内留白一致：行高由 48 命中盒决定，此处再留 5 会挤掉图标与文字的 2px。
       padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 20, color: color),
+          Icon(icon, size: 18, color: color),
           const SizedBox(height: 2),
           Text(
             label,
@@ -907,22 +541,19 @@ class _RowIconButtonState extends State<_RowIconButton> {
                 : SystemMouseCursors.basic,
         child: GestureDetector(
           onTap: widget.enabled ? widget.onTap : null,
-          // 命中盒按触屏标准取 48，悬停底色仍按 34 的视觉密度绘制；
-          // 行高不变靠的是行内纵向留白从 6 收到 2（见行容器注释）。
           behavior: HitTestBehavior.opaque,
           child: SizedBox.square(
-            dimension: 48,
+            dimension: 44,
             child: Center(
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: 34,
-                height: 34,
+                duration: MotionToken.fast,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color:
                       _hovering && widget.enabled
                           ? baseColor.withValues(alpha: 0.10)
                           : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   widget.icon,
@@ -930,11 +561,9 @@ class _RowIconButtonState extends State<_RowIconButton> {
                   color:
                       widget.enabled
                           ? (_hovering
-                              ? baseColor
-                              : context.filesColors.onSurfaceVariant)
-                          : Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                              ? context.filesColors.onSurface
+                              : baseColor)
+                          : baseColor.withValues(alpha: 0.4),
                 ),
               ),
             ),

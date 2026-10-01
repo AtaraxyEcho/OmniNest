@@ -51,12 +51,13 @@ public class FileManagerService {
      */
     @Transactional(readOnly = true)
     public List<FileNodeDto> listRecentFiles(UUID ownerUserId) {
-        return accessRecordRepository.findTop50ByOwnerUserIdOrderByLastAccessedAtDesc(ownerUserId)
+        List<FileNode> nodes = accessRecordRepository
+                .findTop50ByOwnerUserIdOrderByLastAccessedAtDesc(ownerUserId)
                 .stream()
                 .map(FileAccessRecord::getFileNode)
                 .filter(node -> node != null && !node.isDeleted() && node.getSpaceType() != SpaceType.SHARED)
-                .map(fileNodeSupport::toNodeDto)
                 .toList();
+        return fileNodeSupport.toNodeDtos(nodes);
     }
 
     /**
