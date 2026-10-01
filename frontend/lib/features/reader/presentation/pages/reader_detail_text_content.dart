@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
@@ -309,7 +310,7 @@ class ReaderDetailTextContentState
 
   Future<void> _confirmDelete(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(

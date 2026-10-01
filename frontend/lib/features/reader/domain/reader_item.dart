@@ -206,3 +206,39 @@ List<String>? _parseStringList(dynamic value) {
   final result = value.whereType<String>().toList();
   return result.isEmpty ? null : result;
 }
+
+/// 阅读条目列表分页：书架/书库/管理页滚动加载消费。
+class ReaderItemPage {
+  const ReaderItemPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+    required this.totalPages,
+  });
+
+  factory ReaderItemPage.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    return ReaderItemPage(
+      items:
+          rawItems is List
+              ? rawItems
+                  .whereType<Map<String, dynamic>>()
+                  .map(ReaderItem.fromJson)
+                  .toList(growable: false)
+              : const <ReaderItem>[],
+      page: (json['page'] as num?)?.toInt() ?? 0,
+      size: (json['size'] as num?)?.toInt() ?? 50,
+      totalElements: (json['totalElements'] as num?)?.toInt() ?? 0,
+      totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final List<ReaderItem> items;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  bool get hasMore => page + 1 < totalPages;
+}

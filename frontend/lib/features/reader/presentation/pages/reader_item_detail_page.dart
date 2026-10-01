@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_comic_service.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
@@ -339,7 +340,7 @@ class _PdfDetailContent extends StatelessWidget {
 
   Future<void> _confirmDelete(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(

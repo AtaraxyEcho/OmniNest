@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_panel.dart';
@@ -109,6 +110,8 @@ class ReaderAnnotationHandler {
             'ReaderAnnotationHandler: overlapping delete failed: $e',
           );
         }
+        // 删除失败上抛：替换语义下旧批注未清除不能继续写入新批注。
+        rethrow;
       }
     }
   }
@@ -139,9 +142,16 @@ class ReaderAnnotationHandler {
         );
       }
     } on Exception catch (e) {
+      // 高亮是用户显式动作，失败必须可感知，否则用户误以为已保存。
       if (kDebugMode) {
         readerDebugLog(
           'ReaderAnnotationHandler: highlight creation failed: $e',
+        );
+      }
+      if (context.mounted) {
+        showReaderSnackBar(
+          context,
+          AppLocalizations.of(context).readerAnnotationSaveFailed,
         );
       }
     }
@@ -183,7 +193,7 @@ class ReaderAnnotationHandler {
     String selectedColor = '#E0E0E0';
     bool noteEmpty = true;
 
-    final result = await showDialog<bool>(
+    final result = await showWorkstationDialog<bool>(
       context: context,
       builder:
           (ctx) => StatefulBuilder(
@@ -320,9 +330,16 @@ class ReaderAnnotationHandler {
         );
         await load();
       } on Exception catch (e) {
+        // 批注是用户显式动作，失败必须可感知，否则用户误以为已保存。
         if (kDebugMode) {
           readerDebugLog(
             'ReaderAnnotationHandler: annotation creation failed: $e',
+          );
+        }
+        if (context.mounted) {
+          showReaderSnackBar(
+            context,
+            AppLocalizations.of(context).readerAnnotationSaveFailed,
           );
         }
       }
@@ -347,7 +364,7 @@ class ReaderAnnotationHandler {
     final l10n = AppLocalizations.of(context);
     final noteController = TextEditingController(text: annotation.note);
 
-    final result = await showDialog<bool>(
+    final result = await showWorkstationDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(

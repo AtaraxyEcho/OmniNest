@@ -179,7 +179,7 @@ class ImportJobRow extends ConsumerWidget {
                             : l10n.importToPersonalSpace,
                         style: TextStyle(
                           color: rc.onSurfaceVariant,
-                          fontSize: 9,
+                          fontSize: AppTypography.labelMicro,
                           height: 1.2,
                         ),
                       ),

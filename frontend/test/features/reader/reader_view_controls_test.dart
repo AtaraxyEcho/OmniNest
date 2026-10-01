@@ -254,7 +254,7 @@ void main() {
     expect(match.style?.backgroundColor, isNotNull);
   });
 
-  testWidgets('桌面端阅读提示条限制最大宽度', (tester) async {
+  testWidgets('阅读提示条经全局反馈门面展示并去重合并', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1920, 1080);
     addTearDown(tester.view.resetPhysicalSize);
@@ -273,9 +273,18 @@ void main() {
     );
     await tester.tap(find.text('显示提示'));
     await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('书签已添加'), findsOneWidget);
 
-    final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
-    expect(snackBar.width, 560);
-    expect(snackBar.behavior, SnackBarBehavior.floating);
+    // 同文案再次触发：合并为一条并重置计时，不产生第二条。
+    await tester.tap(find.text('显示提示'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('书签已添加'), findsOneWidget);
+    // 冲刷自动关闭计时器，避免用例结束残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 }

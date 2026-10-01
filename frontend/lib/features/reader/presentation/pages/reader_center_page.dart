@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
@@ -88,14 +89,25 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
                           .selectLibrarySegment(segment),
                 ),
         child: ReaderParseFeedback(
-          child: stateAsync.when(
-            data: _buildContent,
-            error:
-                (error, stackTrace) => AppErrorView(
-                  message: describeUserFacingError(error).displayMessage,
-                  onRetry: () => ref.invalidate(readerCenterControllerProvider),
-                ),
-            loading: () => const AppLoading.grid(gridAspectRatio: 0.72),
+          child: InfiniteScrollTrigger(
+            enabled:
+                (stateAsync.asData?.value.itemsHasMore ?? false) &&
+                !(stateAsync.asData?.value.itemsLoadingMore ?? false),
+            onLoadMore:
+                () =>
+                    ref
+                        .read(readerCenterControllerProvider.notifier)
+                        .loadMoreItems(),
+            child: stateAsync.when(
+              data: _buildContent,
+              error:
+                  (error, stackTrace) => AppErrorView(
+                    message: describeUserFacingError(error).displayMessage,
+                    onRetry:
+                        () => ref.invalidate(readerCenterControllerProvider),
+                  ),
+              loading: () => const AppLoading.grid(gridAspectRatio: 0.72),
+            ),
           ),
         ),
       ),
@@ -527,28 +539,16 @@ class _LibraryGrid extends StatefulWidget {
 }
 
 class _LibraryGridState extends State<_LibraryGrid> {
-  static const _pageSize = 60;
-  bool _showAll = false;
-
-  @override
-  void didUpdateWidget(_LibraryGrid oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.items, widget.items)) {
-      _showAll = false;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    // 条目由 controller 滚动加载累积：本组件只渲染已加载窗口（builder 懒），
+    // 原本地 60 条“显示全部”窗口已被触底续页取代。
     final items = widget.items;
-    final visibleCount =
-        _showAll || items.length <= _pageSize ? items.length : _pageSize;
-    final hiddenCount = items.length - visibleCount;
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = _columnCount(constraints.maxWidth);
         final grid = GridView.builder(
-          itemCount: visibleCount,
+          itemCount: items.length,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -570,24 +570,7 @@ class _LibraryGridState extends State<_LibraryGrid> {
             );
           },
         );
-        if (hiddenCount <= 0) {
-          return grid;
-        }
-        return Column(
-          children: [
-            grid,
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: TextButton.icon(
-                onPressed: () => setState(() => _showAll = true),
-                icon: const Icon(Icons.expand_more_rounded, size: 18),
-                label: Text(
-                  AppLocalizations.of(context).readerShowAllBooks(hiddenCount),
-                ),
-              ),
-            ),
-          ],
-        );
+        return grid;
       },
     );
   }

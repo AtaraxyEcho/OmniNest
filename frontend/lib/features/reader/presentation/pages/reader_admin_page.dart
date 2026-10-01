@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -36,44 +37,54 @@ class ReaderAdminPage extends ConsumerWidget {
       onRefresh: () async {
         await ref.read(readerCenterControllerProvider.notifier).refresh();
       },
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 768),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _AdminSectionHeader(labelKey: 'readerImports'),
-              const SizedBox(height: 16),
-              const ImportFromDeviceButton(),
-              if (importJobs.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                for (final job in importJobs)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: ImportJobRow(job: job),
-                  ),
+      child: InfiniteScrollTrigger(
+        enabled:
+            (stateAsync.asData?.value.itemsHasMore ?? false) &&
+            !(stateAsync.asData?.value.itemsLoadingMore ?? false),
+        onLoadMore:
+            () =>
+                ref
+                    .read(readerCenterControllerProvider.notifier)
+                    .loadMoreItems(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 768),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _AdminSectionHeader(labelKey: 'readerImports'),
+                const SizedBox(height: 16),
+                const ImportFromDeviceButton(),
+                if (importJobs.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  for (final job in importJobs)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: ImportJobRow(job: job),
+                    ),
+                ],
+                const _AdminDivider(),
+                // ImportSection 自带「待导入文件」标题，此处不再重复
+                ImportSection(
+                  onImported:
+                      () =>
+                          ref
+                              .read(readerCenterControllerProvider.notifier)
+                              .refresh(),
+                ),
+                const _AdminDivider(),
+                // MetadataSection 自带「元数据管理」标题与搜索，此处不再重复
+                MetadataSection(items: items),
+                const _AdminDivider(),
+                _AdminSectionHeader(
+                  labelKey: 'readerHistory',
+                  count: inProgressCount,
+                ),
+                const SizedBox(height: 16),
+                const _RecentReading(),
+                const SizedBox(height: 40),
               ],
-              const _AdminDivider(),
-              // ImportSection 自带「待导入文件」标题，此处不再重复
-              ImportSection(
-                onImported:
-                    () =>
-                        ref
-                            .read(readerCenterControllerProvider.notifier)
-                            .refresh(),
-              ),
-              const _AdminDivider(),
-              // MetadataSection 自带「元数据管理」标题与搜索，此处不再重复
-              MetadataSection(items: items),
-              const _AdminDivider(),
-              _AdminSectionHeader(
-                labelKey: 'readerHistory',
-                count: inProgressCount,
-              ),
-              const SizedBox(height: 16),
-              const _RecentReading(),
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
         ),
       ),

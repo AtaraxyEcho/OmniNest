@@ -109,6 +109,9 @@ class ReaderCenterState {
     this.sortBy = ReaderSortBy.recent,
     this.librarySegment = ReaderLibrarySegment.all,
     this.errorMessage,
+    this.itemsPage = -1,
+    this.itemsHasMore = false,
+    this.itemsLoadingMore = false,
   });
 
   /// 空状态工厂
@@ -120,6 +123,11 @@ class ReaderCenterState {
 
   final ReaderDashboard dashboard;
   final List<ReaderItem> items;
+
+  /// 条目滚动加载分页：itemsPage 为已加载末页（-1 未加载）。
+  final int itemsPage;
+  final bool itemsHasMore;
+  final bool itemsLoadingMore;
   final String searchQuery;
   final ReaderSortBy sortBy;
   final ReaderLibrarySegment librarySegment;
@@ -161,6 +169,9 @@ class ReaderCenterState {
   ReaderCenterState copyWith({
     ReaderDashboard? dashboard,
     List<ReaderItem>? items,
+    int? itemsPage,
+    bool? itemsHasMore,
+    bool? itemsLoadingMore,
     String? searchQuery,
     ReaderSortBy? sortBy,
     ReaderLibrarySegment? librarySegment,
@@ -170,6 +181,9 @@ class ReaderCenterState {
     return ReaderCenterState(
       dashboard: dashboard ?? this.dashboard,
       items: items ?? this.items,
+      itemsPage: itemsPage ?? this.itemsPage,
+      itemsHasMore: itemsHasMore ?? this.itemsHasMore,
+      itemsLoadingMore: itemsLoadingMore ?? this.itemsLoadingMore,
       searchQuery: searchQuery ?? this.searchQuery,
       sortBy: sortBy ?? this.sortBy,
       librarySegment: librarySegment ?? this.librarySegment,
@@ -200,19 +214,63 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     final partialErrors = <String>[];
     final results = await Future.wait([
       _safe(_api.dashboard, ReaderDashboard.empty(), partialErrors),
-      _safe(() => _api.items(), <ReaderItem>[], partialErrors),
+      _safe(() => _api.itemsPage(), _emptyItemsPage, partialErrors),
     ]);
     final dashboard = results[0] as ReaderDashboard;
-    final items = results[1] as List<ReaderItem>;
+    final itemPage = results[1] as ReaderItemPage;
 
     return ReaderCenterState(
       dashboard: dashboard,
-      items: items,
+      items: itemPage.items,
+      itemsPage: itemPage.page,
+      itemsHasMore: itemPage.hasMore,
       searchQuery: searchQuery,
       sortBy: sortBy,
       errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
     );
   }
+
+  /// 条目滚动加载续页：以 id 去重追加，失败回滚门闩等待下次触底。
+  Future<void> loadMoreItems() async {
+    final current = state.asData?.value;
+    if (current == null || !current.itemsHasMore || current.itemsLoadingMore) {
+      return;
+    }
+    state = AsyncData(current.copyWith(itemsLoadingMore: true));
+    try {
+      final next = await _api.itemsPage(page: current.itemsPage + 1);
+      final latest = state.asData?.value;
+      if (latest == null) {
+        return;
+      }
+      final seen = latest.items.map((item) => item.id).toSet();
+      state = AsyncData(
+        latest.copyWith(
+          items: <ReaderItem>[
+            ...latest.items,
+            ...next.items.where((item) => !seen.contains(item.id)),
+          ],
+          itemsPage: next.page,
+          itemsHasMore: next.hasMore,
+          itemsLoadingMore: false,
+        ),
+      );
+    } on Exception {
+      final latest = state.asData?.value;
+      if (latest != null) {
+        state = AsyncData(latest.copyWith(itemsLoadingMore: false));
+      }
+    }
+  }
+
+  /// 空条目分页兜底：首页加载失败时保持空窗口而非整页失败。
+  static const _emptyItemsPage = ReaderItemPage(
+    items: <ReaderItem>[],
+    page: 0,
+    size: 50,
+    totalElements: 0,
+    totalPages: 0,
+  );
 
   /// 安全执行异步调用，失败时记录到调用方传入的错误列表并返回 fallback
   Future<T> _safe<T>(

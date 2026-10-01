@@ -59,6 +59,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -110,6 +113,18 @@ public class ReaderItemService {
      * @param query       标题关键词，可为 null
      * @return 条目 DTO 列表
      */
+    public Page<ReaderItemDto> listItemsPage(
+            UUID ownerUserId, String itemType, String contentKind, String query, int page, int size) {
+        // 过滤链复用 listItems（类型/关键词为内存过滤）：分页解决网络传输与
+        // 前端驻留，全量查询下沉 Specification 留作后续演进。
+        List<ReaderItemDto> all = listItems(ownerUserId, itemType, contentKind, query);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(size, 1);
+        int from = (int) Math.min((long) safePage * safeSize, all.size());
+        int to = (int) Math.min((long) from + safeSize, all.size());
+        return new PageImpl<>(all.subList(from, to), PageRequest.of(safePage, safeSize), all.size());
+    }
+
     public List<ReaderItemDto> listItems(UUID ownerUserId, String itemType, String contentKind, String query) {
         // 查询用户可见的所有条目（个人空间 + 共享空间）
         List<ReaderItem> items = itemRepository.findItemsVisibleToUser(ownerUserId, SpaceType.SHARED);

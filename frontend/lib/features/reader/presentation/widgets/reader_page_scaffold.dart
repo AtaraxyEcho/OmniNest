@@ -12,6 +12,7 @@ import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
+import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
@@ -198,23 +199,7 @@ class _ReaderModuleTopBar extends ConsumerWidget {
         padding: EdgeInsets.symmetric(horizontal: wide ? 20 : 16),
         child: Row(
           children: [
-            TextButton.icon(
-              onPressed: () => context.go('/portal'),
-              icon: Icon(
-                Icons.arrow_back_rounded,
-                size: 18,
-                color: rc.onSurfaceVariant,
-              ),
-              label: Text(
-                l10n.readerPortal,
-                style: TextStyle(
-                  fontSize: AppTypography.bodyMedium,
-                  height: 18 / 13,
-                  fontWeight: FontWeight.w700,
-                  color: rc.onSurfaceVariant,
-                ),
-              ),
-            ),
+            WorkstationPortalLink(onTap: () => context.go('/portal')),
             const SizedBox(width: 12),
             Expanded(
               child: Row(

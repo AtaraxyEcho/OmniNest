@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
@@ -63,19 +64,40 @@ class ComicReaderSettingsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 24),
         ],
-        SwitchListTile(
-          value: displaySettings.fullWidth,
-          contentPadding: EdgeInsets.zero,
-          title: Text(
-            l10n.readerComicFullWidth,
-            style: TextStyle(color: themeSettings.onSurfaceColor),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap:
+              () => onChanged(
+                displaySettings.copyWith(fullWidth: !displaySettings.fullWidth),
+              ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.readerComicFullWidth,
+                      style: TextStyle(color: themeSettings.onSurfaceColor),
+                    ),
+                    Text(
+                      l10n.readerComicFullWidthHint,
+                      style: TextStyle(
+                        color: themeSettings.onSurfaceVariantColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              WorkstationSwitch(
+                value: displaySettings.fullWidth,
+                onChanged:
+                    (value) =>
+                        onChanged(displaySettings.copyWith(fullWidth: value)),
+              ),
+            ],
           ),
-          subtitle: Text(
-            l10n.readerComicFullWidthHint,
-            style: TextStyle(color: themeSettings.onSurfaceVariantColor),
-          ),
-          onChanged:
-              (value) => onChanged(displaySettings.copyWith(fullWidth: value)),
         ),
         if (!displaySettings.fullWidth) ...[
           const SizedBox(height: 18),
@@ -111,14 +133,24 @@ class ComicReaderSettingsPanel extends StatelessWidget {
         // 音量键翻页依赖原生按键拦截，仅具备该能力的平台提供设置项。
         if (PlatformCapabilities.current().supportsVolumeKeyPageTurn) ...[
           const SizedBox(height: 18),
-          SwitchListTile(
-            value: volumeKeyPaging,
-            contentPadding: EdgeInsets.zero,
-            title: Text(
-              l10n.readerVolumeKeyPaging,
-              style: TextStyle(color: themeSettings.onSurfaceColor),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onVolumeKeyPagingChanged(!volumeKeyPaging),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.readerVolumeKeyPaging,
+                    style: TextStyle(color: themeSettings.onSurfaceColor),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                WorkstationSwitch(
+                  value: volumeKeyPaging,
+                  onChanged: onVolumeKeyPagingChanged,
+                ),
+              ],
             ),
-            onChanged: onVolumeKeyPagingChanged,
           ),
         ],
       ],

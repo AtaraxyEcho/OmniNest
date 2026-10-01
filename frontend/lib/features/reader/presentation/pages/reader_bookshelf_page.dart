@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
@@ -65,78 +66,90 @@ class ReaderBookshelfPage extends ConsumerWidget {
         ],
       ),
       child: ReaderParseFeedback(
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          slivers: [
-            if (shelved.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                // 与书库空态一致：贴内容区顶部、水平居中，不在剩余高度里垂直居中。
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 32),
-                  child: ReaderEmptyState(
-                    title: AppLocalizations.of(context).readerShelfEmpty,
-                    subtitle: AppLocalizations.of(context).readerShelfEmptyHint,
-                    icon: Icons.auto_stories_outlined,
-                    action: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: () => context.go('/reader'),
-                          icon: const Icon(
-                            Icons.library_books_outlined,
-                            size: AppControlTokens.buttonIconSize,
+        child: InfiniteScrollTrigger(
+          enabled:
+              (stateAsync.asData?.value.itemsHasMore ?? false) &&
+              !(stateAsync.asData?.value.itemsLoadingMore ?? false),
+          onLoadMore:
+              () =>
+                  ref
+                      .read(readerCenterControllerProvider.notifier)
+                      .loadMoreItems(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              if (shelved.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  // 与书库空态一致：贴内容区顶部、水平居中，不在剩余高度里垂直居中。
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 32),
+                    child: ReaderEmptyState(
+                      title: AppLocalizations.of(context).readerShelfEmpty,
+                      subtitle:
+                          AppLocalizations.of(context).readerShelfEmptyHint,
+                      icon: Icons.auto_stories_outlined,
+                      action: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () => context.go('/reader'),
+                            icon: const Icon(
+                              Icons.library_books_outlined,
+                              size: AppControlTokens.buttonIconSize,
+                            ),
+                            label: Text(
+                              AppLocalizations.of(context).readerGoToLibrary,
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: rc.primary,
+                              foregroundColor: rc.surface,
+                            ),
                           ),
-                          label: Text(
-                            AppLocalizations.of(context).readerGoToLibrary,
+                          ReaderLibraryImportAction(
+                            style: ImportButtonStyle.outlinedButton,
+                            label:
+                                AppLocalizations.of(context).readerImportBooks,
                           ),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: rc.primary,
-                            foregroundColor: rc.surface,
-                          ),
-                        ),
-                        ReaderLibraryImportAction(
-                          style: ImportButtonStyle.outlinedButton,
-                          label: AppLocalizations.of(context).readerImportBooks,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
-                  0,
-                  MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
-                  40,
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final item = shelved[index];
-                    return Container(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: rc.outlineVariant.withValues(alpha: 0.6),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
+                    0,
+                    MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
+                    40,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final item = shelved[index];
+                      return Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: rc.outlineVariant.withValues(alpha: 0.6),
+                            ),
                           ),
                         ),
-                      ),
-                      child: ReaderShelfRow(
-                        index: index,
-                        item: item,
-                        onTap: () => context.push('/reader/items/${item.id}'),
-                      ),
-                    );
-                  }, childCount: shelved.length),
+                        child: ReaderShelfRow(
+                          index: index,
+                          item: item,
+                          onTap: () => context.push('/reader/items/${item.id}'),
+                        ),
+                      );
+                    }, childCount: shelved.length),
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

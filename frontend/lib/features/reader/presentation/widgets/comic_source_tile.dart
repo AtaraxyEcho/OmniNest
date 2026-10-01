@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
@@ -124,7 +125,7 @@ class _ComicSourceTileState extends State<ComicSourceTile> {
 
   Future<void> _confirmDelete() async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(

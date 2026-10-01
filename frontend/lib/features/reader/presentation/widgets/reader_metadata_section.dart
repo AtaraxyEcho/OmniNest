@@ -375,7 +375,7 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
                           : l10n.importToPersonalSpace,
                       style: TextStyle(
                         color: context.readerColors.onSurfaceVariant,
-                        fontSize: 10,
+                        fontSize: AppTypography.labelMicro,
                         height: 1.2,
                       ),
                     ),

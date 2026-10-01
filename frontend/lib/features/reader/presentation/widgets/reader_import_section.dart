@@ -30,6 +30,9 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
 
   List<ReaderImportCandidate> _candidates = [];
 
+  /// 候选加载失败标记：与「无候选」的空态区分，提供重试入口。
+  bool _loadFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +46,16 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
               .read(readerCenterControllerProvider.notifier)
               .importCandidates();
       if (mounted) {
-        setState(() => _candidates = candidates);
+        setState(() {
+          _candidates = candidates;
+          _loadFailed = false;
+        });
       }
     } on Exception {
-      // 加载失败时保持空列表
+      // 失败与空态区分展示，避免用户误判为「没有待导入」。
+      if (mounted) {
+        setState(() => _loadFailed = true);
+      }
     }
   }
 
@@ -88,7 +97,9 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
           Column(
             children: [
               Icon(
-                Icons.upload_file_outlined,
+                _loadFailed
+                    ? Icons.error_outline_rounded
+                    : Icons.upload_file_outlined,
                 size: 32,
                 color: context.readerColors.onSurfaceVariant.withValues(
                   alpha: 0.4,
@@ -96,24 +107,37 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
               ),
               const SizedBox(height: 12),
               Text(
-                AppLocalizations.of(context).readerNoPendingImport,
+                _loadFailed
+                    ? AppLocalizations.of(
+                      context,
+                    ).readerImportCandidatesLoadFailed
+                    : AppLocalizations.of(context).readerNoPendingImport,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
                   fontSize: AppTypography.bodyMedium,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                AppLocalizations.of(context).readerNoPendingImportHint,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: context.readerColors.onSurfaceVariant.withValues(
-                    alpha: 0.7,
+              if (!_loadFailed) ...[
+                const SizedBox(height: 4),
+                Text(
+                  AppLocalizations.of(context).readerNoPendingImportHint,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: context.readerColors.onSurfaceVariant.withValues(
+                      alpha: 0.7,
+                    ),
+                    fontSize: AppTypography.labelSmall,
                   ),
-                  fontSize: AppTypography.labelSmall,
                 ),
-              ),
+              ] else ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _loadCandidates,
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: Text(AppLocalizations.of(context).commonRetry),
+                ),
+              ],
             ],
           )
         else

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -166,7 +167,11 @@ class ReaderLibraryGridCard extends ConsumerWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        ReaderBookCover(item: item, size: ReaderCoverSize.grid),
+                        ReaderBookCover(
+                          item: item,
+                          size: ReaderCoverSize.grid,
+                          zoomOnHover: true,
+                        ),
                         if (progress != null && progress > 0 && progress < 1)
                           Positioned(
                             left: 0,
@@ -338,7 +343,7 @@ class ReaderLibraryGridCard extends ConsumerWidget {
   Future<void> _confirmDelete(BuildContext context) async {
     if (onDelete == null) return;
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(

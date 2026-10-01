@@ -8,9 +8,11 @@ import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -458,9 +460,11 @@ class _ReaderMetadataEditPageState
             width: 1.5,
           ),
         ),
-        contentPadding: const EdgeInsets.symmetric(
+        // 垂直内边距取全仓输入框 token，与同行的 AppDropdown 闭合态
+        // 严格等高（36/44），避免元数据表单里两套控件度量并存。
+        contentPadding: EdgeInsets.symmetric(
           horizontal: 14,
-          vertical: 12,
+          vertical: AppControlTokens.fieldVerticalPadding,
         ),
       ),
       validator:
@@ -520,7 +524,7 @@ class _ReaderMetadataEditPageState
         }
         return;
       }
-      final selected = await showDialog<ReaderImportCandidate>(
+      final selected = await showWorkstationDialog<ReaderImportCandidate>(
         context: context,
         builder:
             (ctx) => _FilePickerDialog(

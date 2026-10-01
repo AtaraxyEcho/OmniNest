@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
@@ -11,11 +12,27 @@ import 'package:omninest/features/reader/presentation/widgets/reader_cover_image
 /// 真实封面上不再叠加任何生成封面元素，标题与作者由卡片下方的文字区承载。
 enum ReaderCoverSize { grid, small, row, large }
 
-class ReaderBookCover extends StatelessWidget {
-  const ReaderBookCover({required this.item, required this.size, super.key});
+class ReaderBookCover extends StatefulWidget {
+  const ReaderBookCover({
+    required this.item,
+    required this.size,
+    this.zoomOnHover = false,
+    super.key,
+  });
 
   final ReaderItem item;
   final ReaderCoverSize size;
+
+  /// 悬停时封面图内容放大（Photos 照片卡同构的裁切缩放）：画幅钉死、
+  /// 只放大内部像素；生成封面（无真实封面）不缩放。
+  final bool zoomOnHover;
+
+  @override
+  State<ReaderBookCover> createState() => _ReaderBookCoverState();
+}
+
+class _ReaderBookCoverState extends State<ReaderBookCover> {
+  bool _hovered = false;
 
   /// 生成封面配色对（底色, 强调色），按标题哈希稳定选择。
   static const List<(Color, Color)> _palettes =
@@ -23,6 +40,8 @@ class ReaderBookCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final size = widget.size;
     final palette = _palettes[item.title.hashCode.abs() % _palettes.length];
     final generated = _GeneratedCoverChrome(
       item: item,
@@ -34,10 +53,27 @@ class ReaderBookCover extends StatelessWidget {
       return generated;
     }
     // 加载中与拉取失败时退化为生成封面观感，避免空白卡片。
-    return AuthCoverImage(
+    final image = AuthCoverImage(
       itemId: item.id,
       fit: BoxFit.cover,
       fallback: generated,
+    );
+    if (!widget.zoomOnHover) {
+      return image;
+    }
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: ClipRect(
+        child: AnimatedScale(
+          // 内容裁切缩放：封面画幅不动，放大只作用于内部像素。
+          scale:
+              _hovered && !MediaQuery.disableAnimationsOf(context) ? 1.05 : 1.0,
+          duration: MotionToken.normal,
+          curve: MotionToken.curve,
+          child: image,
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
@@ -566,11 +567,10 @@ class ReaderViewSettingsPanel extends StatelessWidget {
             ),
           ),
         ),
-        Switch(
+        WorkstationSwitch(
           value: settings.immersiveMode,
           onChanged:
               (v) => onSettingsChanged(settings.copyWith(immersiveMode: v)),
-          activeThumbColor: settings.accentColor,
         ),
       ],
     );
@@ -600,11 +600,10 @@ class ReaderViewSettingsPanel extends StatelessWidget {
             ),
           ),
         ),
-        Switch(
+        WorkstationSwitch(
           value: settings.volumeKeyPaging,
           onChanged:
               (v) => onSettingsChanged(settings.copyWith(volumeKeyPaging: v)),
-          activeThumbColor: settings.accentColor,
         ),
       ],
     );

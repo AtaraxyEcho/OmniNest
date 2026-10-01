@@ -77,6 +77,25 @@ class ReaderApi {
     return _parseList(response.data, ReaderItem.fromJson, '阅读条目列表格式不正确');
   }
 
+  /// 分页获取阅读条目列表：书架/书库/管理页滚动加载消费。
+  Future<ReaderItemPage> itemsPage({
+    String? itemType,
+    String? query,
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/reader/items/page',
+      queryParameters: {
+        if (itemType != null) 'itemType': itemType,
+        if (query != null) 'query': query,
+        'page': page,
+        'size': size,
+      },
+    );
+    return ReaderItemPage.fromJson(parseData(response.data));
+  }
+
   /// 获取阅读条目详情（含进度）
   Future<ReaderItemDetail> detail(String itemId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(

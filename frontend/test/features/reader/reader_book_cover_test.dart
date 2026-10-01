@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +99,7 @@ void main() {
     required ReaderItem item,
     required ReaderCoverSize size,
     required Uint8List? Function(dynamic ref, String itemId) coverOverride,
+    bool zoomOnHover = false,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -115,7 +117,11 @@ void main() {
               child: SizedBox(
                 width: 120,
                 height: 170,
-                child: ReaderBookCover(item: item, size: size),
+                child: ReaderBookCover(
+                  item: item,
+                  size: size,
+                  zoomOnHover: zoomOnHover,
+                ),
               ),
             ),
           ),
@@ -173,5 +179,50 @@ void main() {
     );
 
     expect(find.text('测试书'), findsNothing);
+  });
+
+  testWidgets('zoomOnHover 悬停内容裁切放大、移出还原', (tester) async {
+    await pumpCover(
+      tester,
+      item: item(coverUrl: '/files/cover-file-1/download-url'),
+      size: ReaderCoverSize.grid,
+      coverOverride: (ref, itemId) => pngBytes,
+      zoomOnHover: true,
+    );
+
+    AnimatedScale scaleOf() =>
+        tester.widget<AnimatedScale>(find.byType(AnimatedScale));
+    expect(scaleOf().scale, 1.0);
+    final coverRectBefore = tester.getRect(find.byType(AuthCoverImage));
+
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final center = tester.getCenter(find.byType(ReaderBookCover));
+    final enterHit = HitTestResult();
+    tester.binding.hitTestInView(enterHit, center, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(center), enterHit);
+    await tester.pump();
+    expect(scaleOf().scale, 1.05);
+    // 封面画幅钉死：放大不改变封面外框。
+    expect(tester.getRect(find.byType(AuthCoverImage)), coverRectBefore);
+
+    final away = const Offset(4, 4);
+    final exitHit = HitTestResult();
+    tester.binding.hitTestInView(exitHit, away, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(away), exitHit);
+    await tester.pump();
+    expect(scaleOf().scale, 1.0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('zoomOnHover 生成封面不引入缩放节点', (tester) async {
+    await pumpCover(
+      tester,
+      item: item(coverUrl: null),
+      size: ReaderCoverSize.grid,
+      coverOverride: (ref, itemId) => null,
+      zoomOnHover: true,
+    );
+
+    expect(find.byType(AnimatedScale), findsNothing);
   });
 }

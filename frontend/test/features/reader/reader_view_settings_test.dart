@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 void main() {
@@ -58,14 +59,14 @@ void main() {
     testWidgets('移动端显示音量键翻页设置项', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       await pumpPanel(tester);
-      expect(find.byType(Switch), findsNWidgets(2));
+      expect(find.byType(WorkstationSwitch), findsNWidgets(2));
       debugDefaultTargetPlatformOverride = null;
     });
 
     testWidgets('桌面端隐藏音量键翻页设置项', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       await pumpPanel(tester);
-      expect(find.byType(Switch), findsOneWidget);
+      expect(find.byType(WorkstationSwitch), findsOneWidget);
       debugDefaultTargetPlatformOverride = null;
     });
   });

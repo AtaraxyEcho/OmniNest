@@ -70,6 +70,7 @@ class ReaderViewTopBar extends StatelessWidget {
                       onPressed: onBack,
                       icon: Icon(
                         Icons.arrow_back_rounded,
+                        size: 21,
                         color: settings.onSurfaceColor,
                       ),
                     ),
@@ -102,7 +103,7 @@ class ReaderViewTopBar extends StatelessWidget {
                     if (layout.density == ReaderControlDensity.expanded) ...[
                       if (onToggleTts != null)
                         _TopBarButton(
-                          icon: Icons.record_voice_over_rounded,
+                          icon: Icons.graphic_eq_rounded,
                           onTap: onToggleTts,
                           settings: settings,
                           tooltip: AppLocalizations.of(context).readerReadAloud,
@@ -120,8 +121,8 @@ class ReaderViewTopBar extends StatelessWidget {
                       _TopBarButton(
                         icon:
                             isInBookshelf
-                                ? Icons.collections_bookmark_rounded
-                                : Icons.collections_bookmark_outlined,
+                                ? Icons.library_add_check_outlined
+                                : Icons.library_add_outlined,
                         onTap: onToggleBookshelf,
                         settings: settings,
                         selected: isInBookshelf,
@@ -146,6 +147,7 @@ class ReaderViewTopBar extends StatelessWidget {
                       PopupMenuButton<_ReaderTopBarOverflowAction>(
                         tooltip:
                             MaterialLocalizations.of(context).moreButtonTooltip,
+                        color: settings.controlSurfaceColor,
                         icon: Icon(
                           Icons.more_vert_rounded,
                           color: settings.onSurfaceVariantColor,
@@ -165,40 +167,33 @@ class ReaderViewTopBar extends StatelessWidget {
                         itemBuilder:
                             (context) => [
                               if (onToggleTts != null)
-                                PopupMenuItem(
-                                  value: _ReaderTopBarOverflowAction.tts,
-                                  child: Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    ).readerReadAloud,
-                                  ),
+                                _menuItem(
+                                  _ReaderTopBarOverflowAction.tts,
+                                  Icons.graphic_eq_rounded,
+                                  AppLocalizations.of(context).readerReadAloud,
                                 ),
                               if (onShowAnnotations != null)
-                                PopupMenuItem(
-                                  value:
-                                      _ReaderTopBarOverflowAction.annotations,
-                                  child: Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    ).readerAnnotations,
-                                  ),
-                                ),
-                              PopupMenuItem(
-                                value: _ReaderTopBarOverflowAction.shortcuts,
-                                child: Text(
+                                _menuItem(
+                                  _ReaderTopBarOverflowAction.annotations,
+                                  Icons.edit_note_rounded,
                                   AppLocalizations.of(
                                     context,
-                                  ).readerShortcutsTitle,
+                                  ).readerAnnotations,
                                 ),
+                              _menuItem(
+                                _ReaderTopBarOverflowAction.shortcuts,
+                                Icons.keyboard_rounded,
+                                AppLocalizations.of(
+                                  context,
+                                ).readerShortcutsTitle,
                               ),
                               if (onToggleImmersive != null)
-                                PopupMenuItem(
-                                  value: _ReaderTopBarOverflowAction.immersive,
-                                  child: Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    ).readerImmersiveMode,
-                                  ),
+                                _menuItem(
+                                  _ReaderTopBarOverflowAction.immersive,
+                                  Icons.fullscreen_rounded,
+                                  AppLocalizations.of(
+                                    context,
+                                  ).readerImmersiveMode,
                                 ),
                             ],
                       ),
@@ -208,6 +203,29 @@ class ReaderViewTopBar extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+
+  /// 溢出菜单条目：图标与直显按钮同款，版式对齐漫画阅读器顶栏。
+  PopupMenuItem<_ReaderTopBarOverflowAction> _menuItem(
+    _ReaderTopBarOverflowAction value,
+    IconData icon,
+    String label,
+  ) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: settings.onSurfaceVariantColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: settings.onSurfaceColor),
+            ),
+          ),
+        ],
       ),
     );
   }

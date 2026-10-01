@@ -1,5 +1,10 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:toastification/toastification.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
@@ -16,6 +21,8 @@ void main() {
     mockDataManager = MockDataManager();
     settings = ReaderViewSettings();
     notifyCount = 0;
+    // toastification 全局单例跨用例残留会吞掉后续条目，逐例清空。
+    toastification.managers.clear();
   });
 
   ReaderAnnotationHandler createHandler({
@@ -202,6 +209,90 @@ void main() {
         ];
         expect(handler.chapters, hasLength(1));
       });
+    });
+  });
+  group('highlight feedback', () {
+    Widget host(ReaderAnnotationHandler handler, GlobalKey trigger) {
+      return ToastificationWrapper(
+        config: omniFeedbackToastConfig,
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('zh'), Locale('en')],
+          home: Scaffold(
+            body: Builder(
+              key: trigger,
+              builder:
+                  (context) => TextButton(
+                    onPressed: () => handler.highlight('选中文本', 0, 6, context),
+                    child: const Text('触发高亮'),
+                  ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('保存失败时弹出错误反馈', (tester) async {
+      final handler = createHandler();
+      when(
+        () => mockDataManager.createAnnotation(
+          itemId: 'item-1',
+          chapterId: 'ch-1',
+          startOffset: 0,
+          endOffset: 6,
+          highlightText: '选中文本',
+          note: null,
+          color: '#FFEB3B',
+        ),
+      ).thenThrow(Exception('db down'));
+      when(
+        () => mockDataManager.loadAnnotations('item-1'),
+      ).thenAnswer((_) async => []);
+
+      final trigger = GlobalKey();
+      await tester.pumpWidget(host(handler, trigger));
+      await tester.tap(find.text('触发高亮'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('批注保存失败，请重试'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('保存成功时保留既有成功反馈', (tester) async {
+      final handler = createHandler();
+      when(
+        () => mockDataManager.createAnnotation(
+          itemId: 'item-1',
+          chapterId: 'ch-1',
+          startOffset: 0,
+          endOffset: 6,
+          highlightText: '选中文本',
+          note: null,
+          color: '#FFEB3B',
+        ),
+      ).thenAnswer((_) async => createAnnotation());
+      when(
+        () => mockDataManager.loadAnnotations('item-1'),
+      ).thenAnswer((_) async => []);
+
+      final trigger = GlobalKey();
+      await tester.pumpWidget(host(handler, trigger));
+      await tester.tap(find.text('触发高亮'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('高亮已添加'), findsOneWidget);
+      expect(find.text('批注保存失败，请重试'), findsNothing);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
     });
   });
 }

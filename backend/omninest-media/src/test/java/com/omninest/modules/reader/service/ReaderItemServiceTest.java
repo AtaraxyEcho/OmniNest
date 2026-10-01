@@ -405,4 +405,28 @@ class ReaderItemServiceTest {
                 null
         );
     }
+
+    @Test
+    void listItemsPageSlicesFilteredItemsAndClampsOverflow() {
+        ReaderItem a = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Book A", "TXT");
+        ReaderItem b = newItem(SHARED_ITEM_ID, OWNER_ID, SHARED_FILE_NODE_ID, "Book B", "TXT");
+        ReaderItem c = newItem(UUID.fromString("30000000-0000-0000-0000-000000000003"), OWNER_ID, UUID.fromString("40000000-0000-0000-0000-000000000003"), "Book C", "TXT");
+        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
+                .thenReturn(List.of(a, b, c));
+        when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
+                .thenReturn(List.of());
+
+        var first = itemService.listItemsPage(OWNER_ID, null, null, null, 0, 2);
+        var second = itemService.listItemsPage(OWNER_ID, null, null, null, 1, 2);
+        var overflow = itemService.listItemsPage(OWNER_ID, null, null, null, 9, 2);
+
+        assertThat(first.getContent()).extracting(ReaderItemDto::title)
+                .containsExactly("Book A", "Book B");
+        assertThat(second.getContent()).extracting(ReaderItemDto::title)
+                .containsExactly("Book C");
+        assertThat(first.getTotalElements()).isEqualTo(3);
+        assertThat(second.getTotalElements()).isEqualTo(3);
+        assertThat(overflow.getContent()).isEmpty();
+        assertThat(overflow.getTotalElements()).isEqualTo(3);
+    }
 }
