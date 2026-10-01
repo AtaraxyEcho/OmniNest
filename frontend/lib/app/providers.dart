@@ -148,7 +148,11 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
     userId: userId,
   );
   ReaderLocalProgress.init(DatabaseReaderLocalProgressStore(db));
-  ReaderSyncQueue.init(db);
+  ReaderSyncQueue.init(
+    db,
+    textCipher: ref.watch(offlineColumnCipherProvider),
+    userId: userId,
+  );
   ReaderImageCache.init(imageRepository);
 
   // 启动时自动清理过期缓存（不阻塞启动）

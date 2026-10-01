@@ -160,6 +160,9 @@ async def lifespan(app: FastAPI):
             "INSIGHTFACE_ROOT",
             "/app/models/insightface",
         )
+        # 校验必须先于 FaceAnalysis 构造：构造即创建 ONNX 会话并反序列化模型，
+        # 被篡改的模型在加载阶段就可能执行代码，事后校验无法达到 fail-closed 目的。
+        _verify_model_checksums(insightface_root)
         loaded_face_app = FaceAnalysis(
             name="buffalo_l",
             root=insightface_root,
@@ -167,7 +170,6 @@ async def lifespan(app: FastAPI):
             providers=["CPUExecutionProvider"],
         )
         loaded_face_app.prepare(ctx_id=-1, det_size=(640, 640))
-        _verify_model_checksums(insightface_root)
         if not _has_required_face_models(loaded_face_app):
             raise RuntimeError("InsightFace detection/recognition models are incomplete")
         face_app = loaded_face_app

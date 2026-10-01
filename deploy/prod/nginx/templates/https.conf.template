@@ -29,7 +29,6 @@ server {
     server_name ${OMNINEST_PUBLIC_HOST};
     root /usr/share/nginx/html;
     index index.html;
-    client_max_body_size 0;
     resolver 127.0.0.11 valid=30s ipv6=off;
     set $omninest_backend backend-api:8080;
 
@@ -46,10 +45,10 @@ server {
         return 200 'ok';
     }
 
-    # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；MinIO 代理端口不受限
-    client_max_body_size 2g;
-
     location /api/ {
+        # 兜底请求体上限：后端 multipart 限 512MB，预留直传转码余量；
+        # 仅作用于本 location，9000 端口的 MinIO 分片直传代理不受限
+        client_max_body_size 2g;
         proxy_pass http://$omninest_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;

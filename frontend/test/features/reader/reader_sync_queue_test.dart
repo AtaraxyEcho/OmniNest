@@ -78,8 +78,9 @@ void main() {
         clientOperationId: 'local-1',
       ),
     ).called(1);
+    // 同步成功后的 reader 操作（含明文 payload）会被清理，不留本地副本
     final operations = await db.select(db.syncOperations).get();
-    expect(operations.single.status, 'completed');
+    expect(operations, isEmpty);
   });
 
   test(
@@ -252,8 +253,9 @@ void main() {
         intraPageOffset: 0.35,
       ),
     ).called(1);
+    // 同步成功后的 reader 操作（含明文 payload）会被清理，不留本地副本
     final operations = await db.select(db.syncOperations).get();
-    expect(operations.single.status, 'completed');
+    expect(operations, isEmpty);
   });
 
   test('deleting local bookmark cancels unsynced create operation', () async {

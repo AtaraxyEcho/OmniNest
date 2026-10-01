@@ -41,9 +41,12 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          // 每个请求生成 X-Request-Id，与后端日志关联便于跨端排障
-          options.headers['X-Request-Id'] = const Uuid().v4();
           final skipAuthorization = options.extra[skipAuthorizationKey] == true;
+          // 每个后端请求生成 X-Request-Id 与日志关联；skipAuthorization 的请求
+          // 目标是外部地址（对象存储预签名等），自定义头会触发不必要的跨源预检
+          if (!skipAuthorization) {
+            options.headers['X-Request-Id'] = const Uuid().v4();
+          }
           if (kIsWeb && !skipAuthorization) {
             options.extra['withCredentials'] = true;
           }

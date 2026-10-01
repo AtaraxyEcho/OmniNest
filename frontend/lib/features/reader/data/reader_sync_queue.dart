@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_codes.dart';
+import 'package:omninest/core/security/offline_text_cipher.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
@@ -16,6 +17,8 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 class ReaderSyncQueue {
   static LocalDatabase? _db;
   static bool _syncing = false;
+  static OfflineTextCipher? _textCipher;
+  static String? _userId;
 
   /// 操作类型常量
   static const opProgress = 'reader.progress';
@@ -42,8 +45,17 @@ class ReaderSyncQueue {
   ];
 
   /// 初始化同步队列（必须在使用前调用）。
-  static void init(LocalDatabase database) {
+  ///
+  /// [textCipher]/[userId] 用于回写替换路径的敏感列加密，与
+  /// ReaderLocalStorage 主实例保持一致；为空时按明文写入（Web 平台）。
+  static void init(
+    LocalDatabase database, {
+    OfflineTextCipher? textCipher,
+    String? userId,
+  }) {
     _db = database;
+    _textCipher = textCipher;
+    _userId = userId;
   }
 
   static LocalDatabase get _database {
@@ -377,6 +389,15 @@ class ReaderSyncQueue {
         await _markFailed(op);
       }
     }
+    if (pending.isNotEmpty) {
+      // 已完成 reader 操作的 payload 含笔记/批注明文，同步成功后即清理，
+      // 不在本地库长期保留敏感明文副本
+      await (_database.delete(_database.syncOperations)..where(
+        (table) =>
+            table.status.equals('completed') &
+            table.type.isIn(_readerOperationTypes),
+      )).go();
+    }
   }
 
   /// 根据操作类型分发到对应的 API 调用。
@@ -505,6 +526,8 @@ class ReaderSyncQueue {
     }
     await ReaderLocalStorage(
       _database,
+      textCipher: _textCipher,
+      userId: _userId,
     ).replaceBookmarkId(localId: localId, serverBookmark: bookmark);
   }
 
@@ -517,6 +540,8 @@ class ReaderSyncQueue {
     }
     await ReaderLocalStorage(
       _database,
+      textCipher: _textCipher,
+      userId: _userId,
     ).replaceAnnotationId(localId: localId, serverAnnotation: annotation);
   }
 
@@ -526,6 +551,8 @@ class ReaderSyncQueue {
     }
     await ReaderLocalStorage(
       _database,
+      textCipher: _textCipher,
+      userId: _userId,
     ).replaceNoteId(localId: localId, serverNote: note);
   }
 
