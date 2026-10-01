@@ -263,6 +263,12 @@ public class AuthService {
         if (!expectedUse.equals(jwt.getClaimAsString("token_use"))) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证无效");
         }
+        // 挑战令牌一次性消费：同一 jti 在有效期内第二次出现即拒绝，阻断截获重放
+        String jti = jwt.getClaimAsString("jti");
+        if (jti != null && !rateLimitService.tryAcquire(
+                "omninest:2fa:challenge:" + jti, 1, TWO_FACTOR_CHALLENGE_TTL)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证已使用，请重新发起");
+        }
         return parseUserId(jwt.getSubject());
     }
 
@@ -412,6 +418,18 @@ public class AuthService {
         if (sessionRevocationService.isRevoked(userId, sessionId)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "会话已在其他设备登录");
         }
+        // 刷新令牌轮换与重放检测：会话只认最近签发的 jti，旧令牌再次出现即判定令牌泄露，
+        // 撤销整个会话迫使全部设备重新登录。存量会话（jti 为空）首次刷新时建立 jti。
+        String presentedJti = jwt.getClaimAsString("jti");
+        String currentJti = session.getCurrentRefreshJti();
+        if (currentJti != null && !currentJti.equals(presentedJti)) {
+            sessionRevocationService.revokeSession(userId, sessionId, authenticationTokenPolicy.refreshTokenTtl());
+            activeSessionRepository.revokeBySessionId(sessionId, "刷新令牌重放，会话已撤销");
+            log.warn("检测到刷新令牌重放，撤销会话: userId={}, sessionId={}", userId, sessionId);
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "刷新凭证已失效，请重新登录");
+        }
+        String rotatedJti = UUID.randomUUID().toString();
+        session.setCurrentRefreshJti(rotatedJti);
         session.setLastActiveAt(now);
         slideSessionExpiry(session, now);
         activeSessionRepository.save(session);
@@ -423,7 +441,7 @@ public class AuthService {
                 sessionId,
                 authenticationTokenPolicy.refreshTokenTtl()
         );
-        return issueToken(toDto(profile), sessionId, session.getExpiresAt());
+        return issueToken(toDto(profile), sessionId, session.getExpiresAt(), rotatedJti);
     }
 
     /**
@@ -486,7 +504,14 @@ public class AuthService {
     }
 
     private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId) {
-        return issueToken(user, sessionId, Instant.now().plus(authenticationTokenPolicy.refreshTokenTtl()));
+        AuthActiveSession session = activeSessionRepository.findById(sessionId).orElse(null);
+        if (session == null) {
+            return issueToken(user, sessionId, Instant.now().plus(authenticationTokenPolicy.refreshTokenTtl()), null);
+        }
+        String refreshJti = UUID.randomUUID().toString();
+        session.setCurrentRefreshJti(refreshJti);
+        activeSessionRepository.save(session);
+        return issueToken(user, sessionId, session.getExpiresAt(), refreshJti);
     }
 
     /**
@@ -496,13 +521,19 @@ public class AuthService {
      * @param user 用户信息
      * @param sessionId 会话标识
      * @param refreshExpiresAt 刷新令牌截止时间
+     * @param refreshJti 刷新令牌 jti；null 时不携带（仅无会话上下文的兜底路径）
      * @return 令牌响应
      */
-    private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId, Instant refreshExpiresAt) {
+    private AuthTokenResponse issueToken(
+            AuthUserDto user,
+            UUID sessionId,
+            Instant refreshExpiresAt,
+            String refreshJti
+    ) {
         Instant now = Instant.now();
         Instant accessExpiresAt = now.plus(authenticationTokenPolicy.accessTokenTtl());
-        String accessToken = encodeToken(user, sessionId, now, accessExpiresAt, "access", true);
-        String refreshToken = encodeToken(user, sessionId, now, refreshExpiresAt, "refresh", false);
+        String accessToken = encodeToken(user, sessionId, now, accessExpiresAt, "access", true, null);
+        String refreshToken = encodeToken(user, sessionId, now, refreshExpiresAt, "refresh", false, refreshJti);
         return new AuthTokenResponse(
                 TOKEN_TYPE,
                 accessToken,
@@ -519,7 +550,8 @@ public class AuthService {
             Instant issuedAt,
             Instant expiresAt,
             String tokenUse,
-            boolean includeAuthorities
+            boolean includeAuthorities,
+            String jti
     ) {
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .subject(user.id().toString())
@@ -527,6 +559,9 @@ public class AuthService {
                 .expiresAt(expiresAt)
                 .claim("token_use", tokenUse)
                 .claim("sid", sessionId.toString());
+        if (jti != null) {
+            claims.id(jti);
+        }
         if (includeAuthorities) {
             claims.claim("username", user.username());
             claims.claim("role", user.role());
@@ -543,6 +578,7 @@ public class AuthService {
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .claim("token_use", tokenUse)
+                .id(UUID.randomUUID().toString())
                 .build();
         JwsHeader headers = JwsHeader.with(MacAlgorithm.HS256).build();
         return jwtEncoder.encode(JwtEncoderParameters.from(headers, claims)).getTokenValue();

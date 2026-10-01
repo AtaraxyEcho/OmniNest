@@ -40,9 +40,11 @@ CREATE TABLE "omni"."auth_active_sessions" (
   "last_active_at" timestamptz(6) NOT NULL DEFAULT now(),
   "revoked_at" timestamptz(6),
   "revoke_reason" varchar(255),
+  "current_refresh_jti" varchar(64),
   "created_at" timestamptz(6) NOT NULL DEFAULT now()
 )
 ;
+COMMENT ON COLUMN "omni"."auth_active_sessions"."current_refresh_jti" IS '当前有效刷新令牌 jti，用于轮换与重放检测；NULL 为升级前存量会话';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."id" IS '会话唯一标识，主键';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."user_id" IS '用户ID，关联auth_users';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."client_platform" IS '客户端平台：WEB / ANDROID / DESKTOP';

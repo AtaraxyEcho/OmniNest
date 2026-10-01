@@ -59,6 +59,8 @@ public class InitialSetupService {
 
     /**
      * 查询首次安装向导状态。
+     * 已完成初始化的实例只返回最小状态：该接口匿名可达（首启探活依赖 2xx + 标准信封），
+     * 不得向陌生访客暴露令牌配置、2FA 要求与持久化状态等部署姿态。
      *
      * @return 不包含安装令牌内容的状态
      */
@@ -68,6 +70,9 @@ public class InitialSetupService {
         boolean setupRequired = persistentStateEnabled
                 ? requireSystemInstance().getSetupState() == SystemInstanceState.SETUP_REQUIRED
                 : !authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN);
+        if (!setupRequired) {
+            return new InitialSetupStatusDto(false, false, false, false);
+        }
         return new InitialSetupStatusDto(
                 setupRequired,
                 setupRequired && hasValidConfiguredToken(),

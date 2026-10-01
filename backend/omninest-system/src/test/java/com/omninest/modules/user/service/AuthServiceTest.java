@@ -1,6 +1,7 @@
 package com.omninest.modules.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -64,8 +65,9 @@ class AuthServiceTest {
     private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
     private final TwoFactorPolicyService twoFactorPolicyService = mock(TwoFactorPolicyService.class);
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
-    private final FixedJwtEncoder jwtEncoder = new FixedJwtEncoder();
-    private final FixedJwtDecoder jwtDecoder = new FixedJwtDecoder();
+    private final Map<String, String> jtiByTokenUse = new HashMap<>();
+    private final FixedJwtEncoder jwtEncoder = new FixedJwtEncoder(jtiByTokenUse);
+    private final FixedJwtDecoder jwtDecoder = new FixedJwtDecoder(jtiByTokenUse);
 
     private AuthService service;
 
@@ -508,6 +510,77 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("刷新轮换 jti：旧刷新令牌再次使用触发会话撤销")
+        void refreshRotatesJtiAndRejectsReplayedToken() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findWithRolesAndPermissionsById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setCurrentRefreshJti("jti-current");
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+            jtiByTokenUse.put("refresh", "jti-stale");
+
+            assertThatThrownBy(() -> service.refresh("refresh-token"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("刷新凭证已失效");
+            verify(activeSessionRepository).revokeBySessionId(session.getId(), "刷新令牌重放，会话已撤销");
+            verify(sessionRevocationService).revokeSession(eq(user.getId()), eq(session.getId()), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("刷新成功后轮换出新 jti 并写回会话")
+        void refreshRotatesJtiOnSuccess() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findWithRolesAndPermissionsById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setCurrentRefreshJti("jti-current");
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+            jtiByTokenUse.put("refresh", "jti-current");
+
+            var token = service.refresh("refresh-token");
+
+            assertThat(token.refreshToken()).isNotBlank();
+            assertThat(session.getCurrentRefreshJti()).isNotEqualTo("jti-current");
+        }
+
+        @Test
+        @DisplayName("存量会话（无 jti）首次刷新建立 jti 不被拒绝")
+        void legacySessionEstablishesJtiOnFirstRefresh() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findWithRolesAndPermissionsById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+            jtiByTokenUse.remove("refresh");
+
+            service.refresh("refresh-token");
+
+            assertThat(session.getCurrentRefreshJti()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("两步验证挑战令牌一次性：第二次消费被拒")
+        void challengeTokenIsSingleUse() {
+            jtiByTokenUse.put("2fa", "challenge-jti");
+            when(rateLimitService.tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), eq(1), any(Duration.class)))
+                    .thenReturn(true)
+                    .thenReturn(false);
+
+            assertThatCode(() -> service.consumeChallengeToken("2fa-token", "2fa"))
+                    .doesNotThrowAnyException();
+            assertThatThrownBy(() -> service.consumeChallengeToken("2fa-token", "2fa"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("已使用");
+        }
+
+        @Test
         @DisplayName("刷新滑动续期：会话有效期顺延至不活跃窗口且与令牌截止一致")
         void refreshSlidesSessionExpiryToInactivityWindow() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
@@ -782,12 +855,21 @@ class AuthServiceTest {
      */
     private static class FixedJwtEncoder implements JwtEncoder {
         private final Map<String, JwtClaimsSet> claimsByTokenUse = new HashMap<>();
+        private final Map<String, String> jtiByTokenUse;
+
+        FixedJwtEncoder(Map<String, String> jtiByTokenUse) {
+            this.jtiByTokenUse = jtiByTokenUse;
+        }
+
 
         @Override
         public Jwt encode(JwtEncoderParameters parameters) {
             JwtClaimsSet claims = parameters.getClaims();
             String tokenUse = claims.getClaimAsString("token_use");
             claimsByTokenUse.put(tokenUse, claims);
+            if (claims.getId() != null) {
+                jtiByTokenUse.put(tokenUse, claims.getId());
+            }
             String tokenValue = switch (tokenUse == null ? "" : tokenUse) {
                 case "refresh" -> "refresh-token";
                 case "2fa" -> "2fa-token";
@@ -813,6 +895,12 @@ class AuthServiceTest {
      * 固定 JWT 解码器，返回预设的 refresh 与两步验证令牌 claims。
      */
     private static class FixedJwtDecoder implements JwtDecoder {
+        private final Map<String, String> jtiByTokenUse;
+
+        FixedJwtDecoder(Map<String, String> jtiByTokenUse) {
+            this.jtiByTokenUse = jtiByTokenUse;
+        }
+
         @Override
         public Jwt decode(String token) throws JwtException {
             String tokenUse = switch (token == null ? "" : token) {
@@ -822,16 +910,20 @@ class AuthServiceTest {
                 case "2fa-finalize-token" -> "2fa_finalize";
                 default -> throw new JwtException("invalid token");
             };
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("sub", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+            claims.put("token_use", tokenUse);
+            claims.put("sid", "22222222-2222-2222-2222-222222222222");
+            String jti = jtiByTokenUse.get(tokenUse);
+            if (jti != null) {
+                claims.put("jti", jti);
+            }
             return new Jwt(
                     token,
                     Instant.parse("2026-05-29T00:00:00Z"),
                     Instant.parse("2026-05-29T01:00:00Z"),
                     Map.of("alg", "HS256"),
-                    Map.of(
-                            "sub", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                            "token_use", tokenUse,
-                            "sid", "22222222-2222-2222-2222-222222222222"
-                    )
+                    claims
             );
         }
     }

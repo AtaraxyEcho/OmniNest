@@ -92,9 +92,10 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
         if (responseContentDisposition != null && !responseContentDisposition.isBlank()) {
             request.responseContentDisposition(responseContentDisposition);
         }
+        GetObjectRequest getObjectRequest = request.build();
         return toUri(s3Presigner.presignGetObject(builder -> builder
                         .signatureDuration(ttl)
-                        .getObjectRequest(request))
+                        .getObjectRequest(getObjectRequest))
                 .url());
     }
 

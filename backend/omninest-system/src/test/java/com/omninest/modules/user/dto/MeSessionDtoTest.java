@@ -42,6 +42,7 @@ class MeSessionDtoTest {
                 now,
                 null,
                 null,
+                null,
                 now
         );
     }

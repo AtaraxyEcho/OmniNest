@@ -56,6 +56,12 @@ public class AuthActiveSession {
     @Column(name = "revoke_reason")
     private String revokeReason;
 
+    /**
+     * 当前有效刷新令牌 jti；null 表示升级前的存量会话，首次刷新后建立并参与重放检测。
+     */
+    @Column(name = "current_refresh_jti", length = 64)
+    private String currentRefreshJti;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

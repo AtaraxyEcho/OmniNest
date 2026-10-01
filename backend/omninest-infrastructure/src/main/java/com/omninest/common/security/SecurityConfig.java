@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.Order;
 import org.springframework.context.annotation.Configuration;
@@ -83,14 +84,16 @@ public class SecurityConfig {
     )
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            SessionRevocationChecker sessionRevocationChecker
+            SessionRevocationChecker sessionRevocationChecker,
+            @Value("${springdoc.api-docs.enabled:true}") boolean apiDocsEnabled
     ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
+                .authorizeHttpRequests(authorize -> {
+                    authorize
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // 错误派发必须匿名可达，否则流式响应失败后二次 Access Denied 并掩盖真实异常
                         .requestMatchers("/error").permitAll()
@@ -123,15 +126,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/setup").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/music/playback/sessions/*/stream").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/music/playback/sessions/*/stream").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers(
+                        .requestMatchers("/ws/**").permitAll();
+                    if (apiDocsEnabled) {
+                        authorize.requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/api-docs/**"
-                        ).permitAll()
-                        // 所有 admin 端点由 @PreAuthorize 注解控制，此处仅要求有效 token
-                        .anyRequest().hasAuthority(TokenAuthorityMapper.ACCESS_TOKEN_AUTHORITY)
+                        ).permitAll();
+                    }
+                    // 所有 admin 端点由 @PreAuthorize 注解控制，此处仅要求有效 token
+                    authorize.anyRequest().hasAuthority(TokenAuthorityMapper.ACCESS_TOKEN_AUTHORITY);
+                }
                 )
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) ->
