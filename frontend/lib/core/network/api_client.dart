@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
@@ -40,6 +41,8 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          // 每个请求生成 X-Request-Id，与后端日志关联便于跨端排障
+          options.headers['X-Request-Id'] = const Uuid().v4();
           final skipAuthorization = options.extra[skipAuthorizationKey] == true;
           if (kIsWeb && !skipAuthorization) {
             options.extra['withCredentials'] = true;

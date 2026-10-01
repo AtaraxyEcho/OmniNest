@@ -3,6 +3,7 @@ import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
@@ -24,9 +25,16 @@ final readerApiProvider = Provider<ReaderApi>((ref) {
   return ReaderApi(ref.watch(apiClientProvider));
 });
 
-/// 阅读器本地存储（共享 LocalDatabase 单例）
+/// 阅读器本地存储（共享 LocalDatabase 单例；章节正文/笔记等敏感列按当前用户加密）
 final readerLocalStorageProvider = Provider<ReaderLocalStorage>((ref) {
-  return ReaderLocalStorage(ref.watch(localDatabaseProvider));
+  final userId = ref.watch(
+    authSessionProvider.select((session) => session.asData?.value.user?.id),
+  );
+  return ReaderLocalStorage(
+    ref.watch(localDatabaseProvider),
+    textCipher: ref.watch(offlineColumnCipherProvider),
+    userId: userId,
+  );
 });
 
 /// 阅读器数据管理器（离线优先写入）

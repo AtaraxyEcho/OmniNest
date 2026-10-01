@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:omninest/core/security/offline_text_cipher.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/domain/reader_annotation.dart';
 import 'package:omninest/features/reader/domain/reader_bookmark.dart';
@@ -10,9 +11,47 @@ import 'package:omninest/features/reader/domain/reader_progress.dart';
 /// 基于 Drift 封装阅读进度、书签、标注、笔记的离线缓存读写。
 /// 所有写操作先存本地，再通过 ReaderSyncQueue 异步同步服务端。
 class ReaderLocalStorage {
-  const ReaderLocalStorage(this._db);
+  ReaderLocalStorage(this._db, {OfflineTextCipher? textCipher, String? userId})
+    : _textCipher = textCipher,
+      _columnUserId = userId;
 
   final LocalDatabase _db;
+
+  /// 离线敏感列加密器与所属用户；任一为空时列保持原样（Web 或未登录场景）。
+  final OfflineTextCipher? _textCipher;
+  final String? _columnUserId;
+
+  Future<String> _encipher(String plaintext) async {
+    final cipher = _textCipher;
+    final userId = _columnUserId;
+    if (cipher == null || userId == null || userId.isEmpty) {
+      return plaintext;
+    }
+    return cipher.encrypt(userId, plaintext);
+  }
+
+  Future<String?> _encipherNullable(String? plaintext) async {
+    if (plaintext == null) {
+      return null;
+    }
+    return _encipher(plaintext);
+  }
+
+  Future<String> _decipher(String stored) async {
+    final cipher = _textCipher;
+    final userId = _columnUserId;
+    if (cipher == null || userId == null || userId.isEmpty) {
+      return stored;
+    }
+    return cipher.decrypt(userId, stored);
+  }
+
+  Future<String?> _decipherNullable(String? stored) async {
+    if (stored == null) {
+      return null;
+    }
+    return _decipher(stored);
+  }
 
   // ─── Progress ────────────────────────────────────────────────
 
@@ -86,7 +125,7 @@ class ReaderLocalStorage {
             readerItemId: bookmark.readerItemId,
             charOffset: Value(bookmark.charOffset),
             progressPercent: Value(bookmark.progressPercent),
-            note: Value(bookmark.note),
+            note: Value(await _encipherNullable(bookmark.note)),
             createdAt: bookmark.createdAt ?? DateTime.now(),
           ),
         );
@@ -98,18 +137,20 @@ class ReaderLocalStorage {
           ..where((t) => t.readerItemId.equals(itemId))
           ..orderBy([(t) => OrderingTerm.asc(t.charOffset)]);
     final rows = await query.get();
-    return rows
-        .map(
-          (row) => ReaderBookmark(
-            id: row.id,
-            readerItemId: row.readerItemId,
-            charOffset: row.charOffset,
-            progressPercent: row.progressPercent,
-            note: row.note,
-            createdAt: row.createdAt,
-          ),
-        )
-        .toList();
+    final bookmarks = <ReaderBookmark>[];
+    for (final row in rows) {
+      bookmarks.add(
+        ReaderBookmark(
+          id: row.id,
+          readerItemId: row.readerItemId,
+          charOffset: row.charOffset,
+          progressPercent: row.progressPercent,
+          note: await _decipherNullable(row.note),
+          createdAt: row.createdAt,
+        ),
+      );
+    }
+    return bookmarks;
   }
 
   Future<void> deleteBookmark(String bookmarkId) async {
@@ -145,8 +186,10 @@ class ReaderLocalStorage {
             chapterId: Value(annotation.chapterId),
             startOffset: annotation.startOffset,
             endOffset: annotation.endOffset,
-            highlightText: Value(annotation.highlightText),
-            note: Value(annotation.note),
+            highlightText: Value(
+              await _encipherNullable(annotation.highlightText),
+            ),
+            note: Value(await _encipherNullable(annotation.note)),
             color: Value(annotation.color),
             createdAt: annotation.createdAt ?? DateTime.now(),
           ),
@@ -159,21 +202,23 @@ class ReaderLocalStorage {
           ..where((t) => t.readerItemId.equals(itemId))
           ..orderBy([(t) => OrderingTerm.asc(t.startOffset)]);
     final rows = await query.get();
-    return rows
-        .map(
-          (row) => ReaderAnnotation(
-            id: row.id,
-            readerItemId: row.readerItemId,
-            chapterId: row.chapterId,
-            startOffset: row.startOffset,
-            endOffset: row.endOffset,
-            highlightText: row.highlightText,
-            note: row.note,
-            color: row.color,
-            createdAt: row.createdAt,
-          ),
-        )
-        .toList();
+    final annotations = <ReaderAnnotation>[];
+    for (final row in rows) {
+      annotations.add(
+        ReaderAnnotation(
+          id: row.id,
+          readerItemId: row.readerItemId,
+          chapterId: row.chapterId,
+          startOffset: row.startOffset,
+          endOffset: row.endOffset,
+          highlightText: await _decipherNullable(row.highlightText),
+          note: await _decipherNullable(row.note),
+          color: row.color,
+          createdAt: row.createdAt,
+        ),
+      );
+    }
+    return annotations;
   }
 
   Future<void> updateAnnotation(
@@ -184,7 +229,7 @@ class ReaderLocalStorage {
     await (_db.update(_db.cachedReaderAnnotations)
       ..where((t) => t.id.equals(annotationId))).write(
       CachedReaderAnnotationsCompanion(
-        note: Value(note),
+        note: Value(await _encipherNullable(note)),
         color: color != null ? Value(color) : const Value.absent(),
       ),
     );
@@ -222,7 +267,7 @@ class ReaderLocalStorage {
             readerItemId: note.readerItemId,
             charOffset: Value(note.charOffset),
             title: Value(note.title),
-            content: note.content,
+            content: await _encipher(note.content),
             createdAt: note.createdAt ?? DateTime.now(),
           ),
         );
@@ -234,18 +279,20 @@ class ReaderLocalStorage {
           ..where((t) => t.readerItemId.equals(itemId))
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
     final rows = await query.get();
-    return rows
-        .map(
-          (row) => ReaderNote(
-            id: row.id,
-            readerItemId: row.readerItemId,
-            charOffset: row.charOffset,
-            title: row.title,
-            content: row.content,
-            createdAt: row.createdAt,
-          ),
-        )
-        .toList();
+    final notes = <ReaderNote>[];
+    for (final row in rows) {
+      notes.add(
+        ReaderNote(
+          id: row.id,
+          readerItemId: row.readerItemId,
+          charOffset: row.charOffset,
+          title: row.title,
+          content: await _decipher(row.content),
+          createdAt: row.createdAt,
+        ),
+      );
+    }
+    return notes;
   }
 
   Future<void> updateNote(
@@ -255,7 +302,10 @@ class ReaderLocalStorage {
   }) async {
     await (_db.update(_db.cachedReaderNotes)
       ..where((t) => t.id.equals(noteId))).write(
-      CachedReaderNotesCompanion(title: Value(title), content: Value(content)),
+      CachedReaderNotesCompanion(
+        title: Value(title),
+        content: Value(await _encipher(content)),
+      ),
     );
   }
 
@@ -358,7 +408,7 @@ class ReaderLocalStorage {
             title: Value(title),
             chapterNumber: Value(chapterNumber),
             charCount: Value(charCount),
-            processedHtml: processedHtml,
+            processedHtml: await _encipher(processedHtml),
             cachedAt: DateTime.now(),
           ),
         );
@@ -372,7 +422,10 @@ class ReaderLocalStorage {
       (t) => t.itemId.equals(itemId) & t.contentPath.equals(contentPath),
     );
     final row = await query.getSingleOrNull();
-    return row?.processedHtml;
+    if (row == null) {
+      return null;
+    }
+    return _decipher(row.processedHtml);
   }
 
   /// 删除指定书籍的所有章节缓存

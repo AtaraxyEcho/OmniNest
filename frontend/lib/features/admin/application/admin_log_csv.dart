@@ -21,7 +21,13 @@ String _csvRow(List<String> cells) {
 }
 
 String _csvCell(String value) {
-  final normalized = value.replaceAll('\r\n', '\n');
+  var normalized = value.replaceAll('\r\n', '\n');
+  // 公式注入中和：= + - @ 等开头的单元格前置单引号，
+  // 避免 Excel/WPS 把用户可控内容（文件名、用户名等）当作公式或 DDE 执行
+  if (normalized.isNotEmpty &&
+      const ['=', '+', '-', '@', '\t'].contains(normalized[0])) {
+    normalized = "'$normalized";
+  }
   final needsQuote =
       normalized.contains(',') ||
       normalized.contains('"') ||

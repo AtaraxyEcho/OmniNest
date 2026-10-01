@@ -138,7 +138,11 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   final userId = ref.watch(
     authSessionProvider.select((session) => session.asData?.value.user?.id),
   );
-  final localStorage = ReaderLocalStorage(db);
+  final localStorage = ReaderLocalStorage(
+    db,
+    textCipher: ref.watch(offlineColumnCipherProvider),
+    userId: userId,
+  );
   final imageRepository = createReaderImageRepository(
     database: db,
     userId: userId,

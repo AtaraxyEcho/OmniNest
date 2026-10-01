@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/security/offline_column_cipher.dart';
 import 'package:omninest/core/storage/local_database.dart';
 
 /// 全应用共享的本地数据库实例。
@@ -8,4 +9,9 @@ final localDatabaseProvider = Provider<LocalDatabase>((ref) {
   final database = LocalDatabase();
   ref.onDispose(() => unawaited(database.close()));
   return database;
+});
+
+/// 离线敏感列加密器（原生平台基于安全存储主密钥；Web 返回 null 保持原样）。
+final offlineColumnCipherProvider = Provider<OfflineTextCipher?>((ref) {
+  return createOfflineColumnCipher();
 });

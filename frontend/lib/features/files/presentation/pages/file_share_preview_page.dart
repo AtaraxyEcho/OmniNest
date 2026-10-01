@@ -85,11 +85,8 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     final authState = ref.read(authSessionProvider);
     final isAuthenticated = authState.asData?.value.isAuthenticated ?? false;
     if (!isAuthenticated) {
-      final redirect =
-          Uri(
-            path: '/s/${widget.token}',
-            queryParameters: {if (_password != null) 'pwd': _password},
-          ).toString();
+      // 密码不进 URL：地址栏/历史/收藏不得留存分享口令，登录回跳后由用户重输
+      final redirect = Uri(path: '/s/${widget.token}').toString();
       if (mounted) context.go('/login?redirect=$redirect');
       return;
     }
