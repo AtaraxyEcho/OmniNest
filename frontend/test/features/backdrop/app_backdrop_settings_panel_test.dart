@@ -48,6 +48,8 @@ void main() {
                 id: 'owner-user',
                 username: 'owner',
                 role: 'MEMBER',
+                // 服务端背景库按 backdrop:read 门控；缺失会跳过资产同步与轮询。
+                permissions: const {'backdrop:read'},
               ),
             ),
           ),
@@ -96,7 +98,9 @@ void main() {
     await tester.tap(find.text('打开背景设置'));
     await tester.pumpAndSettle();
 
-    final separationSwitch = find.widgetWithText(SwitchListTile, '分别设置桌面与移动端');
+    final separationSwitch = find.byKey(
+      const ValueKey<String>('backdrop-toggle-分别设置桌面与移动端'),
+    );
     expect(separationSwitch, findsOneWidget);
 
     await tester.tap(separationSwitch);
@@ -130,6 +134,8 @@ void main() {
                 id: 'owner-user',
                 username: 'owner',
                 role: 'MEMBER',
+                // 服务端背景库按 backdrop:read 门控；缺失会跳过资产同步与轮询。
+                permissions: const {'backdrop:read'},
               ),
             ),
           ),
@@ -239,6 +245,8 @@ void main() {
                 id: 'owner-user',
                 username: 'owner',
                 role: 'MEMBER',
+                // 服务端背景库按 backdrop:read 门控；缺失会跳过资产同步与轮询。
+                permissions: const {'backdrop:read'},
               ),
             ),
           ),
@@ -325,6 +333,8 @@ void main() {
                 id: 'owner-user',
                 username: 'owner',
                 role: 'MEMBER',
+                // 服务端背景库按 backdrop:read 门控；缺失会跳过资产同步与轮询。
+                permissions: const {'backdrop:read'},
               ),
             ),
           ),

@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/theme/workstation_scope.dart';
 import 'package:omninest/core/utils/color_value.dart';
-import 'package:omninest/core/widgets/workbench_panel.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/application/notification_type_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_type_l10n.dart';
 
-/// 通知设置页面。
+/// 通知偏好设置页：56px 工位顶栏 + 分区卡开关行。
+///
+/// 桌面从个人中心通知分区进入，移动端经 `/profile/notifications` 直达；
+/// 本页只承载偏好开关，与桌面分区卡共享同一套语义。
 class NotificationSettingsPage extends ConsumerStatefulWidget {
   const NotificationSettingsPage({super.key});
 
@@ -28,129 +31,131 @@ class _NotificationSettingsPageState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final colors = context.globalColors;
     final typesAsync = ref.watch(notificationTypesProvider);
     final prefsAsync = ref.watch(notificationPreferencesProvider);
 
-    return Scaffold(
-      backgroundColor: colors.surfaceContainerLowest,
-      appBar: AppBar(
-        backgroundColor: colors.surface.withValues(alpha: 0.86),
-        leading: IconButton(
-          tooltip: l10n.coreBack,
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.go('/profile'),
-        ),
-        title: Text(
-          l10n.profileNotificationSettings,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: prefsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(l10n.filesLoadFailed('$e'))),
-        data: (prefs) {
-          _prefs ??= prefs;
-          return _buildBody(typesAsync, colors);
+    return WorkstationScope(
+      child: Builder(
+        builder: (context) {
+          final scheme = Theme.of(context).colorScheme;
+          return Scaffold(
+            backgroundColor: scheme.surface,
+            body: Column(
+              children: [
+                _SettingsTopBar(title: l10n.profileNotificationSettings),
+                Expanded(
+                  child: prefsAsync.when(
+                    loading:
+                        () => const Center(
+                          child: CircularProgressIndicator.adaptive(),
+                        ),
+                    error:
+                        (e, _) =>
+                            Center(child: Text(l10n.filesLoadFailed('$e'))),
+                    data: (prefs) {
+                      _prefs ??= prefs;
+                      return _buildBody(context, typesAsync);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
         },
       ),
     );
   }
 
   Widget _buildBody(
+    BuildContext context,
     AsyncValue<List<NotificationTypeConfig>> typesAsync,
-    GlobalThemeColors colors,
   ) {
     final l10n = AppLocalizations.of(context);
     final prefs = _prefs!;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Section(
-            colors: colors,
-            child: _SwitchTile(
+          _SettingsSection(
+            child: _SettingsSwitchRow(
               icon: Icons.notifications_active_outlined,
               title: l10n.profileNotificationMasterSwitch,
               subtitle: l10n.profileNotificationMasterSwitchHint,
               value: prefs.enabled,
-              colors: colors,
               onChanged: (v) => _updatePrefs(prefs.copyWith(enabled: v)),
             ),
           ),
           const SizedBox(height: 12),
-          _Section(
-            colors: colors,
+          _SettingsSection(
             child: typesAsync.when(
               loading:
-                  () => const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
+                  () => const SizedBox(
+                    height: 64,
+                    child: Center(child: CircularProgressIndicator.adaptive()),
                   ),
               error:
                   (_, _) => Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Text(
-                      l10n.profileNotificationTypesLoadFailed,
-                      style: TextStyle(color: colors.onSurfaceVariant),
-                    ),
+                    child: Text(l10n.profileNotificationTypesLoadFailed),
                   ),
-              data:
-                  (types) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.category_outlined,
-                              size: 18,
-                              color: colors.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              l10n.notificationTypesHeader,
-                              style: TextStyle(
-                                fontSize: AppTypography.titleMedium,
-                                fontWeight: FontWeight.w700,
-                                color: colors.onSurface,
-                              ),
-                            ),
-                          ],
+              data: (types) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                      child: Text(
+                        l10n.notificationTypesHeader,
+                        style: TextStyle(
+                          fontSize: AppTypography.bodyMedium,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
-                      ...types.map(
-                        (type) => _buildTypeTile(type, prefs, colors, l10n),
+                    ),
+                    for (final type in types)
+                      _SettingsSwitchRow(
+                        icon: _iconFromString(type.icon),
+                        title: notificationTypeLabel(type.typeCode, l10n),
+                        subtitle:
+                            notificationTypeDescription(type.typeCode, l10n) ??
+                            type.description,
+                        value: prefs.isTypeEnabled(type.typeCode),
+                        iconColor: _parseColor(type.color, context),
+                        onChanged:
+                            prefs.enabled
+                                ? (v) {
+                                  final newTypes = Map<String, bool>.from(
+                                    prefs.types,
+                                  );
+                                  newTypes[type.typeCode] = v;
+                                  _updatePrefs(prefs.copyWith(types: newTypes));
+                                }
+                                : null,
                       ),
-                    ],
-                  ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
-          _Section(
-            colors: colors,
+          _SettingsSection(
             child: Column(
               children: [
-                _SwitchTile(
+                _SettingsSwitchRow(
                   icon: Icons.volume_up_outlined,
                   title: l10n.profileNotificationSound,
                   subtitle: l10n.profileNotificationSoundHint,
                   value: prefs.sound,
-                  colors: colors,
                   onChanged: (v) => _updatePrefs(prefs.copyWith(sound: v)),
                 ),
-                Divider(
-                  height: 1,
-                  indent: 68,
-                  color: colors.outlineVariant.withValues(alpha: 0.12),
-                ),
-                _SwitchTile(
+                _SettingsDivider(),
+                _SettingsSwitchRow(
                   icon: Icons.preview_outlined,
                   title: l10n.profileNotificationPreview,
                   subtitle: l10n.profileNotificationPreviewHint,
                   value: prefs.showPreview,
-                  colors: colors,
                   onChanged:
                       (v) => _updatePrefs(prefs.copyWith(showPreview: v)),
                 ),
@@ -162,81 +167,105 @@ class _NotificationSettingsPageState
     );
   }
 
-  Widget _buildTypeTile(
-    NotificationTypeConfig type,
-    NotificationPreferences prefs,
-    GlobalThemeColors colors,
-    AppLocalizations l10n,
-  ) {
-    final isTypeEnabled = prefs.isTypeEnabled(type.typeCode);
-    final color = _parseColor(type.color, colors);
-    return _SwitchTile(
-      icon: _iconFromString(type.icon),
-      title: notificationTypeLabel(type.typeCode, l10n),
-      subtitle:
-          notificationTypeDescription(type.typeCode, l10n) ?? type.description,
-      value: isTypeEnabled,
-      colors: colors,
-      iconColor: color,
-      onChanged:
-          prefs.enabled
-              ? (v) {
-                final newTypes = Map<String, bool>.from(prefs.types);
-                newTypes[type.typeCode] = v;
-                _updatePrefs(prefs.copyWith(types: newTypes));
-              }
-              : null,
-    );
-  }
-
   Future<void> _updatePrefs(NotificationPreferences newPrefs) async {
     setState(() => _prefs = newPrefs);
     await ref.read(notificationPreferencesProvider.notifier).save(newPrefs);
   }
 
-  Color _parseColor(String? hex, GlobalThemeColors colors) {
-    return parseHexColor(hex, colors.onSurfaceVariant);
+  Color _parseColor(String? hex, BuildContext context) {
+    return parseHexColor(hex, Theme.of(context).colorScheme.onSurfaceVariant);
   }
 
   IconData _iconFromString(String? name) {
     return switch (name) {
-      'check_circle_rounded' => Icons.check_circle_rounded,
-      'error_rounded' => Icons.error_rounded,
-      'share_rounded' => Icons.share_rounded,
-      'info_rounded' => Icons.info_rounded,
+      'check_circle_rounded' => Icons.check_circle_outlined,
+      'error_rounded' => Icons.error_outline_rounded,
+      'share_rounded' => Icons.share_outlined,
+      'info_rounded' => Icons.info_outline_rounded,
       _ => Icons.notifications_outlined,
     };
   }
 }
 
-// ─── Section ────────────────────────────────────────────────────────────────
+class _SettingsTopBar extends StatelessWidget {
+  const _SettingsTopBar({required this.title});
 
-class _Section extends StatelessWidget {
-  const _Section({required this.child, required this.colors});
-
-  final Widget child;
-  final GlobalThemeColors colors;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: WorkbenchPanel(padding: EdgeInsets.zero, child: child),
+      child: Row(
+        children: [
+          const WorkstationPortalLink(),
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 16,
+            child: VerticalDivider(width: 1, color: scheme.outlineVariant),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Switch Tile ────────────────────────────────────────────────────────────
+/// 分区卡：0px 直角 + 1px 细线。
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.child});
 
-class _SwitchTile extends StatelessWidget {
-  const _SwitchTile({
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SettingsDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Divider(height: 1, thickness: 1, color: scheme.outlineVariant);
+  }
+}
+
+/// 纯平开关行：图标 + 标题/副文 + 右侧开关。
+class _SettingsSwitchRow extends StatelessWidget {
+  const _SettingsSwitchRow({
     required this.icon,
     required this.title,
-    this.subtitle,
     required this.value,
+    this.subtitle,
     this.onChanged,
     this.iconColor,
-    required this.colors,
   });
 
   final IconData icon;
@@ -245,25 +274,17 @@ class _SwitchTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   final Color? iconColor;
-  final GlobalThemeColors colors;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor = iconColor ?? colors.onSurfaceVariant;
+    final scheme = Theme.of(context).colorScheme;
+    final effectiveColor = iconColor ?? scheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: effectiveColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: effectiveColor),
-          ),
-          const SizedBox(width: 14),
+          Icon(icon, size: 16, color: effectiveColor),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,9 +292,9 @@ class _SwitchTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: AppTypography.bodyLarge,
-                    fontWeight: FontWeight.w600,
-                    color: colors.onSurface,
+                    fontSize: AppTypography.bodyMedium,
+                    fontWeight: FontWeight.w500,
+                    color: scheme.onSurface,
                   ),
                 ),
                 if (subtitle != null) ...[
@@ -281,19 +302,15 @@ class _SwitchTile extends StatelessWidget {
                   Text(
                     subtitle!,
                     style: TextStyle(
-                      fontSize: AppTypography.bodySmall,
-                      color: colors.onSurfaceVariant.withValues(alpha: 0.7),
+                      fontSize: AppTypography.labelSmall,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ],
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: colors.primary,
-          ),
+          WorkstationSwitch(value: value, onChanged: onChanged),
         ],
       ),
     );

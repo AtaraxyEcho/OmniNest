@@ -84,30 +84,49 @@ class UnreadCountNotifier extends Notifier<int> {
   }
 }
 
+/// 通知中心筛选档位。
+enum NotificationFilter { all, unread }
+
 /// 通知列表状态
 class NotificationState {
   const NotificationState({
     this.items = const [],
     this.total = 0,
+    this.allTotal = 0,
     this.currentPage = 0,
+    this.filter = NotificationFilter.all,
     this.isLoading = false,
   });
 
   final List<NotificationDto> items;
+
+  /// 当前筛选下的通知总数（分页 totalElements）。
   final int total;
+
+  /// 全部通知总数快照：仅在 all 筛选加载时更新，供未读视图下
+  /// 「全部通知 (n)」标签展示最近已知值。
+  final int allTotal;
+
   final int currentPage;
+
+  final NotificationFilter filter;
+
   final bool isLoading;
 
   NotificationState copyWith({
     List<NotificationDto>? items,
     int? total,
+    int? allTotal,
     int? currentPage,
+    NotificationFilter? filter,
     bool? isLoading,
   }) {
     return NotificationState(
       items: items ?? this.items,
       total: total ?? this.total,
+      allTotal: allTotal ?? this.allTotal,
       currentPage: currentPage ?? this.currentPage,
+      filter: filter ?? this.filter,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -132,7 +151,9 @@ class NotificationController extends Notifier<NotificationState> {
   Future<void>? _activeOperation;
   Future<void>? _realtimeRefresh;
 
-  /// 加载通知列表
+  bool get _unreadOnly => state.filter == NotificationFilter.unread;
+
+  /// 加载通知列表（当前筛选）。
   Future<void> load({int page = 0, int size = 20}) async {
     if (_activeOperation != null) return;
     final operation = _loadPage(page: page, size: size);
@@ -144,6 +165,19 @@ class NotificationController extends Notifier<NotificationState> {
         _activeOperation = null;
       }
     }
+  }
+
+  /// 切换筛选档位并回到第一页。
+  Future<void> setFilter(NotificationFilter filter, {int size = 20}) async {
+    if (state.filter == filter) return;
+    state = state.copyWith(filter: filter, currentPage: 0, isLoading: true);
+    await load(page: 0, size: size);
+  }
+
+  /// 跳转到指定页（0 基）。
+  Future<void> goToPage(int page, {int size = 20}) async {
+    if (page < 0 || page == state.currentPage) return;
+    await load(page: page, size: size);
   }
 
   /// 严格刷新当前通知分页，失败时保留失效记录等待重试。
@@ -184,41 +218,33 @@ class NotificationController extends Notifier<NotificationState> {
     final current = state;
     final pages = await Future.wait([
       for (var page = 0; page <= current.currentPage; page++)
-        _api.list(page: page, size: size),
+        _api.list(page: page, size: size, unreadOnly: _unreadOnly),
     ]);
     state = NotificationState(
       items: pages.expand((page) => page.items).toList(growable: false),
       total: pages.last.total,
+      allTotal: _unreadOnly ? current.allTotal : pages.last.total,
       currentPage: current.currentPage,
+      filter: current.filter,
     );
   }
 
-  /// 加载更多通知（下一页）
-  Future<void> loadMore({int size = 20}) async {
-    if (_activeOperation != null) return;
-    final nextPage = state.currentPage + 1;
-    if (state.items.length >= state.total) return;
-    final operation = _loadMorePage(nextPage: nextPage, size: size);
-    _activeOperation = operation;
-    try {
-      await operation;
-    } finally {
-      if (identical(_activeOperation, operation)) {
-        _activeOperation = null;
-      }
-    }
-  }
-
-  /// 在列表头部插入一条通知（WebSocket 推送时使用）
+  /// 在列表头部插入一条通知（WebSocket 推送时使用）。
+  /// 未读筛选视图下已读推送不可见；total/allTotal 分别跟随可见性与全量。
   bool prepend(NotificationDto notification) {
     final exists = state.items.any((item) => item.id == notification.id);
+    final visibleInFilter = !_unreadOnly || !notification.read;
     state = state.copyWith(
-      items: [
-        notification,
-        for (final item in state.items)
-          if (item.id != notification.id) item,
-      ],
-      total: exists ? state.total : state.total + 1,
+      items:
+          visibleInFilter
+              ? [
+                notification,
+                for (final item in state.items)
+                  if (item.id != notification.id) item,
+              ]
+              : state.items,
+      total: !exists && visibleInFilter ? state.total + 1 : state.total,
+      allTotal: !exists ? state.allTotal + 1 : state.allTotal,
     );
     return !exists;
   }
@@ -226,48 +252,60 @@ class NotificationController extends Notifier<NotificationState> {
   Future<void> _loadPage({required int page, required int size}) async {
     state = state.copyWith(isLoading: true);
     try {
-      final result = await _api.list(page: page, size: size);
+      final unreadOnly = _unreadOnly;
+      final result = await _api.list(
+        page: page,
+        size: size,
+        unreadOnly: unreadOnly,
+      );
       state = NotificationState(
         items: result.items,
         total: result.total,
+        allTotal: unreadOnly ? state.allTotal : result.total,
         currentPage: page,
+        filter: state.filter,
       );
     } catch (_) {
       state = state.copyWith(isLoading: false);
     }
   }
 
-  Future<void> _loadMorePage({required int nextPage, required int size}) async {
-    final result = await _api.list(page: nextPage, size: size);
-    state = NotificationState(
-      items: [...state.items, ...result.items],
-      total: result.total,
-      currentPage: nextPage,
-    );
-  }
-
-  /// 标记指定通知为已读
+  /// 标记指定通知为已读。未读筛选视图下已读条目随即移出列表。
   Future<void> markRead(String id) async {
     final wasUnread = state.items.any((item) => item.id == id && !item.read);
     await _api.markRead([id]);
-    state = state.copyWith(
-      items: [
-        for (final n in state.items)
-          if (n.id == id) n.copyWith(read: true) else n,
-      ],
-    );
+    if (_unreadOnly) {
+      state = state.copyWith(
+        items: [
+          for (final n in state.items)
+            if (n.id != id) n,
+        ],
+        total: (state.total - 1).clamp(0, state.total),
+      );
+    } else {
+      state = state.copyWith(
+        items: [
+          for (final n in state.items)
+            if (n.id == id) n.copyWith(read: true) else n,
+        ],
+      );
+    }
     if (wasUnread) {
       final unread = ref.read(unreadCountProvider);
       ref.read(unreadCountProvider.notifier).set((unread - 1).clamp(0, unread));
     }
   }
 
-  /// 全部标记已读
+  /// 全部标记已读。未读筛选视图下列表清空。
   Future<void> markAllRead() async {
     await _api.markAllRead();
-    state = state.copyWith(
-      items: [for (final n in state.items) n.copyWith(read: true)],
-    );
+    if (_unreadOnly) {
+      state = state.copyWith(items: [], total: 0);
+    } else {
+      state = state.copyWith(
+        items: [for (final n in state.items) n.copyWith(read: true)],
+      );
+    }
     ref.read(unreadCountProvider.notifier).set(0);
   }
 
@@ -281,6 +319,7 @@ class NotificationController extends Notifier<NotificationState> {
           if (item.id != id) item,
       ],
       total: (state.total - 1).clamp(0, state.total),
+      allTotal: (state.allTotal - 1).clamp(0, state.allTotal),
     );
     if (notification != null && !notification.read) {
       final unread = ref.read(unreadCountProvider);
@@ -291,7 +330,7 @@ class NotificationController extends Notifier<NotificationState> {
   /// 清空当前账户的全部通知。
   Future<void> clearAll() async {
     await _api.clearAll();
-    state = const NotificationState();
+    state = NotificationState(filter: state.filter);
     ref.read(unreadCountProvider.notifier).set(0);
   }
 }

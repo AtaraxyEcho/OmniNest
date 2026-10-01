@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 /// 服务器与连接面板：展示当前生效地址（自定义/预置）并发起更换流程。
 ///
@@ -16,25 +19,14 @@ class ProfileServerPanel extends ConsumerWidget {
 
   Future<void> _confirmAndChange(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.serverPanelChangeTitle),
-            content: Text(l10n.serverPanelChangeBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(l10n.serverPanelChangeCancel),
-              ),
-              FilledButton.tonal(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(l10n.serverPanelChangeConfirm),
-              ),
-            ],
-          ),
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.serverPanelChangeTitle,
+      message: l10n.serverPanelChangeBody,
+      confirmLabel: l10n.serverPanelChangeConfirm,
+      destructive: true,
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     await ref.read(authSessionProvider.notifier).clearSession();
@@ -62,56 +54,67 @@ class ProfileServerPanel extends ConsumerWidget {
             ? l10n.serverPanelBadgePreset
             : l10n.serverPanelBadgeUnconfigured;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          l10n.profileSectionServer,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.serverPanelCurrent,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.serverPanelCurrent,
+            style: TextStyle(
+              fontSize: AppTypography.labelSmall,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  environment?.apiBaseUrl ?? '-',
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.bodyMedium,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  border: Border.all(color: scheme.outlineVariant),
+                  color: scheme.surfaceContainerLowest,
+                ),
+                child: Text(
+                  badgeText.toUpperCase(),
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelMicro,
+                    letterSpacing: 1.2,
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        environment?.apiBaseUrl ?? '-',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      badgeText,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: scheme.primary),
-                    ),
-                  ],
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: WorkstationActionButton(
+              label: l10n.serverPanelChange,
+              icon: Icons.swap_horiz_rounded,
+              onPressed: () => _confirmAndChange(context, ref),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: () => _confirmAndChange(context, ref),
-          icon: const Icon(Icons.swap_horiz_rounded),
-          label: Text(l10n.serverPanelChange),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

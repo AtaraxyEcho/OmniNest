@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/theme/workstation_scope.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
-import 'package:omninest/core/widgets/workbench_top_bar.dart';
+import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/core/widgets/workstation_portal_link.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
 
 enum ProfileSection {
   account('account'),
@@ -26,6 +28,10 @@ enum ProfileSection {
   }
 }
 
+/// 个人中心桌面工位壳：56px 顶栏 + 248px 左侧导航 + 内容区。
+///
+/// 遵循建筑极简主义规范：0px 直角、1px 细线、零阴影；激活导航项
+/// 纯靠底色与边框凸显，不附加任何伪线段。
 class ProfileDesktopShell extends StatelessWidget {
   const ProfileDesktopShell({
     required this.selectedSection,
@@ -54,106 +60,138 @@ class ProfileDesktopShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final colors = context.globalColors;
-    return Scaffold(
-      backgroundColor: colors.surfaceContainerLowest,
-      body: Column(
-        children: [
-          WorkbenchTopBar(
-            surfaceColor: colors.surface,
-            borderColor: colors.outlineVariant,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    tooltip: l10n.profileBackTooltip,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    l10n.profileTitle,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: onNotifications,
-                    icon: const Icon(Icons.notifications_none_rounded),
-                    tooltip: l10n.notificationTitle,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final navigationWidth =
-                    constraints.maxWidth < 1180 ? 220.0 : 248.0;
-                final horizontalPadding =
-                    constraints.maxWidth < 1180 ? 24.0 : 36.0;
-                return Row(
-                  children: [
-                    SizedBox(
-                      width: navigationWidth,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            right: BorderSide(color: colors.outlineVariant),
-                          ),
-                        ),
-                        child: Material(
-                          color: colors.surfaceContainerLow,
-                          child: _ProfileNavigation(
-                            selectedSection: selectedSection,
-                            onSectionSelected: onSectionSelected,
-                            displayName: displayName,
-                            username: username,
-                            role: role,
-                            avatarUrl: avatarUrl,
-                            onSignOut: onSignOut,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          28,
-                          horizontalPadding,
-                          48,
-                        ),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1280),
-                            child: AnimatedSwitcher(
-                              duration:
-                                  MediaQuery.disableAnimationsOf(context)
-                                      ? Duration.zero
-                                      : const Duration(milliseconds: 180),
-                              switchInCurve: Curves.easeOutQuart,
-                              switchOutCurve: Curves.easeInCubic,
-                              layoutBuilder: excludeExitingSemanticsStack,
-                              child: KeyedSubtree(
-                                key: ValueKey(selectedSection),
-                                child: child,
+    return WorkstationScope(
+      child: Builder(
+        builder: (context) {
+          final scheme = Theme.of(context).colorScheme;
+          return Scaffold(
+            backgroundColor: scheme.surface,
+            body: Column(
+              children: [
+                _ProfileTopBar(
+                  onBack: onBack,
+                  onNotifications: onNotifications,
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final navigationWidth =
+                          constraints.maxWidth < 1180 ? 216.0 : 248.0;
+                      final horizontalPadding =
+                          constraints.maxWidth < 1180 ? 24.0 : 32.0;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: navigationWidth,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  right: BorderSide(
+                                    color: scheme.outlineVariant,
+                                  ),
+                                ),
+                              ),
+                              child: Material(
+                                color: scheme.surface,
+                                child: _ProfileNavigation(
+                                  selectedSection: selectedSection,
+                                  onSectionSelected: onSectionSelected,
+                                  displayName: displayName,
+                                  username: username,
+                                  role: role,
+                                  avatarUrl: avatarUrl,
+                                  onSignOut: onSignOut,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                28,
+                                horizontalPadding,
+                                48,
+                              ),
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 1100,
+                                  ),
+                                  child: AnimatedSwitcher(
+                                    duration:
+                                        MediaQuery.disableAnimationsOf(context)
+                                            ? Duration.zero
+                                            : const Duration(milliseconds: 180),
+                                    switchInCurve: Curves.easeOutQuart,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    layoutBuilder: excludeExitingSemanticsStack,
+                                    child: KeyedSubtree(
+                                      key: ValueKey(selectedSection),
+                                      child: child,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 顶栏：PORTAL 返回 + mono 面包屑 + 通知铃铛 + 头像菜单。
+class _ProfileTopBar extends StatelessWidget {
+  const _ProfileTopBar({required this.onBack, required this.onNotifications});
+
+  final VoidCallback onBack;
+  final VoidCallback onNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          const WorkstationPortalLink(),
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 16,
+            child: VerticalDivider(width: 1, color: scheme.outlineVariant),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'OMNINEST / ${l10n.profileBreadcrumbTitle}',
+            style: TextStyle(
+              fontFamily: AppTypography.monoFamily,
+              fontFamilyFallback: AppTypography.monoFamilyFallback,
+              fontSize: AppTypography.labelSmall,
+              letterSpacing: 1.2,
+              color: scheme.onSurfaceVariant,
             ),
           ),
+          const Spacer(),
+          NotificationIcon(onPressed: onNotifications),
+          const SizedBox(width: 8),
+          const UserAvatarMenu(),
         ],
       ),
     );
@@ -182,14 +220,109 @@ class _ProfileNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final colors = context.globalColors;
     return Column(
       children: [
+        _NavigationUserCard(
+          displayName: displayName,
+          username: username,
+          role: role,
+          avatarUrl: avatarUrl,
+        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _NavigationAvatar(displayName: displayName, avatarUrl: avatarUrl),
+              _NavigationItem(
+                icon: Icons.person_outline_rounded,
+                label: l10n.profileSectionAccount,
+                selected: selectedSection == ProfileSection.account,
+                onTap: () => onSectionSelected(ProfileSection.account),
+              ),
+              const SizedBox(height: 2),
+              _NavigationItem(
+                icon: Icons.palette_outlined,
+                label: l10n.profileSectionAppearance,
+                selected: selectedSection == ProfileSection.appearance,
+                onTap: () => onSectionSelected(ProfileSection.appearance),
+              ),
+              const SizedBox(height: 2),
+              _NavigationItem(
+                icon: Icons.notifications_outlined,
+                label: l10n.profileSectionNotifications,
+                selected: selectedSection == ProfileSection.notifications,
+                onTap: () => onSectionSelected(ProfileSection.notifications),
+              ),
+              const SizedBox(height: 2),
+              _NavigationItem(
+                icon: Icons.security_outlined,
+                label: l10n.profileSectionSecurity,
+                selected: selectedSection == ProfileSection.security,
+                onTap: () => onSectionSelected(ProfileSection.security),
+              ),
+              if (!isWebPlatform) ...[
+                const SizedBox(height: 2),
+                _NavigationItem(
+                  icon: Icons.dns_outlined,
+                  label: l10n.profileSectionServer,
+                  selected: selectedSection == ProfileSection.server,
+                  onTap: () => onSectionSelected(ProfileSection.server),
+                ),
+              ],
+              const SizedBox(height: 2),
+              _NavigationItem(
+                icon: Icons.info_outline_rounded,
+                label: l10n.profileSectionAbout,
+                selected: selectedSection == ProfileSection.about,
+                onTap: () => onSectionSelected(ProfileSection.about),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: _SignOutButton(onSignOut: onSignOut),
+        ),
+      ],
+    );
+  }
+}
+
+/// 侧栏顶部用户卡：方形头像 + 名称 + @用户名 + 角色码徽章。
+class _NavigationUserCard extends StatelessWidget {
+  const _NavigationUserCard({
+    required this.displayName,
+    required this.username,
+    required this.role,
+    required this.avatarUrl,
+  });
+
+  final String displayName;
+  final String username;
+  final String role;
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _SquareAvatar(
+                displayName: displayName,
+                avatarUrl: avatarUrl,
+                size: 44,
+                fontSize: AppTypography.labelLarge,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -200,8 +333,9 @@ class _ProfileNavigation extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: colors.onSurface,
-                        fontWeight: FontWeight.w700,
+                        fontSize: AppTypography.bodyMedium,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -210,8 +344,10 @@ class _ProfileNavigation extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontSize: AppTypography.bodySmall,
+                        fontFamily: AppTypography.monoFamily,
+                        fontFamilyFallback: AppTypography.monoFamilyFallback,
+                        fontSize: AppTypography.labelSmall,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -219,131 +355,85 @@ class _ProfileNavigation extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        Divider(height: 1, color: colors.outlineVariant),
-        const SizedBox(height: 10),
-        _NavigationItem(
-          icon: Icons.person_outline_rounded,
-          label: l10n.profileSectionAccount,
-          selected: selectedSection == ProfileSection.account,
-          onTap: () => onSectionSelected(ProfileSection.account),
-        ),
-        _NavigationItem(
-          icon: Icons.palette_outlined,
-          label: l10n.profileSectionAppearance,
-          selected: selectedSection == ProfileSection.appearance,
-          onTap: () => onSectionSelected(ProfileSection.appearance),
-        ),
-        _NavigationItem(
-          icon: Icons.notifications_outlined,
-          label: l10n.profileSectionNotifications,
-          selected: selectedSection == ProfileSection.notifications,
-          onTap: () => onSectionSelected(ProfileSection.notifications),
-        ),
-        _NavigationItem(
-          icon: Icons.security_outlined,
-          label: l10n.profileSectionSecurity,
-          selected: selectedSection == ProfileSection.security,
-          onTap: () => onSectionSelected(ProfileSection.security),
-        ),
-        if (!isWebPlatform)
-          _NavigationItem(
-            icon: Icons.dns_outlined,
-            label: l10n.profileSectionServer,
-            selected: selectedSection == ProfileSection.server,
-            onTap: () => onSectionSelected(ProfileSection.server),
-          ),
-        _NavigationItem(
-          icon: Icons.info_outline_rounded,
-          label: l10n.profileSectionAbout,
-          selected: selectedSection == ProfileSection.about,
-          onTap: () => onSectionSelected(ProfileSection.about),
-        ),
-        const Spacer(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  _roleLabel(l10n),
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border.all(color: scheme.outlineVariant),
+              color: scheme.surfaceContainer,
+            ),
+            child: Text(
+              '[${role.toUpperCase()}]',
+              style: TextStyle(
+                fontFamily: AppTypography.monoFamily,
+                fontFamilyFallback: AppTypography.monoFamilyFallback,
+                fontSize: AppTypography.labelMicro,
+                letterSpacing: 1.2,
+                color: scheme.onSurfaceVariant,
               ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: Icon(Icons.logout_rounded, color: colors.error),
-                title: Text(
-                  l10n.coreSignOut,
-                  style: TextStyle(color: colors.error),
-                ),
-                minTileHeight: 44,
-                onTap: onSignOut,
-              ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
-  }
-
-  String _roleLabel(AppLocalizations l10n) {
-    return switch (role) {
-      'SUPER_ADMIN' => l10n.profileRoleSuperAdmin,
-      'ADMIN' => l10n.profileRoleAdmin,
-      _ => l10n.profileRoleMember,
-    };
   }
 }
 
-class _NavigationAvatar extends StatelessWidget {
-  const _NavigationAvatar({required this.displayName, required this.avatarUrl});
+/// 方形直角头像：有上传头像时铺图，否则回退等宽首字母。
+class _SquareAvatar extends StatelessWidget {
+  const _SquareAvatar({
+    required this.displayName,
+    required this.avatarUrl,
+    required this.size,
+    required this.fontSize,
+  });
 
   final String displayName;
   final String? avatarUrl;
+  final double size;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.globalColors;
+    final scheme = Theme.of(context).colorScheme;
     final initial = displayName.isEmpty ? '?' : displayName.characters.first;
     return Container(
-      width: 42,
-      height: 42,
+      width: size,
+      height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: colors.primaryContainer,
+        color: scheme.surfaceContainerHigh,
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child:
           avatarUrl?.isNotEmpty == true
               ? Image.network(
                 avatarUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _initial(initial, colors),
+                errorBuilder: (_, _, _) => _initial(initial, scheme),
               )
-              : _initial(initial, colors),
+              : _initial(initial, scheme),
     );
   }
 
-  Widget _initial(String initial, GlobalThemeColors colors) {
+  Widget _initial(String initial, ColorScheme scheme) {
     return Center(
       child: Text(
-        initial,
+        initial.toUpperCase(),
         style: TextStyle(
-          color: colors.onPrimaryContainer,
+          fontFamily: AppTypography.monoFamily,
+          fontFamilyFallback: AppTypography.monoFamilyFallback,
+          fontSize: fontSize,
           fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
         ),
       ),
     );
   }
 }
 
-class _NavigationItem extends StatelessWidget {
+/// 侧栏导航项：激活 = 容器底 + 细线边框，未激活纯靠变色，无伪线段。
+class _NavigationItem extends StatefulWidget {
   const _NavigationItem({
     required this.icon,
     required this.label,
@@ -357,17 +447,124 @@ class _NavigationItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavigationItem> createState() => _NavigationItemState();
+}
+
+class _NavigationItemState extends State<_NavigationItem> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
-    final colors = context.globalColors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: ListTile(
-        selected: selected,
-        leading: Icon(icon, size: 20),
-        title: Text(label),
-        minTileHeight: 44,
-        onTap: onTap,
-        selectedTileColor: colors.selectedOverlay,
+    final scheme = Theme.of(context).colorScheme;
+    final selected = widget.selected;
+    final foreground =
+        selected || _hovering ? scheme.onSurface : scheme.onSurfaceVariant;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? scheme.surfaceContainerHigh
+                    : _hovering
+                    ? scheme.surfaceContainerLow
+                    : Colors.transparent,
+            border: Border.all(
+              color: selected ? scheme.outlineVariant : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon, size: 16, color: foreground),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.labelMedium,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 侧栏底部退出登录：整宽直角按钮，绯红描边语义。
+class _SignOutButton extends StatefulWidget {
+  const _SignOutButton({required this.onSignOut});
+
+  final VoidCallback onSignOut;
+
+  @override
+  State<_SignOutButton> createState() => _SignOutButtonState();
+}
+
+class _SignOutButtonState extends State<_SignOutButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onSignOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color:
+                _hovering
+                    ? scheme.error.withValues(alpha: 0.08)
+                    : Colors.transparent,
+            border: Border.all(
+              color:
+                  _hovering
+                      ? scheme.error.withValues(alpha: 0.55)
+                      : scheme.outlineVariant,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.logout_rounded,
+                size: 14,
+                color: _hovering ? scheme.error : scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                l10n.coreSignOut,
+                style: TextStyle(
+                  fontSize: AppTypography.labelMedium,
+                  fontWeight: FontWeight.w500,
+                  color: _hovering ? scheme.error : scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

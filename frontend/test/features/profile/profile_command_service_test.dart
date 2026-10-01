@@ -21,11 +21,17 @@ void main() {
       oldPassword: 'current-password',
       newPassword: 'new-password',
     );
+    await service.updateProfile(
+      displayName: 'New Name',
+      email: 'new@example.com',
+    );
     await service.revokeSession('session-1');
 
     expect(repository.uploadedFileName, 'avatar.png');
     expect(repository.oldPassword, 'current-password');
     expect(repository.newPassword, 'new-password');
+    expect(repository.updatedDisplayName, 'New Name');
+    expect(repository.updatedEmail, 'new@example.com');
     expect(repository.revokedSessionId, 'session-1');
   });
 
@@ -55,6 +61,10 @@ void main() {
     expect(repository.oldPassword, 'current-password');
     expect(find.textContaining('修改失败'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    // 失败反馈走 toast（自带 2 秒自动关闭计时器），断言完成后在虚拟
+    // 时间轴上排干该计时器，避免测试结束时的 pending timer 断言。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 }
 
@@ -65,6 +75,8 @@ class _FakeProfileRepository implements ProfileRepository {
   String? uploadedFileName;
   String? oldPassword;
   String? newPassword;
+  String? updatedDisplayName;
+  String? updatedEmail;
   String? revokedSessionId;
 
   @override
@@ -83,6 +95,12 @@ class _FakeProfileRepository implements ProfileRepository {
     if (changePasswordFails) {
       throw Exception('change-password-failed');
     }
+  }
+
+  @override
+  Future<void> updateProfile({String? displayName, String? email}) async {
+    updatedDisplayName = displayName;
+    updatedEmail = email;
   }
 
   @override

@@ -51,12 +51,76 @@ void main() {
     expect(adapter.lastPath, '/me/2fa/disable');
     expect(adapter.lastData, {'password': 'correct-password'});
   });
+
+  test('更新资料走 PATCH /me 并仅携带提供的字段', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    await api.updateMe(displayName: 'New Name');
+
+    expect(adapter.lastMethod, 'PATCH');
+    expect(adapter.lastPath, '/me');
+    expect(adapter.lastData, {'displayName': 'New Name'});
+  });
+
+  test('会话列表解析 current 标记', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    adapter.nextBody = {
+      'code': 200,
+      'message': 'success',
+      'data': [
+        {
+          'id': 'session-current',
+          'clientPlatform': 'web',
+          'ipAddress': '192.168.1.108',
+          'issuedAt': '2026-09-28T09:00:00Z',
+          'expiresAt': '2026-10-28T09:00:00Z',
+          'lastActiveAt': '2026-09-28T09:30:00Z',
+          'createdAt': '2026-09-28T09:00:00Z',
+          'current': true,
+        },
+        {
+          'id': 'session-other',
+          'clientPlatform': 'android',
+          'ipAddress': '192.168.1.142',
+          'issuedAt': '2026-09-27T09:00:00Z',
+          'expiresAt': '2026-10-27T09:00:00Z',
+          'lastActiveAt': '2026-09-28T07:30:00Z',
+          'createdAt': '2026-09-27T09:00:00Z',
+        },
+      ],
+    };
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    final sessions = await api.getSessions();
+
+    expect(sessions, hasLength(2));
+    expect(sessions.first.current, isTrue);
+    expect(sessions.last.current, isFalse);
+  });
 }
 
 class _CapturingHttpClientAdapter implements HttpClientAdapter {
   String? lastMethod;
   String? lastPath;
   Object? lastData;
+  Object? nextBody;
 
   @override
   Future<ResponseBody> fetch(
@@ -67,8 +131,9 @@ class _CapturingHttpClientAdapter implements HttpClientAdapter {
     lastMethod = options.method;
     lastPath = options.path;
     lastData = options.data;
+    final body = nextBody ?? {'code': 200, 'message': 'success', 'data': null};
     return ResponseBody.fromString(
-      jsonEncode({'code': 200, 'message': 'success', 'data': null}),
+      jsonEncode(body),
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],

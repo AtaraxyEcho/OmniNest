@@ -4,6 +4,7 @@ import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.event.MediaAutoImportRequestedEvent;
+import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.StaleTaskRecovery;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -29,6 +30,7 @@ public class MediaAutoImportRetryService {
 
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final NotificationPublisher notificationPublisher;
 
     /**
      * 持久化失败状态并创建延迟 outbox。
@@ -42,6 +44,19 @@ public class MediaAutoImportRetryService {
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {
             taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception));
+            FileUploadedEvent failedFile = event.file();
+            notificationPublisher.notifyOrLog(
+                    failedFile.ownerUserId(),
+                    "MEDIA_AUTO_IMPORT_FAILED",
+                    null,
+                    null,
+                    Map.of(
+                            "taskId", event.taskId().toString(),
+                            "fileNodeId", failedFile.fileNodeId().toString(),
+                            "fileName", failedFile.fileName(),
+                            "errorSummary", errorSummary
+                    )
+            );
             log.error("媒体自动导入任务进入死信终态: taskId={}, retryCount={}, errorType={}",
                     event.taskId(), currentRetries, errorSummary);
             return;
@@ -76,7 +91,21 @@ public class MediaAutoImportRetryService {
                 Instant.now(),
                 "WORKER_HEARTBEAT_TIMEOUT"
         );
-        if (!recovery.recovered() || recovery.deadLetter()) {
+        if (!recovery.recovered()) {
+            return;
+        }
+        if (recovery.deadLetter()) {
+            notificationPublisher.notifyOrLog(
+                    recovery.ownerUserId(),
+                    "MEDIA_AUTO_IMPORT_FAILED",
+                    null,
+                    null,
+                    Map.of(
+                            "taskId", taskId.toString(),
+                            "fileName", String.valueOf(payload.get("fileName")),
+                            "errorCode", "WORKER_HEARTBEAT_TIMEOUT"
+                    )
+            );
             return;
         }
         FileUploadedEvent file = new FileUploadedEvent(

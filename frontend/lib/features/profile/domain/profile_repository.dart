@@ -11,6 +11,8 @@ abstract interface class ProfileRepository {
     required String newPassword,
   });
 
+  Future<void> updateProfile({String? displayName, String? email});
+
   Future<List<UserSession>> getSessions();
 
   Future<void> revokeSession(String sessionId);

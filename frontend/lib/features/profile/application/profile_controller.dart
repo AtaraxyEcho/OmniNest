@@ -39,6 +39,10 @@ class ProfileCommandService {
     );
   }
 
+  Future<void> updateProfile({String? displayName, String? email}) {
+    return _repository.updateProfile(displayName: displayName, email: email);
+  }
+
   Future<void> revokeSession(String sessionId) {
     return _repository.revokeSession(sessionId);
   }

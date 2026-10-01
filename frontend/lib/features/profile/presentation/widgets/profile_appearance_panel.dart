@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
-import 'package:omninest/core/widgets/workbench_panel.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
 
 class ProfileAppearancePanel extends StatelessWidget {
@@ -36,18 +36,16 @@ class ProfileAppearancePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return WorkbenchPanel(
-      padding: const EdgeInsets.all(24),
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            l10n.profileSectionAppearance,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 22),
           _ResponsivePreferenceRow(
             icon: Icons.contrast_rounded,
             title: l10n.settingsAppearance,
@@ -75,7 +73,7 @@ class ProfileAppearancePanel extends StatelessWidget {
                   (selection) => onThemeChanged(selection.first),
             ),
           ),
-          const Divider(height: 32),
+          Divider(height: 28, thickness: 1, color: scheme.outlineVariant),
           _ResponsivePreferenceRow(
             icon: Icons.format_size_rounded,
             title: l10n.fontScaleTitle,
@@ -108,7 +106,7 @@ class ProfileAppearancePanel extends StatelessWidget {
                   (selection) => onFontScaleChanged(selection.first),
             ),
           ),
-          const Divider(height: 32),
+          Divider(height: 28, thickness: 1, color: scheme.outlineVariant),
           _ResponsivePreferenceRow(
             icon: Icons.language_rounded,
             title: l10n.settingsLanguage,
@@ -129,7 +127,7 @@ class ProfileAppearancePanel extends StatelessWidget {
                   (selection) => onLanguageChanged(selection.first),
             ),
           ),
-          const Divider(height: 32),
+          Divider(height: 28, thickness: 1, color: scheme.outlineVariant),
           if (onCloseBehaviorChanged != null) ...[
             _ResponsivePreferenceRow(
               icon: Icons.exit_to_app_rounded,
@@ -155,20 +153,15 @@ class ProfileAppearancePanel extends StatelessWidget {
                     (selection) => onCloseBehaviorChanged!(selection.first),
               ),
             ),
-            const Divider(height: 32),
+            Divider(height: 28, thickness: 1, color: scheme.outlineVariant),
           ],
-          Material(
-            type: MaterialType.transparency,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.wallpaper_rounded),
-              title: Text(l10n.portalLocalBackdropTitle),
-              subtitle: Text(l10n.portalLocalBackdropSubtitle),
-              trailing: OutlinedButton.icon(
-                onPressed: onBackdropSettings,
-                icon: const Icon(Icons.tune_rounded, size: 18),
-                label: Text(l10n.profileManageBackdrop),
-              ),
+          _ResponsivePreferenceRow(
+            icon: Icons.wallpaper_outlined,
+            title: l10n.portalLocalBackdropTitle,
+            control: WorkstationActionButton(
+              label: l10n.profileManageBackdrop,
+              icon: Icons.tune_outlined,
+              onPressed: onBackdropSettings,
             ),
           ),
         ],
@@ -190,16 +183,23 @@ class _ResponsivePreferenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.globalColors;
+    final scheme = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 690;
         final label = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: colors.onSurfaceVariant),
-            const SizedBox(width: 12),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                fontWeight: FontWeight.w500,
+                color: scheme.onSurface,
+              ),
+            ),
           ],
         );
         if (compact) {

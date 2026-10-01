@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -92,44 +93,20 @@ class AppBackdropControls extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
+              _BackdropToggleRow(
                 value: settings.enabled,
                 onChanged:
                     state.selectedBackdrop == null ? null : notifier.setEnabled,
-                title: Text(
-                  l10n.portalLocalBackdropEnable,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: Text(
-                  l10n.portalLocalBackdropEnableHint,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
+                title: l10n.portalLocalBackdropEnable,
+                subtitle: l10n.portalLocalBackdropEnableHint,
+                palette: palette,
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
+              _BackdropToggleRow(
                 value: settings.separateDeviceBackdrops,
                 onChanged: notifier.setDeviceSeparation,
-                title: Text(
-                  l10n.portalLocalBackdropSeparateDevices,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: Text(
-                  l10n.portalLocalBackdropSeparateDevicesHint,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
+                title: l10n.portalLocalBackdropSeparateDevices,
+                subtitle: l10n.portalLocalBackdropSeparateDevicesHint,
+                palette: palette,
               ),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
@@ -248,17 +225,11 @@ class AppBackdropControls extends StatelessWidget {
                 if (state.selectedBackdrop?.isVideo == true)
                   const SizedBox(height: 8),
               ],
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
+              _BackdropToggleRow(
                 value: settings.videoMuted,
                 onChanged: notifier.setVideoMuted,
-                title: Text(
-                  l10n.portalLocalBackdropVideoMuted,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                title: l10n.portalLocalBackdropVideoMuted,
+                palette: palette,
               ),
               if (state.selectedBackdrop?.isVideo == true) ...[
                 const SizedBox(height: 8),
@@ -331,6 +302,74 @@ class _BackdropTargetNotice extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 背景设置面板的方形开关行：文案取面板色板，开关几何与
+/// WorkstationSwitch 对齐，整行可点按（替代 M3 胶囊 SwitchListTile）。
+class _BackdropToggleRow extends StatelessWidget {
+  const _BackdropToggleRow({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+    required this.palette,
+    this.subtitle,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final String title;
+  final String? subtitle;
+  final AppBackdropPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final interactive = onChanged != null;
+    return MouseRegion(
+      cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: interactive ? () => onChanged!(!value) : null,
+        child: Opacity(
+          opacity: interactive ? 1 : 0.45,
+          child: Padding(
+            // 测试与调用方定位开关行的稳定锚点。
+            key: ValueKey<String>('backdrop-toggle-$title'),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: palette.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            color: palette.muted,
+                            fontSize: AppTypography.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                WorkstationSwitch(value: value, onChanged: onChanged),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

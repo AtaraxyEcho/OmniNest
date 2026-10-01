@@ -29,6 +29,22 @@ void main() {
       throwsA(isA<AppException>()),
     );
   });
+
+  test('未读筛选仅在显式开启时携带 unreadOnly 参数', () async {
+    final adapter = _NotificationAdapter(
+      responseBody: {
+        'code': 200,
+        'message': 'success',
+        'data': {'items': <Map<String, dynamic>>[], 'totalElements': 0},
+      },
+    );
+
+    await NotificationApi(_apiClient(adapter)).list(unreadOnly: true);
+    expect(adapter.lastQuery?['unreadOnly'], isTrue);
+
+    await NotificationApi(_apiClient(adapter)).list();
+    expect(adapter.lastQuery?.containsKey('unreadOnly'), isFalse);
+  });
 }
 
 ApiClient _apiClient(HttpClientAdapter adapter) {
@@ -51,6 +67,7 @@ class _NotificationAdapter implements HttpClientAdapter {
   final Map<String, dynamic> responseBody;
   String? lastMethod;
   String? lastPath;
+  Map<String, dynamic>? lastQuery;
 
   @override
   Future<ResponseBody> fetch(
@@ -60,6 +77,7 @@ class _NotificationAdapter implements HttpClientAdapter {
   ) async {
     lastMethod = options.method;
     lastPath = options.path;
+    lastQuery = options.queryParameters.cast<String, dynamic>();
     return ResponseBody.fromString(
       jsonEncode(responseBody),
       statusCode,

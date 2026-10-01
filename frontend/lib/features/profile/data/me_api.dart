@@ -36,6 +36,17 @@ class MeApi {
     );
   }
 
+  /// 更新当前用户基础资料（显示昵称 / 邮箱）；未提供的字段不变。
+  Future<void> updateMe({String? displayName, String? email}) async {
+    await _client.dio.patch<Map<String, dynamic>>(
+      '/me',
+      data: {
+        if (displayName != null) 'displayName': displayName,
+        if (email != null) 'email': email,
+      },
+    );
+  }
+
   /// 查询两步验证状态（是否已开启、策略是否强制当前角色）。
   Future<TwoFactorStatusData> twoFactorStatus() async {
     return TwoFactorStatusData.fromJson(await _getData('/me/2fa/status'));

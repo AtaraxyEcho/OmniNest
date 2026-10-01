@@ -12,10 +12,15 @@ class NotificationApi {
   Future<({List<NotificationDto> items, int total})> list({
     int page = 0,
     int size = 20,
+    bool unreadOnly = false,
   }) async {
     final response = await _client.dio.get<Map<String, dynamic>>(
       '/notifications',
-      queryParameters: {'page': page, 'size': size},
+      queryParameters: {
+        'page': page,
+        'size': size,
+        if (unreadOnly) 'unreadOnly': true,
+      },
     );
     final data = response.data;
     if (data == null) return (items: <NotificationDto>[], total: 0);

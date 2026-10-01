@@ -9,6 +9,7 @@ import com.omninest.modules.file.event.MediaAutoImportRequestedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.service.MediaImportHandler;
 import com.omninest.modules.media.service.MediaImportResult;
+import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +32,7 @@ public class MediaAutoImportExecutionService {
     private final List<MediaImportHandler> handlers;
     private final TaskRecordService taskRecordService;
     private final FileLifecycleGuard fileLifecycleGuard;
+    private final NotificationPublisher notificationPublisher;
 
     /**
      * 执行媒体自动导入任务。
@@ -84,6 +86,18 @@ public class MediaAutoImportExecutionService {
 
         fileLifecycleGuard.requireOwnedWritable(file.ownerUserId(), file.fileNodeId());
         taskRecordService.markCompleted(event.taskId(), resultPayload(outcomes));
+        // 通知文案由前端按类型与 metadata 本地化，后端只落语义载荷。
+        notificationPublisher.notifyOrLog(
+                file.ownerUserId(),
+                "MEDIA_AUTO_IMPORT_COMPLETED",
+                null,
+                null,
+                Map.of(
+                        "taskId", event.taskId().toString(),
+                        "fileNodeId", file.fileNodeId().toString(),
+                        "fileName", file.fileName()
+                )
+        );
         log.info("媒体自动导入任务完成: taskId={}, fileNodeId={}, handlerCount={}",
                 event.taskId(), file.fileNodeId(), handlers.size());
     }

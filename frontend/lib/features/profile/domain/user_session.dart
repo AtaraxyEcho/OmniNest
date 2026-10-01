@@ -10,6 +10,7 @@ class UserSession {
     required this.createdAt,
     this.deviceId,
     this.deviceName,
+    this.current = false,
   });
 
   factory UserSession.fromJson(Map<String, dynamic> json) {
@@ -23,6 +24,7 @@ class UserSession {
       expiresAt: json['expiresAt']?.toString() ?? '',
       lastActiveAt: json['lastActiveAt']?.toString() ?? '',
       createdAt: json['createdAt']?.toString() ?? '',
+      current: json['current'] as bool? ?? false,
     );
   }
 
@@ -35,6 +37,9 @@ class UserSession {
   final String expiresAt;
   final String lastActiveAt;
   final String createdAt;
+
+  /// 是否为发起本次请求的会话（后端按访问令牌 sid 标记）。
+  final bool current;
 
   /// 获取设备显示名称，优先使用 deviceName，回退到 clientPlatform。
   String get effectiveDeviceName =>

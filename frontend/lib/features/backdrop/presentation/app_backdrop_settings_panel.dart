@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.dart';
@@ -23,7 +24,7 @@ const _allBackdropFilter = 'all';
 /// 深色写死面板 + 主题前景色混用导致的对比度问题。
 Future<void> showAppBackdropSettings(BuildContext context) {
   final palette = AppBackdropPalette.fromScheme(Theme.of(context).colorScheme);
-  return showDialog(
+  return showWorkstationDialog(
     context: context,
     barrierColor: Colors.black54,
     builder: (_) => _AppBackdropSettingsDialog(palette: palette),
@@ -479,7 +480,7 @@ class _AppBackdropSettingsContentState
     BuildContext context,
     AppLocalizations l10n,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
       barrierColor: Colors.black54,
       builder:
@@ -688,7 +689,7 @@ class _BackdropTile extends StatelessWidget {
     if (remove == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
       barrierColor: Colors.black54,
       builder:

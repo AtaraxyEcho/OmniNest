@@ -27,6 +27,11 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 
   @override
+  Future<void> updateProfile({String? displayName, String? email}) {
+    return _api.updateMe(displayName: displayName, email: email);
+  }
+
+  @override
   Future<List<UserSession>> getSessions() {
     return _api.getSessions();
   }

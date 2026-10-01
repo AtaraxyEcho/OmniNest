@@ -357,10 +357,7 @@ class ProfileMobileContent extends ConsumerWidget {
   }
 
   Future<void> _showChangePassword(BuildContext context) {
-    return showDialog(
-      context: context,
-      builder: (_) => const ChangePasswordDialog(),
-    );
+    return ChangePasswordDialog.show(context);
   }
 
   Future<void> _showSessions(BuildContext context) {

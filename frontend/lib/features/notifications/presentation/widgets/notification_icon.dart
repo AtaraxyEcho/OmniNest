@@ -8,10 +8,18 @@ import 'package:omninest/features/notifications/application/notification_control
 
 /// 通知入口与未读数量。任务队列不在普通用户视野内，由管理端按归属人处理。
 class NotificationIcon extends ConsumerWidget {
-  const NotificationIcon({super.key, this.size = 20, this.color});
+  const NotificationIcon({
+    super.key,
+    this.size = 20,
+    this.color,
+    this.onPressed,
+  });
 
   final double size;
   final Color? color;
+
+  /// 点击回调；缺省时推入通知中心路由。
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,7 +28,7 @@ class NotificationIcon extends ConsumerWidget {
     return HoverScale(
       child: IconButton(
         tooltip: AppLocalizations.of(context).notificationTitle,
-        onPressed: () => context.push('/notifications'),
+        onPressed: onPressed ?? () => context.push('/notifications'),
         // 悬停反馈统一由 HoverScale 缩放承担，屏蔽默认置色蒙层。
         hoverColor: Colors.transparent,
         icon: Badge(

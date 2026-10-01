@@ -3,101 +3,124 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_models.dart';
-import 'package:omninest/core/widgets/workbench_panel.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 final profileTwoFactorStatusProvider =
     FutureProvider.autoDispose<TwoFactorStatusData>(
       (ref) => ref.watch(meApiProvider).twoFactorStatus(),
     );
 
-/// 个人资料安全分区的两步验证管理卡：状态展示、自助开启向导、密码复核关闭。
+/// 个人资料安全分区的两步验证管理行：状态展示、自助开启向导、密码复核关闭。
 class ProfileTwoFactorCard extends ConsumerWidget {
   const ProfileTwoFactorCard({this.framed = true, super.key});
 
-  /// 桌面分区内自带头面板；移动端底部弹层由宿主提供表面，去掉重复描边。
+  /// 桌面分区内由凭证卡提供表面；移动端底部弹层补一层内边距。
   final bool framed;
 
-  Widget _panel({required EdgeInsets padding, required Widget child}) {
+  Widget _wrap({required Widget child}) {
     if (!framed) {
-      return Padding(padding: padding, child: child);
+      return Padding(padding: const EdgeInsets.all(12), child: child);
     }
-    return WorkbenchPanel(padding: padding, child: child);
+    return child;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final status = ref.watch(profileTwoFactorStatusProvider);
-    return status.when(
-      loading:
-          () => _panel(
-            padding: const EdgeInsets.all(12),
-            child: const LinearProgressIndicator(minHeight: 2),
-          ),
-      error:
-          (_, _) => _panel(
-            padding: const EdgeInsets.all(12),
-            child: ListTile(
-              leading: const Icon(Icons.error_outline_rounded),
-              title: Text(l10n.profileTwoFactorTitle),
-              subtitle: Text(l10n.profileTwoFactorLoadFailed),
-              trailing: IconButton(
-                tooltip: l10n.coreRetry,
-                onPressed: () => ref.invalidate(profileTwoFactorStatusProvider),
-                icon: const Icon(Icons.refresh_rounded),
-              ),
+    return _wrap(
+      child: status.when(
+        loading:
+            () => const SizedBox(
+              height: 44,
+              child: Center(child: LinearProgressIndicator(minHeight: 2)),
             ),
-          ),
-      data:
-          (value) => _panel(
-            padding: const EdgeInsets.all(12),
-            child: ListTile(
-              leading: Icon(
-                value.enabled
-                    ? Icons.verified_user_rounded
-                    : Icons.shield_outlined,
-                color:
-                    value.enabled
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-              ),
-              title: Text(l10n.profileTwoFactorTitle),
-              subtitle: Text(
-                value.enabled
-                    ? l10n.profileTwoFactorEnabled
-                    : (value.required
-                        ? l10n.profileTwoFactorRequiredBadge
-                        : l10n.profileTwoFactorDisabled),
-              ),
-              trailing:
-                  value.enabled
-                      ? OutlinedButton(
-                        onPressed: () => _showDisableDialog(context, ref),
-                        child: Text(l10n.profileTwoFactorDisableAction),
-                      )
-                      : FilledButton.tonal(
-                        onPressed: () => _showEnableDialog(context, ref),
-                        child: Text(l10n.profileTwoFactorEnableAction),
+        error:
+            (_, _) => Row(
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(l10n.profileTwoFactorLoadFailed)),
+                WorkstationIconButton(
+                  tooltip: l10n.coreRetry,
+                  icon: Icons.refresh_rounded,
+                  onPressed:
+                      () => ref.invalidate(profileTwoFactorStatusProvider),
+                ),
+              ],
+            ),
+        data: (value) {
+          final subtitle =
+              value.enabled
+                  ? l10n.profileTwoFactorEnabled
+                  : (value.required
+                      ? l10n.profileTwoFactorRequiredBadge
+                      : l10n.profileTwoFactorDisabled);
+          return Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.profileTwoFactorTitle,
+                      style: TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onSurface,
                       ),
-            ),
-          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: AppTypography.labelSmall,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              WorkstationActionButton(
+                label:
+                    value.enabled
+                        ? l10n.profileTwoFactorManageAction
+                        : l10n.profileTwoFactorEnableAction,
+                onPressed:
+                    value.enabled
+                        ? () => _showDisableDialog(context, ref)
+                        : () => _showEnableDialog(context, ref),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
   Future<void> _showEnableDialog(BuildContext context, WidgetRef ref) {
-    return showDialog<void>(
+    return showWorkstationDialog<void>(
       context: context,
-      barrierDismissible: false,
+      dismissible: false,
       builder: (_) => const _TwoFactorEnableDialog(),
     );
   }
 
   Future<void> _showDisableDialog(BuildContext context, WidgetRef ref) {
-    return showDialog<void>(
+    return showWorkstationDialog<void>(
       context: context,
       builder: (_) => const _TwoFactorDisableDialog(),
     );
@@ -333,12 +356,10 @@ class _TwoFactorEnableDialogState
   Future<void> _copy(String value, AppLocalizations l10n) async {
     final copied = await copyTextToClipboard(value);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }

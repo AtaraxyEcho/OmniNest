@@ -1,7 +1,9 @@
 package com.omninest.worker.media;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,9 +17,11 @@ import com.omninest.modules.file.event.MediaAutoImportRequestedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.service.MediaImportHandler;
 import com.omninest.modules.media.service.MediaImportResult;
+import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -31,10 +35,12 @@ class MediaAutoImportExecutionServiceTest {
     private final MediaImportHandler skippedHandler = mock(MediaImportHandler.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
+    private final NotificationPublisher notificationPublisher = mock(NotificationPublisher.class);
     private final MediaAutoImportExecutionService service = new MediaAutoImportExecutionService(
             List.of(supportedHandler, skippedHandler),
             taskRecordService,
-            fileLifecycleGuard
+            fileLifecycleGuard,
+            notificationPublisher
     );
 
     @Test
@@ -58,6 +64,18 @@ class MediaAutoImportExecutionServiceTest {
         verify(supportedHandler).importFile(event.file());
         verify(skippedHandler, never()).importFile(event.file());
         verify(taskRecordService).markCompleted(eq(event.taskId()), anyMap());
+        // 终态完成必须发站内通知；文案由前端本地化，后端只落语义载荷。
+        verify(notificationPublisher).notifyOrLog(
+                eq(event.file().ownerUserId()),
+                eq("MEDIA_AUTO_IMPORT_COMPLETED"),
+                isNull(),
+                isNull(),
+                eq(Map.of(
+                        "taskId", event.taskId().toString(),
+                        "fileNodeId", event.file().fileNodeId().toString(),
+                        "fileName", "example.jpg"
+                ))
+        );
     }
 
     @Test
@@ -77,6 +95,14 @@ class MediaAutoImportExecutionServiceTest {
 
         verify(taskRecordService).updateResult(eq(event.taskId()), anyMap());
         verify(taskRecordService, never()).markCompleted(eq(event.taskId()), anyMap());
+        // 非终态失败不发通知，由重试服务在死信终态统一通知。
+        verify(notificationPublisher, never()).notifyOrLog(
+                any(),
+                any(),
+                any(),
+                any(),
+                anyMap()
+        );
     }
 
     private FileDescriptor descriptor(SpaceType spaceType) {

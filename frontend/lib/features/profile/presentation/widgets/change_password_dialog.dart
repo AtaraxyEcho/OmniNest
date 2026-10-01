@@ -2,14 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
-/// 修改密码对话框。
+/// 修改密码工位窗口：直角表单 + 焦点陷阱，成功/失败经 OmniFeedback 反馈。
 class ChangePasswordDialog extends ConsumerStatefulWidget {
   const ChangePasswordDialog({super.key});
+
+  /// 工位弹窗入口：Esc 退栈 / 焦点陷阱 / 焦点还原由统一壳承担。
+  static Future<void> show(BuildContext context) {
+    return showWorkstationDialog<void>(
+      context: context,
+      builder: (_) => const ChangePasswordDialog(),
+    );
+  }
 
   @override
   ConsumerState<ChangePasswordDialog> createState() =>
@@ -37,30 +47,19 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final colors = context.globalColors;
-    return AlertDialog(
-      // 横屏手机与最大字号档位下表单高度会超出对话框默认高度。
-      scrollable: true,
-      backgroundColor: colors.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
-        children: [
-          Icon(Icons.lock_outline_rounded, size: 20, color: colors.primary),
-          const SizedBox(width: 10),
-          Text(
-            l10n.profileChangePassword,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-      content: Form(
+    return WorkstationDialogFrame(
+      title: l10n.profileChangePassword,
+      headerLabel: 'PASSWORD',
+      body: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildField(
               controller: _oldController,
               label: l10n.changePasswordOldPassword,
+              prefixIcon: Icons.lock_outline_rounded,
               obscure: _obscureOld,
               onToggle: () => setState(() => _obscureOld = !_obscureOld),
             ),
@@ -68,6 +67,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
             _buildField(
               controller: _newController,
               label: l10n.changePasswordNewPassword,
+              prefixIcon: Icons.vpn_key_outlined,
               obscure: _obscureNew,
               onToggle: () => setState(() => _obscureNew = !_obscureNew),
               validator: (v) {
@@ -81,6 +81,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
             _buildField(
               controller: _confirmController,
               label: l10n.changePasswordConfirmNew,
+              prefixIcon: Icons.vpn_key_outlined,
               obscure: _obscureConfirm,
               onToggle:
                   () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -103,9 +104,8 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
           onPressed: _loading ? null : _submit,
           child:
               _loading
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
+                  ? const SizedBox.square(
+                    dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                   : Text(l10n.changePasswordConfirm),
@@ -117,43 +117,55 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
   Widget _buildField({
     required TextEditingController controller,
     required String label,
+    required IconData prefixIcon,
     required bool obscure,
     required VoidCallback onToggle,
     String? Function(String?)? validator,
   }) {
     final l10n = AppLocalizations.of(context);
-    return TextFormField(
-      controller: controller,
-      obscureText: obscure,
-      validator:
-          validator ??
-          (v) {
-            if (v == null || v.isEmpty) {
-              return l10n.changePasswordEnterField(label);
-            }
-            return null;
-          },
-      style: const TextStyle(fontSize: AppTypography.bodyLarge),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontSize: AppTypography.bodyMedium),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        suffixIcon: IconButton(
-          tooltip:
-              obscure
-                  ? AppLocalizations.of(context).coreShowPassword
-                  : AppLocalizations.of(context).coreHidePassword,
-          icon: Icon(
-            obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            size: 18,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: AppTypography.monoFamily,
+            fontFamilyFallback: AppTypography.monoFamilyFallback,
+            fontSize: AppTypography.labelSmall,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          onPressed: onToggle,
         ),
-      ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          obscureText: obscure,
+          validator:
+              validator ??
+              (v) {
+                if (v == null || v.isEmpty) {
+                  return l10n.changePasswordEnterField(label);
+                }
+                return null;
+              },
+          style: const TextStyle(fontSize: AppTypography.bodyMedium),
+          decoration: workstationInputDecoration(
+            context,
+            prefixIcon: prefixIcon,
+          ).copyWith(
+            suffixIcon: IconButton(
+              tooltip: obscure ? l10n.coreShowPassword : l10n.coreHidePassword,
+              icon: Icon(
+                obscure
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 16,
+              ),
+              onPressed: onToggle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -170,9 +182,11 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
           );
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(
+        showOmniFeedback(
           context,
-        ).showSnackBar(SnackBar(content: Text(l10n.changePasswordSuccess)));
+          l10n.changePasswordSuccess,
+          severity: OmniFeedbackSeverity.success,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -181,9 +195,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
             code == AppErrorCodes.oldPasswordInvalid
                 ? l10n.changePasswordWrongOld
                 : l10n.changePasswordFailed;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        showOmniFeedback(context, message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);

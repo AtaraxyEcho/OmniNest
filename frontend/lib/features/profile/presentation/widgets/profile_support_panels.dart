@@ -4,11 +4,15 @@ import 'package:omninest/core/version/app_version_api.dart';
 import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
-import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_section_card.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
+/// 安全凭证卡内的密码管理行（容器由凭证卡提供）。
 class ProfileSecurityActionsPanel extends StatelessWidget {
   const ProfileSecurityActionsPanel({
     required this.onChangePassword,
@@ -20,15 +24,38 @@ class ProfileSecurityActionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return WorkbenchPanel(
-      padding: const EdgeInsets.all(12),
-      child: ListTile(
-        leading: const Icon(Icons.lock_outline_rounded),
-        title: Text(l10n.profileChangePassword),
-        subtitle: Text(l10n.profileChangePasswordSubtitle),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: onChangePassword,
-      ),
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.profilePasswordRowTitle,
+                style: TextStyle(
+                  fontSize: AppTypography.bodyMedium,
+                  fontWeight: FontWeight.w500,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                l10n.profileChangePasswordSubtitle,
+                style: TextStyle(
+                  fontSize: AppTypography.labelSmall,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        WorkstationActionButton(
+          label: l10n.profileChangePassword,
+          onPressed: onChangePassword,
+        ),
+      ],
     );
   }
 }
@@ -76,41 +103,46 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final info = _result;
-    return WorkbenchPanel(
-      padding: const EdgeInsets.all(28),
+    return ProfileSectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const BrandLogo(size: 40, radius: 10),
-          const SizedBox(height: 18),
-          Text(
-            'OmniNest',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              const BrandLogo(size: 36, radius: 0),
+              const SizedBox(width: 14),
+              Text(
+                'OmniNest',
+                style: TextStyle(
+                  fontSize: AppTypography.titleMedium,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             l10n.settingsAboutHint,
-            style: TextStyle(color: scheme.onSurfaceVariant),
+            style: TextStyle(
+              fontSize: AppTypography.bodySmall,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 20),
-          OutlinedButton.icon(
+          const SizedBox(height: 16),
+          WorkstationActionButton(
+            label: l10n.settingsCheckUpdate,
+            icon: Icons.system_update_outlined,
             onPressed: _checking ? null : _checkUpdate,
-            icon:
-                _checking
-                    ? const SizedBox.square(
-                      dimension: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.system_update_rounded, size: 18),
-            label: Text(l10n.settingsCheckUpdate),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(
               l10n.settingsCheckUpdateFailed(_error!),
-              style: TextStyle(color: scheme.error),
+              style: TextStyle(
+                fontSize: AppTypography.bodySmall,
+                color: scheme.error,
+              ),
             ),
           ],
           if (info != null) ...[
@@ -118,23 +150,28 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
             if (info.latestVersion == null)
               Text(
                 l10n.settingsAlreadyLatest,
-                style: TextStyle(color: scheme.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: AppTypography.bodySmall,
+                  color: scheme.onSurfaceVariant,
+                ),
               )
             else ...[
               Text(
                 l10n.settingsNewVersionFound(info.latestVersion!),
                 style: TextStyle(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w700,
+                  fontSize: AppTypography.bodySmall,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
                 ),
               ),
               if (info.downloadUrl != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: FilledButton.tonal(
+                  child: WorkstationActionButton(
+                    label: l10n.settingsOpenDownloadPage,
+                    variant: WorkstationActionButtonVariant.primary,
                     onPressed:
                         () => unawaited(_openDownloadPage(info.downloadUrl!)),
-                    child: Text(l10n.settingsOpenDownloadPage),
                   ),
                 ),
             ],
@@ -150,12 +187,9 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
       return;
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${AppLocalizations.of(context).settingsOpenDownloadPage}: $url',
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        '${AppLocalizations.of(context).settingsOpenDownloadPage}: $url',
       );
     }
   }

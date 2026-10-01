@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
-import 'package:omninest/core/widgets/workbench_panel.dart';
+import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_edit_dialog.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_section_card.dart';
 
+/// 账户基本信息卡：方形头像 + 只读资料网格 + mono 元信息行。
+///
+/// 编辑资料经 [ProfileEditDialog] 窗口承载（canEditProfile =
+/// profile:write 时展示入口），卡内字段一律只读展示。
 class ProfileAccountPanel extends StatelessWidget {
   const ProfileAccountPanel({
     required this.displayName,
@@ -14,6 +19,8 @@ class ProfileAccountPanel extends StatelessWidget {
     required this.avatarUrl,
     required this.unreadCount,
     required this.onEditAvatar,
+    required this.canEditProfile,
+    required this.onSaveProfile,
     super.key,
   });
 
@@ -25,229 +32,291 @@ class ProfileAccountPanel extends StatelessWidget {
   final String? avatarUrl;
   final int unreadCount;
   final VoidCallback onEditAvatar;
+  final bool canEditProfile;
+
+  /// 保存资料；返回是否成功（窗口内据此决定关闭或内联报错）。
+  final Future<bool> Function(String displayName, String email) onSaveProfile;
+
+  void _openEditDialog(BuildContext context) {
+    ProfileEditDialog.show(
+      context,
+      initialDisplayName: displayName,
+      initialEmail: email,
+      onSave: onSaveProfile,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final colors = context.globalColors;
-    return WorkbenchPanel(
-      padding: const EdgeInsets.all(24),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final details = <({String label, String value})>[
-            (label: l10n.profileUsername, value: username),
-            (label: l10n.profileEmail, value: email),
-            if (userId.isNotEmpty) (label: l10n.profileUserId, value: userId),
-            (
-              label: l10n.profileUnreadNotifications,
-              value: unreadCount.toString(),
-            ),
-            (label: l10n.profileAccountStatus, value: l10n.profileStatusNormal),
-          ];
-          final detailWidth =
-              constraints.maxWidth >= 620
-                  ? (constraints.maxWidth - 24) / 2
-                  : constraints.maxWidth;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _AccountHeader(
-                displayName: displayName,
-                username: username,
-                role: _roleLabel(l10n),
-                avatarUrl: avatarUrl,
-                onEditAvatar: onEditAvatar,
-              ),
-              const SizedBox(height: 24),
-              Divider(color: colors.outlineVariant),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 24,
+    return ProfileSectionCard(
+      title: l10n.profileGeneralInfoTitle,
+      trailing:
+          canEditProfile
+              ? WorkstationActionButton(
+                label: l10n.profileEditProfile,
+                icon: Icons.edit_outlined,
+                onPressed: () => _openEditDialog(context),
+              )
+              : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AvatarBlock(
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            onEditAvatar: onEditAvatar,
+          ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final twoColumns = constraints.maxWidth >= 620;
+              final columnWidth =
+                  twoColumns
+                      ? (constraints.maxWidth - 16) / 2
+                      : double.infinity;
+              return Wrap(
+                spacing: 16,
+                runSpacing: 16,
                 children: [
-                  for (final detail in details)
-                    SizedBox(
-                      width: detailWidth,
-                      child: _DetailItem(
-                        label: detail.label,
-                        value: detail.value,
-                      ),
+                  SizedBox(
+                    width: columnWidth,
+                    child: _ProfileField(
+                      label: l10n.profileDisplayNameLabel,
+                      value: displayName,
                     ),
+                  ),
+                  SizedBox(
+                    width: columnWidth,
+                    child: _ProfileField(
+                      label: l10n.profileUsername,
+                      value: username.isEmpty ? '-' : '@$username',
+                      trailingIcon: Icons.lock_outline_rounded,
+                      mono: true,
+                    ),
+                  ),
+                  SizedBox(
+                    width: twoColumns ? constraints.maxWidth : double.infinity,
+                    child: _ProfileField(
+                      label: l10n.profileEmail,
+                      value: email,
+                      mono: true,
+                    ),
+                  ),
                 ],
-              ),
-            ],
-          );
-        },
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          _AccountMetaRow(userId: userId, role: role, unreadCount: unreadCount),
+        ],
       ),
     );
   }
-
-  String _roleLabel(AppLocalizations l10n) {
-    return switch (role) {
-      'SUPER_ADMIN' => l10n.profileRoleSuperAdmin,
-      'ADMIN' => l10n.profileRoleAdmin,
-      _ => l10n.profileRoleMember,
-    };
-  }
 }
 
-class _AccountHeader extends StatelessWidget {
-  const _AccountHeader({
+class _AvatarBlock extends StatelessWidget {
+  const _AvatarBlock({
     required this.displayName,
-    required this.username,
-    required this.role,
     required this.avatarUrl,
     required this.onEditAvatar,
   });
 
   final String displayName;
-  final String username;
-  final String role;
   final String? avatarUrl;
   final VoidCallback onEditAvatar;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final colors = context.globalColors;
-    return Wrap(
-      spacing: 18,
-      runSpacing: 14,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    final scheme = Theme.of(context).colorScheme;
+    final initial = displayName.isEmpty ? '?' : displayName.characters.first;
+    return Row(
       children: [
-        _AccountAvatar(displayName: displayName, avatarUrl: avatarUrl),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 180, maxWidth: 420),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: colors.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
+        Container(
+          width: 64,
+          height: 64,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child:
+              avatarUrl?.isNotEmpty == true
+                  ? Image.network(
+                    avatarUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _initial(initial, scheme),
+                  )
+                  : _initial(initial, scheme),
+        ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            WorkstationActionButton(
+              label: l10n.profileEditAvatar,
+              icon: Icons.upload_outlined,
+              onPressed: onEditAvatar,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.profileAvatarHint,
+              style: TextStyle(
+                fontSize: AppTypography.labelSmall,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.75),
               ),
-              const SizedBox(height: 5),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '@$username',
-                    style: TextStyle(color: colors.onSurfaceVariant),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.primaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      role,
-                      style: TextStyle(
-                        color: colors.onPrimaryContainer,
-                        fontSize: AppTypography.labelSmall,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _initial(String initial, ColorScheme scheme) {
+    return Center(
+      child: Text(
+        initial.toUpperCase(),
+        style: TextStyle(
+          fontFamily: AppTypography.monoFamily,
+          fontFamilyFallback: AppTypography.monoFamilyFallback,
+          fontSize: AppTypography.headlineSmall,
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
+        ),
+      ),
+    );
+  }
+}
+
+/// 只读资料字段：mono 小标签 + 细线值框（可选锁图标，值可选中复制）。
+class _ProfileField extends StatelessWidget {
+  const _ProfileField({
+    required this.label,
+    required this.value,
+    this.trailingIcon,
+    this.mono = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData? trailingIcon;
+  final bool mono;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: AppTypography.monoFamily,
+            fontFamilyFallback: AppTypography.monoFamilyFallback,
+            fontSize: AppTypography.labelSmall,
+            fontWeight: FontWeight.w500,
+            color: scheme.onSurfaceVariant,
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: onEditAvatar,
-          icon: const Icon(Icons.photo_camera_outlined, size: 18),
-          label: Text(l10n.profileEditAvatar),
+        const SizedBox(height: 6),
+        Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLowest,
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  value,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: AppTypography.bodyMedium,
+                    color: scheme.onSurface,
+                    fontFamily: mono ? AppTypography.monoFamily : null,
+                    fontFamilyFallback:
+                        mono ? AppTypography.monoFamilyFallback : null,
+                  ),
+                ),
+              ),
+              if (trailingIcon != null) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  trailingIcon,
+                  size: 13,
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+              ],
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-class _AccountAvatar extends StatelessWidget {
-  const _AccountAvatar({required this.displayName, required this.avatarUrl});
+/// mono 元信息行：用户 ID / 角色 / 账户状态 / 未读通知。
+class _AccountMetaRow extends StatelessWidget {
+  const _AccountMetaRow({
+    required this.userId,
+    required this.role,
+    required this.unreadCount,
+  });
 
-  final String displayName;
-  final String? avatarUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.globalColors;
-    final initial = displayName.isEmpty ? '?' : displayName.characters.first;
-    return Container(
-      width: 72,
-      height: 72,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: colors.primaryContainer,
-      ),
-      child:
-          avatarUrl?.isNotEmpty == true
-              ? Image.network(
-                avatarUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _fallback(initial, colors),
-              )
-              : _fallback(initial, colors),
-    );
-  }
-
-  Widget _fallback(String initial, GlobalThemeColors colors) {
-    return Center(
-      child: Text(
-        initial,
-        style: TextStyle(
-          color: colors.onPrimaryContainer,
-          fontSize: AppTypography.headlineMedium,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailItem extends StatelessWidget {
-  const _DetailItem({required this.label, required this.value});
-
-  final String label;
-  final String value;
+  final String userId;
+  final String role;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.globalColors;
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final items = <({String label, String value})>[
+      if (userId.isNotEmpty) (label: l10n.profileUserId, value: userId),
+      (label: l10n.profileRoleLabel, value: '[${role.toUpperCase()}]'),
+      (label: l10n.profileAccountStatus, value: l10n.profileStatusNormal),
+      (label: l10n.profileUnreadNotifications, value: '$unreadCount'),
+    ];
     return Container(
-      constraints: const BoxConstraints(minHeight: 68),
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+        color: scheme.surfaceContainerLowest,
+        border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Wrap(
+        spacing: 24,
+        runSpacing: 8,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: colors.onSurfaceVariant,
-              fontSize: AppTypography.bodySmall,
-              fontWeight: FontWeight.w600,
+          for (final item in items)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.label.toUpperCase(),
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelMicro,
+                    letterSpacing: 1.2,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SelectableText(
+                  item.value,
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelSmall,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 5),
-          SelectableText(
-            value,
-            maxLines: 2,
-            style: TextStyle(color: colors.onSurface, height: 1.35),
-          ),
         ],
       ),
     );
