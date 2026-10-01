@@ -554,6 +554,7 @@ public class OfflineDownloadExecutionService {
             inspection = ingressSafetyService.inspect(
                     quarantineKey,
                     sizeBytes,
+                    null,
                     "OFFLINE",
                     task.getId()
             );

@@ -221,6 +221,7 @@ public class ExternalImportExecutionService {
             inspection = ingressSafetyService.inspect(
                     quarantineKey,
                     size,
+                    null,
                     "EXTERNAL",
                     task.getId()
             );

@@ -89,6 +89,7 @@ public class FileIngressStagingService {
             inspection = ingressSafetyService.inspect(
                     quarantineKey(item),
                     item.getSizeBytes(),
+                    item.getTargetName(),
                     item.getSourceType(),
                     item.getSourceTaskId() != null ? item.getSourceTaskId() : ingressItemId
             );

@@ -41,7 +41,7 @@ class FileIngressSafetyServiceTest {
                 .thenReturn(MalwareScanGateway.ScanResult.clean());
 
         FileIngressSafetyService.InspectionResult result =
-                service.inspect(key, content.length, "UPLOAD", CORRELATION_ID);
+                service.inspect(key, content.length, "file.txt", "UPLOAD", CORRELATION_ID);
 
         assertThat(result.sha256())
                 .isEqualTo("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
@@ -56,8 +56,40 @@ class FileIngressSafetyServiceTest {
         when(malwareScanGateway.scan(any(InputStream.class), eq((long) content.length)))
                 .thenReturn(MalwareScanGateway.ScanResult.infected("Eicar-Signature FOUND"));
 
-        assertThatThrownBy(() -> service.inspect(key, content.length, "UPLOAD", CORRELATION_ID))
+        assertThatThrownBy(() -> service.inspect(key, content.length, "file.bin", "UPLOAD", CORRELATION_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.FILE_SECURITY_REJECTED));
+    }
+
+    @Test
+    void inspectCountsActualBytesBeyondSniffPrefix() {
+        byte[] large = new byte[128 * 1024 + 7];
+        ObjectStorageKey key = new ObjectStorageKey("file-quarantine", "uploads/file.bin");
+        when(objectStorageClient.getObject(key)).thenReturn(new ByteArrayInputStream(large));
+        when(malwareScanGateway.scan(any(InputStream.class), eq(1L)))
+                .thenReturn(MalwareScanGateway.ScanResult.clean());
+
+        FileIngressSafetyService.InspectionResult result =
+                service.inspect(key, 1L, "file.bin", "UPLOAD", CORRELATION_ID);
+
+        assertThat(result.actualSizeBytes()).isEqualTo(large.length);
+    }
+
+    @Test
+    void inspectDetectsRealMimeTypeFromMagicBytes() {
+        byte[] jpeg = new byte[] {
+                (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10,
+                'J', 'F', 'I', 'F', 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00
+        };
+        ObjectStorageKey key = new ObjectStorageKey("file-quarantine", "uploads/photo.dat");
+        when(objectStorageClient.getObject(key)).thenReturn(new ByteArrayInputStream(jpeg));
+        when(malwareScanGateway.scan(any(InputStream.class), eq((long) jpeg.length)))
+                .thenReturn(MalwareScanGateway.ScanResult.clean());
+
+        FileIngressSafetyService.InspectionResult result =
+                service.inspect(key, jpeg.length, "photo.dat", "UPLOAD", CORRELATION_ID);
+
+        assertThat(result.detectedMimeType()).isEqualTo("image/jpeg");
+        assertThat(result.actualSizeBytes()).isEqualTo(jpeg.length);
     }
 }

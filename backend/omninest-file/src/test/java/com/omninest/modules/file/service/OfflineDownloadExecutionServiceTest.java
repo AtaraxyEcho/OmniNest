@@ -90,6 +90,7 @@ class OfflineDownloadExecutionServiceTest {
         Mockito.when(ingressSafetyService.inspect(
                         Mockito.any(ObjectStorageKey.class),
                         Mockito.anyLong(),
+                        Mockito.any(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class)
                 ))

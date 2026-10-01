@@ -11,9 +11,13 @@ import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.repository.FileObjectRepository;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +35,20 @@ public class MinioFileContentProvider implements FileContentProvider {
      */
     private static final Duration DOWNLOAD_URL_TTL = Duration.ofHours(2);
     private static final String PROVIDER_TYPE = "MINIO";
+
+    /**
+     * 浏览器会直接执行的类型：经预签名 URL 内联返回即构成存储型 XSS 面，
+     * 下载地址必须强制为附件且覆盖为不可执行类型。
+     */
+    private static final Set<String> INLINE_EXECUTABLE_TYPES = Set.of(
+            "text/html",
+            "application/xhtml+xml",
+            "image/svg+xml",
+            "application/xml",
+            "text/xml",
+            "application/javascript",
+            "text/javascript"
+    );
 
     private final FileObjectRepository fileObjectRepository;
     private final ObjectStorageClient objectStorageClient;
@@ -59,20 +77,32 @@ public class MinioFileContentProvider implements FileContentProvider {
     @Override
     public FileDownloadUrlDto createDownloadUrl(FileNode node) {
         FileObject object = requireObject(node);
-        String url = objectStorageClient.createDownloadUrl(
-                new ObjectStorageKey(object.getBucketName(), object.getObjectKey()),
-                DOWNLOAD_URL_TTL
-        ).toString();
+        String url = createSafeDownloadUrl(node.getName(), object).toString();
         return new FileDownloadUrlDto(node.getId(), node.getName(), url, Instant.now().plus(DOWNLOAD_URL_TTL));
     }
 
     @Override
     public FileDownloadUrlDto createDownloadUrl(FileNode node, FileObject object) {
-        String url = objectStorageClient.createDownloadUrl(
-                new ObjectStorageKey(object.getBucketName(), object.getObjectKey()),
-                DOWNLOAD_URL_TTL
-        ).toString();
+        String url = createSafeDownloadUrl(node.getName(), object).toString();
         return new FileDownloadUrlDto(node.getId(), node.getName(), url, Instant.now().plus(DOWNLOAD_URL_TTL));
+    }
+
+    /**
+     * 危险类型强制附件下载；普通类型维持内联语义以保留在线预览能力。
+     */
+    private java.net.URI createSafeDownloadUrl(String fileName, FileObject object) {
+        ObjectStorageKey key = new ObjectStorageKey(object.getBucketName(), object.getObjectKey());
+        String mimeType = object.getMimeType() == null ? "" : object.getMimeType().toLowerCase(Locale.ROOT);
+        if (!INLINE_EXECUTABLE_TYPES.contains(mimeType)) {
+            return objectStorageClient.createDownloadUrl(key, DOWNLOAD_URL_TTL);
+        }
+        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+        return objectStorageClient.createDownloadUrl(
+                key,
+                DOWNLOAD_URL_TTL,
+                "application/octet-stream",
+                "attachment; filename*=UTF-8''" + encodedName
+        );
     }
 
     @Override

@@ -108,7 +108,7 @@ class FileIngressPromotionServiceTest {
         FileUploadSession session = session();
         when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
@@ -143,7 +143,7 @@ class FileIngressPromotionServiceTest {
         service.process(event(null));
 
         verify(ingressLifecycleService, never()).markScanning(any());
-        verify(ingressSafetyService, never()).inspect(any(), anyLong(), anyString(), any());
+        verify(ingressSafetyService, never()).inspect(any(), anyLong(), any(), anyString(), any());
     }
 
     @Test
@@ -167,7 +167,7 @@ class FileIngressPromotionServiceTest {
         service.process(event(null));
 
         verify(ingressLifecycleService, never()).markScanning(any());
-        verify(ingressSafetyService, never()).inspect(any(), anyLong(), anyString(), any());
+        verify(ingressSafetyService, never()).inspect(any(), anyLong(), any(), anyString(), any());
         verify(ingressLifecycleService).markAvailable(eq(INGRESS_ID), any(UUID.class));
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
     }
@@ -178,7 +178,7 @@ class FileIngressPromotionServiceTest {
         FileUploadSession session = session();
         when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.INFECTED, "Eicar-Signature FOUND", SHA256));
 
         assertThatThrownBy(() -> service.process(event(null)))
@@ -199,7 +199,7 @@ class FileIngressPromotionServiceTest {
         FileUploadSession session = session();
         when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
 
         assertThatThrownBy(() -> service.process(event("b".repeat(64))))
@@ -214,7 +214,7 @@ class FileIngressPromotionServiceTest {
     void processRetriesScanErrors() {
         FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
         when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenThrow(new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ClamAV 安全扫描不可用，文件保持隔离"));
 
         assertThatCode(() -> service.process(event(null)))
@@ -233,7 +233,7 @@ class FileIngressPromotionServiceTest {
         service.process(event(null));
 
         verify(ingressLifecycleService, never()).markScanning(any());
-        verify(ingressSafetyService, never()).inspect(any(), anyLong(), anyString(), any());
+        verify(ingressSafetyService, never()).inspect(any(), anyLong(), any(), anyString(), any());
         Mockito.verifyNoInteractions(objectStorageClient);
     }
 
@@ -282,7 +282,7 @@ class FileIngressPromotionServiceTest {
         session.setQuotaReservationId(null);
         when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
         when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
         when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
             FileObject object = invocation.getArgument(0);
@@ -303,5 +303,50 @@ class FileIngressPromotionServiceTest {
         verify(sharedSpaceQuotaService).increaseUsage(512L);
         verify(storageQuotaService, never()).settleReservation(anyString(), any(UUID.class), anyLong());
         verify(storageQuotaService, never()).incrementUsage(any(UUID.class), anyLong());
+    }
+
+    @Test
+    void processRejectsUploadLargerThanDeclaredSize() {
+        FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
+        FileUploadSession session = session();
+        when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
+        when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256, 2048L, null));
+
+        assertThatThrownBy(() -> service.process(event(null)))
+                .isInstanceOf(FileIngressRejectedException.class)
+                .hasMessageContaining("实际大小");
+        assertThat(session.getStatus()).isEqualTo("REJECTED");
+        verify(objectStorageClient, never()).copyObject(any(), any());
+    }
+
+    @Test
+    void processAdjustsUndersizedUploadAndOverridesDeclaredMime() {
+        FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
+        item.setMimeType("image/png");
+        FileUploadSession session = session();
+        when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
+        when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256, 256L, "image/jpeg"));
+        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
+            FileObject object = invocation.getArgument(0);
+            object.setId(UUID.randomUUID());
+            return object;
+        });
+        when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
+            FileNode node = invocation.getArgument(0);
+            node.setId(UUID.randomUUID());
+            return node;
+        });
+        when(postProcessingTaskService.enqueueMediaAutoImport(any())).thenReturn(UUID.randomUUID());
+
+        service.process(event(null));
+
+        assertThat(item.getSizeBytes()).isEqualTo(256L);
+        assertThat(item.getMimeType()).isEqualTo("image/jpeg");
+        assertThat(session.getStatus()).isEqualTo("COMPLETED");
+        verify(storageQuotaService).settleReservation("UPLOAD", SESSION_ID, 256L);
     }
 }

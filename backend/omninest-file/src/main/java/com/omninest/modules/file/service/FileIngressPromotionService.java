@@ -84,7 +84,9 @@ public class FileIngressPromotionService {
             ingressLifecycleService.markScanning(item.getId());
             InspectionResult inspection = scanQuietly(item);
             ensureShaMatches(item, event, inspection);
+            requireActualSizeWithinDeclaration(item, inspection);
             ingressLifecycleService.markClean(item.getId(), inspection.sha256());
+            applyInspectionCorrections(item, inspection);
             sha256 = inspection.sha256();
         }
         return promote(item, sha256, event);
@@ -108,6 +110,7 @@ public class FileIngressPromotionService {
             inspection = ingressSafetyService.inspect(
                     quarantineKey(item),
                     item.getSizeBytes(),
+                    item.getTargetName(),
                     item.getSourceType(),
                     item.getUploadSessionId() != null ? item.getUploadSessionId() : item.getSourceTaskId()
             );
@@ -143,6 +146,41 @@ public class FileIngressPromotionService {
         throw new FileIngressRejectedException("服务端计算的文件摘要与客户端声明不一致");
     }
 
+    /**
+     * 实际字节数超过申报值时拒绝入库：预签名直传未限制大小，
+     * 低报大小是绕过配额预留的唯一路径，必须在晋升前核对。
+     */
+    private void requireActualSizeWithinDeclaration(FileIngressItem item, InspectionResult inspection) {
+        if (inspection.actualSizeBytes() < 0 || inspection.actualSizeBytes() <= item.getSizeBytes()) {
+            return;
+        }
+        settleTerminalFailure(item, false, ErrorCode.FILE_UPLOAD_FAILED.name(), "实际大小超过申报大小",
+                "文件大小校验失败", "文件「" + item.getTargetName() + "」实际大小超过申报大小，已拒绝入库");
+        throw new FileIngressRejectedException("实际大小超过申报大小");
+    }
+
+    /**
+     * 以服务端事实修正入库记录：实际字节数与魔数探测的 MIME。
+     * 实际小于申报时按实际值结算配额；探测无结论（null）时保留客户端声明。
+     */
+    private void applyInspectionCorrections(FileIngressItem item, InspectionResult inspection) {
+        boolean changed = false;
+        if (inspection.actualSizeBytes() >= 0 && inspection.actualSizeBytes() != item.getSizeBytes()) {
+            item.setSizeBytes(inspection.actualSizeBytes());
+            changed = true;
+        }
+        String detected = inspection.detectedMimeType();
+        if (detected != null && !detected.equals(item.getMimeType())) {
+            log.info("入库 MIME 按魔数修正: ingressItemId={}, declared={}, detected={}",
+                    item.getId(), item.getMimeType(), detected);
+            item.setMimeType(detected);
+            changed = true;
+        }
+        if (changed) {
+            ingressItemRepository.save(item);
+        }
+    }
+
     private PromotionOutcome promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
         return transactionTemplate.execute(txStatus -> promoteInTransaction(item, sha256, event));
     }
@@ -152,6 +190,10 @@ public class FileIngressPromotionService {
         FileUploadSession session = item.getUploadSessionId() == null
                 ? null
                 : uploadSessionRepository.findById(item.getUploadSessionId()).orElse(null);
+        if (session != null && session.getTotalSizeBytes() != item.getSizeBytes()) {
+            // 配额结算以服务端核实的实际大小为准
+            session.setTotalSizeBytes(item.getSizeBytes());
+        }
         ObjectStorageKey quarantineKey = quarantineKey(item);
         ObjectStorageKey targetKey = new ObjectStorageKey(item.getTargetBucket(), item.getTargetObjectKey());
         objectStorageClient.copyObject(quarantineKey, targetKey);

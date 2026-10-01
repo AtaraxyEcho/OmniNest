@@ -103,7 +103,7 @@ class ExternalImportExecutionServiceTest {
         when(taskRecordService.claimForExecution(any(UUID.class), any(String.class))).thenReturn(true);
         when(objectStorageBuckets.quarantine()).thenReturn("file-quarantine");
         when(ingressLifecycleService.open(any())).thenReturn(UUID.randomUUID());
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
                 .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", "0".repeat(64)));
     }
 

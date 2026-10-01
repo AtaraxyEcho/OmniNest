@@ -32,6 +32,25 @@ public interface ObjectStorageClient {
     URI createDownloadUrl(ObjectStorageKey key, Duration ttl);
 
     /**
+     * 创建对象下载地址，可覆盖响应 Content-Type 与 Content-Disposition。
+     * 用于把浏览器会执行的类型（HTML/SVG 等）强制为附件下载。
+     *
+     * @param key 对象存储键
+     * @param ttl 地址有效期
+     * @param responseContentType 覆盖的 Content-Type；null 表示不覆盖
+     * @param responseContentDisposition 覆盖的 Content-Disposition；null 表示不覆盖
+     * @return 下载地址
+     */
+    default URI createDownloadUrl(
+            ObjectStorageKey key,
+            Duration ttl,
+            String responseContentType,
+            String responseContentDisposition
+    ) {
+        return createDownloadUrl(key, ttl);
+    }
+
+    /**
      * 初始化分片上传。
      *
      * @param key 对象存储键

@@ -77,6 +77,31 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
      * {@inheritDoc}
      */
     @Override
+    public URI createDownloadUrl(
+            ObjectStorageKey key,
+            Duration ttl,
+            String responseContentType,
+            String responseContentDisposition
+    ) {
+        GetObjectRequest.Builder request = GetObjectRequest.builder()
+                .bucket(key.bucket())
+                .key(key.objectKey());
+        if (responseContentType != null && !responseContentType.isBlank()) {
+            request.responseContentType(responseContentType);
+        }
+        if (responseContentDisposition != null && !responseContentDisposition.isBlank()) {
+            request.responseContentDisposition(responseContentDisposition);
+        }
+        return toUri(s3Presigner.presignGetObject(builder -> builder
+                        .signatureDuration(ttl)
+                        .getObjectRequest(request))
+                .url());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public String initiateMultipartUpload(ObjectStorageKey key, String contentType) {
         CreateMultipartUploadRequest.Builder builder = CreateMultipartUploadRequest.builder()
                 .bucket(key.bucket())
