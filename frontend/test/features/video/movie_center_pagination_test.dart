@@ -39,7 +39,7 @@ void main() {
       ]);
       expect(
         adapter.requestedPaths.skip(3).toSet().difference({
-          '/video/series/by-type',
+          '/video/series/by-type/page',
         }),
         isEmpty,
       );
@@ -81,7 +81,13 @@ class _MovieLibraryAdapter implements HttpClientAdapter {
         'series': <Object>[],
       },
       '/video/library/page' => _libraryPage(options),
-      '/video/series/by-type' => <Object>[],
+      '/video/series/by-type/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return ResponseBody.fromString(

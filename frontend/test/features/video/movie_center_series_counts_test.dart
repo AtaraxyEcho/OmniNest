@@ -94,7 +94,7 @@ class _SeriesApiAdapter implements HttpClientAdapter {
     final data = switch (options.path) {
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
-      '/video/series/by-type' => _seriesByType(options),
+      '/video/series/by-type/page' => _seriesByType(options),
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return ResponseBody.fromString(
@@ -130,11 +130,19 @@ class _SeriesApiAdapter implements HttpClientAdapter {
     };
   }
 
-  List<Object> _seriesByType(RequestOptions options) {
+  Map<String, Object> _seriesByType(RequestOptions options) {
     final seriesType = options.queryParameters['seriesType']?.toString();
-    return seriesType == 'ANIME'
-        ? [_series('anime-1', 'ANIME')]
-        : [_series('tv-1', 'TV')];
+    final items =
+        seriesType == 'ANIME'
+            ? <Object>[_series('anime-1', 'ANIME')]
+            : <Object>[_series('tv-1', 'TV')];
+    return {
+      'items': items,
+      'page': 0,
+      'size': 50,
+      'totalElements': items.length,
+      'totalPages': 1,
+    };
   }
 
   Map<String, Object> _series(String id, String seriesType) {

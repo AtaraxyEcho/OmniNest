@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -248,6 +249,27 @@ public class MovieLibraryService {
     }
 
     /**
+     * 分页查询指定类型的可访问系列，按更新时间倒序，供系列网格滚动加载。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param seriesType 系列类型
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 系列分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MovieSeriesDto> seriesByTypePage(UUID ownerUserId, String seriesType, int page, int size) {
+        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        Page<MediaTvSeries> items = tvSeriesRepository.findPageByActiveReadableAndSeriesType(
+                ownerUserId, readableLibraryIds, seriesType, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return new PageImpl<>(
+                toSeriesDtos(ownerUserId, items.getContent()),
+                items.getPageable(),
+                items.getTotalElements()
+        );
+    }
+
+    /**
      * 查询当前用户收藏的系列（剧集与动漫），按收藏时间倒序。
      *
      * @param ownerUserId 所有者用户 ID
@@ -255,8 +277,30 @@ public class MovieLibraryService {
      */
     @Transactional(readOnly = true)
     public List<MovieSeriesDto> favoriteSeries(UUID ownerUserId) {
-        List<MediaSeriesFavorite> favorites =
-                seriesFavoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId);
+        return toFavoriteSeriesDtos(ownerUserId,
+                seriesFavoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId));
+    }
+
+    /**
+     * 分页查询用户收藏的系列，按收藏时间倒序，供收藏系列列表滚动加载。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 收藏系列分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MovieSeriesDto> favoriteSeriesPage(UUID ownerUserId, int page, int size) {
+        Page<MediaSeriesFavorite> favorites = seriesFavoriteRepository.findPageByOwnerUserIdOrderByCreatedAtDesc(
+                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return new PageImpl<>(
+                toFavoriteSeriesDtos(ownerUserId, favorites.getContent()),
+                favorites.getPageable(),
+                favorites.getTotalElements()
+        );
+    }
+
+    private List<MovieSeriesDto> toFavoriteSeriesDtos(UUID ownerUserId, List<MediaSeriesFavorite> favorites) {
         if (favorites.isEmpty()) {
             return List.of();
         }

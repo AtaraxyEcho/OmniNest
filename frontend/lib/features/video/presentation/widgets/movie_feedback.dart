@@ -4,6 +4,7 @@ import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 String movieErrorMessage(Object error, [AppLocalizations? l10n]) {
   final userFacingError = describeUserFacingError(error, l10n: l10n);
@@ -26,22 +27,11 @@ void showMovieFeedback(
   String message, {
   bool isError = false,
 }) {
-  final theme = Theme.of(context);
-  final backgroundColor =
-      isError
-          ? theme.colorScheme.errorContainer
-          : context.videoColors.surfaceContainerHigh.withValues(alpha: 0.92);
-  final foregroundColor =
-      isError
-          ? theme.colorScheme.onErrorContainer
-          : context.videoColors.onSurface;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message, style: TextStyle(color: foregroundColor)),
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: backgroundColor,
-      duration: const Duration(seconds: 3),
-    ),
+  showOmniFeedback(
+    context,
+    message,
+    severity:
+        isError ? OmniFeedbackSeverity.error : OmniFeedbackSeverity.success,
   );
 }
 

@@ -45,6 +45,11 @@ class MovieCenterState {
     required this.continueWatching,
     required this.favoriteItems,
     this.favoriteSeries = const [],
+    this.favoriteSeriesPaging = const ListPaging(),
+    this.favoritesPaging = const ListPaging(),
+    this.historyPaging = const ListPaging(),
+    this.tvSeriesPaging = const ListPaging(),
+    this.animeSeriesPaging = const ListPaging(),
     required this.watchHistory,
     required this.collections,
     required this.tasks,
@@ -78,6 +83,13 @@ class MovieCenterState {
   final List<MovieContinueWatching> continueWatching;
   final List<MovieVideoItem> favoriteItems;
   final List<MovieSeries> favoriteSeries;
+
+  /// 各列表滚动加载分页状态：page 为已加载末页（-1 表示未加载）。
+  final ListPaging favoriteSeriesPaging;
+  final ListPaging favoritesPaging;
+  final ListPaging historyPaging;
+  final ListPaging tvSeriesPaging;
+  final ListPaging animeSeriesPaging;
   final List<MovieWatchHistory> watchHistory;
   final List<MovieCollection> collections;
   final List<MovieTask> tasks;
@@ -326,6 +338,11 @@ class MovieCenterState {
     List<MovieContinueWatching>? continueWatching,
     List<MovieVideoItem>? favoriteItems,
     List<MovieSeries>? favoriteSeries,
+    ListPaging? favoriteSeriesPaging,
+    ListPaging? favoritesPaging,
+    ListPaging? historyPaging,
+    ListPaging? tvSeriesPaging,
+    ListPaging? animeSeriesPaging,
     List<MovieWatchHistory>? watchHistory,
     List<MovieCollection>? collections,
     List<MovieTask>? tasks,
@@ -363,6 +380,11 @@ class MovieCenterState {
       continueWatching: continueWatching ?? this.continueWatching,
       favoriteItems: favoriteItems ?? this.favoriteItems,
       favoriteSeries: favoriteSeries ?? this.favoriteSeries,
+      favoriteSeriesPaging: favoriteSeriesPaging ?? this.favoriteSeriesPaging,
+      favoritesPaging: favoritesPaging ?? this.favoritesPaging,
+      historyPaging: historyPaging ?? this.historyPaging,
+      tvSeriesPaging: tvSeriesPaging ?? this.tvSeriesPaging,
+      animeSeriesPaging: animeSeriesPaging ?? this.animeSeriesPaging,
       watchHistory: watchHistory ?? this.watchHistory,
       collections: collections ?? this.collections,
       tasks: tasks ?? this.tasks,
@@ -386,6 +408,27 @@ class MovieCenterState {
       loadedSections: loadedSections ?? this.loadedSections,
       loadingSections: loadingSections ?? this.loadingSections,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+}
+
+/// 列表滚动加载分页状态：page 记录已加载末页，-1 表示尚未加载。
+class ListPaging {
+  const ListPaging({
+    this.page = -1,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+  });
+
+  final int page;
+  final bool hasMore;
+  final bool isLoadingMore;
+
+  ListPaging copyWith({int? page, bool? hasMore, bool? isLoadingMore}) {
+    return ListPaging(
+      page: page ?? this.page,
+      hasMore: hasMore ?? this.hasMore,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
     );
   }
 }

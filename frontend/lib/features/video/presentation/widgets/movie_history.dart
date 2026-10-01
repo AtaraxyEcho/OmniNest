@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -15,6 +16,9 @@ class HistorySection extends StatelessWidget {
     required this.items,
     this.onDelete,
     this.onClearAll,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
     super.key,
   });
 
@@ -22,85 +26,94 @@ class HistorySection extends StatelessWidget {
   final ValueChanged<MovieWatchHistory>? onDelete;
   final VoidCallback? onClearAll;
 
+  /// 滚动加载三件套：分页后每页行数受控，行容器保持 Column 构建。
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final palette = context.movieRedesign;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: MovieRedesignSectionHeader(
-                title: l10n.videoSectionHistory,
-                subtitleEn: l10n.videoRedesignSubHistory,
-                count: items.isEmpty ? null : items.length,
-                subtitle: l10n.videoHistorySubtitle,
+    return InfiniteScrollTrigger(
+      enabled: hasMore && !isLoadingMore && onLoadMore != null,
+      onLoadMore: onLoadMore ?? () {},
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: MovieRedesignSectionHeader(
+                  title: l10n.videoSectionHistory,
+                  subtitleEn: l10n.videoRedesignSubHistory,
+                  count: items.isEmpty ? null : items.length,
+                  subtitle: l10n.videoHistorySubtitle,
+                ),
               ),
-            ),
-            if (onClearAll != null && items.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: onClearAll,
-                    borderRadius: MovieRedesignPalette.borderRadius,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: Text(
-                        l10n.videoClearHistory,
-                        style: context.movieRedesignText.mono(
-                          size: 12,
-                          color: palette.mutedForeground,
+              if (onClearAll != null && items.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: onClearAll,
+                      borderRadius: MovieRedesignPalette.borderRadius,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          l10n.videoClearHistory,
+                          style: context.movieRedesignText.mono(
+                            size: 12,
+                            color: palette.mutedForeground,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        if (items.isEmpty)
-          // 分区 Column 为左对齐布局，空状态需撑满宽度才能与
-          // Sliver 分区一样水平居中。
-          Center(
-            child: MovieRedesignEmptyState(
-              icon: Icons.manage_history_rounded,
-              title: l10n.videoNoWatchHistory,
-              subtitle: l10n.videoRedesignNoHistoryHint,
-            ),
-          )
-        else
-          MovieRedesignHistoryList(
-            entries: [
-              for (final item in items)
-                MovieRedesignHistoryEntry(
-                  videoItemId: item.videoItemId,
-                  title: item.title,
-                  subtitle: _subtitleOf(context, item),
-                  timeText: movieRedesignRelativeTime(context, item.playedAt),
-                  progressText: _progressText(item),
-                  thumbUrl: item.posterUrl,
-                  onTap:
-                      item.videoItemId.isEmpty
-                          ? null
-                          : () => context.push(
-                            movieDetailRouteFromIds(
-                              videoItemId: item.videoItemId,
-                              seriesId: item.seriesId,
-                            ),
-                          ),
-                  onDelete: onDelete == null ? null : () => onDelete!(item),
-                ),
             ],
           ),
-      ],
+          if (items.isEmpty)
+            // 分区 Column 为左对齐布局，空状态需撑满宽度才能与
+            // Sliver 分区一样水平居中。
+            Center(
+              child: MovieRedesignEmptyState(
+                icon: Icons.manage_history_rounded,
+                title: l10n.videoNoWatchHistory,
+                subtitle: l10n.videoRedesignNoHistoryHint,
+              ),
+            )
+          else
+            MovieRedesignHistoryList(
+              entries: [
+                for (final item in items)
+                  MovieRedesignHistoryEntry(
+                    videoItemId: item.videoItemId,
+                    title: item.title,
+                    subtitle: _subtitleOf(context, item),
+                    timeText: movieRedesignRelativeTime(context, item.playedAt),
+                    progressText: _progressText(item),
+                    thumbUrl: item.posterUrl,
+                    onTap:
+                        item.videoItemId.isEmpty
+                            ? null
+                            : () => context.push(
+                              movieDetailRouteFromIds(
+                                videoItemId: item.videoItemId,
+                                seriesId: item.seriesId,
+                              ),
+                            ),
+                    onDelete: onDelete == null ? null : () => onDelete!(item),
+                  ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 

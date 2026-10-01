@@ -134,11 +134,35 @@ public class VideoLibraryController {
         return ApiResponse.success(movieEngagementService.favorites(currentUserContext.requireCurrentUserId()));
     }
 
+    @Operation(summary = "分页获取收藏视频", description = "按收藏时间倒序分页返回收藏视频，供滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
+    @GetMapping("/api/v1/video/favorites/page")
+    ApiResponse<PageResponse<MovieVideoItemDto>> favoritesPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = movieEngagementService.favoritesPage(currentUserContext.requireCurrentUserId(), page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
+    }
+
     @Operation(summary = "获取收藏系列", description = "返回用户收藏的剧集与动漫，按收藏时间倒序")
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/favorites/series")
     ApiResponse<List<MovieSeriesDto>> favoriteSeries() {
         return ApiResponse.success(movieLibraryService.favoriteSeries(currentUserContext.requireCurrentUserId()));
+    }
+
+    @Operation(summary = "分页获取收藏系列", description = "按收藏时间倒序分页返回收藏系列，供滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
+    @GetMapping("/api/v1/video/favorites/series/page")
+    ApiResponse<PageResponse<MovieSeriesDto>> favoriteSeriesPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = movieLibraryService.favoriteSeriesPage(currentUserContext.requireCurrentUserId(), page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
 
     @Operation(summary = "获取收藏状态", description = "查询指定视频的收藏状态")
@@ -163,6 +187,18 @@ public class VideoLibraryController {
     @GetMapping("/api/v1/video/history")
     ApiResponse<List<MovieWatchHistoryDto>> history() {
         return ApiResponse.success(movieEngagementService.history(currentUserContext.requireCurrentUserId()));
+    }
+
+    @Operation(summary = "分页获取观看历史", description = "按播放时间倒序分页返回观看历史，供滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
+    @GetMapping("/api/v1/video/history/page")
+    ApiResponse<PageResponse<MovieWatchHistoryDto>> historyPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = movieEngagementService.historyPage(currentUserContext.requireCurrentUserId(), page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
 
     @Operation(summary = "删除观看记录", description = "删除指定的观看历史记录")
@@ -194,6 +230,20 @@ public class VideoLibraryController {
     ApiResponse<List<MovieSeriesDto>> seriesByType(
             @RequestParam(defaultValue = "TV") String seriesType) {
         return ApiResponse.success(movieLibraryService.seriesByType(currentUserContext.requireCurrentUserId(), seriesType));
+    }
+
+    @Operation(summary = "按类型分页获取剧集", description = "按更新时间倒序分页返回指定类型剧集，供滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/video/series/by-type/page")
+    ApiResponse<PageResponse<MovieSeriesDto>> seriesByTypePage(
+            @RequestParam(defaultValue = "TV") String seriesType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = movieLibraryService.seriesByTypePage(
+                currentUserContext.requireCurrentUserId(), seriesType, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
 
     @Operation(summary = "获取剧集详情", description = "返回指定剧集的详细信息")

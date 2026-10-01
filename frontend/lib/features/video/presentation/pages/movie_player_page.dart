@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/platform/android/pip_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -34,6 +33,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_player_top_ba
 import 'package:omninest/features/video/presentation/widgets/subtitle_file_decoder.dart';
 import 'package:omninest/features/video/presentation/widgets/subtitle_parser.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'movie_player_page_interactions.dart';
 part 'movie_player_page_tracks.dart';

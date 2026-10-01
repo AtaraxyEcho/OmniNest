@@ -190,10 +190,18 @@ class _SubtitleLanguageDialogState extends State<_SubtitleLanguageDialog> {
                   color: palette.muted,
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
+                // 闭合态与全仓输入框/下拉同高（36/44），避免原生
+                // DropdownButton 默认 ~48px 的点击填充撑出独立度量。
+                constraints: BoxConstraints(
+                  minHeight: AppControlTokens.fieldHeight,
+                  maxHeight: AppControlTokens.fieldHeight,
+                ),
+                alignment: Alignment.centerLeft,
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _language,
                     isExpanded: true,
+                    isDense: true,
                     borderRadius: MovieRedesignPalette.borderRadius,
                     dropdownColor: palette.card,
                     items: [

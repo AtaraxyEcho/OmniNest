@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -224,12 +225,14 @@ class _MovieContent extends ConsumerWidget {
         subtitleEn: l10n.videoRedesignSubTvShows,
         subtitle: l10n.videoSeriesLibrarySubtitle,
         series: state.filteredSeries,
+        anime: false,
       ),
       MovieSection.anime => _SeriesGridSection(
         title: l10n.videoSectionAnime,
         subtitleEn: l10n.videoRedesignSubAnime,
         subtitle: l10n.videoAnimeLibrarySubtitle,
         series: state.filteredAnimeSeries,
+        anime: true,
       ),
       MovieSection.collections => CollectionsSection(
         totalCount: state.movies.length,
@@ -240,6 +243,13 @@ class _MovieContent extends ConsumerWidget {
       MovieSection.favorites => _FavoritesSection(state: state),
       MovieSection.history => HistorySection(
         items: state.watchHistory,
+        hasMore: state.historyPaging.hasMore,
+        isLoadingMore: state.historyPaging.isLoadingMore,
+        onLoadMore:
+            () =>
+                ref
+                    .read(movieCenterControllerProvider.notifier)
+                    .loadMoreHistory(),
         // 无 activity:write 的角色隐藏删历史入口，只保留浏览。
         onDelete:
             ref.watch(userCapabilitiesProvider).canManageOwnActivity
@@ -601,12 +611,16 @@ class _SeriesGridSection extends ConsumerWidget {
     required this.subtitleEn,
     required this.subtitle,
     required this.series,
+    required this.anime,
   });
 
   final String title;
   final String subtitleEn;
   final String subtitle;
   final List<MovieSeries> series;
+
+  /// 动漫分区标记：滚动加载取对应分页状态。
+  final bool anime;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -631,72 +645,80 @@ class _SeriesGridSection extends ConsumerWidget {
       MovieRedesignChip(value: 'releaseDate', label: l10n.videoYear),
       MovieRedesignChip(value: 'title', label: l10n.videoSortTitle),
     ];
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.only(bottom: 16),
-          sliver: SliverToBoxAdapter(
-            child: MovieRedesignSectionHeader(
-              title: title,
-              subtitleEn: subtitleEn,
-              count: series.isEmpty ? null : series.length,
-              subtitle: subtitle,
-            ),
-          ),
+    final paging =
+        anime ? centerState.animeSeriesPaging : centerState.tvSeriesPaging;
+    return InfiniteScrollTrigger(
+      enabled: paging.hasMore && !paging.isLoadingMore,
+      onLoadMore: () => controller.loadMoreSeries(anime: anime),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
         ),
-        if (centerState.continueWatching.isNotEmpty)
+        slivers: [
           SliverPadding(
-            padding: EdgeInsets.zero,
+            padding: const EdgeInsets.only(bottom: 16),
             sliver: SliverToBoxAdapter(
-              child: _sharedContinueStrip(context, ref, centerState),
-            ),
-          ),
-        SliverPadding(
-          padding: const EdgeInsets.only(bottom: 16),
-          sliver: SliverToBoxAdapter(
-            child: MovieRedesignFilterSortBar(
-              filters: filters,
-              filterValue: centerState.filter.name,
-              onFilter: (value) {
-                controller.setFilter(
-                  MovieLibraryFilter.values.firstWhere((f) => f.name == value),
-                );
-              },
-              sorts: sorts,
-              sortValue: centerState.sortBy.name,
-              onSort: (value) {
-                controller.setSort(
-                  MovieSortBy.values.firstWhere((s) => s.name == value),
-                );
-              },
-            ),
-          ),
-        ),
-        if (series.isEmpty)
-          SliverPadding(
-            padding: EdgeInsets.zero,
-            sliver: SliverToBoxAdapter(
-              child: MovieRedesignEmptyState(
-                icon: Icons.tv_outlined,
-                title: l10n.videoNoMediaItems,
+              child: MovieRedesignSectionHeader(
+                title: title,
+                subtitleEn: subtitleEn,
+                count: series.isEmpty ? null : series.length,
+                subtitle: subtitle,
               ),
             ),
-          )
-        else
+          ),
+          if (centerState.continueWatching.isNotEmpty)
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: SliverToBoxAdapter(
+                child: _sharedContinueStrip(context, ref, centerState),
+              ),
+            ),
           SliverPadding(
-            padding: EdgeInsets.zero,
-            sliver: MovieRedesignPosterSliverGrid(
-              items: [
-                for (final item in series)
-                  _seriesCard(context, centerState, item),
-              ],
+            padding: const EdgeInsets.only(bottom: 16),
+            sliver: SliverToBoxAdapter(
+              child: MovieRedesignFilterSortBar(
+                filters: filters,
+                filterValue: centerState.filter.name,
+                onFilter: (value) {
+                  controller.setFilter(
+                    MovieLibraryFilter.values.firstWhere(
+                      (f) => f.name == value,
+                    ),
+                  );
+                },
+                sorts: sorts,
+                sortValue: centerState.sortBy.name,
+                onSort: (value) {
+                  controller.setSort(
+                    MovieSortBy.values.firstWhere((s) => s.name == value),
+                  );
+                },
+              ),
             ),
           ),
-        const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
-      ],
+          if (series.isEmpty)
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: SliverToBoxAdapter(
+                child: MovieRedesignEmptyState(
+                  icon: Icons.tv_outlined,
+                  title: l10n.videoNoMediaItems,
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: MovieRedesignPosterSliverGrid(
+                items: [
+                  for (final item in series)
+                    _seriesCard(context, centerState, item),
+                ],
+              ),
+            ),
+          const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
+        ],
+      ),
     );
   }
 }
@@ -847,47 +869,64 @@ class _FavoritesSection extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     // 影片收藏与系列（剧集/动漫）收藏合并展示；系列卡点击进系列详情。
     final totalCount = state.favoriteItems.length + state.favoriteSeries.length;
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.only(bottom: 16),
-          sliver: SliverToBoxAdapter(
-            child: MovieRedesignSectionHeader(
-              title: l10n.videoSectionFavorites,
-              subtitleEn: l10n.videoRedesignSubFavorites,
-              count: totalCount == 0 ? null : totalCount,
-              subtitle: l10n.videoFavoritesSubtitle,
-            ),
-          ),
+    final favoritesPaging = state.favoritesPaging;
+    final favoriteSeriesPaging = state.favoriteSeriesPaging;
+    return InfiniteScrollTrigger(
+      enabled:
+          (favoritesPaging.hasMore && !favoritesPaging.isLoadingMore) ||
+          (favoriteSeriesPaging.hasMore && !favoriteSeriesPaging.isLoadingMore),
+      onLoadMore: () {
+        final controller = ref.read(movieCenterControllerProvider.notifier);
+        if (favoritesPaging.hasMore && !favoritesPaging.isLoadingMore) {
+          controller.loadMoreFavorites();
+        }
+        if (favoriteSeriesPaging.hasMore &&
+            !favoriteSeriesPaging.isLoadingMore) {
+          controller.loadMoreFavoriteSeries();
+        }
+      },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
         ),
-        if (totalCount == 0)
+        slivers: [
           SliverPadding(
-            padding: EdgeInsets.zero,
+            padding: const EdgeInsets.only(bottom: 16),
             sliver: SliverToBoxAdapter(
-              child: MovieRedesignEmptyState(
-                icon: Icons.favorite_rounded,
-                title: l10n.videoRedesignNoFavorites,
-                subtitle: l10n.videoRedesignNoFavoritesHint,
+              child: MovieRedesignSectionHeader(
+                title: l10n.videoSectionFavorites,
+                subtitleEn: l10n.videoRedesignSubFavorites,
+                count: totalCount == 0 ? null : totalCount,
+                subtitle: l10n.videoFavoritesSubtitle,
               ),
             ),
-          )
-        else
-          SliverPadding(
-            padding: EdgeInsets.zero,
-            sliver: MovieRedesignPosterSliverGrid(
-              items: [
-                for (final item in state.favoriteItems)
-                  _movieCard(context, ref, item),
-                for (final series in state.favoriteSeries)
-                  _seriesCard(context, state, series),
-              ],
-            ),
           ),
-        const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
-      ],
+          if (totalCount == 0)
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: SliverToBoxAdapter(
+                child: MovieRedesignEmptyState(
+                  icon: Icons.favorite_rounded,
+                  title: l10n.videoRedesignNoFavorites,
+                  subtitle: l10n.videoRedesignNoFavoritesHint,
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: MovieRedesignPosterSliverGrid(
+                items: [
+                  for (final item in state.favoriteItems)
+                    _movieCard(context, ref, item),
+                  for (final series in state.favoriteSeries)
+                    _seriesCard(context, state, series),
+                ],
+              ),
+            ),
+          const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
+        ],
+      ),
     );
   }
 }

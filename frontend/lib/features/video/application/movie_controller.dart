@@ -739,7 +739,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         MovieSection.recent => _api.recent(),
         MovieSection.continueWatching => _api.continueWatching(),
         MovieSection.favorites => _loadFavoriteLists(),
-        MovieSection.history => _api.history(),
+        MovieSection.history => _api.historyPage(),
         MovieSection.collections => _api.collections(),
         MovieSection.management => _api.tasks(),
         _ => Future<Object?>.value(null),
@@ -767,16 +767,23 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           loadingSections: stillLoading,
         ),
         MovieSection.favorites => latest.copyWith(
-          favoriteItems: (result as List<Object>)[0] as List<MovieVideoItem>,
-          favoriteSeries: result[1] as List<MovieSeries>,
+          favoriteItems:
+              ((result as List<Object>)[0] as MediaPage<MovieVideoItem>).items,
+          favoriteSeries: (result[1] as MediaPage<MovieSeries>).items,
+          favoritesPaging: _pagingOf(result[0] as MediaPage<MovieVideoItem>),
+          favoriteSeriesPaging: _pagingOf(result[1] as MediaPage<MovieSeries>),
           loadedSections: loaded,
           loadingSections: stillLoading,
         ),
-        MovieSection.history => latest.copyWith(
-          watchHistory: result as List<MovieWatchHistory>,
-          loadedSections: loaded,
-          loadingSections: stillLoading,
-        ),
+        MovieSection.history => () {
+          final historyResult = result as MediaPage<MovieWatchHistory>;
+          return latest.copyWith(
+            watchHistory: historyResult.items,
+            historyPaging: _pagingOf(historyResult),
+            loadedSections: loaded,
+            loadingSections: stillLoading,
+          );
+        }(),
         MovieSection.collections => latest.copyWith(
           collections: result as List<MovieCollection>,
           loadedSections: loaded,
@@ -827,7 +834,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       state = AsyncData(current.copyWith(loadingSections: loading));
     }
     try {
-      final series = await _api.seriesByType(
+      final seriesPage = await _api.seriesByTypePage(
         seriesType: section == MovieSection.anime ? 'ANIME' : 'TV',
       );
       if (!ref.mounted || _sectionLoadGenerations[section] != generation) {
@@ -852,8 +859,14 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       // 剧集/动漫各写独立系列字段，互不覆盖；侧边栏计数与分区网格同源。
       final updated =
           section == MovieSection.tvShows
-              ? latest.copyWith(tvSeries: series)
-              : latest.copyWith(animeSeries: series);
+              ? latest.copyWith(
+                tvSeries: seriesPage.items,
+                tvSeriesPaging: _pagingOf(seriesPage),
+              )
+              : latest.copyWith(
+                animeSeries: seriesPage.items,
+                animeSeriesPaging: _pagingOf(seriesPage),
+              );
       state = AsyncData(
         updated.copyWith(
           loadedSections: loaded,
@@ -897,17 +910,32 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       _safe(() => _api.libraryPage(mediaType: 'EPISODE'), emptyPage),
       // 预取两类系列列表：侧边栏计数与剧集/动漫分区首屏即有稳定数据
       // （后端 dashboard 的 series 字段恒为空，不能作为计数来源）。
-      _safe(() => _api.seriesByType(seriesType: 'TV'), const <MovieSeries>[]),
       _safe(
-        () => _api.seriesByType(seriesType: 'ANIME'),
-        const <MovieSeries>[],
+        () => _api.seriesByTypePage(seriesType: 'TV'),
+        MediaPage<MovieSeries>(
+          items: const <MovieSeries>[],
+          page: 0,
+          size: 50,
+          totalElements: 0,
+          totalPages: 0,
+        ),
+      ),
+      _safe(
+        () => _api.seriesByTypePage(seriesType: 'ANIME'),
+        MediaPage<MovieSeries>(
+          items: const <MovieSeries>[],
+          page: 0,
+          size: 50,
+          totalElements: 0,
+          totalPages: 0,
+        ),
       ),
     ]);
     final dashboard = results[0] as MovieDashboard;
     final moviePage = results[1] as MediaPage<MovieVideoItem>;
     final episodePage = results[2] as MediaPage<MovieVideoItem>;
-    final tvSeries = results[3] as List<MovieSeries>;
-    final animeList = results[4] as List<MovieSeries>;
+    final tvSeriesPage = results[3] as MediaPage<MovieSeries>;
+    final animePage = results[4] as MediaPage<MovieSeries>;
     final mergedItems = <String, MovieVideoItem>{
       for (final item in moviePage.items) item.id: item,
       for (final item in episodePage.items) item.id: item,
@@ -921,8 +949,10 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       watchHistory: const [],
       collections: const [],
       tasks: const [],
-      tvSeries: tvSeries,
-      animeSeries: animeList,
+      tvSeries: tvSeriesPage.items,
+      animeSeries: animePage.items,
+      tvSeriesPaging: _pagingOf(tvSeriesPage),
+      animeSeriesPaging: _pagingOf(animePage),
       moviePage: moviePage.page,
       movieHasMore: moviePage.page + 1 < moviePage.totalPages,
       episodePage: episodePage.page,
@@ -954,4 +984,167 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       state = AsyncData(current.copyWith(clearError: true));
     }
   }
+
+  /// 通用续页：拉取 page+1 追加去重；门闩经 [onPaging] 回写状态，
+  /// 失败回滚等待下次触底。
+  Future<void> _appendPage<T>({
+    required List<T> currentItems,
+    required ListPaging paging,
+    required String Function(T item) keyOf,
+    required Future<MediaPage<T>> Function(int page) fetch,
+    required void Function(ListPaging paging) onPaging,
+    required void Function(List<T> items, ListPaging paging) apply,
+  }) async {
+    if (!paging.hasMore || paging.isLoadingMore) {
+      return;
+    }
+    onPaging(paging.copyWith(isLoadingMore: true));
+    try {
+      final next = await fetch(paging.page + 1);
+      final seen = currentItems.map(keyOf).toSet();
+      apply(<T>[
+        ...currentItems,
+        ...next.items.where((item) => !seen.contains(keyOf(item))),
+      ], _pagingOf(next));
+    } on Exception {
+      onPaging(paging);
+    }
+  }
+
+  /// 观看历史续页。
+  Future<void> loadMoreHistory() async {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    await _appendPage(
+      currentItems: current.watchHistory,
+      paging: current.historyPaging,
+      keyOf: (item) => item.id,
+      fetch: (page) => _api.historyPage(page: page),
+      onPaging: (paging) => _setHistoryPaging(paging),
+      apply: (items, paging) {
+        final latest = state.asData?.value;
+        if (latest != null) {
+          state = AsyncData(
+            latest.copyWith(watchHistory: items, historyPaging: paging),
+          );
+        }
+      },
+    );
+  }
+
+  /// 收藏视频续页。
+  Future<void> loadMoreFavorites() async {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    await _appendPage(
+      currentItems: current.favoriteItems,
+      paging: current.favoritesPaging,
+      keyOf: (item) => item.id,
+      fetch: (page) => _api.favoritesPage(page: page),
+      onPaging: (paging) => _setFavoritesPaging(paging),
+      apply: (items, paging) {
+        final latest = state.asData?.value;
+        if (latest != null) {
+          state = AsyncData(
+            latest.copyWith(favoriteItems: items, favoritesPaging: paging),
+          );
+        }
+      },
+    );
+  }
+
+  /// 收藏系列续页。
+  Future<void> loadMoreFavoriteSeries() async {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    await _appendPage(
+      currentItems: current.favoriteSeries,
+      paging: current.favoriteSeriesPaging,
+      keyOf: (item) => item.id,
+      fetch: (page) => _api.favoriteSeriesPage(page: page),
+      onPaging: (paging) => _setFavoriteSeriesPaging(paging),
+      apply: (items, paging) {
+        final latest = state.asData?.value;
+        if (latest != null) {
+          state = AsyncData(
+            latest.copyWith(
+              favoriteSeries: items,
+              favoriteSeriesPaging: paging,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  /// 剧集/动漫系列网格续页。
+  Future<void> loadMoreSeries({required bool anime}) async {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    await _appendPage(
+      currentItems: anime ? current.animeSeries : current.tvSeries,
+      paging: anime ? current.animeSeriesPaging : current.tvSeriesPaging,
+      keyOf: (item) => item.id,
+      fetch:
+          (page) => _api.seriesByTypePage(
+            seriesType: anime ? 'ANIME' : 'TV',
+            page: page,
+          ),
+      onPaging: (paging) => _setSeriesPaging(anime: anime, paging: paging),
+      apply: (items, paging) {
+        final latest = state.asData?.value;
+        if (latest != null) {
+          state = AsyncData(
+            anime
+                ? latest.copyWith(animeSeries: items, animeSeriesPaging: paging)
+                : latest.copyWith(tvSeries: items, tvSeriesPaging: paging),
+          );
+        }
+      },
+    );
+  }
+
+  void _setHistoryPaging(ListPaging paging) {
+    final latest = state.asData?.value;
+    if (latest != null) {
+      state = AsyncData(latest.copyWith(historyPaging: paging));
+    }
+  }
+
+  void _setFavoritesPaging(ListPaging paging) {
+    final latest = state.asData?.value;
+    if (latest != null) {
+      state = AsyncData(latest.copyWith(favoritesPaging: paging));
+    }
+  }
+
+  void _setFavoriteSeriesPaging(ListPaging paging) {
+    final latest = state.asData?.value;
+    if (latest != null) {
+      state = AsyncData(latest.copyWith(favoriteSeriesPaging: paging));
+    }
+  }
+
+  void _setSeriesPaging({required bool anime, required ListPaging paging}) {
+    final latest = state.asData?.value;
+    if (latest != null) {
+      state = AsyncData(
+        anime
+            ? latest.copyWith(animeSeriesPaging: paging)
+            : latest.copyWith(tvSeriesPaging: paging),
+      );
+    }
+  }
 }
+
+/// 分页页对象到滚动加载状态的映射。
+ListPaging _pagingOf<T>(MediaPage<T> page) =>
+    ListPaging(page: page.page, hasMore: page.page + 1 < page.totalPages);

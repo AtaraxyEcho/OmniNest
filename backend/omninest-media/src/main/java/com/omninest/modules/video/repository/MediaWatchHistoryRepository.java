@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +14,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface MediaWatchHistoryRepository extends JpaRepository<MediaWatchHistory, UUID> {
     List<MediaWatchHistory> findByOwnerUserIdOrderByPlayedAtDesc(UUID ownerUserId);
+
+    /**
+     * 分页查询用户观看历史，按播放时间倒序，供历史列表滚动加载。
+     */
+    Page<MediaWatchHistory> findPageByOwnerUserIdOrderByPlayedAtDesc(UUID ownerUserId, Pageable pageable);
 
     /**
      * 统计用户观看历史总数。

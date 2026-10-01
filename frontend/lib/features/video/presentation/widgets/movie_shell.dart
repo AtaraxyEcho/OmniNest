@@ -13,6 +13,8 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
@@ -21,6 +23,7 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_section_transition.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'movie_shell_search_overlay.dart';
 part 'movie_shell_mobile.dart';
@@ -336,17 +339,9 @@ class MovieTopBar extends StatelessWidget {
                           )
                           .toList(),
             ),
-          IconButton(
-            onPressed: () => context.go('/portal'),
-            tooltip: l10n.videoBackToPortal,
-            icon: Icon(
-              Icons.arrow_back_rounded,
-              size: 18,
-              color: palette.mutedForeground,
-            ),
-          ),
+          WorkstationPortalLink(onTap: () => context.go('/portal')),
+          const SizedBox(width: 12),
           if (wide) ...[
-            const SizedBox(width: 8),
             // 三端统一品牌入口：以 logo 替代原电影图标，与 Portal 顶栏同语言。
             const BrandLogo(size: 20, radius: 6),
             const SizedBox(width: 6),
@@ -401,7 +396,16 @@ class MovieTopBar extends StatelessWidget {
                         interval: const Duration(seconds: 2),
                       );
                     } on Object {
-                      // 自动导入失败不阻断已完成的上传结果。
+                      // 轮询异常不阻断上传结果，但结果未确认需要用户可感知。
+                      if (context.mounted) {
+                        showOmniFeedback(
+                          context,
+                          AppLocalizations.of(
+                            context,
+                          ).videoAutoImportStatusUnknown,
+                          severity: OmniFeedbackSeverity.warning,
+                        );
+                      }
                     }
                   }
                   await onRefresh?.call();

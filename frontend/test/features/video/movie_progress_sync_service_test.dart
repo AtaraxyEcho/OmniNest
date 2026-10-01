@@ -69,7 +69,7 @@ void main() {
       interval: const Duration(milliseconds: 20),
       readPositionSeconds: () => 10,
       readDurationSeconds: () => 100,
-      computeCompleted: (_, __) => false,
+      computeCompleted: (_, _) => false,
       onSyncFailed: () => failed++,
     );
     await Future<void>.delayed(const Duration(milliseconds: 80));
@@ -87,7 +87,7 @@ void main() {
       interval: const Duration(milliseconds: 20),
       readPositionSeconds: () => 10,
       readDurationSeconds: () => 100,
-      computeCompleted: (_, __) => false,
+      computeCompleted: (_, _) => false,
       onSyncFailed: () => failed++,
     );
     await Future<void>.delayed(const Duration(milliseconds: 80));

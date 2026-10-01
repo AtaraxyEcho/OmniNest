@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -24,6 +26,11 @@ public interface MediaVideoFavoriteRepository extends JpaRepository<MediaVideoFa
     Optional<MediaVideoFavorite> findByOwnerUserIdAndVideoItemId(UUID ownerUserId, UUID videoItemId);
 
     List<MediaVideoFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
+
+    /**
+     * 分页查询用户收藏的视频，按收藏时间倒序，供收藏列表滚动加载。
+     */
+    Page<MediaVideoFavorite> findPageByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId, Pageable pageable);
 
     void deleteByOwnerUserIdAndVideoItemIdIn(UUID ownerUserId, Collection<UUID> videoItemIds);
 

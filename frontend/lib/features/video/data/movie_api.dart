@@ -77,11 +77,35 @@ class MovieApi {
     return parseList(response.data).map(_videoItemFromJson).toList();
   }
 
+  /// 分页获取收藏视频：滚动加载消费，按收藏时间倒序。
+  Future<MediaPage<MovieVideoItem>> favoritesPage({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/favorites/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return MediaPage.fromJson(parseData(response.data), _videoItemFromJson);
+  }
+
   Future<List<MovieSeries>> favoriteSeries() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/video/favorites/series',
     );
     return parseList(response.data).map(_seriesFromJson).toList();
+  }
+
+  /// 分页获取收藏系列：滚动加载消费，按收藏时间倒序。
+  Future<MediaPage<MovieSeries>> favoriteSeriesPage({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/favorites/series/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return MediaPage.fromJson(parseData(response.data), _seriesFromJson);
   }
 
   Future<MovieSeries> updateSeriesMetadata({
@@ -103,6 +127,21 @@ class MovieApi {
     return parseList(response.data)
         .map((json) => MovieWatchHistory.fromJson(_resolvePosterJson(json)))
         .toList();
+  }
+
+  /// 分页获取观看历史：滚动加载消费，按播放时间倒序。
+  Future<MediaPage<MovieWatchHistory>> historyPage({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/history/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return MediaPage.fromJson(
+      parseData(response.data),
+      (json) => MovieWatchHistory.fromJson(_resolvePosterJson(json)),
+    );
   }
 
   /// 删除指定观看历史（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
@@ -665,6 +704,19 @@ class MovieApi {
       queryParameters: {'seriesType': seriesType},
     );
     return parseList(response.data).map(_seriesFromJson).toList();
+  }
+
+  /// 按类型分页获取系列：滚动加载消费，按更新时间倒序。
+  Future<MediaPage<MovieSeries>> seriesByTypePage({
+    String seriesType = 'TV',
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/series/by-type/page',
+      queryParameters: {'seriesType': seriesType, 'page': page, 'size': size},
+    );
+    return MediaPage.fromJson(parseData(response.data), _seriesFromJson);
   }
 
   Future<MovieSeriesDetail> seriesDetail(String seriesId) async {

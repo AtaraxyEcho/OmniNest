@@ -15,6 +15,7 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 
 import 'movie_feedback.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 class CollectionsSection extends ConsumerWidget {
   const CollectionsSection({
@@ -118,7 +119,7 @@ Future<void> _showCreateCollectionDialog(
 ) async {
   final nameController = TextEditingController();
   final descriptionController = TextEditingController();
-  final created = await showDialog<bool>(
+  final created = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(
@@ -203,7 +204,7 @@ Future<void> _showCollectionItems(
   WidgetRef ref,
   MovieCollection collection,
 ) async {
-  await showDialog<void>(
+  await showWorkstationDialog<void>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(
@@ -319,7 +320,7 @@ Future<void> _showMoviePickerDialog(
   BuildContext context,
   MovieCollection collection,
 ) async {
-  await showDialog<void>(
+  await showWorkstationDialog<void>(
     context: context,
     builder: (dialogContext) => _MoviePickerDialog(collection: collection),
   );

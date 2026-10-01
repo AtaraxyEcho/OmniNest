@@ -208,20 +208,11 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
         .read(videoLocalPreferencesControllerProvider.notifier)
         .markAudioCacheNoticeShown();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          AppLocalizations.of(context).videoCompatibleAudioNotice,
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: MovieChromeColors.trackChipBackground,
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: AppLocalizations.of(context).videoGotIt,
-          textColor: MovieChromeColors.trackChipText,
-          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-        ),
-      ),
+    showOmniFeedback(
+      context,
+      AppLocalizations.of(context).videoCompatibleAudioNotice,
+      actionLabel: AppLocalizations.of(context).videoGotIt,
+      duration: const Duration(seconds: 3),
     );
   }
 

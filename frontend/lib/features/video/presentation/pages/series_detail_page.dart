@@ -16,6 +16,7 @@ import 'package:omninest/features/video/domain/series_play_target.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'series_detail_header_widgets.dart';
 part 'series_detail_overview_cast.dart';
@@ -191,6 +192,13 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
       if (!mounted) {
         return;
       }
+      showOmniFeedback(
+        context,
+        current
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
       ref.invalidate(seriesFavoriteProvider(series.id));
     } on Exception catch (error) {
       if (!mounted) {

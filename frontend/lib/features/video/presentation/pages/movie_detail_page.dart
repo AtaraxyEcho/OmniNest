@@ -7,15 +7,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/movie_detail_action_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'movie_detail_page_sections.dart';
 part 'movie_detail_page_tabs.dart';
@@ -192,6 +195,13 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
       if (!mounted) {
         return;
       }
+      showOmniFeedback(
+        context,
+        current
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
       ref.invalidate(videoFavoriteStatusProvider(widget.item.id));
     } on Exception catch (error) {
       if (!mounted) {
@@ -215,7 +225,7 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
     if (!mounted || bytes.isEmpty) {
       return;
     }
-    final language = await showDialog<String>(
+    final language = await showWorkstationDialog<String>(
       context: context,
       builder: (dialogContext) => _SubtitleLanguageDialog(fileName: file.name),
     );

@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
@@ -20,6 +21,8 @@ void main() {
     await _pumpDialog(tester, const []);
 
     expect(tester.takeException(), isNull);
+    // 空态提示同样走工位弹窗外壳。
+    expect(find.byType(WorkstationDialogFrame), findsOneWidget);
     expect(find.text('暂无可用存储位置'), findsOneWidget);
     expect(find.text('关闭'), findsOneWidget);
   });
@@ -35,7 +38,10 @@ void main() {
     await _pumpDialog(tester, const [_healthyLocation]);
 
     expect(tester.takeException(), isNull);
+    // 工位弹窗外壳：直角框架 + 右上角库类型 code 标签。
+    expect(find.byType(WorkstationDialogFrame), findsOneWidget);
     expect(find.text('添加来源'), findsOneWidget);
+    expect(find.text('MOVIE'), findsOneWidget);
     expect(find.textContaining('本地影视盘'), findsOneWidget);
   });
 

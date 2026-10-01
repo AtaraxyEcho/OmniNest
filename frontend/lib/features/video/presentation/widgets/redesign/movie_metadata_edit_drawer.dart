@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -18,9 +19,9 @@ Future<void> showMovieMetadataEditor(
   MovieVideoItem item,
 ) async {
   final l10n = AppLocalizations.of(context);
-  await showGeneralDialog<void>(
+  await showWorkstationGeneralDialog<void>(
     context: context,
-    barrierDismissible: true,
+    dismissible: true,
     barrierLabel: l10n.videoDetailEdit,
     barrierColor: Colors.black54,
     transitionDuration: const Duration(milliseconds: 220),
@@ -29,7 +30,7 @@ Future<void> showMovieMetadataEditor(
           alignment: Alignment.centerRight,
           child: MovieMetadataEditPanel(item: item),
         ),
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,

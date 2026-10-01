@@ -84,11 +84,30 @@ class _RefreshApiAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     final data = switch (options.path) {
-      '/video/favorites' => _favorites(),
-      '/video/favorites/series' => <Object>[_series('series-1')],
+      '/video/favorites/page' => _favorites(),
+      '/video/favorites/series/page' => {
+        'items': <Object>[_series('series-1')],
+        'page': 0,
+        'size': 50,
+        'totalElements': 1,
+        'totalPages': 1,
+      },
+      '/video/history/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
-      '/video/series/by-type' => <Object>[],
+      '/video/series/by-type/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return ResponseBody.fromString(
@@ -100,9 +119,15 @@ class _RefreshApiAdapter implements HttpClientAdapter {
     );
   }
 
-  List<Object> _favorites() {
+  Map<String, Object> _favorites() {
     favoritesRequests++;
-    return [_movie('movie-1')];
+    return {
+      'items': <Object>[_movie('movie-1')],
+      'page': 0,
+      'size': 50,
+      'totalElements': 1,
+      'totalPages': 1,
+    };
   }
 
   Map<String, Object> _series(String id) {

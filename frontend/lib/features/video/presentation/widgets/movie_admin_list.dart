@@ -583,21 +583,16 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
 
   void _showSubmittedFeedback() {
     final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.videoTaskSubmitted),
-          action: SnackBarAction(
-            label: l10n.videoSnackViewProgress,
-            onPressed: _showTaskProgressDialog,
-          ),
-        ),
-      );
+    showOmniFeedback(
+      context,
+      l10n.videoTaskSubmitted,
+      actionLabel: l10n.videoSnackViewProgress,
+      onAction: _showTaskProgressDialog,
+    );
   }
 
   void _showTaskProgressDialog() {
-    showDialog<void>(
+    showWorkstationDialog<void>(
       context: context,
       builder: (dialogContext) => const _MovieAdminTaskDialog(),
     );
@@ -759,7 +754,7 @@ class _AdminTextAction extends StatelessWidget {
 Future<void> _showNfoPreview(BuildContext context, MovieVideoItem item) async {
   final container = ProviderScope.containerOf(context);
   final nfoAsync = container.read(movieNfoPreviewProvider(item.id));
-  await showDialog<void>(
+  await showWorkstationDialog<void>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(

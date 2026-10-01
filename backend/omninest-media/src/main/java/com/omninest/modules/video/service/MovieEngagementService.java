@@ -32,6 +32,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,7 +60,29 @@ public class MovieEngagementService {
 
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> favorites(UUID ownerUserId) {
-        List<MediaVideoFavorite> favorites = favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId);
+        return toFavoriteDtos(ownerUserId, favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId));
+    }
+
+    /**
+     * 分页查询用户收藏的视频，按收藏时间倒序，供收藏列表滚动加载。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 收藏视频分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MovieVideoItemDto> favoritesPage(UUID ownerUserId, int page, int size) {
+        Page<MediaVideoFavorite> favorites = favoriteRepository.findPageByOwnerUserIdOrderByCreatedAtDesc(
+                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return new PageImpl<>(
+                toFavoriteDtos(ownerUserId, favorites.getContent()),
+                favorites.getPageable(),
+                favorites.getTotalElements()
+        );
+    }
+
+    private List<MovieVideoItemDto> toFavoriteDtos(UUID ownerUserId, List<MediaVideoFavorite> favorites) {
         if (favorites.isEmpty()) {
             return List.of();
         }
@@ -108,7 +133,29 @@ public class MovieEngagementService {
 
     @Transactional(readOnly = true)
     public List<MovieWatchHistoryDto> history(UUID ownerUserId) {
-        List<MediaWatchHistory> histories = historyRepository.findByOwnerUserIdOrderByPlayedAtDesc(ownerUserId);
+        return toHistoryDtos(ownerUserId, historyRepository.findByOwnerUserIdOrderByPlayedAtDesc(ownerUserId));
+    }
+
+    /**
+     * 分页查询用户观看历史，按播放时间倒序，供历史列表滚动加载。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 历史分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MovieWatchHistoryDto> historyPage(UUID ownerUserId, int page, int size) {
+        Page<MediaWatchHistory> histories = historyRepository.findPageByOwnerUserIdOrderByPlayedAtDesc(
+                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return new PageImpl<>(
+                toHistoryDtos(ownerUserId, histories.getContent()),
+                histories.getPageable(),
+                histories.getTotalElements()
+        );
+    }
+
+    private List<MovieWatchHistoryDto> toHistoryDtos(UUID ownerUserId, List<MediaWatchHistory> histories) {
         if (histories.isEmpty()) {
             return List.of();
         }

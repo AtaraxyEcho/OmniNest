@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -103,6 +105,37 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             @Param("requesterUserId") UUID requesterUserId,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("seriesType") String seriesType
+    );
+
+    /**
+     * 分页查询当前用户可访问且仍有活动剧集文件的指定类型系列，按更新时间倒序，
+     * 供系列网格滚动加载。
+     */
+    @Query(
+            value = """
+            select distinct series from MediaTvSeries series
+            join MediaVideoItem item on item.seriesId = series.id
+            join FileNode file on item.fileNodeId = file.id
+            where series.seriesType = :seriesType
+              and file.deleted = false
+              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+                   or series.librarySourceId in :librarySourceIds)
+            order by series.updatedAt desc
+            """,
+            countQuery = """
+            select count(distinct series.id) from MediaTvSeries series
+            join MediaVideoItem item on item.seriesId = series.id
+            join FileNode file on item.fileNodeId = file.id
+            where series.seriesType = :seriesType
+              and file.deleted = false
+              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+                   or series.librarySourceId in :librarySourceIds)
+            """)
+    Page<MediaTvSeries> findPageByActiveReadableAndSeriesType(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("seriesType") String seriesType,
+            Pageable pageable
     );
 
     /**

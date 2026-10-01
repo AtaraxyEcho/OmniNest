@@ -318,7 +318,17 @@ extension MovieCenterCommands on MovieCenterController {
   Future<void> deleteHistoryItem(MovieWatchHistory entry) async {
     try {
       await _api.deleteHistoryItem(entry.id);
-      await refresh();
+      // 本地移除保持已加载窗口，避免全量重拉清掉滚动累积；当前页被删空
+      // 时由下次触底续页自然补齐。
+      final current = centerState.asData?.value;
+      if (current != null) {
+        centerState = AsyncData(
+          current.copyWith(
+            watchHistory:
+                current.watchHistory.where((h) => h.id != entry.id).toList(),
+          ),
+        );
+      }
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -328,7 +338,15 @@ extension MovieCenterCommands on MovieCenterController {
   Future<void> clearHistory() async {
     try {
       await _api.clearHistory();
-      await refresh();
+      final current = centerState.asData?.value;
+      if (current != null) {
+        centerState = AsyncData(
+          current.copyWith(
+            watchHistory: const [],
+            historyPaging: const ListPaging(),
+          ),
+        );
+      }
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -360,11 +378,11 @@ extension MovieCenterCommands on MovieCenterController {
     return page.items.where((item) => item.mediaType == 'MOVIE').toList();
   }
 
-  /// 收藏分区同时拉取影片收藏与系列（剧集/动漫）收藏。
+  /// 收藏分区同时拉取影片收藏与系列（剧集/动漫）收藏首页：滚动加载续页。
   Future<List<Object>> _loadFavoriteLists() async {
     final favorites = await Future.wait([
-      _api.favorites(),
-      _api.favoriteSeries(),
+      _api.favoritesPage(),
+      _api.favoriteSeriesPage(),
     ]);
     return [favorites[0], favorites[1]];
   }

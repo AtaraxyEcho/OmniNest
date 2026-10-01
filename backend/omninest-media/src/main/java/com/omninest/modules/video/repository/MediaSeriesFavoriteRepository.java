@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MediaSeriesFavoriteRepository extends JpaRepository<MediaSeriesFavorite, UUID> {
@@ -27,6 +29,11 @@ public interface MediaSeriesFavoriteRepository extends JpaRepository<MediaSeries
      * @return 系列收藏列表
      */
     List<MediaSeriesFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
+
+    /**
+     * 分页查询用户收藏的系列，按收藏时间倒序，供收藏系列列表滚动加载。
+     */
+    Page<MediaSeriesFavorite> findPageByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId, Pageable pageable);
 
     List<MediaSeriesFavorite> findByOwnerUserIdAndSeriesIdIn(UUID ownerUserId, Collection<UUID> seriesIds);
 

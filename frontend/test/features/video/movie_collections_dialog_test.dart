@@ -184,7 +184,13 @@ class _CollectionApiAdapter implements HttpClientAdapter {
       '/video/collections/coll-1/items' => _items,
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
-      '/video/series/by-type' => <Object>[],
+      '/video/series/by-type/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return _ok(data);

@@ -42,9 +42,7 @@ void main() {
             'series-1',
           ).overrideWith((ref) async => _detail),
           seriesFavoriteProvider('series-1').overrideWith((ref) async => false),
-          seriesPlayIntentProvider(
-            'series-1',
-          ).overrideWith(
+          seriesPlayIntentProvider('series-1').overrideWith(
             (ref) async =>
                 const SeriesPlayIntent(kind: SeriesPlayIntentKind.first),
           ),
@@ -129,9 +127,27 @@ class _SeriesApiAdapter implements HttpClientAdapter {
     final data = switch (options.path) {
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
-      '/video/series/by-type' => <Object>[],
-      '/video/favorites' => <Object>[],
-      '/video/favorites/series' => <Object>[],
+      '/video/series/by-type/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
+      '/video/favorites/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
+      '/video/favorites/series/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return _ok(data);

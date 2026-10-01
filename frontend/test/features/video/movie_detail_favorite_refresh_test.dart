@@ -60,6 +60,9 @@ void main() {
     expect(adapter.dashboardRequests, 2);
     // 收藏状态提供器被失效重取，星星变为点亮态。
     expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+    // 收藏成功提示的计时器需要冲刷，避免用例结束残留 pending timer。
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 }
 
@@ -109,8 +112,20 @@ class _FavoriteApiAdapter implements HttpClientAdapter {
     final data = switch (options.path) {
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
-      '/video/series/by-type' => <Object>[],
-      '/video/favorites' => <Object>[],
+      '/video/series/by-type/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
+      '/video/favorites/page' => {
+        'items': <Object>[],
+        'page': 0,
+        'size': 50,
+        'totalElements': 0,
+        'totalPages': 0,
+      },
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return _ok(data);

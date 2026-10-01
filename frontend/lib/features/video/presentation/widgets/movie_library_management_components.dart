@@ -69,9 +69,9 @@ class _VideoLibrarySourceDialogState
     final effectiveMountMode = mountAllowed && _mountMode;
     if (!effectiveMountMode &&
         (_locationId.isEmpty || widget.locations.isEmpty)) {
-      return AlertDialog(
-        title: Text(l10n.videoNoAvailableStorageLocation),
-        content: Text(l10n.videoNoAvailableStorageLocationHint),
+      return WorkstationDialogFrame(
+        title: l10n.videoNoAvailableStorageLocation,
+        body: Text(l10n.videoNoAvailableStorageLocationHint),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -85,156 +85,159 @@ class _VideoLibrarySourceDialogState
     final availableMounts = mounts.where((mount) => mount.available).toList();
     final effectiveMountKey =
         _mountKey ?? availableMounts.firstOrNull?.mountKey;
-    return AlertDialog(
-      title: Text(
-        widget.source == null
-            ? l10n.videoAddLibrarySource
-            : l10n.videoEditLibrarySource,
-      ),
-      content: SizedBox(
-        width: 440,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (mountAllowed) ...[
-              SegmentedButton<bool>(
-                segments: [
-                  ButtonSegment(
-                    value: true,
-                    label: Text(l10n.videoSourceFromMount),
-                  ),
-                  ButtonSegment(
-                    value: false,
-                    label: Text(l10n.videoStorageLocation),
-                  ),
-                ],
-                selected: {_mountMode},
-                onSelectionChanged: (selection) {
-                  setState(() => _mountMode = selection.first);
-                },
-              ),
-              const SizedBox(height: 14),
-            ],
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(labelText: l10n.videoSourceName),
+    return WorkstationDialogFrame(
+      title:
+          widget.source == null
+              ? l10n.videoAddLibrarySource
+              : l10n.videoEditLibrarySource,
+      headerLabel: _libraryType.apiValue,
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (mountAllowed) ...[
+            SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(
+                  value: true,
+                  label: Text(l10n.videoSourceFromMount),
+                ),
+                ButtonSegment(
+                  value: false,
+                  label: Text(l10n.videoStorageLocation),
+                ),
+              ],
+              selected: {_mountMode},
+              onSelectionChanged: (selection) {
+                setState(() => _mountMode = selection.first);
+              },
             ),
             const SizedBox(height: 14),
-            if (effectiveMountMode)
-              AppDropdown<String>(
-                value: effectiveMountKey ?? '',
-                label: l10n.videoTrustedMountLabel,
-                items: [
-                  for (final mount in mounts)
-                    AppDropdownItem(
-                      value: mount.mountKey,
-                      label: mount.displayName,
-                      enabled: mount.available,
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _mountKey = value;
-                      _pathController.text = '.';
-                    });
-                  }
-                },
-              )
-            else
-              AppDropdown<String>(
-                value: _locationId,
-                label: l10n.videoStorageLocation,
-                items: [
-                  for (final location in widget.locations)
-                    AppDropdownItem(
-                      value: location.id,
-                      label:
-                          '${location.name} · ${_storageHealthLabel(l10n, location.healthStatus)}',
-                      enabled: location.available,
-                    ),
-                ],
-                onChanged:
-                    widget.source == null
-                        ? (value) {
-                          if (value != null) {
-                            setState(() {
-                              _locationId = value;
-                              _pathController.text = '.';
-                            });
-                          }
-                        }
-                        : null,
-              ),
-            const SizedBox(height: 14),
-            AppDropdown<VideoLibraryType>(
-              value: _libraryType,
-              label: l10n.videoLibraryType,
-              helperText: l10n.videoLibraryTypeHint,
+          ],
+          TextField(
+            controller: _nameController,
+            decoration: InputDecoration(labelText: l10n.videoSourceName),
+          ),
+          const SizedBox(height: 14),
+          if (effectiveMountMode)
+            AppDropdown<String>(
+              value: effectiveMountKey ?? '',
+              label: l10n.videoTrustedMountLabel,
               items: [
-                for (final type in VideoLibraryType.values)
+                for (final mount in mounts)
                   AppDropdownItem(
-                    value: type,
-                    label: _libraryTypeLabel(l10n, type),
+                    value: mount.mountKey,
+                    label: mount.displayName,
+                    enabled: mount.available,
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _mountKey = value;
+                    _pathController.text = '.';
+                  });
+                }
+              },
+            )
+          else
+            AppDropdown<String>(
+              value: _locationId,
+              label: l10n.videoStorageLocation,
+              items: [
+                for (final location in widget.locations)
+                  AppDropdownItem(
+                    value: location.id,
+                    label:
+                        '${location.name} · ${_storageHealthLabel(l10n, location.healthStatus)}',
+                    enabled: location.available,
                   ),
               ],
               onChanged:
                   widget.source == null
                       ? (value) {
                         if (value != null) {
-                          setState(() => _libraryType = value);
+                          setState(() {
+                            _locationId = value;
+                            _pathController.text = '.';
+                          });
                         }
                       }
                       : null,
             ),
-            const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _pathController,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: l10n.videoRelativeDirectory,
-                      helperText:
-                          effectiveMountMode
-                              ? l10n.videoNoTrustedMountHint
-                              : l10n.videoRelativeDirectoryHint,
-                    ),
+          const SizedBox(height: 14),
+          AppDropdown<VideoLibraryType>(
+            value: _libraryType,
+            label: l10n.videoLibraryType,
+            helperText: l10n.videoLibraryTypeHint,
+            items: [
+              for (final type in VideoLibraryType.values)
+                AppDropdownItem(
+                  value: type,
+                  label: _libraryTypeLabel(l10n, type),
+                ),
+            ],
+            onChanged:
+                widget.source == null
+                    ? (value) {
+                      if (value != null) {
+                        setState(() => _libraryType = value);
+                      }
+                    }
+                    : null,
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _pathController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: l10n.videoRelativeDirectory,
+                    helperText:
+                        effectiveMountMode
+                            ? l10n.videoNoTrustedMountHint
+                            : l10n.videoRelativeDirectoryHint,
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed:
-                      effectiveMountMode && effectiveMountKey == null
-                          ? null
-                          : _browseDirectory,
-                  tooltip: l10n.videoBrowseRelativeDirectory,
-                  icon: const Icon(Icons.folder_open_rounded),
+              ),
+              const SizedBox(width: 8),
+              // 浏览按钮与相邻输入框严格等高（同取 fieldHeight 令牌），
+              // 修复按钮默认 40px 高于输入框 36px 的顶部错位。
+              IconButton.filledTonal(
+                style: IconButton.styleFrom(
+                  minimumSize: Size.square(AppControlTokens.fieldHeight),
+                  maximumSize: Size.square(AppControlTokens.fieldHeight),
+                  padding: EdgeInsets.zero,
                 ),
-              ],
+                onPressed:
+                    effectiveMountMode && effectiveMountKey == null
+                        ? null
+                        : _browseDirectory,
+                tooltip: l10n.videoBrowseRelativeDirectory,
+                icon: const Icon(Icons.folder_open_rounded),
+              ),
+            ],
+          ),
+          if (effectiveMountMode && effectiveMountKey == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                l10n.videoNoTrustedMount,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: AppTypography.bodySmall,
+                ),
+              ),
             ),
-            if (effectiveMountMode && effectiveMountKey == null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  l10n.videoNoTrustedMount,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
-              ),
-            if (widget.source != null)
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                value: _enabled,
-                title: Text(l10n.videoSourceEnabled),
-                onChanged: (value) => setState(() => _enabled = value),
-              ),
-          ],
-        ),
+          if (widget.source != null)
+            WorkstationToggle(
+              label: l10n.videoSourceEnabled,
+              value: _enabled,
+              onChanged: (value) => setState(() => _enabled = value),
+            ),
+        ],
       ),
       actions: [
         TextButton(
@@ -313,7 +316,7 @@ class _VideoLibrarySourceDialogState
     final mountKey =
         _mountKey ??
         mounts.where((mount) => mount.available).firstOrNull?.mountKey;
-    final selected = await showDialog<String>(
+    final selected = await showWorkstationDialog<String>(
       context: context,
       builder:
           (context) => _VideoStorageDirectoryDialog(
@@ -402,14 +405,13 @@ class _VideoStorageDirectoryDialogState
             parent: parent,
           )),
     );
-    return AlertDialog(
-      title: Text(
-        widget.mountKey != null
-            ? l10n.videoBrowseMountDirectory
-            : l10n.videoBrowseRelativeDirectory,
-      ),
-      content: SizedBox(
-        width: 520,
+    return WorkstationDialogFrame(
+      title:
+          widget.mountKey != null
+              ? l10n.videoBrowseMountDirectory
+              : l10n.videoBrowseRelativeDirectory,
+      width: 520,
+      body: SizedBox(
         height: 420,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -163,9 +163,9 @@ class _MovieMobileShell extends StatelessWidget {
 
   void _openSectionDrawer(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    showGeneralDialog<void>(
+    showWorkstationGeneralDialog<void>(
       context: context,
-      barrierDismissible: true,
+      dismissible: true,
       barrierLabel: l10n.videoBrowse,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 220),
@@ -180,7 +180,7 @@ class _MovieMobileShell extends StatelessWidget {
           ),
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,
@@ -215,9 +215,9 @@ class _MovieMobileTopBar extends StatelessWidget {
 
   void _openSectionDrawer(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    showGeneralDialog<void>(
+    showWorkstationGeneralDialog<void>(
       context: context,
-      barrierDismissible: true,
+      dismissible: true,
       barrierLabel: l10n.videoBrowse,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 220),
@@ -232,7 +232,7 @@ class _MovieMobileTopBar extends StatelessWidget {
           ),
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,
@@ -313,7 +313,16 @@ class _MovieMobileTopBar extends StatelessWidget {
                         interval: const Duration(seconds: 2),
                       );
                     } on Object {
-                      // 自动导入失败不阻断已完成的上传结果。
+                      // 轮询异常不阻断上传结果，但结果未确认需要用户可感知。
+                      if (context.mounted) {
+                        showOmniFeedback(
+                          context,
+                          AppLocalizations.of(
+                            context,
+                          ).videoAutoImportStatusUnknown,
+                          severity: OmniFeedbackSeverity.warning,
+                        );
+                      }
                     }
                   }
                   await onRefresh?.call();
@@ -346,9 +355,9 @@ class _MovieMobileTopBar extends StatelessWidget {
   void _showSearchDialog(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final controller = TextEditingController();
-    showGeneralDialog<void>(
+    showWorkstationGeneralDialog<void>(
       context: context,
-      barrierDismissible: true,
+      dismissible: true,
       barrierLabel: l10n.videoSearch,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 250),
@@ -364,7 +373,7 @@ class _MovieMobileTopBar extends StatelessWidget {
               },
             ),
           ),
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
           curve: Curves.easeOutCubic,

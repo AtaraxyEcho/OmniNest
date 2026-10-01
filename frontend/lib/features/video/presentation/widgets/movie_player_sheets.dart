@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/video/domain/movie_models.dart'
     hide SubtitleTrack;
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
@@ -402,9 +403,9 @@ Future<void> _showPlayerPanel({
     );
     return;
   }
-  await showGeneralDialog<void>(
+  await showWorkstationGeneralDialog<void>(
     context: context,
-    barrierDismissible: true,
+    dismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black38,
     transitionDuration:
@@ -419,7 +420,7 @@ Future<void> _showPlayerPanel({
             ),
           ),
         ),
-    transitionBuilder:
+    transitionsBuilder:
         (context, animation, secondaryAnimation, child) => FadeTransition(
           opacity: CurvedAnimation(
             parent: animation,
