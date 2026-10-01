@@ -174,114 +174,122 @@ class _WorkstationPaginationBarState extends State<WorkstationPaginationBar> {
       return enabled ? button : Opacity(opacity: 0.45, child: button);
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      // 单行布局：计数/每页条数与翻页/跳页两组整体靠左（各页统一左
-      // 侧语言）；窄屏自动折行，折行组同样左起，不居中不右挂。
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        alignment: WrapAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                l10n.paginationTotal(widget.totalElements),
-                style: countStyle,
-              ),
-              if (widget.totalElements > 0) ...[
-                Text(' · ', style: mutedCountStyle),
+    // 强制满宽：Wrap 默认收缩为内容宽度，宿主 Column 若未显式
+    // start/stretch（如 Files 主列表）会把收缩后的条整体居中——满宽后
+    // 条与上方表格同宽，内容恒自左缘排布，与宿主对齐方式解耦。
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        // 单行布局：计数/每页条数与翻页/跳页两组整体靠左（各页统一左
+        // 侧语言）；窄屏自动折行，折行组同样左起，不居中不右挂。
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
                 Text(
-                  l10n.paginationRange(rangeStart, rangeEnd),
-                  style: mutedCountStyle,
+                  l10n.paginationTotal(widget.totalElements),
+                  style: countStyle,
                 ),
-              ],
-              if (widget.busy) ...[
-                const SizedBox(width: 8),
-                SizedBox.square(
-                  dimension: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.primary,
+                if (widget.totalElements > 0) ...[
+                  Text(' · ', style: mutedCountStyle),
+                  Text(
+                    l10n.paginationRange(rangeStart, rangeEnd),
+                    style: mutedCountStyle,
                   ),
-                ),
-              ],
-              const SizedBox(width: 12),
-              _RowsPerPageSelector(
-                value: widget.rowsPerPage,
-                choices: widget.rowsPerPageChoices,
-                onChanged: widget.onRowsPerPageChanged,
-              ),
-            ],
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              navButton(
-                Icons.first_page_rounded,
-                l10n.paginationFirst,
-                current > 0,
-                () => widget.onPageChanged(0),
-              ),
-              navButton(
-                Icons.chevron_left_rounded,
-                l10n.paginationPrev,
-                current > 0,
-                () => widget.onPageChanged(current - 1),
-              ),
-              for (final page in _visiblePages())
-                page == null
-                    ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Text('…', style: mutedCountStyle),
-                    )
-                    : pageChip(page),
-              navButton(
-                Icons.chevron_right_rounded,
-                l10n.paginationNext,
-                current < total - 1,
-                () => widget.onPageChanged(current + 1),
-              ),
-              navButton(
-                Icons.last_page_rounded,
-                l10n.paginationLast,
-                current < total - 1,
-                () => widget.onPageChanged(total - 1),
-              ),
-              if (total > 5) ...[
-                const SizedBox(width: 4),
-                Text(
-                  l10n.paginationJumpTo,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(width: 4),
-                SizedBox(
-                  width: 64,
-                  child: TextField(
-                    controller: _jumpController,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: countStyle,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: compact ? 7 : 13,
-                      ),
-                      constraints: BoxConstraints(minHeight: compact ? 28 : 44),
+                ],
+                if (widget.busy) ...[
+                  const SizedBox(width: 8),
+                  SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.primary,
                     ),
-                    onSubmitted: _submitJump,
                   ),
+                ],
+                const SizedBox(width: 12),
+                _RowsPerPageSelector(
+                  value: widget.rowsPerPage,
+                  choices: widget.rowsPerPageChoices,
+                  onChanged: widget.onRowsPerPageChanged,
                 ),
               ],
-            ],
-          ),
-        ],
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                navButton(
+                  Icons.first_page_rounded,
+                  l10n.paginationFirst,
+                  current > 0,
+                  () => widget.onPageChanged(0),
+                ),
+                navButton(
+                  Icons.chevron_left_rounded,
+                  l10n.paginationPrev,
+                  current > 0,
+                  () => widget.onPageChanged(current - 1),
+                ),
+                for (final page in _visiblePages())
+                  page == null
+                      ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text('…', style: mutedCountStyle),
+                      )
+                      : pageChip(page),
+                navButton(
+                  Icons.chevron_right_rounded,
+                  l10n.paginationNext,
+                  current < total - 1,
+                  () => widget.onPageChanged(current + 1),
+                ),
+                navButton(
+                  Icons.last_page_rounded,
+                  l10n.paginationLast,
+                  current < total - 1,
+                  () => widget.onPageChanged(total - 1),
+                ),
+                if (total > 5) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    l10n.paginationJumpTo,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 64,
+                    child: TextField(
+                      controller: _jumpController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: countStyle,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: compact ? 7 : 13,
+                        ),
+                        constraints: BoxConstraints(
+                          minHeight: compact ? 28 : 44,
+                        ),
+                      ),
+                      onSubmitted: _submitJump,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

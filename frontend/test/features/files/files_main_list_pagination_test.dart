@@ -10,6 +10,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/presentation/widgets/files_table_view.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 
 /// 主列表分页条：替代原“加载更多”按钮，跳页经 goToFilePage 重放窗口。
@@ -61,6 +62,27 @@ void main() {
     expect(find.text('第 1-100 条'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(find.byType(OutlinedButton), findsNothing, reason: '加载更多已移除');
+
+    // 分页条自身满宽（与上方表格同宽同左），内容自左缘排布——不收缩成
+    // 内容宽度后被宿主居中。
+    final barRect = tester.getRect(find.byType(WorkstationPaginationBar));
+    final tableRect = tester.getRect(find.byType(FileTableView));
+    expect(
+      (barRect.left - tableRect.left).abs(),
+      lessThan(2),
+      reason: '分页条左缘与表格左缘对齐',
+    );
+    expect(
+      (barRect.width - tableRect.width).abs(),
+      lessThan(2),
+      reason: '分页条满宽与表格同宽',
+    );
+    final countLeft = tester.getTopLeft(find.text('共 3000 条')).dx;
+    expect(
+      (countLeft - barRect.left).abs(),
+      lessThan(4),
+      reason: '计数文本自分页条左缘排布',
+    );
 
     await tester.tap(find.text('3'));
     await tester.pumpAndSettle();
