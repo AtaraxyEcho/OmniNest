@@ -10,11 +10,31 @@ import org.springframework.core.env.StandardEnvironment;
 class JwtSecretValidationTest {
 
     @Test
-    @DisplayName("dev 启动成功：JWT secret 使用兼容默认值")
-    void startupSucceedsWhenJwtSecretIsDefaultInDev() {
+    @DisplayName("非 prod 启动失败：公开默认 JWT secret 且未显式豁免")
+    void startupFailsWhenJwtSecretIsDefaultWithoutExemption() {
         SecurityProperties props = new SecurityProperties();
+        assertThatThrownBy(() -> new JwtSecretValidator(props, new StandardEnvironment()).validate(false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("allow-insecure-local-secret");
+    }
+
+    @Test
+    @DisplayName("非 prod 启动成功：公开默认 JWT secret 已显式豁免（本机回环调试）")
+    void startupSucceedsWhenJwtSecretIsDefaultWithExemption() {
+        SecurityProperties props = new SecurityProperties();
+        props.setAllowInsecureLocalSecret(true);
         assertThatCode(() -> new JwtSecretValidator(props, new StandardEnvironment()).validate(false))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("prod 启动失败：公开默认 JWT secret 即使显式豁免也拒绝")
+    void startupFailsWhenJwtSecretIsDefaultInProdEvenWithExemption() {
+        SecurityProperties props = new SecurityProperties();
+        props.setAllowInsecureLocalSecret(true);
+        assertThatThrownBy(() -> new JwtSecretValidator(props, new StandardEnvironment()).validate(true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("OMNINEST_SECURITY_JWT_SECRET");
     }
 
     @Test

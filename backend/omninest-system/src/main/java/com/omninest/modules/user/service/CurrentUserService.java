@@ -56,6 +56,7 @@ public class CurrentUserService {
     private final ObjectStorageBuckets objectStorageBuckets;
     private final NotificationPublisher notificationService;
     private final SessionRevocationService sessionRevocationService;
+    private final UserSessionRevocationService userSessionRevocationService;
     private final ReadThroughCache readThroughCache;
     private final MalwareScanGateway malwareScanGateway;
     private final UserSyncEventRecorder syncEventRecorder;
@@ -111,6 +112,10 @@ public class CurrentUserService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         authUserRepository.save(user);
         readThroughCache.invalidate("omninest:user:profile:" + userId);
+
+        // 改密后撤销除当前会话外的全部活跃会话，阻断被盗 refresh 会话继续存活
+        UUID currentSessionId = currentUserContext.currentSessionId();
+        userSessionRevocationService.revokeAllExcept(userId, currentSessionId, "PASSWORD_CHANGED");
 
         // 发送密码修改通知
         notificationService.notifyOrLog(userId, "PASSWORD_CHANGED",

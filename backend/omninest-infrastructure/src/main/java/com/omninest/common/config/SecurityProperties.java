@@ -18,6 +18,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSecurityPolicy {
     private String jwtSecret = "change-me-omninest-local-jwt-secret-at-least-32-bytes";
 
+    /**
+     * 是否显式豁免“公开默认 JWT secret”的启动拦截。
+     * 仅限本机回环调试；生产 profile 无论该值如何都拒绝默认 secret。
+     */
+    private boolean allowInsecureLocalSecret = false;
+
     private String credentialEncryptionKey = "";
 
     private int credentialEncryptionKeyVersion = 1;

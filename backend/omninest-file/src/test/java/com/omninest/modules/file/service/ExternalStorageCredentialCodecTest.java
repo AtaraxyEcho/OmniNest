@@ -55,7 +55,7 @@ class ExternalStorageCredentialCodecTest {
                 """;
 
         JSONObject merged = JSON.parseObject(
-                ExternalStorageCredentialCodec.mergeForUpdate(existing, submitted)
+                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted)
         );
 
         assertThat(merged.getString("url")).isEqualTo("https://new.example.com/dav");
@@ -76,9 +76,73 @@ class ExternalStorageCredentialCodecTest {
                 """;
 
         JSONObject merged = JSON.parseObject(
-                ExternalStorageCredentialCodec.mergeForUpdate(existing, submitted)
+                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted)
         );
 
         assertThat(merged.getString("PASSWORD")).isEqualTo("stored-password");
+    }
+
+    @Test
+    void sanitizeDropsFieldsOutsideProviderWhitelist() {
+        String credentials = """
+                {
+                  "vendor":"nextcloud",
+                  "url":"https://dav.example.com",
+                  "user":"alice",
+                  "pass":"secret",
+                  "type":"s3",
+                  "config_is_local":"true"
+                }
+                """;
+
+        JSONObject sanitized = JSON.parseObject(
+                ExternalStorageCredentialCodec.sanitize("WEBDAV", credentials)
+        );
+
+        assertThat(sanitized).containsOnlyKeys("vendor", "url", "user", "pass");
+    }
+
+    @Test
+    void mergeForUpdateDropsFieldsOutsideProviderWhitelist() {
+        String existing = """
+                {
+                  "vendor":"nextcloud",
+                  "url":"https://old.example.com",
+                  "user":"alice"
+                }
+                """;
+        String submitted = """
+                {
+                  "url":"https://new.example.com",
+                  "type":"s3",
+                  "config_is_local":"true"
+                }
+                """;
+
+        JSONObject merged = JSON.parseObject(
+                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted)
+        );
+
+        assertThat(merged).containsOnlyKeys("vendor", "url", "user");
+        assertThat(merged.getString("url")).isEqualTo("https://new.example.com");
+    }
+
+    @Test
+    void sanitizeKeepsS3FieldsAndDropsWebdavOnlyKeys() {
+        String credentials = """
+                {
+                  "access_key_id":"key",
+                  "secret_access_key":"secret",
+                  "endpoint":"https://s3.example.com",
+                  "region":"us-east-1",
+                  "url":"https://should-drop.example.com"
+                }
+                """;
+
+        JSONObject sanitized = JSON.parseObject(
+                ExternalStorageCredentialCodec.sanitize("S3", credentials)
+        );
+
+        assertThat(sanitized).containsOnlyKeys("access_key_id", "secret_access_key", "endpoint", "region");
     }
 }

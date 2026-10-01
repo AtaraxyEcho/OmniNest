@@ -54,6 +54,7 @@ public class FileIngressPromotionService {
     private final FileVersionService fileVersionService;
     private final FileContentChangePublisher fileContentChangePublisher;
     private final StorageQuotaService storageQuotaService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final ObjectStorageClient objectStorageClient;
     private final UserSyncEventRecorder syncEventRecorder;
     private final NotificationPublisher notificationPublisher;
@@ -183,13 +184,14 @@ public class FileIngressPromotionService {
     }
 
     private FileNode promoteAsNewNode(FileIngressItem item, FileObject savedObject) {
-        FileNode parent = resolveParent(item.getOwnerUserId(), item.getTargetParentId());
-        if (sameNameExists(item.getOwnerUserId(), item.getTargetParentId(), item.getTargetName())) {
+        SpaceType spaceType = resolveSpaceType(item);
+        FileNode parent = resolveParent(item.getOwnerUserId(), item.getTargetParentId(), spaceType);
+        if (sameNameExists(item.getOwnerUserId(), spaceType, item.getTargetParentId(), item.getTargetName())) {
             settleTerminalFailure(item, false, ErrorCode.CONFLICT.name(), "晋升时目标目录已存在同名文件",
                     "文件入库冲突", "文件「" + item.getTargetName() + "」所在目录已存在同名文件，上传未完成");
             throw new FileIngressRejectedException("晋升时目标目录已存在同名文件");
         }
-        return fileNodeRepository.save(toFileNode(item, savedObject, parent));
+        return fileNodeRepository.save(toFileNode(item, savedObject, parent, spaceType));
     }
 
     private UUID applySessionResult(
@@ -246,6 +248,9 @@ public class FileIngressPromotionService {
 
     private void settleUploadQuota(FileUploadSession session) {
         if (session.getSpaceType() != SpaceType.PERSONAL) {
+            // 共享空间无预留机制：晋升时按实际结算量复核容量并计入用量
+            sharedSpaceQuotaService.checkQuota(session.getTotalSizeBytes());
+            sharedSpaceQuotaService.increaseUsage(session.getTotalSizeBytes());
             return;
         }
         if (session.getQuotaReservationId() == null) {
@@ -326,7 +331,7 @@ public class FileIngressPromotionService {
         return fileObject;
     }
 
-    private FileNode toFileNode(FileIngressItem item, FileObject object, FileNode parent) {
+    private FileNode toFileNode(FileIngressItem item, FileObject object, FileNode parent, SpaceType spaceType) {
         FileNode file = new FileNode();
         file.setOwnerUserId(item.getOwnerUserId());
         file.setParentId(item.getTargetParentId());
@@ -336,7 +341,6 @@ public class FileIngressPromotionService {
         file.setMimeType(item.getMimeType());
         file.setSizeBytes(item.getSizeBytes());
         file.setCurrentObjectId(object.getId());
-        SpaceType spaceType = resolveSpaceType(item);
         file.setSpaceType(spaceType);
         if (spaceType == SpaceType.SHARED) {
             file.setUploadedBy(item.getOwnerUserId());
@@ -352,19 +356,35 @@ public class FileIngressPromotionService {
                         .orElse(SpaceType.PERSONAL);
     }
 
-    private FileNode resolveParent(UUID ownerUserId, UUID parentId) {
+    private FileNode resolveParent(UUID ownerUserId, UUID parentId, SpaceType spaceType) {
         if (parentId == null) {
             return null;
         }
         FileNode parent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(parentId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+                .orElseGet(() -> spaceType == SpaceType.SHARED
+                        ? fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(parentId, SpaceType.SHARED).orElse(null)
+                        : null);
+        if (parent == null) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在");
+        }
         if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+        }
+        if (parent.getSpaceType() != spaceType) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级目录与目标空间类型不一致");
         }
         return parent;
     }
 
-    private boolean sameNameExists(UUID ownerUserId, UUID parentId, String fileName) {
+    private boolean sameNameExists(UUID ownerUserId, SpaceType spaceType, UUID parentId, String fileName) {
+        if (spaceType == SpaceType.SHARED) {
+            if (parentId == null) {
+                return fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                        SpaceType.SHARED, fileName);
+            }
+            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    SpaceType.SHARED, parentId, fileName);
+        }
         if (parentId == null) {
             return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, fileName);
         }

@@ -26,6 +26,25 @@ public final class ExternalStorageCredentialCodec {
             "client_secret"
     );
 
+    /**
+     * 各提供者允许入库的凭据键白名单（比较时大小写不敏感）。
+     * 未列出的键在创建与更新时一并丢弃，阻断任意键透传 rclone config/create。
+     */
+    private static final Map<String, Set<String>> ALLOWED_FIELDS = Map.of(
+            "S3", Set.of("provider", "access_key_id", "secret_access_key", "endpoint", "region"),
+            "MINIO", Set.of("provider", "access_key_id", "secret_access_key", "endpoint", "region"),
+            "WEBDAV", Set.of("vendor", "url", "user", "pass", "password", "token", "bearer_token"),
+            "ONEDRIVE", oauthFields(),
+            "GDRIVE", oauthFields(),
+            "GOOGLE_DRIVE", oauthFields(),
+            "ALIYUN_DRIVE", oauthFields(),
+            "DROPBOX", oauthFields()
+    );
+
+    private static Set<String> oauthFields() {
+        return Set.of("client_id", "client_secret", "access_token", "token_type", "refresh_token", "expiry");
+    }
+
     private ExternalStorageCredentialCodec() {
     }
 
@@ -63,22 +82,28 @@ public final class ExternalStorageCredentialCodec {
 
     /**
      * 将客户端提交的变更合并到已有凭据中。
-     * 空的敏感字段表示保留原值，非敏感字段允许显式清空。
+     * 空的敏感字段表示保留原值，非敏感字段允许显式清空；白名单之外的键直接丢弃。
      *
+     * @param provider 存储提供者
      * @param existingCredentialsJson 已保存的完整凭据
      * @param submittedCredentialsJson 客户端提交的凭据变更
      * @return 合并后的完整凭据 JSON
      */
     public static String mergeForUpdate(
+            String provider,
             String existingCredentialsJson,
             String submittedCredentialsJson
     ) {
         JSONObject existing = parseRequired(existingCredentialsJson);
         JSONObject submitted = parseRequired(submittedCredentialsJson);
+        Set<String> allowed = allowedFields(provider);
         Map<String, Object> original = new LinkedHashMap<>(existing);
         for (Map.Entry<String, Object> entry : submitted.entrySet()) {
             String field = entry.getKey();
             Object value = entry.getValue();
+            if (!isAllowedField(allowed, field)) {
+                continue;
+            }
             if (SENSITIVE_FIELDS.contains(field.toLowerCase(Locale.ROOT))
                     && (value == null || value.toString().isBlank())) {
                 continue;
@@ -89,6 +114,34 @@ public final class ExternalStorageCredentialCodec {
             return existingCredentialsJson;
         }
         return JSON.toJSONString(existing);
+    }
+
+    /**
+     * 过滤创建请求中的凭据 JSON，仅保留该提供者白名单内的键。
+     *
+     * @param provider 存储提供者
+     * @param credentialsJson 客户端提交的凭据 JSON
+     * @return 过滤后的凭据 JSON；无可识别键时返回空对象 JSON
+     */
+    public static String sanitize(String provider, String credentialsJson) {
+        JSONObject credentials = parseRequired(credentialsJson);
+        Set<String> allowed = allowedFields(provider);
+        JSONObject filtered = new JSONObject();
+        for (Map.Entry<String, Object> entry : credentials.entrySet()) {
+            if (isAllowedField(allowed, entry.getKey())) {
+                filtered.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return filtered.isEmpty() ? "{}" : JSON.toJSONString(filtered);
+    }
+
+    private static boolean isAllowedField(Set<String> allowed, String field) {
+        return field != null && allowed.contains(field.toLowerCase(Locale.ROOT));
+    }
+
+    private static Set<String> allowedFields(String provider) {
+        String normalized = provider == null ? "" : provider.trim().toUpperCase(Locale.ROOT);
+        return ALLOWED_FIELDS.getOrDefault(normalized, Set.of());
     }
 
     private static JSONObject parseSafely(String credentialsJson) {

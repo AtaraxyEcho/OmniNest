@@ -71,6 +71,8 @@ class FileUploadSessionServiceTest {
     private FileIngressScanTaskService ingressScanTaskService;
     private FileUploadSessionService service;
     private ConfigValueProvider configValueProvider;
+    private SharedSpaceService sharedSpaceService;
+    private SharedSpaceQuotaService sharedSpaceQuotaService;
 
     @BeforeEach
     void setUp() {
@@ -97,6 +99,8 @@ class FileUploadSessionServiceTest {
         RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
         FileContentChangePublisher fileContentChangePublisher =
                 new FileContentChangePublisher(postProcessingTaskService);
+        sharedSpaceService = mock(SharedSpaceService.class);
+        sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
         when(runtimeConfigCache.get(anyString())).thenReturn(Optional.empty());
         when(ingressLifecycleService.open(any())).thenReturn(UUID.randomUUID());
         when(storageQuotaService.reserve(
@@ -121,8 +125,69 @@ class FileUploadSessionServiceTest {
                 ingressScanTaskService,
                 configValueProvider,
                 runtimeConfigCache,
+                sharedSpaceService,
+                sharedSpaceQuotaService,
                 fileContentChangePublisher
         );
+    }
+
+    @Test
+    void createSessionSharedRequiresUploadPermission() {
+        Mockito.doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权限执行此操作"))
+                .when(sharedSpaceService).requireSharedWrite(OWNER_ID);
+
+        assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                null, "video.mp4", 20L * 1024 * 1024, "video/mp4", null, null, "SHARED", null
+        )))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("无权限执行此操作");
+        verify(storageQuotaService, Mockito.never()).reserve(
+                any(UUID.class), anyString(), any(UUID.class), anyLong(), any(Instant.class));
+        verify(sharedSpaceQuotaService, Mockito.never()).checkQuota(anyLong());
+    }
+
+    @Test
+    void createSessionSharedChecksSharedQuotaInsteadOfPersonalReservation() {
+        Mockito.doThrow(new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "共享空间容量不足"))
+                .when(sharedSpaceQuotaService).checkQuota(20L * 1024 * 1024);
+
+        assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                null, "video.mp4", 20L * 1024 * 1024, "video/mp4", null, null, "SHARED", null
+        )))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("共享空间容量不足");
+        verify(storageQuotaService, Mockito.never()).reserve(
+                any(UUID.class), anyString(), any(UUID.class), anyLong(), any(Instant.class));
+    }
+
+    @Test
+    void createSessionSharedResolvesParentInSharedTree() {
+        UUID sharedFolderId = UUID.randomUUID();
+        FileNode sharedFolder = new FileNode();
+        sharedFolder.setId(sharedFolderId);
+        sharedFolder.setNodeType("FOLDER");
+        sharedFolder.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(sharedFolderId, OWNER_ID))
+                .thenReturn(Optional.empty());
+        when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(sharedFolderId, SpaceType.SHARED))
+                .thenReturn(Optional.of(sharedFolder));
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                SpaceType.SHARED, sharedFolderId, "video.mp4")).thenReturn(false);
+        when(objectStorageClient.initiateMultipartUpload(any(), eq("video/mp4"))).thenReturn("upload-123");
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(uploadPartRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectStorageClient.createMultipartUploadPartUrl(any(), eq("upload-123"), anyInt(), any()))
+                .thenReturn(URI.create("http://minio/part"));
+
+        var response = service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                sharedFolderId, "video.mp4", 20L * 1024 * 1024, "video/mp4", null, 10 * 1024 * 1024, "SHARED", null
+        ));
+
+        assertThat(response.uploadId()).isEqualTo("upload-123");
+        verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
+        verify(sharedSpaceQuotaService).checkQuota(20L * 1024 * 1024);
+        verify(storageQuotaService, Mockito.never()).reserve(
+                any(UUID.class), anyString(), any(UUID.class), anyLong(), any(Instant.class));
     }
 
     @Test

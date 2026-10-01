@@ -32,7 +32,7 @@ public class UserSessionRevocationService {
      * 撤销指定用户集合的全部活跃会话。
      *
      * @param userIds 用户标识集合
-     * @param reason 撤销原因
+     * @param reason  撤销原因
      */
     @Transactional(rollbackFor = Exception.class)
     public void revokeAll(Collection<UUID> userIds, String reason) {
@@ -50,6 +50,33 @@ public class UserSessionRevocationService {
         ));
         sessionsByUser.forEach(sessionRevocationService::recordRevocations);
         registerAfterCommit(sessionsByUser);
+    }
+
+    /**
+     * 撤销指定用户除保留会话外的全部活跃会话，供修改密码等自助操作保留当前登录态。
+     *
+     * @param userId        用户标识
+     * @param keepSessionId 需要保留的当前会话 ID；为 null 时等价于撤销全部会话
+     * @param reason        撤销原因
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void revokeAllExcept(UUID userId, UUID keepSessionId, String reason) {
+        List<AuthActiveSession> sessions = activeSessionRepository
+                .findByUserIdAndRevokedAtIsNullOrderByCreatedAtDesc(userId);
+        List<UUID> sessionIds = sessions.stream()
+                .map(AuthActiveSession::getId)
+                .filter(sessionId -> keepSessionId == null || !sessionId.equals(keepSessionId))
+                .toList();
+        if (sessionIds.isEmpty()) {
+            return;
+        }
+        if (keepSessionId == null) {
+            activeSessionRepository.revokeByUserIdIn(List.of(userId), reason);
+        } else {
+            activeSessionRepository.revokeByUserIdExcluding(userId, keepSessionId, reason);
+        }
+        sessionRevocationService.recordRevocations(userId, sessionIds);
+        registerAfterCommit(Map.of(userId, sessionIds));
     }
 
     private void registerAfterCommit(Map<UUID, List<UUID>> sessionsByUser) {

@@ -56,6 +56,7 @@ public class ExternalStorageService {
     private final SharedSpaceService sharedSpaceService;
     private final ExternalStorageImportProperties importProperties;
     private final ExternalStorageOAuthService oauthService;
+    private final ExternalStorageEndpointGuard endpointGuard;
 
     // ========== Remote 生命周期 ==========
 
@@ -354,12 +355,25 @@ public class ExternalStorageService {
     // ========== 内部方法 ==========
 
     /**
-     * 确保远程可用：OAuth 类先刷新 token，再确保 rclone remote 存在。
+     * 确保远程可用：先复核端点安全策略（拦截历史遗留的不安全地址），再刷新 OAuth token，最后确保 rclone remote 存在。
      * token 发生刷新时强制重建 remote，使 rclone 侧拿到最新凭据。
      */
     private void prepareUsableRemote(StorageExternalAccount account) {
+        validateEndpointSafety(account);
         boolean tokenRefreshed = maybeRefreshOAuthToken(account);
         ensureRemoteActivated(account, tokenRefreshed);
+    }
+
+    /**
+     * 使用前复核外部存储端点安全策略。
+     * 创建/更新入口已做同样校验；此处拦截校验上线前已入库的历史账户，阻断其继续发起内网请求。
+     */
+    void validateEndpointSafety(StorageExternalAccount account) {
+        String provider = normalizedProvider(account);
+        if (isOAuthProvider(provider)) {
+            return;
+        }
+        endpointGuard.validate(provider, decryptCredentials(account));
     }
 
     private boolean maybeRefreshOAuthToken(StorageExternalAccount account) {

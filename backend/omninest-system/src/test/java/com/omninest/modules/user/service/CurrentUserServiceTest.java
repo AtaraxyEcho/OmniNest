@@ -45,6 +45,7 @@ class CurrentUserServiceTest {
     private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
     private final NotificationService notificationService = mock(NotificationService.class);
     private final SessionRevocationService sessionRevocationService = mock(SessionRevocationService.class);
+    private final UserSessionRevocationService userSessionRevocationService = mock(UserSessionRevocationService.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class, invocation -> {
         if ("getOrLoad".equals(invocation.getMethod().getName())) {
             Supplier<?> loader = invocation.getArgument(2);
@@ -57,7 +58,7 @@ class CurrentUserServiceTest {
     private final CurrentUserService service = new CurrentUserService(
             authUserRepository, activeSessionRepository, currentUserContext, passwordEncoder,
             new PasswordPolicy(), objectStorageClient, objectStorageBuckets, notificationService, sessionRevocationService,
-            readThroughCache, malwareScanGateway, syncEventRecorder);
+            userSessionRevocationService, readThroughCache, malwareScanGateway, syncEventRecorder);
 
     @Test
     void returnsCurrentUserFromSecurityContextUserId() {
@@ -173,6 +174,26 @@ class CurrentUserServiceTest {
 
         verify(authUserRepository).save(user);
         assertThat(user.getPasswordHash()).isEqualTo("$2a$10$newHash");
+        verify(userSessionRevocationService).revokeAllExcept(
+                userId, null, "PASSWORD_CHANGED");
+    }
+
+    @Test
+    void changePassword_revokesOtherSessionsKeepingCurrentOne() {
+        UUID userId = UUID.randomUUID();
+        UUID currentSessionId = UUID.randomUUID();
+        AuthUser user = new AuthUser();
+        user.setPasswordHash("$2a$10$oldHash");
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("oldPass", "$2a$10$oldHash")).thenReturn(true);
+        when(passwordEncoder.encode("newPass123")).thenReturn("$2a$10$newHash");
+        when(authUserRepository.save(any(AuthUser.class))).thenAnswer(i -> i.getArgument(0));
+        when(currentUserContext.currentSessionId()).thenReturn(currentSessionId);
+
+        service.changePassword(userId, "oldPass", "newPass123");
+
+        verify(userSessionRevocationService).revokeAllExcept(
+                userId, currentSessionId, "PASSWORD_CHANGED");
     }
 
     @Test

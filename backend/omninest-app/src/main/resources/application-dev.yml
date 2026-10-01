@@ -81,6 +81,9 @@ omninest:
     embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:true}
   security:
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
+    # 公开默认 JWT secret 在所有 profile 拒绝启动；dev 开箱即用依赖此显式豁免，
+    # 仅限本机回环调试，绑定局域网地址前必须改用独立密钥。
+    allow-insecure-local-secret: true
     # 外部存储凭据 AES-GCM 密钥的本地回退值（32 零字节的 Base64）。
     # 仅用于开发环境开箱即用；生产环境必须通过环境变量显式配置独立密钥。
     credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}

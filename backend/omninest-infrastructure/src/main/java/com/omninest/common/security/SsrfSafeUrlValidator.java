@@ -45,6 +45,20 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
      */
     @Override
     public void requireSafeHost(URI uri) {
+        requireSafeHost(uri, false);
+    }
+
+    /**
+     * 验证 URL 的主机名和解析后的 IP 地址是否安全；
+     * allowSiteLocal 为 true 时放行 RFC1918 与 IPv6 唯一本地地址，
+     * 环回、链路本地、云元数据与保留地址在任何模式下都拒绝。
+     *
+     * @param uri 待验证的 URI
+     * @param allowSiteLocal 是否允许内网专用地址段
+     * @throws BusinessException 如果地址指向本地或受限网络
+     */
+    @Override
+    public void requireSafeHost(URI uri, boolean allowSiteLocal) {
         String host = uri.getHost();
         if (host == null || host.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 缺少主机名");
@@ -58,7 +72,7 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 无法解析");
             }
             for (InetAddress address : addresses) {
-                if (isBlockedAddress(address)) {
+                if (isBlockedAddress(address, allowSiteLocal)) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
                 }
             }
@@ -102,26 +116,31 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
                 || "metadata".equals(normalized);
     }
 
-    private static boolean isBlockedAddress(InetAddress address) {
+    private static boolean isBlockedAddress(InetAddress address, boolean allowSiteLocal) {
         if (address.isAnyLocalAddress()
                 || address.isLoopbackAddress()
                 || address.isLinkLocalAddress()
-                || address.isSiteLocalAddress()
                 || address.isMulticastAddress()) {
             return true;
+        }
+        if (address.isSiteLocalAddress()) {
+            return !allowSiteLocal;
         }
         if (address instanceof Inet6Address inet6Address) {
             byte[] bytes = inet6Address.getAddress();
             byte[] embeddedIpv4 = extractEmbeddedIpv4(bytes);
             if (embeddedIpv4 != null) {
-                return isBlockedIpv4(embeddedIpv4);
+                return isBlockedIpv4(embeddedIpv4, allowSiteLocal);
             }
             int first = bytes[0] & 0xFF;
-            // 唯一本地地址 fc00::/7，含 fd00::/8
-            return (first & 0xFE) == 0xFC;
+            // 唯一本地地址 fc00::/7，含 fd00::/8，视作内网专用段
+            if ((first & 0xFE) == 0xFC) {
+                return !allowSiteLocal;
+            }
+            return false;
         }
         if (address instanceof Inet4Address inet4Address) {
-            return isBlockedIpv4(inet4Address.getAddress());
+            return isBlockedIpv4(inet4Address.getAddress(), allowSiteLocal);
         }
         return false;
     }
@@ -161,17 +180,20 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
         return true;
     }
 
-    private static boolean isBlockedIpv4(byte[] bytes) {
+    private static boolean isBlockedIpv4(byte[] bytes, boolean allowSiteLocal) {
         int first = bytes[0] & 0xFF;
         int second = bytes[1] & 0xFF;
         int third = bytes[2] & 0xFF;
+        boolean siteLocal = first == 10
+                || (first == 172 && second >= 16 && second <= 31)
+                || (first == 192 && second == 168);
+        if (siteLocal) {
+            return !allowSiteLocal;
+        }
         return first == 0
-                || first == 10
                 || first == 127
                 || (first == 100 && second >= 64 && second <= 127)
                 || (first == 169 && second == 254)
-                || (first == 172 && second >= 16 && second <= 31)
-                || (first == 192 && second == 168)
                 || (first == 192 && second == 0 && third == 0)
                 || (first == 192 && second == 88 && third == 99)
                 || (first == 198 && (second == 18 || second == 19))

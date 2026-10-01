@@ -61,6 +61,7 @@ class FileIngressPromotionServiceTest {
     private FileNodeRepository fileNodeRepository;
     private FilePostProcessingTaskService postProcessingTaskService;
     private StorageQuotaService storageQuotaService;
+    private SharedSpaceQuotaService sharedSpaceQuotaService;
     private ObjectStorageClient objectStorageClient;
     private NotificationPublisher notificationPublisher;
     private FileIngressPromotionService service;
@@ -77,6 +78,7 @@ class FileIngressPromotionServiceTest {
         postProcessingTaskService = mock(FilePostProcessingTaskService.class);
         FileContentChangePublisher fileContentChangePublisher = new FileContentChangePublisher(postProcessingTaskService);
         storageQuotaService = mock(StorageQuotaService.class);
+        sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
         objectStorageClient = mock(ObjectStorageClient.class);
         UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
         notificationPublisher = mock(NotificationPublisher.class);
@@ -92,6 +94,7 @@ class FileIngressPromotionServiceTest {
                 fileVersionService,
                 fileContentChangePublisher,
                 storageQuotaService,
+                sharedSpaceQuotaService,
                 objectStorageClient,
                 syncEventRecorder,
                 notificationPublisher,
@@ -269,5 +272,36 @@ class FileIngressPromotionServiceTest {
         session.setQuotaReservationId(UUID.fromString("00000000-0000-0000-0000-000000000005"));
         session.setSpaceType(SpaceType.PERSONAL);
         return session;
+    }
+
+    @Test
+    void processSettlesSharedQuotaInsteadOfPersonalReservationForSharedSession() {
+        FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
+        FileUploadSession session = session();
+        session.setSpaceType(SpaceType.SHARED);
+        session.setQuotaReservationId(null);
+        when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
+        when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
+            FileObject object = invocation.getArgument(0);
+            object.setId(UUID.randomUUID());
+            return object;
+        });
+        when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
+            FileNode node = invocation.getArgument(0);
+            node.setId(UUID.randomUUID());
+            return node;
+        });
+        when(postProcessingTaskService.enqueueMediaAutoImport(any())).thenReturn(UUID.randomUUID());
+
+        service.process(event(null));
+
+        assertThat(session.getStatus()).isEqualTo("COMPLETED");
+        verify(sharedSpaceQuotaService).checkQuota(512L);
+        verify(sharedSpaceQuotaService).increaseUsage(512L);
+        verify(storageQuotaService, never()).settleReservation(anyString(), any(UUID.class), anyLong());
+        verify(storageQuotaService, never()).incrementUsage(any(UUID.class), anyLong());
     }
 }

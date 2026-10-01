@@ -42,7 +42,13 @@ public class JwtSecretValidator implements ApplicationRunner {
                 throw new IllegalStateException(
                         "生产环境禁止使用兼容默认 JWT secret，请通过 OMNINEST_SECURITY_JWT_SECRET 注入独立密钥");
             }
-            log.warn("JWT secret 正在使用兼容默认值，公开部署前必须通过环境变量替换");
+            if (!securityProperties.isAllowInsecureLocalSecret()) {
+                throw new IllegalStateException(
+                        "检测到仓库公开的默认 JWT secret，任何 profile 均拒绝签发令牌："
+                                + "请通过 OMNINEST_SECURITY_JWT_SECRET 注入独立密钥；"
+                                + "仅限本机回环调试时可设置 omninest.security.allow-insecure-local-secret=true 显式豁免");
+            }
+            log.warn("JWT secret 正在使用显式豁免的公开默认值，公开部署前必须通过环境变量替换");
         }
     }
 }

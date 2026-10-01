@@ -24,6 +24,49 @@ class SsrfSafeUrlValidatorTest {
     private final SafeUrlValidator validator = new SsrfSafeUrlValidator();
 
     @Nested
+    @DisplayName("内网地址策略开关")
+    class SiteLocalPolicySwitch {
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "http://192.168.1.10/dav",
+                "http://10.0.0.5/dav",
+                "http://172.16.0.1/dav"
+        })
+        @DisplayName("allowSiteLocal=true 时放行 RFC1918 地址")
+        void allowsSiteLocalWhenSwitchOn(String url) {
+            assertDoesNotThrow(() -> validator.requireSafeHost(java.net.URI.create(url), true));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "http://169.254.169.254/latest/meta-data/",
+                "http://127.0.0.1:8080/admin",
+                "http://[fe80::1]/dav"
+        })
+        @DisplayName("allowSiteLocal=true 时链路本地、环回与云元数据地址仍被拒绝")
+        void stillBlocksLoopbackAndLinkLocalWhenSwitchOn(String url) {
+            assertThatThrownBy(() -> validator.requireSafeHost(java.net.URI.create(url), true))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("内网地址");
+        }
+
+        @Test
+        @DisplayName("allowSiteLocal=true 时 IPv6 唯一本地地址随开关放行")
+        void allowsIpv6UniqueLocalWhenSwitchOn() {
+            assertDoesNotThrow(() -> validator.requireSafeHost(java.net.URI.create("http://[fd00::1]/dav"), true));
+        }
+
+        @Test
+        @DisplayName("allowSiteLocal=false 时 RFC1918 地址维持拒绝")
+        void blocksSiteLocalWhenSwitchOff() {
+            assertThatThrownBy(() -> validator.requireSafeHost(java.net.URI.create("http://192.168.1.10/dav"), false))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("内网地址");
+        }
+    }
+
+    @Nested
     @DisplayName("IPv4 回环地址拦截")
     class LoopbackIpv4 {
 

@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.alibaba.fastjson2.JSON;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
@@ -27,6 +28,7 @@ public class ExternalStorageAccountService {
     private final ExternalStorageService externalStorageService;
     private final ExternalStorageCredentialService externalStorageCredentialService;
     private final ExternalStorageOAuthService externalStorageOAuthService;
+    private final ExternalStorageEndpointGuard endpointGuard;
 
     /**
      * 查询当前用户的外部存储账户列表。
@@ -61,7 +63,9 @@ public class ExternalStorageAccountService {
         account.setOwnerUserId(ownerUserId);
         account.setProvider(provider);
         account.setDisplayName(request.displayName().trim());
-        account.setEncryptedCredentials(externalStorageCredentialService.encrypt(request.encryptedCredentials()));
+        String sanitizedCredentials = ExternalStorageCredentialCodec.sanitize(provider, request.encryptedCredentials());
+        endpointGuard.validate(provider, JSON.parseObject(sanitizedCredentials));
+        account.setEncryptedCredentials(externalStorageCredentialService.encrypt(sanitizedCredentials));
         return toExternalAccountDto(externalAccountRepository.save(account));
     }
 
@@ -85,9 +89,11 @@ public class ExternalStorageAccountService {
 
         String existingJson = externalStorageCredentialService.decryptToJson(account.getEncryptedCredentials());
         String mergedJson = ExternalStorageCredentialCodec.mergeForUpdate(
+                account.getProvider(),
                 existingJson,
                 request.encryptedCredentials()
         );
+        endpointGuard.validate(account.getProvider(), JSON.parseObject(mergedJson));
         boolean credentialsChanged = !mergedJson.equals(existingJson);
         account.setDisplayName(request.displayName().trim());
         if (credentialsChanged) {

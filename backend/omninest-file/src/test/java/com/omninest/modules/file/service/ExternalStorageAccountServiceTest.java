@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * ExternalStorageAccountService 单元测试。
@@ -36,9 +39,10 @@ class ExternalStorageAccountServiceTest {
     private final ExternalStorageCredentialService credentialService =
             mock(ExternalStorageCredentialService.class);
     private final ExternalStorageOAuthService oauthService = mock(ExternalStorageOAuthService.class);
+    private final ExternalStorageEndpointGuard endpointGuard = mock(ExternalStorageEndpointGuard.class);
 
     private final ExternalStorageAccountService service = new ExternalStorageAccountService(
-            externalAccountRepository, externalStorageService, credentialService, oauthService);
+            externalAccountRepository, externalStorageService, credentialService, oauthService, endpointGuard);
 
     @BeforeEach
     void setUpSave() {
@@ -79,5 +83,27 @@ class ExternalStorageAccountServiceTest {
                 new CreateExternalStorageRequest("WEBDAV", "坚果云", "{\"url\":\"https://dav.example.com\"}")))
                 .doesNotThrowAnyException();
         verifyNoInteractions(oauthService);
+    }
+
+    @Test
+    void createValidatesEndpointSafetyBeforeSave() {
+        doThrow(new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部存储地址被安全策略拒绝"))
+                .when(endpointGuard).validate(anyString(), any());
+
+        assertThatThrownBy(() -> service.createExternalAccount(OWNER_ID,
+                new CreateExternalStorageRequest("WEBDAV", "内网盘", "{\"url\":\"http://192.168.1.10/dav\"}")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("安全策略拒绝");
+        verifyNoInteractions(externalAccountRepository);
+    }
+
+    @Test
+    void createSanitizesCredentialsBeforeEncryption() {
+        service.createExternalAccount(OWNER_ID, new CreateExternalStorageRequest("WEBDAV", "内网盘",
+                "{\"url\":\"https://dav.example.com\",\"type\":\"s3\",\"config_is_local\":\"true\"}"));
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(credentialService).encrypt(captor.capture());
+        assertThat(captor.getValue()).contains("dav.example.com").doesNotContain("config_is_local");
     }
 }

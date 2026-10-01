@@ -120,6 +120,17 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
             @Param("reason") String reason);
 
     /**
+     * 撤销用户除指定会话外的全部活跃会话，供改密等自助操作保留当前登录态。
+     */
+    @Modifying
+    @Query("UPDATE AuthActiveSession s SET s.revokedAt = CURRENT_TIMESTAMP, s.revokeReason = :reason " +
+           "WHERE s.userId = :userId AND s.id != :excludeSessionId AND s.revokedAt IS NULL")
+    int revokeByUserIdExcluding(
+            @Param("userId") UUID userId,
+            @Param("excludeSessionId") UUID excludeSessionId,
+            @Param("reason") String reason);
+
+    /**
      * 批量撤销多个用户的全部活跃会话。
      */
     @Modifying

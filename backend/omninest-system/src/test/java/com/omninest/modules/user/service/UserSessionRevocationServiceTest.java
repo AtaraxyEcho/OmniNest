@@ -63,4 +63,40 @@ class UserSessionRevocationServiceTest {
             TransactionSynchronizationManager.clearSynchronization();
         }
     }
+
+    @Test
+    void revokeAllExceptKeepsCurrentSessionAndBlacklistsOthers() {
+        UUID keptSessionId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        UUID revokedSessionId = UUID.fromString("20000000-0000-0000-0000-000000000003");
+        AuthActiveSession kept = new AuthActiveSession();
+        kept.setId(keptSessionId);
+        kept.setUserId(USER_ID);
+        AuthActiveSession revoked = new AuthActiveSession();
+        revoked.setId(revokedSessionId);
+        revoked.setUserId(USER_ID);
+        Mockito.when(activeSessionRepository.findByUserIdAndRevokedAtIsNullOrderByCreatedAtDesc(USER_ID))
+                .thenReturn(List.of(kept, revoked));
+
+        service.revokeAllExcept(USER_ID, keptSessionId, "PASSWORD_CHANGED");
+
+        Mockito.verify(activeSessionRepository)
+                .revokeByUserIdExcluding(USER_ID, keptSessionId, "PASSWORD_CHANGED");
+        Mockito.verify(sessionRevocationService).recordRevocations(USER_ID, List.of(revokedSessionId));
+    }
+
+    @Test
+    void revokeAllExceptSkipsWorkWhenNoOtherActiveSessions() {
+        UUID keptSessionId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        AuthActiveSession kept = new AuthActiveSession();
+        kept.setId(keptSessionId);
+        kept.setUserId(USER_ID);
+        Mockito.when(activeSessionRepository.findByUserIdAndRevokedAtIsNullOrderByCreatedAtDesc(USER_ID))
+                .thenReturn(List.of(kept));
+
+        service.revokeAllExcept(USER_ID, keptSessionId, "PASSWORD_CHANGED");
+
+        Mockito.verify(activeSessionRepository, Mockito.never())
+                .revokeByUserIdExcluding(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(sessionRevocationService, Mockito.never()).recordRevocations(Mockito.any(), Mockito.anyList());
+    }
 }

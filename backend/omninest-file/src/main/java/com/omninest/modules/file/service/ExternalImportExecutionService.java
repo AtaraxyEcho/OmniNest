@@ -460,6 +460,7 @@ public class ExternalImportExecutionService {
 
         try {
             Files.createDirectories(tempDir);
+            externalStorageService.validateEndpointSafety(account);
             externalStorageService.activateRemote(account);
 
             String sourceFs = externalStorageService.resolveFs(account);

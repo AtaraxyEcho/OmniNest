@@ -86,6 +86,8 @@ public class FileUploadSessionService {
     private final FileIngressScanTaskService ingressScanTaskService;
     private final ConfigValueProvider configValueProvider;
     private final RuntimeConfigCache runtimeConfigCache;
+    private final SharedSpaceService sharedSpaceService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final FileContentChangePublisher fileContentChangePublisher;
 
     public FileUploadPolicyDto uploadPolicy() {
@@ -113,13 +115,23 @@ public class FileUploadSessionService {
             }
         }
 
+        if (spaceType == SpaceType.SHARED) {
+            // 共享空间上传必须具备 CAN_UPLOAD 角色能力并受共享空间容量约束
+            sharedSpaceService.requireSharedWrite(ownerUserId);
+            sharedSpaceQuotaService.checkQuota(request.sizeBytes());
+        }
+
         String fileName = normalizeFileName(request.fileName());
-        FileNode parent = resolveParent(ownerUserId, request.parentId());
+        FileNode parent = resolveParent(ownerUserId, request.parentId(), spaceType);
         UUID asVersionOfFileId = request.asVersionOfFileId();
         if (asVersionOfFileId != null) {
             fileNodeRepository
                     .findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, ownerUserId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件不存在"));
+        } else if (spaceType == SpaceType.SHARED) {
+            if (sameNameExists(ownerUserId, spaceType, request.parentId(), fileName)) {
+                throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
+            }
         } else {
             checkActiveNameConflict(ownerUserId, request.parentId(), fileName);
             checkSoftDeletedConflict(ownerUserId, request.parentId(), fileName);
@@ -279,10 +291,10 @@ public class FileUploadSessionService {
         List<FileUploadPart> parts = fileUploadPartRepository.findByUploadSessionIdOrderByPartNumber(session.getId());
         ensureAllPartsCompleted(session, parts);
 
-        resolveParent(ownerUserId, session.getTargetParentId());
+        resolveParent(ownerUserId, session.getTargetParentId(), session.getSpaceType());
         UUID asVersionOfFileIdForCheck = request == null ? null : request.asVersionOfFileId();
         if (asVersionOfFileIdForCheck == null
-                && sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
+                && sameNameExists(ownerUserId, session.getSpaceType(), session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
@@ -423,10 +435,10 @@ public class FileUploadSessionService {
             session.setSha256(sha256);
         }
 
-        resolveParent(ownerUserId, session.getTargetParentId());
+        resolveParent(ownerUserId, session.getTargetParentId(), session.getSpaceType());
         UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
         if (asVersionOfFileId == null
-                && sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
+                && sameNameExists(ownerUserId, session.getSpaceType(), session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
@@ -457,19 +469,35 @@ public class FileUploadSessionService {
         }
     }
 
-    private FileNode resolveParent(UUID ownerUserId, UUID parentId) {
+    private FileNode resolveParent(UUID ownerUserId, UUID parentId, SpaceType spaceType) {
         if (parentId == null) {
             return null;
         }
         FileNode parent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(parentId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+                .orElseGet(() -> spaceType == SpaceType.SHARED
+                        ? fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(parentId, SpaceType.SHARED).orElse(null)
+                        : null);
+        if (parent == null) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在");
+        }
         if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+        }
+        if (parent.getSpaceType() != spaceType) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级目录与目标空间类型不一致");
         }
         return parent;
     }
 
-    private boolean sameNameExists(UUID ownerUserId, UUID parentId, String fileName) {
+    private boolean sameNameExists(UUID ownerUserId, SpaceType spaceType, UUID parentId, String fileName) {
+        if (spaceType == SpaceType.SHARED) {
+            if (parentId == null) {
+                return fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                        SpaceType.SHARED, fileName);
+            }
+            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    SpaceType.SHARED, parentId, fileName);
+        }
         if (parentId == null) {
             return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, fileName);
         }

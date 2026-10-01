@@ -538,6 +538,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     boolean existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(SpaceType spaceType, UUID parentId, String name);
 
     /**
+     * 共享空间根目录同名检查
+     */
+    boolean existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(SpaceType spaceType, String name);
+
+    /**
      * 按空间类型查询回收站文件（个人空间用 ownerUserId，共享空间用 deletedBy）
      */
     List<FileNode> findByOwnerUserIdAndSpaceTypeAndDeletedTrueOrderByDeletedAtDesc(
