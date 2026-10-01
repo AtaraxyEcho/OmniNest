@@ -730,7 +730,7 @@ void main() {
     });
   });
 
-  testWidgets('原图层就绪后短淡入，封面层保持即时显示', (tester) async {
+  testWidgets('原图层就绪后短淡入，封面层异步就绪短淡入柔化直出', (tester) async {
     _mockPathProvider();
     await _mockNetworkImages(() async {
       await tester.runAsync(_ensureServedImageBytes);
@@ -747,7 +747,13 @@ void main() {
               )
               .toList();
       expect(images, hasLength(2), reason: '舞台应渲染封面与原图两层');
-      expect(images.first.fadeInDuration, Duration.zero, reason: '封面层立即显示');
+      // 封面层异步就绪后 120ms 短淡入：柔化 Hero 落位后解码才完成的直出跳变；
+      // 同步缓存命中（含与飞行层共享解码）不播淡入，保证无缝接管。
+      expect(
+        images.first.fadeInDuration,
+        const Duration(milliseconds: 120),
+        reason: '封面层异步就绪短淡入柔化直出跳变',
+      );
       expect(
         images.last.fadeInDuration,
         const Duration(milliseconds: 220),

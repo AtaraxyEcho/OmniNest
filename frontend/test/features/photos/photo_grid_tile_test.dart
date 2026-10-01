@@ -241,6 +241,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Hero 子树只含图片本体，遮罩与选中描边不随飞行', (tester) async {
+    final photo = PhotoItem(
+      id: 'photo-1',
+      fileNodeId: 'file-1',
+      title: 'photo.jpg',
+      format: 'jpg',
+      fileSize: 1,
+      metadataStatus: 'READY',
+      favorite: false,
+      createdAt: DateTime(2026),
+      coverUrl: 'https://example.test/photo.jpg',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OmniNestTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Center(
+          child: SizedBox(
+            width: 240,
+            height: 240,
+            child: PhotoGridTile(
+              photo: photo,
+              onTap: () {},
+              enableHero: true,
+              isSelectionMode: true,
+              isSelected: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final heroFinder = find.byType(Hero);
+    expect(heroFinder, findsOneWidget);
+    expect(tester.widget<Hero>(heroFinder).tag, 'photo-cover-${photo.id}');
+    // 遮罩文案、遮罩动画与选中描边都在 Hero 之外，不会成为飞行载体。
+    expect(
+      find.descendant(of: heroFinder, matching: find.text(photo.title)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: heroFinder, matching: find.byType(AnimatedOpacity)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: heroFinder, matching: find.byType(DecoratedBox)),
+      findsNothing,
+    );
+    // 图片本体与悬停微放大随 Hero 进入飞行子树。
+    expect(
+      find.descendant(of: heroFinder, matching: find.byType(AnimatedScale)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: heroFinder,
+        matching: find.byType(CachedNetworkImage),
+      ),
+      findsOneWidget,
+    );
+    // 遮罩层本身仍常驻瓦片树中。
+    expect(find.text(photo.title), findsOneWidget);
+    expect(find.byType(AnimatedOpacity), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('收藏语义为稳定 button 而非 CustomSemanticsAction', (tester) async {
     final photo = PhotoItem(
       id: 'photo-1',
