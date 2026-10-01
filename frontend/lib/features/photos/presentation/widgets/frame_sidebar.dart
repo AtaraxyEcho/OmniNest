@@ -109,7 +109,9 @@ class FrameSidebar extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = context.frameColors;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      // 与导航文字列严格同轴：容器 8 + 项内边距 14 + 图标 17 + 间距 10。
+      // 统计是文本，归属文字轴才不悬浮于图标列与文字列之间。
+      padding: const EdgeInsets.fromLTRB(49, 8, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
