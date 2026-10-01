@@ -336,6 +336,84 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     }
   }
 
+  /// 回收站续页：滚动加载消费，按页码递增追加以 id 去重。
+  Future<void> loadMoreTrash() async {
+    final current = state.asData?.value;
+    if (current == null ||
+        !current.hasMoreTrash ||
+        current.isLoadingMoreTrash) {
+      return;
+    }
+    state = AsyncData(current.copyWith(isLoadingMoreTrash: true));
+    try {
+      final page = await _repo.listTrash(page: current.trashPage + 1);
+      final next = state.asData?.value;
+      if (next == null) {
+        return;
+      }
+      final seen = next.trashPhotos.map((photo) => photo.id).toSet();
+      state = AsyncData(
+        next.copyWith(
+          trashPhotos: <PhotoItem>[
+            ...next.trashPhotos,
+            ...page.items.where((photo) => !seen.contains(photo.id)),
+          ],
+          trashPage: page.page,
+          trashTotalElements: page.totalElements,
+          isLoadingMoreTrash: false,
+        ),
+      );
+    } on Exception catch (e) {
+      final next = state.asData?.value;
+      if (next == null) {
+        return;
+      }
+      state = AsyncData(
+        next.copyWith(
+          isLoadingMoreTrash: false,
+          trashPageError: describeUserFacingError(e).message,
+        ),
+      );
+    }
+  }
+
+  /// 相册列表续页：滚动加载消费，以 id 去重追加，页码显式递增。
+  Future<void> loadMoreAlbums() async {
+    final current = state.asData?.value;
+    if (current == null ||
+        !current.albumsHasMore ||
+        current.isLoadingMoreAlbums) {
+      return;
+    }
+    state = AsyncData(current.copyWith(isLoadingMoreAlbums: true));
+    try {
+      final page = await _repo.listAlbumsPage(page: current.albumsPage + 1);
+      final next = state.asData?.value;
+      if (next == null) {
+        return;
+      }
+      final seen = next.albums.map((album) => album.id).toSet();
+      state = AsyncData(
+        next.copyWith(
+          albums: <PhotoAlbum>[
+            ...next.albums,
+            ...page.items.where((album) => !seen.contains(album.id)),
+          ],
+          albumsHasMore: page.hasMore,
+          albumsPage: page.page,
+          isLoadingMoreAlbums: false,
+        ),
+      );
+    } on Exception {
+      final next = state.asData?.value;
+      if (next == null) {
+        return;
+      }
+      // 相册续页失败静默回滚门闩：视图在下次触底时重试。
+      state = AsyncData(next.copyWith(isLoadingMoreAlbums: false));
+    }
+  }
+
   /// 创建相册
   Future<PhotoAlbum> createAlbum({
     required String name,

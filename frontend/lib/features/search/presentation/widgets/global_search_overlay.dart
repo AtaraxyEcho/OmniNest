@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/router.dart';
+import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
@@ -23,7 +25,7 @@ Future<void> showGlobalSearchDialog(BuildContext context) async {
   }
   _globalSearchOpen = true;
   try {
-    await showDialog<void>(
+    await showWorkstationDialog<void>(
       context: context,
       barrierColor: const Color(0x990D1117),
       builder: (context) => const _CommandPaletteDialog(),
@@ -556,7 +558,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                   keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.search,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: AppTypography.bodyLarge,
                     height: 1.0,
                     color: p.ink,
                     fontWeight: FontWeight.w400,
@@ -575,7 +577,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                     hintText: l10n.searchPaletteHint,
                     hintStyle: TextStyle(
                       color: p.inkPlaceholder,
-                      fontSize: 15,
+                      fontSize: AppTypography.bodyLarge,
                       height: 1.0,
                       fontWeight: FontWeight.w400,
                     ),
@@ -671,7 +673,10 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       child: Center(
         child: Text(
           query.isEmpty ? l10n.searchEmptyQuery : l10n.searchEmptyResult,
-          style: TextStyle(color: p.inkMuted, fontSize: 13),
+          style: TextStyle(
+            color: p.inkMuted,
+            fontSize: AppTypography.bodyMedium,
+          ),
         ),
       ),
     );
@@ -704,7 +709,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w500,
                     color: p.ink,
                   ),
@@ -714,7 +719,10 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                 const SizedBox(width: 10),
                 Text(
                   hit.subtitle,
-                  style: TextStyle(fontSize: 11, color: p.inkMuted),
+                  style: TextStyle(
+                    fontSize: AppTypography.labelSmall,
+                    color: p.inkMuted,
+                  ),
                 ),
               ],
               if (hit.kbds.isNotEmpty) ...[
@@ -794,7 +802,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                           fontWeight: FontWeight.w600,
                           color: p.ink,
                         ),
@@ -804,7 +812,10 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                         hit.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: p.inkMuted),
+                        style: TextStyle(
+                          fontSize: AppTypography.labelSmall,
+                          color: p.inkMuted,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -824,7 +835,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                           Text(
                             '${(progress * 100).round()}%',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: AppTypography.labelMicro,
                               color: p.inkMuted,
                               fontFeatures: const [],
                             ),
@@ -861,7 +872,13 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
           const Spacer(),
           Container(width: 6, height: 6, color: p.statusOk),
           const SizedBox(width: 8),
-          Text('OmniNest', style: TextStyle(fontSize: 11, color: p.inkMuted)),
+          Text(
+            'OmniNest',
+            style: TextStyle(
+              fontSize: AppTypography.labelSmall,
+              color: p.inkMuted,
+            ),
+          ),
         ],
       ),
     );
@@ -873,7 +890,13 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       children: [
         _Kbd(label: key, p: p),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 11, color: p.inkMuted)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.labelSmall,
+            color: p.inkMuted,
+          ),
+        ),
       ],
     );
   }
@@ -910,7 +933,7 @@ class _Kbd extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: AppTypography.labelSmall,
           height: 1.0,
           color: muted ? p.inkMuted : p.ink,
           fontWeight: FontWeight.w500,
@@ -958,7 +981,7 @@ class _TabChip extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 color: selected ? p.ink : p.inkMuted,
               ),
@@ -967,7 +990,7 @@ class _TabChip extends StatelessWidget {
             Text(
               shortcut,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: AppTypography.labelMicro,
                 color: selected ? p.inkMuted : p.inkPlaceholder,
                 fontWeight: FontWeight.w500,
               ),

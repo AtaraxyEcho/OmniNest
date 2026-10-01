@@ -44,6 +44,16 @@ Future<void> _pumpTagsView(WidgetTester tester, Widget child) async {
   await tester.pumpAndSettle();
 }
 
+PhotoPage _pageOf(List<PhotoItem> items) {
+  return PhotoPage(
+    items: items,
+    page: 0,
+    size: 50,
+    totalElements: items.length,
+    totalPages: items.isEmpty ? 0 : 1,
+  );
+}
+
 void main() {
   final photos = [_photo('photo-1', '人像'), _photo('photo-2', '人像')];
 
@@ -71,11 +81,19 @@ void main() {
     final repository = _MockPhotoRepository();
     when(() => repository.listTags()).thenAnswer((_) async => ['人像', '风景']);
     when(
-      () => repository.listByTag(any(that: equals('人像'))),
-    ).thenAnswer((_) async => photos);
+      () => repository.listByTagPage(
+        any(that: equals('人像')),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+      ),
+    ).thenAnswer((_) async => _pageOf(photos));
     when(
-      () => repository.listByTag(any(that: equals('风景'))),
-    ).thenAnswer((_) async => <PhotoItem>[]);
+      () => repository.listByTagPage(
+        any(that: equals('风景')),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+      ),
+    ).thenAnswer((_) async => PhotoPage.empty());
     await _pumpTagsView(tester, buildHarness(repository));
 
     expect(find.text('人像'), findsOneWidget);
@@ -90,7 +108,13 @@ void main() {
   testWidgets('再次点击芯片取消选中并回到提示态', (tester) async {
     final repository = _MockPhotoRepository();
     when(() => repository.listTags()).thenAnswer((_) async => ['人像']);
-    when(() => repository.listByTag(any())).thenAnswer((_) async => photos);
+    when(
+      () => repository.listByTagPage(
+        any(),
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+      ),
+    ).thenAnswer((_) async => _pageOf(photos));
     await _pumpTagsView(tester, buildHarness(repository));
 
     await tester.tap(find.text('人像'));

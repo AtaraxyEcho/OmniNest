@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
@@ -20,7 +21,7 @@ Future<bool> showFrameConfirmDialog(
   bool destructive = false,
 }) async {
   final colors = context.frameColors;
-  final result = await showDialog<bool>(
+  final result = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (ctx) => AlertDialog(
@@ -57,7 +58,7 @@ Future<String?> showFramePromptDialog(
   bool obscureText = false,
   required String confirmLabel,
 }) {
-  return showDialog<String>(
+  return showWorkstationDialog<String>(
     context: context,
     builder:
         (ctx) => PhotoDialogTextField(
@@ -110,7 +111,7 @@ Future<T?> showFrameChoiceDialog<T>(
 }) {
   final colors = context.frameColors;
   final l10n = AppLocalizations.of(context);
-  return showDialog<T>(
+  return showWorkstationDialog<T>(
     context: context,
     builder:
         (ctx) => AlertDialog(
@@ -193,7 +194,7 @@ Future<T?> showFrameChoiceDialog<T>(
 /// Frame 新建影集弹窗；返回 (名称, 描述)，取消返回 null，名称为空不提交。
 Future<(String, String)?> showFrameNewAlbumDialog(BuildContext context) {
   final l10n = AppLocalizations.of(context);
-  return showDialog<(String, String)>(
+  return showWorkstationDialog<(String, String)>(
     context: context,
     builder:
         (ctx) => PhotoDialogTextField(

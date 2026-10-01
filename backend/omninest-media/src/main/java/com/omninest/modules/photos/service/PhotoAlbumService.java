@@ -65,6 +65,21 @@ public class PhotoAlbumService {
     }
 
     /**
+     * 分页查询用户相册，按更新时间倒序。
+     *
+     * @param ownerUserId 用户标识
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 相册分页
+     */
+    @Transactional(readOnly = true)
+    public Page<PhotoAlbumDto> listAlbumsPage(UUID ownerUserId, int page, int size) {
+        Page<PhotoAlbum> result = albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(
+                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        return result.map(this::toDto);
+    }
+
+    /**
      * 创建新相册
      */
     @Transactional(rollbackFor = Exception.class)

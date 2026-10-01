@@ -8,7 +8,9 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
@@ -32,10 +34,57 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
   bool _loading = true;
   int _loadGeneration = 0;
 
+  /// 访客会话令牌：续页复用，避免每次触底都重新走密码授权。
+  String? _sessionToken;
+  bool _loadingMore = false;
+
   @override
   void initState() {
     super.initState();
     _loadAlbum();
+  }
+
+  /// 共享相册续页：页码递增追加以 id 去重，失败静默等待下次触底。
+  Future<void> _loadMore() async {
+    final album = _album;
+    final sessionToken = _sessionToken;
+    if (album == null ||
+        sessionToken == null ||
+        !album.hasMore ||
+        _loadingMore) {
+      return;
+    }
+    _loadingMore = true;
+    try {
+      final controller = ref.read(photoCenterControllerProvider.notifier);
+      final next = await controller.accessSharedAlbum(
+        widget.token,
+        sessionToken: sessionToken,
+        page: album.page + 1,
+        size: album.size,
+      );
+      if (!mounted) {
+        return;
+      }
+      final seen = album.photos.map((photo) => photo.id).toSet();
+      setState(() {
+        _album = PhotoSharedAlbum(
+          albumName: album.albumName,
+          description: album.description,
+          photos: <PhotoItem>[
+            ...album.photos,
+            ...next.photos.where((photo) => !seen.contains(photo.id)),
+          ],
+          page: next.page,
+          size: next.size,
+          total: next.total,
+        );
+      });
+    } on Object {
+      // 续页失败静默：访客页无重试条，下次触底自动重试。
+    } finally {
+      _loadingMore = false;
+    }
   }
 
   Future<void> _loadAlbum() async {
@@ -51,6 +100,7 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
         password: _password,
       );
       if (!mounted || generation != _loadGeneration) return;
+      _sessionToken = sessionToken;
       final album = await controller.accessSharedAlbum(
         widget.token,
         sessionToken: sessionToken,
@@ -134,7 +184,11 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
 
     if (_album == null) return const SizedBox.shrink();
 
-    return _SharedAlbumContent(album: _album!);
+    return _SharedAlbumContent(
+      album: _album!,
+      isLoadingMore: _loadingMore,
+      onLoadMore: _loadMore,
+    );
   }
 }
 
@@ -252,9 +306,17 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
 
 /// 共享相册内容
 class _SharedAlbumContent extends StatelessWidget {
-  const _SharedAlbumContent({required this.album});
+  const _SharedAlbumContent({
+    required this.album,
+    this.isLoadingMore = false,
+    this.onLoadMore,
+  });
 
   final PhotoSharedAlbum album;
+
+  /// 滚动加载：访客页续页由宿主 State 持有会话与门闩。
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -352,65 +414,72 @@ class _SharedAlbumContent extends StatelessWidget {
                               : constraints.maxWidth >= 400
                               ? 3
                               : 2;
-                      return GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                          childAspectRatio: 1,
-                        ),
-                        itemCount: album.photos.length,
-                        itemBuilder: (context, index) {
-                          final photo = album.photos[index];
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child:
-                                photo.hasCover
-                                    ? CachedNetworkImage(
-                                      imageUrl: photo.coverUrl!,
-                                      // 网格瓦片按实际列宽解码：公开相册页
-                                      // 在宽屏下同时可见数十张，全分辨率解码
-                                      // 会造成明显滚动与首帧卡顿。
-                                      memCacheWidth: thumbnailDecodeWidth(
-                                        (constraints.maxWidth -
-                                                48 -
-                                                8 * (columns - 1)) /
-                                            columns,
-                                        MediaQuery.devicePixelRatioOf(context),
-                                      ),
-                                      fit: BoxFit.cover,
-                                      placeholder:
-                                          (context, url) => Container(
-                                            color:
-                                                context
-                                                    .photosColors
-                                                    .surfaceContainerHigh,
+                      return InfiniteScrollTrigger(
+                        enabled: album.hasMore && !isLoadingMore,
+                        onLoadMore: onLoadMore ?? () {},
+                        child: GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: columns,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                                childAspectRatio: 1,
+                              ),
+                          itemCount: album.photos.length,
+                          itemBuilder: (context, index) {
+                            final photo = album.photos[index];
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child:
+                                  photo.hasCover
+                                      ? CachedNetworkImage(
+                                        imageUrl: photo.coverUrl!,
+                                        // 网格瓦片按实际列宽解码：公开相册页
+                                        // 在宽屏下同时可见数十张，全分辨率解码
+                                        // 会造成明显滚动与首帧卡顿。
+                                        memCacheWidth: thumbnailDecodeWidth(
+                                          (constraints.maxWidth -
+                                                  48 -
+                                                  8 * (columns - 1)) /
+                                              columns,
+                                          MediaQuery.devicePixelRatioOf(
+                                            context,
                                           ),
-                                      errorWidget:
-                                          (context, url, error) => Icon(
-                                            Icons.broken_image_outlined,
-                                            color:
-                                                context
-                                                    .photosColors
-                                                    .onSurfaceVariant,
-                                          ),
-                                    )
-                                    : Container(
-                                      color:
-                                          context
-                                              .photosColors
-                                              .surfaceContainerHigh,
-                                      child: Icon(
-                                        Icons.photo_outlined,
+                                        ),
+                                        fit: BoxFit.cover,
+                                        placeholder:
+                                            (context, url) => Container(
+                                              color:
+                                                  context
+                                                      .photosColors
+                                                      .surfaceContainerHigh,
+                                            ),
+                                        errorWidget:
+                                            (context, url, error) => Icon(
+                                              Icons.broken_image_outlined,
+                                              color:
+                                                  context
+                                                      .photosColors
+                                                      .onSurfaceVariant,
+                                            ),
+                                      )
+                                      : Container(
                                         color:
                                             context
                                                 .photosColors
-                                                .onSurfaceVariant,
+                                                .surfaceContainerHigh,
+                                        child: Icon(
+                                          Icons.photo_outlined,
+                                          color:
+                                              context
+                                                  .photosColors
+                                                  .onSurfaceVariant,
+                                        ),
                                       ),
-                                    ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       );
                     },
                   ),

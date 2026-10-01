@@ -1,3 +1,4 @@
+import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_content_analysis.dart';
 
 /// 照片实体模型。
@@ -335,6 +336,52 @@ class PhotoPage {
   }
 
   final List<PhotoItem> items;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  bool get hasMore => page + 1 < totalPages;
+}
+
+/// 相册列表分页：滚动加载消费。
+class PhotoAlbumPage {
+  const PhotoAlbumPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+    required this.totalPages,
+  });
+
+  factory PhotoAlbumPage.empty({int size = 50}) {
+    return PhotoAlbumPage(
+      items: const <PhotoAlbum>[],
+      page: 0,
+      size: size,
+      totalElements: 0,
+      totalPages: 0,
+    );
+  }
+
+  factory PhotoAlbumPage.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    return PhotoAlbumPage(
+      items:
+          rawItems is List
+              ? rawItems
+                  .whereType<Map<String, dynamic>>()
+                  .map(PhotoAlbum.fromJson)
+                  .toList(growable: false)
+              : const <PhotoAlbum>[],
+      page: _asInt(json['page']),
+      size: _asInt(json['size']),
+      totalElements: _asInt(json['totalElements']),
+      totalPages: _asInt(json['totalPages']),
+    );
+  }
+
+  final List<PhotoAlbum> items;
   final int page;
   final int size;
   final int totalElements;

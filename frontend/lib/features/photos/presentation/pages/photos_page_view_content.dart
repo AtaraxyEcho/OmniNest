@@ -96,6 +96,13 @@ class _FrameViewContent extends ConsumerWidget {
             onOpenAlbum: onOpenAlbum,
             onDeleteAlbum: onDeleteAlbum,
             onCreateAlbum: onCreateAlbum,
+            hasMore: state.albumsHasMore,
+            isLoadingMore: state.isLoadingMoreAlbums,
+            onLoadMore:
+                () =>
+                    ref
+                        .read(photoCenterControllerProvider.notifier)
+                        .loadMoreAlbums(),
           ),
         ),
         FrameView.trash => FrameTrashView(
@@ -106,6 +113,13 @@ class _FrameViewContent extends ConsumerWidget {
           onRestore: onRestoreFromTrash,
           onDeleteForever: onDeleteForeverFromTrash,
           onEmptyTrash: onEmptyTrash,
+          hasMore: state.hasMoreTrash,
+          isLoadingMore: state.isLoadingMoreTrash,
+          onLoadMore:
+              () =>
+                  ref
+                      .read(photoCenterControllerProvider.notifier)
+                      .loadMoreTrash(),
         ),
       },
     );

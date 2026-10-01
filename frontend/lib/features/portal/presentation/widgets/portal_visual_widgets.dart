@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
@@ -420,6 +421,7 @@ class PortalGradientCover extends StatelessWidget {
     this.directImage = false,
     this.coverCacheKey,
     this.onCoverError,
+    this.contentScale = 1.0,
     super.key,
   });
 
@@ -445,6 +447,11 @@ class PortalGradientCover extends StatelessWidget {
 
   /// 封面加载失败回调；调用方据此触发对应数据分区重签刷新。
   final VoidCallback? onCoverError;
+
+  /// 封面图悬停微放大，与 Photos 照片卡同构：只作用于图像本体，氛围
+  /// 底图、遮罩、文字与描边保持原位；满铺直图的溢出由卡片圆角裁剪，
+  /// 前景封面图在其留白内放大。悬停时由调用方驱动该值。
+  final double contentScale;
 
   @override
   Widget build(BuildContext context) {
@@ -502,6 +509,7 @@ class PortalGradientCover extends StatelessWidget {
                       directImage: directImage,
                       coverCacheKey: coverCacheKey,
                       onCoverError: onCoverError,
+                      contentScale: contentScale,
                     ),
                   )
                 else
@@ -621,6 +629,7 @@ class _AdaptiveCoverImage extends ConsumerWidget {
     this.readerItemId,
     this.coverCacheKey,
     this.onCoverError,
+    this.contentScale = 1.0,
   });
 
   final String? imageUrl;
@@ -631,6 +640,9 @@ class _AdaptiveCoverImage extends ConsumerWidget {
   final BoxFit foregroundFit;
   final EdgeInsetsGeometry foregroundPadding;
   final bool directImage;
+
+  /// 封面图缩放，见 [PortalGradientCover.contentScale]。
+  final double contentScale;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -647,10 +659,13 @@ class _AdaptiveCoverImage extends ConsumerWidget {
     if (directImage) {
       final fallback = _CoverImageFallback(colors: fallbackColors);
       if (readerCoverItemId != null) {
-        return AuthCoverImage(
-          itemId: readerCoverItemId,
-          fit: BoxFit.cover,
-          fallback: fallback,
+        return _CoverArtScale(
+          scale: contentScale,
+          child: AuthCoverImage(
+            itemId: readerCoverItemId,
+            fit: BoxFit.cover,
+            fallback: fallback,
+          ),
         );
       }
       // 本地音乐封面走稳定鉴权 API 路径，需要音乐专域的 Dio 缓存管理器；
@@ -658,32 +673,35 @@ class _AdaptiveCoverImage extends ConsumerWidget {
       final coverManager = ref.watch(
         musicCoverCacheManagerProvider(networkCoverUrl!),
       );
-      return CachedNetworkImage(
-        imageUrl: networkCoverUrl,
-        cacheKey: coverCacheKey,
-        cacheManager: coverManager,
-        // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
-        imageRenderMethodForWeb: musicCoverRenderMethodForWeb(coverManager),
-        fit: BoxFit.cover,
-        alignment: Alignment.center,
-        filterQuality: FilterQuality.medium,
-        memCacheWidth: quantizedDecodeWidth(
-          logicalWidth: 200,
-          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-          step: 64,
-          min: 128,
-          max: 800,
+      return _CoverArtScale(
+        scale: contentScale,
+        child: CachedNetworkImage(
+          imageUrl: networkCoverUrl,
+          cacheKey: coverCacheKey,
+          cacheManager: coverManager,
+          // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
+          imageRenderMethodForWeb: musicCoverRenderMethodForWeb(coverManager),
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.medium,
+          memCacheWidth: quantizedDecodeWidth(
+            logicalWidth: 200,
+            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+            step: 64,
+            min: 128,
+            max: 800,
+          ),
+          errorListener: (_) {
+            // 签名 URL 过期是封面失败主因：post-frame 通知上层重签，
+            // 避免在图片流回调（可发生于 build 期）中直接触发状态改写。
+            final callback = onCoverError;
+            if (callback != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+            }
+          },
+          placeholder: (context, url) => fallback,
+          errorWidget: (context, url, error) => fallback,
         ),
-        errorListener: (_) {
-          // 签名 URL 过期是封面失败主因：post-frame 通知上层重签，
-          // 避免在图片流回调（可发生于 build 期）中直接触发状态改写。
-          final callback = onCoverError;
-          if (callback != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => callback());
-          }
-        },
-        placeholder: (context, url) => fallback,
-        errorWidget: (context, url, error) => fallback,
       );
     }
     if (readerCoverItemId != null) {
@@ -692,6 +710,7 @@ class _AdaptiveCoverImage extends ConsumerWidget {
         fallbackColors: fallbackColors,
         foregroundFit: foregroundFit,
         foregroundPadding: foregroundPadding,
+        contentScale: contentScale,
       );
     }
     return _NetworkAdaptiveCoverImage(
@@ -701,6 +720,7 @@ class _AdaptiveCoverImage extends ConsumerWidget {
       foregroundPadding: foregroundPadding,
       cacheKey: coverCacheKey,
       onCoverError: onCoverError,
+      contentScale: contentScale,
     );
   }
 }
@@ -711,12 +731,16 @@ class _ReaderAdaptiveCoverImage extends StatelessWidget {
     required this.fallbackColors,
     required this.foregroundFit,
     required this.foregroundPadding,
+    this.contentScale = 1.0,
   });
 
   final String itemId;
   final List<Color> fallbackColors;
   final BoxFit foregroundFit;
   final EdgeInsetsGeometry foregroundPadding;
+
+  /// 封面图缩放，见 [PortalGradientCover.contentScale]。
+  final double contentScale;
 
   @override
   Widget build(BuildContext context) {
@@ -738,10 +762,13 @@ class _ReaderAdaptiveCoverImage extends StatelessWidget {
         ),
         Padding(
           padding: foregroundPadding,
-          child: AuthCoverImage(
-            itemId: itemId,
-            fit: foregroundFit,
-            fallback: const SizedBox.shrink(),
+          child: _CoverArtZoom(
+            scale: contentScale,
+            child: AuthCoverImage(
+              itemId: itemId,
+              fit: foregroundFit,
+              fallback: const SizedBox.shrink(),
+            ),
           ),
         ),
       ],
@@ -757,6 +784,7 @@ class _NetworkAdaptiveCoverImage extends ConsumerWidget {
     required this.foregroundPadding,
     this.cacheKey,
     this.onCoverError,
+    this.contentScale = 1.0,
   });
 
   final String imageUrl;
@@ -765,6 +793,9 @@ class _NetworkAdaptiveCoverImage extends ConsumerWidget {
   final EdgeInsetsGeometry foregroundPadding;
   final String? cacheKey;
   final VoidCallback? onCoverError;
+
+  /// 封面图缩放，见 [PortalGradientCover.contentScale]。
+  final double contentScale;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -805,30 +836,81 @@ class _NetworkAdaptiveCoverImage extends ConsumerWidget {
         ),
         Padding(
           padding: foregroundPadding,
-          child: CachedNetworkImage(
-            imageUrl: imageUrl,
-            cacheKey: cacheKey,
-            cacheManager: cacheManager,
-            // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
-            imageRenderMethodForWeb: musicCoverRenderMethodForWeb(cacheManager),
-            fit: foregroundFit,
-            alignment: Alignment.center,
-            filterQuality: FilterQuality.high,
-            // hero 封面卡最宽 400 逻辑像素：量化解码覆盖 DPR 放大，
-            // 同时避免整图分辨率的解码开销。
-            memCacheWidth: quantizedDecodeWidth(
-              logicalWidth: 400,
-              devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-              step: 128,
-              min: 256,
-              max: 1280,
+          child: _CoverArtZoom(
+            scale: contentScale,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
+              cacheKey: cacheKey,
+              cacheManager: cacheManager,
+              // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
+              imageRenderMethodForWeb: musicCoverRenderMethodForWeb(
+                cacheManager,
+              ),
+              fit: foregroundFit,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.high,
+              // hero 封面卡最宽 400 逻辑像素：量化解码覆盖 DPR 放大，
+              // 同时避免整图分辨率的解码开销。
+              memCacheWidth: quantizedDecodeWidth(
+                logicalWidth: 400,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                step: 128,
+                min: 256,
+                max: 1280,
+              ),
+              errorListener: (_) => notifyCoverError(),
+              placeholder: (context, url) => const SizedBox.shrink(),
+              errorWidget: (context, url, error) => const SizedBox.shrink(),
             ),
-            errorListener: (_) => notifyCoverError(),
-            placeholder: (context, url) => const SizedBox.shrink(),
-            errorWidget: (context, url, error) => const SizedBox.shrink(),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 满铺封面图悬停微放大（Photos 照片卡同构的裁切缩放）：图片铺满容器，
+/// 放大后的溢出由外层卡片圆角裁剪——画幅边界不动，只有内容放大。
+class _CoverArtScale extends StatelessWidget {
+  const _CoverArtScale({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: scale,
+      duration: MotionToken.normal,
+      curve: MotionToken.curve,
+      child: child,
+    );
+  }
+}
+
+/// 前景封面图的悬停内容放大（Photos 照片卡同构的裁切缩放）：
+/// FittedBox 把图片按 contain 适配进留白区，ClipRect 钉住图片的
+/// 天然画幅——放大只作用于内部像素、边缘被裁掉，封面本体不变大。
+/// 图片在无界约束下按解码尺寸布局，加载前后画幅一致。
+class _CoverArtZoom extends StatelessWidget {
+  const _CoverArtZoom({required this.scale, required this.child});
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.contain,
+      clipBehavior: Clip.none,
+      child: ClipRect(
+        child: AnimatedScale(
+          scale: scale,
+          duration: MotionToken.normal,
+          curve: MotionToken.curve,
+          child: child,
+        ),
+      ),
     );
   }
 }

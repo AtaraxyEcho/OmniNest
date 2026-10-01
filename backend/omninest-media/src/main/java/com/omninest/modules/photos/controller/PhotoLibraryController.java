@@ -223,6 +223,24 @@ public class PhotoLibraryController {
         return ApiResponse.success(libraryService.listByTag(userId, tag));
     }
 
+    @Operation(summary = "按标签分页查询照片", description = "按标签分页返回照片列表，按打标签时间倒序")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/by-tag/page")
+    ApiResponse<PageResponse<PhotoItemDto>> listByTagPage(
+            @RequestParam String tag,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<PhotoItemDto> result = libraryService.listByTagPage(userId, tag, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()
+        ));
+    }
+
     // ─── 回收站 ───
 
     @Operation(summary = "回收站照片列表", description = "分页查询回收站中的照片")
@@ -345,6 +363,23 @@ public class PhotoLibraryController {
     ApiResponse<List<PhotoAlbumDto>> listAlbums() {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(albumService.listAlbums(userId));
+    }
+
+    @Operation(summary = "分页获取相册列表", description = "按更新时间倒序分页返回用户相册")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/albums/page")
+    ApiResponse<PageResponse<PhotoAlbumDto>> listAlbumsPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<PhotoAlbumDto> result = albumService.listAlbumsPage(userId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()
+        ));
     }
 
     @Operation(summary = "创建相册", description = "创建一个新的照片相册")

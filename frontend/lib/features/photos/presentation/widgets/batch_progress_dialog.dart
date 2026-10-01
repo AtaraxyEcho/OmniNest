@@ -11,6 +11,7 @@ import 'package:omninest/features/photos/platform/photo_batch_web_download.dart'
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 批量任务进度对话框（Frame 极简风格）。
 class BatchProgressDialog extends ConsumerStatefulWidget {
@@ -31,7 +32,6 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
     if (_isDownloading) return;
     setState(() => _isDownloading = true);
     final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final controller = ref.read(photoCenterControllerProvider.notifier);
       final ticket = await controller.getBatchDownloadTicket(widget.taskId);
@@ -40,29 +40,33 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
           url: ticket.url,
           fileName: ticket.fileName,
         );
-        if (messenger.mounted) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(l10n.photosDownloadStarted)),
+        if (mounted) {
+          showOmniFeedback(
+            context,
+            l10n.photosDownloadStarted,
+            severity: OmniFeedbackSeverity.success,
           );
         }
         return;
       }
       final exportResult = await controller.saveBatchArchiveToDisk(ticket);
       if (exportResult is PhotoExportCancelled) return;
-      if (messenger.mounted) {
+      if (mounted) {
         final message = switch (exportResult) {
           PhotoExportSaved(:final path) => l10n.photosArchiveSaved(path),
           PhotoExportShared() => l10n.photosExportShared,
           PhotoExportCancelled() => null,
         };
         if (message != null) {
-          messenger.showSnackBar(SnackBar(content: Text(message)));
+          showOmniFeedback(context, message);
         }
       }
     } on Exception {
-      if (messenger.mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.photosArchiveDownloadFailed)),
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          l10n.photosArchiveDownloadFailed,
+          severity: OmniFeedbackSeverity.error,
         );
       }
     } finally {

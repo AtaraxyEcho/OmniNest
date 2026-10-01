@@ -11,6 +11,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dar
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
 import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 export 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart'
     show photoInfoPanelWidth;
@@ -136,23 +137,33 @@ class PhotoInfoPanel extends ConsumerWidget {
   ) async {
     if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).errorForbidden)),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).errorForbidden,
+        severity: OmniFeedbackSeverity.error,
       );
       return;
     }
+    final wasFavorite = fresh.favorite;
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .toggleFavorite(fresh.id, currentFavorite: fresh.favorite);
       if (!context.mounted) return;
+      showOmniFeedback(
+        context,
+        wasFavorite
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
       ref.invalidate(photoDetailProvider(fresh.id));
     } on Exception {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosOperationFailed),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosOperationFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -252,12 +263,10 @@ class PhotoInfoPanel extends ConsumerWidget {
                     ref.invalidate(photoDetailProvider(fresh.id));
                   } on Exception {
                     if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          AppLocalizations.of(context).photosDeleteTagFailed,
-                        ),
-                      ),
+                    showOmniFeedback(
+                      context,
+                      AppLocalizations.of(context).photosDeleteTagFailed,
+                      severity: OmniFeedbackSeverity.error,
                     );
                   }
                 },
@@ -296,9 +305,11 @@ class PhotoInfoPanel extends ConsumerWidget {
         ref.invalidate(photoDetailProvider(photoId));
       } on Exception {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(
+        showOmniFeedback(
           context,
-        ).showSnackBar(SnackBar(content: Text(l10n.photosAddTagFailed)));
+          l10n.photosAddTagFailed,
+          severity: OmniFeedbackSeverity.error,
+        );
       }
     }
   }

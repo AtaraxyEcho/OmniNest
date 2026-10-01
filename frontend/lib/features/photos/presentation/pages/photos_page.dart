@@ -16,6 +16,7 @@ import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
@@ -33,6 +34,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.d
 import 'package:omninest/features/photos/presentation/widgets/frame_top_bar.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_timeline_view.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'photos_page_batch_actions.dart';
 part 'photos_page_view_content.dart';
@@ -318,21 +320,19 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
           .read(photoCenterControllerProvider.notifier)
           .restorePhotoFromTrash(photo.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosTrashRestored),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosTrashRestored,
+        severity: OmniFeedbackSeverity.success,
       );
     } on Exception catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).localizeUserFacing(describeUserFacingError(error)),
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(
+          context,
+        ).localizeUserFacing(describeUserFacingError(error)),
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -350,19 +350,15 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
         },
       );
       if (!deleted || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).photosTrashPurged)),
-      );
+      showOmniFeedback(context, AppLocalizations.of(context).photosTrashPurged);
     } on Exception catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).localizeUserFacing(describeUserFacingError(error)),
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(
+          context,
+        ).localizeUserFacing(describeUserFacingError(error)),
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -372,39 +368,42 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     try {
       await ref.read(photoCenterControllerProvider.notifier).purgeTrash();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).photosTrashPurged)),
-      );
+      showOmniFeedback(context, AppLocalizations.of(context).photosTrashPurged);
     } on Exception catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).localizeUserFacing(describeUserFacingError(error)),
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(
+          context,
+        ).localizeUserFacing(describeUserFacingError(error)),
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
 
   /// 卡片心形切换收藏；失败时给出用户可读提示。
   Future<void> _toggleFavorite(PhotoItem photo) async {
+    final wasFavorite = photo.favorite;
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .toggleFavorite(photo.id, currentFavorite: photo.favorite);
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        wasFavorite
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
     } on Exception catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(
-              context,
-            ).localizeUserFacing(describeUserFacingError(error)),
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(
+          context,
+        ).localizeUserFacing(describeUserFacingError(error)),
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -445,20 +444,18 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
             .read(photoCenterControllerProvider.notifier)
             .deleteAlbum(album.id);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context).photosDeletedAlbum(album.name),
-              ),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosDeletedAlbum(album.name),
+            severity: OmniFeedbackSeverity.success,
           );
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosDeleteFailed),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosDeleteFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }
@@ -476,22 +473,18 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       if (context.mounted) {
         // 先清掉在播提示再弹出：同名相册连续创建时两条同文案 SnackBar
         // 并存会触发 SnackBar Hero tag 重复断言。
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context).photosAlbumCreated(name),
-              ),
-            ),
-          );
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).photosAlbumCreated(name),
+          severity: OmniFeedbackSeverity.success,
+        );
       }
     } on Exception {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).photosCreateFailed),
-          ),
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).photosCreateFailed,
+          severity: OmniFeedbackSeverity.error,
         );
       }
     }

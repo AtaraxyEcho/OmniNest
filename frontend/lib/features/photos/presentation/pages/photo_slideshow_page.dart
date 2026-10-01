@@ -19,6 +19,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
 enum SlideshowPhase { loading, ready, failed }
@@ -482,7 +483,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             ?.value
             .photos,
       PhotoBrowseSource.tag =>
-        ref.read(photosByTagProvider(widget.sourceKey!)).asData?.value,
+        ref.read(photosByTagProvider(widget.sourceKey!)).asData?.value.items,
       PhotoBrowseSource.locations || PhotoBrowseSource.timeline => null,
     };
     if (live == null || live.length <= _photos.length) {
@@ -752,23 +753,33 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
     if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).errorForbidden)),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).errorForbidden,
+        severity: OmniFeedbackSeverity.error,
       );
       return;
     }
+    final wasFavorite = photo.favorite;
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .toggleFavorite(photo.id, currentFavorite: photo.favorite);
       if (!mounted) return;
+      showOmniFeedback(
+        context,
+        wasFavorite
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
       ref.invalidate(photoDetailProvider(photo.id));
     } on Exception {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosOperationFailed),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosOperationFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -801,16 +812,14 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         PhotoExportCancelled() => null,
       };
       if (message != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        showOmniFeedback(context, message);
       }
     } on Exception {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosDownloadFailed),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosDownloadFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }

@@ -20,12 +20,14 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
+import 'package:omninest/core/services/app_image_cache_policy.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 桌面端信息侧栏宽度：与幻灯片信息面板及分享侧栏一致。
 /// 照片详情/查看器页面
@@ -138,6 +140,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   bool _showSharePanel = false;
   final Set<String> _locationBackfillAttempted = {};
 
+  /// 已触发过详情预取的相邻页，避免往复翻页时重复请求。
+  final Set<String> _detailPrefetchAttempted = {};
+
   @override
   void initState() {
     super.initState();
@@ -148,6 +153,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     _pageController = PageController(initialPage: _currentPage);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _ensureImageCacheBudget();
       _backfillLocationIfNeeded(_pages[_currentPage]);
       _precacheNeighbors(_currentPage);
     });
@@ -212,21 +218,86 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     }
   }
 
-  /// 相邻页原图预取，消除切换时的占位等待。
+  /// 相邻页预取：原图/封面按渲染层同键预解码，签名 URL 缺失时预取详情补齐。
+  ///
+  /// 图片缓存键含 ResizeImage 解码宽度；裸 provider 预取只暖下载/磁盘缓存，
+  /// 页面滑入时仍会现场解码。两层宽度须与渐进图层的分支一致：有原图时
+  /// 封面按封面档解码，无原图回退时封面按原图档解码。
   void _precacheNeighbors(int index) {
+    final widths = viewerDecodeWidths(context);
     for (final neighbor in [index - 1, index + 1]) {
-      if (neighbor < 0 || neighbor >= _pages.length) continue;
+      if (neighbor < 0 || neighbor >= _pages.length) {
+        continue;
+      }
       final item = _pages[neighbor];
-      final url = item.sourceUrl ?? item.coverUrl;
-      if (url == null || url.isEmpty) continue;
-      precacheImage(
-        CachedNetworkImageProvider(
-          url,
-          cacheKey:
-              item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
-        ),
-        context,
+      final sourceUrl = item.sourceUrl;
+      final coverUrl = item.coverUrl;
+      final hasSource = sourceUrl != null && sourceUrl.isNotEmpty;
+      if (hasSource) {
+        _precacheViewerImage(
+          sourceUrl,
+          cacheKey: item.sourceCacheKey,
+          decodeWidth: widths.source,
+        );
+      }
+      if (coverUrl != null && coverUrl.isNotEmpty) {
+        _precacheViewerImage(
+          coverUrl,
+          cacheKey: item.coverCacheKey,
+          decodeWidth: hasSource ? widths.cover : widths.source,
+        );
+      }
+      if (!hasSource) {
+        unawaited(_prefetchNeighborDetail(item.id));
+      }
+    }
+  }
+
+  /// 与渲染层同键预解码一张查看器图片，键不匹配的预取不会命中图片缓存。
+  void _precacheViewerImage(
+    String url, {
+    required String cacheKey,
+    required int decodeWidth,
+  }) {
+    precacheImage(
+      ResizeImage(
+        CachedNetworkImageProvider(url, cacheKey: cacheKey),
+        width: decodeWidth,
+      ),
+      context,
+      // 预取失败静默降级：页面可见时仍走常规加载与错误链路。
+      onError: (_, _) {},
+    );
+  }
+
+  /// 无签名原图 URL 的相邻页（首页最近/收藏条带路径）预取详情：
+  /// 写入详情内存缓存并按匹配键预解码，页面滑入时经内存缓存种子直出。
+  /// 失败静默降级为页面可见时的常规详情加载。
+  Future<void> _prefetchNeighborDetail(String photoId) async {
+    if (_detailPrefetchAttempted.contains(photoId)) {
+      return;
+    }
+    _detailPrefetchAttempted.add(photoId);
+    final widths = viewerDecodeWidths(context);
+    final repository = ref.read(photoRepositoryProvider);
+    final memoryCache = ref.read(photoDetailMemoryCacheProvider);
+    try {
+      final detail = await repository.getPhoto(photoId);
+      memoryCache.put(detail);
+      if (!mounted) {
+        return;
+      }
+      final sourceUrl = detail.sourceUrl;
+      if (sourceUrl == null || sourceUrl.isEmpty) {
+        return;
+      }
+      _precacheViewerImage(
+        sourceUrl,
+        cacheKey: detail.sourceCacheKey,
+        decodeWidth: widths.source,
       );
+    } on Object {
+      // 预取属尽力而为：任何失败都不影响相邻页可见后的常规加载。
     }
   }
 
@@ -240,11 +311,28 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       _pageController.animateToPage(
         target,
         duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        curve: Curves.fastOutSlowIn,
       );
     } else {
       _pageController.jumpToPage(target);
     }
+  }
+
+  /// 声明查看器解码工作集的缓存预算下限：当前页与两侧相邻预取共约
+  /// 3 张原图档 + 3 张封面档位图（按正方形位图保守估算，另留 30% 余量）。
+  /// 宽屏平板等档位下若超过平台预算，先抬预算再预取，避免预取互相驱逐、
+  /// 回滑时重新解码。
+  void _ensureImageCacheBudget() {
+    final widths = viewerDecodeWidths(context);
+    const bytesPerPixel = 4;
+    const workingSetImages = 3;
+    const margin = 1.3;
+    final bytes =
+        (widths.source * widths.source + widths.cover * widths.cover) *
+        bytesPerPixel *
+        workingSetImages *
+        margin;
+    AppImageCachePolicy.ensureMinimumBytes(bytes.round());
   }
 
   void _setMotionHold(bool playing) {
@@ -263,10 +351,10 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       _motionHoldPlaying = false;
       _motionPinnedPlaying = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(AppLocalizations.of(context).photosMotionPlayFailed),
-      ),
+    showOmniFeedback(
+      context,
+      AppLocalizations.of(context).photosMotionPlayFailed,
+      severity: OmniFeedbackSeverity.error,
     );
   }
 
@@ -282,7 +370,6 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
 
   Future<void> _downloadPhoto() async {
     final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     final photoId = _current.id;
     // 下载必须使用详情接口新签发的 sourceUrl：列表种子无 sourceUrl，
     // 内存缓存与会话内旧详情都可能持有已过期的预签名地址。
@@ -292,25 +379,30 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       photo = await ref.read(photoDetailProvider(photoId).future);
     } on Exception {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.photosDownloadFailed)),
+      showOmniFeedback(
+        context,
+        l10n.photosDownloadFailed,
+        severity: OmniFeedbackSeverity.error,
       );
       return;
     }
     if (!mounted) return;
     final sourceUrl = photo.sourceUrl;
     if (sourceUrl == null || sourceUrl.isEmpty) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.photosDownloadSourceUnavailable)),
-      );
+      showOmniFeedback(context, l10n.photosDownloadSourceUnavailable);
       return;
     }
     final fileName = photo.downloadFileName;
     try {
       if (kIsWeb) {
         await downloadPhotoBatchInBrowser(url: sourceUrl, fileName: fileName);
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.photosDownloadStarted)),
+        if (!mounted) {
+          return;
+        }
+        showOmniFeedback(
+          context,
+          l10n.photosDownloadStarted,
+          severity: OmniFeedbackSeverity.success,
         );
         return;
       }
@@ -328,12 +420,14 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
         PhotoExportCancelled() => null,
       };
       if (message != null) {
-        messenger.showSnackBar(SnackBar(content: Text(message)));
+        showOmniFeedback(context, message);
       }
     } on Exception {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.photosDownloadFailed)),
+      showOmniFeedback(
+        context,
+        l10n.photosDownloadFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -382,16 +476,18 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
           .read(photoCenterControllerProvider.notifier)
           .movePhotoToTrash(_current.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showOmniFeedback(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.photosTrashMoved)));
+        l10n.photosTrashMoved,
+        severity: OmniFeedbackSeverity.success,
+      );
       _closeViewer();
     } on Exception {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosDeleteFailed),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosDeleteFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -426,18 +522,18 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
             .read(photoCenterControllerProvider.notifier)
             .addPhotosToAlbum(albumId: selected, photoIds: [_current.id]);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosAddedToAlbum),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosAddedToAlbum,
+            severity: OmniFeedbackSeverity.success,
           );
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosAddFailed),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosAddFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }
@@ -499,12 +595,19 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               final base = _pages[index];
               return Consumer(
                 builder: (context, pageRef, _) {
+                  // 首页条带等列表项缺签名原图 URL：用相邻页详情预取写入的
+                  // 内存缓存作种子，原图可立即走磁盘缓存，不必等详情往返。
+                  final seed =
+                      pageRef
+                          .watch(photoDetailMemoryCacheProvider)
+                          .get(base.id) ??
+                      base;
                   final item =
                       pageRef
                           .watch(photoDetailProvider(base.id))
                           .asData
                           ?.value ??
-                      base;
+                      seed;
                   return _buildPhotoStage(context, item, index, _pages.length);
                 },
               );
@@ -539,35 +642,39 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
               if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(context).errorForbidden,
-                      ),
-                    ),
+                  showOmniFeedback(
+                    context,
+                    AppLocalizations.of(context).errorForbidden,
+                    severity: OmniFeedbackSeverity.error,
                   );
                 }
                 return;
               }
               try {
-                if (!mounted) return;
+                if (!context.mounted) return;
+                final wasFavorite = currentFresh.favorite;
                 await ref
                     .read(photoCenterControllerProvider.notifier)
                     .toggleFavorite(
                       currentFresh.id,
                       currentFavorite: currentFresh.favorite,
                     );
-                if (!mounted) return;
+                if (!context.mounted) return;
+                showOmniFeedback(
+                  context,
+                  wasFavorite
+                      ? AppLocalizations.of(context).favoriteRemoved
+                      : AppLocalizations.of(context).favoriteAdded,
+                  severity: OmniFeedbackSeverity.success,
+                );
                 // 刷新详情
                 ref.invalidate(photoDetailProvider(currentFresh.id));
               } on Exception {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(context).photosOperationFailed,
-                      ),
-                    ),
+                  showOmniFeedback(
+                    context,
+                    AppLocalizations.of(context).photosOperationFailed,
+                    severity: OmniFeedbackSeverity.error,
                   );
                 }
               }
@@ -741,15 +848,44 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   }
 }
 
-/// 查看器渐进图层：列表封面先亮，原图就绪后无缝覆盖。
+/// 查看器两层图片的解码宽度档位：预取与渲染共用，保证图片缓存键一致。
 ///
-/// 列表接口不返回 sourceUrl，原图需详情接口签发；网格已解码的封面可立刻
-/// 展示，原图按屏宽降采样解码，避免移动端整幅原图解码卡顿。
+/// 原图层按屏宽 256 步进量化；封面层 128 步进、上限 1024。256 档位避免
+/// 最大化/还原时屏宽连续变化反复重解码。
+({int source, int cover}) viewerDecodeWidths(BuildContext context) {
+  final size = MediaQuery.sizeOf(context);
+  final dpr = MediaQuery.devicePixelRatioOf(context);
+  return (
+    source: quantizedDecodeWidth(
+      logicalWidth: size.width,
+      devicePixelRatio: dpr,
+      step: 256,
+      min: 512,
+      max: 4096,
+    ),
+    cover: quantizedDecodeWidth(
+      logicalWidth: size.width,
+      devicePixelRatio: dpr,
+      step: 128,
+      min: 400,
+      max: 1024,
+    ),
+  );
+}
+
+/// 查看器渐进图层：列表封面先亮，原图就绪后淡入覆盖。
 ///
-/// 首帧种子（列表/内存缓存）可能携带已过期的预签名 URL；签名 URL 失败
-/// 后按世代后缀重试并作废详情 provider 换取现签地址：CachedNetworkImage
-/// 的 provider 相等性只看 cacheKey，同 key 的 URL 轮换不会重载已失败的
+/// 分页列表项已携带签名 sourceUrl；首页最近/收藏条带的列表项不含
+/// sourceUrl，由相邻页详情预取与内存缓存种子补齐。原图按屏宽降采样
+/// 解码，避免移动端整幅原图解码卡顿。
+///
+/// 种子（列表/内存缓存）可能携带已过期的预签名 URL；签名 URL 失败后按
+/// 世代后缀重试并作废详情 provider 换取现签地址：CachedNetworkImage 的
+/// provider 相等性只看 cacheKey，同 key 的 URL 轮换不会重载已失败的
 /// 流，必须换 key 才能重试。
+///
+/// 解码宽度档位由 [viewerDecodeWidths] 统一提供，相邻页预取与渲染共用，
+/// 保证图片缓存键一致，预取才能真正命中已解码位图。
 class _ProgressivePhotoImage extends ConsumerStatefulWidget {
   const _ProgressivePhotoImage({required this.photo});
 
@@ -763,6 +899,10 @@ class _ProgressivePhotoImage extends ConsumerStatefulWidget {
 class _ProgressivePhotoImageState
     extends ConsumerState<_ProgressivePhotoImage> {
   static const int _maxRetryTicks = 2;
+
+  /// 原图层异步就绪后的短淡入时长；仅异步加载播放，同步缓存命中不播。
+  static const Duration _sourceFadeIn = Duration(milliseconds: 220);
+
   int _retryTick = 0;
   bool _recovering = false;
 
@@ -791,23 +931,9 @@ class _ProgressivePhotoImageState
     final retrySuffix = _retryTick > 0 ? ':r$_retryTick' : '';
     final coverUrl = photo.coverUrl;
     final sourceUrl = photo.sourceUrl;
-    final size = MediaQuery.sizeOf(context);
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    // 256px 档位：最大化/还原时不因屏宽连续变化而反复重解码。
-    final sourceDecodeWidth = quantizedDecodeWidth(
-      logicalWidth: size.width,
-      devicePixelRatio: dpr,
-      step: 256,
-      min: 512,
-      max: 4096,
-    );
-    final coverDecodeWidth = quantizedDecodeWidth(
-      logicalWidth: size.width,
-      devicePixelRatio: dpr,
-      step: 128,
-      min: 400,
-      max: 1024,
-    );
+    final widths = viewerDecodeWidths(context);
+    final sourceDecodeWidth = widths.source;
+    final coverDecodeWidth = widths.cover;
 
     if (sourceUrl == null || sourceUrl.isEmpty) {
       if (coverUrl == null || coverUrl.isEmpty) {
@@ -817,6 +943,7 @@ class _ProgressivePhotoImageState
         imageUrl: coverUrl,
         cacheKey: '${photo.coverCacheKey}$retrySuffix',
         memCacheWidth: sourceDecodeWidth,
+        fadeInDuration: _sourceFadeIn,
         onError: _handleImageError,
       );
     }
@@ -836,7 +963,10 @@ class _ProgressivePhotoImageState
           imageUrl: sourceUrl,
           cacheKey: '${photo.sourceCacheKey}$retrySuffix',
           memCacheWidth: sourceDecodeWidth,
-          // 封面已在底层：原图加载中不再叠 spinner，失败时保留封面。
+          // 封面已在底层：原图加载中不再叠 spinner，失败时保留封面；
+          // 异步就绪后短淡入，把封面→原图的清晰度跳变柔化为交叉过渡
+          //（预取命中的同步加载会被 octo 跳过淡入，仍单帧直出）。
+          fadeInDuration: _sourceFadeIn,
           transparentWhilePending: hasCover,
           hideError: hasCover,
           onError: _handleImageError,
@@ -851,6 +981,7 @@ class _ViewerNetworkImage extends StatelessWidget {
     required this.imageUrl,
     required this.cacheKey,
     required this.memCacheWidth,
+    this.fadeInDuration = Duration.zero,
     this.transparentWhilePending = false,
     this.hideError = false,
     this.onError,
@@ -859,6 +990,7 @@ class _ViewerNetworkImage extends StatelessWidget {
   final String imageUrl;
   final String cacheKey;
   final int memCacheWidth;
+  final Duration fadeInDuration;
   final bool transparentWhilePending;
   final bool hideError;
   final VoidCallback? onError;
@@ -870,7 +1002,7 @@ class _ViewerNetworkImage extends StatelessWidget {
       cacheKey: cacheKey,
       memCacheWidth: memCacheWidth,
       fit: BoxFit.contain,
-      fadeInDuration: Duration.zero,
+      fadeInDuration: fadeInDuration,
       fadeOutDuration: Duration.zero,
       useOldImageOnUrlChange: true,
       errorListener: (_) {

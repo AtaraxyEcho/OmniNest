@@ -10,6 +10,7 @@ import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoAlbum;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDetailDto;
+import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
@@ -23,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,5 +101,18 @@ class PhotoAlbumServiceTest {
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent()).extracting(PhotoItemDto::id)
                 .containsExactly(PHOTO_1, PHOTO_2);
+    }
+
+    @Test
+    void listAlbumsPage_mapsSliceAndKeepsRepositoryTotal() {
+        var pageable = PageRequest.of(1, 2);
+        when(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER, pageable))
+                .thenReturn(new PageImpl<>(List.of(album()), pageable, 5));
+
+        Page<PhotoAlbumDto> page = service.listAlbumsPage(OWNER, 1, 2);
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent()).extracting(PhotoAlbumDto::name).containsExactly("Trip");
+        assertThat(page.getTotalElements()).isEqualTo(5);
     }
 }

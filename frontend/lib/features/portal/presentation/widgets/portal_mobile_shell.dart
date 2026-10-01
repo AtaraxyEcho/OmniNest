@@ -38,6 +38,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_cover_image
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'portal_mobile_system_widgets.dart';
 part 'portal_mobile_quick_actions.dart';
@@ -138,11 +139,10 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
         if (_lastBackPress == null ||
             now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
           _lastBackPress = now;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.portalPressBackAgain),
-              duration: const Duration(seconds: 2),
-            ),
+          showOmniFeedback(
+            context,
+            l10n.portalPressBackAgain,
+            duration: const Duration(seconds: 2),
           );
           return;
         }

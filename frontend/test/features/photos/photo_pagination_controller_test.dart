@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
-import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_group.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/domain/photo_timeline.dart';
@@ -492,8 +491,11 @@ void _stubCommon(_MockPhotoRepository repository) {
     ),
   ).thenAnswer((_) async => PhotoPage.empty());
   when(
-    () => repository.listAlbums(),
-  ).thenAnswer((_) async => const <PhotoAlbum>[]);
+    () => repository.listAlbumsPage(
+      page: any(named: 'page'),
+      size: any(named: 'size'),
+    ),
+  ).thenAnswer((_) async => PhotoAlbumPage.empty());
   when(
     () => repository.listTrash(
       page: any(named: 'page'),

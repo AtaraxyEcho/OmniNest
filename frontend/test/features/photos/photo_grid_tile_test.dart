@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 
@@ -184,6 +185,60 @@ void main() {
     expect(find.byIcon(Icons.favorite_border), findsOneWidget);
     expect(tester.takeException(), isNull);
     handle.dispose();
+  });
+
+  testWidgets('悬停时图片图内微放大、移出后还原', (tester) async {
+    final photo = PhotoItem(
+      id: 'photo-1',
+      fileNodeId: 'file-1',
+      title: 'photo.jpg',
+      format: 'jpg',
+      fileSize: 1,
+      metadataStatus: 'READY',
+      favorite: false,
+      createdAt: DateTime(2026),
+      coverUrl: 'https://example.test/photo.jpg',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OmniNestTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Center(
+          child: SizedBox(
+            width: 240,
+            height: 240,
+            child: PhotoGridTile(photo: photo, onTap: () {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    AnimatedScale tileScale() =>
+        tester.widget<AnimatedScale>(find.byType(AnimatedScale));
+    expect(tileScale().scale, 1.0);
+
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final center = tester.getCenter(find.byType(PhotoGridTile));
+    final enterHit = HitTestResult();
+    tester.binding.hitTestInView(enterHit, center, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(center), enterHit);
+    await tester.pump();
+    expect(tileScale().scale, 1.05);
+    // 缩放手感与地点/影集卡一致：300ms easeOutCubic，更短会显得生硬。
+    expect(tileScale().duration, MotionToken.normal);
+    expect(tileScale().curve, MotionToken.curve);
+
+    final away = const Offset(4, 4);
+    final exitHit = HitTestResult();
+    tester.binding.hitTestInView(exitHit, away, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(away), exitHit);
+    await tester.pump();
+    expect(tileScale().scale, 1.0);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('收藏语义为稳定 button 而非 CustomSemanticsAction', (tester) async {

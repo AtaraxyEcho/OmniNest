@@ -112,6 +112,19 @@ class PhotoApi {
     return parseList(response.data).map(PhotoItem.fromJson).toList();
   }
 
+  /// 按标签分页查询照片：滚动加载消费，totalElements 为标签关联总数。
+  Future<PhotoPage> listByTagPage(
+    String tag, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/by-tag/page',
+      queryParameters: {'tag': tag, 'page': page, 'size': size},
+    );
+    return PhotoPage.fromJson(parseData(response.data));
+  }
+
   /// 永久删除回收站中的照片。
   Future<TaskSubmission> purgePhoto(
     String photoId, {
@@ -205,6 +218,15 @@ class PhotoApi {
       '/photos/albums',
     );
     return parseList(response.data).map(PhotoAlbum.fromJson).toList();
+  }
+
+  /// 分页获取相册列表：滚动加载消费，按更新时间倒序。
+  Future<PhotoAlbumPage> listAlbumsPage({int page = 0, int size = 50}) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/albums/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return PhotoAlbumPage.fromJson(parseData(response.data));
   }
 
   /// 创建相册

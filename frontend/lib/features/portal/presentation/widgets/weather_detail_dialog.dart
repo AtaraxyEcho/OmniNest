@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
@@ -19,7 +20,7 @@ Future<void> showWeatherDetailDialog(
   BuildContext context, {
   required WeatherData weather,
 }) {
-  return showDialog<void>(
+  return showWorkstationDialog<void>(
     context: context,
     barrierColor: Colors.black54,
     builder: (_) => _WeatherDetailDialog(weather: weather),

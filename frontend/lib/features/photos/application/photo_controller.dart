@@ -92,15 +92,22 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       _safe(_repo.dashboard, PhotoDashboard.empty(), partialErrors),
       _safe(_repo.listPhotos, PhotoPage.empty(), partialErrors),
       _safe(_repo.listFavorites, PhotoPage.empty(), partialErrors),
-      _safe(_repo.listAlbums, <PhotoAlbum>[], partialErrors),
+      _safe(
+        () => _repo.listAlbumsPage(),
+        PhotoAlbumPage.empty(),
+        partialErrors,
+      ),
     ]);
     final photoPage = results[1] as PhotoPage;
     final favoritePage = results[2] as PhotoPage;
+    final albumPage = results[3] as PhotoAlbumPage;
     return PhotoCenterState(
       dashboard: results[0] as PhotoDashboard,
       photos: photoPage.items,
       favorites: favoritePage.items,
-      albums: results[3] as List<PhotoAlbum>,
+      albums: albumPage.items,
+      albumsHasMore: albumPage.hasMore,
+      albumsPage: albumPage.page,
       tab: previous?.tab ?? PhotoTab.all,
       libraryView: previous?.libraryView ?? PhotoLibraryView.gridDay,
       frameView: previous?.frameView ?? FrameView.grid,
@@ -144,10 +151,15 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
         PhotoPage.empty(),
         partialErrors,
       ),
-      _safe(_repo.listAlbums, <PhotoAlbum>[], partialErrors),
+      _safe(
+        () => _repo.listAlbumsPage(),
+        PhotoAlbumPage.empty(),
+        partialErrors,
+      ),
     ]);
     final photoPage = results[1] as PhotoPage;
     final favoritePage = results[2] as PhotoPage;
+    final albumPage = results[3] as PhotoAlbumPage;
     if (!ref.mounted || generation != _refreshGeneration) {
       _listRefreshSuperseded = true;
       return;
@@ -157,7 +169,9 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
         dashboard: results[0] as PhotoDashboard,
         photos: photoPage.items,
         favorites: favoritePage.items,
-        albums: results[3] as List<PhotoAlbum>,
+        albums: albumPage.items,
+        albumsHasMore: albumPage.hasMore,
+        albumsPage: albumPage.page,
         photoPage: photoPage.page,
         favoritePage: favoritePage.page,
         photoTotalElements: photoPage.totalElements,
@@ -211,7 +225,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       _repo.listFavorites(
         query: current.tab == PhotoTab.favorites ? current.searchQuery : null,
       ),
-      _repo.listAlbums(),
+      _repo.listAlbumsPage(),
     ]);
     if (!ref.mounted || generation != _refreshGeneration) return;
     final photoPage = results[1] as PhotoPage;
@@ -229,7 +243,9 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
           favoritePage.items,
           favoritePage.totalElements,
         ),
-        albums: results[3] as List<PhotoAlbum>,
+        albums: (results[3] as PhotoAlbumPage).items,
+        albumsHasMore: (results[3] as PhotoAlbumPage).hasMore,
+        albumsPage: (results[3] as PhotoAlbumPage).page,
         photoTotalElements: photoPage.totalElements,
         favoriteTotalElements: favoritePage.totalElements,
         photoRefreshVersion: current.photoRefreshVersion + 1,

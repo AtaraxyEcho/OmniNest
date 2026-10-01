@@ -759,6 +759,34 @@ public class PhotoLibraryService {
     }
 
     /**
+     * 按标签分页查询照片列表。
+     *
+     * <p>totalElements 取标签关联总数（与旧全量端点先查标签再过滤软删的口径一致），
+     * 个别软删照片导致页内条数略少于 size 由前端以已加载数对齐判断兜底。</p>
+     *
+     * @param ownerUserId 用户标识
+     * @param tag 标签名
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @return 标签照片分页
+     */
+    @Transactional(readOnly = true)
+    public Page<PhotoItemDto> listByTagPage(UUID ownerUserId, String tag, int page, int size) {
+        Page<PhotoTag> tagPage = photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(
+                ownerUserId, tag, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+        if (tagPage.isEmpty()) {
+            return new PageImpl<>(List.of(), tagPage.getPageable(), tagPage.getTotalElements());
+        }
+        List<UUID> photoIds = tagPage.getContent().stream().map(PhotoTag::getPhotoId).toList();
+        List<PhotoItem> items = photoItemRepository
+                .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds).stream()
+                .filter(Objects::nonNull)
+                .toList();
+        List<PhotoItemDto> dtos = mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
+        return new PageImpl<>(dtos, tagPage.getPageable(), tagPage.getTotalElements());
+    }
+
+    /**
      * 查询用户所有标签。
      */
     @Transactional(readOnly = true)

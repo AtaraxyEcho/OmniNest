@@ -136,12 +136,10 @@ class _BatchActionBar extends StatelessWidget {
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context).photosTaskCreateFailed,
-              ),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosTaskCreateFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }
@@ -177,12 +175,10 @@ class _BatchActionBar extends StatelessWidget {
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context).photosTaskCreateFailed,
-              ),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosTaskCreateFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }
@@ -206,18 +202,18 @@ class _BatchActionBar extends StatelessWidget {
             .read(photoCenterControllerProvider.notifier)
             .movePhotosToTrash(photoIds);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosTrashMoved),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosTrashMoved,
+            severity: OmniFeedbackSeverity.success,
           );
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosDeleteFailed),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosDeleteFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }
@@ -234,10 +230,10 @@ class _BatchActionBar extends StatelessWidget {
       }
     } on Exception {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).photosTaskCreateFailed),
-          ),
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).photosTaskCreateFailed,
+          severity: OmniFeedbackSeverity.error,
         );
       }
     }
@@ -245,9 +241,9 @@ class _BatchActionBar extends StatelessWidget {
 
   void _showProgressDialog(BuildContext context, String taskId) {
     ref.read(photoCenterControllerProvider.notifier).toggleSelectionMode();
-    showDialog(
+    showWorkstationDialog<void>(
       context: context,
-      barrierDismissible: false,
+      dismissible: false,
       builder: (ctx) => BatchProgressDialog(taskId: taskId),
     );
   }

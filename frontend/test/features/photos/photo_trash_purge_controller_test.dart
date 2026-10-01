@@ -4,7 +4,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
-import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
@@ -68,8 +67,11 @@ void _stubRepository(
     ),
   ).thenAnswer((_) async => PhotoPage.empty());
   when(
-    () => repository.listAlbums(),
-  ).thenAnswer((_) async => const <PhotoAlbum>[]);
+    () => repository.listAlbumsPage(
+      page: any(named: 'page'),
+      size: any(named: 'size'),
+    ),
+  ).thenAnswer((_) async => PhotoAlbumPage.empty());
   when(
     () => repository.listTrash(
       page: any(named: 'page'),

@@ -19,6 +19,7 @@ import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 相册详情页面
 class PhotoAlbumDetailPage extends ConsumerWidget {
@@ -324,22 +325,18 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
             .deleteAlbum(widget.albumId);
         if (context.mounted) {
           context.pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(
-                  context,
-                ).photosDeletedAlbum(widget.album.name),
-              ),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosDeletedAlbum(widget.album.name),
+            severity: OmniFeedbackSeverity.success,
           );
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosDeleteFailed),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosDeleteFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }
@@ -359,10 +356,10 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           .listAlbumShares(albumId);
     } on Exception catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(describeUserFacingError(error).displayMessage),
-          ),
+        showOmniFeedback(
+          context,
+          describeUserFacingError(error).displayMessage,
+          severity: OmniFeedbackSeverity.error,
         );
       }
     }
@@ -401,22 +398,20 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
       if (context.mounted) {
         // 影集分享走 SPA hash 路由（/shared/photos/:token）；基址取
         // 服务器下发的对外 Web 地址，未配置时回退到客户端推导值。
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context).photosShareLinkCreated(
-                '$baseUrl/#/shared/photos/${link.token}',
-              ),
-            ),
-          ),
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(
+            context,
+          ).photosShareLinkCreated('$baseUrl/#/shared/photos/${link.token}'),
+          severity: OmniFeedbackSeverity.success,
         );
       }
     } on Exception {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).photosShareLinkFailed),
-          ),
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).photosShareLinkFailed,
+          severity: OmniFeedbackSeverity.error,
         );
       }
     }
@@ -444,22 +439,18 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
         // 刷新相册详情
         ref.invalidate(photoAlbumDetailProvider(widget.albumId));
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(
-                  context,
-                ).photosRemovedFromAlbum(photo.title),
-              ),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosRemovedFromAlbum(photo.title),
+            severity: OmniFeedbackSeverity.success,
           );
         }
       } on Exception {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosOperationFailed),
-            ),
+          showOmniFeedback(
+            context,
+            AppLocalizations.of(context).photosOperationFailed,
+            severity: OmniFeedbackSeverity.error,
           );
         }
       }

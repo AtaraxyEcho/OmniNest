@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
@@ -57,6 +58,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
     final photo = widget.photo;
     final overlayVisible =
         _hovering || widget.isSelectionMode || widget.isSelected;
+    final animationsEnabled = !MediaQuery.disableAnimationsOf(context);
     final date = photo.dateTaken ?? photo.createdAt;
     final dateText =
         date == null
@@ -70,13 +72,22 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (photo.hasCover)
-            PhotoThumbImage(
-              imageUrl: photo.coverUrl!,
-              cacheKey: photo.coverCacheKey,
-            )
-          else
-            const _Placeholder(),
+          // 悬停时图内微放大：缩放只作用于图片本体，超出部分由本层
+          // ClipRRect 裁剪；遮罩文案与选择控件保持原尺寸，也不影响
+          // 瀑布流布局。300ms easeOutCubic 与地点/影集卡的既有悬停
+          // 缩放手感一致，过短会显得生硬。
+          AnimatedScale(
+            scale: _hovering && animationsEnabled ? 1.05 : 1.0,
+            duration: MotionToken.normal,
+            curve: MotionToken.curve,
+            child:
+                photo.hasCover
+                    ? PhotoThumbImage(
+                      imageUrl: photo.coverUrl!,
+                      cacheKey: photo.coverCacheKey,
+                    )
+                    : const _Placeholder(),
+          ),
 
           // 悬停/多选/选中时的遮罩层
           Positioned.fill(
@@ -84,10 +95,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
               ignoring: !overlayVisible,
               child: AnimatedOpacity(
                 opacity: overlayVisible ? 1 : 0,
-                duration:
-                    MediaQuery.disableAnimationsOf(context)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 150),
+                duration: animationsEnabled ? MotionToken.fast : Duration.zero,
                 // 透明度归零会整棵摘掉遮罩语义（含收藏/选择节点），悬停进出再
                 // 整棵加回：Windows 辅助功能桥会在仍持有旧节点 id 时更新失败
                 // （"will not be in the tree and is not the new root"）。

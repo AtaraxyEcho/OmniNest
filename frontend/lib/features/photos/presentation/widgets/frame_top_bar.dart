@@ -7,6 +7,7 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/responsive_search_field.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
@@ -14,6 +15,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// Frame 顶栏：返回 Portal、衬线视图标题、搜索框与导入、通知、头像入口。
 ///
@@ -99,11 +101,7 @@ class FrameTopBar extends ConsumerWidget {
             child: Row(
               children: [
                 if (showBack) ...[
-                  FrameIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: l10n.photosBackToPortal,
-                    onTap: () => context.go('/portal'),
-                  ),
+                  WorkstationPortalLink(onTap: () => context.go('/portal')),
                   const SizedBox(width: 12),
                 ],
                 if (showTitle)
@@ -243,12 +241,9 @@ class FrameImportAction extends ConsumerWidget {
           if (!context.mounted) return null;
           final failure = controller.lastImportNotice;
           if (!visible && failure != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  photoImportNoticeText(AppLocalizations.of(context), failure),
-                ),
-              ),
+            showOmniFeedback(
+              context,
+              photoImportNoticeText(AppLocalizations.of(context), failure),
             );
             return MediaImportCompletionState.failed;
           }

@@ -77,6 +77,9 @@ class PhotoSharedAlbum {
   final int size;
   final int total;
 
+  /// 滚动加载终止判断：已到末页时为 false。
+  bool get hasMore => total > (page + 1) * size;
+
   factory PhotoSharedAlbum.fromJson(Map<String, dynamic> json) {
     return PhotoSharedAlbum(
       albumName: json['albumName']?.toString() ?? '',

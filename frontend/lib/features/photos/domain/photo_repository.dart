@@ -50,6 +50,9 @@ abstract interface class PhotoRepository {
   /// 按标签查询照片列表。
   Future<List<PhotoItem>> listByTag(String tag);
 
+  /// 按标签分页查询照片：滚动加载消费。
+  Future<PhotoPage> listByTagPage(String tag, {int page = 0, int size = 50});
+
   /// 清空回收站。
   Future<TaskSubmission> purgeTrash();
 
@@ -78,6 +81,9 @@ abstract interface class PhotoRepository {
 
   /// 获取相册列表
   Future<List<PhotoAlbum>> listAlbums();
+
+  /// 分页获取相册列表：滚动加载消费。
+  Future<PhotoAlbumPage> listAlbumsPage({int page = 0, int size = 50});
 
   /// 创建相册
   Future<PhotoAlbum> createAlbum({required String name, String? description});

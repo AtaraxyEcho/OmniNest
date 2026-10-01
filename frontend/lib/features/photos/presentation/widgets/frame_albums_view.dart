@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
@@ -11,12 +12,16 @@ import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.
 ///
 /// 封面卡 aspect 1.4、圆角 4、底色 #EAE7E0，悬停放大 1.05；
 /// 网格 2 列（md 3 列、lg 4 列），间距 16px。
+/// 相册分页加载：行式懒构建 + 触底续页。
 class FrameAlbumsView extends StatelessWidget {
   const FrameAlbumsView({
     required this.albums,
     required this.onOpenAlbum,
     required this.onDeleteAlbum,
     required this.onCreateAlbum,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
     super.key,
   });
 
@@ -25,80 +30,105 @@ class FrameAlbumsView extends StatelessWidget {
   final ValueChanged<PhotoAlbum> onDeleteAlbum;
   final VoidCallback onCreateAlbum;
 
+  /// 滚动加载三件套：hasMore 与加载门闩由 controller 状态承载。
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.frameColors;
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverLayoutBuilder(
-          builder: (context, constraints) {
-            final padding = _paddingFor(constraints.crossAxisExtent);
-            final columns = _columnCountFor(constraints.crossAxisExtent);
-            return SliverPadding(
-              padding: EdgeInsets.all(padding),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  Row(
-                    children: [
-                      Text(
-                        l10n.photosAlbums,
-                        style: TextStyle(
-                          fontFamily: FramePalette.serifFamily,
-                          fontFamilyFallback: FramePalette.serifFallback,
-                          color: colors.ink,
-                          fontSize: AppTypography.headlineSmall,
-                        ),
-                      ),
-                      const Spacer(),
-                      _NewAlbumButton(onTap: onCreateAlbum),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  if (albums.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        l10n.photosNoAlbums,
-                        style: TextStyle(
-                          color: colors.muted,
-                          fontSize: AppTypography.bodyMedium,
-                        ),
-                      ),
-                    )
-                  else
-                    LayoutBuilder(
-                      builder: (context, gridConstraints) {
-                        final itemWidth =
-                            (gridConstraints.maxWidth - (columns - 1) * 16) /
-                            columns;
-                        return Wrap(
-                          spacing: 16,
-                          runSpacing: 20,
+    return InfiniteScrollTrigger(
+      enabled: hasMore && !isLoadingMore && onLoadMore != null,
+      onLoadMore: onLoadMore ?? () {},
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final padding = _paddingFor(constraints.crossAxisExtent);
+              final columns = _columnCountFor(constraints.crossAxisExtent);
+              return SliverPadding(
+                padding: EdgeInsets.all(padding),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index == 0) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            for (final album in albums)
-                              SizedBox(
-                                width: itemWidth,
-                                child: _FrameAlbumCard(
-                                  album: album,
-                                  onOpen: () => onOpenAlbum(album),
-                                  onLongPress: () {
-                                    HapticFeedback.mediumImpact();
-                                    onDeleteAlbum(album);
-                                  },
+                            Row(
+                              children: [
+                                Text(
+                                  l10n.photosAlbums,
+                                  style: TextStyle(
+                                    fontFamily: FramePalette.serifFamily,
+                                    fontFamilyFallback:
+                                        FramePalette.serifFallback,
+                                    color: colors.ink,
+                                    fontSize: AppTypography.headlineSmall,
+                                  ),
+                                ),
+                                const Spacer(),
+                                _NewAlbumButton(onTap: onCreateAlbum),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            if (albums.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  l10n.photosNoAlbums,
+                                  style: TextStyle(
+                                    color: colors.muted,
+                                    fontSize: AppTypography.bodyMedium,
+                                  ),
                                 ),
                               ),
                           ],
                         );
-                      },
-                    ),
-                ]),
-              ),
-            );
-          },
-        ),
-      ],
+                      }
+                      final rowStart = (index - 1) * columns;
+                      if (rowStart >= albums.length) {
+                        return null;
+                      }
+                      final rowEnd = (rowStart + columns).clamp(
+                        0,
+                        albums.length,
+                      );
+                      final row = albums.sublist(rowStart, rowEnd);
+                      // 行内均分宽度对齐原 Wrap 网格的列宽计算。
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (var i = 0; i < row.length; i++) ...[
+                              if (i > 0) const SizedBox(width: 16),
+                              Expanded(
+                                child: _FrameAlbumCard(
+                                  album: row[i],
+                                  onOpen: () => onOpenAlbum(row[i]),
+                                  onLongPress: () {
+                                    HapticFeedback.mediumImpact();
+                                    onDeleteAlbum(row[i]);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                    childCount: 1 + ((albums.length + columns - 1) ~/ columns),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -21,6 +22,9 @@ class FrameTrashView extends StatefulWidget {
     required this.onDeleteForever,
     required this.onEmptyTrash,
     this.errorMessage,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
     super.key,
   });
 
@@ -30,6 +34,11 @@ class FrameTrashView extends StatefulWidget {
   final ValueChanged<PhotoItem> onRestore;
   final ValueChanged<PhotoItem> onDeleteForever;
   final VoidCallback onEmptyTrash;
+
+  /// 滚动加载三件套：修复回收站 >50 条不可见的截断缺陷。
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
 
   @override
   State<FrameTrashView> createState() => _FrameTrashViewState();
@@ -62,36 +71,41 @@ class _FrameTrashViewState extends State<FrameTrashView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.frameColors;
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverLayoutBuilder(
-          builder: (context, constraints) {
-            final padding = constraints.crossAxisExtent > 768 ? 24.0 : 16.0;
-            final columns = _columnCount(constraints.crossAxisExtent);
-            return SliverPadding(
-              padding: EdgeInsets.all(padding),
-              sliver: SliverMainAxisGroup(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: _buildHeader(context, l10n, colors),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                  if (widget.errorMessage != null)
-                    SliverToBoxAdapter(child: _buildError())
-                  else if (widget.photos.isEmpty)
-                    SliverToBoxAdapter(child: _buildEmpty(l10n))
-                  else
-                    _buildTileRows(
-                      constraints.crossAxisExtent - padding * 2,
-                      columns,
+    return InfiniteScrollTrigger(
+      enabled:
+          widget.hasMore && !widget.isLoadingMore && widget.onLoadMore != null,
+      onLoadMore: widget.onLoadMore ?? () {},
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final padding = constraints.crossAxisExtent > 768 ? 24.0 : 16.0;
+              final columns = _columnCount(constraints.crossAxisExtent);
+              return SliverPadding(
+                padding: EdgeInsets.all(padding),
+                sliver: SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: _buildHeader(context, l10n, colors),
                     ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    if (widget.errorMessage != null)
+                      SliverToBoxAdapter(child: _buildError())
+                    else if (widget.photos.isEmpty)
+                      SliverToBoxAdapter(child: _buildEmpty(l10n))
+                    else
+                      _buildTileRows(
+                        constraints.crossAxisExtent - padding * 2,
+                        columns,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 

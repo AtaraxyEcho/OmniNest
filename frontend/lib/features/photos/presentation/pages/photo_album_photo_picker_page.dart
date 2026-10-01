@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 影集"添加照片"选择页：分页候选集 + 多选 + 提交。
 class PhotoAlbumPhotoPickerPage extends ConsumerStatefulWidget {
@@ -41,18 +42,21 @@ class _PhotoAlbumPhotoPickerPageState
       return;
     }
     final l10n = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     if (success) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.photosPickerAddSuccess(selectedCount))),
+      showOmniFeedback(
+        context,
+        l10n.photosPickerAddSuccess(selectedCount),
+        severity: OmniFeedbackSeverity.success,
       );
       if (mounted) {
         context.pop();
       }
     } else {
       final error = ref.read(photoAlbumPickerProvider).error;
-      messenger.showSnackBar(
-        SnackBar(content: Text(error ?? l10n.photosAddPhotos)),
+      showOmniFeedback(
+        context,
+        error ?? l10n.photosAddPhotos,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }

@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -19,6 +20,7 @@ import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
 import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'photo_share_panel_builders.dart';
 part 'photo_share_panel_rows.dart';
@@ -261,10 +263,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     final copied = await copyTextToClipboard(target);
     if (!mounted) return;
     if (!copied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).clipboardCopyFailed),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).clipboardCopyFailed,
+        severity: OmniFeedbackSeverity.error,
       );
       return;
     }
@@ -480,13 +482,13 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.photosShareWeChatCopiedFallback)),
+        showOmniFeedback(
+          context,
+          l10n.photosShareWeChatCopiedFallback,
+          severity: OmniFeedbackSeverity.success,
         );
       case PhotoShareChannelFailure(:final message):
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        showOmniFeedback(context, message);
     }
   }
 
@@ -495,7 +497,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     if (!mounted) {
       return;
     }
-    showDialog<void>(
+    showWorkstationDialog<void>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(

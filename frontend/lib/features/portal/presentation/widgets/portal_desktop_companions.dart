@@ -1,5 +1,30 @@
 part of 'portal_desktop_visual_shells.dart';
 
+/// 分区封面卡悬停内容放大：只把指针进出重建为 hovered，
+/// 卡片几何与氛围层全部静止，缩放经由 PortalGradientCover.contentScale
+/// 作用于封面图本体（Photos 照片卡同构的裁切缩放）。
+class _HoverCoverScale extends StatefulWidget {
+  const _HoverCoverScale({required this.builder});
+
+  final Widget Function(BuildContext context, bool hovered) builder;
+
+  @override
+  State<_HoverCoverScale> createState() => _HoverCoverScaleState();
+}
+
+class _HoverCoverScaleState extends State<_HoverCoverScale> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: widget.builder(context, _hovered),
+    );
+  }
+}
+
 /// 胶片条迷你卡封面自愈：加载失败（签名 URL 过期为主因）时按模块
 /// 有限次重试对应数据分区，重签 URL 后由稳定缓存键命中或重新下载。
 class _VisualFilmStrip extends ConsumerStatefulWidget {
@@ -99,27 +124,35 @@ class _VisualFilmStripState extends ConsumerState<_VisualFilmStrip> {
                         width: active ? 1.4 : 0,
                       ),
                     ),
-                    child: PortalGradientCover(
-                      palette: palette,
-                      title: item.title,
-                      subtitle: item.subtitle,
-                      variant: item.variant,
-                      imageUrl: item.imageUrl,
-                      readerItemId: item.readerItemId,
-                      coverCacheKey: item.coverCacheKey,
-                      onCoverError: () => _handleCoverError(item.module),
-                      fallbackIcon: item.icon.iconData,
-                      height: itemHeight,
-                      maxCoverWidth: itemWidth,
-                      maxCoverHeight: itemHeight,
-                      minCoverHeight: itemHeight,
-                      directImage: true,
-                      foregroundPadding: EdgeInsets.fromLTRB(
-                        8,
-                        8,
-                        8,
-                        dense ? 40 : 52,
-                      ),
+                    child: _HoverCoverScale(
+                      builder:
+                          (context, hovered) => PortalGradientCover(
+                            palette: palette,
+                            title: item.title,
+                            subtitle: item.subtitle,
+                            variant: item.variant,
+                            imageUrl: item.imageUrl,
+                            readerItemId: item.readerItemId,
+                            coverCacheKey: item.coverCacheKey,
+                            onCoverError: () => _handleCoverError(item.module),
+                            fallbackIcon: item.icon.iconData,
+                            height: itemHeight,
+                            maxCoverWidth: itemWidth,
+                            maxCoverHeight: itemHeight,
+                            minCoverHeight: itemHeight,
+                            directImage: true,
+                            foregroundPadding: EdgeInsets.fromLTRB(
+                              8,
+                              8,
+                              8,
+                              dense ? 40 : 52,
+                            ),
+                            contentScale:
+                                hovered &&
+                                        !MediaQuery.disableAnimationsOf(context)
+                                    ? 1.05
+                                    : 1.0,
+                          ),
                     ),
                   ),
                 ),
@@ -568,14 +601,24 @@ class _SingleColumnVisual extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      PortalGradientCover(
-                        palette: palette,
-                        title: item.title,
-                        subtitle: item.subtitle,
-                        height: 320,
-                        imageUrl: item.imageUrl,
-                        readerItemId: item.readerItemId,
-                        fallbackIcon: item.icon.iconData,
+                      _HoverCoverScale(
+                        builder:
+                            (context, hovered) => PortalGradientCover(
+                              palette: palette,
+                              title: item.title,
+                              subtitle: item.subtitle,
+                              height: 320,
+                              imageUrl: item.imageUrl,
+                              readerItemId: item.readerItemId,
+                              fallbackIcon: item.icon.iconData,
+                              contentScale:
+                                  hovered &&
+                                          !MediaQuery.disableAnimationsOf(
+                                            context,
+                                          )
+                                      ? 1.05
+                                      : 1.0,
+                            ),
                       ),
                       Positioned(
                         top: 10,

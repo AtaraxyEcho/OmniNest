@@ -65,6 +65,10 @@ class PhotoRepositoryImpl implements PhotoRepository {
   Future<List<PhotoItem>> listByTag(String tag) => _api.listByTag(tag);
 
   @override
+  Future<PhotoPage> listByTagPage(String tag, {int page = 0, int size = 50}) =>
+      _api.listByTagPage(tag, page: page, size: size);
+
+  @override
   Future<PhotoPage> listFavorites({
     String? query,
     int page = 0,
@@ -102,6 +106,10 @@ class PhotoRepositoryImpl implements PhotoRepository {
 
   @override
   Future<List<PhotoAlbum>> listAlbums() => _api.listAlbums();
+
+  @override
+  Future<PhotoAlbumPage> listAlbumsPage({int page = 0, int size = 50}) =>
+      _api.listAlbumsPage(page: page, size: size);
 
   @override
   Future<PhotoAlbum> createAlbum({required String name, String? description}) =>

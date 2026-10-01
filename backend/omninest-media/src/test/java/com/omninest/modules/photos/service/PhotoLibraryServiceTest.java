@@ -19,6 +19,7 @@ import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoItem;
+import com.omninest.modules.photos.domain.PhotoTag;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTrashResultDto;
 import com.omninest.modules.photos.dto.GroupBy;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoGroupDto;
@@ -45,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 /**
@@ -491,6 +493,57 @@ class PhotoLibraryServiceTest {
         when(projection.getGroupKey()).thenReturn(groupKey);
         when(projection.getPhotoCount()).thenReturn(photoCount);
         return projection;
+    }
+
+    @Test
+    void listByTagPage_returnsPageSliceWithTagAssociationTotal() {
+        PhotoTag tag1 = new PhotoTag();
+        tag1.setOwnerUserId(OWNER_ID);
+        tag1.setTag("旅行");
+        tag1.setPhotoId(PHOTO_ID_1);
+        PhotoTag tag2 = new PhotoTag();
+        tag2.setOwnerUserId(OWNER_ID);
+        tag2.setTag("旅行");
+        tag2.setPhotoId(PHOTO_ID_2);
+        Pageable pageable = PageRequest.of(0, 2);
+        when(photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(OWNER_ID, "旅行", pageable))
+                .thenReturn(new PageImpl<>(List.of(tag1, tag2), pageable, 5));
+        PhotoItem photo1 = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片一");
+        PhotoItem photo2 = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "标签照片二");
+        when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of(photo1, photo2));
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(
+                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any()))
+                .thenReturn(Map.of(
+                        COVER_FILE_ID_1,
+                        downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"),
+                        COVER_FILE_ID_2,
+                        downloadUrl(COVER_FILE_ID_2, "photo2.jpg", "http://minio/photo2")));
+
+        Page<PhotoItemDto> result = service.listByTagPage(OWNER_ID, "旅行", 0, 2);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent()).extracting(PhotoItemDto::title)
+                .containsExactly("标签照片一", "标签照片二");
+        // totalElements 取标签关联总数而非当前页条数，滚动加载据此判断 hasMore。
+        assertThat(result.getTotalElements()).isEqualTo(5);
+    }
+
+    @Test
+    void listByTagPage_emptyTagReturnsEmptyPageWithoutItemLookup() {
+        Pageable pageable = PageRequest.of(0, 2);
+        when(photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(OWNER_ID, "无标签", pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Page<PhotoItemDto> result = service.listByTagPage(OWNER_ID, "无标签", 0, 2);
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+        verify(photoItemRepository, Mockito.never()).findActiveByOwnerUserIdAndIdIn(any(), any());
     }
 
     private FileDownloadUrlDto downloadUrl(UUID fileId, String fileName, String url) {

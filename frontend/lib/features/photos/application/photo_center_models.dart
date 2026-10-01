@@ -60,7 +60,11 @@ class PhotoCenterState {
     this.trashPage = 0,
     this.trashTotalElements = 0,
     this.isLoadingTrash = false,
+    this.isLoadingMoreTrash = false,
     this.trashPageError,
+    this.albumsHasMore = false,
+    this.albumsPage = 0,
+    this.isLoadingMoreAlbums = false,
     this.errorMessage,
   });
 
@@ -113,8 +117,14 @@ class PhotoCenterState {
   final int trashPage;
   final int trashTotalElements;
   final bool isLoadingTrash;
+  final bool isLoadingMoreTrash;
   final String? trashPageError;
+  final bool albumsHasMore;
+  final int albumsPage;
+  final bool isLoadingMoreAlbums;
   final String? errorMessage;
+
+  bool get hasMoreTrash => trashPhotos.length < trashTotalElements;
 
   bool get hasMorePhotos => photos.length < photoTotalElements;
 
@@ -203,8 +213,12 @@ class PhotoCenterState {
     int? trashPage,
     int? trashTotalElements,
     bool? isLoadingTrash,
+    bool? isLoadingMoreTrash,
     String? trashPageError,
     bool clearTrashPageError = false,
+    bool? albumsHasMore,
+    int? albumsPage,
+    bool? isLoadingMoreAlbums,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -265,8 +279,12 @@ class PhotoCenterState {
       trashPage: trashPage ?? this.trashPage,
       trashTotalElements: trashTotalElements ?? this.trashTotalElements,
       isLoadingTrash: isLoadingTrash ?? this.isLoadingTrash,
+      isLoadingMoreTrash: isLoadingMoreTrash ?? this.isLoadingMoreTrash,
       trashPageError:
           clearTrashPageError ? null : (trashPageError ?? this.trashPageError),
+      albumsHasMore: albumsHasMore ?? this.albumsHasMore,
+      albumsPage: albumsPage ?? this.albumsPage,
+      isLoadingMoreAlbums: isLoadingMoreAlbums ?? this.isLoadingMoreAlbums,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }

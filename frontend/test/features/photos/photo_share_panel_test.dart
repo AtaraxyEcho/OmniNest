@@ -184,9 +184,12 @@ void main() {
     // 测试环境无 share_plus 插件实现：点击微信入口应降级复制并提示。
     await tester.tap(find.text('微信'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('✓ 已复制'), findsOneWidget);
     expect(find.text('已复制链接，请粘贴到微信发送'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('桌面端点击二维码弹出真实二维码弹层', (tester) async {

@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_editor_configs.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 照片编辑页面：基于 pro_image_editor 的整图编辑（裁剪/滤镜/调参等）。
 ///
@@ -78,16 +79,28 @@ class PhotoEditorPage extends ConsumerWidget {
     WidgetRef ref,
     Uint8List bytes,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .applyEditedImage(photoId, bytes);
       ref.invalidate(photoDetailProvider(photoId));
-      messenger.showSnackBar(SnackBar(content: Text(l10n.photosEditSaved)));
+      if (!context.mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        l10n.photosEditSaved,
+        severity: OmniFeedbackSeverity.success,
+      );
     } on Exception {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.photosSaveFailed)));
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          l10n.photosSaveFailed,
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
       rethrow;
     }
   }

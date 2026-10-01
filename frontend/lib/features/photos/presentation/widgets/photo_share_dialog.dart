@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
@@ -24,7 +25,7 @@ Future<(String, String)?> showPhotoShareDialog(
   final remainingShares = [...shares];
   String? revokeError;
 
-  return showDialog<(String, String)>(
+  return showWorkstationDialog<(String, String)>(
     context: context,
     builder:
         (ctx) => PhotoDialogTextField(

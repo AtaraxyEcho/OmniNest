@@ -14,7 +14,7 @@ void main() {
               visible: visible,
               onClose: onClose ?? () {},
               child: const SizedBox.expand(
-                child: ColoredBox(color: Color(0xF00A0A0A)),
+                child: ColoredBox(color: Color(0xFF0A0A0A)),
               ),
             ),
           ],

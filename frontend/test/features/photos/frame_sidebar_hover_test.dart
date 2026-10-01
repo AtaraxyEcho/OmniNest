@@ -11,7 +11,6 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
-import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
@@ -31,8 +30,11 @@ Future<Widget> _framePage() async {
     () => repository.dashboard(),
   ).thenAnswer((_) async => PhotoDashboard.empty());
   when(
-    () => repository.listAlbums(),
-  ).thenAnswer((_) async => const <PhotoAlbum>[]);
+    () => repository.listAlbumsPage(
+      page: any(named: 'page'),
+      size: any(named: 'size'),
+    ),
+  ).thenAnswer((_) async => PhotoAlbumPage.empty());
   when(
     () => repository.listPhotos(
       query: any(named: 'query'),

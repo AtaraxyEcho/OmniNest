@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -126,6 +127,40 @@ void main() {
       entrySize.width * entrySize.height,
       lessThan(coverSize.width * coverSize.height * 0.05),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Hero 封面悬停放大封面内容、卡框不动、移出还原', (tester) async {
+    tester.view.physicalSize = const Size(1936, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await pumpPortal(tester);
+
+    final cover = find.byKey(const ValueKey('omninest.portal.hero-cover'));
+    expect(cover, findsOneWidget);
+    // 悬停缩放只经由 contentScale 传给封面图，卡片层不参与缩放。
+    PortalGradientCover heroCover() => tester.widget<PortalGradientCover>(
+      find.descendant(of: cover, matching: find.byType(PortalGradientCover)),
+    );
+    expect(heroCover().contentScale, 1.0);
+
+    final cardSizeBefore = tester.getSize(cover);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final center = tester.getCenter(cover);
+    final enterHit = HitTestResult();
+    tester.binding.hitTestInView(enterHit, center, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(center), enterHit);
+    await tester.pump();
+    expect(heroCover().contentScale, 1.05);
+    // 卡框尺寸不变：放大只作用于封面图。
+    expect(tester.getSize(cover), cardSizeBefore);
+
+    final away = const Offset(4, 4);
+    final exitHit = HitTestResult();
+    tester.binding.hitTestInView(exitHit, away, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(away), exitHit);
+    await tester.pump();
+    expect(heroCover().contentScale, 1.0);
     expect(tester.takeException(), isNull);
   });
 

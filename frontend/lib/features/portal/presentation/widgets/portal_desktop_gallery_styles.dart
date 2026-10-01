@@ -598,6 +598,7 @@ class _PortalHeroCoverDisplayState
   // hero 封面自愈上限：重签后仍失败则保持降级态，避免无限重试循环。
   static const int _maxRecoverAttempts = 2;
   int _recoverAttempts = 0;
+  bool _hovered = false;
 
   void _handleCoverError() {
     if (_recoverAttempts >= _maxRecoverAttempts) {
@@ -637,36 +638,51 @@ class _PortalHeroCoverDisplayState
             key: const ValueKey('omninest.portal.hero-cover'),
             width: coverWidth,
             height: coverHeight,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                PortalGradientCover(
-                  palette: widget.palette,
-                  title: item.title,
-                  subtitle: item.subtitle,
-                  variant: item.variant,
-                  height: coverHeight,
-                  imageUrl: item.imageUrl,
-                  readerItemId: item.readerItemId,
-                  coverCacheKey: item.coverCacheKey,
-                  onCoverError: _handleCoverError,
-                  fallbackIcon: item.icon.iconData,
-                  maxCoverWidth: coverWidth,
-                  maxCoverHeight: coverHeight,
-                  foregroundFit: BoxFit.contain,
-                  foregroundPadding: const EdgeInsets.fromLTRB(16, 16, 16, 74),
-                  borderWidth: 1.2,
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: _PortalCoverEntryButton(
-                    onTap: widget.onTap,
-                    module: item.module,
-                    tooltip: item.actionLabel,
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _hovered = true),
+              onExit: (_) => setState(() => _hovered = false),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  PortalGradientCover(
+                    palette: widget.palette,
+                    title: item.title,
+                    subtitle: item.subtitle,
+                    variant: item.variant,
+                    height: coverHeight,
+                    imageUrl: item.imageUrl,
+                    readerItemId: item.readerItemId,
+                    coverCacheKey: item.coverCacheKey,
+                    onCoverError: _handleCoverError,
+                    fallbackIcon: item.icon.iconData,
+                    maxCoverWidth: coverWidth,
+                    maxCoverHeight: coverHeight,
+                    foregroundFit: BoxFit.contain,
+                    foregroundPadding: const EdgeInsets.fromLTRB(
+                      16,
+                      16,
+                      16,
+                      74,
+                    ),
+                    borderWidth: 1.2,
+                    // 悬停放大封面内容：卡框、文字与入口圆钮保持原位，
+                    // 溢出由卡片圆角裁剪；系统开启减弱动态时不缩放。
+                    contentScale:
+                        _hovered && !MediaQuery.disableAnimationsOf(context)
+                            ? 1.05
+                            : 1.0,
                   ),
-                ),
-              ],
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: _PortalCoverEntryButton(
+                      onTap: widget.onTap,
+                      module: item.module,
+                      tooltip: item.actionLabel,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

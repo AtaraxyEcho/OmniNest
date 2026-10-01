@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
@@ -130,7 +131,9 @@ class _FrameTagsViewState extends ConsumerState<FrameTagsView> {
                           .set(
                             ref
                                     .read(photosByTagProvider(_selectedTag!))
-                                    .value ??
+                                    .asData
+                                    ?.value
+                                    .items ??
                                 const <PhotoItem>[],
                             PhotoBrowseSource.tag,
                             sourceKey: _selectedTag,
@@ -180,7 +183,7 @@ class _TagPhotos extends ConsumerWidget {
             ),
           ),
       data:
-          (photos) => Column(
+          (paging) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
@@ -202,7 +205,7 @@ class _TagPhotos extends ConsumerWidget {
                     Text(
                       AppLocalizations.of(
                         context,
-                      ).photosTagsPhotoCount(photos.length),
+                      ).photosTagsPhotoCount(paging.items.length),
                       style: TextStyle(
                         color: colors.muted,
                         fontSize: AppTypography.bodySmall,
@@ -212,10 +215,19 @@ class _TagPhotos extends ConsumerWidget {
                 ),
               ),
               Expanded(
-                child: FrameMasonryGrid(
-                  photos: photos,
-                  onOpenPhoto: onOpenPhoto,
-                  onToggleFavorite: onToggleFavorite,
+                // 滚动加载：门闩由 provider 状态承载，触底自动续页。
+                child: InfiniteScrollTrigger(
+                  enabled: paging.hasMore && !paging.isLoadingMore,
+                  onLoadMore:
+                      () =>
+                          ref
+                              .read(photosByTagProvider(tag).notifier)
+                              .loadMore(),
+                  child: FrameMasonryGrid(
+                    photos: paging.items,
+                    onOpenPhoto: onOpenPhoto,
+                    onToggleFavorite: onToggleFavorite,
+                  ),
                 ),
               ),
             ],

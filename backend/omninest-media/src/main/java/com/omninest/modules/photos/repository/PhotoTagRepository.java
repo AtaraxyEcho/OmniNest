@@ -3,6 +3,8 @@ package com.omninest.modules.photos.repository;
 import com.omninest.modules.photos.domain.PhotoTag;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,6 +23,11 @@ public interface PhotoTagRepository extends JpaRepository<PhotoTag, UUID> {
      * 按用户和标签名查询照片标签，按创建时间倒序
      */
     List<PhotoTag> findByOwnerUserIdAndTagOrderByCreatedAtDesc(UUID ownerUserId, String tag);
+
+    /**
+     * 按用户和标签名分页查询照片标签，按创建时间倒序，供标签照片分页列表使用
+     */
+    Page<PhotoTag> findByOwnerUserIdAndTagOrderByCreatedAtDesc(UUID ownerUserId, String tag, Pageable pageable);
 
     /**
      * 按用户和照片ID列表批量查询标签
