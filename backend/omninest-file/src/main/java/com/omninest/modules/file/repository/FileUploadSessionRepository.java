@@ -16,9 +16,14 @@ import org.springframework.data.repository.query.Param;
 public interface FileUploadSessionRepository extends JpaRepository<FileUploadSession, UUID> {
 
     /**
-     * 统计用户处于指定状态的上传会话数量，用于活跃会话并发上限。
+     * 统计用户处于指定状态且尚未过期（expiresAt 晚于给定时刻）的上传会话数量，
+     * 用于活跃会话并发上限；已被放弃但未被回收任务标记的过期会话不占名额。
      */
-    long countByOwnerUserIdAndStatusIn(UUID ownerUserId, Collection<String> statuses);
+    long countByOwnerUserIdAndStatusInAndExpiresAtAfter(
+            UUID ownerUserId,
+            Collection<String> statuses,
+            Instant expiresAfter
+    );
     Optional<FileUploadSession> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     Optional<FileUploadSession> findByUploadIdAndOwnerUserId(String uploadId, UUID ownerUserId);

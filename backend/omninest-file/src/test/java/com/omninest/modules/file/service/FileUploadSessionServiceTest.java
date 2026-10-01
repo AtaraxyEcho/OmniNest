@@ -132,6 +132,20 @@ class FileUploadSessionServiceTest {
     }
 
     @Test
+    void createSessionRejectsWhenActiveSessionBudgetExhausted() {
+        when(uploadSessionRepository.countByOwnerUserIdAndStatusInAndExpiresAtAfter(
+                eq(OWNER_ID), any(), any(Instant.class))).thenReturn(20L);
+
+        assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                null, "video.mp4", 20L * 1024 * 1024, "video/mp4", null, null, null, null
+        )))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("活跃上传会话过多");
+        verify(storageQuotaService, Mockito.never()).reserve(
+                any(UUID.class), anyString(), any(UUID.class), anyLong(), any(Instant.class));
+    }
+
+    @Test
     void createSessionSharedRequiresUploadPermission() {
         Mockito.doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权限执行此操作"))
                 .when(sharedSpaceService).requireSharedWrite(OWNER_ID);

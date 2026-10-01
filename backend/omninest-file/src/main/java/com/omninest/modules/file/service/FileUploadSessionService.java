@@ -480,11 +480,15 @@ public class FileUploadSessionService {
      * 超限时要求先完成或等待过期回收，防止认证用户刷会话资源。
      */
     private void requireActiveSessionBudget(UUID ownerUserId) {
-        long active = fileUploadSessionRepository.countByOwnerUserIdAndStatusIn(ownerUserId, List.of(
-                UploadStatus.CREATED.getValue(),
-                UploadStatus.UPLOADING.getValue(),
-                UploadStatus.FINALIZING.getValue()
-        ));
+        long active = fileUploadSessionRepository.countByOwnerUserIdAndStatusInAndExpiresAtAfter(
+                ownerUserId,
+                List.of(
+                        UploadStatus.CREATED.getValue(),
+                        UploadStatus.UPLOADING.getValue(),
+                        UploadStatus.FINALIZING.getValue()
+                ),
+                Instant.now()
+        );
         if (active >= MAX_ACTIVE_UPLOAD_SESSIONS) {
             throw new BusinessException(ErrorCode.RATE_LIMITED,
                     "活跃上传会话过多（上限 " + MAX_ACTIVE_UPLOAD_SESSIONS + "），请先完成或等待过期会话释放");
