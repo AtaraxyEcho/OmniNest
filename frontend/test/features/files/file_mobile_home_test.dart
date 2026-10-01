@@ -107,9 +107,10 @@ void main() {
       findsNothing,
       reason: '托管平板不复用桌面侧栏',
     );
-    // 触屏内容按壳层 chrome 同宽封顶居中：内容列左缘落在 (1280-720)/2+16。
+    // 触屏内容按壳层 chrome 同宽封顶靠左（与 Admin 等全宽工位页同左缘
+    // 语言）：内容列左缘只剩首页 16px 内边距，无居中画布偏移。
     final labelRect = tester.getRect(find.text('位置'));
-    expect(labelRect.left, closeTo((1280 - 720) / 2 + 16, 1));
+    expect(labelRect.left, closeTo(16, 1));
   });
 
   testWidgets('点分区卡进入列表态，返回行与系统返回都回首页', (tester) async {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/core/widgets/workstation_pagination_bar.dart';
+import 'package:omninest/core/widgets/hosted_touch_canvas.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -128,6 +130,66 @@ void main() {
       ),
       findsNothing,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('托管平板宽度下分页条贴屏幕左缘，不随画布居中', (tester) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer.test(
+      overrides: [
+        fileBrowserControllerProvider.overrideWith(
+          () => _PagedMainListController(<int>[]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final router = GoRouter(
+      initialLocation: '/files',
+      routes: [
+        GoRoute(
+          path: '/files',
+          builder:
+              (context, state) => const FileBrowserPage(
+                initialSection: FileManagerSection.allFiles,
+              ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      MobileShellScope(
+        hosted: true,
+        child: UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            routerConfig: router,
+            theme: OmniNestTheme.light(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('zh'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 从首页卡进入全部文件列表态。
+    await tester.tap(find.text('全部文件'));
+    await tester.pumpAndSettle();
+    expect(find.byType(WorkstationPaginationBar), findsOneWidget);
+
+    // 宽画布封顶 720 时内容列贴屏幕左缘（与 Admin 全宽工位同语言）：
+    // 画布本身不得有居中偏移，分页条计数文本左偏移只剩列表内边距。
+    final canvasLeft = tester.getTopLeft(find.byType(HostedTouchCanvas)).dx;
+    expect(canvasLeft, 0, reason: '托管宽画布须左对齐封顶，不居中');
+    final countLeft = tester.getTopLeft(find.text('共 3000 条')).dx;
+    expect(countLeft, lessThan(60), reason: '分页条随内容列贴左，无居中画布偏移');
     expect(tester.takeException(), isNull);
   });
 

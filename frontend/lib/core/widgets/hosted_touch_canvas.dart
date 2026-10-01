@@ -1,6 +1,10 @@
 import 'package:flutter/widgets.dart';
 
-/// 托管态触屏内容画布：窄屏无感铺满，宽画布下按给定上限封顶居中。
+/// 托管态触屏内容画布：窄屏无感铺满，宽画布下按给定上限封顶**靠左**。
+///
+/// 与 Admin 等非托管工位页保持同一左缘语言：封顶只防整屏拉伸，不再
+/// 居中——否则平板托管态下列表与分页条悬浮屏幕中部，与全宽工位页
+/// 观感分裂。
 ///
 /// 封顶时同步把 [MediaQueryData.size] 改写为画布宽度，使子树内
 /// `MediaQuery.sizeOf(context).width` 与 `LayoutBuilder` 的约束宽一致；
@@ -32,7 +36,7 @@ class HostedTouchCanvas extends StatelessWidget {
     // 分支只随 hosted 变化，不随宽度增删节点，避免旋转或缩放时子树重挂载。
     final mediaQuery = MediaQuery.of(context);
     return Align(
-      alignment: Alignment.topCenter,
+      alignment: Alignment.topLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints.tightFor(width: maxContentWidth),
         child: MediaQuery(
