@@ -356,6 +356,13 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       return;
     }
     await syncFromCenterState();
+    // 竞态兜底：open 路径在“消费 pending”与“标记已加载”之间留有窗口，
+    // seekTo 恰好落在窗口内时 pending 无人消费，这里直接补一次跳转。
+    final pending = _pendingSeek;
+    if (pending != null && _loadedItem?.playableKey == pending.playableKey) {
+      _pendingSeek = null;
+      await _player.seek(pending.position);
+    }
   }
 
   /// 取出并清除指定曲目的待生效跳转。
@@ -413,6 +420,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       await _openItem(item, plan.url, play: current.isPlaying);
       return;
     }
+    final pendingSeek = _takePendingSeek(item.playableKey);
     if (current.isPlaying && !_player.state.playing) {
       if (_completedForLoadedItem) {
         // 单曲循环原地重播：地址与曲目都没变，只调 play() 无法从头起播
@@ -425,6 +433,9 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     } else if (!current.isPlaying && _player.state.playing) {
       await _player.pause();
       await _persistCurrent();
+    }
+    if (pendingSeek != null) {
+      await _player.seek(pendingSeek);
     }
   }
 

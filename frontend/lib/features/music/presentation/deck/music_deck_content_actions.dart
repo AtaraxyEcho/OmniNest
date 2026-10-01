@@ -84,9 +84,7 @@ class _MusicBatchActionBar extends ConsumerWidget {
             ? l10n.musicBatchAddedToPlaylist(success, playlist.name)
             : '${l10n.musicBatchPartial(success, failed)}'
                 ' · ${l10n.musicBatchFailedTitles(failedTitles.join(', '))}';
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text)));
+    showOmniFeedback(context, text);
   }
 
   Future<void> _enqueue(BuildContext context, WidgetRef ref) async {
@@ -98,9 +96,7 @@ class _MusicBatchActionBar extends ConsumerWidget {
       return;
     }
     final success = results.where((item) => item.success).length;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(l10n.musicBatchEnqueued(success))));
+    showOmniFeedback(context, l10n.musicBatchEnqueued(success));
   }
 
   Future<MusicPlaylist?> _showPlaylistPicker(
@@ -295,7 +291,7 @@ class _GenresContentState extends ConsumerState<_GenresContent> {
                                   .toList(growable: false),
                               startIndex: index,
                             ),
-                    onToggleFavorite: _favoriteHandler(ref),
+                    onToggleFavorite: _favoriteHandler(context, ref),
                     onDelete: _deleteTrackHandler(context, ref),
                     onEnqueue: _enqueueTrackHandler(context, ref),
                     onAddToPlaylist: _addToPlaylistHandler(context, ref),

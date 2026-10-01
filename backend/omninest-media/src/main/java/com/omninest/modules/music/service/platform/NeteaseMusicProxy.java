@@ -28,6 +28,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -346,17 +348,25 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 return List.of();
             }
             int total = Math.min(ids.size(), MAX_ACCOUNT_TRACKS);
-            List<OnlineTrackDto> results = new ArrayList<>();
+            List<String> detailPaths = new ArrayList<>();
             for (int start = 0; start < total; start += SONG_DETAIL_CHUNK_SIZE) {
                 int end = Math.min(start + SONG_DETAIL_CHUNK_SIZE, total);
                 List<String> songIds = new ArrayList<>();
                 for (int index = start; index < end; index++) {
                     songIds.add(ids.getString(index));
                 }
-                String detailPath = "/song/detail?ids=" + encode(String.join(",", songIds))
-                        + "&timestamp=" + System.currentTimeMillis();
-                JSONObject detail = requestJson(detailPath, credential.cookie());
-                results.addAll(parseSongs(detail == null ? null : detail.getJSONArray("songs")));
+                detailPaths.add("/song/detail?ids=" + encode(String.join(",", songIds))
+                        + "&timestamp=" + System.currentTimeMillis());
+            }
+            // 曲目详情分块并行回源；聚合按 likelist 顺序拼接，保住默认播放序。
+            // 任一分块传输异常按整支失败处理，与既有串行语义一致。
+            List<CompletableFuture<NeteaseApiResponse>> details = detailPaths.stream()
+                    .map(detailPath -> requestAsync(detailPath, credential.cookie()))
+                    .toList();
+            List<OnlineTrackDto> results = new ArrayList<>();
+            for (CompletableFuture<NeteaseApiResponse> detail : details) {
+                JSONObject payload = awaitResponse(detail).body();
+                results.addAll(parseSongs(payload == null ? null : payload.getJSONArray("songs")));
             }
             return results;
         } catch (InterruptedException exception) {
@@ -712,8 +722,54 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
         );
+        return toApiResponse(response);
+    }
+
+    /**
+     * 发送异步 GET 请求并解析 JSON 响应，供互不依赖的分块回源并行执行。
+     *
+     * @param path 请求路径（含查询参数）
+     * @param cookie 平台凭据 Cookie，可为 null
+     * @return 完成后携带解析结果的 future
+     */
+    private CompletableFuture<NeteaseApiResponse> requestAsync(String path, String cookie) {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(requestUri(path))
+                .timeout(REQUEST_TIMEOUT)
+                .header("Accept", "application/json")
+                .header("Referer", "https://music.163.com/")
+                .header("User-Agent", USER_AGENT)
+                .GET();
+        attachCookie(requestBuilder, cookie);
+        return httpClient
+                .sendAsync(requestBuilder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .thenApply(this::toApiResponse);
+    }
+
+    /**
+     * 等待异步响应完成，并把包装异常还原为与同步路径一致的异常类型。
+     *
+     * @param response 异步响应 future
+     * @return 响应结果
+     */
+    private NeteaseApiResponse awaitResponse(CompletableFuture<NeteaseApiResponse> response)
+            throws IOException, InterruptedException {
+        try {
+            return response.join();
+        } catch (CompletionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            if (cause instanceof InterruptedException interrupted) {
+                throw interrupted;
+            }
+            throw exception;
+        }
+    }
+
+    private NeteaseApiResponse toApiResponse(HttpResponse<String> response) {
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("网易云API请求失败: status={}, uri={}", response.statusCode(), request.uri());
+            log.warn("网易云API请求失败: status={}, uri={}", response.statusCode(), response.uri());
             return new NeteaseApiResponse(null, "");
         }
         return new NeteaseApiResponse(

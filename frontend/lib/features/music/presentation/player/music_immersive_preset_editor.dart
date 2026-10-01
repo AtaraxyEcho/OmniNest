@@ -816,20 +816,76 @@ class _VisualSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile.adaptive(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      title: Row(
-        children: [
-          Expanded(child: Text(label, style: TextStyle(color: palette.text))),
-          if (scopeLabel != null)
-            MusicVisualScopeBadge(palette: palette, label: scopeLabel!),
-        ],
+    return Semantics(
+      toggled: value,
+      button: true,
+      enabled: true,
+      // 测试与调用方定位开关行的稳定锚点。
+      key: ValueKey<String>('visual-switch-$label'),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(color: palette.text),
+                        ),
+                      ),
+                      if (scopeLabel != null)
+                        MusicVisualScopeBadge(
+                          palette: palette,
+                          label: scopeLabel!,
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 方形轨道：几何与 WorkstationToggle 对齐（32×16 + 10×10
+                // 方滑块），颜色取面板 glass 色板以融入强制深色窗口。
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  width: 32,
+                  height: 16,
+                  padding: EdgeInsets.only(
+                    top: 2,
+                    bottom: 2,
+                    left: value ? 18 : 2,
+                    right: value ? 2 : 18,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        value
+                            ? palette.accent.withValues(alpha: 0.55)
+                            : Colors.white.withValues(alpha: 0.06),
+                    border: Border.all(
+                      color:
+                          value
+                              ? palette.accent
+                              : palette.muted.withValues(alpha: 0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    width: 10,
+                    height: 10,
+                    color: value ? palette.text : palette.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      value: value,
-      onChanged: onChanged,
-      activeTrackColor: palette.accent.withValues(alpha: 0.55),
-      activeThumbColor: palette.text,
     );
   }
 }

@@ -5,6 +5,8 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/music/application/music_cover_artwork.dart';
+import 'package:omninest/features/music/application/music_test_env_io.dart'
+    if (dart.library.js_interop) 'package:omninest/features/music/application/music_test_env_stub.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
 /// 播放系统命令回调：由音乐播放会话层注入，转接 MusicCenter 命令。
@@ -174,7 +176,12 @@ StreamSubscription<void>? _becomingNoisySub;
 bool _resumeAfterInterruption = false;
 
 /// 是否在本平台启用 audio_service 媒体会话（仅 Android/iOS）。
+///
+/// flutter_tester 下 defaultTargetPlatform 伪装为 Android，但测试环境没有
+/// 平台通道插件：audio_service 初始化必然失败，并在 cache_manager 内部
+/// 泄漏迟到的未处理异步错误，把随机测试判失败，因此测试环境直接视为不支持。
 bool get musicMediaSessionSupported =>
+    !musicRunningInFlutterTest &&
     !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS);

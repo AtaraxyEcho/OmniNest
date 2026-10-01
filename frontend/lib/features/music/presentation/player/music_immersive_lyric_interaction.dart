@@ -95,7 +95,7 @@ extension _MusicImmersiveLyricInteraction on _MusicImmersiveLyricsState {
     }
   }
 
-  /// 复制一行歌词到剪贴板，并在宿主提供 ScaffoldMessenger 时给出反馈。
+  /// 复制一行歌词到剪贴板并给出全局反馈。
   void _copyLine(int index) {
     if (index < 0 || index >= widget.lyrics.length) {
       return;
@@ -105,17 +105,14 @@ extension _MusicImmersiveLyricInteraction on _MusicImmersiveLyricsState {
     );
     // 复制反馈用宿主提供的本地化文案；没有本地化委派的宿主（部分测试）
     final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (l10n == null || messenger == null) {
+    if (l10n == null) {
       return;
     }
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.musicLyricCopied),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    showOmniFeedback(
+      context,
+      l10n.musicLyricCopied,
+      severity: OmniFeedbackSeverity.success,
+      duration: const Duration(seconds: 2),
+    );
   }
 }

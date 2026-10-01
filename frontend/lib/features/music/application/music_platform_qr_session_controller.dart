@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -20,6 +20,12 @@ enum PlatformQrDisplayStatus {
 
   /// 已扫码，等待手机端确认。
   scanned,
+
+  /// 手机端已确认，正在同步账号资料与曲库。
+  ///
+  /// 登录在平台侧已经成立，此状态只覆盖确认后的后台刷新窗口：面板停留在此
+  /// 状态可以让用户立即看到"扫码成功"，而不是退回等待扫码的旧二维码动画。
+  syncing,
 
   /// 二维码已过期（或超出轮询上限）。
   expired,
@@ -68,6 +74,7 @@ class PlatformQrSessionState {
       status == PlatformQrDisplayStatus.starting ||
       status == PlatformQrDisplayStatus.waiting ||
       status == PlatformQrDisplayStatus.scanned ||
+      status == PlatformQrDisplayStatus.syncing ||
       regenerating;
 
   PlatformQrSessionState copyWith({
@@ -123,6 +130,21 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
   /// 连续失败上限，超过后停止轮询并提示重试。
   static const int maximumConsecutiveFailures = 5;
 
+  /// 轮询间隔：已扫码、用户正盯着手机等确认时收紧到 1 秒，其余维持既有节奏；
+  /// 连续失败按既有退避阶梯放大。
+  @visibleForTesting
+  static int pollIntervalSeconds({
+    required int consecutiveFailures,
+    required bool scanned,
+  }) {
+    return switch (consecutiveFailures) {
+      0 => scanned ? 1 : 2,
+      1 => 3,
+      2 => 6,
+      _ => 12,
+    };
+  }
+
   bool _cancelled = true;
   bool _completed = false;
   int _consecutiveFailures = 0;
@@ -131,6 +153,9 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
   /// 不会把废弃二维码的状态写回当前面板。
   int _generation = 0;
   bool _polling = false;
+
+  /// 确认后刷新失败的用户可读原因；资料已落地时不再展示。
+  String? _loginRefreshErrorMessage;
 
   @override
   PlatformQrSessionState build() {
@@ -260,10 +285,11 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
             case 'confirmed':
               _completed = true;
               state = state.copyWith(
-                status: PlatformQrDisplayStatus.waiting,
+                status: PlatformQrDisplayStatus.syncing,
                 regenerating: false,
               );
               await _refreshAfterLogin();
+              _settleAfterLoginRefresh();
               return;
             case 'expired':
               _applyStatus(PlatformQrDisplayStatus.expired);
@@ -287,12 +313,10 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
             return;
           }
         }
-        final seconds = switch (_consecutiveFailures) {
-          0 => 2,
-          1 => 3,
-          2 => 6,
-          _ => 12,
-        };
+        final seconds = pollIntervalSeconds(
+          consecutiveFailures: _consecutiveFailures,
+          scanned: state.status == PlatformQrDisplayStatus.scanned,
+        );
         await Future<void>.delayed(Duration(seconds: seconds));
       }
     } finally {
@@ -324,11 +348,36 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
 
   /// 登录确认后的刷新在 application 层完成：不依赖面板是否仍然存在。
   Future<void> _refreshAfterLogin() async {
+    _loginRefreshErrorMessage = null;
     try {
       await ref.read(platformQrLoginRefreshProvider)();
-    } on Object {
-      // 刷新失败不影响"已登录"这一事实，账号资料可下次进入时再回源。
+    } on Object catch (error) {
+      // 刷新失败不影响"已登录"这一事实，账号资料可下次进入时再回源；
+      // 但原因要保留给终态：资料未落地时面板需要向用户说明同步未完成。
+      _loginRefreshErrorMessage = describeUserFacingError(error).message;
     }
+  }
+
+  /// 确认后的终态收敛。
+  ///
+  /// 资料已落地时宿主区块会自行切换到已登录卡片，此处复位会话状态即可；
+  /// 资料未落地（回源失败）时回落到入口态并展示原因，避免面板永久停留在
+  /// "同步中"转圈。
+  void _settleAfterLoginRefresh() {
+    if (!ref.mounted) {
+      return;
+    }
+    if (ref.exists(musicCenterControllerProvider)) {
+      final userInfo =
+          ref.read(musicCenterControllerProvider).asData?.value.neteaseUserInfo;
+      if (userInfo == null && _loginRefreshErrorMessage != null) {
+        state = PlatformQrSessionState(
+          failureMessage: _loginRefreshErrorMessage,
+        );
+        return;
+      }
+    }
+    state = const PlatformQrSessionState();
   }
 
   static Uint8List? _decodeQrBytes(String? raw) {

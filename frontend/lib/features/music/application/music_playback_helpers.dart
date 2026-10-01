@@ -155,7 +155,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
   }
 
   Future<void> _recordPlayableHistory(MusicPlayableItem item) async {
-    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+    if (!_canManageOwnActivity) {
       return;
     }
     try {

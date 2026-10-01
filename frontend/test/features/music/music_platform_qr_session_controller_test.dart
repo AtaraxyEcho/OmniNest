@@ -11,6 +11,23 @@ import 'package:omninest/features/music/domain/music_models.dart';
 
 class _MockMusicApi extends Mock implements MusicApi {}
 
+/// 轻量中心控制器桩：只为 QR 终态判定提供 neteaseUserInfo 快照。
+class _StubCenterController extends MusicCenterController {
+  _StubCenterController(this.userInfo);
+
+  final PlatformUserInfo? userInfo;
+
+  @override
+  Future<MusicCenterState> build() async => MusicCenterState(
+        dashboard: MusicDashboard.empty(),
+        tracks: const <MusicTrack>[],
+        albums: const <MusicAlbum>[],
+        artists: const <MusicArtist>[],
+        playlists: const <MusicPlaylist>[],
+        neteaseUserInfo: userInfo,
+      );
+}
+
 /// 轮询循环在 application 层，这里锁定它的状态机契约：
 /// 会话申请、状态去重、过期收尾、确认后刷新、失败可见与取消。
 void main() {
@@ -24,15 +41,27 @@ void main() {
   Future<void> settleFirstPoll() =>
       Future<void>.delayed(const Duration(milliseconds: 60));
 
-  ProviderContainer createContainer({Future<void> Function()? refresh}) {
+  ProviderContainer createContainer({
+    Future<void> Function()? refresh,
+    PlatformUserInfo? centerUserInfo,
+    bool mountCenter = false,
+  }) {
     final container = ProviderContainer.test(
       overrides: [
         musicApiProvider.overrideWithValue(api),
         if (refresh != null)
           platformQrLoginRefreshProvider.overrideWithValue(refresh),
+        if (mountCenter)
+          musicCenterControllerProvider.overrideWith(
+            () => _StubCenterController(centerUserInfo),
+          ),
       ],
     );
     addTearDown(container.dispose);
+    if (mountCenter) {
+      // 提前挂载中心控制器，供确认后的终态判定读取资料快照。
+      container.read(musicCenterControllerProvider.notifier);
+    }
     return container;
   }
 
@@ -105,6 +134,99 @@ void main() {
       verify(() => api.checkNeteaseQrLogin('key-1')).called(1);
     },
   );
+
+  test(
+    'confirmed enters syncing and settles to clean state once refreshed',
+    () async {
+      stubSession();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'confirmed'));
+      final refreshGate = Completer<void>();
+      final container = createContainer(
+        refresh: () => refreshGate.future,
+        mountCenter: true,
+        centerUserInfo: const PlatformUserInfo(
+          platform: 'netease',
+          userId: '42',
+          nickname: '听歌的人',
+          avatarUrl: '',
+          vip: false,
+        ),
+      );
+
+      await container.read(platformQrSessionProvider.notifier).start();
+      await settleFirstPoll();
+
+      // 确认后立即进入"同步中"，而不是退回等待扫码的旧二维码动画。
+      expect(
+        container.read(platformQrSessionProvider).status,
+        PlatformQrDisplayStatus.syncing,
+      );
+
+      refreshGate.complete();
+      await Future<void>.delayed(Duration.zero);
+      // 资料已落地：宿主区块切换到已登录卡片，会话状态复位。
+      final settled = container.read(platformQrSessionProvider);
+      expect(settled.status, PlatformQrDisplayStatus.idle);
+      expect(settled.loginKey, isNull);
+    },
+  );
+
+  test(
+    'sync failure with missing profile surfaces reason and returns to entry',
+    () async {
+      stubSession();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'confirmed'));
+      final container = createContainer(
+        refresh: () async => throw Exception('profile fetch failed'),
+        mountCenter: true,
+        centerUserInfo: null,
+      );
+
+      await container.read(platformQrSessionProvider.notifier).start();
+      await settleFirstPoll();
+
+      final settled = container.read(platformQrSessionProvider);
+      // 登录已成立但资料未同步：回到入口态并给出原因，不能停在同步中转圈。
+      expect(settled.status, PlatformQrDisplayStatus.idle);
+      expect(settled.failureMessage, isNotNull);
+      expect(settled.busy, isFalse);
+    },
+  );
+
+  test('poll interval tightens to 1s only while scanned', () {
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 0,
+        scanned: true,
+      ),
+      1,
+    );
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 0,
+        scanned: false,
+      ),
+      2,
+    );
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 1,
+        scanned: true,
+      ),
+      3,
+    );
+    expect(
+      PlatformQrSessionController.pollIntervalSeconds(
+        consecutiveFailures: 3,
+        scanned: true,
+      ),
+      12,
+    );
+  });
 
   test('expired status ends the session with a regeneratable state', () async {
     stubSession();

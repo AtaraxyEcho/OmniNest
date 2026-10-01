@@ -17,6 +17,7 @@ import 'package:omninest/features/music/presentation/widgets/music_playback_cont
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// Mini Player 可注入配色。
 class MusicMiniPlayerPalette {
@@ -583,10 +584,10 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).musicPlaybackError),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicPlaybackError,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }

@@ -233,6 +233,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                       children: [
                         if (!compact)
                           _buildTrackSection(
+                            context,
                             l10n,
                             ref,
                             chrome,
@@ -286,6 +287,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   /// 定宽而非 minWidth：这是主 Row 的非 flex 子级，minWidth 会给它无上界的宽度，
   /// 内部再放 Expanded 就会报「非零 flex 但宽度无界」。
   Widget _buildTrackSection(
+    BuildContext context,
     AppLocalizations l10n,
     WidgetRef ref,
     _DockGlassChrome chrome, {
@@ -359,7 +361,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
               chrome: chrome,
               tooltip:
                   track.favorite ? l10n.musicUnfavorite : l10n.musicFavorite,
-              onTap: () => _toggleFavorite(ref, track),
+              onTap: () => _toggleFavorite(context, ref, track),
             ),
           ],
         ],
@@ -529,15 +531,32 @@ void _seekDockBy(
 }
 
 /// Dock 收藏切换：命令内部已容错，这里只兜住异常避免未处理异步错误。
-void _toggleFavorite(WidgetRef ref, MusicTrack track) {
+void _toggleFavorite(BuildContext context, WidgetRef ref, MusicTrack track) {
+  final wasFavorite = track.favorite;
   unawaited(() async {
     try {
       await ref
           .read(musicCenterControllerProvider.notifier)
           .toggleFavorite(track);
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          wasFavorite
+              ? AppLocalizations.of(context).favoriteRemoved
+              : AppLocalizations.of(context).favoriteAdded,
+          severity: OmniFeedbackSeverity.success,
+        );
+      }
     } on Exception catch (error) {
       if (kDebugMode) {
         devLog('Music 沉浸页收藏切换失败: ${describeUserFacingError(error).message}');
+      }
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).musicFavoriteToggleFailed,
+          severity: OmniFeedbackSeverity.error,
+        );
       }
     }
   }());

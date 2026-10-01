@@ -7,7 +7,7 @@ import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
-import 'package:omninest/features/music/presentation/pages/music_metadata_edit_page.dart';
+import 'package:omninest/features/music/presentation/widgets/music_metadata_edit_dialog.dart';
 
 const MusicTrack _track = MusicTrack(
   id: 'track-1',
@@ -63,6 +63,41 @@ const MusicTrack _trackWithCoverAndLyrics = MusicTrack(
   lyricsRaw: '[00:01.00] Existing line',
 );
 
+Future<void> _pumpEditor(
+  WidgetTester tester, {
+  required ProviderContainer container,
+}) async {
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('zh'),
+        home: Scaffold(
+          body: Builder(
+            builder:
+                (context) => Center(
+                  child: TextButton(
+                    onPressed:
+                        () => showMusicMetadataEditDialog(
+                          context: context,
+                          trackId: 'track-1',
+                        ),
+                    child: const Text('open-editor'),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await container.read(musicCenterControllerProvider.future);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('open-editor'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('在线匹配展示候选并应用后回填表单', (tester) async {
     final api = _StubMusicApi();
@@ -76,19 +111,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
-          home: const MusicMetadataEditPage(trackId: 'track-1'),
-        ),
-      ),
-    );
-    await container.read(musicCenterControllerProvider.future);
-    await tester.pumpAndSettle();
+    await _pumpEditor(tester, container: container);
 
     expect(find.text('Raw Filename'), findsWidgets);
     expect(find.text('Matched Title'), findsNothing);
@@ -125,19 +148,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
-          home: const MusicMetadataEditPage(trackId: 'track-1'),
-        ),
-      ),
-    );
-    await container.read(musicCenterControllerProvider.future);
-    await tester.pumpAndSettle();
+    await _pumpEditor(tester, container: container);
 
     await tester.ensureVisible(find.text('搜索歌词'));
     await tester.pumpAndSettle();
@@ -169,19 +180,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
-          home: const MusicMetadataEditPage(trackId: 'track-1'),
-        ),
-      ),
-    );
-    await container.read(musicCenterControllerProvider.future);
-    await tester.pumpAndSettle();
+    await _pumpEditor(tester, container: container);
 
     expect(api.trackDetailRequests, ['track-1']);
     expect(find.text('已有歌词（可替换）'), findsOneWidget);
@@ -189,7 +188,8 @@ void main() {
   });
 
   testWidgets('移除封面与清空歌词保存时提交 clearCover 与空歌词', (tester) async {
-    final api = _StubMusicApi()..currentTracks = const [_trackWithCoverAndLyrics];
+    final api =
+        _StubMusicApi()..currentTracks = const [_trackWithCoverAndLyrics];
     final container = ProviderContainer.test(
       overrides: [
         musicApiProvider.overrideWithValue(api),
@@ -200,19 +200,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
-          home: const MusicMetadataEditPage(trackId: 'track-1'),
-        ),
-      ),
-    );
-    await container.read(musicCenterControllerProvider.future);
-    await tester.pumpAndSettle();
+    await _pumpEditor(tester, container: container);
 
     await tester.ensureVisible(find.text('清空歌词'));
     await tester.pumpAndSettle();
@@ -231,6 +219,8 @@ void main() {
 
     expect(api.updatedTrackClearCover, isTrue);
     expect(api.updatedTrackLyricsRaw, '');
+    // 保存成功后弹窗关闭。
+    expect(find.text('保存'), findsNothing);
   });
 
   testWidgets('列表投影已带歌词时直接预览且不重复补拉', (tester) async {
@@ -248,19 +238,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
-          home: const MusicMetadataEditPage(trackId: 'track-1'),
-        ),
-      ),
-    );
-    await container.read(musicCenterControllerProvider.future);
-    await tester.pumpAndSettle();
+    await _pumpEditor(tester, container: container);
 
     expect(api.trackDetailRequests, isEmpty);
     expect(find.text('已有歌词（可替换）'), findsOneWidget);

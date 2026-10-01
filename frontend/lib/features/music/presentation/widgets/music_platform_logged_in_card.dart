@@ -9,6 +9,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login_controls.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 已登录用户信息与断开操作。
 class MusicPlatformLoggedInCard extends ConsumerStatefulWidget {
@@ -75,10 +76,7 @@ class _MusicPlatformLoggedInCardState
   }
 
   void _showMessage(String message) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showOmniFeedback(context, message);
   }
 
   @override

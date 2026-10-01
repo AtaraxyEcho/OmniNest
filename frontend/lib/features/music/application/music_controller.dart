@@ -79,12 +79,11 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   MusicApi get _api => ref.read(musicApiProvider);
 
-  /// 平台账号曲库的当前快照：队列重建按值取用，不订阅平台状态变化。
-  MusicPlatformLibraryState get _platformLibrarySnapshot =>
-      ref.read(musicPlatformLibraryProvider).asData?.value ??
-      const MusicPlatformLibraryState();
-
   MusicCenterState? get _currentState => state.asData?.value;
+
+  /// 播放历史门控：`ref` 只能在类体内取用，播放流程扩展经此转接。
+  bool get _canManageOwnActivity =>
+      ref.read(userCapabilitiesProvider).canManageOwnActivity;
 
   /// 补齐外部平台歌单曲目：`ref` 只能在类体内取用，队列命令扩展经此转接。
   Future<List<OnlineTrack>> _loadAllPlatformPlaylistTracks(
@@ -92,6 +91,16 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   ) async {
     final notifier = ref.read(musicPlatformLibraryProvider.notifier);
     final tracks = await notifier.loadAllPlaylistTracks(playlist);
+    if (_controllerDisposed) {
+      return const <OnlineTrack>[];
+    }
+    return tracks;
+  }
+
+  /// 补齐外部平台整个喜欢列表：队列重建经此转接，语义与歌单整队一致。
+  Future<List<OnlineTrack>> _loadAllLikedTracks(String platform) async {
+    final notifier = ref.read(musicPlatformLibraryProvider.notifier);
+    final tracks = await notifier.loadAllLikedTracks(platform);
     if (_controllerDisposed) {
       return const <OnlineTrack>[];
     }
@@ -107,16 +116,20 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   /// 由 application 层持有完整流程，不随登录面板关闭而丢失——此前
   /// 面板在慢速资料回源期间被用户关闭，`mounted` 守卫会跳过曲库
   /// 失效，表现为"登录成功但首页/曲库/歌单/收藏全空"。
+  ///
+  /// 曲库重建不再串行等资料回源：确认后立即失效重建（externalUserId 未落
+  /// 时后端各支路会自行补拉一次资料），资料与曲库并行到位。方法整体仍等
+  /// 资料完成，扫码确认流依赖此契约判定面板终态。
   Future<void> refreshAfterPlatformChange() async {
+    final platformInfo = loadPlatformInfo();
+    if (!_controllerDisposed && ref.mounted) {
+      ref.invalidate(musicPlatformLibraryProvider);
+    }
     try {
-      await loadPlatformInfo();
+      await platformInfo;
     } on Object {
       // 账号资料刷新失败不阻塞曲库刷新。
     }
-    if (_controllerDisposed || !ref.mounted) {
-      return;
-    }
-    ref.invalidate(musicPlatformLibraryProvider);
   }
 
   Future<void> _refreshTaskState() async {

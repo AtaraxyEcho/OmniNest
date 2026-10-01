@@ -168,10 +168,7 @@ class _LocalManagementContent extends ConsumerWidget {
                           children: [
                             IconButton(
                               tooltip: l10n.musicEditMetadata,
-                              onPressed:
-                                  () => context.push(
-                                    '/music/tracks/${track.id}/metadata',
-                                  ),
+                              onPressed: () => _editMetadata(context, track),
                               icon: const Icon(Icons.edit_outlined),
                             ),
                             IconButton(
@@ -192,6 +189,22 @@ class _LocalManagementContent extends ConsumerWidget {
                   ),
         ),
       ],
+    );
+  }
+
+  /// 打开元数据编辑弹窗；保存成功后给一次全局瞬时成功反馈。
+  Future<void> _editMetadata(BuildContext context, MusicTrack track) async {
+    final saved = await showMusicMetadataEditDialog(
+      context: context,
+      trackId: track.id,
+    );
+    if (saved != true || !context.mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      AppLocalizations.of(context).musicMetadataSaved,
+      severity: OmniFeedbackSeverity.success,
     );
   }
 }

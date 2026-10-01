@@ -97,13 +97,15 @@ extension MusicCenterQueueRestore on MusicCenterController {
           if (source.isPureLocalLibrary) {
             return await _rebuildLibraryQueue(currentKey);
           }
+          // 喜欢列表分页化后快照只含已加载页；队列重建必须持有完整列表，
+          // 走整表单飞加载（与歌单整队一致），失败时由方法内部回退已加载页。
           final likedItems = <MusicPlayableItem>[
             for (final platform in (source.platforms ?? const <String>[]).where(
               (item) => item != 'local',
             ))
-              ...(_platformLibrarySnapshot.likedTracksByPlatform[platform] ??
-                      const <OnlineTrack>[])
-                  .map(MusicPlayableItem.online),
+              ...(await _loadAllLikedTracks(
+                platform,
+              )).map(MusicPlayableItem.online),
           ];
           if (likedItems.isEmpty) {
             return null;

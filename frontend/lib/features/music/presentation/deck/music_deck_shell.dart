@@ -15,6 +15,7 @@ import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
@@ -273,11 +274,8 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       height: AppControlTokens.fieldHeight,
       child: Row(
         children: [
-          IconButton(
-            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            onPressed: () => context.go('/portal'),
-            icon: Icon(Icons.arrow_back_rounded, color: colors.onSurface),
-          ),
+          WorkstationPortalLink(onTap: () => context.go('/portal')),
+          const SizedBox(width: 12),
           // 三端统一品牌入口：桌面顶栏以 logo 领起，与 Portal 顶栏同语言。
           const BrandLogo(size: 22, radius: 6),
           const SizedBox(width: 8),
@@ -345,13 +343,8 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
               height: 44,
               child: Row(
                 children: [
-                  IconButton(
-                    tooltip:
-                        MaterialLocalizations.of(context).backButtonTooltip,
-                    onPressed: () => context.go('/portal'),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  const SizedBox(width: 4),
+                  WorkstationPortalLink(onTap: () => context.go('/portal')),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       _section.label(l10n),

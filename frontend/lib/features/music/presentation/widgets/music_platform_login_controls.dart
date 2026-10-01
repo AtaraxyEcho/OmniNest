@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 /// 平台账号窗口的共用控件。
 ///
@@ -336,7 +337,7 @@ Future<bool> showMusicPlatformConfirmDialog({
   required String cancelLabel,
 }) async {
   final colors = context.musicColors;
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (dialogContext) => Dialog(

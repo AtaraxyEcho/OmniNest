@@ -144,10 +144,7 @@ void main() {
   testWidgets('关闭歌词开关后不再展示歌词参数', (tester) async {
     await pumpPanel(tester, lyricScrollMode: true);
 
-    final lyricsSwitch = find.ancestor(
-      of: find.text('歌词'),
-      matching: find.byType(SwitchListTile),
-    );
+    final lyricsSwitch = find.byKey(const ValueKey<String>('visual-switch-歌词'));
     expect(lyricsSwitch, findsOneWidget);
     await tester.ensureVisible(lyricsSwitch);
     await tester.pumpAndSettle();
@@ -189,9 +186,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final translationSwitch = find.ancestor(
-        of: find.text('显示译文'),
-        matching: find.byType(SwitchListTile),
+      final translationSwitch = find.byKey(
+        const ValueKey<String>('visual-switch-显示译文'),
       );
       expect(translationSwitch, findsOneWidget);
       await tester.ensureVisible(translationSwitch);
@@ -244,10 +240,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final fillSwitch = find.ancestor(
-      of: find.text('逐字填充'),
-      matching: find.byType(SwitchListTile),
-    );
+    final fillSwitch = find.byKey(const ValueKey<String>('visual-switch-逐字填充'));
     expect(fillSwitch, findsOneWidget);
     await tester.ensureVisible(fillSwitch);
     await tester.pumpAndSettle();

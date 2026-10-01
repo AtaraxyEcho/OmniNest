@@ -1,7 +1,9 @@
 package com.omninest.modules.music.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -13,6 +15,9 @@ import static org.mockito.Mockito.when;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlatformUserInfo;
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginSession;
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginStatus;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.service.platform.MusicPlatform;
 import com.omninest.modules.music.service.platform.MusicPlatformCapabilities;
@@ -49,6 +54,8 @@ class MusicPlatformAccountServiceTest {
     private final MediaSyncEventService mediaSyncEventService = mock(MediaSyncEventService.class);
     private final MusicPlatformService musicPlatformService = mock(MusicPlatformService.class);
     private final MusicPlaybackQueueService musicPlaybackQueueService = mock(MusicPlaybackQueueService.class);
+    private final MusicPlatformLibraryWarmupService libraryWarmupService = mock(MusicPlatformLibraryWarmupService.class);
+    private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final MusicPlatformAccountService service = new MusicPlatformAccountService(
             List.of(neteaseProvider),
             neteaseProvider,
@@ -58,6 +65,8 @@ class MusicPlatformAccountServiceTest {
             mediaSyncEventService,
             musicPlatformService,
             musicPlaybackQueueService,
+            libraryWarmupService,
+            rateLimitService,
             new StubTransactionManager()
     );
 
@@ -108,7 +117,36 @@ class MusicPlatformAccountServiceTest {
         ));
         when(configService.onlineEnabled()).thenReturn(true);
         when(configService.neteaseEnabled()).thenReturn(true);
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
         service.initTransactionTemplate();
+    }
+
+    @Test
+    void qrSessionCreationIsRejectedWhenRateLimited() {
+        when(rateLimitService.tryAcquire(
+                eq("music:qr-session:create:" + OWNER_ID), anyInt(), any()
+        )).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createNeteaseQrLogin(OWNER_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.RATE_LIMITED)
+                );
+        // 限流拒绝不得触达平台侧外部调用。
+        verify(neteaseProvider, never()).createQrLogin();
+    }
+
+    @Test
+    void qrPollIsRejectedWhenRateLimited() {
+        when(rateLimitService.tryAcquire(
+                eq("music:qr-session:check:" + OWNER_ID), anyInt(), any()
+        )).thenReturn(false);
+
+        assertThatThrownBy(() -> service.checkNeteaseQrLogin(OWNER_ID, LOGIN_KEY))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.RATE_LIMITED)
+                );
+        verify(loginSessionService, never()).requireOwner(any(), any(), anyString());
+        verify(neteaseProvider, never()).checkQrLogin(any(), anyString());
     }
 
     @Test
@@ -135,6 +173,8 @@ class MusicPlatformAccountServiceTest {
         verify(loginSessionService).markConfirmed(OWNER_ID, MusicPlatform.NETEASE, LOGIN_KEY);
         verify(loginSessionService, never()).complete(MusicPlatform.NETEASE, LOGIN_KEY);
         verify(mediaSyncEventService).invalidate(eq(OWNER_ID), any(), eq("MUSIC_PLATFORM"), any());
+        // 确认响应保持轻量，曲库回源交由后台预热。
+        verify(libraryWarmupService).warmNeteaseLibrary(OWNER_ID);
     }
 
     @Test
@@ -152,6 +192,8 @@ class MusicPlatformAccountServiceTest {
         assertThat(status.status()).isEqualTo("confirmed");
         assertThat(status.userInfo()).isEqualTo(SAVED_USER);
         verify(loginSessionService).complete(MusicPlatform.NETEASE, LOGIN_KEY);
+        // 确认重放不重复预热：缓存已在此前的确认路径写入。
+        verify(libraryWarmupService, never()).warmNeteaseLibrary(any());
     }
 
     @Test

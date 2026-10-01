@@ -61,6 +61,7 @@ class MusicCenterState {
     this.selectedArtistTracks = const [],
     this.hasMoreTracks = false,
     this.tracksLoadingMore = false,
+    this.detailPaging = const MusicDetailPaging(),
     this.lastScanJob,
     this.errorMessage,
     this.neteaseUserInfo,
@@ -88,6 +89,9 @@ class MusicCenterState {
   final List<MusicTrack> selectedArtistTracks;
   final bool hasMoreTracks;
   final bool tracksLoadingMore;
+
+  /// 详情曲目的滚动加载分页（歌单/专辑/歌手共用一形态）。
+  final MusicDetailPaging detailPaging;
   final MusicScanJob? lastScanJob;
   final String? errorMessage;
   final PlatformUserInfo? neteaseUserInfo;
@@ -137,6 +141,9 @@ class MusicCenterState {
     List<MusicTrack>? selectedArtistTracks,
     bool? hasMoreTracks,
     bool? tracksLoadingMore,
+    MusicDetailPaging? detailPaging,
+    MusicDetailPaging? albumsPaging,
+    MusicDetailPaging? artistsPaging,
     bool clearCurrentTrack = false,
     bool clearPlaybackPlan = false,
     bool clearSelectedPlaylist = false,
@@ -188,10 +195,32 @@ class MusicCenterState {
               : selectedArtistTracks ?? this.selectedArtistTracks,
       hasMoreTracks: hasMoreTracks ?? this.hasMoreTracks,
       tracksLoadingMore: tracksLoadingMore ?? this.tracksLoadingMore,
+      detailPaging: detailPaging ?? this.detailPaging,
       lastScanJob: lastScanJob ?? this.lastScanJob,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       neteaseUserInfo:
           clearNeteaseUserInfo ? null : neteaseUserInfo ?? this.neteaseUserInfo,
+    );
+  }
+}
+
+/// 详情曲目/封面网格滚动加载分页状态（公开：进入公共状态类字段）。
+class MusicDetailPaging {
+  const MusicDetailPaging({
+    this.page = -1,
+    this.hasMore = false,
+    this.loadingMore = false,
+  });
+
+  final int page;
+  final bool hasMore;
+  final bool loadingMore;
+
+  MusicDetailPaging copyWith({int? page, bool? hasMore, bool? loadingMore}) {
+    return MusicDetailPaging(
+      page: page ?? this.page,
+      hasMore: hasMore ?? this.hasMore,
+      loadingMore: loadingMore ?? this.loadingMore,
     );
   }
 }

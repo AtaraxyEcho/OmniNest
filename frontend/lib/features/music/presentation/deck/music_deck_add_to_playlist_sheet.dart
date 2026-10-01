@@ -8,6 +8,8 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_create_playlist_dialog.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 /// 弹出歌单选择抽屉，把曲目加入所选歌单或先新建歌单。
 Future<void> showMusicAddToPlaylistSheet(
@@ -127,7 +129,7 @@ class MusicDeckAddToPlaylistSheet extends ConsumerWidget {
   }
 
   Future<void> _createAndAdd(BuildContext context, WidgetRef ref) async {
-    final draft = await showDialog<MusicDeckPlaylistDraft>(
+    final draft = await showWorkstationDialog<MusicDeckPlaylistDraft>(
       context: context,
       builder: (dialogContext) => const MusicDeckCreatePlaylistDialog(),
     );
@@ -163,17 +165,11 @@ class MusicDeckAddToPlaylistSheet extends ConsumerWidget {
           .read(musicCenterControllerProvider.notifier)
           .addTrackToPlaylist(playlist, item.track);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(
-                  context,
-                ).musicAddToPlaylistSuccess(playlist.name),
-              ),
-            ),
-          );
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).musicAddToPlaylistSuccess(playlist.name),
+          severity: OmniFeedbackSeverity.success,
+        );
       }
     } on Exception catch (error) {
       if (context.mounted) {
@@ -184,15 +180,11 @@ class MusicDeckAddToPlaylistSheet extends ConsumerWidget {
 
   void _reportFailure(BuildContext context, Object error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context).musicAddToPlaylistFailed,
-            ),
-          ),
-        );
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicAddToPlaylistFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
     }
   }
 }

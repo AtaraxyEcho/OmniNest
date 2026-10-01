@@ -31,6 +31,7 @@ import 'package:omninest/features/music/presentation/widgets/music_playback_cont
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'music_immersive_cover_deck.dart';
 part 'music_immersive_cover_deck_card.dart';

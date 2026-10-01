@@ -322,25 +322,92 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
   }
 
-  /// 打开歌单详情并加载曲目。
+  /// 打开歌单详情并加载曲目首页；余下曲目滚动加载。
   Future<void> openPlaylist(MusicPlaylist playlist) async {
     final current = _currentState;
     if (current == null) {
       return;
     }
     try {
-      final tracks = await _api.playlistTracks(playlist.id);
+      final page = await _api.playlistTracksPage(playlist.id);
       _replaceState(
         current.copyWith(
           section: MusicSection.playlistDetail,
           selectedPlaylist: playlist,
-          selectedPlaylistTracks: tracks,
+          selectedPlaylistTracks: page.items,
+          detailPaging: MusicDetailPaging(
+            page: page.page,
+            hasMore: page.hasMore,
+          ),
         ),
       );
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
       rethrow;
     }
+  }
+
+  /// 歌单详情续页：以曲目 id 去重追加，门闩经状态回写，失败回滚。
+  Future<void> loadMorePlaylistTracks() async {
+    final current = _currentState;
+    if (current == null || current.selectedPlaylist == null) {
+      return;
+    }
+    final paging = current.detailPaging;
+    if (!paging.hasMore || paging.loadingMore) {
+      return;
+    }
+    _replaceState(
+      current.copyWith(detailPaging: paging.copyWith(loadingMore: true)),
+    );
+    try {
+      final next = await _api.playlistTracksPage(
+        current.selectedPlaylist!.id,
+        page: paging.page + 1,
+      );
+      final latest = _currentState;
+      if (latest == null) {
+        return;
+      }
+      final seen =
+          latest.selectedPlaylistTracks.map((track) => track.id).toSet();
+      _replaceState(
+        latest.copyWith(
+          selectedPlaylistTracks: <MusicTrack>[
+            ...latest.selectedPlaylistTracks,
+            ...next.items.where((track) => !seen.contains(track.id)),
+          ],
+          detailPaging: MusicDetailPaging(
+            page: next.page,
+            hasMore: next.hasMore,
+          ),
+        ),
+      );
+    } on Exception {
+      final latest = _currentState;
+      if (latest != null) {
+        _replaceState(latest.copyWith(detailPaging: paging));
+      }
+    }
+  }
+
+  /// 播放前确保歌单曲目全量：播放队列按来源全量重建，滚动窗口不够。
+  Future<List<MusicTrack>> ensureCompletePlaylistTracks() async {
+    final state = _currentState;
+    if (state == null) {
+      return const <MusicTrack>[];
+    }
+    if (!state.detailPaging.hasMore || state.selectedPlaylist == null) {
+      return state.selectedPlaylistTracks;
+    }
+    final all = await _api.playlistTracks(state.selectedPlaylist!.id);
+    _replaceState(
+      state.copyWith(
+        selectedPlaylistTracks: all,
+        detailPaging: const MusicDetailPaging(),
+      ),
+    );
+    return all;
   }
 
   /// 关闭歌单详情。
@@ -357,7 +424,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
     );
   }
 
-  /// 打开专辑详情并全量加载专辑曲目（失败回退已加载页过滤子集）。
+  /// 打开专辑详情并加载曲目首页（失败回退已加载页过滤子集）。
   Future<void> openAlbum(MusicAlbum album) async {
     final current = _currentState;
     if (current == null) {
@@ -367,21 +434,89 @@ extension MusicLibraryContentCommands on MusicCenterController {
         current.tracks
             .where((track) => track.albumTitle == album.title)
             .toList();
+    var paging = const MusicDetailPaging();
     try {
-      final fetched = await _api.albumTracks(album.id);
-      if (fetched.isNotEmpty) {
-        albumTracks = fetched;
+      final fetched = await _api.albumTracksPage(album.id);
+      if (fetched.items.isNotEmpty) {
+        albumTracks = fetched.items;
+        paging = MusicDetailPaging(
+          page: fetched.page,
+          hasMore: fetched.hasMore,
+        );
       }
     } on Exception {
-      // 全量拉取失败时回退客户端过滤子集。
+      // 首页拉取失败时回退客户端过滤子集。
     }
     _replaceState(
       current.copyWith(
         section: MusicSection.albumDetail,
         selectedAlbum: album,
         selectedAlbumTracks: albumTracks,
+        detailPaging: paging,
       ),
     );
+  }
+
+  /// 专辑详情续页：以曲目 id 去重追加，门闩经状态回写，失败回滚。
+  Future<void> loadMoreAlbumTracks() async {
+    final current = _currentState;
+    if (current == null || current.selectedAlbum == null) {
+      return;
+    }
+    final paging = current.detailPaging;
+    if (!paging.hasMore || paging.loadingMore) {
+      return;
+    }
+    _replaceState(
+      current.copyWith(detailPaging: paging.copyWith(loadingMore: true)),
+    );
+    try {
+      final next = await _api.albumTracksPage(
+        current.selectedAlbum!.id,
+        page: paging.page + 1,
+      );
+      final latest = _currentState;
+      if (latest == null) {
+        return;
+      }
+      final seen = latest.selectedAlbumTracks.map((track) => track.id).toSet();
+      _replaceState(
+        latest.copyWith(
+          selectedAlbumTracks: <MusicTrack>[
+            ...latest.selectedAlbumTracks,
+            ...next.items.where((track) => !seen.contains(track.id)),
+          ],
+          detailPaging: MusicDetailPaging(
+            page: next.page,
+            hasMore: next.hasMore,
+          ),
+        ),
+      );
+    } on Exception {
+      final latest = _currentState;
+      if (latest != null) {
+        _replaceState(latest.copyWith(detailPaging: paging));
+      }
+    }
+  }
+
+  /// 播放前确保专辑曲目全量：播放队列按来源全量重建。
+  Future<List<MusicTrack>> ensureCompleteAlbumTracks() async {
+    final state = _currentState;
+    if (state == null) {
+      return const <MusicTrack>[];
+    }
+    if (!state.detailPaging.hasMore || state.selectedAlbum == null) {
+      return state.selectedAlbumTracks;
+    }
+    final all = await _api.albumTracks(state.selectedAlbum!.id);
+    _replaceState(
+      state.copyWith(
+        selectedAlbumTracks: all,
+        detailPaging: const MusicDetailPaging(),
+      ),
+    );
+    return all;
   }
 
   /// 关闭专辑详情。
@@ -395,7 +530,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
     );
   }
 
-  /// 打开歌手详情并全量加载歌手曲目（失败回退已加载页过滤子集）。
+  /// 打开歌手详情并加载曲目首页（失败回退已加载页过滤子集）。
   Future<void> openArtist(MusicArtist artist) async {
     final current = _currentState;
     if (current == null) {
@@ -405,21 +540,92 @@ extension MusicLibraryContentCommands on MusicCenterController {
         current.tracks
             .where((track) => track.artistName == artist.name)
             .toList();
+    var artistPaging = const MusicDetailPaging();
     try {
-      final fetched = await _api.artistTracks(artist.id);
-      if (fetched.isNotEmpty) {
-        artistTracks = fetched;
+      final fetched = await _api.artistTracksPage(artist.id);
+      if (fetched.items.isNotEmpty) {
+        artistTracks = fetched.items;
+        artistPaging = MusicDetailPaging(
+          page: fetched.page,
+          hasMore: fetched.hasMore,
+        );
       }
     } on Exception {
-      // 全量拉取失败时回退客户端过滤子集。
+      // 首页拉取失败时回退客户端过滤子集。
     }
     _replaceState(
       current.copyWith(
         section: MusicSection.artistDetail,
         selectedArtist: artist,
         selectedArtistTracks: artistTracks,
+        detailPaging: artistPaging,
       ),
     );
+  }
+
+  /// 歌手详情续页：以曲目 id 去重追加，门闩经状态回写，失败回滚。
+  Future<void> loadMoreArtistTracks() async {
+    final current = _currentState;
+    if (current == null || current.selectedArtist == null) {
+      return;
+    }
+    final paging = current.detailPaging;
+    if (!paging.hasMore || paging.loadingMore) {
+      return;
+    }
+    _replaceState(
+      current.copyWith(
+        selectedArtistTracks: current.selectedArtistTracks,
+        detailPaging: paging.copyWith(loadingMore: true),
+      ),
+    );
+    try {
+      final next = await _api.artistTracksPage(
+        current.selectedArtist!.id,
+        page: paging.page + 1,
+      );
+      final latest = _currentState;
+      if (latest == null) {
+        return;
+      }
+      final seen = latest.selectedArtistTracks.map((track) => track.id).toSet();
+      _replaceState(
+        latest.copyWith(
+          selectedArtistTracks: <MusicTrack>[
+            ...latest.selectedArtistTracks,
+            ...next.items.where((track) => !seen.contains(track.id)),
+          ],
+          detailPaging: MusicDetailPaging(
+            page: next.page,
+            hasMore: next.hasMore,
+          ),
+        ),
+      );
+    } on Exception {
+      final latest = _currentState;
+      if (latest != null) {
+        _replaceState(latest.copyWith(detailPaging: paging));
+      }
+    }
+  }
+
+  /// 播放前确保歌手曲目全量：播放队列按来源全量重建。
+  Future<List<MusicTrack>> ensureCompleteArtistTracks() async {
+    final state = _currentState;
+    if (state == null) {
+      return const <MusicTrack>[];
+    }
+    if (!state.detailPaging.hasMore || state.selectedArtist == null) {
+      return state.selectedArtistTracks;
+    }
+    final all = await _api.artistTracks(state.selectedArtist!.id);
+    _replaceState(
+      state.copyWith(
+        selectedArtistTracks: all,
+        detailPaging: const MusicDetailPaging(),
+      ),
+    );
+    return all;
   }
 
   /// 关闭歌手详情。

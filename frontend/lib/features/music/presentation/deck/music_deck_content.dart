@@ -10,6 +10,7 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -26,8 +27,10 @@ import 'package:omninest/features/music/presentation/deck/music_deck_create_play
 import 'package:omninest/features/music/presentation/deck/music_deck_models.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_track_list.dart';
+import 'package:omninest/features/music/presentation/widgets/music_metadata_edit_dialog.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'music_deck_content_actions.dart';
 
@@ -179,7 +182,8 @@ class _HomeContent extends ConsumerWidget {
             _InlineEmpty(message: l10n.musicDeckRecentEmpty)
           else
             SizedBox(
-              height: recent.length * 66,
+              // 条带不做无限滚动（滚动劫持）：截断 20 条，完整列表走历史页。
+              height: (recent.length > 20 ? 20 : recent.length) * 66,
               child: MusicDeckTrackList(
                 items: recent,
                 scrollable: false,
@@ -188,7 +192,7 @@ class _HomeContent extends ConsumerWidget {
                     (index) => ref
                         .read(musicCenterControllerProvider.notifier)
                         .playItems(recent, startIndex: index),
-                onToggleFavorite: _favoriteHandler(ref),
+                onToggleFavorite: _favoriteHandler(context, ref),
                 onDelete: _deleteTrackHandler(context, ref),
                 onEnqueue: _enqueueTrackHandler(context, ref),
                 onAddToPlaylist: _addToPlaylistHandler(context, ref),
@@ -510,19 +514,35 @@ class _LibraryContent extends ConsumerWidget {
                       ),
                     );
               },
-              onToggleFavorite: _favoriteHandler(ref),
+              onToggleFavorite: _favoriteHandler(context, ref),
               onDelete: _deleteTrackHandler(context, ref),
               onEnqueue: _enqueueTrackHandler(context, ref),
               onAddToPlaylist: _addToPlaylistHandler(context, ref),
               onReachEnd:
-                  center.hasMoreTracks
-                      ? () =>
+                  (center.hasMoreTracks ||
+                          platform.hasMoreLikedTracks(
+                            sources
+                                .where((item) => item != MusicPlatform.local)
+                                .map((item) => item.apiValue),
+                          ))
+                      ? () {
+                        // 曲库列表混排本地曲目与在线喜欢列表：两端各自续载。
+                        if (center.hasMoreTracks) {
                           ref
                               .read(musicCenterControllerProvider.notifier)
-                              .loadMoreTracks()
+                              .loadMoreTracks();
+                        }
+                        ref
+                            .read(musicPlatformLibraryProvider.notifier)
+                            .loadMoreLikedTracks(
+                              sources
+                                  .where((item) => item != MusicPlatform.local)
+                                  .map((item) => item.apiValue),
+                            );
+                      }
                       : null,
               footer:
-                  center.tracksLoadingMore
+                  (center.tracksLoadingMore || platform.loadingMoreLiked)
                       ? const SizedBox.square(
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
@@ -661,7 +681,7 @@ class _TrackSection extends ConsumerWidget {
                 (index) => ref
                     .read(musicCenterControllerProvider.notifier)
                     .playItems(items, startIndex: index),
-            onToggleFavorite: _favoriteHandler(ref),
+            onToggleFavorite: _favoriteHandler(context, ref),
             onDelete: _deleteTrackHandler(context, ref),
             onEnqueue: _enqueueTrackHandler(context, ref),
             onAddToPlaylist: _addToPlaylistHandler(context, ref),
@@ -834,6 +854,33 @@ class _CollectionDetail extends ConsumerWidget {
         );
         return;
       }
+      if (center.detailPaging.hasMore) {
+        // 播放队列按来源全量重建：本地详情滚动窗口未满时先补齐全量再入队。
+        unawaited(() async {
+          final List<MusicTrack> complete = await switch (selection) {
+            LocalMusicDeckCollection() =>
+              centerNotifier.ensureCompletePlaylistTracks(),
+            AlbumMusicDeckCollection() =>
+              centerNotifier.ensureCompleteAlbumTracks(),
+            ArtistMusicDeckCollection() =>
+              centerNotifier.ensureCompleteArtistTracks(),
+            _ => Future.value(const <MusicTrack>[]),
+          };
+          final target = items[index];
+          final completeItems = complete
+              .map<MusicPlayableItem>(MusicPlayableItem.local)
+              .toList(growable: false);
+          final startIndex = completeItems.indexWhere(
+            (candidate) => candidate.playableKey == target.playableKey,
+          );
+          await centerNotifier.playItems(
+            completeItems,
+            startIndex: startIndex < 0 ? 0 : startIndex,
+            source: queueSource,
+          );
+        }());
+        return;
+      }
       unawaited(
         centerNotifier.playItems(items, startIndex: index, source: queueSource),
       );
@@ -860,14 +907,33 @@ class _CollectionDetail extends ConsumerWidget {
                     items: items,
                     currentPlayableKey: center.currentItem?.playableKey,
                     onPlay: playAt,
-                    onReachEnd:
-                        platformPlaylist == null || !canLoadMorePlaylistTracks
-                            ? null
-                            : () => unawaited(
-                              ref
-                                  .read(musicPlatformLibraryProvider.notifier)
-                                  .loadMorePlaylistTracks(platformPlaylist),
-                            ),
+                    onReachEnd: () {
+                      if (platformPlaylist != null) {
+                        if (canLoadMorePlaylistTracks) {
+                          unawaited(
+                            ref
+                                .read(musicPlatformLibraryProvider.notifier)
+                                .loadMorePlaylistTracks(platformPlaylist),
+                          );
+                        }
+                        return;
+                      }
+                      if (center.detailPaging.hasMore &&
+                          !center.detailPaging.loadingMore) {
+                        final notifier = ref.read(
+                          musicCenterControllerProvider.notifier,
+                        );
+                        unawaited(switch (selection) {
+                          LocalMusicDeckCollection() =>
+                            notifier.loadMorePlaylistTracks(),
+                          AlbumMusicDeckCollection() =>
+                            notifier.loadMoreAlbumTracks(),
+                          ArtistMusicDeckCollection() =>
+                            notifier.loadMoreArtistTracks(),
+                          _ => Future.value(),
+                        });
+                      }
+                    },
                     footer:
                         playlistTracksLoadingMore
                             ? const SizedBox.square(
@@ -875,7 +941,7 @@ class _CollectionDetail extends ConsumerWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                             : null,
-                    onToggleFavorite: _favoriteHandler(ref),
+                    onToggleFavorite: _favoriteHandler(context, ref),
                     onDelete: _deleteTrackHandler(context, ref),
                     onEnqueue: _enqueueTrackHandler(context, ref),
                     onAddToPlaylist: _addToPlaylistHandler(context, ref),
@@ -888,7 +954,7 @@ class _CollectionDetail extends ConsumerWidget {
 
 Future<void> _confirmStartScan(BuildContext context, WidgetRef ref) async {
   final l10n = AppLocalizations.of(context);
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(
@@ -914,7 +980,7 @@ Future<void> _confirmStartScan(BuildContext context, WidgetRef ref) async {
 
 Future<void> _confirmScrapeLibrary(BuildContext context, WidgetRef ref) async {
   final l10n = AppLocalizations.of(context);
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(

@@ -25,6 +25,7 @@ import 'package:omninest/features/tasks/domain/task_record.dart';
 part 'music_controller_platform_test_part.dart';
 part 'music_controller_first_frame_test_part.dart';
 part 'music_controller_queue_test_part.dart';
+part 'music_controller_queue_navigation_test_part.dart';
 part 'music_controller_queue_source_test_part.dart';
 
 class _HeldPlaylistTracks {
@@ -168,6 +169,7 @@ void main() {
   });
 
   registerMusicQueueTests();
+  registerMusicQueueNavigationTests();
   registerMusicQueueSourceTests();
   registerMusicQueuePersistenceTests();
 
@@ -826,6 +828,49 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
 }
 
 class _FakeMusicApi implements MusicApi {
+  // 分页端点从全量 map 切页：openXxx 走分页后既有用例语义不变。
+  @override
+  Future<MusicPagedResult<MusicTrack>> playlistTracksPage(
+    String playlistId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    return _slicePage(await playlistTracks(playlistId), page, size);
+  }
+
+  @override
+  Future<MusicPagedResult<MusicTrack>> albumTracksPage(
+    String albumId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    return _slicePage(await albumTracks(albumId), page, size);
+  }
+
+  @override
+  Future<MusicPagedResult<MusicTrack>> artistTracksPage(
+    String artistId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    return _slicePage(await artistTracks(artistId), page, size);
+  }
+
+  static MusicPagedResult<MusicTrack> _slicePage(
+    List<MusicTrack> all,
+    int page,
+    int size,
+  ) {
+    final from = (page * size).clamp(0, all.length);
+    final to = (from + size).clamp(0, all.length);
+    return MusicPagedResult<MusicTrack>(
+      items: all.sublist(from, to),
+      page: page,
+      size: size,
+      totalElements: all.length,
+    );
+  }
+
   final track = const MusicTrack(
     id: 'track-1',
     fileNodeId: 'file-1',

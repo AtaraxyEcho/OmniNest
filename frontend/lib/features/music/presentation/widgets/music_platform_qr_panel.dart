@@ -301,6 +301,11 @@ class _QrFrame extends StatelessWidget {
         l10n.musicQrScanned,
         false,
       ),
+      PlatformQrDisplayStatus.syncing => (
+        Icons.check_circle_outline_rounded,
+        l10n.musicQrConfirmedSyncing,
+        false,
+      ),
       PlatformQrDisplayStatus.expired => (
         Icons.hourglass_disabled_rounded,
         l10n.musicQrExpired,
@@ -314,6 +319,7 @@ class _QrFrame extends StatelessWidget {
       _ => (Icons.info_outline_rounded, '', false),
     };
     if (status != PlatformQrDisplayStatus.scanned &&
+        status != PlatformQrDisplayStatus.syncing &&
         status != PlatformQrDisplayStatus.expired &&
         status != PlatformQrDisplayStatus.error) {
       return null;
@@ -368,6 +374,17 @@ class _QrFrame extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (status == PlatformQrDisplayStatus.syncing) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: contentColor.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
                 if (session.canRegenerate) ...[
                   const SizedBox(height: 10),
                   _QrRefreshButton(

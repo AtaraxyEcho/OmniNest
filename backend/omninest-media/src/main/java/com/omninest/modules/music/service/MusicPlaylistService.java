@@ -28,6 +28,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -125,6 +128,15 @@ public class MusicPlaylistService {
     }
 
     @Transactional(readOnly = true)
+    public Page<MusicTrackDto> playlistTracksPage(UUID ownerUserId, UUID playlistId, int page, int size) {
+        List<MusicTrackDto> all = playlistTracks(ownerUserId, playlistId);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(size, 1);
+        int from = (int) Math.min((long) safePage * safeSize, all.size());
+        int to = (int) Math.min((long) from + safeSize, all.size());
+        return new PageImpl<>(all.subList(from, to), PageRequest.of(safePage, safeSize), all.size());
+    }
+
     public List<MusicTrackDto> playlistTracks(UUID ownerUserId, UUID playlistId) {
         requirePlaylist(ownerUserId, playlistId);
         List<UUID> trackIds = playlistItemRepository

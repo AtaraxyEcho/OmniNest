@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/theme/music_visual_swatches.dart';
@@ -78,7 +79,7 @@ class MusicVisualPaintField extends StatelessWidget {
   }
 
   Future<void> _openPicker(BuildContext context) async {
-    final selected = await showDialog<LyricPaint>(
+    final selected = await showWorkstationDialog<LyricPaint>(
       context: context,
       builder:
           (context) => _VisualPaintDialog(

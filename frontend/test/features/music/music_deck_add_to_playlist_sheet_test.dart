@@ -63,10 +63,13 @@ void main() {
 
     await tester.tap(find.text('Road Trip'));
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
 
     expect(api.addedPlaylistItems['playlist-1'], ['track-1']);
     expect(find.text('已加入「Road Trip」'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
   });
 }
 

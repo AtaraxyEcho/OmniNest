@@ -12,6 +12,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_layout_spec.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'music_immersive_lyric_line.dart';
 part 'music_immersive_lyric_paint.dart';

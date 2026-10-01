@@ -17,6 +17,7 @@ import 'package:omninest/features/music/application/music_playback_session.dart'
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 应用级移动端壳层使用的音乐播放插槽。
 class MusicMobileMiniPlayerSlot extends ConsumerStatefulWidget {
@@ -333,7 +334,29 @@ class _MusicMobileMiniPlayerSlotState
   }
 
   Future<void> _toggleFavorite(MusicTrack track) async {
-    await _runCommand(() => _controller.toggleFavorite(track));
+    final wasFavorite = track.favorite;
+    try {
+      await _controller.toggleFavorite(track);
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        wasFavorite
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Exception {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicFavoriteToggleFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
   }
 
   Future<void> _runCommand(Future<void> Function() command) async {
@@ -343,10 +366,10 @@ class _MusicMobileMiniPlayerSlotState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).musicPlaybackError),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicPlaybackError,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }

@@ -163,6 +163,19 @@ class MusicApi {
     return _parseList(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
   }
 
+  /// 分页获取歌单曲目：详情列表滚动加载；播放全量仍走 [playlistTracks]。
+  Future<MusicPagedResult<MusicTrack>> playlistTracksPage(
+    String playlistId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/playlists/$playlistId/tracks/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
+  }
+
   /// 获取专辑内全部曲目（碟号、音轨号排序）。
   Future<List<MusicTrack>> albumTracks(String albumId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
@@ -171,12 +184,38 @@ class MusicApi {
     return _parseList(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
   }
 
+  /// 分页获取专辑内曲目：详情列表滚动加载；播放全量仍走 [albumTracks]。
+  Future<MusicPagedResult<MusicTrack>> albumTracksPage(
+    String albumId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/albums/$albumId/tracks/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
+  }
+
   /// 获取歌手内全部曲目（专辑名、碟号、音轨号排序）。
   Future<List<MusicTrack>> artistTracks(String artistId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/artists/$artistId/tracks',
     );
     return _parseList(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
+  }
+
+  /// 分页获取歌手内曲目：详情列表滚动加载；播放全量仍走 [artistTracks]。
+  Future<MusicPagedResult<MusicTrack>> artistTracksPage(
+    String artistId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists/$artistId/tracks/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
   }
 
   Future<MusicPlaylist> addPlaylistItems(

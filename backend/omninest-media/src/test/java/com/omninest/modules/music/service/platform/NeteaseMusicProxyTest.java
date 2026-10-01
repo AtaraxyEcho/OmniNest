@@ -22,10 +22,12 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -518,6 +520,68 @@ class NeteaseMusicProxyTest {
                 "http://127.0.0.1:" + server.getAddress().getPort()
         );
         return configService;
+    }
+
+    @Test
+    void likedTracksFetchesDetailChunksConcurrentlyAndKeepsListOrder() throws IOException {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
+        StringBuilder idArray = new StringBuilder();
+        for (int index = 0; index <= 500; index++) {
+            if (index > 0) {
+                idArray.append(',');
+            }
+            idArray.append(index);
+        }
+        String likelistBody = "{\"ids\":[" + idArray + "]}";
+        AtomicInteger detailRequests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/likelist", exchange ->
+                writeJson(exchange, likelistBody));
+        server.createContext("/song/detail", exchange -> {
+            detailRequests.incrementAndGet();
+            String query = exchange.getRequestURI().getRawQuery();
+            String idsParam = query.substring(query.indexOf("ids=") + 4);
+            int ampersand = idsParam.indexOf('&');
+            if (ampersand >= 0) {
+                idsParam = idsParam.substring(0, ampersand);
+            }
+            String decoded = URLDecoder.decode(idsParam, StandardCharsets.UTF_8);
+            StringBuilder songs = new StringBuilder();
+            boolean first = true;
+            for (String token : decoded.split(",")) {
+                if (!first) {
+                    songs.append(',');
+                }
+                first = false;
+                songs.append("{\"id\":").append(token)
+                        .append(",\"name\":\"Song ").append(token)
+                        .append("\",\"ar\":[{\"name\":\"Artist\"}],\"al\":{\"id\":1,\"name\":\"Album\"},\"dt\":200000}");
+            }
+            writeJson(exchange, "{\"songs\":[" + songs + "]}");
+        });
+        server.start();
+        try {
+            UUID ownerUserId = UUID.randomUUID();
+            when(configService.neteaseBaseUrl()).thenReturn(
+                    "http://127.0.0.1:" + server.getAddress().getPort()
+            );
+            when(credentialService.find(ownerUserId, MusicPlatform.NETEASE)).thenReturn(
+                    Optional.of(credential("42"))
+            );
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService);
+
+            var tracks = localProxy.likedTracks(ownerUserId);
+
+            // 501 条按 500/块拆两块并行回源，聚合仍保持 likelist 顺序。
+            assertThat(tracks).hasSize(501);
+            assertThat(tracks.get(0).songId()).isEqualTo("0");
+            assertThat(tracks.get(250).songId()).isEqualTo("250");
+            assertThat(tracks.get(500).songId()).isEqualTo("500");
+            assertThat(detailRequests.get()).isEqualTo(2);
+        } finally {
+            server.stop(0);
+        }
     }
 
     private static MusicPlatformCredential credential(String externalUserId) {

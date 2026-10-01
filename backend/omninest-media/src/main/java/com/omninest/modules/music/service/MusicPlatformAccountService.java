@@ -2,6 +2,7 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.dto.OnlineMusicDtos.MusicPlatformStatusDto;
@@ -13,6 +14,7 @@ import com.omninest.modules.music.service.platform.MusicPlatformCredential;
 import com.omninest.modules.music.service.platform.MusicPlatformProvider;
 import com.omninest.modules.music.service.platform.NeteaseMusicProxy;
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +39,21 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class MusicPlatformAccountService {
+
+    /**
+     * 二维码会话创建限流：每次创建都触发平台侧密钥与二维码两个外部调用，
+     * 且会话有效期仅数分钟，正常使用远低于该限额。
+     */
+    private static final int QR_SESSION_CREATE_LIMIT = 10;
+    private static final Duration QR_SESSION_CREATE_WINDOW = Duration.ofHours(1);
+
+    /**
+     * 登录状态轮询限流：前端在已扫码确认期以 1 秒间隔轮询，限额留足整段
+     * 会话（约 3 分钟）的余量。
+     */
+    private static final int QR_SESSION_CHECK_LIMIT = 120;
+    private static final Duration QR_SESSION_CHECK_WINDOW = Duration.ofMinutes(1);
+
     private final List<MusicPlatformProvider> providers;
     private final NeteaseMusicProxy neteaseMusicProxy;
     private final MusicRuntimeConfigService configService;
@@ -45,6 +62,8 @@ public class MusicPlatformAccountService {
     private final MediaSyncEventService mediaSyncEventService;
     private final MusicPlatformService musicPlatformService;
     private final MusicPlaybackQueueService musicPlaybackQueueService;
+    private final MusicPlatformLibraryWarmupService libraryWarmupService;
+    private final RateLimitService rateLimitService;
     private final PlatformTransactionManager transactionManager;
 
     private TransactionTemplate transactionTemplate;
@@ -93,6 +112,13 @@ public class MusicPlatformAccountService {
      */
     public QrLoginSession createNeteaseQrLogin(UUID ownerUserId) {
         requireEnabled(MusicPlatform.NETEASE);
+        if (!rateLimitService.tryAcquire(
+                "music:qr-session:create:" + ownerUserId,
+                QR_SESSION_CREATE_LIMIT,
+                QR_SESSION_CREATE_WINDOW
+        )) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "二维码登录会话创建过于频繁，请稍后再试");
+        }
         QrLoginSession session = neteaseMusicProxy.createQrLogin();
         if (session == null || session.loginKey() == null || session.loginKey().isBlank()) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "创建网易云二维码登录会话失败");
@@ -115,6 +141,13 @@ public class MusicPlatformAccountService {
      */
     public QrLoginStatus checkNeteaseQrLogin(UUID ownerUserId, String loginKey) {
         requireEnabled(MusicPlatform.NETEASE);
+        if (!rateLimitService.tryAcquire(
+                "music:qr-session:check:" + ownerUserId,
+                QR_SESSION_CHECK_LIMIT,
+                QR_SESSION_CHECK_WINDOW
+        )) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "登录状态查询过于频繁，请稍后再试");
+        }
         loginSessionService.requireOwner(ownerUserId, MusicPlatform.NETEASE, loginKey);
         if (loginSessionService.isDisconnected(ownerUserId, MusicPlatform.NETEASE)) {
             // 用户已主动断开：拒绝处理旧会话的迟到确认，避免凭据被重新写回。
@@ -125,6 +158,8 @@ public class MusicPlatformAccountService {
         if ("confirmed".equals(status.status())) {
             loginSessionService.markConfirmed(ownerUserId, MusicPlatform.NETEASE, loginKey);
             publishPlatformChanged(ownerUserId);
+            // 确认响应保持轻量，账号内容缓存的第三方回源交给后台预热。
+            libraryWarmupService.warmNeteaseLibrary(ownerUserId);
             return status;
         }
         if ("expired".equals(status.status())) {

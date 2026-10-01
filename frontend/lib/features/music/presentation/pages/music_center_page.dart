@@ -15,6 +15,7 @@ import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_shell.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// Music 模块自适应 Deck 入口。
 class MusicCenterPage extends ConsumerStatefulWidget {
@@ -140,14 +141,10 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
       return;
     }
     final localized = AppLocalizations.of(context).localizeStoredError(message);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(localized),
-        action: SnackBarAction(
-          label: AppLocalizations.of(context).musicGotIt,
-          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-        ),
-      ),
+    showOmniFeedback(
+      context,
+      localized,
+      actionLabel: AppLocalizations.of(context).musicGotIt,
     );
   }
 }

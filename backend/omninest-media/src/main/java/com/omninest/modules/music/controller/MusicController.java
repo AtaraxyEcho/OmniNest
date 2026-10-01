@@ -201,12 +201,40 @@ public class MusicController {
                 currentUserContext.requireCurrentUserId(), albumId));
     }
 
+    @Operation(summary = "分页查询专辑曲目", description = "按碟号与音轨号顺序分页返回专辑曲目，供详情列表滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/albums/{albumId}/tracks/page")
+    ApiResponse<PageResponse<MusicTrackDto>> albumTracksPage(
+            @PathVariable UUID albumId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = musicLibraryService.albumTracksPage(
+                currentUserContext.requireCurrentUserId(), albumId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
+    }
+
     @Operation(summary = "查询艺术家全部曲目", description = "按专辑名与碟号、音轨号返回艺术家全部可见曲目，用于播放队列按来源重建")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/artists/{artistId}/tracks")
     ApiResponse<List<MusicTrackDto>> artistTracks(@PathVariable UUID artistId) {
         return ApiResponse.success(musicLibraryService.artistTracks(
                 currentUserContext.requireCurrentUserId(), artistId));
+    }
+
+    @Operation(summary = "分页查询艺术家曲目", description = "按专辑与音轨顺序分页返回艺术家曲目，供详情列表滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/artists/{artistId}/tracks/page")
+    ApiResponse<PageResponse<MusicTrackDto>> artistTracksPage(
+            @PathVariable UUID artistId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = musicLibraryService.artistTracksPage(
+                currentUserContext.requireCurrentUserId(), artistId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
@@ -405,6 +433,20 @@ public class MusicController {
     @GetMapping("/api/v1/music/playlists/{playlistId}/items")
     ApiResponse<List<MusicTrackDto>> playlistTracks(@PathVariable UUID playlistId) {
         return ApiResponse.success(playlistService.playlistTracks(currentUserContext.requireCurrentUserId(), playlistId));
+    }
+
+    @Operation(summary = "分页查询歌单曲目", description = "按歌单排序分页返回曲目，供详情列表滚动加载")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/playlists/{playlistId}/tracks/page")
+    ApiResponse<PageResponse<MusicTrackDto>> playlistTracksPage(
+            @PathVariable UUID playlistId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var result = playlistService.playlistTracksPage(
+                currentUserContext.requireCurrentUserId(), playlistId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")

@@ -199,6 +199,8 @@ void registerMusicPlaylistPreloadTests() {
       'netease:list-2',
     });
     expect(loading.playlistTracks, isEmpty);
+    // 首帧数据与预热加载标记各发布一次（曲目数为 0）；该平台未启用喜欢列表，
+    // 渐进补发无内容时不产生空发布。预热结果仍一次性合并，不逐条发布。
     expect(trackCounts, <int>[0, 0]);
 
     api.playlistTracksGate!.complete();

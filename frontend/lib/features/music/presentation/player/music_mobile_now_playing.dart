@@ -22,6 +22,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_pres
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 /// 移动端音乐播放详情页。
 class MusicMobileNowPlaying extends ConsumerStatefulWidget {
@@ -337,18 +338,28 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
   }
 
   Future<void> _toggleFavorite(BuildContext context, MusicTrack track) async {
+    final wasFavorite = track.favorite;
     try {
       await ref
           .read(musicCenterControllerProvider.notifier)
           .toggleFavorite(track);
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          wasFavorite
+              ? AppLocalizations.of(context).favoriteRemoved
+              : AppLocalizations.of(context).favoriteAdded,
+          severity: OmniFeedbackSeverity.success,
+        );
+      }
     } on Exception {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).musicPlaybackError),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicFavoriteToggleFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }

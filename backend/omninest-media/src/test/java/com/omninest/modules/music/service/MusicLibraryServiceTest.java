@@ -116,6 +116,25 @@ class MusicLibraryServiceTest {
     }
 
     @Test
+    void albumTracksPageSlicesWithFilteredTotal() {
+        UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        MusicAlbum album = new MusicAlbum();
+        album.setId(albumId);
+        album.setOwnerUserId(OWNER_ID);
+        when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.of(album));
+        when(trackRepository.findAlbumTracks(OWNER_ID, albumId))
+                .thenReturn(java.util.List.of(track(), track(), track()));
+
+        var first = libraryService.albumTracksPage(OWNER_ID, albumId, 0, 2);
+        var second = libraryService.albumTracksPage(OWNER_ID, albumId, 1, 2);
+
+        org.assertj.core.api.Assertions.assertThat(first.getContent()).hasSize(2);
+        org.assertj.core.api.Assertions.assertThat(first.getTotalElements()).isEqualTo(3);
+        org.assertj.core.api.Assertions.assertThat(second.getContent()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(second.getTotalElements()).isEqualTo(3);
+    }
+
+    @Test
     void albumTracksReturnsOwnerScopedTracks() {
         UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
         MusicAlbum album = new MusicAlbum();

@@ -329,7 +329,7 @@ List<MusicPlayableItem> _libraryItems(
       ...center.tracks.map(MusicPlayableItem.local),
     for (final source in sources)
       if (source != MusicPlatform.local)
-        ...(platform.likedTracksByPlatform[source.apiValue] ??
+        ...(platform.likedTracksByPlatform[source.apiValue]?.items ??
                 const <OnlineTrack>[])
             .map(MusicPlayableItem.online),
   ];
@@ -457,7 +457,7 @@ List<OnlineTrack> _knownOnlineTracks(
   MusicPlatform source,
 ) {
   final tracks = <OnlineTrack>[
-    ...(platform.likedTracksByPlatform[source.apiValue] ??
+    ...(platform.likedTracksByPlatform[source.apiValue]?.items ??
         const <OnlineTrack>[]),
     for (final entry in platform.playlistTracks.entries)
       if (entry.key.startsWith('${source.apiValue}:')) ...entry.value.items,
@@ -472,7 +472,7 @@ Future<void> _showCreatePlaylistDialog(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final draft = await showDialog<MusicDeckPlaylistDraft>(
+  final draft = await showWorkstationDialog<MusicDeckPlaylistDraft>(
     context: context,
     builder: (dialogContext) => const MusicDeckCreatePlaylistDialog(),
   );
@@ -505,7 +505,7 @@ Future<void> _showEditPlaylistDialog(
   WidgetRef ref,
   MusicPlaylist playlist,
 ) async {
-  final draft = await showDialog<MusicDeckPlaylistDraft>(
+  final draft = await showWorkstationDialog<MusicDeckPlaylistDraft>(
     context: context,
     builder:
         (dialogContext) => MusicDeckCreatePlaylistDialog(
@@ -546,7 +546,7 @@ Future<void> _confirmDeletePlaylist(
   MusicPlaylist playlist,
 ) async {
   final l10n = AppLocalizations.of(context);
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(
@@ -589,9 +589,7 @@ Future<void> _confirmDeletePlaylist(
 }
 
 void _showPlaylistMessage(BuildContext context, String message) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  showOmniFeedback(context, message);
 }
 
 List<MusicPlayableItem> _favoriteItems(
@@ -606,7 +604,7 @@ List<MusicPlayableItem> _favoriteItems(
           .map(MusicPlayableItem.local),
     for (final source in sources)
       if (source != MusicPlatform.local)
-        ...(platform.likedTracksByPlatform[source.apiValue] ??
+        ...(platform.likedTracksByPlatform[source.apiValue]?.items ??
                 const <OnlineTrack>[])
             .map(MusicPlayableItem.online),
   ];
@@ -684,15 +682,40 @@ List<MusicDeckCoverItem> _playlistCoverItems(
 }
 
 /// 无 activity:write 时返回 null，曲目卡片据此隐藏收藏动作。
-ValueChanged<MusicPlayableItem>? _favoriteHandler(WidgetRef ref) {
+ValueChanged<MusicPlayableItem>? _favoriteHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
   if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
     return null;
   }
   return (item) {
     if (item.ref is LocalMusicRef) {
-      ref
-          .read(musicCenterControllerProvider.notifier)
-          .toggleFavorite(item.track);
+      final wasFavorite = item.track.favorite;
+      unawaited(() async {
+        try {
+          await ref
+              .read(musicCenterControllerProvider.notifier)
+              .toggleFavorite(item.track);
+          if (context.mounted) {
+            showOmniFeedback(
+              context,
+              wasFavorite
+                  ? AppLocalizations.of(context).favoriteRemoved
+                  : AppLocalizations.of(context).favoriteAdded,
+              severity: OmniFeedbackSeverity.success,
+            );
+          }
+        } on Exception {
+          if (context.mounted) {
+            showOmniFeedback(
+              context,
+              AppLocalizations.of(context).musicFavoriteToggleFailed,
+              severity: OmniFeedbackSeverity.error,
+            );
+          }
+        }
+      }());
     }
   };
 }
