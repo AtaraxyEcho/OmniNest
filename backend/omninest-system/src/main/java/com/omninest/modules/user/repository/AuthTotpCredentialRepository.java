@@ -1,6 +1,8 @@
 package com.omninest.modules.user.repository;
 
 import com.omninest.modules.user.domain.AuthTotpCredential;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,6 +21,9 @@ public interface AuthTotpCredentialRepository extends JpaRepository<AuthTotpCred
 
     /** 查询用户已确认启用的 TOTP 凭据。 */
     Optional<AuthTotpCredential> findByUserIdAndEnabledTrue(UUID userId);
+
+    /** 批量查询一组用户已确认启用的 TOTP 凭据（管理用户列表两步验证状态）。 */
+    List<AuthTotpCredential> findByUserIdInAndEnabledTrue(Collection<UUID> userIds);
 
     /** 判断用户是否已确认启用两步验证。 */
     boolean existsByUserIdAndEnabledTrue(UUID userId);

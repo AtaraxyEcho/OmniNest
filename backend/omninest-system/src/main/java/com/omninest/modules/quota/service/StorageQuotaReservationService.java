@@ -197,4 +197,14 @@ public class StorageQuotaReservationService {
         }
         return normalized;
     }
+
+    /**
+     * 管理端账户删除配套：物理清空该用户的全部配额预留记录。
+     *
+     * @param userId 用户标识
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void adminPurgeForUser(UUID userId) {
+        reservationRepository.deleteByOwnerUserId(userId);
+    }
 }

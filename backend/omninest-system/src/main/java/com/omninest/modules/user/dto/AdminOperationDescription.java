@@ -53,6 +53,8 @@ public final class AdminOperationDescription {
             case "ADMIN_ROLE_PERMISSIONS_UPDATE" -> "更新角色权限";
             case "ADMIN_CONFIG_UPDATE" -> "修改系统配置";
             case "ADMIN_TASK_RETRY" -> "重新投递失败任务";
+            case "ADMIN_TASK_CANCEL" -> "取消排队任务";
+            case "ADMIN_TASK_DLQ_DISCARD" -> "丢弃死信任务";
             case "ADMIN_EXTERNAL_STORAGE_CREATE" -> "创建外部存储配置";
             case "ADMIN_EXTERNAL_STORAGE_STATUS_UPDATE" -> "修改外部存储状态";
             case "ADMIN_SESSION_REVOKE" -> "撤销用户会话";

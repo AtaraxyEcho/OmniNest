@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -231,11 +232,30 @@ public class AdminOperationsPagingService {
     }
 
     private List<AdminOperationsDto.AuditLogItem> toAuditItems(List<AuditLog> logs) {
-        return logs.stream().map(audit -> new AdminOperationsDto.AuditLogItem(
-                audit.getId(), audit.getActorUserId(), audit.getAction(),
-                AdminOperationDescription.audit(audit.getAction(), audit.getResourceType()),
-                audit.getResourceType(), audit.getResourceId(), audit.getIpAddress(), audit.getCreatedAt()
-        )).toList();
+        // 批量查询操作人显示名，避免 N+1；历史脏数据操作人缺失时回退空串。
+        Set<UUID> actorIds = logs.stream()
+                .map(AuditLog::getActorUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> actorLabelMap = actorIds.isEmpty()
+                ? Map.of()
+                : authUserRepository.findAllById(actorIds).stream()
+                    .collect(Collectors.toMap(AuthUser::getId, AdminOperationsPagingService::actorLabelOf));
+        return logs.stream()
+                .map(log -> AdminOperationsDto.AuditLogItem.from(
+                        log,
+                        log.getActorUserId() == null
+                                ? ""
+                                : actorLabelMap.getOrDefault(log.getActorUserId(), "")))
+                .toList();
+    }
+
+    private static String actorLabelOf(AuthUser user) {
+        String displayName = user.getDisplayName();
+        if (displayName != null && !displayName.isBlank()) {
+            return displayName;
+        }
+        return user.getUsername() == null ? "" : user.getUsername();
     }
 
     private List<AdminOperationsDto.SessionItem> toSessionItems(List<AuthActiveSession> sessions) {

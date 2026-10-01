@@ -48,6 +48,42 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             Pageable pageable
     );
 
+    /**
+     * 管理端用户列表搜索：用户名、展示名、邮箱小写模糊匹配，并按角色编码精确过滤。
+     *
+     * <p>角色为空表示不过滤，使用 left join 保留无角色用户；多角色用户命中任一角色即返回，
+     * distinct 去重后每用户一行。角色集合通过 EntityGraph 一次取出，供页级权限批量映射。</p>
+     *
+     * @param searchPattern 已小写化的模糊搜索模式，空字符串表示不限
+     * @param roleCode 角色编码，空字符串表示不限
+     * @param pageable 分页参数
+     * @return 用户分页
+     */
+    @EntityGraph(attributePaths = "roles")
+    @Query(value = """
+            select distinct user from AuthUser user
+            left join user.roles role
+            where (:searchPattern = ''
+                   or lower(user.username) like :searchPattern
+                   or lower(coalesce(user.displayName, '')) like :searchPattern
+                   or lower(coalesce(user.email, '')) like :searchPattern)
+              and (:roleCode = '' or role.code = :roleCode)
+            """,
+            countQuery = """
+                    select count(distinct user) from AuthUser user
+                    left join user.roles role
+                    where (:searchPattern = ''
+                           or lower(user.username) like :searchPattern
+                           or lower(coalesce(user.displayName, '')) like :searchPattern
+                           or lower(coalesce(user.email, '')) like :searchPattern)
+                      and (:roleCode = '' or role.code = :roleCode)
+                    """)
+    Page<AuthUser> searchAdminUsers(
+            @Param("searchPattern") String searchPattern,
+            @Param("roleCode") String roleCode,
+            Pageable pageable
+    );
+
     @EntityGraph(attributePaths = "roles")
     @Override
     List<AuthUser> findAll(Sort sort);

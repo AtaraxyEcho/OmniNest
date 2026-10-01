@@ -1,5 +1,6 @@
 part of 'admin_shell.dart';
 
+/// 侧栏导航项：纯平直角，激活态靠背景与 1px 边框表达，禁左侧线段。
 class _AdminNavItem extends StatefulWidget {
   const _AdminNavItem({
     required this.section,
@@ -18,22 +19,20 @@ class _AdminNavItem extends StatefulWidget {
 }
 
 class _AdminNavItemState extends State<_AdminNavItem> {
-  bool _hovered = false;
+  bool _hovering = false;
 
   @override
   Widget build(BuildContext context) {
-    final adminColors = context.adminColors;
+    final scheme = Theme.of(context).colorScheme;
     final selected = widget.selected;
     final foreground =
-        selected
-            ? Theme.of(context).colorScheme.onPrimaryContainer
-            : adminColors.onSurfaceVariant;
+        selected || _hovering ? scheme.onSurface : scheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: MouseRegion(
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
         cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: () {
             if (widget.closeOnSelect) {
@@ -44,41 +43,34 @@ class _AdminNavItemState extends State<_AdminNavItem> {
             }
           },
           child: AnimatedContainer(
-            duration: MotionToken.fast,
-            curve: MotionToken.curve,
-            height: 40,
+            duration: const Duration(milliseconds: 120),
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color:
                   selected
-                      ? adminColors.primaryContainer.withValues(alpha: 0.88)
-                      : _hovered
-                      ? adminColors.onSurfaceVariant.withValues(alpha: 0.08)
+                      ? scheme.surfaceContainerHighest
+                      : _hovering
+                      ? scheme.surfaceContainer
                       : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color:
-                    selected
-                        ? adminColors.primary.withValues(alpha: 0.34)
-                        : _hovered
-                        ? adminColors.outlineVariant.withValues(alpha: 0.36)
-                        : Colors.transparent,
+                color: selected ? scheme.outlineVariant : Colors.transparent,
               ),
             ),
             child: Row(
               children: [
-                const SizedBox(width: 14),
-                Icon(_iconFor(widget.section), size: 18, color: foreground),
-                const SizedBox(width: 14),
+                Icon(_iconFor(widget.section), size: 16, color: foreground),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     _sectionLabel(AppLocalizations.of(context), widget.section),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      fontSize: AppTypography.bodyMedium,
+                      height: 18 / AppTypography.bodyMedium,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                       color: foreground,
-                      fontSize: AppTypography.bodyLarge,
-                      height: 20 / 14,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                     ),
                   ),
                 ),
@@ -91,58 +83,64 @@ class _AdminNavItemState extends State<_AdminNavItem> {
   }
 }
 
+/// 底部固定存储微卡：严格吸附侧栏最底部（shrink-0），
+/// 标题 + 已用数值 + 文件数说明，1px 上边线，纯平直角。
 class _SidebarStorageStatus extends ConsumerWidget {
   const _SidebarStorageStatus();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.adminColors;
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context);
     // 与概览页共用同一 summary provider，避免重复请求。
     final storage =
         ref.watch(adminConsoleControllerProvider).asData?.value.storage;
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       decoration: BoxDecoration(
-        color: c.surfaceContainerHigh.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.outlineVariant.withValues(alpha: 0.26)),
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.storage_outlined, size: 18, color: c.onSurface),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.adminStorageOverview,
-                  style: Theme.of(context).textTheme.labelLarge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.adminStorageOverview,
+                style: TextStyle(
+                  fontFamily: AppTypography.monoFamily,
+                  fontFamilyFallback: AppTypography.monoFamilyFallback,
+                  fontSize: AppTypography.labelSmall,
+                  letterSpacing: 1.2,
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              storage == null
-                  ? '—'
-                  : l10n.adminStorageUsed(formatFileSize(storage.usedBytes)),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: c.onSurface,
-                fontWeight: FontWeight.w700,
               ),
+              Text(
+                storage == null ? '—' : formatFileSize(storage.usedBytes),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontFamily: AppTypography.monoFamily,
+                  fontFamilyFallback: AppTypography.monoFamilyFallback,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            storage == null
+                ? '—'
+                : l10n.adminStorageFileCount(storage.fileCount),
+            style: TextStyle(
+              fontFamily: AppTypography.monoFamily,
+              fontFamilyFallback: AppTypography.monoFamilyFallback,
+              fontSize: AppTypography.labelMicro,
+              color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 4),
-            Text(
-              storage == null
-                  ? '—'
-                  : l10n.adminStorageFileCount(storage.fileCount),
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(color: c.onSurfaceVariant),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -151,22 +149,20 @@ class _SidebarStorageStatus extends ConsumerWidget {
 IconData _iconFor(AdminSection section) {
   return switch (section) {
     AdminSection.overview => Icons.dashboard_customize_outlined,
-    AdminSection.monitoring => Icons.monitor_heart_outlined,
     AdminSection.logs => Icons.receipt_long_outlined,
-    AdminSection.tasks => Icons.pending_actions_outlined,
+    AdminSection.tasks => Icons.task_alt_outlined,
     AdminSection.sessions => Icons.devices_rounded,
-    AdminSection.users => Icons.group_outlined,
+    AdminSection.users => Icons.badge_outlined,
     AdminSection.roles => Icons.verified_user_outlined,
-    AdminSection.config => Icons.tune_rounded,
-    AdminSection.storage => Icons.cloud_queue_rounded,
-    AdminSection.externalStorage => Icons.add_to_drive_outlined,
+    AdminSection.config => Icons.tune_outlined,
+    AdminSection.storage => Icons.dns_outlined,
+    AdminSection.externalStorage => Icons.cloud_sync_outlined,
   };
 }
 
 String _sectionLabel(AppLocalizations l10n, AdminSection section) {
   return switch (section) {
     AdminSection.overview => l10n.adminNavOverview,
-    AdminSection.monitoring => l10n.adminNavMonitoring,
     AdminSection.logs => l10n.adminNavLogs,
     AdminSection.tasks => l10n.adminNavTasks,
     AdminSection.sessions => l10n.adminNavSessions,
@@ -181,7 +177,6 @@ String _sectionLabel(AppLocalizations l10n, AdminSection section) {
 String _sectionTitle(AppLocalizations l10n, AdminSection section) {
   return switch (section) {
     AdminSection.overview => l10n.adminOverviewTitle,
-    AdminSection.monitoring => l10n.adminMonitoringTitle,
     AdminSection.logs => l10n.adminLogsTitle,
     AdminSection.tasks => l10n.adminTasksTitle,
     AdminSection.sessions => l10n.adminSessionsTitle,
@@ -203,11 +198,21 @@ String _sectionGroupLabel(AppLocalizations l10n, AdminSectionGroup group) {
   };
 }
 
+String _sectionGroupCode(AdminSectionGroup group) {
+  return switch (group) {
+    AdminSectionGroup.overview => 'OVERVIEW',
+    AdminSectionGroup.operations => 'OPERATIONS',
+    AdminSectionGroup.identity => 'IDENTITY',
+    AdminSectionGroup.configuration => 'CONFIG',
+    AdminSectionGroup.storage => 'STORAGE',
+  };
+}
+
 int _adminDockIndex(AdminSection section) {
   return switch (section) {
     AdminSection.overview => 0,
     AdminSection.users || AdminSection.roles => 1,
-    AdminSection.tasks || AdminSection.sessions || AdminSection.monitoring => 2,
+    AdminSection.tasks || AdminSection.sessions => 2,
     AdminSection.logs => 3,
     AdminSection.config ||
     AdminSection.storage ||

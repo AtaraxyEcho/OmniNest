@@ -15,7 +15,8 @@ public enum TaskStatus {
     COMPLETED("COMPLETED"),
     FAILED("FAILED"),
     CANCELLED("CANCELLED"),
-    DLQ("DLQ");
+    DLQ("DLQ"),
+    DISCARDED("DISCARDED");
 
     private final String value;
 
@@ -30,6 +31,8 @@ public enum TaskStatus {
 
     /**
      * 判断是否为可重试状态。
+     *
+     * <p>DISCARDED 是管理员显式丢弃死信后的处置终态，不参与重试。</p>
      */
     public boolean isRetryable() {
         return this == RETRY_WAIT || this == FAILED || this == CANCELLED || this == DLQ;
@@ -39,6 +42,6 @@ public enum TaskStatus {
      * 判断是否为终态。
      */
     public boolean isTerminal() {
-        return this == COMPLETED || this == FAILED || this == CANCELLED || this == DLQ;
+        return this == COMPLETED || this == FAILED || this == CANCELLED || this == DLQ || this == DISCARDED;
     }
 }

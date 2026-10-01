@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
 
 class NotificationServiceTest {
@@ -215,6 +216,41 @@ class NotificationServiceTest {
         verify(syncEventRecorder).record(eventCaptor.capture());
         assertThat(eventCaptor.getValue().action()).isEqualTo(SyncAction.DELETED);
         assertThat(eventCaptor.getValue().hints()).containsEntry("deletedCount", 12);
+    }
+
+    @Test
+    void list_unreadOnly_usesUnreadQueryAndCount() {
+        UUID userId = UUID.randomUUID();
+        when(notificationRepository.findByRecipientUserIdAndReadAtIsNullOrderByCreatedAtDesc(
+                eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(notificationRepository.countByRecipientUserIdAndReadAtIsNull(userId)).thenReturn(3L);
+
+        var items = service.list(userId, 0, 20, true);
+        long total = service.totalCount(userId, true);
+
+        assertThat(items).isEmpty();
+        assertThat(total).isEqualTo(3L);
+        verify(notificationRepository, never())
+                .findByRecipientUserIdOrderByCreatedAtDesc(eq(userId), any(Pageable.class));
+        verify(notificationRepository, never()).countByRecipientUserId(userId);
+    }
+
+    @Test
+    void list_all_usesGeneralQueryAndCount() {
+        UUID userId = UUID.randomUUID();
+        when(notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(
+                eq(userId), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(notificationRepository.countByRecipientUserId(userId)).thenReturn(18L);
+
+        service.list(userId, 0, 20, false);
+        long total = service.totalCount(userId, false);
+
+        assertThat(total).isEqualTo(18L);
+        verify(notificationRepository, never())
+                .findByRecipientUserIdAndReadAtIsNullOrderByCreatedAtDesc(eq(userId), any(Pageable.class));
+        verify(notificationRepository, never()).countByRecipientUserIdAndReadAtIsNull(userId);
     }
 
     private NotificationType type(String typeCode, boolean enabled) {

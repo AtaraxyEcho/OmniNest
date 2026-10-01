@@ -73,6 +73,7 @@ class AdminOperationsPagingServiceTest {
         audit.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
         audit.setAction("ADMIN_CONFIG_UPDATE");
         audit.setResourceType("config_entries");
+        audit.setDetailPayload("{\"key\":\"rate-limit.default-limit\",\"oldValue\":\"120\",\"newValue\":\"180\"}");
         audit.setCreatedAt(Instant.parse("2026-08-25T08:00:00Z"));
         Sort defaultSort = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
         when(auditRepository.searchAdminLogs(
@@ -86,6 +87,73 @@ class AdminOperationsPagingServiceTest {
 
         assertThat(result.page()).isEqualTo(1);
         assertThat(result.items()).extracting("id").containsExactly(audit.getId());
+        assertThat(result.items().get(0).payload())
+                .containsEntry("key", "rate-limit.default-limit")
+                .containsEntry("oldValue", "120")
+                .containsEntry("newValue", "180");
+    }
+
+    @Test
+    void logPageResolvesActorLabelWithDisplayNamePriority() {
+        UUID nickId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        UUID plainId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaba");
+        AuditLog nickAudit = new AuditLog();
+        nickAudit.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4"));
+        nickAudit.setActorUserId(nickId);
+        nickAudit.setAction("USER_CREATE");
+        nickAudit.setResourceType("auth_users");
+        nickAudit.setCreatedAt(Instant.parse("2026-08-25T08:00:00Z"));
+        AuditLog plainAudit = new AuditLog();
+        plainAudit.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5"));
+        plainAudit.setActorUserId(plainId);
+        plainAudit.setAction("ROLE_PERMISSIONS_UPDATE");
+        plainAudit.setResourceType("auth_role_permissions");
+        plainAudit.setCreatedAt(Instant.parse("2026-08-25T08:00:01Z"));
+        AuditLog systemAudit = new AuditLog();
+        systemAudit.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb6"));
+        systemAudit.setAction("SYSTEM_CLEANUP");
+        systemAudit.setResourceType("system");
+        systemAudit.setCreatedAt(Instant.parse("2026-08-25T08:00:02Z"));
+        AuthUser nickUser = new AuthUser();
+        nickUser.setId(nickId);
+        nickUser.setUsername("ataraxy");
+        nickUser.setDisplayName("远野");
+        AuthUser plainUser = new AuthUser();
+        plainUser.setId(plainId);
+        plainUser.setUsername("ops-runner");
+        Sort defaultSort = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
+        when(auditRepository.searchAdminLogs(eq(""), eq(""), eq(PageRequest.of(0, 25, defaultSort))))
+                .thenReturn(new PageImpl<>(List.of(nickAudit, plainAudit, systemAudit), PageRequest.of(0, 25, defaultSort), 3));
+        when(userRepository.findAllById(Set.of(nickId, plainId))).thenReturn(List.of(nickUser, plainUser));
+
+        var result = service.logPage(0, 25, "", "", "createdAt", "desc");
+
+        // 昵称优先回退账号名；无操作人的历史脏数据回退空串。
+        assertThat(result.items()).extracting("actorLabel").containsExactly("远野", "ops-runner", "");
+    }
+
+    @Test
+    void logPageFallsBackToEmptyPayloadOnBlankOrInvalidJson() {
+        AuditLog blank = new AuditLog();
+        blank.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"));
+        blank.setAction("ADMIN_CONFIG_UPDATE");
+        blank.setResourceType("config_entries");
+        blank.setCreatedAt(Instant.parse("2026-08-25T08:00:00Z"));
+        AuditLog corrupted = new AuditLog();
+        corrupted.setId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2"));
+        corrupted.setAction("ADMIN_CONFIG_UPDATE");
+        corrupted.setResourceType("config_entries");
+        corrupted.setDetailPayload("{not-a-json");
+        corrupted.setCreatedAt(Instant.parse("2026-08-25T08:00:01Z"));
+        Sort defaultSort = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
+        when(auditRepository.searchAdminLogs(eq(""), eq(""), eq(PageRequest.of(0, 25, defaultSort))))
+                .thenReturn(new PageImpl<>(List.of(blank, corrupted), PageRequest.of(0, 25, defaultSort), 2));
+
+        var result = service.logPage(0, 25, "", "", "createdAt", "desc");
+
+        assertThat(result.items()).extracting("id")
+                .containsExactly(blank.getId(), corrupted.getId());
+        assertThat(result.items()).allSatisfy(item -> assertThat(item.payload()).isEmpty());
     }
 
     @Test

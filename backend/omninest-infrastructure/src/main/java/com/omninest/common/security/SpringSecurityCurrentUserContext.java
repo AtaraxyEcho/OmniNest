@@ -55,6 +55,28 @@ public class SpringSecurityCurrentUserContext implements CurrentUserContext {
         return requireCurrentUser().userId();
     }
 
+    /**
+     * 从当前访问令牌的 sid claim 解析会话标识，供“当前会话”标记等展示场景。
+     */
+    @Override
+    public UUID currentSessionId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Jwt jwt = null;
+        if (authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
+            jwt = jwtAuthenticationToken.getToken();
+        } else if (authentication != null && authentication.getPrincipal() instanceof Jwt principalJwt) {
+            jwt = principalJwt;
+        }
+        if (jwt == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(jwt.getClaimAsString("sid"));
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
     private CurrentUser fromJwt(Jwt jwt) {
         UUID userId = resolveUserId(jwt);
         return new CurrentUser(

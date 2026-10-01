@@ -162,6 +162,7 @@ class DevApplicationProfileContextSmokeTest extends ApplicationProfileContextSmo
                 "file.local-media.enabled=false",
                 "omninest.search.index-path=${java.io.tmpdir}/omninest-smoke-prod",
                 "omninest.security.jwt-secret=smoke-test-jwt-secret-at-least-32-bytes-long!",
+                "omninest.security.credential-encryption-key=smoke-credential-key-at-least-32-bytes!",
                 "spring.rabbitmq.password=smoke-rabbit-password",
                 "spring.data.redis.password=smoke-redis-password",
                 "omninest.minio.access-key=smoke-minio-access",

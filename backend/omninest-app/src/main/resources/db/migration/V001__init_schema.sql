@@ -11,6 +11,7 @@ CREATE TABLE "omni"."audit_logs" (
   "user_agent" varchar(500),
   "request_id" uuid,
   "metadata" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "detail_payload" text,
   "created_at" timestamptz(6) NOT NULL DEFAULT now()
 )
 ;
@@ -23,6 +24,7 @@ COMMENT ON COLUMN "omni"."audit_logs"."ip_address" IS '请求IP地址';
 COMMENT ON COLUMN "omni"."audit_logs"."user_agent" IS '请求User-Agent';
 COMMENT ON COLUMN "omni"."audit_logs"."request_id" IS '请求链路ID';
 COMMENT ON COLUMN "omni"."audit_logs"."metadata" IS '扩展元数据，JSONB格式';
+COMMENT ON COLUMN "omni"."audit_logs"."detail_payload" IS '操作变更上下文载荷，JSON 字符串，敏感值必须掩码后写入，可为空';
 COMMENT ON COLUMN "omni"."audit_logs"."created_at" IS '创建时间';
 COMMENT ON TABLE "omni"."audit_logs" IS '审计日志表，记录用户操作、资源和请求上下文';
 
@@ -1725,7 +1727,7 @@ CREATE TABLE "omni"."notification_messages" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "recipient_user_id" uuid NOT NULL,
   "notification_type" varchar(64) NOT NULL,
-  "title" varchar(160) NOT NULL,
+  "title" varchar(160),
   "message" text,
   "metadata" jsonb NOT NULL DEFAULT '{}'::jsonb,
   "read_at" timestamptz(6),

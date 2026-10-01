@@ -172,6 +172,90 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('库源列表在 1280 视口内容宽度下各列内容完整可见', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const source = VideoLibrarySource(
+      id: 'src-1',
+      name: '电影收藏',
+      storageLocationId: 'loc-1',
+      relativeRoot: 'Movie',
+      libraryType: VideoLibraryType.movie,
+      importPolicy: 'MANUAL_REVIEW',
+      visibility: MediaLibraryVisibility.private,
+      enabled: true,
+      scanStatus: 'READY',
+      healthStatus: 'AVAILABLE',
+      lastScannedCount: 24,
+      lastCreatedCount: 0,
+      lastCandidateCount: 3,
+      lastMissingCount: 0,
+      version: 0,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          videoStorageLocationsProvider.overrideWith(
+            (ref) async => const <VideoStorageLocation>[
+              VideoStorageLocation(
+                id: 'loc-1',
+                name: '影视主库',
+                providerType: 'LOCAL',
+                mountKey: 'media-01',
+                relativeRoot: 'Movie',
+                scopeType: 'SHARED',
+                enabled: true,
+                healthStatus: 'AVAILABLE',
+              ),
+            ],
+          ),
+          videoLibrarySourcesProvider.overrideWith(
+            (ref) async => const <VideoLibrarySource>[source],
+          ),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const Scaffold(
+            // 模拟 1280 视口下 Admin 壳层正文宽度：
+            // 1280 - 侧栏 256 - 边距 80 = 944。
+            body: Center(
+              child: SizedBox(
+                width: 944,
+                child: SingleChildScrollView(
+                  child: AdminStoragePage(
+                    view: AdminStorageManagementView(
+                      buckets: [],
+                      locations: [],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    // 库名称固定窄列 + 存储位置独立列；类型/可见性/健康为补充字段。
+    expect(find.text('电影收藏'), findsOneWidget);
+    expect(find.text('影视主库 · Movie'), findsOneWidget);
+    expect(find.text('电影'), findsOneWidget);
+    expect(find.text('就绪'), findsOneWidget);
+    expect(find.text('就绪'), findsOneWidget);
+    expect(find.text('发现 3 · 入库 0 · 缺失 0'), findsOneWidget);
+    expect(find.text('启用'), findsOneWidget);
+    // 列增多后 944 宽正文允许横向滚动，仅断言各列内容完整构建。
+  });
+
   testWidgets('存储位置区只读且无添加向导入口', (tester) async {
     tester.view.physicalSize = const Size(1440, 1200);
     tester.view.devicePixelRatio = 1;

@@ -80,4 +80,13 @@ public interface AuditLogAdminRepository extends JpaRepository<AuditLog, UUID> {
     @Modifying
     @Query("delete from AuditLog audit where audit.createdAt < :cutoff")
     int deleteCreatedBefore(@Param("cutoff") Instant cutoff);
+
+    /**
+     * 统计指定时间之前将被清理的审计日志数量，谓词与 deleteCreatedBefore 保持一致。
+     *
+     * @param cutoff 截止时间
+     * @return 审计日志数量
+     */
+    @Query("select count(audit) from AuditLog audit where audit.createdAt < :cutoff")
+    long countCreatedBefore(@Param("cutoff") Instant cutoff);
 }

@@ -318,6 +318,68 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('配置中心：敏感配置值以 mono 掩码展示且悬停说明不回显', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const view = AdminConfigManagementView(
+      items: [
+        AdminConfigEntry(
+          key: 'media.tmdb.key',
+          value: 'sk-live-credential-value',
+          valueType: 'STRING',
+          category: 'media',
+          refreshScope: 'HOT',
+          updatedAt: '2026-09-19T08:00:00Z',
+          surface: 'INTEGRATION',
+          displayCode: 'config.integration.tmdb.apiKey',
+          sensitiveConfigured: true,
+        ),
+        AdminConfigEntry(
+          key: 'media.tmdb.lang',
+          value: 'zh-CN',
+          valueType: 'STRING',
+          category: 'media',
+          refreshScope: 'HOT',
+          updatedAt: '2026-09-19T08:00:00Z',
+          surface: 'INTEGRATION',
+          displayCode: 'config.integration.tmdb.language',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: OmniNestTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const Scaffold(
+            body: SingleChildScrollView(child: AdminConfigPage(view: view)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 敏感值仅展示掩码圆点，不回显真实值，也不在单元格平铺长说明。
+    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.textContaining('sk-live-credential-value'), findsNothing);
+    expect(find.textContaining('出于安全策略'), findsNothing);
+    final maskTooltip = find.ancestor(
+      of: find.text('••••••••'),
+      matching: find.byType(Tooltip),
+    );
+    expect(maskTooltip, findsOneWidget);
+    // 悬停说明由既有“值不回显”语义键承载。
+    expect(tester.widget<Tooltip>(maskTooltip).message, contains('回显'));
+    // 非敏感普通值保持“当前值: xxx”语义展示。
+    expect(find.textContaining('zh-CN'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('AdminCellText：普通文本仅截断时挂 Tooltip，富文案常驻挂载', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

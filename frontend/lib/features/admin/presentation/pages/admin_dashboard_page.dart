@@ -24,7 +24,7 @@ import 'package:omninest/core/errors/error_message.dart';
 class AdminDashboardPage extends ConsumerStatefulWidget {
   const AdminDashboardPage({this.initialSectionSegment, super.key});
 
-  /// 路由路径段，如 `storage`、`monitoring`；空或非法时回落 overview。
+  /// 路由路径段，如 `storage`、`logs`；空或非法时回落 overview。
   final String? initialSectionSegment;
 
   @override
@@ -115,19 +115,6 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   }
 }
 
-class _MonitoringSectionBody extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // watch 轮询器以在其挂载期间保活；分区卸载即停止轮询。
-    ref.watch(adminMonitoringPollerProvider);
-    return _AsyncStateBuilder<AdminMonitoringView>(
-      state: ref.watch(adminMonitoringProvider),
-      onRetry: () => ref.invalidate(adminMonitoringProvider),
-      builder: (view) => AdminMonitoringPage(view: view),
-    );
-  }
-}
-
 class _AdminSectionBody extends ConsumerWidget {
   const _AdminSectionBody({required this.section});
 
@@ -142,7 +129,6 @@ class _AdminSectionBody extends ConsumerWidget {
       AdminSection.users => _UserStateBuilder(
         builder: (state) => AdminUsersPage(state: state),
       ),
-      AdminSection.monitoring => _MonitoringSectionBody(),
       AdminSection.logs => const AdminLogsPage(),
       AdminSection.tasks => const AdminTasksPage(),
       AdminSection.roles => _AsyncStateBuilder<AdminRoleManagementView>(
@@ -225,7 +211,7 @@ class _AsyncStateBuilder<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return state.when(
-      // 分区切换失效与监控轮询走 invalidate（isRefreshing），默认
+      // 分区切换失效走 invalidate（isRefreshing），默认
       // skipLoadingOnRefresh 已保留已渲染内容不闪 loading；也不开启
       // 「reload 期间保留旧值」——isReloading 仅在换号世代变化时出现，
       // 此时必须显示 loading 而非上一账号数据。

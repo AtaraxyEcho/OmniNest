@@ -32,18 +32,19 @@ public class NotificationController {
     private final CurrentUserContext currentUserContext;
     private final NotificationService notificationService;
 
-    @Operation(summary = "分页查询通知列表", description = "分页查询当前用户的站内通知列表")
+    @Operation(summary = "分页查询通知列表", description = "分页查询当前用户的站内通知列表，unreadOnly=true 时仅返回未读")
     @GetMapping("/api/v1/notifications")
     @PreAuthorize(
             "hasAuthority('" + Permissions.ACTIVITY_READ + "') or hasAuthority('" + Permissions.PROFILE_READ + "')"
     )
     ApiResponse<PageResponse<NotificationDto>> list(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "false") boolean unreadOnly
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        List<NotificationDto> items = notificationService.list(userId, page, size);
-        long total = notificationService.totalCount(userId);
+        List<NotificationDto> items = notificationService.list(userId, page, size, unreadOnly);
+        long total = notificationService.totalCount(userId, unreadOnly);
         return ApiResponse.success(PageResponse.of(items, page, size, total));
     }
 

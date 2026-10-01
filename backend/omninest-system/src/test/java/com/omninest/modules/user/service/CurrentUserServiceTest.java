@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
@@ -172,6 +173,82 @@ class CurrentUserServiceTest {
 
         verify(authUserRepository).save(user);
         assertThat(user.getPasswordHash()).isEqualTo("$2a$10$newHash");
+    }
+
+    @Test
+    void updateProfile_updatesProvidedFieldsAndInvalidatesCache() {
+        UUID userId = UUID.randomUUID();
+        AuthUser user = new AuthUser();
+        user.setId(userId);
+        user.setUsername("root");
+        user.setDisplayName("Root");
+        user.setEmail("root@example.com");
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(authUserRepository.save(any(AuthUser.class))).thenAnswer(i -> i.getArgument(0));
+        when(authUserRepository.findWithRolesAndPermissionsById(userId)).thenReturn(Optional.of(user));
+
+        service.updateProfile(userId, "  New Name  ", null);
+
+        assertThat(user.getDisplayName()).isEqualTo("New Name");
+        assertThat(user.getEmail()).isEqualTo("root@example.com");
+        verify(readThroughCache).invalidate("omninest:user:profile:" + userId);
+        verify(syncEventRecorder).record(any());
+    }
+
+    @Test
+    void updateProfile_noChanges_returnsCachedWithoutSave() {
+        UUID userId = UUID.randomUUID();
+        AuthUser user = new AuthUser();
+        user.setId(userId);
+        user.setUsername("root");
+        user.setDisplayName("Root");
+        user.setEmail("root@example.com");
+        user.getRoles().add(role("ADMIN", Permissions.SYSTEM_CONFIG_MANAGE));
+        when(currentUserContext.requireCurrentUserId()).thenReturn(userId);
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(authUserRepository.findWithRolesAndPermissionsById(userId)).thenReturn(Optional.of(user));
+
+        var profile = service.updateProfile(userId, "Root", "root@example.com");
+
+        assertThat(profile.displayName()).isEqualTo("Root");
+        verify(authUserRepository, never()).save(any(AuthUser.class));
+    }
+
+    @Test
+    void updateProfile_invalidDisplayName_throws() {
+        UUID userId = UUID.randomUUID();
+        AuthUser user = new AuthUser();
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.updateProfile(userId, "   ", null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("显示昵称");
+    }
+
+    @Test
+    void updateProfile_invalidEmail_throws() {
+        UUID userId = UUID.randomUUID();
+        AuthUser user = new AuthUser();
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.updateProfile(userId, null, "not-an-email"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("邮箱");
+    }
+
+    @Test
+    void updateProfile_emptyEmail_clearsEmail() {
+        UUID userId = UUID.randomUUID();
+        AuthUser user = new AuthUser();
+        user.setId(userId);
+        user.setEmail("root@example.com");
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(authUserRepository.save(any(AuthUser.class))).thenAnswer(i -> i.getArgument(0));
+        when(authUserRepository.findWithRolesAndPermissionsById(userId)).thenReturn(Optional.of(user));
+
+        service.updateProfile(userId, null, "  ");
+
+        assertThat(user.getEmail()).isNull();
     }
 
     private static ObjectStorageBuckets createObjectStorageBuckets() {

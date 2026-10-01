@@ -84,4 +84,13 @@ public interface AuthLoginAuditRepository extends JpaRepository<AuthLoginAudit, 
     @Modifying
     @Query("delete from AuthLoginAudit audit where audit.createdAt < :cutoff")
     int deleteCreatedBefore(@Param("cutoff") Instant cutoff);
+
+    /**
+     * 统计指定时间之前将被清理的登录审计数量，谓词与 deleteCreatedBefore 保持一致。
+     *
+     * @param cutoff 截止时间
+     * @return 登录审计数量
+     */
+    @Query("select count(audit) from AuthLoginAudit audit where audit.createdAt < :cutoff")
+    long countCreatedBefore(@Param("cutoff") Instant cutoff);
 }

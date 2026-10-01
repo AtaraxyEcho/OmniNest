@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:omninest/app/session/session_epoch.dart';
-import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -56,8 +55,6 @@ class AdminSectionRefresher {
         _ref.invalidate(adminConsoleControllerProvider);
       case AdminSection.users:
         _ref.invalidate(adminUserControllerProvider);
-      case AdminSection.monitoring:
-        _ref.invalidate(adminMonitoringProvider);
       case AdminSection.roles:
         _ref.invalidate(adminRolesProvider);
       case AdminSection.config:
@@ -134,6 +131,30 @@ final adminDlqProvider = FutureProvider<List<AdminDlqTask>>((ref) {
   return ref.watch(adminOperationsApiProvider).listDlq();
 });
 
+/// 清理预估的目标类型。
+enum AdminCleanupPreviewKind { auditLogs, loginAuditLogs, sessions }
+
+/// 清理预估查询键：目标类型 + 保留天数。
+typedef AdminCleanupPreviewQuery =
+    ({AdminCleanupPreviewKind kind, int retentionDays});
+
+/// 清理预估条数：随清理确认弹窗打开而请求，弹窗关闭（autoDispose）即释放。
+/// 预估失败不阻塞清理流程，由弹窗自行展示 '-'。
+final adminCleanupPreviewProvider = FutureProvider.autoDispose
+    .family<int, AdminCleanupPreviewQuery>((ref, query) {
+      final api = ref.watch(adminOperationsApiProvider);
+      return switch (query.kind) {
+        AdminCleanupPreviewKind.auditLogs => api.previewCleanupAuditLogs(
+          query.retentionDays,
+        ),
+        AdminCleanupPreviewKind.loginAuditLogs => api
+            .previewCleanupLoginAuditLogs(query.retentionDays),
+        AdminCleanupPreviewKind.sessions => api.previewCleanupSessions(
+          query.retentionDays,
+        ),
+      };
+    });
+
 final adminLogsProvider = FutureProvider<AdminLogManagementView>((ref) {
   ref.watch(sessionEpochProvider);
 
@@ -153,40 +174,6 @@ final adminLogPageProvider = FutureProvider.autoDispose
             dir: query.dir,
           );
     });
-
-final adminMonitoringProvider = FutureProvider<AdminMonitoringView>((ref) {
-  ref.watch(sessionEpochProvider);
-
-  return ref.watch(adminOperationsApiProvider).monitoring();
-});
-
-/// 监控分区挂载期间的准实时轮询间隔；4C4G 自托管画像取保守端，可调。
-const Duration adminMonitoringPollInterval = Duration(seconds: 10);
-
-/// 监控分区准实时轮询器：autoDispose，分区页面挂载期间保持 watch 即存活，
-/// 卸载（AnimatedSwitcher 切走）即停。错误时退避（连续错误数 ×2，封顶
-/// 6 个间隔），恢复成功即回到基础间隔；配合分区渲染的保数据刷新，
-/// 轮询期间不闪 loading。
-final adminMonitoringPollerProvider = Provider.autoDispose<void>((ref) {
-  Timer? timer;
-  var consecutiveErrors = 0;
-  ref.listen<AsyncValue<AdminMonitoringView>>(adminMonitoringProvider, (
-    previous,
-    next,
-  ) {
-    consecutiveErrors = next.hasError ? consecutiveErrors + 1 : 0;
-  });
-
-  void tick() {
-    ref.invalidate(adminMonitoringProvider);
-    final backoffMultiplier =
-        consecutiveErrors == 0 ? 1 : math.min(consecutiveErrors * 2, 6);
-    timer = Timer(adminMonitoringPollInterval * backoffMultiplier, tick);
-  }
-
-  timer = Timer(adminMonitoringPollInterval, tick);
-  ref.onDispose(() => timer?.cancel());
-});
 
 final adminStorageProvider = FutureProvider<AdminStorageManagementView>((ref) {
   ref.watch(sessionEpochProvider);
@@ -269,6 +256,57 @@ final adminAnalyticsProvider = FutureProvider.autoDispose
       return ref.read(adminOperationsApiProvider).getAnalytics(days: days);
     });
 
+/// 概览页自动刷新档位；默认关闭。
+enum AdminOverviewRefreshInterval { off, thirtySeconds, fiveMinutes }
+
+extension AdminOverviewRefreshIntervalDuration on AdminOverviewRefreshInterval {
+  /// 定时刷新间隔；关闭档位返回 null 表示不启动轮询。
+  Duration? get pollingDuration {
+    return switch (this) {
+      AdminOverviewRefreshInterval.off => null,
+      AdminOverviewRefreshInterval.thirtySeconds => const Duration(seconds: 30),
+      AdminOverviewRefreshInterval.fiveMinutes => const Duration(minutes: 5),
+    };
+  }
+}
+
+/// 概览自动刷新档位状态（autoDispose：概览页卸载后回归默认关闭，
+/// 重新进入不恢复旧档位，避免无预期的后台轮询）。
+final adminOverviewRefreshIntervalProvider = NotifierProvider<
+  AdminOverviewRefreshIntervalNotifier,
+  AdminOverviewRefreshInterval
+>(AdminOverviewRefreshIntervalNotifier.new);
+
+class AdminOverviewRefreshIntervalNotifier
+    extends Notifier<AdminOverviewRefreshInterval> {
+  @override
+  AdminOverviewRefreshInterval build() => AdminOverviewRefreshInterval.off;
+
+  void selectInterval(AdminOverviewRefreshInterval value) => state = value;
+}
+
+/// 概览页定时刷新轮询器。
+///
+/// autoDispose：概览页挂载期间保持 watch 即存活，切走分区即停。
+/// 按所选档位固定间隔失效 summary 与 analytics（错误退避简化为固定
+/// 间隔）；实现参考 git 历史中的 adminMonitoringPollerProvider。
+final adminOverviewPollerProvider = Provider.autoDispose<void>((ref) {
+  final duration =
+      ref.watch(adminOverviewRefreshIntervalProvider).pollingDuration;
+  if (duration == null) {
+    return;
+  }
+  Timer? timer;
+  void tick() {
+    ref.invalidate(adminConsoleControllerProvider);
+    ref.invalidate(adminAnalyticsProvider(7));
+    timer = Timer(duration, tick);
+  }
+
+  timer = Timer(duration, tick);
+  ref.onDispose(() => timer?.cancel());
+});
+
 final adminOperationsActionsProvider = Provider<AdminOperationsActions>((ref) {
   return AdminOperationsActions(ref);
 });
@@ -290,6 +328,19 @@ class AdminOperationsActions {
     await _api.updateRolePermissions(roleCode, permissions);
     ref.invalidate(adminRolesProvider);
     _refreshSessionIfAffectsCurrentUser(roleCode: roleCode);
+  }
+
+  /// 创建自定义角色；成功后失效角色视图并返回新角色详情。
+  Future<AdminRoleDetail> createRole(AdminCreateRoleInput input) async {
+    final role = await _api.createRole(input);
+    ref.invalidate(adminRolesProvider);
+    return role;
+  }
+
+  /// 删除自定义角色；仍有用户绑定时后端返回业务错误。
+  Future<void> deleteRole(String roleCode) async {
+    await _api.deleteRole(roleCode);
+    ref.invalidate(adminRolesProvider);
   }
 
   /// 角色权限变更影响当前用户所属角色时轮换本地 JWT，使 claims 与服务端一致。
@@ -320,6 +371,21 @@ class AdminOperationsActions {
     ref.invalidate(adminTaskPageProvider);
   }
 
+  /// 取消排队或等待重试的任务；仅在执行前有效。
+  Future<void> cancelTask(String taskId) async {
+    await _api.cancelTask(taskId);
+    ref.invalidate(adminTasksProvider);
+    ref.invalidate(adminTaskPageProvider);
+  }
+
+  /// 丢弃死信任务：任务进入 DISCARDED 终态，不可再重试。
+  Future<void> discardDlqTask(String taskId) async {
+    await _api.discardDlqTask(taskId);
+    ref.invalidate(adminDlqProvider);
+    ref.invalidate(adminTasksProvider);
+    ref.invalidate(adminTaskPageProvider);
+  }
+
   /// 逐条批量重试任务，失败项跳过，结束后统一刷新任务列表。
   Future<AdminBatchResult> batchRetryTasks(Iterable<String> taskIds) async {
     var successCount = 0;
@@ -339,10 +405,72 @@ class AdminOperationsActions {
     return (successCount: successCount, failedIds: failedIds);
   }
 
+  /// 逐条批量取消任务（仅排队/等待重试态生效），失败项跳过，结束后统一刷新。
+  Future<AdminBatchResult> batchCancelTasks(Iterable<String> taskIds) async {
+    var successCount = 0;
+    final failedIds = <String>[];
+    for (final taskId in taskIds) {
+      try {
+        await _api.cancelTask(taskId);
+        successCount++;
+      } on Object {
+        failedIds.add(taskId);
+      }
+    }
+    if (successCount > 0) {
+      ref.invalidate(adminTasksProvider);
+      ref.invalidate(adminTaskPageProvider);
+    }
+    return (successCount: successCount, failedIds: failedIds);
+  }
+
+  /// 逐条批量重试死信任务，失败项跳过，结束后统一刷新死信与任务列表。
+  Future<AdminBatchResult> batchRetryDlq(Iterable<String> taskIds) async {
+    var successCount = 0;
+    final failedIds = <String>[];
+    for (final taskId in taskIds) {
+      try {
+        await _api.retryDlq(taskId);
+        successCount++;
+      } on Object {
+        failedIds.add(taskId);
+      }
+    }
+    if (successCount > 0) {
+      ref.invalidate(adminDlqProvider);
+      ref.invalidate(adminTasksProvider);
+      ref.invalidate(adminTaskPageProvider);
+    }
+    return (successCount: successCount, failedIds: failedIds);
+  }
+
+  /// 逐条批量丢弃死信任务（破坏性，终态不可重试），失败项跳过，结束后统一刷新。
+  Future<AdminBatchResult> batchDiscardDlq(Iterable<String> taskIds) async {
+    var successCount = 0;
+    final failedIds = <String>[];
+    for (final taskId in taskIds) {
+      try {
+        await _api.discardDlqTask(taskId);
+        successCount++;
+      } on Object {
+        failedIds.add(taskId);
+      }
+    }
+    if (successCount > 0) {
+      ref.invalidate(adminDlqProvider);
+      ref.invalidate(adminTasksProvider);
+      ref.invalidate(adminTaskPageProvider);
+    }
+    return (successCount: successCount, failedIds: failedIds);
+  }
+
   /// 重试死信队列任务
   Future<void> retryDlq(String taskId) async {
     await _api.retryDlq(taskId);
+    // 重试后任务离开死信回到执行链：与丢弃一致，同步刷新死信与任务列表。
     ref.invalidate(adminDlqProvider);
+    ref.invalidate(adminTasksProvider);
+    ref.invalidate(adminTaskPageProvider);
   }
 
   Future<AdminConfigEntry> rollbackConfig(String historyId) async {
@@ -482,7 +610,6 @@ class AdminOperationsActions {
     final count = await _api.cleanupAuditLogs(retentionDays);
     ref.invalidate(adminLogsProvider);
     ref.invalidate(adminLogPageProvider);
-    ref.invalidate(adminMonitoringProvider);
     return count;
   }
 

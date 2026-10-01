@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/features/admin/application/admin_user_controller.dart';
 import 'package:omninest/features/admin/data/admin_user_api.dart';
 
 void main() {
@@ -56,5 +57,20 @@ void main() {
       }),
       throwsA(isA<AppException>()),
     );
+  });
+
+  test('用户状态页计算与选择集语义正确', () {
+    const state = AdminUserState(
+      users: [],
+      page: 2,
+      pageSize: 10,
+      totalElements: 25,
+      selectedIds: {'a', 'b'},
+    );
+    expect(state.totalPages, 3);
+    expect(state.hasSelection, isTrue);
+    const empty = AdminUserState(users: []);
+    expect(empty.totalPages, 0);
+    expect(empty.hasSelection, isFalse);
   });
 }

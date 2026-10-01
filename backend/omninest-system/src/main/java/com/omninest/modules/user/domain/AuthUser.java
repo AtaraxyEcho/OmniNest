@@ -69,6 +69,12 @@ public class AuthUser {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    /**
+     * 创建时间由数据库默认值填充；实体侧只读映射，供管理列表展示与排序。
+     */
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    private Instant createdAt;
+
     @Version
     @Column(nullable = false)
     private long version;

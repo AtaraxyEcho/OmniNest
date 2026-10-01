@@ -22,4 +22,11 @@ public interface CurrentUserContext {
      * @return 当前用户标识
      */
     UUID requireCurrentUserId();
+
+    /**
+     * 获取当前访问令牌对应的会话标识（sid claim）。
+     *
+     * @return 当前会话标识；凭证未携带会话信息时返回 null
+     */
+    UUID currentSessionId();
 }

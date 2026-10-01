@@ -74,6 +74,47 @@ void main() {
     expect(tasks.items.single.retryCount, 2);
   });
 
+  test('parses audit log payload and tolerates invalid payload', () {
+    final view = api.parseLogResponse({
+      'code': 200,
+      'message': 'success',
+      'data': {
+        'items': [
+          {
+            'id': 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            'actorUserId': 'user-1',
+            'action': 'ADMIN_CONFIG_UPDATE',
+            'resourceType': 'config',
+            'ipAddress': '127.0.0.1',
+            'createdAt': '2026-09-28T09:00:00Z',
+            'payload': {
+              'oldValue': 'false',
+              'newValue': 'true',
+              'reason': '启用功能',
+              'nested': {'depth': 1},
+              'empty': null,
+            },
+          },
+          {
+            'id': 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+            'action': 'LOGIN',
+            'resourceType': 'auth_users',
+            'ipAddress': '127.0.0.1',
+            'createdAt': '2026-09-28T09:05:00Z',
+            'payload': 'not-a-map',
+          },
+        ],
+      },
+    });
+
+    final first = view.items.first;
+    expect(first.payload['oldValue'], 'false');
+    expect(first.payload['newValue'], 'true');
+    expect(first.payload['nested'], isA<Map<String, dynamic>>());
+    expect(first.payload, isNot(contains('empty')));
+    expect(view.items.last.payload, isEmpty);
+  });
+
   test('parses controlled config metadata without a sensitive value', () {
     final view = api.parseConfigResponse({
       'code': 200,
@@ -103,70 +144,6 @@ void main() {
     expect(item.surface, 'INTEGRATION');
     expect(item.sensitiveConfigured, isTrue);
     expect(item.displayCode, 'config.integration.tmdb.apiKey');
-  });
-
-  test('parses admin monitoring response', () {
-    final view = api.parseMonitoringResponse({
-      'code': 200,
-      'message': 'success',
-      'data': {
-        'overview': {
-          'status': 'UP',
-          'uptime': '0d 1h 2m',
-          'cpuUsage': 12.4,
-          'memoryUsage': 34.7,
-          'diskUsage': 28.1,
-          'jvmHeapUsage': 42.3,
-          'activeTasks': 3,
-          'queueDepth': 27,
-          'todayRequests': 12840,
-        },
-        'components': [
-          {
-            'name': 'PostgreSQL',
-            'status': 'UP',
-            'detail': {'activeConnections': 8},
-          },
-        ],
-        'alerts': [
-          {
-            'severity': 'WARNING',
-            'message': 'Disk usage exceeds 85%',
-            'timestamp': '2026-05-20T10:30:00Z',
-          },
-        ],
-        'auditRecent': [
-          {
-            'id': 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-            'actorUserId': null,
-            'action': 'LOGIN',
-            'resourceType': 'auth_users',
-            'resourceId': null,
-            'ipAddress': '127.0.0.1',
-            'createdAt': '2026-05-20T09:00:00Z',
-          },
-        ],
-        'series': [
-          {
-            'metric': 'cpu',
-            'label': 'CPU',
-            'unit': '%',
-            'points': [
-              {'timestamp': '2026-05-20T10:29:00Z', 'value': 11.2},
-              {'timestamp': '2026-05-20T10:30:00Z', 'value': 12.4},
-            ],
-          },
-        ],
-        'health': [],
-        'metrics': [],
-      },
-    });
-
-    expect(view.overview.queueDepth, 27);
-    expect(view.components.single.detail['activeConnections'], '8');
-    expect(view.alerts.single.severity, 'WARNING');
-    expect(view.auditRecent.single.action, 'LOGIN');
-    expect(view.series.single.points.last.value, 12.4);
   });
 
   test('parses configured storage buckets', () {

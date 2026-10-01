@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
@@ -84,16 +83,16 @@ class _AdminSectionEntranceState extends State<AdminSectionEntrance>
 class AdminResponsiveMetricGrid extends StatelessWidget {
   const AdminResponsiveMetricGrid({
     required this.children,
-    this.cardHeight = 208,
+    this.cardHeight = 132,
     super.key,
   });
 
   final List<Widget> children;
 
-  /// 统一卡片高度（含 sparkline + 徽标行的完整高度）。
+  /// 统一卡片高度（紧凑形态：标题行 + 数值 + 明细 + 单行徽标/进度槽）。
   ///
-  /// 基准 208：内边距 32 + 标题/数值/明细约 80 + 趋势 32 + 徽标 24 + 间距，
-  /// 为趋势徽标与长文案留出余量，避免 Column 底部溢出。
+  /// 基准 132：内边距 24 + 标题/数值/明细约 60 + 单行徽标 26 与间距余量；
+  /// 卡片内容超出时由卡片自身裁剪降级，网格高度随字号缩放钳制同步放大。
   final double cardHeight;
 
   @override
@@ -108,11 +107,11 @@ class AdminResponsiveMetricGrid extends StatelessWidget {
                 : w >= 820
                 ? 2
                 : 1;
-        // 字体放大时卡片高度同步放大，防溢出。
+        // 字体放大时卡片高度同步放大；1.3 以上钳制，避免卡片重新占满半屏。
         final textScale =
             MediaQuery.textScalerOf(
               context,
-            ).scale(1).clamp(1.0, 1.4).toDouble();
+            ).scale(1).clamp(1.0, 1.3).toDouble();
         return GridView.count(
           crossAxisCount: columns,
           crossAxisSpacing: 16,
@@ -125,258 +124,6 @@ class AdminResponsiveMetricGrid extends StatelessWidget {
       },
     );
   }
-}
-
-/// 统一仪表环网格：控制台监控与可视化图表共用，保证同一行对齐。
-///
-/// 使用 Wrap 而非 GridView，避免 shrink-wrap viewport 无法参与 intrinsic 高度测量。
-class AdminGaugeGrid extends StatelessWidget {
-  const AdminGaugeGrid({
-    required this.children,
-    this.gaugeSize = 112,
-    this.spacing = 12,
-    super.key,
-  });
-
-  final List<Widget> children;
-  final double gaugeSize;
-  final double spacing;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width =
-            constraints.maxWidth == double.infinity
-                ? 720.0
-                : constraints.maxWidth;
-        final columns =
-            width >= 520
-                ? 4
-                : width >= 360
-                ? 2
-                : 1;
-        final itemWidth = (width - spacing * (columns - 1)) / columns;
-        return Align(
-          alignment: Alignment.topCenter,
-          child: Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: [
-              for (final child in children)
-                SizedBox(
-                  width: itemWidth.clamp(gaugeSize, itemWidth),
-                  child: Center(child: child),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Sparkline 迷你趋势线
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// 指标卡内嵌迷你趋势线（无坐标轴，仅曲线+面积）。
-class AdminSparkline extends StatelessWidget {
-  const AdminSparkline({
-    required this.values,
-    required this.color,
-    this.height = 36,
-    super.key,
-  });
-
-  final List<double> values;
-  final Color color;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    if (values.length < 2) {
-      return SizedBox(height: height);
-    }
-    final max = values.reduce((a, b) => a > b ? a : b);
-    final min = values.reduce((a, b) => a < b ? a : b);
-    final range = (max - min) == 0 ? 1.0 : (max - min).toDouble();
-    final spots = [
-      for (int i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
-    ];
-    return SizedBox(
-      height: height,
-      child: LineChart(
-        LineChartData(
-          minY: min - range * 0.1,
-          maxY: max + range * 0.1,
-          gridData: const FlGridData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              curveSmoothness: 0.35,
-              color: color,
-              barWidth: 1.8,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.25),
-                    color.withValues(alpha: 0.0),
-                  ],
-                  stops: const [0, 1],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-          lineTouchData: const LineTouchData(enabled: false),
-        ),
-        duration: const Duration(milliseconds: 300),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 径向仪表（系统监控）
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// 圆环仪表：展示百分比指标（CPU/内存/磁盘等）。
-class AdminGaugeRing extends StatelessWidget {
-  const AdminGaugeRing({
-    required this.label,
-    required this.value,
-    required this.detail,
-    this.size = 120,
-    super.key,
-  });
-
-  final String label;
-  final double value;
-  final String detail;
-  final double size;
-
-  Color _color(AdminColors c) {
-    if (value >= 85) return c.error;
-    if (value >= 70) return c.tertiary;
-    return c.success;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.adminColors;
-    final color = _color(c);
-    final clamped = value.clamp(0, 100) / 100;
-    return SizedBox(
-      width: size,
-      height: size + 52,
-      child: Column(
-        children: [
-          SizedBox(
-            width: size,
-            height: size,
-            child: CustomPaint(
-              painter: _GaugeRingPainter(
-                progress: clamped,
-                color: color,
-                trackColor: c.outlineVariant.withValues(alpha: 0.16),
-                strokeWidth: 8,
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${value.toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: AppTypography.headlineMedium,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                        height: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.bodySmall,
-              fontWeight: FontWeight.w700,
-              color: c.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            detail,
-            style: TextStyle(
-              fontSize: AppTypography.labelSmall,
-              color: c.onSurfaceVariant.withValues(alpha: 0.70),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GaugeRingPainter extends CustomPainter {
-  const _GaugeRingPainter({
-    required this.progress,
-    required this.color,
-    required this.trackColor,
-    required this.strokeWidth,
-  });
-
-  final double progress;
-  final Color color;
-  final Color trackColor;
-  final double strokeWidth;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    // 轨道
-    final trackPaint =
-        Paint()
-          ..color = trackColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, 0, 2 * 3.14159265, false, trackPaint);
-
-    // 进度弧（从顶部顺时针）
-    final progressPaint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      rect,
-      -3.14159265 / 2,
-      2 * 3.14159265 * progress,
-      false,
-      progressPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_GaugeRingPainter old) =>
-      old.progress != progress || old.color != color;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -435,10 +182,10 @@ class AdminTrendBadge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 服务状态网格瓦片（系统监控）
+// 服务状态瓦片
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// 服务健康状态瓦片：图标 + 名称 + 状态指示灯。
+/// 服务健康状态瓦片：状态点 + 名称 + 说明，直角细边框。
 class AdminServiceTile extends StatelessWidget {
   const AdminServiceTile({
     required this.name,
@@ -459,23 +206,20 @@ class AdminServiceTile extends StatelessWidget {
     };
   }
 
-  IconData _statusIcon() {
-    return switch (status) {
-      'UP' => Icons.check_circle_rounded,
-      'WARN' => Icons.warning_rounded,
-      _ => Icons.error_rounded,
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.adminColors;
     final color = _statusColor(c);
     return WorkbenchPanel(
       padding: const EdgeInsets.all(14),
+      borderRadius: 0,
       child: Row(
         children: [
-          Icon(_statusIcon(), size: 20, color: color),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

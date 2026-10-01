@@ -151,7 +151,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteNotificationTypeDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.notification_types")).isEqualTo(11);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.notification_types")).isEqualTo(13);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -166,7 +166,9 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('NEW_DEVICE_LOGIN'),
                         ('PASSWORD_CHANGED'),
                         ('SECURITY_THREAT'),
-                        ('SECURITY_SCAN_FAILED')
+                        ('SECURITY_SCAN_FAILED'),
+                        ('MEDIA_AUTO_IMPORT_COMPLETED'),
+                        ('MEDIA_AUTO_IMPORT_FAILED')
                 ) expected(type_code)
                 FULL JOIN omni.notification_types actual USING (type_code)
                 WHERE expected.type_code IS NULL

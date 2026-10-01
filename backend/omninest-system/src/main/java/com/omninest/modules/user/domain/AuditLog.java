@@ -54,6 +54,12 @@ public class AuditLog {
     @Column(columnDefinition = "jsonb", nullable = false)
     private Map<String, Object> metadata = Map.of();
 
+    /**
+     * 操作变更上下文载荷，JSON 字符串；调用方必须先掩码敏感值再写入。
+     */
+    @Column(name = "detail_payload", columnDefinition = "text")
+    private String detailPayload;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

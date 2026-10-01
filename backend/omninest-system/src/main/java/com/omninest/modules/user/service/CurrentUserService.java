@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -223,6 +224,75 @@ public class CurrentUserService {
         } catch (Exception exception) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "头像图片检查失败");
         }
+    }
+
+    /**
+     * 修改当前用户基础资料（显示昵称 / 邮箱）。
+     *
+     * <p>仅更新提供的字段；变更后失效资料缓存并广播 USER_PROFILE 同步
+     * 事件，其他设备即时重拉。昵称与邮箱不出现在日志中。</p>
+     *
+     * @param userId 用户 ID
+     * @param displayName 新显示昵称；null 表示不变
+     * @param email 新邮箱；null 表示不变，空串表示清除
+     * @return 更新后的用户资料
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AuthUserDto updateProfile(UUID userId, String displayName, String email) {
+        AuthUser user = authUserRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        if (!UserStatus.ACTIVE.getValue().equals(user.getStatus())) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不可用");
+        }
+        String nextDisplayName = displayName == null ? null : normalizeDisplayName(displayName);
+        String nextEmail = email == null ? null : normalizeEmail(email);
+
+        List<String> changedFields = new ArrayList<>(2);
+        if (nextDisplayName != null && !nextDisplayName.equals(user.getDisplayName())) {
+            user.setDisplayName(nextDisplayName);
+            changedFields.add("displayName");
+        }
+        if (nextEmail != null && !nextEmail.equals(user.getEmail() == null ? "" : user.getEmail())) {
+            user.setEmail(nextEmail.isEmpty() ? null : nextEmail);
+            changedFields.add("email");
+        }
+        if (changedFields.isEmpty()) {
+            return currentUser();
+        }
+        authUserRepository.save(user);
+        readThroughCache.invalidate("omninest:user:profile:" + userId);
+        log.info("用户资料已更新: userId={}, fields={}", userId, changedFields);
+        syncEventRecorder.record(new SyncEventCommand(
+                userId,
+                SyncScope.PREFERENCES,
+                "USER_PROFILE",
+                "USER_PROFILE",
+                SyncAction.UPDATED,
+                null,
+                Map.of()
+        ));
+        return authUserRepository.findWithRolesAndPermissionsById(userId)
+                .map(this::toDto)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+    }
+
+    private String normalizeDisplayName(String displayName) {
+        String trimmed = displayName.trim();
+        if (trimmed.isEmpty() || trimmed.length() > 120) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "显示昵称长度须为 1-120 个字符");
+        }
+        return trimmed;
+    }
+
+    private String normalizeEmail(String email) {
+        String trimmed = email.trim();
+        if (trimmed.isEmpty()) {
+            return trimmed;
+        }
+        if (trimmed.length() > 255 || !trimmed.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "邮箱格式不正确");
+        }
+        return trimmed.toLowerCase(Locale.ROOT);
     }
 
     /**

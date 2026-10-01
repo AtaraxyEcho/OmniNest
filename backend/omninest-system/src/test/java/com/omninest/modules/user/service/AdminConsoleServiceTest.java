@@ -86,6 +86,7 @@ class AdminConsoleServiceTest {
         when(taskRecordRepository.countByStatus("FAILED")).thenReturn(1L);
         when(taskRecordRepository.countByStatus("CANCELLED")).thenReturn(2L);
         when(taskRecordRepository.countByStatus("DLQ")).thenReturn(1L);
+        when(taskRecordRepository.countByStatus("DISCARDED")).thenReturn(1L);
         when(storageMetricsQuery.systemMetrics())
                 .thenReturn(new StorageMetricsSnapshot(12, 4, 10, 4096));
         when(externalStorageAdministration.countAccounts()).thenReturn(2L);
@@ -101,7 +102,9 @@ class AdminConsoleServiceTest {
         assertThat(summary.configs().total()).isEqualTo(2);
         assertThat(summary.configs().hot()).isEqualTo(1);
         assertThat(summary.configs().restartRequired()).isEqualTo(1);
-        assertThat(summary.tasks().total()).isEqualTo(16);
+        assertThat(summary.tasks().total()).isEqualTo(17);
+        // DISCARDED 是管理员显式丢弃的死信处置终态，归入 cancelled 桶且不计入 failed/dlq。
+        assertThat(summary.tasks().cancelled()).isEqualTo(3);
         assertThat(summary.tasks().failed()).isEqualTo(1);
         assertThat(summary.tasks().dlq()).isEqualTo(1);
         assertThat(summary.storage().fileCount()).isEqualTo(12);

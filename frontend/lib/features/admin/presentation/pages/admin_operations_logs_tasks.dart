@@ -1,5 +1,8 @@
 part of 'admin_operations_pages.dart';
 
+// 任务状态映射（_taskStatusLabel/_taskStatusTone）与任务详情弹窗
+// （_TaskDetailDialog）拆分至 admin_operations_task_dialogs.dart。
+
 class AdminTasksPage extends ConsumerStatefulWidget {
   const AdminTasksPage({super.key});
 
@@ -94,30 +97,16 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
     });
   }
 
-  /// 批量重试选中的任务：确认后逐条执行，失败项跳过。
+  /// 批量重试选中的任务：工位确认弹窗后逐条执行，失败项跳过。
   Future<void> _batchRetry(AdminPage<AdminTaskRecord> page) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.adminBatchConfirmTitle),
-            content: Text(
-              l10n.adminBatchConfirmMessage('${_selectedTasks.length}'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(l10n.coreCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(l10n.coreConfirm),
-              ),
-            ],
-          ),
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminBatchConfirmTitle,
+      message: l10n.adminBatchConfirmMessage('${_selectedTasks.length}'),
+      confirmLabel: l10n.coreConfirm,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     final ids = <String>[
       for (final index in _selectedTasks)
         if (index >= 0 &&
@@ -131,21 +120,61 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
           .batchRetryTasks(ids);
       if (!mounted) return;
       setState(() => _selectedTasks.clear());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            l10n.adminBatchCompleted(
-              result.successCount,
-              result.failedIds.length,
-            ),
-          ),
-        ),
+      showOmniFeedback(
+        context,
+        l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
+        severity: OmniFeedbackSeverity.warning,
       );
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showOmniFeedback(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.adminOperationFailed)));
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  /// 批量取消选中的任务：仅排队/等待重试态生效，失败项跳过。
+  Future<void> _batchCancel(AdminPage<AdminTaskRecord> page) async {
+    final l10n = AppLocalizations.of(context);
+    final targets = <String>[
+      for (final index in _selectedTasks)
+        if (index >= 0 &&
+            index < page.items.length &&
+            page.items[index].canCancel)
+          page.items[index].id,
+    ];
+    if (targets.isEmpty) {
+      setState(() => _selectedTasks.clear());
+      return;
+    }
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminBatchCancelTasks,
+      message: l10n.adminBatchCancelConfirmMessage('${targets.length}'),
+      confirmLabel: l10n.adminTaskCancel,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      final result = await ref
+          .read(adminOperationsActionsProvider)
+          .batchCancelTasks(targets);
+      if (!mounted) return;
+      setState(() => _selectedTasks.clear());
+      showOmniFeedback(
+        context,
+        l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
+        severity: OmniFeedbackSeverity.warning,
+      );
+    } on Object {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
     }
   }
 
@@ -164,8 +193,16 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
             if (_taskType != 'ALL') _taskType,
           }.toList()
           ..sort();
-    final failed = page.items.where((item) => item.status == 'FAILED').length;
     final running = page.items.where((item) => item.status == 'RUNNING').length;
+    final queued = page.items.where((item) => item.status == 'QUEUED').length;
+    final retryWait =
+        page.items.where((item) => item.status == 'RETRY_WAIT').length;
+    final queuedReady = queued + retryWait;
+    final failedStatus =
+        page.items.where((item) => item.status == 'FAILED').length;
+    final dlqOnPage = page.items.where((item) => item.status == 'DLQ').length;
+    final failed = failedStatus + dlqOnPage;
+    final dlqCount = dlqAsync.asData?.value.length ?? 0;
     final useExpanded =
         !ResponsiveBreakpoints.isCompact(MediaQuery.sizeOf(context).width) &&
         MediaQuery.sizeOf(context).height >= 620;
@@ -175,10 +212,19 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
         AdminPageHeader(
           title: l10n.adminBackgroundTasks,
           subtitle: l10n.adminBackgroundTasksSubtitle,
-          trailing: IconButton.filledTonal(
-            tooltip: l10n.adminRefresh,
-            onPressed: () => ref.invalidate(adminTaskPageProvider),
-            icon: const Icon(Icons.refresh_rounded),
+          trailing: Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AdminStatusPill(
+                label: '${l10n.adminTotalTasks} ${page.totalElements}',
+              ),
+              IconButton.filledTonal(
+                tooltip: l10n.adminRefresh,
+                onPressed: () => ref.invalidate(adminTaskPageProvider),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -192,11 +238,13 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
               options: const [
                 'ALL',
                 'QUEUED',
+                'RETRY_WAIT',
                 'RUNNING',
                 'COMPLETED',
                 'FAILED',
                 'CANCELLED',
                 'DLQ',
+                'DISCARDED',
               ],
               optionLabel: (value) => value == 'ALL' ? l10n.adminAll : value,
               onChanged:
@@ -222,13 +270,11 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
         ),
         const SizedBox(height: 20),
         _MetricGrid(
+          maxColumns: 4,
+          cardExtent: 132,
           children: [
-            AdminMetricCard(
-              title: l10n.adminTotalTasks,
-              value: page.totalElements.toString(),
-              detail: l10n.adminRecentTasks,
-              icon: Icons.pending_actions_outlined,
-            ),
+            // 执行中卡不引入 Worker 活跃文案：该口径需要独立后端数据，
+            // 此处仅用既有分页数据补齐其余卡片的 supporting 行。
             AdminMetricCard(
               title: l10n.adminRunningTasks,
               value: running.toString(),
@@ -237,11 +283,45 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
               accent: colors.info,
             ),
             AdminMetricCard(
+              title: l10n.adminMetricQueuedReady,
+              value: queuedReady.toString(),
+              detail: l10n.adminCurrentPage,
+              icon: Icons.schedule_rounded,
+              accent: colors.warning,
+              supporting: [
+                AdminMetricMiniStat(
+                  label: l10n.statusScanQueued,
+                  value: queued.toString(),
+                ),
+                AdminMetricMiniStat(
+                  label: l10n.adminTaskStatusRetryWait,
+                  value: retryWait.toString(),
+                ),
+              ],
+            ),
+            AdminMetricCard(
+              title: l10n.adminMetricDlq,
+              value: dlqCount.toString(),
+              detail: l10n.adminDlqMetricHint,
+              icon: Icons.report_outlined,
+              accent: dlqCount == 0 ? colors.success : colors.error,
+            ),
+            AdminMetricCard(
               title: l10n.adminFailedTasks,
               value: failed.toString(),
               detail: l10n.adminCurrentPage,
               icon: Icons.error_outline_rounded,
               accent: failed == 0 ? colors.success : colors.error,
+              supporting: [
+                AdminMetricMiniStat(
+                  label: l10n.adminFailedTasks,
+                  value: failedStatus.toString(),
+                ),
+                AdminMetricMiniStat(
+                  label: l10n.adminTaskStatusDlq,
+                  value: dlqOnPage.toString(),
+                ),
+              ],
             ),
           ],
         ),
@@ -263,6 +343,8 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
                   _selectedTasks.clear();
                 }),
             onRetry: _retryTask,
+            onCancel: _cancelTask,
+            onDetail: _showTaskDetail,
             pageSize: _pageSize,
             onRowsPerPageChanged: _changePageSize,
             busy: busy,
@@ -286,15 +368,23 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
                 _selectedTasks.clear();
                 if (value) {
                   for (var i = 0; i < page.items.length; i++) {
-                    if (page.items[i].canRetry) _selectedTasks.add(i);
+                    if (page.items[i].canRetry || page.items[i].canCancel) {
+                      _selectedTasks.add(i);
+                    }
                   }
                 }
               });
             },
             onBatchRetry: () => _batchRetry(page),
+            onBatchCancel: () => _batchCancel(page),
             onClearSelection: () => setState(() => _selectedTasks.clear()),
           ),
-          _DlqTab(query: _query, state: dlqAsync),
+          _DlqTab(
+            query: _query,
+            state: dlqAsync,
+            onRetry: _retryDlq,
+            onDiscard: _discardDlqTask,
+          ),
           useExpanded: useExpanded,
         ),
       ],
@@ -312,6 +402,15 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
         : SizedBox(height: 520, child: tabView);
   }
 
+  /// 打开任务详情弹窗。
+  Future<void> _showTaskDetail(AdminTaskRecord item) async {
+    if (!mounted) return;
+    await showWorkstationDialog<void>(
+      context: context,
+      builder: (dialogContext) => _TaskDetailDialog(item: item),
+    );
+  }
+
   void _retryTask(String taskId) {
     unawaited(_retryTaskAsync(taskId));
   }
@@ -321,10 +420,71 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
       await ref.read(adminOperationsActionsProvider).retryTask(taskId);
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).adminLoadFailed('')),
-        ),
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).adminLoadFailed(''),
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  /// 取消排队/等待重试的任务：确认后调用 cancelTask。
+  Future<void> _cancelTask(String taskId) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminTaskCancelConfirmTitle,
+      message: l10n.adminTaskCancelConfirmMessage,
+      confirmLabel: l10n.adminTaskCancel,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await ref.read(adminOperationsActionsProvider).cancelTask(taskId);
+    } on Object {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  /// 重试死信任务。
+  Future<void> _retryDlq(String taskId) async {
+    try {
+      await ref.read(adminOperationsActionsProvider).retryDlq(taskId);
+    } on Object {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).adminLoadFailed(''),
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  /// 丢弃死信任务：键入任务 ID 前 8 位短码的破坏性确认。
+  Future<void> _discardDlqTask(AdminDlqTask item) async {
+    final l10n = AppLocalizations.of(context);
+    final phrase = item.id.length >= 8 ? item.id.substring(0, 8) : item.id;
+    final confirmed = await showWorkstationDestructiveConfirm(
+      context,
+      title: l10n.adminTaskDiscardTitle,
+      message: l10n.adminTaskDiscardMessage,
+      confirmPhrase: phrase,
+      confirmLabel: l10n.adminTaskDiscard,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await ref.read(adminOperationsActionsProvider).discardDlqTask(item.id);
+    } on Object {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
       );
     }
   }
@@ -335,6 +495,8 @@ class _TaskListTab extends StatelessWidget {
     required this.page,
     required this.onPageChanged,
     required this.onRetry,
+    required this.onCancel,
+    required this.onDetail,
     required this.pageSize,
     required this.onRowsPerPageChanged,
     required this.busy,
@@ -344,12 +506,19 @@ class _TaskListTab extends StatelessWidget {
     required this.onRowCheck,
     required this.onCheckAll,
     required this.onBatchRetry,
+    required this.onBatchCancel,
     required this.onClearSelection,
   });
 
   final AdminPage<AdminTaskRecord> page;
   final ValueChanged<int> onPageChanged;
   final void Function(String taskId) onRetry;
+
+  /// 取消排队/等待重试任务。
+  final void Function(String taskId) onCancel;
+
+  /// 打开任务详情弹窗。
+  final ValueChanged<AdminTaskRecord> onDetail;
   final int pageSize;
   final ValueChanged<int> onRowsPerPageChanged;
   final bool busy;
@@ -359,30 +528,15 @@ class _TaskListTab extends StatelessWidget {
   final void Function(int index, bool value) onRowCheck;
   final void Function(bool value) onCheckAll;
   final VoidCallback onBatchRetry;
+  final VoidCallback onBatchCancel;
   final VoidCallback onClearSelection;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    AdminTagTone taskStatusToneFor(String status) => switch (status) {
-      'COMPLETED' => AdminTagTone.success,
-      'RUNNING' => AdminTagTone.info,
-      'FAILED' || 'DLQ' => AdminTagTone.error,
-      _ => AdminTagTone.neutral,
-    };
-
-    String taskStatusLabelFor(AppLocalizations l10n, String status) =>
-        switch (status) {
-          'RUNNING' => l10n.adminTaskStatusRunning,
-          'COMPLETED' => l10n.adminTaskStatusCompleted,
-          'DLQ' => l10n.adminTaskStatusDlq,
-          'FAILED' => l10n.statusScanFailed,
-          'CANCELLED' => l10n.statusScanCancelled,
-          'QUEUED' => l10n.statusScanQueued,
-          _ => status,
-        };
-
-    final selectableCount = page.items.where((item) => item.canRetry).length;
+    // 可勾选 = 可重试或可取消：勾选同时服务批量重试与批量取消两个动作。
+    final selectableCount =
+        page.items.where((item) => item.canRetry || item.canCancel).length;
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 16),
       child: AdminTableSection(
@@ -395,6 +549,9 @@ class _TaskListTab extends StatelessWidget {
               actionLabel: l10n.adminBatchRetryTasks,
               actionIcon: Icons.replay_rounded,
               onAction: onBatchRetry,
+              secondaryActionLabel: l10n.adminBatchCancelTasks,
+              secondaryActionIcon: Icons.close_rounded,
+              onSecondaryAction: onBatchCancel,
               onClear: onClearSelection,
             ),
             const SizedBox(height: 8),
@@ -405,7 +562,10 @@ class _TaskListTab extends StatelessWidget {
             AdminDataTable(
               showCheckboxes: true,
               isChecked: (index) => selectedIndexes.contains(index),
-              isCheckDisabled: (index) => !page.items[index].canRetry,
+              isCheckDisabled:
+                  (index) =>
+                      !page.items[index].canRetry &&
+                      !page.items[index].canCancel,
               onRowCheck: onRowCheck,
               onCheckAll: onCheckAll,
               allChecked:
@@ -416,11 +576,12 @@ class _TaskListTab extends StatelessWidget {
                   selectedIndexes.length < selectableCount,
               showIndex: true,
               indexBase: page.page * pageSize,
-              minTableWidth: 1140,
+              minTableWidth: 1480,
               columns: [
                 AdminListColumn(
                   key: 'taskType',
                   label: l10n.adminFilterTaskType,
+                  minWidth: 128,
                   sortable: true,
                 ),
                 AdminListColumn(key: 'description', label: l10n.adminTaskName),
@@ -428,20 +589,35 @@ class _TaskListTab extends StatelessWidget {
                 AdminListColumn(
                   key: 'progress',
                   label: l10n.adminProgress,
+                  minWidth: 130,
                   sortable: true,
                 ),
                 AdminListColumn(
                   key: 'status',
                   label: l10n.adminTaskExecutionStatus,
+                  minWidth: 100,
                   sortable: true,
+                ),
+                AdminListColumn(
+                  key: 'retryCount',
+                  label: l10n.adminTaskRetryCount,
+                  minWidth: 88,
+                  numeric: true,
                 ),
                 AdminListColumn(
                   key: 'error',
                   label: l10n.adminTaskErrorSummary,
                 ),
                 AdminListColumn(
+                  key: 'createdAt',
+                  label: l10n.adminTaskCreatedAt,
+                  minWidth: 150,
+                  sortable: true,
+                ),
+                AdminListColumn(
                   key: 'updatedAt',
                   label: l10n.adminTaskUpdatedAt,
+                  minWidth: 150,
                   sortable: true,
                 ),
               ],
@@ -463,31 +639,68 @@ class _TaskListTab extends StatelessWidget {
                         ? item.ownerLabel!
                         : '-',
                   ),
+                  // 直角 1px 细槽进度：与用户页配额槽同一形态，去除圆角残留。
                   SizedBox(
                     width: 110,
                     child: Row(
                       children: [
                         Expanded(
-                          child: LinearProgressIndicator(
-                            value: item.progress / 100,
-                            minHeight: 6,
-                            borderRadius: BorderRadius.circular(3),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
+                            child: FractionallySizedBox(
+                              widthFactor: (item.progress / 100).clamp(
+                                0.0,
+                                1.0,
+                              ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                child: const SizedBox(height: 3),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           '${item.progress}%',
-                          style: Theme.of(context).textTheme.labelSmall,
+                          style: TextStyle(
+                            fontFamily: AppTypography.monoFamily,
+                            fontFamilyFallback:
+                                AppTypography.monoFamilyFallback,
+                            fontSize: AppTypography.labelSmall,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   AdminStatusTag(
-                    label: taskStatusLabelFor(l10n, item.status),
-                    tone: taskStatusToneFor(item.status),
+                    label: _taskStatusLabel(l10n, item.status),
+                    tone: _taskStatusTone(item.status),
+                  ),
+                  // 重试轮次：mono 短码 x/3（任务默认最多重试 3 次）。
+                  Text(
+                    '${item.retryCount}/3',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontFamily: AppTypography.monoFamily,
+                      fontFamilyFallback: AppTypography.monoFamilyFallback,
+                      fontSize: AppTypography.labelSmall,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   AdminCellText(
                     item.errorSummary ?? '-',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    item.createdAt,
+                    maxLines: 1,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   Text(
@@ -497,20 +710,32 @@ class _TaskListTab extends StatelessWidget {
                   ),
                 ];
               },
-              actionsBuilder:
-                  (context, index) =>
-                      page.items[index].canRetry
-                          ? [
-                            IconButton(
-                              tooltip: l10n.adminRetry,
-                              icon: const Icon(Icons.replay_rounded, size: 20),
-                              onPressed: () => onRetry(page.items[index].id),
-                            ),
-                          ]
-                          : const [],
+              actionsBuilder: (context, index) {
+                final item = page.items[index];
+                return [
+                  AdminRowIconAction(
+                    tooltip: l10n.adminTaskDetailTitle,
+                    icon: Icons.info_outlined,
+                    onTap: () => onDetail(item),
+                  ),
+                  if (item.canRetry)
+                    AdminRowIconAction(
+                      tooltip: l10n.adminRetry,
+                      icon: Icons.replay_outlined,
+                      onTap: () => onRetry(item.id),
+                    ),
+                  if (item.canCancel)
+                    AdminRowIconAction(
+                      tooltip: l10n.adminTaskCancel,
+                      icon: Icons.block_outlined,
+                      color: context.adminColors.error,
+                      onTap: () => onCancel(item.id),
+                    ),
+                ];
+              },
             ),
           const SizedBox(height: 12),
-          AdminListPaginationBar(
+          WorkstationPaginationBar(
             currentPage: page.page,
             totalPages: page.totalPages,
             totalElements: page.totalElements,
@@ -525,46 +750,8 @@ class _TaskListTab extends StatelessWidget {
   }
 }
 
-/// 列表页批量操作条：已选数量、取消选择与主操作按钮。
-class _AdminBatchBar extends StatelessWidget {
-  const _AdminBatchBar({
-    required this.count,
-    required this.actionLabel,
-    required this.actionIcon,
-    required this.onAction,
-    required this.onClear,
-  });
-
-  final int count;
-  final String actionLabel;
-  final IconData actionIcon;
-  final VoidCallback onAction;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Row(
-      children: [
-        Text(
-          l10n.adminListSelectedCount('$count'),
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
-        const Spacer(),
-        TextButton(
-          onPressed: onClear,
-          child: Text(l10n.adminBatchClearSelection),
-        ),
-        const SizedBox(width: 8),
-        FilledButton.icon(
-          onPressed: onAction,
-          icon: Icon(actionIcon, size: 18),
-          label: Text(actionLabel),
-        ),
-      ],
-    );
-  }
-}
+// 批量操作条（_AdminBatchBar）由任务与会话页共用，定义在
+// admin_operations_pages.dart 共享组件区。
 
 class _TaskFilter extends StatelessWidget {
   const _TaskFilter({
@@ -599,16 +786,121 @@ class _TaskFilter extends StatelessWidget {
   }
 }
 
-class _DlqTab extends StatelessWidget {
-  const _DlqTab({required this.query, required this.state});
+class _DlqTab extends ConsumerStatefulWidget {
+  const _DlqTab({
+    required this.query,
+    required this.state,
+    required this.onRetry,
+    required this.onDiscard,
+  });
 
   final String query;
   final AsyncValue<List<AdminDlqTask>> state;
 
+  /// 重试死信任务。
+  final void Function(String taskId) onRetry;
+
+  /// 丢弃死信任务（破坏性确认）。
+  final void Function(AdminDlqTask item) onDiscard;
+
+  @override
+  ConsumerState<_DlqTab> createState() => _DlqTabState();
+}
+
+class _DlqTabState extends ConsumerState<_DlqTab> {
+  /// 勾选索引基于过滤后列表：查询词或数据刷新变化时失效，须清空。
+  final Set<int> _selected = <int>{};
+
+  @override
+  void didUpdateWidget(_DlqTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query && _selected.isNotEmpty) {
+      setState(_selected.clear);
+    }
+  }
+
+  /// 批量重试勾选的死信：确认后逐条执行，失败项跳过。
+  Future<void> _batchRetry(List<AdminDlqTask> filtered) async {
+    final l10n = AppLocalizations.of(context);
+    final ids = <String>[
+      for (final index in _selected)
+        if (index >= 0 && index < filtered.length) filtered[index].id,
+    ];
+    if (ids.isEmpty) {
+      return;
+    }
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminBatchRetryTasks,
+      message: l10n.adminBatchConfirmMessage('${ids.length}'),
+      confirmLabel: l10n.coreConfirm,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      final result = await ref
+          .read(adminOperationsActionsProvider)
+          .batchRetryDlq(ids);
+      if (!mounted) return;
+      setState(_selected.clear);
+      showOmniFeedback(
+        context,
+        l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
+        severity: OmniFeedbackSeverity.warning,
+      );
+    } on Object {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  /// 批量丢弃勾选的死信（破坏性，终态不可重试）：数量确认兜底，
+  /// 单行丢弃的短码口令在批量场景不可行，文案明确不可恢复。
+  Future<void> _batchDiscard(List<AdminDlqTask> filtered) async {
+    final l10n = AppLocalizations.of(context);
+    final ids = <String>[
+      for (final index in _selected)
+        if (index >= 0 && index < filtered.length) filtered[index].id,
+    ];
+    if (ids.isEmpty) {
+      return;
+    }
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminTaskDiscard,
+      message: l10n.adminBatchDiscardConfirmMessage('${ids.length}'),
+      confirmLabel: l10n.adminTaskDiscard,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      final result = await ref
+          .read(adminOperationsActionsProvider)
+          .batchDiscardDlq(ids);
+      if (!mounted) return;
+      setState(_selected.clear);
+      showOmniFeedback(
+        context,
+        l10n.adminBatchCompleted(result.successCount, result.failedIds.length),
+        severity: OmniFeedbackSeverity.warning,
+      );
+    } on Object {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return state.when(
+    return widget.state.when(
       loading:
           () => const Padding(
             padding: EdgeInsets.all(16),
@@ -617,14 +909,14 @@ class _DlqTab extends StatelessWidget {
       error: (_, _) => Center(child: Text(l10n.adminLoadFailed(''))),
       data: (items) {
         final filtered =
-            query.isEmpty
+            widget.query.isEmpty
                 ? items
                 : items.where((item) {
                   return item.taskType.toLowerCase().contains(
-                        query.toLowerCase(),
+                        widget.query.toLowerCase(),
                       ) ||
                       (item.errorSummary?.toLowerCase().contains(
-                            query.toLowerCase(),
+                            widget.query.toLowerCase(),
                           ) ??
                           false);
                 }).toList();
@@ -634,29 +926,71 @@ class _DlqTab extends StatelessWidget {
             title: l10n.adminDlq,
             subtitle: l10n.adminDlqSubtitle,
             children: [
+              if (_selected.isNotEmpty) ...[
+                _AdminBatchBar(
+                  count: _selected.length,
+                  actionLabel: l10n.adminBatchRetryTasks,
+                  actionIcon: Icons.replay_rounded,
+                  onAction: () => _batchRetry(filtered),
+                  secondaryActionLabel: l10n.adminTaskDiscard,
+                  secondaryActionIcon: Icons.delete_outline_rounded,
+                  onSecondaryAction: () => _batchDiscard(filtered),
+                  onClear: () => setState(_selected.clear),
+                ),
+                const SizedBox(height: 8),
+              ],
               AdminDataTable(
+                showCheckboxes: true,
+                isChecked: (index) => _selected.contains(index),
+                onRowCheck:
+                    (index, value) => setState(() {
+                      value ? _selected.add(index) : _selected.remove(index);
+                    }),
+                onCheckAll: (value) {
+                  setState(() {
+                    _selected.clear();
+                    if (value) {
+                      for (var i = 0; i < filtered.length; i++) {
+                        _selected.add(i);
+                      }
+                    }
+                  });
+                },
+                allChecked:
+                    filtered.isNotEmpty && _selected.length == filtered.length,
+                someChecked:
+                    _selected.isNotEmpty && _selected.length < filtered.length,
                 showIndex: true,
-                minTableWidth: 860,
+                minTableWidth: 980,
+                // 两个 48px 图标按钮需 2×48 加余量，默认 168 偏宽。
+                actionColumnWidth: 112,
                 rowCount: filtered.length,
                 emptyState: AdminListEmptyState(
+                  // 无死信属健康态，与“筛选无匹配”区分，避免误读为异常。
                   message:
-                      query.isEmpty ? l10n.adminNoDlqTasks : l10n.adminNoMatch,
+                      widget.query.isEmpty
+                          ? l10n.adminDlqEmptyHealthy
+                          : l10n.adminNoMatch,
                 ),
                 columns: [
                   AdminListColumn(
+                    key: 'id',
+                    label: l10n.adminTaskIdColumn,
+                    minWidth: 120,
+                  ),
+                  AdminListColumn(
                     key: 'taskType',
                     label: l10n.adminFilterTaskType,
-                    flex: 2,
                   ),
                   AdminListColumn(
                     key: 'status',
                     label: l10n.adminTaskExecutionStatus,
-                    minWidth: 110,
+                    minWidth: 92,
                   ),
                   AdminListColumn(
                     key: 'progress',
                     label: l10n.adminProgress,
-                    minWidth: 100,
+                    minWidth: 76,
                   ),
                   AdminListColumn(
                     key: 'error',
@@ -671,7 +1005,19 @@ class _DlqTab extends StatelessWidget {
                 ],
                 rowCellsBuilder: (context, index) {
                   final item = filtered[index];
+                  // 丢弃确认以任务 ID 前 8 位短码为口令，列表同步展示短码，
+                  // 悬停可见完整 ID 便于日志检索。
+                  final shortId =
+                      item.id.length >= 8 ? item.id.substring(0, 8) : item.id;
                   return [
+                    AdminCellText(
+                      shortId,
+                      tooltipMessage: item.id,
+                      style: const TextStyle(
+                        fontFamily: AppTypography.monoFamily,
+                        fontFamilyFallback: AppTypography.monoFamilyFallback,
+                      ),
+                    ),
                     AdminCellText(
                       item.taskType,
                       style: const TextStyle(fontWeight: FontWeight.w600),
@@ -699,6 +1045,22 @@ class _DlqTab extends StatelessWidget {
                     AdminCellText(
                       item.updatedAt,
                       style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ];
+                },
+                actionsBuilder: (context, index) {
+                  final item = filtered[index];
+                  return [
+                    AdminRowIconAction(
+                      tooltip: l10n.adminRetry,
+                      icon: Icons.replay_outlined,
+                      onTap: () => widget.onRetry(item.id),
+                    ),
+                    AdminRowIconAction(
+                      tooltip: l10n.adminTaskDiscard,
+                      icon: Icons.delete_outline,
+                      color: context.adminColors.error,
+                      onTap: () => widget.onDiscard(item),
                     ),
                   ];
                 },

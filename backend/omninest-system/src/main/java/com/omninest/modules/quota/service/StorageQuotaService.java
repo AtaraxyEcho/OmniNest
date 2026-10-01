@@ -187,12 +187,12 @@ public class StorageQuotaService {
         }
         long oldQuota = user.quotaBytes();
         userStorageCommand.updateQuota(userId, newQuotaBytes);
-        auditRecorder.recordWithMetadata(
+        auditRecorder.recordWithPayload(
                 operatorId,
                 "ADMIN_QUOTA_UPDATE",
                 "auth_users",
                 userId,
-                Map.of("oldQuotaBytes", oldQuota, "newQuotaBytes", newQuotaBytes)
+                quotaAuditPayload(oldQuota, newQuotaBytes, operatorId)
         );
         log.info("已更新用户存储配额: userId={}, 旧配额={}, 新配额={}", userId, oldQuota, newQuotaBytes);
     }
@@ -234,12 +234,12 @@ public class StorageQuotaService {
             }
             long oldQuota = user.quotaBytes();
             userStorageCommand.updateQuota(userId, newQuotaBytes);
-            auditRecorder.recordWithMetadata(
+            auditRecorder.recordWithPayload(
                     operatorId,
                     "ADMIN_QUOTA_UPDATE",
                     "auth_users",
                     userId,
-                    Map.of("oldQuotaBytes", oldQuota, "newQuotaBytes", newQuotaBytes)
+                    quotaAuditPayload(oldQuota, newQuotaBytes, operatorId)
             );
             updated++;
         }
@@ -247,6 +247,24 @@ public class StorageQuotaService {
             log.info("批量更新用户存储配额: 目标 {} 人, 实际修改 {} 人, 新配额={} bytes", userIds.size(), updated, newQuotaBytes);
         }
         return updated;
+    }
+
+    /**
+     * 构建配额变更审计载荷，记录变更前后值与操作者。
+     *
+     * <p>配额字节数与操作者标识非敏感，可直接进入 detail_payload。</p>
+     *
+     * @param oldQuotaBytes 变更前配额字节数
+     * @param newQuotaBytes 变更后配额字节数
+     * @param operatorId 操作者用户 ID
+     * @return 变更上下文载荷
+     */
+    private Map<String, Object> quotaAuditPayload(long oldQuotaBytes, long newQuotaBytes, UUID operatorId) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("oldQuotaBytes", oldQuotaBytes);
+        payload.put("newQuotaBytes", newQuotaBytes);
+        payload.put("changeBy", operatorId.toString());
+        return payload;
     }
 
     /**

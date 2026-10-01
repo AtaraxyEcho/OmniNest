@@ -145,4 +145,25 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
             + "where (session.revokedAt is not null and session.revokedAt < :cutoff) "
             + "or session.expiresAt < :cutoff")
     int deleteInactiveBefore(@Param("cutoff") Instant cutoff);
+
+    /**
+     * 删除用户全部会话记录，供管理端物理删除空账户使用。
+     *
+     * @param userId 用户标识
+     * @return 删除数量
+     */
+    @Modifying
+    @Query("delete from AuthActiveSession session where session.userId = :userId")
+    int deleteByUserId(@Param("userId") UUID userId);
+
+    /**
+     * 统计截止时间之前已撤销或已过期的会话数量，谓词与 deleteInactiveBefore 保持一致。
+     *
+     * @param cutoff 截止时间
+     * @return 会话数量
+     */
+    @Query("select count(session) from AuthActiveSession session "
+            + "where (session.revokedAt is not null and session.revokedAt < :cutoff) "
+            + "or session.expiresAt < :cutoff")
+    long countInactiveBefore(@Param("cutoff") Instant cutoff);
 }

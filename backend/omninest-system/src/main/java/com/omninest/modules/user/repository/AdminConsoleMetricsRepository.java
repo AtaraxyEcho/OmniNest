@@ -54,6 +54,51 @@ public class AdminConsoleMetricsRepository {
         return taskRecord((Object[]) query.getSingleResult());
     }
 
+    /**
+     * 以预期状态为守卫把任务更新为终态并返回完整记录（PostgreSQL RETURNING 子句）。
+     *
+     * <p>用于管理员取消排队任务与丢弃死信任务：并发状态变化导致守卫不命中时
+     * 不更新任何行并抛出 NoResultException，由调用方转换为稳定业务错误。
+     * reason 非空时覆盖错误摘要（取消原因），为空时保留原死信错误摘要。</p>
+     *
+     * @param taskId 任务 ID
+     * @param status 目标终态
+     * @param expectedStatus 调用方刚读取到的状态守卫
+     * @param reason 覆盖写入的取消原因，可为 null
+     * @return 更新后的任务记录
+     */
+    public AdminOperationsDto.TaskRecordItem updateTaskTerminalReturning(
+            UUID taskId,
+            String status,
+            String expectedStatus,
+            String reason
+    ) {
+        var query = entityManager.createNativeQuery("""
+                with updated as (
+                    update omni.sys_tasks
+                    set status = :status,
+                        error_summary = coalesce(:reason, error_summary),
+                        next_retry_at = null,
+                        completed_at = now(),
+                        updated_at = now(),
+                        version = version + 1
+                    where id = :taskId and status = :expectedStatus
+                    returning *
+                )
+                select t.id, t.task_type, t.status, t.progress, t.routing_key,
+                       t.error_summary, t.retry_count, t.created_at, t.updated_at,
+                       t.owner_user_id,
+                       coalesce(nullif(a.display_name, ''), a.username) as owner_label
+                from updated t
+                left join omni.auth_users a on a.id = t.owner_user_id
+                """);
+        query.setParameter("taskId", taskId);
+        query.setParameter("status", status);
+        query.setParameter("expectedStatus", expectedStatus);
+        query.setParameter("reason", reason);
+        return taskRecord((Object[]) query.getSingleResult());
+    }
+
     // ── DTO 映射 ──────────────────────────────────────────────────────
 
     private AdminOperationsDto.TaskRecordItem taskRecord(Object[] row) {

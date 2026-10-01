@@ -115,6 +115,35 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         update(key, value, reason, changedBy);
     }
 
+    /**
+     * 查询配置键的审计上下文：是否敏感以及当前存储值。
+     *
+     * <p>供管理审计构建 detail_payload：敏感配置的旧值与新值必须以
+     * {@link ConfigHistoryDto#MASK} 呈现，禁止明文或密文进入审计载荷。</p>
+     *
+     * @param key 配置键
+     * @return 审计上下文；配置项不存在时 oldValue 为 null
+     */
+    @Transactional(readOnly = true)
+    public ConfigAuditContext auditContext(String key) {
+        boolean sensitive = ConfigDefinitionCatalog.find(key)
+                .map(ConfigDefinition::sensitive)
+                .orElse(false);
+        String oldValue = configEntryRepository.findByConfigKey(key)
+                .map(ConfigEntry::getConfigValue)
+                .orElse(null);
+        return new ConfigAuditContext(sensitive, oldValue);
+    }
+
+    /**
+     * 配置审计上下文。
+     *
+     * @param sensitive 配置是否敏感，敏感时任何值都必须掩码后进入审计载荷
+     * @param oldValue 当前存储值（敏感配置为密文，不得直接展示）
+     */
+    public record ConfigAuditContext(boolean sensitive, String oldValue) {
+    }
+
     @Transactional(readOnly = true)
     public List<ConfigHistoryDto> listHistory(String configKey) {
         ConfigDefinition definition = requireEditable(configKey);

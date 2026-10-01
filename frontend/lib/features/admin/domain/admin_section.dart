@@ -8,7 +8,6 @@ enum AdminSectionGroup {
 
 enum AdminSection {
   overview(group: AdminSectionGroup.overview, pathSegment: 'overview'),
-  monitoring(group: AdminSectionGroup.operations, pathSegment: 'monitoring'),
   logs(group: AdminSectionGroup.operations, pathSegment: 'logs'),
   tasks(group: AdminSectionGroup.operations, pathSegment: 'tasks'),
   sessions(group: AdminSectionGroup.operations, pathSegment: 'sessions'),
@@ -34,7 +33,6 @@ enum AdminSection {
   Set<String> get requiredAnyPermissions {
     return switch (this) {
       AdminSection.overview => {'system:config:read', 'system:user:read'},
-      AdminSection.monitoring ||
       AdminSection.logs ||
       AdminSection.sessions ||
       AdminSection.config ||

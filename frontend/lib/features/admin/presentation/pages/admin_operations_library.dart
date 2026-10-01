@@ -83,7 +83,7 @@ class _LibrarySourcesSectionState
     final button = OutlinedButton.icon(
       onPressed:
           canAdd
-              ? () => showDialog<void>(
+              ? () => showWorkstationDialog<void>(
                 context: context,
                 builder:
                     (dialogContext) => VideoLibrarySourceDialog(
@@ -114,20 +114,16 @@ class _LibrarySourcesSectionState
           .read(videoLibrarySourceActionsProvider)
           .scan(source.id);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(task.message)));
+        showOmniFeedback(context, task.message);
       }
     } on Exception catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.adminLoadFailed(
-                describeUserFacingError(error, l10n: l10n).message,
-              ),
-            ),
+        showOmniFeedback(
+          context,
+          l10n.adminLoadFailed(
+            describeUserFacingError(error, l10n: l10n).message,
           ),
+          severity: OmniFeedbackSeverity.error,
         );
       }
     } finally {
@@ -139,37 +135,25 @@ class _LibrarySourcesSectionState
 
   Future<void> _deleteSource(VideoLibrarySource source) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.adminLibraryDeleteSourceTitle),
-            content: Text(l10n.adminLibraryDeleteSourceBody(source.name)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(l10n.adminCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(l10n.adminStorageDeleteAction),
-              ),
-            ],
-          ),
+    // 删除属高危破坏性操作：走工位确认弹窗（默认聚焦取消、绯红警示线）。
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminLibraryDeleteSourceTitle,
+      message: l10n.adminLibraryDeleteSourceBody(source.name),
+      confirmLabel: l10n.adminStorageDeleteAction,
+      destructive: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     try {
       await ref.read(videoLibrarySourceActionsProvider).delete(source.id);
     } on Exception catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.adminLoadFailed(
-                describeUserFacingError(error, l10n: l10n).message,
-              ),
-            ),
+        showOmniFeedback(
+          context,
+          l10n.adminLoadFailed(
+            describeUserFacingError(error, l10n: l10n).message,
           ),
+          severity: OmniFeedbackSeverity.error,
         );
       }
       return;
@@ -195,17 +179,14 @@ class _LibrarySourcesSectionState
       return;
     }
     if (!mounted || orphans.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.adminLibraryOrphanLocation(orphans.length)),
-        action:
-            orphans.length == 1
-                ? SnackBarAction(
-                  label: l10n.adminLibraryCleanupOrphan,
-                  onPressed: () => _cleanupOrphanLocation(orphans.first),
-                )
-                : null,
-      ),
+    showOmniFeedback(
+      context,
+      l10n.adminLibraryOrphanLocation(orphans.length),
+      actionLabel: orphans.length == 1 ? l10n.adminLibraryCleanupOrphan : null,
+      onAction:
+          orphans.length == 1
+              ? () => _cleanupOrphanLocation(orphans.first)
+              : null,
     );
   }
 
@@ -219,14 +200,12 @@ class _LibrarySourcesSectionState
       // deleteStorageLocation 已安排合并失效，此处不再重复 invalidate。
     } on Exception catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.adminLoadFailed(
-                describeUserFacingError(error, l10n: l10n).message,
-              ),
-            ),
+        showOmniFeedback(
+          context,
+          l10n.adminLoadFailed(
+            describeUserFacingError(error, l10n: l10n).message,
           ),
+          severity: OmniFeedbackSeverity.error,
         );
       }
     }
@@ -236,7 +215,7 @@ class _LibrarySourcesSectionState
     VideoLibrarySource source,
     List<VideoStorageLocation> locations,
   ) {
-    showDialog<void>(
+    showWorkstationDialog<void>(
       context: context,
       builder:
           (dialogContext) =>
@@ -247,15 +226,13 @@ class _LibrarySourcesSectionState
   /// 打开访问管理弹窗：可见性与授权用户。
   void _openAccessDialog(VideoLibrarySource source) {
     final l10n = AppLocalizations.of(context);
-    showDialog<void>(
+    showWorkstationDialog<void>(
       context: context,
       builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.adminLibraryAccessTitle),
-            content: SizedBox(
-              width: 420,
-              child: MediaLibraryAccessPanel(source: source),
-            ),
+          (dialogContext) => WorkstationDialogFrame(
+            title: l10n.adminLibraryAccessTitle,
+            width: 480,
+            body: MediaLibraryAccessPanel(source: source),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(),
@@ -268,7 +245,7 @@ class _LibrarySourcesSectionState
 
   /// 打开媒体库管理窗口：父子嵌套布局承载库源信息与审阅工作区。
   void _openManageWindow(VideoLibrarySource source, String locationName) {
-    showDialog<void>(
+    showWorkstationDialog<void>(
       context: context,
       builder:
           (dialogContext) =>
@@ -317,9 +294,12 @@ class _LibrarySourcesSectionState
       children: [
         AdminDataTable(
           showIndex: true,
-          minTableWidth: 1080,
+          // 列宽分配：库名称固定窄列，存储位置与扫描摘要承担弹性，
+          // 补充可见性/健康字段消耗富余宽度；列增多后 1040 下限，
+          // 窄视口横向滚动优于挤压。
+          minTableWidth: 1040,
           // 4 个操作按钮在触控密度下需 4×48，默认 168 宽度会横向溢出。
-          actionColumnWidth: 200,
+          actionColumnWidth: 168,
           rowCount: filtered.length,
           onRowTap:
               (index) => _openManageWindow(
@@ -333,39 +313,52 @@ class _LibrarySourcesSectionState
                     : l10n.adminNoMatch,
           ),
           columns: [
+            // 库名称固定窄列（名称就几个字，不给弹性）；宽度让给补充的
+            // 可见性/健康字段，存储位置与扫描摘要承担弹性。
             AdminListColumn(
               key: 'name',
               label: l10n.adminLibraryColumnName,
-              flex: 2,
+              minWidth: 150,
             ),
             AdminListColumn(
               key: 'location',
               label: l10n.adminLibraryColumnLocation,
-              flex: 2,
+              flex: 1,
             ),
             AdminListColumn(
               key: 'type',
               label: l10n.videoLibraryType,
-              minWidth: 100,
+              minWidth: 90,
+            ),
+            AdminListColumn(
+              key: 'visibility',
+              label: l10n.adminLibraryColumnVisibility,
+              minWidth: 92,
             ),
             AdminListColumn(
               key: 'scanStatus',
               label: l10n.adminLibraryColumnScanStatus,
-              minWidth: 110,
+              minWidth: 100,
             ),
             AdminListColumn(
               key: 'lastScan',
               label: l10n.adminLibraryColumnLastScan,
-              minWidth: 200,
+              flex: 1,
+            ),
+            AdminListColumn(
+              key: 'health',
+              label: l10n.adminLibraryColumnHealth,
+              minWidth: 100,
             ),
             AdminListColumn(
               key: 'status',
               label: l10n.adminFilterStatus,
-              minWidth: 90,
+              minWidth: 80,
             ),
           ],
           rowCellsBuilder: (context, index) {
             final source = filtered[index];
+            final scheme = Theme.of(context).colorScheme;
             return [
               AdminCellText(
                 source.name,
@@ -373,12 +366,31 @@ class _LibrarySourcesSectionState
               ),
               AdminCellText(
                 '${locationName(source)} · ${source.relativeRoot}',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: TextStyle(
+                  fontFamily: AppTypography.monoFamily,
+                  fontFamilyFallback: AppTypography.monoFamilyFallback,
+                  fontSize: AppTypography.labelSmall,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              Tooltip(
+                message:
+                    _isManagedCatalogRoot(source.relativeRoot)
+                        ? l10n.adminLibrarySourceManaged
+                        : l10n.adminLibrarySourceCustom,
+                child: AdminCellText(
+                  _libraryTypeLabel(l10n, source.libraryType),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
               AdminCellText(
-                '${_libraryTypeLabel(l10n, source.libraryType)} · '
-                '${_isManagedCatalogRoot(source.relativeRoot) ? l10n.adminLibrarySourceManaged : l10n.adminLibrarySourceCustom}',
-                style: Theme.of(context).textTheme.bodySmall,
+                source.visibility.name,
+                style: TextStyle(
+                  fontFamily: AppTypography.monoFamily,
+                  fontFamilyFallback: AppTypography.monoFamilyFallback,
+                  fontSize: AppTypography.labelSmall,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
               AdminStatusTag(
                 label: _scanStatusLabel(l10n, source.scanStatus),
@@ -387,6 +399,13 @@ class _LibrarySourcesSectionState
               AdminCellText(
                 _lastScanSummary(l10n, source),
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+              AdminStatusTag(
+                label: source.healthStatus,
+                tone:
+                    source.healthStatus.toUpperCase() == 'AVAILABLE'
+                        ? AdminTagTone.success
+                        : AdminTagTone.warning,
               ),
               AdminStatusTag(
                 label:
@@ -404,35 +423,30 @@ class _LibrarySourcesSectionState
             final source = filtered[index];
             final scanning = _scanningSourceId == source.id;
             return [
-              IconButton(
+              AdminRowIconAction(
                 tooltip: l10n.adminLibraryDiscoverUpdates,
-                icon:
-                    scanning
-                        ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.manage_search_rounded, size: 20),
-                onPressed:
+                icon: Icons.manage_search_outlined,
+                busy: scanning,
+                onTap:
                     canManage && source.enabled && !scanning
                         ? () => _discoverUpdates(source)
                         : null,
               ),
-              IconButton(
+              AdminRowIconAction(
                 tooltip: l10n.adminLibraryAccessTitle,
-                icon: const Icon(Icons.people_outline_rounded, size: 20),
-                onPressed: canManage ? () => _openAccessDialog(source) : null,
+                icon: Icons.people_outline,
+                onTap: canManage ? () => _openAccessDialog(source) : null,
               ),
-              IconButton(
+              AdminRowIconAction(
                 tooltip: l10n.videoEditLibrarySource,
-                icon: const Icon(Icons.edit_outlined, size: 20),
-                onPressed:
-                    canManage ? () => _editSource(source, locations) : null,
+                icon: Icons.edit_outlined,
+                onTap: canManage ? () => _editSource(source, locations) : null,
               ),
-              IconButton(
+              AdminRowIconAction(
                 tooltip: l10n.adminLibraryDeleteSourceTitle,
-                icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                onPressed: canManage ? () => _deleteSource(source) : null,
+                icon: Icons.delete_outline,
+                color: context.adminColors.error,
+                onTap: canManage ? () => _deleteSource(source) : null,
               ),
             ];
           },
@@ -474,11 +488,18 @@ class _LibraryManageWindowState extends State<_LibraryManageWindow> {
       280.0,
       520.0,
     );
-    return Dialog(
-      child: ConstrainedBox(
+    // 工位弹窗容器：surfaceContainer 底 + 1px outline 强边框，零阴影零圆角，
+    // 与 WorkstationDialogFrame 同壳；窗口内容为自定义父子嵌套布局。
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainer,
+      child: Container(
         constraints: BoxConstraints(
           maxWidth: 920,
           maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        ),
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outline, width: 1),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

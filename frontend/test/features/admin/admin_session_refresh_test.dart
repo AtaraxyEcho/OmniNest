@@ -92,9 +92,17 @@ void main() {
     when(
       () => api.updateUserRoles(any(), any()),
     ).thenAnswer((_) async => updatedUser);
-    when(
-      () => api.listUsers(page: any(named: 'page'), size: any(named: 'size')),
-    ).thenAnswer((_) async => (items: <AdminUser>[], total: 0));
+    when(() {
+      // build 首拉与 _fetch 回刷都携带完整命名参数。
+      return api.listUsers(
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+        query: any(named: 'query'),
+        role: any(named: 'role'),
+        sort: any(named: 'sort'),
+        dir: any(named: 'dir'),
+      );
+    }).thenAnswer((_) async => (items: <AdminUser>[], total: 0));
     final container = ProviderContainer.test(
       overrides: [
         adminUserApiProvider.overrideWithValue(api),

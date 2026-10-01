@@ -80,8 +80,44 @@ class AdminExternalStoragePage extends ConsumerWidget {
                                   for (final app in items)
                                     _InfoRow(
                                       leading: app.connectorCode,
-                                      middle:
-                                          '${app.clientId}\n${app.redirectUri}',
+                                      // clientId 为长技术标识：mono 展示，
+                                      // 截断时悬停可见完整值。
+                                      middleChild: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          AdminCellText(
+                                            app.clientId,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  AppTypography.monoFamily,
+                                              fontFamilyFallback:
+                                                  AppTypography
+                                                      .monoFamilyFallback,
+                                              fontSize: AppTypography.bodySmall,
+                                              height: 16 / 12,
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            app.redirectUri,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  context
+                                                      .adminColors
+                                                      .onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                       trailing: AdminStatusPill(
                                         label:
                                             app.enabled
@@ -117,9 +153,46 @@ class AdminExternalStoragePage extends ConsumerWidget {
                     for (final item in filtered)
                       _InfoRow(
                         leading: item.displayName,
-                        middle:
-                            '${l10n.adminExternalStorageOwner} ${_shortId(item.ownerUserId)}\n'
-                            '${item.provider}\n${item.updatedAt}',
+                        // Provider 编码上浮为标题行 mono 徽标，与样板实例行一致。
+                        codeBadge: item.provider,
+                        // 所有者 ID 以 mono 短码呈现，与列表类页面的
+                        // 技术标识展示形态一致。
+                        middleChild: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text.rich(
+                              TextSpan(
+                                text: '${l10n.adminExternalStorageOwner} ',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: context.adminColors.onSurfaceVariant,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: _shortId(item.ownerUserId),
+                                    style: TextStyle(
+                                      fontFamily: AppTypography.monoFamily,
+                                      fontFamilyFallback:
+                                          AppTypography.monoFamilyFallback,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.updatedAt,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: context.adminColors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
                         trailing: Wrap(
                           spacing: 8,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -170,7 +243,7 @@ const List<AppDropdownItem<String>> _oauthConnectorItems = [
 ];
 
 Future<void> _showOAuthAppDialog(BuildContext context) {
-  return showDialog<void>(
+  return showWorkstationDialog<void>(
     context: context,
     builder: (_) => const _OAuthAppDialog(),
   );
@@ -276,75 +349,67 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return AlertDialog(
-      title: Text(l10n.adminOAuthAppsTitle),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppDropdown<String>(
-                value: _connectorCode,
-                items: _oauthConnectorItems,
-                onChanged:
-                    (value) => setState(() {
-                      _connectorCode = value ?? 'ONEDRIVE';
-                      _syncRedirectPrefill();
-                    }),
-                label: l10n.adminType,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _clientIdController,
-                decoration: InputDecoration(
-                  labelText: l10n.adminExternalStorageClientId,
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _clientSecretController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: l10n.adminExternalStorageClientSecret,
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _redirectController,
-                decoration: InputDecoration(
-                  labelText: l10n.adminExternalStorageRedirectUri,
-                  helperText: l10n.adminOAuthRedirectHint,
-                  helperMaxLines: 2,
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              // 紧凑单行开关，避免 SwitchListTile 在宽对话框中把标签与开关拉开。
-              Row(
-                children: [
-                  Expanded(child: Text(l10n.adminEnabled)),
-                  Switch(
-                    value: _enabled,
-                    onChanged: (value) => setState(() => _enabled = value),
-                  ),
-                ],
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 14),
-                Text(
-                  _errorMessage!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: context.adminColors.error,
-                  ),
-                ),
-              ],
-            ],
+    return WorkstationDialogFrame(
+      title: l10n.adminOAuthAppsTitle,
+      width: 480,
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppDropdown<String>(
+            value: _connectorCode,
+            items: _oauthConnectorItems,
+            onChanged:
+                (value) => setState(() {
+                  _connectorCode = value ?? 'ONEDRIVE';
+                  _syncRedirectPrefill();
+                }),
+            label: l10n.adminType,
           ),
-        ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _clientIdController,
+            decoration: InputDecoration(
+              labelText: l10n.adminExternalStorageClientId,
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _clientSecretController,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: l10n.adminExternalStorageClientSecret,
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _redirectController,
+            decoration: InputDecoration(
+              labelText: l10n.adminExternalStorageRedirectUri,
+              helperText: l10n.adminOAuthRedirectHint,
+              helperMaxLines: 2,
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 工位开关行：label 左、开关右，整行可点，替代 Material 胶囊开关。
+          WorkstationToggle(
+            label: l10n.adminEnabled,
+            value: _enabled,
+            onChanged: (value) => setState(() => _enabled = value),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              _errorMessage!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: context.adminColors.error),
+            ),
+          ],
+        ],
       ),
       actions: [
         TextButton(
@@ -361,11 +426,20 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
 }
 
 class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({required this.children});
+  const _MetricGrid({
+    required this.children,
+    this.maxColumns = 3,
+    this.cardExtent = 128,
+  });
 
   final List<Widget> children;
 
-  /// 单卡固定高度；内容较多的页面（如监控页含 supporting 行）可调大。
+  /// 列数上限：默认 3 列（>=560 断点）；传 4 时宽屏走 4 列、中屏 2 列。
+  final int maxColumns;
+
+  /// 单卡固定高度；内容较多的页面（如含 supporting 行的分布卡）可调大。
+
+  final double cardExtent;
 
   @override
   Widget build(BuildContext context) {
@@ -374,12 +448,16 @@ class _MetricGrid extends StatelessWidget {
         MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5).toDouble();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 560 ? 3 : 1;
+        final width = constraints.maxWidth;
+        final columns =
+            maxColumns >= 4
+                ? (width >= 1080 ? 4 : (width >= 560 ? 2 : 1))
+                : (width >= 560 ? 3 : 1);
         return GridView.count(
           crossAxisCount: columns,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          mainAxisExtent: 128 * textScale,
+          mainAxisExtent: cardExtent * textScale,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: children,
@@ -392,13 +470,27 @@ class _MetricGrid extends StatelessWidget {
 class _InfoRow extends StatelessWidget {
   const _InfoRow({
     required this.leading,
-    required this.middle,
     required this.trailing,
+    this.middle,
+    this.codeBadge,
+    this.titleTrailing,
+    this.middleChild,
   });
 
   final String leading;
-  final String middle;
+
+  /// 中部说明文本；传入 [middleChild] 时忽略。
+  final String? middle;
   final Widget trailing;
+
+  /// 标题右侧的等宽代码徽标（如角色编码、Provider 编码）。
+  final String? codeBadge;
+
+  /// 标题行内追加的徽标/统计区（紧跟 codeBadge，窄屏自动换行）。
+  final Widget? titleTrailing;
+
+  /// 自定义中部内容；传入时忽略 [middle] 文本。
+  final Widget? middleChild;
 
   @override
   Widget build(BuildContext context) {
@@ -406,12 +498,9 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 14),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: context.adminColors.surfaceContainerLow.withValues(
-            alpha: 0.42,
-          ),
-          borderRadius: BorderRadius.circular(16),
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
           border: Border.all(
-            color: context.adminColors.outlineVariant.withValues(alpha: 0.18),
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
         child: Padding(
@@ -419,8 +508,11 @@ class _InfoRow extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 720;
-              final content = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // 标题行改为 Wrap：名称、code 徽标与统计同行排布，窄屏自然换行。
+              final titleRow = Wrap(
+                spacing: 10,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     leading,
@@ -429,15 +521,22 @@ class _InfoRow extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  if (codeBadge != null) _MonoCodeBadge(codeBadge!),
+                  if (titleTrailing != null) titleTrailing!,
+                ],
+              );
+              final middleContent =
+                  middleChild ??
                   Text(
-                    middle,
+                    middle ?? '',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: context.adminColors.onSurfaceVariant,
                       height: 1.5,
                     ),
-                  ),
-                ],
+                  );
+              final content = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [titleRow, const SizedBox(height: 5), middleContent],
               );
 
               if (!isWide) {
@@ -485,26 +584,6 @@ class _EmptyText extends StatelessWidget {
   }
 }
 
-String _detailText(Map<String, String> detail, AppLocalizations l10n) {
-  if (detail.isEmpty) {
-    return l10n.adminNoDetailDiagnostics;
-  }
-  return detail.entries
-      .map((entry) => '${entry.key}: ${entry.value}')
-      .take(5)
-      .join('\n');
-}
-
-Color _seriesColor(String metric, AdminColors adminColors) {
-  return switch (metric) {
-    'cpu' => adminColors.tertiary,
-    'memory' => adminColors.info,
-    'jvmHeap' => adminColors.primary,
-    'tasks' => adminColors.success,
-    _ => adminColors.onSurfaceVariant,
-  };
-}
-
 /// 需要以 GB 为单位展示的字节类配置键。
 const _gbValueConfigs = {'storage.quota.default', 'storage.quota.default.gb'};
 
@@ -530,14 +609,4 @@ String _formatConfigValue(String key, String value) {
   final bytes = int.tryParse(value) ?? 0;
   final gb = bytes / (1024 * 1024 * 1024);
   return '${gb.toStringAsFixed(1)} GB';
-}
-
-Color _statusColor(String status, AdminColors adminColors) {
-  return switch (status) {
-    'UP' || 'ACTIVE' || 'COMPLETED' => adminColors.success,
-    'WARN' => adminColors.warning,
-    'DOWN' || 'FAILED' || 'DLQ' || 'DISABLED' => adminColors.error,
-    'RUNNING' => adminColors.info,
-    _ => adminColors.tertiary,
-  };
 }

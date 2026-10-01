@@ -11,6 +11,8 @@ class AdminUser {
     this.displayName,
     this.email,
     this.avatarUrl,
+    this.createdAt,
+    this.twoFactorEnabled = false,
   });
 
   factory AdminUser.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,8 @@ class AdminUser {
       permissions: _stringSet(json['permissions']),
       quotaBytes: _intValue(json['quotaBytes']),
       usedBytes: _intValue(json['usedBytes']),
+      createdAt: json['createdAt']?.toString(),
+      twoFactorEnabled: json['twoFactorEnabled'] == true,
     );
   }
 
@@ -40,6 +44,12 @@ class AdminUser {
   final Set<String> permissions;
   final int quotaBytes;
   final int usedBytes;
+
+  /// 创建时间（后端 ISO-8601 字符串）；旧负载缺省为空。
+  final String? createdAt;
+
+  /// 是否已确认启用两步验证；仅管理列表端点填充。
+  final bool twoFactorEnabled;
 
   String get title =>
       displayName == null || displayName!.isEmpty ? username : displayName!;

@@ -11,10 +11,21 @@ class AdminUserApi {
   Future<({List<AdminUser> items, int total})> listUsers({
     int page = 0,
     int size = 50,
+    String query = '',
+    String role = 'ALL',
+    String sort = 'username',
+    String dir = 'asc',
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/admin/users',
-      queryParameters: {'page': page, 'size': size},
+      queryParameters: {
+        'page': page,
+        'size': size,
+        if (query.trim().isNotEmpty) 'query': query.trim(),
+        if (role.isNotEmpty && role != 'ALL') 'role': role,
+        'sort': sort,
+        'dir': dir,
+      },
     );
     return parseUserPageResponse(response.data);
   }
@@ -61,6 +72,33 @@ class AdminUserApi {
     if (data is int) return data;
     if (data is num) return data.toInt();
     return int.tryParse(data?.toString() ?? '') ?? 0;
+  }
+
+  /// 批量更新用户状态（启用/禁用）：逐项执行，失败项计入 failedIds。
+  Future<({int successCount, List<String> failedIds})> batchUpdateUserStatus(
+    List<String> userIds,
+    String status,
+  ) async {
+    final response = await apiClient.dio.patch<Map<String, dynamic>>(
+      '/admin/users/status/batch',
+      data: {'userIds': userIds, 'status': status},
+    );
+    final data = parseData(response.data);
+    final successCount = (data['successCount'] as num?)?.toInt() ?? 0;
+    final failedIds =
+        (data['failedIds'] as List? ?? [])
+            .map((item) => item.toString())
+            .toList();
+    return (successCount: successCount, failedIds: failedIds);
+  }
+
+  /// 删除空账户用户；后端对自我删除、SUPER_ADMIN 与仍有内容归属的账户
+  /// 返回业务错误，由调用方原样展示。
+  Future<void> deleteUser(String userId) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/admin/users/$userId',
+    );
+    parseEnvelope(response.data);
   }
 
   ({List<AdminUser> items, int total}) parseUserPageResponse(

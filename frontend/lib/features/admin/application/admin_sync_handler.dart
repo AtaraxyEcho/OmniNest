@@ -14,6 +14,14 @@ class AdminSyncHandler implements RealtimeScopeHandler {
   final Ref ref;
   final RealtimeRevisionTracker _auxiliaryRevisions = RealtimeRevisionTracker();
 
+  /// 影响用户列表口径的资源类型：账户增删改（含状态、角色、配额）与
+  /// 角色定义变更。配置、任务、DLQ、会话、审计清理等事件与用户表
+  /// 无关，不得触发刷新，否则会把列表的当前页与批量选中集一并重置。
+  static const Set<String> _userListResourceTypes = {
+    'auth_users',
+    'auth_roles',
+  };
+
   @override
   RealtimeScope get scope => RealtimeScope.admin;
 
@@ -34,6 +42,12 @@ class AdminSyncHandler implements RealtimeScopeHandler {
   @override
   Future<bool> refresh(List<RealtimeInvalidation> invalidations) async {
     final auxiliary = _auxiliaryRevisions.pending(invalidations);
+    final userListEvents = auxiliary
+        .where(
+          (invalidation) =>
+              _userListResourceTypes.contains(invalidation.resourceType),
+        )
+        .toList(growable: false);
     final refreshes = <Future<Object?>>[];
     if (auxiliary.isNotEmpty && ref.exists(adminConsoleSummaryProvider)) {
       refreshes.add(ref.refresh(adminConsoleSummaryProvider.future));
@@ -42,9 +56,12 @@ class AdminSyncHandler implements RealtimeScopeHandler {
       _refreshMountedProviders(refreshes);
     }
     await Future.wait(refreshes);
-    _auxiliaryRevisions.markCompleted(auxiliary);
+    // 用户表事件单独标记：其刷新抛错时保持未完成，下一轮重试仍会触发。
+    _auxiliaryRevisions.markCompleted(
+      auxiliary.where((event) => !userListEvents.contains(event)),
+    );
     var refreshedMainModule = false;
-    if (ref.exists(adminUserControllerProvider)) {
+    if (userListEvents.isNotEmpty && ref.exists(adminUserControllerProvider)) {
       await ref.read(adminUserControllerProvider.future);
       await ref.read(adminUserControllerProvider.notifier).refreshUsers();
       refreshedMainModule = true;
@@ -55,6 +72,7 @@ class AdminSyncHandler implements RealtimeScopeHandler {
       refreshedMainModule = true;
     }
     if (!refreshedMainModule) return false;
+    _auxiliaryRevisions.markCompleted(userListEvents);
     _auxiliaryRevisions.clear(invalidations);
     return true;
   }
@@ -79,9 +97,6 @@ class AdminSyncHandler implements RealtimeScopeHandler {
     }
     if (ref.exists(adminLogsProvider)) {
       refreshes.add(ref.refresh(adminLogsProvider.future));
-    }
-    if (ref.exists(adminMonitoringProvider)) {
-      refreshes.add(ref.refresh(adminMonitoringProvider.future));
     }
     // 存储相关 Provider 使用合并刷新，避免与挂载创建流程同帧多次 rebuild。
     if (ref.exists(adminStorageProvider) ||

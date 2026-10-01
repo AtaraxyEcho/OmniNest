@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
-import 'package:omninest/features/admin/domain/admin_paging.dart';
 
 class AdminPageHeader extends StatelessWidget {
   const AdminPageHeader({
@@ -70,6 +68,14 @@ class AdminPageHeader extends StatelessWidget {
   }
 }
 
+/// 管理指标卡（紧凑形态）：标题行 + 大数值 + 单行明细 + 单行 supporting
+/// 徽标区与 3px 进度槽，内容整体按最小高度收缩，不再使用 Spacer 撑开。
+///
+/// 定高卡在超大字号下内容超出时按纯裁剪降级（ClipRect + OverflowBox），
+/// 不抛 RenderFlex 溢出异常；卡内不得存在任何 Scrollable 后代，
+/// 否则桌面端指针悬停会浮现卡片级滚动条，与页面级滚动条叠加。
+/// 卡高与字号缩放由外层指标网格统一钳制；supporting 与进度槽间距
+/// 按 132 基准高收紧（7/8），使 supporting+progress 组合天然放得下。
 class AdminMetricCard extends StatelessWidget {
   const AdminMetricCard({
     required this.title,
@@ -97,56 +103,77 @@ class AdminMetricCard extends StatelessWidget {
     final c = context.adminColors;
     final resolvedAccent = accent ?? c.primary;
     return WorkbenchPanel(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      borderRadius: 0,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+      child: ClipRect(
+        // 固定卡高下的兜底：OverflowBox 放开子级高度约束，Column 按固有
+        // 高度布局，超出部分由 ClipRect 在内容盒边缘裁剪；不引入
+        // Scrollable，悬停不会触发桌面端 ScrollConfiguration 滚动条。
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          maxHeight: double.infinity,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontSize: AppTypography.labelSmall,
+                        height: 14 / 11,
+                        color: c.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(icon, size: 16, color: resolvedAccent),
+                ],
+              ),
+              const SizedBox(height: 6),
               Text(
-                title,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontSize: AppTypography.bodySmall,
-                  height: 16 / 12,
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontSize: AppTypography.titleLarge,
+                  height: 24 / 20,
+                  color: resolvedAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontSize: AppTypography.labelSmall,
+                  height: 14 / 11,
                   color: c.onSurfaceVariant,
                 ),
               ),
-              const Spacer(),
-              Icon(icon, color: resolvedAccent),
+              if (supporting.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                ConstrainedBox(
+                  // supporting 固定单行：折行内容直接裁剪，保持紧凑卡高度稳定。
+                  constraints: const BoxConstraints(maxHeight: 28),
+                  child: Wrap(spacing: 6, runSpacing: 6, children: supporting),
+                ),
+              ],
+              if (progress != null) ...[
+                const SizedBox(height: 8),
+                _MetricProgress(value: progress!, color: resolvedAccent),
+              ],
+              if (footer != null) ...[const SizedBox(height: 8), footer!],
             ],
           ),
-          if (supporting.isEmpty && progress == null && footer == null)
-            const Spacer()
-          else
-            const SizedBox(height: 14),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: AppTypography.headlineMedium,
-              height: 34 / 28,
-              color: resolvedAccent,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            detail,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontSize: AppTypography.bodySmall,
-              height: 16 / 12,
-              color: c.onSurfaceVariant,
-            ),
-          ),
-          if (supporting.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Wrap(spacing: 8, runSpacing: 8, children: supporting),
-          ],
-          if (progress != null) ...[
-            const Spacer(),
-            _MetricProgress(value: progress!, color: resolvedAccent),
-          ],
-          if (footer != null) ...[const SizedBox(height: 10), footer!],
-        ],
+        ),
       ),
     );
   }
@@ -170,8 +197,7 @@ class AdminMetricMiniStat extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvedColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: resolvedColor.withValues(alpha: 0.16)),
+        border: Border.all(color: resolvedColor.withValues(alpha: 0.28)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -208,30 +234,20 @@ class _MetricProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeValue = value.clamp(0, 1).toDouble();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: safeValue,
           child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: context.adminColors.surfaceContainerHighest.withValues(
-                alpha: 0.42,
-              ),
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: safeValue,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(color: color),
-                  child: const SizedBox(height: 6),
-                ),
-              ),
-            ),
+            decoration: BoxDecoration(color: color),
+            child: const SizedBox(height: 3),
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -248,7 +264,6 @@ class AdminStatusPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: resolvedColor.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
         border: Border.all(color: resolvedColor.withValues(alpha: 0.28)),
       ),
       child: Padding(
@@ -288,6 +303,8 @@ class AdminInfoPanel extends StatelessWidget {
     required this.children,
     this.trailing,
     this.expandBody = false,
+    this.padding,
+    this.headerDivider = false,
     super.key,
   });
 
@@ -299,6 +316,14 @@ class AdminInfoPanel extends StatelessWidget {
   /// 为 true 时内容区吃满父级有界高度，children 中可使用 Expanded。
   /// 仅用于已用 SizedBox/Expanded 限高的并排面板；页面纵向流式布局须保持 false。
   final bool expandBody;
+
+  /// 面板内边距；null 时沿用工作台面板默认 24。
+  /// 样板控制台卡片为 p-5（20），页面按样板传值。
+  final EdgeInsetsGeometry? padding;
+
+  /// 为 true 时标题区带 1px 底部分隔线（样板 pb-4 border-b mb-4 形态），
+  /// 标题区与内容间距收拢为 16。
+  final bool headerDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -332,12 +357,28 @@ class AdminInfoPanel extends StatelessWidget {
         if (trailing != null) ...[const SizedBox(width: 16), trailing!],
       ],
     );
+    final headerBlock =
+        headerDivider
+            ? Container(
+              padding: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+              ),
+              child: header,
+            )
+            : header;
     return WorkbenchPanel(
+      borderRadius: 0,
+      padding: padding ?? const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          header,
-          const SizedBox(height: 22),
+          headerBlock,
+          SizedBox(height: headerDivider ? 16 : 22),
           if (expandBody)
             Expanded(
               child: SizedBox(
@@ -374,6 +415,7 @@ class AdminEmptyFeature extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.adminColors;
     return WorkbenchPanel(
+      borderRadius: 0,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -385,7 +427,7 @@ class AdminEmptyFeature extends StatelessWidget {
                 height: 64,
                 decoration: BoxDecoration(
                   color: c.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: c.outlineVariant),
                 ),
                 child: Icon(icon, color: c.primary, size: 30),
               ),
@@ -417,55 +459,6 @@ class AdminEmptyFeature extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class AdminPaginationBar extends StatelessWidget {
-  const AdminPaginationBar({
-    required this.page,
-    required this.onPrevious,
-    required this.onNext,
-    super.key,
-  });
-
-  final AdminPage<Object?> page;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final totalPages = page.totalPages == 0 ? 1 : page.totalPages;
-    return Wrap(
-      alignment: WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 8,
-      runSpacing: 4,
-      children: [
-        Text(
-          l10n.adminPageIndicator(page.page + 1, totalPages),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: context.adminColors.onSurfaceVariant,
-          ),
-        ),
-        Text(
-          l10n.adminTotalCount('${page.totalElements}'),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: context.adminColors.onSurfaceVariant,
-          ),
-        ),
-        IconButton(
-          tooltip: l10n.adminPreviousPage,
-          onPressed: onPrevious,
-          icon: const Icon(Icons.chevron_left_rounded),
-        ),
-        IconButton(
-          tooltip: l10n.adminNextPage,
-          onPressed: onNext,
-          icon: const Icon(Icons.chevron_right_rounded),
-        ),
-      ],
     );
   }
 }

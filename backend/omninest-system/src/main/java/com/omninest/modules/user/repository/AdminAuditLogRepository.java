@@ -19,6 +19,22 @@ public class AdminAuditLogRepository {
      * 插入审计日志记录。
      */
     public void insert(UUID actorUserId, String action, String resourceType, UUID resourceId, Map<String, Object> metadata) {
+        insert(actorUserId, action, resourceType, resourceId, metadata, null);
+    }
+
+    /**
+     * 插入审计日志记录并写入变更上下文载荷。
+     *
+     * @param detailPayload 已序列化的变更上下文 JSON 字符串，敏感值必须先掩码，可为 null
+     */
+    public void insert(
+            UUID actorUserId,
+            String action,
+            String resourceType,
+            UUID resourceId,
+            Map<String, Object> metadata,
+            String detailPayload
+    ) {
         AuditLog log = new AuditLog();
         log.setId(UUID.randomUUID());
         log.setActorUserId(actorUserId);
@@ -26,6 +42,7 @@ public class AdminAuditLogRepository {
         log.setResourceType(resourceType);
         log.setResourceId(resourceId);
         log.setMetadata(metadata == null ? Map.of() : metadata);
+        log.setDetailPayload(detailPayload);
         entityManager.persist(log);
     }
 }

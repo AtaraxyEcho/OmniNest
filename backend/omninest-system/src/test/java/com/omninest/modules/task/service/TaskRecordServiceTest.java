@@ -136,7 +136,8 @@ class TaskRecordServiceTest {
         List<String> statuses = List.of(
                 TaskStatus.COMPLETED.getValue(),
                 TaskStatus.FAILED.getValue(),
-                TaskStatus.CANCELLED.getValue()
+                TaskStatus.CANCELLED.getValue(),
+                TaskStatus.DISCARDED.getValue()
         );
         List<UUID> taskIds = List.of(UUID.randomUUID(), UUID.randomUUID());
         Mockito.when(taskRecordRepository.findIdsByStatusInAndUpdatedAtBefore(

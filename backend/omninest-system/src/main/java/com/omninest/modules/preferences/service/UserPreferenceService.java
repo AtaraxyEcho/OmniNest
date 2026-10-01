@@ -231,4 +231,14 @@ public class UserPreferenceService implements UserPreferenceQuery {
                 Map.of("scope", scope)
         ));
     }
+
+    /**
+     * 管理端账户删除配套：物理清空该用户全部偏好记录。
+     *
+     * @param ownerUserId 用户标识
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void adminPurgeForUser(UUID ownerUserId) {
+        userPreferenceRepository.deleteByOwnerUserId(ownerUserId);
+    }
 }

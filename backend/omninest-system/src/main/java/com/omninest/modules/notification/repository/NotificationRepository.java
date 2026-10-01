@@ -23,6 +23,14 @@ public interface NotificationRepository extends JpaRepository<NotificationMessag
     List<NotificationMessage> findByRecipientUserIdOrderByCreatedAtDesc(UUID recipientUserId, Pageable pageable);
 
     /**
+     * 分页查询用户未读通知，按创建时间倒序。
+     */
+    List<NotificationMessage> findByRecipientUserIdAndReadAtIsNullOrderByCreatedAtDesc(
+            UUID recipientUserId,
+            Pageable pageable
+    );
+
+    /**
      * 按接收用户读取指定通知。
      *
      * @param id 通知标识

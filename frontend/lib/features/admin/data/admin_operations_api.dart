@@ -1,6 +1,5 @@
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/admin/data/admin_api_response.dart';
-import 'package:omninest/features/admin/data/admin_monitoring_dto.dart';
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
@@ -27,6 +26,24 @@ class AdminOperationsApi {
       data: {'permissions': permissions.toList()},
     );
     return AdminRoleDetail.fromJson(parseData(response.data));
+  }
+
+  /// 创建自定义角色：code 须以 ROLE_ 开头（大写字母/数字/下划线），
+  /// baseTemplate 为 none/member/admin 时克隆对应内置角色权限。
+  Future<AdminRoleDetail> createRole(AdminCreateRoleInput input) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/roles',
+      data: input.toJson(),
+    );
+    return AdminRoleDetail.fromJson(parseData(response.data));
+  }
+
+  /// 删除自定义角色：内置角色或仍有用户绑定时后端返回业务错误。
+  Future<void> deleteRole(String roleCode) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/admin/roles/$roleCode',
+    );
+    parseData(response.data);
   }
 
   Future<AdminConfigManagementView> configs() async {
@@ -111,6 +128,22 @@ class AdminOperationsApi {
     return AdminTaskRecord.fromJson(parseData(response.data));
   }
 
+  /// 取消排队或等待重试的任务；非法状态下后端返回业务错误。
+  Future<AdminTaskRecord> cancelTask(String taskId) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/tasks/$taskId/cancel',
+    );
+    return AdminTaskRecord.fromJson(parseData(response.data));
+  }
+
+  /// 丢弃死信任务；丢弃后任务进入 DISCARDED 终态，不可再重试。
+  Future<AdminTaskRecord> discardDlqTask(String taskId) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/tasks/dlq/$taskId/discard',
+    );
+    return AdminTaskRecord.fromJson(parseData(response.data));
+  }
+
   /// 获取死信队列任务列表
   Future<List<AdminDlqTask>> listDlq({int limit = 20}) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
@@ -160,13 +193,6 @@ class AdminOperationsApi {
       },
     );
     return AdminPage.fromJson(parseData(response.data), AdminAuditLog.fromJson);
-  }
-
-  Future<AdminMonitoringView> monitoring() async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/monitoring',
-    );
-    return parseMonitoringResponse(response.data);
   }
 
   Future<AdminStorageManagementView> storage() async {
@@ -397,6 +423,15 @@ class AdminOperationsApi {
     );
   }
 
+  /// 预估会话清理条数：保留期之外的过期与已吊销会话数量。
+  Future<int> previewCleanupSessions(int retentionDays) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/sessions/cleanup/preview',
+      queryParameters: {'retentionDays': retentionDays},
+    );
+    return _parseCount(response.data);
+  }
+
   Future<int> cleanupSessions(int retentionDays) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/admin/sessions/cleanup',
@@ -449,6 +484,24 @@ class AdminOperationsApi {
     return _parseCount(response.data);
   }
 
+  /// 预估操作审计清理条数：保留期之外的审计记录数量。
+  Future<int> previewCleanupAuditLogs(int retentionDays) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/logs/audit/cleanup/preview',
+      queryParameters: {'retentionDays': retentionDays},
+    );
+    return _parseCount(response.data);
+  }
+
+  /// 预估登录日志清理条数：保留期之外的登录记录数量。
+  Future<int> previewCleanupLoginAuditLogs(int retentionDays) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/login-audit/cleanup/preview',
+      queryParameters: {'retentionDays': retentionDays},
+    );
+    return _parseCount(response.data);
+  }
+
   Future<int> cleanupLoginAuditLogs(int retentionDays) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/admin/login-audit/cleanup',
@@ -478,14 +531,6 @@ class AdminOperationsApi {
 
   AdminLogManagementView parseLogResponse(Map<String, dynamic>? body) {
     return AdminLogManagementView.fromJson(parseData(body));
-  }
-
-  AdminMonitoringView parseMonitoringResponse(Map<String, dynamic>? body) {
-    final data = parseData(body);
-    final view = AdminMonitoringView.fromJson(data);
-    return view.copyWith(
-      components: parseAdminMonitoringComponents(data['components']),
-    );
   }
 
   AdminStorageManagementView parseStorageResponse(Map<String, dynamic>? body) {

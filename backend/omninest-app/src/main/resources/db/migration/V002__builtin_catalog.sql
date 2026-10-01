@@ -196,7 +196,11 @@ INSERT INTO omni.notification_types (
     ('a1b2c3d4-5678-9abc-def0-666666666666', 'SECURITY_THREAT', '安全威胁',
         '文件安全扫描已确认检测到恶意内容', 'security_rounded', '#EF4444', 10, true),
     ('a1b2c3d4-5678-9abc-def0-777777777777', 'SECURITY_SCAN_FAILED', '安全扫描失败',
-        '文件安全扫描因服务不可用或处理异常而无法完成', 'warning_amber_rounded', '#F59E0B', 11, true);
+        '文件安全扫描因服务不可用或处理异常而无法完成', 'warning_amber_rounded', '#F59E0B', 11, true),
+    ('a1b2c3d4-5678-9abc-def0-888888888888', 'MEDIA_AUTO_IMPORT_COMPLETED', '媒体导入完成',
+        '上传文件已自动导入媒体库', 'check_circle_rounded', '#34D399', 12, true),
+    ('a1b2c3d4-5678-9abc-def0-999999999999', 'MEDIA_AUTO_IMPORT_FAILED', '媒体导入失败',
+        '上传文件自动导入未完成', 'error_rounded', '#F87171', 13, true);
 
 -- 内置角色的共享空间权限。
 INSERT INTO omni.shared_space_permissions (

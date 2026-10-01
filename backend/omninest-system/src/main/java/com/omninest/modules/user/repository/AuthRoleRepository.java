@@ -34,6 +34,24 @@ public interface AuthRoleRepository extends JpaRepository<AuthRole, UUID> {
     Optional<AuthRole> findByCode(String code);
 
     /**
+     * 按编码判断角色是否已存在。
+     *
+     * @param code 角色编码
+     * @return 存在时为 true
+     */
+    boolean existsByCode(String code);
+
+    /**
+     * 按编码加载角色并初始化权限集合，用于自定义角色创建克隆与删除前清理绑定。
+     *
+     * @param code 角色编码
+     * @return 匹配角色
+     */
+    @EntityGraph(attributePaths = "permissions")
+    @Query("select role from AuthRole role where role.code = :code")
+    Optional<AuthRole> findWithPermissionsByCode(@Param("code") String code);
+
+    /**
      * 锁定并读取角色，用于串行化首次安装流程。
      *
      * @param code 角色编码

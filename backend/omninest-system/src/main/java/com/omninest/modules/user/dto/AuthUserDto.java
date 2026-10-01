@@ -1,6 +1,7 @@
 package com.omninest.modules.user.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -16,6 +17,8 @@ public record AuthUserDto(
         @Schema(description = "角色集合") Set<String> roles,
         @Schema(description = "权限集合") Set<String> permissions,
         @Schema(description = "存储配额（字节）", example = "10737418240") long quotaBytes,
-        @Schema(description = "已用存储（字节）", example = "1073741824") long usedBytes
+        @Schema(description = "已用存储（字节）", example = "1073741824") long usedBytes,
+        @Schema(description = "创建时间") Instant createdAt,
+        @Schema(description = "是否已确认启用两步验证；仅管理用户列表填充，其余场景为空") Boolean twoFactorEnabled
 ) {
 }

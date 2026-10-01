@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -176,11 +178,18 @@ class StorageQuotaServiceTest {
     void updateQuotaSuccess() {
         UserAccountSummary user = userWith(1000, 500);
         when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user));
+        UUID operatorId = UUID.randomUUID();
 
-        service.updateQuota(USER_ID, 2000, UUID.randomUUID());
+        service.updateQuota(USER_ID, 2000, operatorId);
 
         verify(userStorageCommand).updateQuota(USER_ID, 2000);
-        verify(auditRecorder).recordWithMetadata(any(), any(), any(), any(), any());
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditRecorder).recordWithPayload(
+                any(), eq("ADMIN_QUOTA_UPDATE"), eq("auth_users"), eq(USER_ID), payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("oldQuotaBytes", 1000L)
+                .containsEntry("newQuotaBytes", 2000L)
+                .containsEntry("changeBy", operatorId.toString());
     }
 
     @Test

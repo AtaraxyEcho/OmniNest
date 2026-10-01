@@ -758,7 +758,8 @@ public class TaskRecordService {
         List<String> terminalStatuses = List.of(
                 TaskStatus.COMPLETED.getValue(),
                 TaskStatus.FAILED.getValue(),
-                TaskStatus.CANCELLED.getValue()
+                TaskStatus.CANCELLED.getValue(),
+                TaskStatus.DISCARDED.getValue()
         );
         int normalizedBatchSize = Math.max(1, Math.min(batchSize, 5000));
         List<UUID> taskIds = taskRecordRepository.findIdsByStatusInAndUpdatedAtBefore(

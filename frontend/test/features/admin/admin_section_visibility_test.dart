@@ -7,18 +7,6 @@ void main() {
     expect(AdminSection.tasks.isVisibleTo({'task:admin'}), isTrue);
   });
 
-  test('监控分区要求 system:config:read', () {
-    expect(
-      AdminSection.monitoring.isVisibleTo({
-        'task:admin',
-        'media:library:manage',
-        'photo:admin',
-      }),
-      isFalse,
-    );
-    expect(AdminSection.monitoring.isVisibleTo({'system:config:read'}), isTrue);
-  });
-
   test('角色分区接受 user:read 或 config:read', () {
     expect(AdminSection.roles.isVisibleTo({'system:user:read'}), isTrue);
     expect(AdminSection.roles.isVisibleTo({'system:config:read'}), isTrue);

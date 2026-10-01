@@ -92,10 +92,6 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
     }
     final auditPage = auditAsync.value ?? _lastAuditPage;
     final loginPage = loginAsync.value ?? _lastLoginPage;
-    final currentTotal =
-        _tabController.index == 0
-            ? auditPage?.totalElements ?? 0
-            : loginPage?.totalElements ?? 0;
     final currentOptions =
         <String>{
             'ALL',
@@ -113,9 +109,7 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
             AdminPageHeader(
               title: l10n.adminLogCenter,
               subtitle: l10n.adminLogCenterSubtitle,
-              trailing: AdminStatusPill(
-                label: l10n.adminAuditCount('$currentTotal'),
-              ),
+              // 计数由 Tab 徽章承载，页头不再重复展示统计 Pill。
             ),
             const SizedBox(height: 16),
             TabBar(
@@ -124,8 +118,30 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
               unselectedLabelColor: context.adminColors.onSurfaceVariant,
               indicatorColor: context.adminColors.primary,
               tabs: [
-                Tab(text: l10n.adminTabAudit),
-                Tab(text: l10n.adminTabLoginLog),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(l10n.adminTabAudit),
+                      const SizedBox(width: 8),
+                      _TabCountBadge(
+                        auditPage == null ? '-' : '${auditPage.totalElements}',
+                      ),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(l10n.adminTabLoginLog),
+                      const SizedBox(width: 8),
+                      _TabCountBadge(
+                        loginPage == null ? '-' : '${loginPage.totalElements}',
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -182,6 +198,7 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
                     _auditPage = 0;
                   });
                 },
+                onDetail: _showAuditDetail,
               ),
               _LoginAuditLogTab(
                 page: loginPage,
@@ -253,14 +270,18 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
         csv: csv,
       );
       if (!mounted || savedPath == null) return;
-      ScaffoldMessenger.of(
+      showOmniFeedback(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.adminCsvExported)));
+        l10n.adminCsvExported,
+        severity: OmniFeedbackSeverity.success,
+      );
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showOmniFeedback(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.adminOperationFailed)));
+        l10n.adminOperationFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
     }
   }
 
@@ -315,46 +336,87 @@ class _AdminLogsPageState extends ConsumerState<AdminLogsPage>
     );
   }
 
+  /// 打开操作审计详情弹窗：元数据 + 变更快照 + 原始负载。
+  Future<void> _showAuditDetail(AdminAuditLog item) async {
+    if (!mounted) return;
+    await showWorkstationDialog<void>(
+      context: context,
+      builder: (dialogContext) => _AuditDetailDialog(item: item),
+    );
+  }
+
+  /// 清理当前 Tab 对应日志：工位弹窗内异步预估条数，确认后物理删除。
   Future<void> _cleanupCurrentLog() async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
+    final isAudit = _tabController.index == 0;
+    final confirmed = await showWorkstationDialog<bool>(
       context: context,
+      dismissible: false,
       builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.adminCleanupConfirmTitle),
-            content: Text(l10n.adminCleanupConfirmMessage),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(l10n.coreCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(l10n.adminCleanup),
-              ),
-            ],
+          (dialogContext) => _CleanupConfirmDialog(
+            targetLabel: isAudit ? l10n.adminTabAudit : l10n.adminTabLoginLog,
+            retentionDays: _retentionDays,
+            kind:
+                isAudit
+                    ? AdminCleanupPreviewKind.auditLogs
+                    : AdminCleanupPreviewKind.loginAuditLogs,
+            showExportHint: true,
           ),
     );
     if (confirmed != true || !mounted) return;
     try {
       final actions = ref.read(adminOperationsActionsProvider);
       final count =
-          _tabController.index == 0
+          isAudit
               ? await actions.cleanupAuditLogs(_retentionDays)
               : await actions.cleanupLoginAuditLogs(_retentionDays);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.adminCleanupCompleted('$count'))),
+      showOmniFeedback(
+        context,
+        l10n.adminCleanupCompleted('$count'),
+        severity: OmniFeedbackSeverity.success,
       );
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showOmniFeedback(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.adminLoadFailed(''))));
+        l10n.adminLoadFailed(''),
+        severity: OmniFeedbackSeverity.error,
+      );
     }
   }
 }
 
+/// Tab 计数徽章：等宽数字 + 细线描边，未加载时显示 '-'。
+class _TabCountBadge extends StatelessWidget {
+  const _TabCountBadge(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: AppTypography.monoFamily,
+          fontFamilyFallback: AppTypography.monoFamilyFallback,
+          fontSize: AppTypography.labelSmall,
+          height: 14 / 11,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// 操作审计详情弹窗：元数据键值、旧值/新值变更快照与原始负载 JSON。
 class _AuditLogTab extends StatelessWidget {
   const _AuditLogTab({
     required this.page,
@@ -365,6 +427,7 @@ class _AuditLogTab extends StatelessWidget {
     required this.onSort,
     required this.pageSize,
     required this.onRowsPerPageChanged,
+    required this.onDetail,
   });
 
   final AdminPage<AdminAuditLog>? page;
@@ -375,6 +438,7 @@ class _AuditLogTab extends StatelessWidget {
   final void Function(String columnKey, bool ascending) onSort;
   final int pageSize;
   final ValueChanged<int> onRowsPerPageChanged;
+  final ValueChanged<AdminAuditLog> onDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -397,13 +461,25 @@ class _AuditLogTab extends StatelessWidget {
           AdminDataTable(
             showIndex: true,
             indexBase: result.page * pageSize,
-            minTableWidth: 960,
+            minTableWidth: 1200,
+            actionColumnWidth: 96,
+            onRowTap: (index) => onDetail(result.items[index]),
             columns: [
               AdminListColumn(
                 key: 'action',
                 label: l10n.adminFilterAction,
-                minWidth: 170,
+                minWidth: 118,
                 sortable: true,
+              ),
+              AdminListColumn(
+                key: 'actor',
+                label: l10n.adminAuditActorColumn,
+                minWidth: 120,
+              ),
+              AdminListColumn(
+                key: 'actorId',
+                label: l10n.adminAuditActorIdColumn,
+                minWidth: 110,
               ),
               AdminListColumn(
                 key: 'content',
@@ -440,6 +516,29 @@ class _AuditLogTab extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 AdminCellText(
+                  (item.actorLabel ?? '').isEmpty ? '-' : item.actorLabel!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                // 操作账号 ID 短码：mono 前 8 位，悬停展示完整 UUID；
+                // 便于跨表关联用户与审计日志检索。
+                AdminCellText(
+                  (item.actorUserId ?? '').isEmpty
+                      ? '-'
+                      : (item.actorUserId!.length >= 8
+                          ? item.actorUserId!.substring(0, 8)
+                          : item.actorUserId!),
+                  tooltipMessage:
+                      (item.actorUserId ?? '').isEmpty
+                          ? null
+                          : item.actorUserId,
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelSmall,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                AdminCellText(
                   item.description.isEmpty ? item.action : item.description,
                 ),
                 AdminCellText(item.resourceType),
@@ -453,9 +552,17 @@ class _AuditLogTab extends StatelessWidget {
                 ),
               ];
             },
+            actionsBuilder:
+                (context, index) => [
+                  AdminRowIconAction(
+                    tooltip: l10n.adminAuditDetailTitle,
+                    icon: Icons.info_outlined,
+                    onTap: () => onDetail(result.items[index]),
+                  ),
+                ],
           ),
           const SizedBox(height: 12),
-          AdminListPaginationBar(
+          WorkstationPaginationBar(
             currentPage: result.page,
             totalPages: result.totalPages,
             totalElements: result.totalElements,
@@ -512,7 +619,7 @@ class _LoginAuditLogTab extends StatelessWidget {
           AdminDataTable(
             showIndex: true,
             indexBase: result.page * pageSize,
-            minTableWidth: 960,
+            minTableWidth: 1080,
             columns: [
               AdminListColumn(
                 key: 'username',
@@ -528,7 +635,12 @@ class _LoginAuditLogTab extends StatelessWidget {
               AdminListColumn(
                 key: 'platform',
                 label: l10n.adminFilterPlatform,
-                minWidth: 100,
+                minWidth: 92,
+              ),
+              AdminListColumn(
+                key: 'client',
+                label: l10n.adminLoginClientColumn,
+                minWidth: 150,
               ),
               AdminListColumn(
                 key: 'ip',
@@ -566,6 +678,11 @@ class _LoginAuditLogTab extends StatelessWidget {
                 ),
                 AdminCellText(item.clientPlatform),
                 AdminCellText(
+                  _userAgentSummary(item.userAgent),
+                  tooltipMessage: item.userAgent,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                AdminCellText(
                   item.ipAddress,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -581,7 +698,7 @@ class _LoginAuditLogTab extends StatelessWidget {
             },
           ),
           const SizedBox(height: 12),
-          AdminListPaginationBar(
+          WorkstationPaginationBar(
             currentPage: result.page,
             totalPages: result.totalPages,
             totalElements: result.totalElements,
@@ -594,6 +711,52 @@ class _LoginAuditLogTab extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 登录审计 User-Agent 摘要：识别主流浏览器与操作系统组合（如
+/// "Chrome · Windows"），无法识别时回退截断原文；空值回退 "-"。
+/// 判定顺序遵循 UA 串优先级惯例：Edg 最具体先判，Safari 依赖 Version/ 兜底。
+String _userAgentSummary(String? userAgent) {
+  if (userAgent == null || userAgent.isEmpty) {
+    return '-';
+  }
+  String browser;
+  if (userAgent.contains('Edg/')) {
+    browser = 'Edge';
+  } else if (userAgent.contains('Firefox/')) {
+    browser = 'Firefox';
+  } else if (userAgent.contains('Chrome/')) {
+    browser = 'Chrome';
+  } else if (userAgent.contains('Safari/') && userAgent.contains('Version/')) {
+    browser = 'Safari';
+  } else {
+    browser = '';
+  }
+  String os;
+  if (userAgent.contains('Windows')) {
+    os = 'Windows';
+  } else if (userAgent.contains('Android')) {
+    os = 'Android';
+  } else if (userAgent.contains('iPhone') || userAgent.contains('iPad')) {
+    os = 'iOS';
+  } else if (userAgent.contains('Mac OS X') ||
+      userAgent.contains('Macintosh')) {
+    os = 'macOS';
+  } else if (userAgent.contains('Linux')) {
+    os = 'Linux';
+  } else {
+    os = '';
+  }
+  if (browser.isEmpty && os.isEmpty) {
+    return userAgent.length > 24 ? userAgent.substring(0, 24) : userAgent;
+  }
+  if (browser.isEmpty) {
+    return os;
+  }
+  if (os.isEmpty) {
+    return browser;
+  }
+  return '$browser · $os';
 }
 
 class _AdminRecordFilterBar extends StatelessWidget {
@@ -628,33 +791,47 @@ class _AdminRecordFilterBar extends StatelessWidget {
       runSpacing: 10,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        AppDropdown<String>(
-          width: AppControlTokens.filterFieldWidth,
-          value: value,
-          dense: true,
-          label: label,
-          items: [
-            for (final option in options)
-              AppDropdownItem(value: option, label: optionLabel(option)),
+        // 样板形态：每个筛选下拉前置等宽小标，下拉本体仅承载取值。
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _FilterPrefixLabel(label),
+            const SizedBox(width: 8),
+            AppDropdown<String>(
+              width: AppControlTokens.filterFieldWidth,
+              value: value,
+              dense: true,
+              items: [
+                for (final option in options)
+                  AppDropdownItem(value: option, label: optionLabel(option)),
+              ],
+              onChanged: (next) {
+                if (next != null) onChanged(next);
+              },
+            ),
           ],
-          onChanged: (next) {
-            if (next != null) onChanged(next);
-          },
         ),
-        AppDropdown<int>(
-          width: AppControlTokens.filterFieldCompactWidth,
-          value: retentionDays,
-          dense: true,
-          items: [
-            for (final days in const <int>[7, 30, 90, 365])
-              AppDropdownItem(
-                value: days,
-                label: l10n.adminRetentionDays('$days'),
-              ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _FilterPrefixLabel(l10n.adminFilterRetention),
+            const SizedBox(width: 8),
+            AppDropdown<int>(
+              width: AppControlTokens.filterFieldCompactWidth,
+              value: retentionDays,
+              dense: true,
+              items: [
+                for (final days in const <int>[7, 30, 90, 365])
+                  AppDropdownItem(
+                    value: days,
+                    label: l10n.adminRetentionDays('$days'),
+                  ),
+              ],
+              onChanged: (next) {
+                if (next != null) onRetentionChanged(next);
+              },
+            ),
           ],
-          onChanged: (next) {
-            if (next != null) onRetentionChanged(next);
-          },
         ),
         FilledButton.tonalIcon(
           onPressed: onCleanup,

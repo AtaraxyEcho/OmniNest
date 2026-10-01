@@ -1,4 +1,4 @@
-import 'package:omninest/features/admin/domain/admin_console_summary.dart';
+part 'admin_operations_storage_models.dart';
 
 class AdminRoleManagementView {
   const AdminRoleManagementView({
@@ -47,6 +47,32 @@ class AdminRoleDetail {
   final bool builtIn;
   final bool enabled;
   final List<String> permissions;
+}
+
+/// 新建自定义角色入参。
+class AdminCreateRoleInput {
+  const AdminCreateRoleInput({
+    required this.code,
+    required this.name,
+    required this.description,
+    required this.baseTemplate,
+  });
+
+  final String code;
+  final String name;
+  final String description;
+
+  /// none / member / admin；member 与 admin 克隆对应内置角色权限基线。
+  final String baseTemplate;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'code': code,
+      'name': name,
+      'description': description,
+      'baseTemplate': baseTemplate,
+    };
+  }
 }
 
 class AdminPermissionDetail {
@@ -229,6 +255,9 @@ class AdminTaskRecord {
 
   bool get canRetry =>
       status == 'FAILED' || status == 'CANCELLED' || status == 'DLQ';
+
+  /// 排队与等待重试的任务允许在执行前取消。
+  bool get canCancel => status == 'QUEUED' || status == 'RETRY_WAIT';
 }
 
 /// 死信队列任务
@@ -285,592 +314,53 @@ class AdminAuditLog {
     required this.ipAddress,
     required this.createdAt,
     this.actorUserId,
+    this.actorLabel,
     this.resourceId,
+    this.payload = const <String, Object>{},
   });
 
   factory AdminAuditLog.fromJson(Map<String, dynamic> json) {
     return AdminAuditLog(
       id: json['id']?.toString() ?? '',
       actorUserId: json['actorUserId']?.toString(),
+      actorLabel: json['actorLabel']?.toString(),
       action: json['action']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       resourceType: json['resourceType']?.toString() ?? '',
       resourceId: json['resourceId']?.toString(),
       ipAddress: json['ipAddress']?.toString() ?? '',
       createdAt: json['createdAt']?.toString() ?? '',
+      payload: _payloadMap(json['payload']),
     );
   }
 
   final String id;
   final String? actorUserId;
+
+  /// 操作者显示名：优先昵称回退账号名；历史脏数据缺失时为空。
+  final String? actorLabel;
   final String action;
   final String description;
-  final String resourceType;
   final String? resourceId;
+  final String resourceType;
   final String ipAddress;
   final String createdAt;
+
+  /// 扩展负载：变更前后值、原因、requestId 等已在服务端掩码的信息。
+  /// 值为 null 的键不收录；旧数据没有 payload 时为空 Map。
+  final Map<String, Object> payload;
 }
 
-class AdminMonitoringView {
-  const AdminMonitoringView({
-    this.overview = const AdminMonitoringOverview.empty(),
-    this.components = const [],
-    this.alerts = const [],
-    this.auditRecent = const [],
-    this.series = const [],
-    this.health = const [],
-    this.metrics = const [],
+/// 解析审计扩展负载；非对象或缺失时回退空 Map，值为 null 的键丢弃。
+Map<String, Object> _payloadMap(Object? value) {
+  if (value is! Map) {
+    return const <String, Object>{};
+  }
+  final result = <String, Object>{};
+  value.forEach((key, entryValue) {
+    if (entryValue != null) {
+      result[key.toString()] = entryValue;
+    }
   });
-
-  factory AdminMonitoringView.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringView(
-      overview: AdminMonitoringOverview.fromJson(_map(json['overview'])),
-      components: const [],
-      alerts: _list(json['alerts']).map(AdminMonitoringAlert.fromJson).toList(),
-      auditRecent:
-          _list(json['auditRecent']).map(AdminAuditLog.fromJson).toList(),
-      series:
-          _list(json['series']).map(AdminMonitoringSeries.fromJson).toList(),
-      health: _list(json['health']).map(AdminHealthItem.fromJson).toList(),
-      metrics:
-          _list(json['metrics']).map(AdminMonitoringMetric.fromJson).toList(),
-    );
-  }
-
-  final AdminMonitoringOverview overview;
-  final List<AdminMonitoringComponent> components;
-  final List<AdminMonitoringAlert> alerts;
-  final List<AdminAuditLog> auditRecent;
-  final List<AdminMonitoringSeries> series;
-  final List<AdminHealthItem> health;
-  final List<AdminMonitoringMetric> metrics;
-
-  AdminMonitoringView copyWith({List<AdminMonitoringComponent>? components}) {
-    return AdminMonitoringView(
-      overview: overview,
-      components: components ?? this.components,
-      alerts: alerts,
-      auditRecent: auditRecent,
-      series: series,
-      health: health,
-      metrics: metrics,
-    );
-  }
-}
-
-class AdminMonitoringOverview {
-  const AdminMonitoringOverview({
-    required this.status,
-    required this.uptime,
-    required this.cpuUsage,
-    required this.memoryUsage,
-    required this.diskUsage,
-    required this.jvmHeapUsage,
-    required this.activeTasks,
-    required this.queueDepth,
-    required this.todayRequests,
-  });
-
-  const AdminMonitoringOverview.empty()
-    : status = 'UNKNOWN',
-      uptime = '-',
-      cpuUsage = 0,
-      memoryUsage = 0,
-      diskUsage = 0,
-      jvmHeapUsage = 0,
-      activeTasks = 0,
-      queueDepth = 0,
-      todayRequests = 0;
-
-  factory AdminMonitoringOverview.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringOverview(
-      status: json['status']?.toString() ?? 'UNKNOWN',
-      uptime: json['uptime']?.toString() ?? '-',
-      cpuUsage: _double(json['cpuUsage']),
-      memoryUsage: _double(json['memoryUsage']),
-      diskUsage: _double(json['diskUsage']),
-      jvmHeapUsage: _double(json['jvmHeapUsage']),
-      activeTasks: _int(json['activeTasks']),
-      queueDepth: _int(json['queueDepth']),
-      todayRequests: _int(json['todayRequests']),
-    );
-  }
-
-  final String status;
-  final String uptime;
-  final double cpuUsage;
-  final double memoryUsage;
-  final double diskUsage;
-  final double jvmHeapUsage;
-  final int activeTasks;
-  final int queueDepth;
-  final int todayRequests;
-}
-
-class AdminMonitoringComponent {
-  const AdminMonitoringComponent({
-    required this.name,
-    required this.status,
-    required this.detail,
-  });
-
-  final String name;
-  final String status;
-
-  /// 组件诊断键值，值在数据层已统一为字符串。
-  final Map<String, String> detail;
-}
-
-class AdminMonitoringAlert {
-  const AdminMonitoringAlert({
-    required this.severity,
-    required this.message,
-    required this.timestamp,
-  });
-
-  factory AdminMonitoringAlert.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringAlert(
-      severity: json['severity']?.toString() ?? 'INFO',
-      message: json['message']?.toString() ?? '',
-      timestamp: json['timestamp']?.toString() ?? '',
-    );
-  }
-
-  final String severity;
-  final String message;
-  final String timestamp;
-}
-
-class AdminMonitoringSeries {
-  const AdminMonitoringSeries({
-    required this.metric,
-    required this.label,
-    required this.unit,
-    required this.points,
-  });
-
-  factory AdminMonitoringSeries.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringSeries(
-      metric: json['metric']?.toString() ?? '',
-      label: json['label']?.toString() ?? '',
-      unit: json['unit']?.toString() ?? '',
-      points:
-          _list(
-            json['points'],
-          ).map(AdminMonitoringSeriesPoint.fromJson).toList(),
-    );
-  }
-
-  final String metric;
-  final String label;
-  final String unit;
-  final List<AdminMonitoringSeriesPoint> points;
-}
-
-class AdminMonitoringSeriesPoint {
-  const AdminMonitoringSeriesPoint({
-    required this.timestamp,
-    required this.value,
-  });
-
-  factory AdminMonitoringSeriesPoint.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringSeriesPoint(
-      timestamp: json['timestamp']?.toString() ?? '',
-      value: _double(json['value']),
-    );
-  }
-
-  final String timestamp;
-  final double value;
-}
-
-class AdminMonitoringMetric {
-  const AdminMonitoringMetric({
-    required this.name,
-    required this.value,
-    required this.unit,
-    required this.status,
-  });
-
-  factory AdminMonitoringMetric.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringMetric(
-      name: json['name']?.toString() ?? '',
-      value: json['value']?.toString() ?? '',
-      unit: json['unit']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'UNKNOWN',
-    );
-  }
-
-  final String name;
-  final String value;
-  final String unit;
-  final String status;
-}
-
-/// 存储管理聚合视图。
-///
-/// [fromJson] 只解析 `/admin/storage` 返回的桶清单；[locations] 与
-/// [trustedMounts] 来自独立端点，由 AdminOperationsApi.storage() 组装填充。
-class AdminStorageManagementView {
-  const AdminStorageManagementView({
-    required this.buckets,
-    this.locations = const [],
-    this.trustedMounts = const [],
-  });
-
-  factory AdminStorageManagementView.fromJson(Map<String, dynamic> json) {
-    return AdminStorageManagementView(
-      buckets: _list(json['buckets']).map(AdminBucketItem.fromJson).toList(),
-    );
-  }
-
-  final List<AdminBucketItem> buckets;
-
-  /// 本地只读存储位置，来自 `/admin/storage/locations`。
-  final List<AdminStorageLocation> locations;
-
-  /// 部署可信挂载，来自 `/admin/storage/mounts`。
-  final List<AdminTrustedMount> trustedMounts;
-}
-
-class AdminTrustedMount {
-  const AdminTrustedMount({
-    required this.mountKey,
-    required this.displayName,
-    required this.available,
-  });
-
-  factory AdminTrustedMount.fromJson(Map<String, dynamic> json) {
-    return AdminTrustedMount(
-      mountKey: json['mountKey']?.toString() ?? '',
-      displayName: json['displayName']?.toString() ?? '',
-      available: json['available'] == true,
-    );
-  }
-
-  final String mountKey;
-  final String displayName;
-  final bool available;
-}
-
-class AdminStorageDirectory {
-  const AdminStorageDirectory({
-    required this.nodeId,
-    required this.name,
-    required this.relativePath,
-    required this.hasChildren,
-  });
-
-  factory AdminStorageDirectory.fromJson(Map<String, dynamic> json) {
-    return AdminStorageDirectory(
-      nodeId: json['nodeId']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      relativePath: json['relativePath']?.toString() ?? '.',
-      hasChildren: json['hasChildren'] == true,
-    );
-  }
-
-  final String nodeId;
-  final String name;
-  final String relativePath;
-  final bool hasChildren;
-}
-
-class AdminStorageLocation {
-  const AdminStorageLocation({
-    required this.id,
-    required this.name,
-    required this.providerType,
-    required this.managementMode,
-    required this.mountKey,
-    required this.relativeRoot,
-    required this.scopeType,
-    required this.enabled,
-    required this.healthStatus,
-    required this.nodeId,
-  });
-
-  factory AdminStorageLocation.fromJson(Map<String, dynamic> json) {
-    return AdminStorageLocation(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      providerType: json['providerType']?.toString() ?? '',
-      managementMode: json['managementMode']?.toString() ?? '',
-      mountKey: json['mountKey']?.toString() ?? '',
-      relativeRoot: json['relativeRoot']?.toString() ?? '.',
-      scopeType: json['scopeType']?.toString() ?? '',
-      enabled: json['enabled'] == true,
-      healthStatus: json['healthStatus']?.toString() ?? 'UNAVAILABLE',
-      nodeId: json['nodeId']?.toString() ?? '',
-    );
-  }
-
-  final String id;
-  final String name;
-  final String providerType;
-  final String managementMode;
-  final String mountKey;
-  final String relativeRoot;
-  final String scopeType;
-  final bool enabled;
-  final String healthStatus;
-  final String nodeId;
-}
-
-class AdminBucketItem {
-  const AdminBucketItem({
-    required this.name,
-    required this.purpose,
-    required this.status,
-  });
-
-  factory AdminBucketItem.fromJson(Map<String, dynamic> json) {
-    return AdminBucketItem(
-      name: json['name']?.toString() ?? '',
-      purpose: json['purpose']?.toString() ?? '',
-      status: json['status']?.toString() ?? '',
-    );
-  }
-
-  final String name;
-  final String purpose;
-  final String status;
-}
-
-class AdminExternalStorageView {
-  const AdminExternalStorageView({required this.items});
-
-  factory AdminExternalStorageView.fromJson(Map<String, dynamic> json) {
-    return AdminExternalStorageView(
-      items:
-          _list(json['items']).map(AdminExternalStorageItem.fromJson).toList(),
-    );
-  }
-
-  final List<AdminExternalStorageItem> items;
-}
-
-class AdminExternalStorageItem {
-  const AdminExternalStorageItem({
-    required this.id,
-    required this.ownerUserId,
-    required this.provider,
-    required this.displayName,
-    required this.status,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  factory AdminExternalStorageItem.fromJson(Map<String, dynamic> json) {
-    return AdminExternalStorageItem(
-      id: json['id']?.toString() ?? '',
-      ownerUserId: json['ownerUserId']?.toString() ?? '',
-      provider: json['provider']?.toString() ?? '',
-      displayName: json['displayName']?.toString() ?? '',
-      status: json['status']?.toString() ?? '',
-      createdAt: json['createdAt']?.toString() ?? '',
-      updatedAt: json['updatedAt']?.toString() ?? '',
-    );
-  }
-
-  final String id;
-  final String ownerUserId;
-  final String provider;
-  final String displayName;
-  final String status;
-  final String createdAt;
-  final String updatedAt;
-}
-
-class AdminConnectorOAuthApp {
-  const AdminConnectorOAuthApp({
-    required this.id,
-    required this.connectorCode,
-    required this.clientId,
-    required this.redirectUri,
-    required this.enabled,
-    required this.updatedAt,
-  });
-
-  factory AdminConnectorOAuthApp.fromJson(Map<String, dynamic> json) {
-    return AdminConnectorOAuthApp(
-      id: json['id']?.toString() ?? '',
-      connectorCode: json['connectorCode']?.toString() ?? '',
-      clientId: json['clientId']?.toString() ?? '',
-      redirectUri: json['redirectUri']?.toString() ?? '',
-      enabled: json['enabled'] == true,
-      updatedAt: json['updatedAt']?.toString() ?? '',
-    );
-  }
-
-  final String id;
-  final String connectorCode;
-  final String clientId;
-  final String redirectUri;
-  final bool enabled;
-  final String updatedAt;
-}
-
-// ── 会话管理 ──────────────────────────────────────────────────────────
-
-class AdminSessionManagementView {
-  const AdminSessionManagementView({required this.items});
-
-  factory AdminSessionManagementView.fromJson(Map<String, dynamic> json) {
-    return AdminSessionManagementView(
-      items: _list(json['items']).map(AdminSessionItem.fromJson).toList(),
-    );
-  }
-
-  final List<AdminSessionItem> items;
-}
-
-class AdminSessionItem {
-  const AdminSessionItem({
-    required this.id,
-    required this.userId,
-    required this.clientPlatform,
-    required this.ipAddress,
-    required this.issuedAt,
-    required this.expiresAt,
-    required this.lastActiveAt,
-    this.username,
-    this.deviceId,
-    this.deviceName,
-    this.revokedAt,
-    this.revokeReason,
-  });
-
-  factory AdminSessionItem.fromJson(Map<String, dynamic> json) {
-    return AdminSessionItem(
-      id: json['id']?.toString() ?? '',
-      userId: json['userId']?.toString() ?? '',
-      username: json['username']?.toString(),
-      clientPlatform: json['clientPlatform']?.toString() ?? '',
-      deviceId: json['deviceId']?.toString(),
-      deviceName: json['deviceName']?.toString(),
-      ipAddress: json['ipAddress']?.toString() ?? '',
-      issuedAt: json['issuedAt']?.toString() ?? '',
-      expiresAt: json['expiresAt']?.toString() ?? '',
-      lastActiveAt: json['lastActiveAt']?.toString() ?? '',
-      revokedAt: json['revokedAt']?.toString(),
-      revokeReason: json['revokeReason']?.toString(),
-    );
-  }
-
-  final String id;
-  final String userId;
-  final String? username;
-  final String clientPlatform;
-  final String? deviceId;
-  final String? deviceName;
-  final String ipAddress;
-  final String issuedAt;
-  final String expiresAt;
-  final String lastActiveAt;
-  final String? revokedAt;
-  final String? revokeReason;
-
-  bool get isRevoked => revokedAt != null && revokedAt!.isNotEmpty;
-
-  bool get isExpired {
-    final expires = DateTime.tryParse(expiresAt);
-    return !isRevoked &&
-        expires != null &&
-        expires.isBefore(DateTime.now().toUtc());
-  }
-
-  bool get isInactive => isRevoked || isExpired;
-
-  bool get isActive => !isInactive;
-}
-
-// ── 登录日志 ──────────────────────────────────────────────────────────
-
-class AdminLoginAuditView {
-  const AdminLoginAuditView({required this.items});
-
-  factory AdminLoginAuditView.fromJson(Map<String, dynamic> json) {
-    return AdminLoginAuditView(
-      items: _list(json['items']).map(AdminLoginAuditItem.fromJson).toList(),
-    );
-  }
-
-  final List<AdminLoginAuditItem> items;
-}
-
-class AdminLoginAuditItem {
-  const AdminLoginAuditItem({
-    required this.id,
-    required this.username,
-    required this.loginResult,
-    required this.clientPlatform,
-    required this.ipAddress,
-    required this.createdAt,
-    this.userId,
-    this.userAgent,
-    this.failureReason,
-  });
-
-  factory AdminLoginAuditItem.fromJson(Map<String, dynamic> json) {
-    return AdminLoginAuditItem(
-      id: json['id']?.toString() ?? '',
-      userId: json['userId']?.toString(),
-      username: json['username']?.toString() ?? '',
-      loginResult: json['loginResult']?.toString() ?? '',
-      clientPlatform: json['clientPlatform']?.toString() ?? '',
-      ipAddress: json['ipAddress']?.toString() ?? '',
-      userAgent: json['userAgent']?.toString(),
-      failureReason: json['failureReason']?.toString(),
-      createdAt: json['createdAt']?.toString() ?? '',
-    );
-  }
-
-  final String id;
-  final String? userId;
-  final String username;
-  final String loginResult;
-  final String clientPlatform;
-  final String ipAddress;
-  final String? userAgent;
-  final String? failureReason;
-  final String createdAt;
-}
-
-List<Map<String, dynamic>> _list(Object? value) {
-  if (value is! List) {
-    return const [];
-  }
-  return value.whereType<Map<String, dynamic>>().toList();
-}
-
-Map<String, dynamic> _map(Object? value) {
-  return value is Map<String, dynamic> ? value : <String, dynamic>{};
-}
-
-List<String> _strings(Object? value) {
-  if (value is! List) {
-    return const [];
-  }
-  return value.map((item) => item.toString()).toList();
-}
-
-double _double(Object? value) {
-  if (value is double) {
-    return value;
-  }
-  if (value is num) {
-    return value.toDouble();
-  }
-  return double.tryParse(value?.toString() ?? '') ?? 0;
-}
-
-int _int(Object? value) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.toInt();
-  }
-  return int.tryParse(value?.toString() ?? '') ?? 0;
+  return result;
 }

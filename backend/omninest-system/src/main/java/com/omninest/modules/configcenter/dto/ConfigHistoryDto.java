@@ -18,8 +18,8 @@ public record ConfigHistoryDto(
         @Schema(description = "变更原因") String changeReason,
         @Schema(description = "创建时间") Instant createdAt
 ) {
-    /** 敏感值掩码常量 */
-    private static final String MASK = "******";
+    /** 敏感值掩码常量，审计与展示侧统一复用 */
+    public static final String MASK = "******";
 
     /**
      * 从 ConfigHistory 实体转换为 DTO（不掩码）。

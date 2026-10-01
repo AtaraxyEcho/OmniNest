@@ -1,6 +1,8 @@
 package com.omninest.modules.user.dto;
 
+import com.alibaba.fastjson2.JSON;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
+import com.omninest.modules.user.domain.AuditLog;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -52,6 +54,27 @@ public final class AdminOperationsDto {
     @Schema(description = "更新角色权限请求")
     public record UpdateRolePermissionsRequest(
             @Schema(description = "权限编码集合") Set<String> permissions
+    ) {
+    }
+
+    /**
+     * 创建自定义角色请求。编码必须以 ROLE_ 开头且仅含大写字母、数字与下划线。
+     */
+    @Schema(description = "创建自定义角色请求")
+    public record CreateRoleRequest(
+            @Schema(description = "角色编码", example = "ROLE_MEDIA_CURATOR")
+            @NotBlank(message = "角色编码不能为空")
+            @Size(min = 3, max = 64, message = "角色编码长度必须在 3 到 64 个字符之间")
+            String code,
+            @Schema(description = "角色名称", example = "媒体策展人")
+            @NotBlank(message = "角色名称不能为空")
+            @Size(max = 64, message = "角色名称长度不能超过 64 个字符")
+            String name,
+            @Schema(description = "角色描述")
+            @Size(max = 500, message = "角色描述长度不能超过 500 个字符")
+            String description,
+            @Schema(description = "权限模板：none 空权限，member 克隆成员角色，admin 克隆管理员角色", example = "member")
+            String baseTemplate
     ) {
     }
 
@@ -108,13 +131,53 @@ public final class AdminOperationsDto {
     public record AuditLogItem(
             @Schema(description = "日志 ID") UUID id,
             @Schema(description = "操作者用户 ID") UUID actorUserId,
+            @Schema(description = "操作者显示名，优先昵称回退账号名，历史脏数据缺失时为空串", example = "ataraxy") String actorLabel,
             @Schema(description = "操作类型", example = "USER_CREATE") String action,
             @Schema(description = "操作内容描述") String description,
             @Schema(description = "资源类型", example = "USER") String resourceType,
             @Schema(description = "资源 ID") UUID resourceId,
             @Schema(description = "IP 地址", example = "192.168.1.1") String ipAddress,
-            @Schema(description = "创建时间") Instant createdAt
+            @Schema(description = "创建时间") Instant createdAt,
+            @Schema(description = "变更上下文载荷，含变更前后值与请求上下文，解析失败时为空对象")
+            Map<String, Object> payload
     ) {
+
+        /**
+         * 从审计日志实体构建管理端条目。
+         *
+         * <p>detail_payload 为空或非法 JSON 时回退为空 Map，
+         * 单条历史脏数据不得让整页审计查询失败。</p>
+         *
+         * @param audit 审计日志实体
+         * @param actorLabel 操作者显示名，由调用方批量查询后传入
+         * @return 审计日志项
+         */
+        public static AuditLogItem from(AuditLog audit, String actorLabel) {
+            return new AuditLogItem(
+                    audit.getId(),
+                    audit.getActorUserId(),
+                    actorLabel,
+                    audit.getAction(),
+                    AdminOperationDescription.audit(audit.getAction(), audit.getResourceType()),
+                    audit.getResourceType(),
+                    audit.getResourceId(),
+                    audit.getIpAddress(),
+                    audit.getCreatedAt(),
+                    parsePayload(audit.getDetailPayload())
+            );
+        }
+
+        private static Map<String, Object> parsePayload(String detailPayload) {
+            if (detailPayload == null || detailPayload.isBlank()) {
+                return Map.of();
+            }
+            try {
+                Map<String, Object> parsed = JSON.parseObject(detailPayload);
+                return parsed == null ? Map.of() : parsed;
+            } catch (RuntimeException ex) {
+                return Map.of();
+            }
+        }
     }
 
     @Schema(description = "日志管理视图")

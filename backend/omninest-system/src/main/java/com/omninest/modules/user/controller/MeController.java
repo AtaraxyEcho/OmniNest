@@ -3,8 +3,9 @@ package com.omninest.modules.user.controller;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
-import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.dto.AuthUserDto;
+import com.omninest.modules.user.dto.MeSessionDto;
+import com.omninest.modules.user.dto.UpdateMeRequest;
 import com.omninest.modules.user.service.CurrentUserService;
 import java.util.List;
 import com.omninest.modules.user.dto.ChangePasswordRequest;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,6 +44,19 @@ public class MeController {
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
     ApiResponse<AuthUserDto> me() {
         return ApiResponse.success(currentUserService.currentUser());
+    }
+
+    /**
+     * 更新当前用户基础资料（显示昵称 / 邮箱）；未提供的字段保持不变。
+     */
+    @Operation(summary = "更新当前用户资料", description = "修改显示昵称与邮箱，未提供的字段保持不变")
+    @PatchMapping("/api/v1/me")
+    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
+    ApiResponse<AuthUserDto> updateMe(@RequestBody UpdateMeRequest request) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(
+                currentUserService.updateProfile(userId, request.displayName(), request.email())
+        );
     }
 
     /**
@@ -74,13 +89,18 @@ public class MeController {
     }
 
     /**
-     * 查询当前用户的活跃会话列表。
+     * 查询当前用户的活跃会话列表，发起本次请求的会话带 current 标记。
      */
+    @Operation(summary = "查询活跃会话", description = "返回当前用户全部未撤销会话，当前访问会话带 current 标记")
     @GetMapping("/api/v1/me/sessions")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
-    ApiResponse<List<AuthActiveSession>> sessions() {
+    ApiResponse<List<MeSessionDto>> sessions() {
         UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(currentUserService.activeSessions(userId));
+        UUID currentSessionId = currentUserContext.currentSessionId();
+        List<MeSessionDto> sessions = currentUserService.activeSessions(userId).stream()
+                .map(session -> MeSessionDto.from(session, currentSessionId))
+                .toList();
+        return ApiResponse.success(sessions);
     }
 
     /**

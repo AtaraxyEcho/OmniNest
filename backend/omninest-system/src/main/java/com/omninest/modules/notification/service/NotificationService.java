@@ -12,6 +12,7 @@ import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.notification.domain.NotificationMessage;
 import com.omninest.modules.notification.domain.NotificationType;
 import com.omninest.modules.notification.dto.NotificationDto;
+import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.notification.port.NotificationRealtimeQuery;
 import com.omninest.modules.notification.repository.NotificationRepository;
@@ -40,7 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class NotificationService implements NotificationPublisher, NotificationRealtimeQuery {
+public class NotificationService implements NotificationPublisher, NotificationRealtimeQuery, NotificationMaintenance {
 
     private final NotificationRepository notificationRepository;
     private final NotificationTypeRepository notificationTypeRepository;
@@ -145,17 +146,15 @@ public class NotificationService implements NotificationPublisher, NotificationR
     }
 
     /**
-     * 分页查询用户通知。
+     * 分页查询用户通知，unreadOnly 为 true 时仅返回未读。
      */
     @Transactional(readOnly = true)
-    public List<NotificationDto> list(UUID userId, int page, int size) {
-        return notificationRepository
-                .findByRecipientUserIdOrderByCreatedAtDesc(
-                        userId,
-                        PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)))
-                .stream()
-                .map(this::toDto)
-                .toList();
+    public List<NotificationDto> list(UUID userId, int page, int size, boolean unreadOnly) {
+        var pageable = PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size));
+        var entities = unreadOnly
+                ? notificationRepository.findByRecipientUserIdAndReadAtIsNullOrderByCreatedAtDesc(userId, pageable)
+                : notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(userId, pageable);
+        return entities.stream().map(this::toDto).toList();
     }
 
     /**
@@ -171,11 +170,13 @@ public class NotificationService implements NotificationPublisher, NotificationR
     }
 
     /**
-     * 查询用户通知总数。
+     * 查询用户通知总数，unreadOnly 为 true 时仅统计未读。
      */
     @Transactional(readOnly = true)
-    public long totalCount(UUID userId) {
-        return notificationRepository.countByRecipientUserId(userId);
+    public long totalCount(UUID userId, boolean unreadOnly) {
+        return unreadOnly
+                ? notificationRepository.countByRecipientUserIdAndReadAtIsNull(userId)
+                : notificationRepository.countByRecipientUserId(userId);
     }
 
     /**
@@ -241,6 +242,20 @@ public class NotificationService implements NotificationPublisher, NotificationR
         return count;
     }
 
+    /**
+     * 管理端账户删除配套：物理清空该用户全部站内通知，不产生同步事件。
+     *
+     * @param userId 用户标识
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+        public void adminPurgeForUser(UUID userId) {
+        int count = notificationRepository.deleteAllForRecipient(userId);
+        if (count > 0) {
+            readThroughCache.invalidate("omninest:notification:unread:" + userId);
+        }
+    }
+
     private NotificationDto toDto(NotificationMessage entity) {
         return new NotificationDto(
                 entity.getId(),
@@ -248,7 +263,8 @@ public class NotificationService implements NotificationPublisher, NotificationR
                 entity.getTitle(),
                 entity.getMessage(),
                 entity.isRead(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getMetadata() == null ? Map.of() : entity.getMetadata()
         );
     }
 

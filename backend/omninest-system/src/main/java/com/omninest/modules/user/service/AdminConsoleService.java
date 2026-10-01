@@ -130,7 +130,9 @@ public class AdminConsoleService {
         long running = taskRecordRepository.countByStatus(TaskStatus.RUNNING.getValue());
         long completed = taskRecordRepository.countByStatus(TaskStatus.COMPLETED.getValue());
         long failed = taskRecordRepository.countByStatus(TaskStatus.FAILED.getValue());
-        long cancelled = taskRecordRepository.countByStatus(TaskStatus.CANCELLED.getValue());
+        // DISCARDED 是管理员显式丢弃死信的处置结果，与主动取消同性质，归入 cancelled 桶且不计入 failed/dlq。
+        long cancelled = taskRecordRepository.countByStatus(TaskStatus.CANCELLED.getValue())
+                + taskRecordRepository.countByStatus(TaskStatus.DISCARDED.getValue());
         long dlq = taskRecordRepository.countByStatus(TaskStatus.DLQ.getValue());
         return new AdminConsoleSummaryDto.TaskStats(
                 queued + running + completed + failed + cancelled + dlq,

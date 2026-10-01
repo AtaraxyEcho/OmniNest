@@ -54,6 +54,19 @@ public final class AuthUserMapper {
             AuthUser user,
             String avatarUrl,
             Map<UUID, Set<String>> permissionCodesByRoleId) {
+        return toDto(user, avatarUrl, permissionCodesByRoleId, null);
+    }
+
+    /**
+     * 将 AuthUser 转换为 AuthUserDto，并附带两步验证启用状态。
+     *
+     * @param twoFactorEnabled  是否已确认启用两步验证；由管理用户列表按页批量查询后传入
+     */
+    public static AuthUserDto toDto(
+            AuthUser user,
+            String avatarUrl,
+            Map<UUID, Set<String>> permissionCodesByRoleId,
+            Boolean twoFactorEnabled) {
         Set<String> roles = roleCodes(user);
         Set<String> permissions = user.getRoles().stream()
                 .filter(AuthRole::isEnabled)
@@ -73,7 +86,9 @@ public final class AuthUserMapper {
                 roles,
                 permissions,
                 user.getQuotaBytes(),
-                user.getUsedBytes()
+                user.getUsedBytes(),
+                user.getCreatedAt(),
+                twoFactorEnabled
         );
     }
 

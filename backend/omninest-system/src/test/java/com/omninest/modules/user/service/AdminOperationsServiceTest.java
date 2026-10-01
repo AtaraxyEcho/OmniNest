@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,7 @@ import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
+import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
@@ -40,6 +42,7 @@ import com.omninest.modules.user.repository.AuthPermissionRepository;
 import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.user.port.ExternalStorageAccountSummary;
 import com.omninest.modules.user.port.ExternalStorageAdministration;
+import jakarta.persistence.NoResultException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -142,7 +145,14 @@ class AdminOperationsServiceTest {
         assertThat(updated.permissions()).containsExactly(Permissions.SYSTEM_USER_MANAGE);
         assertThat(admin.getPermissions()).containsExactly(manageUsers);
         verify(userSessionRevocationService).revokeAll(List.of(affectedUser.getId()), "管理员更新角色权限");
-        verify(auditLogService).record(actorUserId, "ADMIN_ROLE_PERMISSIONS_UPDATE", "auth_roles", admin.getId());
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_ROLE_PERMISSIONS_UPDATE"), eq("auth_roles"), eq(admin.getId()),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("oldValue", List.of(Permissions.SYSTEM_USER_READ))
+                .containsEntry("newValue", List.of(Permissions.SYSTEM_USER_MANAGE))
+                .containsEntry("changeBy", actorUserId.toString());
     }
 
     @Test
@@ -174,6 +184,184 @@ class AdminOperationsServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    void createRoleClonesTemplatePermissionsAndWritesAudit() {
+        givenFreshAdminActor();
+        AuthPermission userRead = permission(Permissions.SYSTEM_USER_READ, "system");
+        AuthPermission userManage = permission(Permissions.SYSTEM_USER_MANAGE, "system");
+        AuthRole template = role(Roles.MEMBER, userRead, userManage);
+        when(authRoleRepository.existsByCode("ROLE_MEDIA_CURATOR")).thenReturn(false);
+        when(authRoleRepository.findWithPermissionsByCode(Roles.MEMBER)).thenReturn(Optional.of(template));
+
+        AdminOperationsDto.RoleDetail created = service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest(
+                        " role_media_curator ", "媒体策展人", "自定义角色", "member")
+        );
+
+        assertThat(created.code()).isEqualTo("ROLE_MEDIA_CURATOR");
+        assertThat(created.name()).isEqualTo("媒体策展人");
+        assertThat(created.builtIn()).isFalse();
+        assertThat(created.enabled()).isTrue();
+        assertThat(created.permissions())
+                .containsExactly(Permissions.SYSTEM_USER_MANAGE, Permissions.SYSTEM_USER_READ);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_ROLE_CREATE"), eq("auth_roles"), isNull(),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("code", "ROLE_MEDIA_CURATOR")
+                .containsEntry("baseTemplate", "MEMBER")
+                .containsEntry("permissionCount", 2);
+    }
+
+    @Test
+    void createRoleSupportsNoneTemplate() {
+        givenFreshAdminActor();
+        when(authRoleRepository.existsByCode("ROLE_EMPTY")).thenReturn(false);
+
+        AdminOperationsDto.RoleDetail created = service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ROLE_EMPTY", "空角色", null, null)
+        );
+
+        assertThat(created.permissions()).isEmpty();
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_ROLE_CREATE"), eq("auth_roles"), isNull(),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("baseTemplate", "NONE")
+                .containsEntry("permissionCount", 0);
+    }
+
+    @Test
+    void createRoleRejectsInvalidCodeFormat() {
+        givenFreshAdminActor();
+
+        assertThatThrownBy(() -> service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ADMIN", "管理员", null, "none")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ROLE_")
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+        assertThatThrownBy(() -> service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA-CURATOR", "非法字符", null, "none")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+        assertThatThrownBy(() -> service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ROLE_" + "X".repeat(64), "超长编码", null, "none")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    @Test
+    void createRoleRejectsDuplicateCode() {
+        givenFreshAdminActor();
+        when(authRoleRepository.existsByCode("ROLE_MEDIA_CURATOR")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA_CURATOR", "媒体策展人", null, "none")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.CONFLICT);
+    }
+
+    @Test
+    void createRoleRejectsUnknownBaseTemplate() {
+        givenFreshAdminActor();
+
+        assertThatThrownBy(() -> service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA_CURATOR", "媒体策展人", null, "superadmin")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    @Test
+    void createRoleRejectsMissingTemplateRole() {
+        givenFreshAdminActor();
+        when(authRoleRepository.existsByCode("ROLE_MEDIA_CURATOR")).thenReturn(false);
+        when(authRoleRepository.findWithPermissionsByCode(Roles.MEMBER)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createRole(
+                actorUserId,
+                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA_CURATOR", "媒体策展人", null, "member")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.INTERNAL_ERROR);
+    }
+
+    @Test
+    void deleteRoleRemovesCustomRoleAndClearsPermissionBindings() {
+        givenFreshAdminActor();
+        AuthRole custom = role("ROLE_MEDIA_CURATOR",
+                permission(Permissions.SYSTEM_USER_READ, "system"),
+                permission(Permissions.SYSTEM_USER_MANAGE, "system"));
+        custom.setBuiltIn(false);
+        when(authRoleRepository.findWithPermissionsByCode("ROLE_MEDIA_CURATOR")).thenReturn(Optional.of(custom));
+        when(authUserRepository.existsByRoles_Code("ROLE_MEDIA_CURATOR")).thenReturn(false);
+
+        service.deleteRole(actorUserId, "role_media_curator");
+
+        assertThat(custom.getPermissions()).isEmpty();
+        verify(authRoleRepository).delete(custom);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_ROLE_DELETE"), eq("auth_roles"), eq(custom.getId()),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("code", "ROLE_MEDIA_CURATOR")
+                .containsEntry("permissionCount", 2);
+    }
+
+    @Test
+    void deleteRoleRejectsBuiltinRole() {
+        givenFreshAdminActor();
+        AuthRole builtin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
+        when(authRoleRepository.findWithPermissionsByCode(Roles.ADMIN)).thenReturn(Optional.of(builtin));
+
+        assertThatThrownBy(() -> service.deleteRole(actorUserId, Roles.ADMIN))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
+        verify(authRoleRepository, never()).delete(any(AuthRole.class));
+    }
+
+    @Test
+    void deleteRoleRejectsRoleWithBoundUsers() {
+        givenFreshAdminActor();
+        AuthRole custom = role("ROLE_MEDIA_CURATOR");
+        custom.setBuiltIn(false);
+        when(authRoleRepository.findWithPermissionsByCode("ROLE_MEDIA_CURATOR")).thenReturn(Optional.of(custom));
+        when(authUserRepository.existsByRoles_Code("ROLE_MEDIA_CURATOR")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteRole(actorUserId, "ROLE_MEDIA_CURATOR"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("解绑")
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.RESOURCE_IN_USE);
+        verify(authRoleRepository, never()).delete(any(AuthRole.class));
+    }
+
+    @Test
+    void deleteRoleRejectsMissingRole() {
+        givenFreshAdminActor();
+        when(authRoleRepository.findWithPermissionsByCode("ROLE_GONE")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.deleteRole(actorUserId, "ROLE_GONE"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
     }
 
     @Test
@@ -427,6 +615,8 @@ class AdminOperationsServiceTest {
     @Test
     void updateConfigDelegatesToConfigCenter() {
         givenFreshAdminActor();
+        when(configCenterService.auditContext("rate-limit.default-limit"))
+                .thenReturn(new ConfigCenterService.ConfigAuditContext(false, "120"));
         when(configCenterService.update("rate-limit.default-limit", "180", "调整默认限流", actorUserId)).thenReturn(
                 new ConfigEntryDto("rate-limit.default-limit", "180", "STRING", "runtime", "HOT", Instant.now(), null)
         );
@@ -438,7 +628,175 @@ class AdminOperationsServiceTest {
         );
 
         assertThat(updated.value()).isEqualTo("180");
-        verify(auditLogService).record(actorUserId, "ADMIN_CONFIG_UPDATE", "config_entries", null);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_CONFIG_UPDATE"), eq("config_entries"), isNull(),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("key", "rate-limit.default-limit")
+                .containsEntry("oldValue", "120")
+                .containsEntry("newValue", "180")
+                .containsEntry("reason", "调整默认限流")
+                .containsEntry("changeBy", actorUserId.toString());
+    }
+
+    @Test
+    void updateConfigMasksSensitiveValuesInAuditPayload() {
+        givenFreshAdminActor();
+        when(configCenterService.auditContext("integration.musicbrainz.token"))
+                .thenReturn(new ConfigCenterService.ConfigAuditContext(true, "v1:cipher:secret"));
+        when(configCenterService.update("integration.musicbrainz.token", "new-token", null, actorUserId)).thenReturn(
+                new ConfigEntryDto("integration.musicbrainz.token", null, "STRING", "integration", "HOT",
+                        Instant.now(), null)
+        );
+
+        service.updateConfig(
+                actorUserId,
+                "integration.musicbrainz.token",
+                new AdminOperationsDto.UpdateConfigRequest("new-token", null)
+        );
+
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_CONFIG_UPDATE"), eq("config_entries"), isNull(),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("oldValue", ConfigHistoryDto.MASK)
+                .containsEntry("newValue", ConfigHistoryDto.MASK)
+                .containsKey("reason")
+                .doesNotContainEntry("newValue", "new-token")
+                .doesNotContainEntry("oldValue", "v1:cipher:secret");
+    }
+
+    @Test
+    void cancelTaskCancelsQueuedTaskAndRecordsReason() {
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        doReturn(rawTaskRow(taskId, "QUEUED")).when(taskRecordRepository).findByIdRaw(taskId);
+        when(metricsRepository.updateTaskTerminalReturning(taskId, "CANCELLED", "QUEUED", "cancelled by admin"))
+                .thenReturn(taskRecordItem(taskId, "CANCELLED"));
+
+        var cancelled = service.cancelTask(actorUserId, taskId);
+
+        assertThat(cancelled.status()).isEqualTo("CANCELLED");
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_TASK_CANCEL"), eq("sys_tasks"), eq(taskId), payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("reason", "cancelled by admin")
+                .containsEntry("previousStatus", "QUEUED");
+    }
+
+    @Test
+    void cancelTaskRejectsRunningTask() {
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        doReturn(rawTaskRow(taskId, "RUNNING")).when(taskRecordRepository).findByIdRaw(taskId);
+
+        assertThatThrownBy(() -> service.cancelTask(actorUserId, taskId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.TASK_STATUS_ILLEGAL);
+    }
+
+    @Test
+    void cancelTaskRejectsMissingTask() {
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        doReturn(List.of()).when(taskRecordRepository).findByIdRaw(taskId);
+
+        assertThatThrownBy(() -> service.cancelTask(actorUserId, taskId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    void cancelTaskReportsConcurrentStateChange() {
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        doReturn(rawTaskRow(taskId, "QUEUED")).when(taskRecordRepository).findByIdRaw(taskId);
+        when(metricsRepository.updateTaskTerminalReturning(taskId, "CANCELLED", "QUEUED", "cancelled by admin"))
+                .thenThrow(new NoResultException());
+
+        assertThatThrownBy(() -> service.cancelTask(actorUserId, taskId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.TASK_STATUS_ILLEGAL);
+    }
+
+    @Test
+    void discardDlqTaskMarksDiscardedTerminalWithoutOverwritingError() {
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        doReturn(rawTaskRow(taskId, "DLQ")).when(taskRecordRepository).findByIdRaw(taskId);
+        when(metricsRepository.updateTaskTerminalReturning(taskId, "DISCARDED", "DLQ", null))
+                .thenReturn(taskRecordItem(taskId, "DISCARDED"));
+
+        var discarded = service.discardDlqTask(actorUserId, taskId);
+
+        assertThat(discarded.status()).isEqualTo("DISCARDED");
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(auditLogService).recordWithPayload(
+                eq(actorUserId), eq("ADMIN_TASK_DLQ_DISCARD"), eq("sys_tasks"), eq(taskId), payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue()).containsEntry("previousStatus", "DLQ");
+    }
+
+    @Test
+    void discardDlqTaskRejectsNonDlqTask() {
+        UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        doReturn(rawTaskRow(taskId, "FAILED")).when(taskRecordRepository).findByIdRaw(taskId);
+
+        assertThatThrownBy(() -> service.discardDlqTask(actorUserId, taskId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.TASK_STATUS_ILLEGAL);
+    }
+
+    @Test
+    void cleanupPreviewsCountWithSameCutoffAsCleanup() {
+        when(auditLogAdminRepository.countCreatedBefore(any())).thenReturn(7L);
+        when(loginAuditRepository.countCreatedBefore(any())).thenReturn(3L);
+        when(activeSessionRepository.countInactiveBefore(any())).thenReturn(5L);
+
+        assertThat(service.previewCleanupAuditLogs(30)).isEqualTo(7);
+        assertThat(service.previewCleanupLoginAuditLogs(30)).isEqualTo(3);
+        assertThat(service.previewCleanupSessions(30)).isEqualTo(5);
+    }
+
+    @Test
+    void cleanupPreviewsRejectOutOfRangeRetentionDays() {
+        assertThatThrownBy(() -> service.previewCleanupAuditLogs(-1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+        assertThatThrownBy(() -> service.previewCleanupLoginAuditLogs(3651))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+        assertThatThrownBy(() -> service.previewCleanupSessions(-1))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    private List<Object[]> rawTaskRow(UUID taskId, String status) {
+        return Collections.singletonList(new Object[]{
+                taskId, "FILE_INDEX", status, 0, "file.index", null, 0,
+                Instant.parse("2026-06-01T10:00:00Z"), Instant.parse("2026-06-01T10:00:00Z"), "{}"
+        });
+    }
+
+    private AdminOperationsDto.TaskRecordItem taskRecordItem(UUID taskId, String status) {
+        return new AdminOperationsDto.TaskRecordItem(
+                taskId,
+                "FILE_INDEX",
+                "更新文件索引",
+                status,
+                0,
+                "file.index",
+                null,
+                0,
+                Instant.parse("2026-06-01T10:00:00Z"),
+                Instant.parse("2026-06-01T10:00:00Z"),
+                null,
+                null
+        );
     }
 
     private static WorkerRuntimeRegistry availableWorkerRuntimeRegistry() {

@@ -199,7 +199,9 @@ class AuthControllerCookieTest {
                 Set.of("SUPER_ADMIN"),
                 Set.of("system:config:manage"),
                 1024,
-                0
+                0,
+                null,
+                null
         );
         return new AuthTokenResponse(
                 "Bearer",
