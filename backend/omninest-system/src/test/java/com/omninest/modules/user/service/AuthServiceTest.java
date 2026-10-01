@@ -249,8 +249,9 @@ class AuthServiceTest {
             assertThatThrownBy(() -> service.login(
                     new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("账号已被禁用");
+                    .hasMessageContaining("用户名或密码错误");
 
+            // 对外文案统一，真实禁用原因只保留在审计日志
             verify(loginAuditService).record(eq(user), eq("admin"), eq("web"), any(), any(),
                     eq("127.0.0.1"), eq("test"), eq("DISABLED"), eq("账号已被禁用"));
         }

@@ -3,6 +3,7 @@ package com.omninest.modules.file.repository;
 import com.omninest.modules.file.domain.FileUploadSession;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface FileUploadSessionRepository extends JpaRepository<FileUploadSession, UUID> {
+
+    /**
+     * 统计用户处于指定状态的上传会话数量，用于活跃会话并发上限。
+     */
+    long countByOwnerUserIdAndStatusIn(UUID ownerUserId, Collection<String> statuses);
     Optional<FileUploadSession> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     Optional<FileUploadSession> findByUploadIdAndOwnerUserId(String uploadId, UUID ownerUserId);

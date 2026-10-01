@@ -221,7 +221,7 @@ public class FileShareService {
         if (request.password() != null && !request.password().isBlank()) {
             share.setPasswordHash(passwordEncoder.encode(request.password()));
         } else if (request.generatePassword()) {
-            generatedPassword = generateRandomPassword(6);
+            generatedPassword = generateRandomPassword(10);
             share.setPasswordHash(passwordEncoder.encode(generatedPassword));
         }
 

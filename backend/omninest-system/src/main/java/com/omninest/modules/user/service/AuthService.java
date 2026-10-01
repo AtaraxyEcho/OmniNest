@@ -316,7 +316,9 @@ public class AuthService {
         if (!"ACTIVE".equals(profile.getStatus())) {
             auditLogin(profile, username, clientPlatform, deviceId, deviceName,
                     ipAddress, userAgent, "DISABLED", "账号已被禁用");
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "账号已被禁用");
+            // 对外文案与“用户名或密码错误”一致，避免账号存在性与状态被枚举；
+            // 真实原因保留在审计日志（DISABLED）
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
         }
         if (!passwordEncoder.matches(request.password(), profile.getPasswordHash())) {
             auditLogin(profile, username, clientPlatform, deviceId, deviceName,

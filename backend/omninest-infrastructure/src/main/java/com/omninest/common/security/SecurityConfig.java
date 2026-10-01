@@ -60,9 +60,13 @@ public class SecurityConfig {
     )
     SecurityFilterChain publicContentFilterChain(HttpSecurity http) throws Exception {
         // 分享链接与 OAuth 回调由一次性 state/token 校验，不携带 Bearer。
+        // /api/v1/s/** 显式枚举匿名可达的分享端点：accept 需要登录用户身份，
+        // 不在本链（落入主链按 Bearer 鉴权），否则该端点永远 401。
         http.securityMatcher(
                         "/api/v1/public/**",
-                        "/api/v1/s/**",
+                        "/api/v1/s/*",
+                        "/api/v1/s/*/authorize",
+                        "/api/v1/s/*/preview",
                         "/share/**",
                         "/api/v1/external-connectors/*/oauth/callback"
                 )
@@ -168,7 +172,8 @@ public class SecurityConfig {
 
     @Bean
     PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        // 强度 12：仅影响新产生的哈希，存量 $2a$10 哈希仍可校验
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean

@@ -108,7 +108,8 @@ class FileManagerServiceTest {
     });
 
     private final FileNodeSupport fileNodeSupport =
-            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository);
+            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository,
+                    Mockito.mock(SharedSpaceService.class));
     private final FileSyncEventWriter syncEventWriter = new FileSyncEventWriter(syncEventRecorder);
     private final FileFavoriteService fileFavoriteService = new FileFavoriteService(
             favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter);
@@ -216,7 +217,7 @@ class FileManagerServiceTest {
         var result = fileShareService.createShare(OWNER_ID, request);
 
         assertThat(result.generatedPassword()).isNotNull();
-        assertThat(result.generatedPassword()).hasSize(6);
+        assertThat(result.generatedPassword()).hasSize(10);
         assertThat(result.generatedPassword()).matches("[a-zA-Z0-9]+");
         verify(passwordEncoder).encode(result.generatedPassword());
     }
@@ -803,7 +804,7 @@ class FileManagerServiceTest {
         var createResult = realShareService.createShare(OWNER_ID, createRequest);
 
         assertThat(createResult.generatedPassword()).isNotNull();
-        assertThat(createResult.generatedPassword()).hasSize(6);
+        assertThat(createResult.generatedPassword()).hasSize(10);
         String plainPassword = createResult.generatedPassword();
 
         // 提取存储的密码哈希（从 save 调用中捕获）

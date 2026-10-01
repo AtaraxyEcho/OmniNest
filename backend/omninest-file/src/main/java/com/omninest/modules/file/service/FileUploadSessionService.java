@@ -63,6 +63,10 @@ import org.springframework.util.MimeType;
 @Slf4j
 @RequiredArgsConstructor
 public class FileUploadSessionService {
+
+    /** 单用户未完成上传会话的并发上限。 */
+    private static final int MAX_ACTIVE_UPLOAD_SESSIONS = 20;
+
     private static final long DIRECT_UPLOAD_MAX_BYTES = 64L * 1024 * 1024;
     private static final int MAX_CONCURRENT_PARTS = 4;
     private static final int MIN_PART_SIZE_BYTES = 10 * 1024 * 1024;
@@ -114,6 +118,8 @@ public class FileUploadSessionService {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的空间类型: " + request.spaceType());
             }
         }
+
+        requireActiveSessionBudget(ownerUserId);
 
         if (spaceType == SpaceType.SHARED) {
             // 共享空间上传必须具备 CAN_UPLOAD 角色能力并受共享空间容量约束
@@ -466,6 +472,22 @@ public class FileUploadSessionService {
         }
         if (!UploadStatus.CREATED.getValue().equals(session.getStatus()) && !UploadStatus.UPLOADING.getValue().equals(session.getStatus())) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话状态不允许完成");
+        }
+    }
+
+    /**
+     * 活跃上传会话并发上限：未完成会话会占用隔离桶 multipart 与配额预留，
+     * 超限时要求先完成或等待过期回收，防止认证用户刷会话资源。
+     */
+    private void requireActiveSessionBudget(UUID ownerUserId) {
+        long active = fileUploadSessionRepository.countByOwnerUserIdAndStatusIn(ownerUserId, List.of(
+                UploadStatus.CREATED.getValue(),
+                UploadStatus.UPLOADING.getValue(),
+                UploadStatus.FINALIZING.getValue()
+        ));
+        if (active >= MAX_ACTIVE_UPLOAD_SESSIONS) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED,
+                    "活跃上传会话过多（上限 " + MAX_ACTIVE_UPLOAD_SESSIONS + "），请先完成或等待过期会话释放");
         }
     }
 
