@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
+import 'package:omninest/core/theme/workstation_skin.dart';
 
 /// 全局统一下拉选项描述。
 class AppDropdownItem<T> {
@@ -21,6 +22,10 @@ class AppDropdownItem<T> {
 /// 展开菜单基于 Material 3 的 [MenuAnchor]——锚点定位、自动上下翻转、
 /// 外部点击关闭与键盘导航均由框架保证；视觉上为圆角投影面板、选项
 /// hover 高亮、选中项主色加粗并打勾。全局所有表单型下拉统一使用本控件。
+///
+/// 工位皮肤作用域内（Files / Admin，经 [WorkstationSurfaceFlag] 感知）：
+/// 字段与菜单改直角细线零阴影，默认 hairline 描边、聚焦/展开仅 1px
+/// 精准升为 onSurface；非工位子树保持全局默认圆角外观不受影响。
 ///
 /// 字段横向撑满父级约束（或 [width]），箭头通过 suffixIcon 固定右侧；
 /// 筛选栏等与按钮并排的场景应传 [dense] 为 true。
@@ -108,6 +113,9 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    // 工位 Scope 标记：直角细线形态；否则维持全局默认圆角外观。
+    final workstation =
+        Theme.of(context).extension<WorkstationSurfaceFlag>() != null;
     final dense = widget.dense;
     final labelStyle = textTheme.bodySmall?.copyWith(
       color: colors.onSurfaceVariant,
@@ -121,21 +129,31 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
         controller: _menu,
         useRootOverlay: true,
         alignmentOffset: const Offset(0, 6),
-        style: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(colors.surfaceContainerHigh),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppControlTokens.menuRadius),
-              side: BorderSide(color: colors.outlineVariant),
-            ),
-          ),
-          elevation: const WidgetStatePropertyAll(8),
-          padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(vertical: 6),
-          ),
-          minimumSize: const WidgetStatePropertyAll(Size(120, 0)),
-          maximumSize: const WidgetStatePropertyAll(Size(double.infinity, 320)),
-        ),
+        // 工位形态交由皮肤 menuTheme 统一（直角、outline 强边、零阴影）。
+        style:
+            workstation
+                ? null
+                : MenuStyle(
+                  backgroundColor: WidgetStatePropertyAll(
+                    colors.surfaceContainerHigh,
+                  ),
+                  shape: WidgetStatePropertyAll(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppControlTokens.menuRadius,
+                      ),
+                      side: BorderSide(color: colors.outlineVariant),
+                    ),
+                  ),
+                  elevation: const WidgetStatePropertyAll(8),
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(vertical: 6),
+                  ),
+                  minimumSize: const WidgetStatePropertyAll(Size(120, 0)),
+                  maximumSize: const WidgetStatePropertyAll(
+                    Size(double.infinity, 320),
+                  ),
+                ),
         builder: (context, controller, child) {
           final isOpen = controller.isOpen;
           return MouseRegion(
@@ -198,13 +216,18 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                         contentPadding: _contentPadding,
                         border: _fieldBorder(colors.outlineVariant),
                         enabledBorder: _fieldBorder(
-                          _focused || isOpen
+                          workstation
+                              ? colors.outlineVariant
+                              : _focused || isOpen
                               ? colors.primary
                               : _hovered
                               ? colors.onSurfaceVariant
                               : colors.outlineVariant,
                         ),
-                        focusedBorder: _fieldBorder(colors.primary, width: 1.5),
+                        focusedBorder: _fieldBorder(
+                          workstation ? colors.onSurface : colors.primary,
+                          width: workstation ? 1 : 1.5,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -249,9 +272,12 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                 ),
                 shape: WidgetStatePropertyAll(
                   RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppControlTokens.controlRadius,
-                    ),
+                    borderRadius:
+                        workstation
+                            ? BorderRadius.zero
+                            : BorderRadius.circular(
+                              AppControlTokens.controlRadius,
+                            ),
                   ),
                 ),
                 backgroundColor: WidgetStateProperty.resolveWith(
@@ -296,9 +322,15 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
     return field;
   }
 
-  OutlineInputBorder _fieldBorder(Color color, {double width = 1}) =>
-      OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
-        borderSide: BorderSide(color: color, width: width),
-      );
+  OutlineInputBorder _fieldBorder(Color color, {double width = 1}) {
+    final workstation =
+        Theme.of(context).extension<WorkstationSurfaceFlag>() != null;
+    return OutlineInputBorder(
+      borderRadius:
+          workstation
+              ? BorderRadius.zero
+              : BorderRadius.circular(AppControlTokens.controlRadius),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
 }

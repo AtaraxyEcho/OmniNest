@@ -299,6 +299,7 @@
   "coreSave": "Save",
   "coreClose": "Close",
   "coreBack": "Back",
+  "coreBackToPortal": "Back to Portal",
   "coreDelete": "Delete",
   "coreClear": "Clear",
   "coreUnknownDate": "Unknown date",
@@ -413,12 +414,101 @@
   "filesCurrentView": "Current View",
   "filesCurrentViewTotal": "Current View Total",
   "filesSoftDeleted": "Soft Deleted Files",
+  "filesColumnName": "Name",
+  "filesColumnModified": "Modified",
+  "filesColumnSharedAt": "Shared at",
+  "filesColumnExpiresAt": "Expires at",
+    "paginationTotal": "{count} total",
+  "@paginationTotal": { "placeholders": { "count": {} } },
+  "paginationRange": "{start}-{end}",
+  "@paginationRange": { "placeholders": { "start": {}, "end": {} } },
+  "paginationFirst": "First page",
+  "paginationPrev": "Previous page",
+  "paginationNext": "Next page",
+  "paginationLast": "Last page",
+  "paginationJumpTo": "Jump to",
+  "paginationRowsPerPage": "Rows per page",
+  "@filesPaginationTotal": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@filesPaginationRange": {
+    "placeholders": {
+      "start": {},
+      "end": {}
+    }
+  },
+  "filesColumnSize": "Size",
+  "filesColumnUpdatedAt": "Updated",
+  "filesColumnCreatedAt": "Created",
+  "filesImportFileCount": "Files",
+  "filesColumnType": "Type",
+  "filesColumnFormat": "Format",
+  "filesColumnStatus": "Status",
+  "filesTaskCancel": "Cancel Task",
+  "filesOfflineSpeed": "Speed",
+  "filesStatusDownloading": "Downloading",
+  "filesStatusRunning": "Running",
+  "filesStatusCompleted": "Completed",
+  "filesOfflineCancelConfirm": "Cancel offline download?",
+  "filesOfflineCancelMessage": "Task progress and resume state will be discarded.",
+  "filesImportCancelConfirm": "Cancel import task?",
+  "filesImportCancelMessage": "The running import pipeline will be aborted.",
+  "filesShareLink": "Share Link",
+  "filesShareAccess": "Access",
+  "filesShareRemaining": "Remaining",
+  "filesShareExpires": "Expires",
+  "filesShareCreated": "Created",
+  "filesShareExtract": "Extract Code",
+  "filesMetricSharedOwners": "Share Owners",
+  "filesMetricSharedItems": "Shared Items",
+  "filesMetricSharedSize": "Total Size",
+  "filesMetricTotalShares": "Total Links",
+  "filesMetricActiveShares": "Active Links",
+  "filesMetricExpiredShares": "Expired",
+  "filesMetricRevokedShares": "Revoked",
+  "filesSharePublic": "Public",
+  "filesSharePermanent": "Permanent",
+  "filesShareExpiredShort": "Inactive",
+  "filesOpEdit": "Edit",
+  "filesOpRevoke": "Revoke",
+  "filesMetricUploading": "Uploading",
+  "filesMetricQueued": "Queued",
+  "filesMetricCompleted": "Completed",
+  "filesMetricFailed": "Failed",
+  "filesMetricMounts": "Mounts",
+  "filesMetricReady": "Credentials Ready",
+  "filesMetricAbnormal": "Abnormal",
+  "filesOpBrowse": "Browse",
+  "filesOpUnmount": "Unmount",
+  "filesOpConfig": "Configure",
+  "filesTaskSource": "Source",
+  "filesProgress": "Progress",
+  "filesStatusFilterAll": "All",
+  "filesInspectorTitle": "File Details",
+  "filesColumnUploader": "Uploader",
+  "filesNewFolderDefault": "New Folder",
+  "filesToolbarTableView": "Table View",
+  "filesToolbarGridView": "Grid View",
+  "filesToggleInspector": "Details Panel",
+  "filesInspectorTabOverview": "Overview",
+  "filesInspectorTabVersions": "Versions",
+  "filesInspectorTabActivity": "Activity",
+  "filesInspectorEmptyHint": "Select an item to inspect its technical details",
+  "filesInspectorPath": "Path",
+  "filesInspectorNode": "Node",
+  "filesInspectorExactBytes": "Exact bytes",
+  "filesInspectorResolution": "Resolution",
+  "filesInspectorDuration": "Duration",
+  "filesInspectorMime": "MIME",
+  "filesInspectorSpace": "Space",
+  "filesInspectorNoVersions": "No version history",
   "filesEmpty": "No files",
   "filesRecycleBinEmpty": "Recycle bin is empty",
   "filesCameraTakePhoto": "Take Photo & Upload",
   "filesCameraRecordVideo": "Record Video & Upload",
   "filesUploadFile": "Upload File",
-  "filesLoadMore": "Load more ({loaded} / {total} loaded)",
   "@filesLoadMore": {
     "placeholders": {
       "loaded": {},
@@ -452,6 +542,8 @@
   "filesShare": "Share",
   "filesOpen": "Open",
   "filesPreview": "Preview",
+  "filesPreviewFullscreen": "Fullscreen",
+  "filesPreviewExitFullscreen": "Exit fullscreen",
   "filesRestore": "Restore",
   "filesMoreActions": "More Actions",
   "filesMoreSections": "More Sections",
@@ -563,7 +655,6 @@
   "filesStatusUploading": "Uploading",
   "filesStatusPaused": "Paused",
   "filesStatusFailed": "Failed",
-  "filesStatusCompleted": "Completed",
   "filesStatusCancelled": "Cancelled",
   "filesStatusCancelling": "Cancelling",
   "filesOfflineEmpty": "No offline download tasks",
@@ -653,6 +744,8 @@
   },
   "filesAccessUnlimited": "Unlimited",
   "filesShareActive": "Active",
+  "filesShareScopeMine": "Mine",
+  "filesShareScopeAll": "All links",
   "filesShareRevoked": "Revoked",
   "filesShareExpired": "Expired",
   "filesShareExhausted": "Exhausted",
@@ -792,6 +885,11 @@
     }
   },
   "filesStatusConflict": "Conflict",
+  "filesStatusPending": "Queued",
+  "filesUploadOrigin": "Origin",
+  "filesUploadOriginLocal": "Local",
+  "filesUploadOriginServer": "Server",
+  "filesUploadPartsUnit": "parts",
   "filesStatusCreated": "Created",
   "filesLocalUpload": "Local Upload",
   "filesUploadTaskCount": "{count} tasks",
@@ -1327,6 +1425,25 @@
   "adminRequests": "Requests",
   "adminComponentHealth": "Component Health",
   "adminComponentHealthSubtitle": "Current snapshot of database, Redis, RabbitMQ, MinIO and index components.",
+  "adminMiddlewareTopologyTitle": "Middleware & Infrastructure Topology",
+  "adminChartTipCompleted": "Completed {count}",
+  "@adminChartTipCompleted": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminChartTipFailed": "Failed {count}",
+  "@adminChartTipFailed": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminChartTipRunning": "Running {count}",
+  "@adminChartTipRunning": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "adminNoComponentHealth": "No component health data.",
   "adminRecentAlerts": "Recent System Alerts",
   "adminRecentAlertsSubtitle": "Generated by snapshot rules, can be connected to real alert table later.",
@@ -1349,6 +1466,71 @@
   "adminTabLoginLog": "Login Log",
   "adminRecentAudit": "Recent Audit",
   "adminRecentAuditSubtitle": "From audit_logs, sorted by creation time descending.",
+  "adminServiceInspect": "Inspect",
+  "adminUserColumn": "User",
+  "adminUserQuotaUsageColumn": "Quota Usage",
+  "adminUserCreatedAtColumn": "Created",
+  "adminUserTwoFactorColumn": "2FA",
+  "adminUserPermissionsCount": "{count} permissions",
+  "@adminUserPermissionsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminUserProtected": "PROTECTED",
+  "adminUserProtectedTooltip": "Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.",
+  "adminUserDisableConfirmTitle": "Disable account",
+  "adminUserDisableConfirmMessage": "Disable {name}? The account will be signed out and denied login until re-enabled.",
+  "adminUserEnableConfirmTitle": "Enable account",
+  "adminUserEnableConfirmMessage": "Enable {name}? The account will be allowed to sign in again.",
+  "adminDeleteUser": "Delete user",
+  "adminDeleteUserConfirmMessage": "Permanently delete {name}. Only empty accounts with no content ownership can be deleted; type the username to confirm.",
+  "adminEditRolesHint": "Assign one or more system roles. Changing roles immediately updates the user's permissions and visible menus.",
+  "adminCreateRole": "New custom role",
+  "adminRoleCode": "Role code",
+  "adminRoleCodeRule": "Must start with ROLE_ and contain only uppercase letters, digits and underscores (7-66 chars in total).",
+  "adminRoleDisplayName": "Display name",
+  "adminRoleDescription": "Description",
+  "adminRoleBaseTemplate": "Permission template",
+  "adminRoleTemplateNone": "Empty permission set (configure later)",
+  "adminRoleTemplateMember": "Clone ROLE_MEMBER baseline",
+  "adminRoleTemplateAdmin": "Clone ROLE_ADMIN baseline",
+  "adminRoleNameRequired": "Display name is required",
+  "adminRoleDelete": "Delete role",
+  "adminRoleDeleteConfirmMessage": "Delete role {name} ({code})? Roles still bound to users cannot be deleted.",
+  "adminRoleSuperAdminLocked": "SUPER_ADMIN holds every permission and is read-only by design.",
+  "adminRolePermissionSummary": "{count} permissions granted across {modules} modules",
+  "adminRoleBuiltinTag": "Built-in",
+  "adminRoleCustomTag": "Custom",
+  "adminPermissionMatrixTitle": "Business module permission matrix",
+  "adminPermissionMatrixSubtitle": "Derived from the permission catalog grouped by module; open a role to edit its bindings.",
+  "adminPermissionSelectedCount": "{selected} / {total} permissions selected",
+  "adminPermissionSelectAll": "Select all",
+  "adminPermissionClear": "Clear",
+  "adminPermissionGroupToggle": "Toggle group",
+  "adminPermissionToggleModule": "Collapse / expand module",
+  "adminModuleActivity": "Activity",
+  "adminModulePreference": "Preference",
+  "adminModuleProfile": "Profile",
+  "adminModuleFile": "File",
+  "adminModuleMedia": "Media",
+  "adminModulePhoto": "Photo",
+  "adminModuleBackdrop": "Backdrop",
+  "adminModuleTask": "Task",
+  "adminModuleSystem": "System",
+  "adminServiceColumn": "Service",
+  "adminStatusColumn": "Status",
+  "adminLatencyColumn": "Latency",
+  "adminViewAllAuditLogs": "View all audit logs",
+  "adminAutoRefresh": "Live refresh",
+  "adminThroughputTrend": "Task Throughput Trend",
+  "adminThroughputTrendSubtitle": "Completed and failed task throughput for this week (Mon-Sun).",
+  "adminLoadStateNormal": "Normal",
+  "adminLoadStateWarning": "Warning",
+  "adminLoadStateCritical": "Critical",
+  "adminFailedCount": "Failed",
   "adminNoAuditLogs": "No audit logs.",
   "adminNoLoginLogs": "No login logs.",
   "adminLoadFailed": "Load failed: {error}",
@@ -1364,6 +1546,7 @@
   "adminFilterAction": "Action",
   "adminFilterStatus": "Status",
   "adminFilterPlatform": "Platform",
+  "adminFilterRetention": "Retention",
   "adminCleanup": "Clean up",
   "adminRetentionDays": "Keep {days} days",
   "@adminRetentionDays": {
@@ -1393,6 +1576,9 @@
   "adminTaskStatusDlq": "Dead letter",
   "adminTaskErrorSummary": "Error summary",
   "adminTaskUpdatedAt": "Updated at",
+  "adminTaskCreatedAt": "Created at",
+  "adminTaskRetryCount": "Retries",
+  "adminTaskIdColumn": "Task ID",
   "adminTaskName": "Task name",
   "adminTaskOwner": "Owner",
   "adminTaskExecutionStatus": "Status",
@@ -1620,11 +1806,12 @@
   "adminNoReason": "No reason",
   "adminDlq": "Dead Letter Queue",
   "adminDlqSubtitle": "Failed tasks exhausted retries — re-queue manually",
+  "adminDlqMetricHint": "Retries exhausted; manual action needed",
+  "adminDlqEmptyHealthy": "No dead letter tasks — queue is healthy",
   "adminNoDlqTasks": "No DLQ tasks",
   "adminNoErrorSummary": "No error summary",
   "adminStorageManagement": "Storage Management",
   "adminListEmpty": "No data. Try adjusting the filters.",
-  "adminListRowsPerPage": "Rows per page",
   "adminListPageOf": "Page {current} of {total}",
   "@adminListPageOf": {
     "placeholder": {
@@ -1633,8 +1820,6 @@
       }
     }
   },
-  "adminListPrevPage": "Previous page",
-  "adminListNextPage": "Next page",
   "adminListActions": "Actions",
   "adminListIndex": "#",
   "adminListSelectedCount": "{count} selected",
@@ -1798,6 +1983,9 @@
   "adminSessionExpiresAt": "Expires at",
   "adminSessionLastActive": "Last active at",
   "adminSessionIp": "IP address",
+  "adminAuditActorColumn": "Actor",
+  "adminAuditActorIdColumn": "Account ID",
+  "adminLoginClientColumn": "Client",
   "adminResourceType": "Resource type",
   "adminLogContent": "Description",
   "adminLogTime": "Time",
@@ -1833,6 +2021,8 @@
   "adminLibraryCleanupOrphan": "Clean up mount location",
   "adminLibraryColumnName": "Name",
   "adminLibraryColumnLocation": "Location · Root",
+  "adminLibraryColumnVisibility": "Visibility",
+  "adminLibraryColumnHealth": "Health",
   "adminLibraryColumnScanStatus": "Scan status",
   "adminLibraryColumnLastScan": "Last scan",
   "adminLibraryManageInfoSection": "Library info",
@@ -1859,26 +2049,33 @@
   "adminStorageColumnRoot": "Root",
   "adminStorageColumnHealth": "Health",
   "adminLibraryDiscoverUpdates": "Discover updates",
-  "adminListTotalCount": "{count} items",
   "@adminListTotalCount": {
     "placeholders": {
       "count": {}
     }
   },
-  "adminListRange": "Items {start}-{end}",
   "@adminListRange": {
     "placeholders": {
       "start": {},
       "end": {}
     }
   },
-  "adminListFirstPage": "First page",
-  "adminListLastPage": "Last page",
-  "adminListJumpTo": "Go to",
-  "adminListPageUnit": "",
   "adminConfigGroupColumn": "Group",
   "adminBatchRevokeSessions": "Force sign out selected",
   "adminBatchRetryTasks": "Retry selected",
+  "adminBatchCancelTasks": "Cancel selected",
+  "adminBatchCancelConfirmMessage": "This will cancel {count} queued or retry-waiting tasks; running tasks are unaffected. Failed items are skipped.",
+  "@adminBatchCancelConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminBatchDiscardConfirmMessage": "This will permanently discard {count} dead-letter tasks; discarded tasks cannot be retried. Failed items are skipped.",
+  "@adminBatchDiscardConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "adminBatchClearSelection": "Clear selection",
   "adminBatchCompleted": "Batch finished: {success} succeeded, {failed} failed",
   "@adminBatchCompleted": {
@@ -1946,6 +2143,7 @@
   "adminSearchUsers": "Search username, nickname or email",
   "adminAll": "All",
   "adminNoMatchingUsers": "No matching users.",
+  "adminNoUsers": "No users yet.",
   "adminLoadMore": "Load more (loaded {loaded} / {total})",
   "@adminLoadMore": {
     "placeholders": {
@@ -1960,6 +2158,14 @@
   "adminSystemMaintenance": "System maintenance",
   "adminMemberGuest": "Member / Guest",
   "adminBusinessAccess": "Business access",
+  "adminSuperAdminDisableNote": "Cannot be disabled",
+  "adminAssignableRoles": "Assignable roles",
+  "adminQuotaUsedBytes": "Used {size}",
+  "@adminQuotaUsedBytes": {
+    "placeholders": {
+      "size": {}
+    }
+  },
   "adminNotSetEmail": "Email not set",
   "adminDisable": "Disable",
   "adminRole": "Role",
@@ -1975,6 +2181,20 @@
   },
   "adminBatchSetStorageQuota": "Batch Set Storage Quota ({count} users)",
   "@adminBatchSetStorageQuota": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminBatchDisableUsers": "Batch disable",
+  "adminBatchEnableUsers": "Batch enable",
+  "adminBatchDisableConfirmMessage": "This will disable {count} users: all their sessions are revoked immediately and they cannot sign in until re-enabled. Failed items are skipped.",
+  "@adminBatchDisableConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminBatchEnableConfirmMessage": "This will enable {count} users, restoring their ability to sign in. Failed items are skipped.",
+  "@adminBatchEnableConfirmMessage": {
     "placeholders": {
       "count": {}
     }
@@ -2055,6 +2275,20 @@
     }
   },
   "adminObjects": "Objects",
+  "adminTaskThroughput7d": "Task Throughput (7D)",
+  "adminOverviewThroughputTrend": "Task Throughput Trend (Last 7 Days)",
+  "adminGrowthPanelTitle": "Activity & Storage Growth",
+  "adminGrowthPanelSubtitle": "Daily user growth and storage growth from analytics.",
+  "adminUserGrowthLabel": "User Growth",
+  "adminStorageGrowthLabel": "Storage Growth",
+  "adminFilesFoldersObjects": "{files} files · {folders} folders · {objects} objects",
+  "@adminFilesFoldersObjects": {
+    "placeholders": {
+      "files": {},
+      "folders": {},
+      "objects": {}
+    }
+  },
   "adminHealthy": "Healthy",
   "adminFiles": "Files",
   "adminFolders": "Folders",
@@ -2109,6 +2343,10 @@
   "adminStorageSubtitle": "Manage MinIO buckets, capacity, and index maintenance.",
   "adminExternalStorageTitle": "External Storage",
   "adminRefresh": "Refresh",
+  "adminOverviewAutoRefresh": "Auto refresh",
+  "adminOverviewRefreshOff": "Off",
+  "adminOverviewRefresh30s": "30s",
+  "adminOverviewRefresh5m": "5m",
   "adminRecalculate": "Recalculate",
   "adminRecalculateDone": "Updated storage for {count} users",
   "@adminRecalculateDone": {
@@ -2564,7 +2802,6 @@
   },
   "readerContinueBtn": "Continue Reading",
   "readerBookshelfSection": "Bookshelf",
-  "readerShowAllBooks": "Show all {count} more",
   "@readerShowAllBooks": {
     "placeholder": {
       "count": {
@@ -3792,7 +4029,6 @@
   "filesOpNavigateToRoot": "Navigate to root",
   "filesOpChangeDirectory": "Change directory",
   "filesOpFilterFileType": "Filter file type",
-  "filesOpLoadMore": "Load more files",
   "filesOpCreateFolder": "Create folder",
   "filesOpRename": "Rename file",
   "filesOpCopy": "Copy file",
@@ -4248,6 +4484,7 @@
   "musicQrLoginInstruction": "Open the Netease Cloud Music app and scan this QR code.",
   "musicQrWaiting": "Waiting for scan…",
   "musicQrScanned": "Scanned — confirm on your phone",
+  "musicQrConfirmedSyncing": "Confirmed — syncing your library…",
   "musicQrExpired": "The QR code expired. Start login again to get a new code.",
   "musicQrStatusFailed": "Unable to refresh login status. Check the connection and retry.",
   "musicQrRetry": "Retry",
@@ -4666,5 +4903,138 @@
   "adminAuditActionSessionCleanup": "Session cleanup",
   "adminAuditActionAuditLogCleanup": "Audit log cleanup",
   "adminAuditActionLoginAuditCleanup": "Login log cleanup",
-  "adminAuditActionUnknown": "System action"
+  "adminAuditActionUnknown": "System action",
+  "adminAuditDetailTitle": "Audit detail",
+  "adminAuditFieldAction": "Action",
+  "adminAuditFieldTime": "Timestamp",
+  "adminAuditFieldActor": "Actor",
+  "adminAuditFieldIp": "Client IP",
+  "adminAuditChangeSnapshot": "Change snapshot",
+  "adminAuditOldValue": "Old value",
+  "adminAuditNewValue": "New value",
+  "adminAuditPayload": "Raw payload",
+  "adminAuditPayloadEmpty": "This entry has no extended payload.",
+  "adminCleanupTarget": "Target",
+  "adminCleanupRetention": "Retention",
+  "adminCleanupPreviewCount": "Estimated rows",
+  "adminCleanupPhysicalWarning": "Records beyond the retention window are physically deleted and cannot be recovered.",
+  "adminCleanupExportHint": "Export the current page as CSV before cleanup to keep a copy.",
+  "adminCleanupSessionsHint": "Only expired and revoked sessions are removed; active sessions are unaffected.",
+  "adminCleanupTargetSessions": "Expired & revoked sessions",
+  "adminTaskDetailTitle": "Task detail",
+  "adminTaskFieldHandler": "Handler",
+  "adminTaskFieldQueue": "Queue",
+  "adminTaskFieldRetryCount": "Retry rounds",
+  "adminTaskCancel": "Cancel task",
+  "adminTaskCancelConfirmTitle": "Cancel this task",
+  "adminTaskCancelConfirmMessage": "The task will stop before execution and cannot be resumed.",
+  "adminTaskDiscard": "Discard",
+  "adminTaskDiscardTitle": "Discard DLQ task",
+  "adminTaskDiscardMessage": "A discarded task reaches a terminal state and can never be retried.",
+  "adminTaskStatusDiscarded": "Discarded",
+  "adminTaskStatusRetryWait": "Retry waiting",
+  "adminMetricQueuedReady": "Queued / ready",
+  "adminMetricDlq": "Dead letter",
+  "adminSessionMetricRevoked": "Revoked",
+  "adminSessionClientMix": "Client mix",
+  "adminSessionPlatformWeb": "Web",
+  "adminSessionPlatformPc": "PC",
+  "adminSessionPlatformMobile": "Mobile",
+  "notificationUnreadCount": "{count} unread",
+  "@notificationUnreadCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationFilterAll": "All ({count})",
+  "@notificationFilterAll": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationFilterUnread": "Unread ({count})",
+  "@notificationFilterUnread": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationFilterAllTooltip": "View all notifications",
+  "notificationFilterUnreadTooltip": "View unread notifications only",
+  "notificationTotalSummary": "TOTAL: {count} ITEMS",
+  "@notificationTotalSummary": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationPrevPage": "Previous",
+  "notificationNextPage": "Next",
+  "profileHeaderAccount": "Account Profile",
+  "profileHeaderAppearance": "Appearance",
+  "profileHeaderNotifications": "Notification Preferences",
+  "profileHeaderSecurity": "Security & Sessions",
+  "profileHeaderServer": "Server Configuration",
+  "profileHeaderAbout": "About",
+  "profileSectionAccountSubtitle": "Manage your basic profile, avatar and account status.",
+  "profileSectionAppearanceSubtitle": "Adjust theme, language, font scale and local backdrop.",
+  "profileSectionNotificationsSubtitle": "Configure notification types and foreground toasts.",
+  "profileSectionSecuritySubtitle": "Manage password, two-factor authentication and active sessions.",
+  "profileSectionServerSubtitle": "View and switch the connected server.",
+  "profileSectionAboutSubtitle": "View system version and updates.",
+  "profileGeneralInfoTitle": "General Information",
+  "profileDisplayNameLabel": "Display Name",
+  "profileAvatarHint": "JPG/PNG/WebP up to 5MB",
+  "profileRoleLabel": "Role",
+  "profilePasswordRowTitle": "Password",
+  "profileCredentialsTitle": "Credentials & 2FA",
+  "profileTwoFactorManageAction": "Manage 2FA",
+  "profileActiveSessionsTitle": "Active Sessions",
+  "profileSessionDeviceColumn": "Device / Browser",
+  "profileSessionIpColumn": "IP Address",
+  "profileSessionLoginTimeColumn": "Signed in",
+  "profileSessionExpiresColumn": "Expires",
+  "profileSessionLastActiveColumn": "Last active",
+  "profileSessionStatusColumn": "Status",
+  "profileSessionActionColumn": "Actions",
+  "profileSessionCurrent": "Current",
+  "notificationActionViewFiles": "View files",
+  "notificationActionOpenMedia": "Open media center",
+  "notificationActionManageSessions": "Manage sessions",
+  "notificationActionViewShares": "View shares",
+  "profileSaveChanges": "Save Changes",
+  "profileUpdateFailed": "Failed to save profile",
+  "profileUpdateSuccess": "Profile updated",
+  "notificationCenterTitle": "Notifications",
+  "profileBreadcrumbTitle": "Profile & Settings",
+  "videoAutoImportStatusUnknown": "Import result could not be confirmed yet; check the notification and task center later",
+  "readerAnnotationSaveFailed": "Failed to save the annotation, please retry",
+  "musicFavoriteToggleFailed": "Failed to toggle favorite, please retry",
+  "readerImportCandidatesLoadFailed": "Failed to load import candidates",
+  "syncReplayPendingWarning": "{count} offline operations are pending and will retry automatically when back online",
+  "commonRetry": "Retry",
+  "profileEditProfile": "Edit Profile",
+  "profileEditProfileTitle": "Edit Profile",
+  "profileSessionLoginAt": "Signed in {time}",
+  "@profileSessionLoginAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "profileDisplayNameInvalid": "Display name must be 1-120 characters",
+  "profileEmailInvalid": "Invalid email format",
+  "profileSessionExpiresAt": "Expires {time}",
+  "@profileSessionExpiresAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "notificationTypeMediaImportCompleted": "Media import completed",
+  "notificationTypeMediaImportCompletedDesc": "An uploaded file was imported into the library automatically",
+  "notificationTypeMediaImportFailed": "Media import failed",
+  "notificationTypeMediaImportFailedDesc": "An uploaded file could not be imported automatically",
+  "notificationMediaImportCompleted": "Media was imported into the library automatically",
+  "notificationMediaImportCompletedWithName": "File {fileName} was imported into the library automatically",
+  "notificationMediaImportFailed": "Automatic media import failed; check the file and re-upload or import manually",
+  "notificationMediaImportFailedWithName": "Automatic import of file {fileName} failed; check the file and re-upload or import manually",
+  "favoriteAdded": "Added to favorites",
+  "favoriteRemoved": "Removed from favorites"
 }

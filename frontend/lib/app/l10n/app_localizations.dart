@@ -1682,6 +1682,12 @@ abstract class AppLocalizations {
   /// **'Back'**
   String get coreBack;
 
+  /// No description provided for @coreBackToPortal.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Portal'**
+  String get coreBackToPortal;
+
   /// No description provided for @coreDelete.
   ///
   /// In en, this message translates to:
@@ -2306,6 +2312,468 @@ abstract class AppLocalizations {
   /// **'Soft Deleted Files'**
   String get filesSoftDeleted;
 
+  /// No description provided for @filesColumnName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get filesColumnName;
+
+  /// No description provided for @filesColumnModified.
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get filesColumnModified;
+
+  /// No description provided for @filesColumnSharedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared at'**
+  String get filesColumnSharedAt;
+
+  /// No description provided for @filesColumnExpiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires at'**
+  String get filesColumnExpiresAt;
+
+  /// No description provided for @paginationTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} total'**
+  String paginationTotal(Object count);
+
+  /// No description provided for @paginationRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{start}-{end}'**
+  String paginationRange(Object start, Object end);
+
+  /// No description provided for @paginationFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'First page'**
+  String get paginationFirst;
+
+  /// No description provided for @paginationPrev.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get paginationPrev;
+
+  /// No description provided for @paginationNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get paginationNext;
+
+  /// No description provided for @paginationLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Last page'**
+  String get paginationLast;
+
+  /// No description provided for @paginationJumpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to'**
+  String get paginationJumpTo;
+
+  /// No description provided for @paginationRowsPerPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows per page'**
+  String get paginationRowsPerPage;
+
+  /// No description provided for @filesColumnSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get filesColumnSize;
+
+  /// No description provided for @filesColumnUpdatedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get filesColumnUpdatedAt;
+
+  /// No description provided for @filesColumnCreatedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get filesColumnCreatedAt;
+
+  /// No description provided for @filesImportFileCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get filesImportFileCount;
+
+  /// No description provided for @filesColumnType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get filesColumnType;
+
+  /// No description provided for @filesColumnFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get filesColumnFormat;
+
+  /// No description provided for @filesColumnStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get filesColumnStatus;
+
+  /// No description provided for @filesTaskCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Task'**
+  String get filesTaskCancel;
+
+  /// No description provided for @filesOfflineSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get filesOfflineSpeed;
+
+  /// No description provided for @filesStatusDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get filesStatusDownloading;
+
+  /// No description provided for @filesStatusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get filesStatusRunning;
+
+  /// No description provided for @filesStatusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get filesStatusCompleted;
+
+  /// No description provided for @filesOfflineCancelConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel offline download?'**
+  String get filesOfflineCancelConfirm;
+
+  /// No description provided for @filesOfflineCancelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Task progress and resume state will be discarded.'**
+  String get filesOfflineCancelMessage;
+
+  /// No description provided for @filesImportCancelConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel import task?'**
+  String get filesImportCancelConfirm;
+
+  /// No description provided for @filesImportCancelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The running import pipeline will be aborted.'**
+  String get filesImportCancelMessage;
+
+  /// No description provided for @filesShareLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Link'**
+  String get filesShareLink;
+
+  /// No description provided for @filesShareAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Access'**
+  String get filesShareAccess;
+
+  /// No description provided for @filesShareRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining'**
+  String get filesShareRemaining;
+
+  /// No description provided for @filesShareExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires'**
+  String get filesShareExpires;
+
+  /// No description provided for @filesShareCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get filesShareCreated;
+
+  /// No description provided for @filesShareExtract.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract Code'**
+  String get filesShareExtract;
+
+  /// No description provided for @filesMetricSharedOwners.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Owners'**
+  String get filesMetricSharedOwners;
+
+  /// No description provided for @filesMetricSharedItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared Items'**
+  String get filesMetricSharedItems;
+
+  /// No description provided for @filesMetricSharedSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Size'**
+  String get filesMetricSharedSize;
+
+  /// No description provided for @filesMetricTotalShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Links'**
+  String get filesMetricTotalShares;
+
+  /// No description provided for @filesMetricActiveShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Active Links'**
+  String get filesMetricActiveShares;
+
+  /// No description provided for @filesMetricExpiredShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get filesMetricExpiredShares;
+
+  /// No description provided for @filesMetricRevokedShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get filesMetricRevokedShares;
+
+  /// No description provided for @filesSharePublic.
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get filesSharePublic;
+
+  /// No description provided for @filesSharePermanent.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanent'**
+  String get filesSharePermanent;
+
+  /// No description provided for @filesShareExpiredShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get filesShareExpiredShort;
+
+  /// No description provided for @filesOpEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get filesOpEdit;
+
+  /// No description provided for @filesOpRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get filesOpRevoke;
+
+  /// No description provided for @filesMetricUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading'**
+  String get filesMetricUploading;
+
+  /// No description provided for @filesMetricQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get filesMetricQueued;
+
+  /// No description provided for @filesMetricCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get filesMetricCompleted;
+
+  /// No description provided for @filesMetricFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get filesMetricFailed;
+
+  /// No description provided for @filesMetricMounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Mounts'**
+  String get filesMetricMounts;
+
+  /// No description provided for @filesMetricReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Credentials Ready'**
+  String get filesMetricReady;
+
+  /// No description provided for @filesMetricAbnormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Abnormal'**
+  String get filesMetricAbnormal;
+
+  /// No description provided for @filesOpBrowse.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse'**
+  String get filesOpBrowse;
+
+  /// No description provided for @filesOpUnmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmount'**
+  String get filesOpUnmount;
+
+  /// No description provided for @filesOpConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure'**
+  String get filesOpConfig;
+
+  /// No description provided for @filesTaskSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get filesTaskSource;
+
+  /// No description provided for @filesProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get filesProgress;
+
+  /// No description provided for @filesStatusFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filesStatusFilterAll;
+
+  /// No description provided for @filesInspectorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'File Details'**
+  String get filesInspectorTitle;
+
+  /// No description provided for @filesColumnUploader.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploader'**
+  String get filesColumnUploader;
+
+  /// No description provided for @filesNewFolderDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'New Folder'**
+  String get filesNewFolderDefault;
+
+  /// No description provided for @filesToolbarTableView.
+  ///
+  /// In en, this message translates to:
+  /// **'Table View'**
+  String get filesToolbarTableView;
+
+  /// No description provided for @filesToolbarGridView.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid View'**
+  String get filesToolbarGridView;
+
+  /// No description provided for @filesToggleInspector.
+  ///
+  /// In en, this message translates to:
+  /// **'Details Panel'**
+  String get filesToggleInspector;
+
+  /// No description provided for @filesInspectorTabOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get filesInspectorTabOverview;
+
+  /// No description provided for @filesInspectorTabVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'Versions'**
+  String get filesInspectorTabVersions;
+
+  /// No description provided for @filesInspectorTabActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get filesInspectorTabActivity;
+
+  /// No description provided for @filesInspectorEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an item to inspect its technical details'**
+  String get filesInspectorEmptyHint;
+
+  /// No description provided for @filesInspectorPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Path'**
+  String get filesInspectorPath;
+
+  /// No description provided for @filesInspectorNode.
+  ///
+  /// In en, this message translates to:
+  /// **'Node'**
+  String get filesInspectorNode;
+
+  /// No description provided for @filesInspectorExactBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact bytes'**
+  String get filesInspectorExactBytes;
+
+  /// No description provided for @filesInspectorResolution.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get filesInspectorResolution;
+
+  /// No description provided for @filesInspectorDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get filesInspectorDuration;
+
+  /// No description provided for @filesInspectorMime.
+  ///
+  /// In en, this message translates to:
+  /// **'MIME'**
+  String get filesInspectorMime;
+
+  /// No description provided for @filesInspectorSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Space'**
+  String get filesInspectorSpace;
+
+  /// No description provided for @filesInspectorNoVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'No version history'**
+  String get filesInspectorNoVersions;
+
   /// No description provided for @filesEmpty.
   ///
   /// In en, this message translates to:
@@ -2335,12 +2803,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload File'**
   String get filesUploadFile;
-
-  /// No description provided for @filesLoadMore.
-  ///
-  /// In en, this message translates to:
-  /// **'Load more ({loaded} / {total} loaded)'**
-  String filesLoadMore(Object loaded, Object total);
 
   /// No description provided for @filesDropToUpload.
   ///
@@ -2503,6 +2965,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview'**
   String get filesPreview;
+
+  /// No description provided for @filesPreviewFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Fullscreen'**
+  String get filesPreviewFullscreen;
+
+  /// No description provided for @filesPreviewExitFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit fullscreen'**
+  String get filesPreviewExitFullscreen;
 
   /// No description provided for @filesRestore.
   ///
@@ -2766,12 +3240,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed'**
   String get filesStatusFailed;
-
-  /// No description provided for @filesStatusCompleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Completed'**
-  String get filesStatusCompleted;
 
   /// No description provided for @filesStatusCancelled.
   ///
@@ -3066,6 +3534,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Active'**
   String get filesShareActive;
+
+  /// No description provided for @filesShareScopeMine.
+  ///
+  /// In en, this message translates to:
+  /// **'Mine'**
+  String get filesShareScopeMine;
+
+  /// No description provided for @filesShareScopeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All links'**
+  String get filesShareScopeAll;
 
   /// No description provided for @filesShareRevoked.
   ///
@@ -3708,6 +4188,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Conflict'**
   String get filesStatusConflict;
+
+  /// No description provided for @filesStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get filesStatusPending;
+
+  /// No description provided for @filesUploadOrigin.
+  ///
+  /// In en, this message translates to:
+  /// **'Origin'**
+  String get filesUploadOrigin;
+
+  /// No description provided for @filesUploadOriginLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Local'**
+  String get filesUploadOriginLocal;
+
+  /// No description provided for @filesUploadOriginServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get filesUploadOriginServer;
+
+  /// No description provided for @filesUploadPartsUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'parts'**
+  String get filesUploadPartsUnit;
 
   /// No description provided for @filesStatusCreated.
   ///
@@ -5767,6 +6277,30 @@ abstract class AppLocalizations {
   /// **'Current snapshot of database, Redis, RabbitMQ, MinIO and index components.'**
   String get adminComponentHealthSubtitle;
 
+  /// No description provided for @adminMiddlewareTopologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Middleware & Infrastructure Topology'**
+  String get adminMiddlewareTopologyTitle;
+
+  /// No description provided for @adminChartTipCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed {count}'**
+  String adminChartTipCompleted(Object count);
+
+  /// No description provided for @adminChartTipFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed {count}'**
+  String adminChartTipFailed(Object count);
+
+  /// No description provided for @adminChartTipRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running {count}'**
+  String adminChartTipRunning(Object count);
+
   /// No description provided for @adminNoComponentHealth.
   ///
   /// In en, this message translates to:
@@ -5869,6 +6403,354 @@ abstract class AppLocalizations {
   /// **'From audit_logs, sorted by creation time descending.'**
   String get adminRecentAuditSubtitle;
 
+  /// No description provided for @adminServiceInspect.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect'**
+  String get adminServiceInspect;
+
+  /// No description provided for @adminUserColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get adminUserColumn;
+
+  /// No description provided for @adminUserQuotaUsageColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Quota Usage'**
+  String get adminUserQuotaUsageColumn;
+
+  /// No description provided for @adminUserCreatedAtColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get adminUserCreatedAtColumn;
+
+  /// No description provided for @adminUserTwoFactorColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'2FA'**
+  String get adminUserTwoFactorColumn;
+
+  /// No description provided for @adminUserPermissionsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} permissions'**
+  String adminUserPermissionsCount(int count);
+
+  /// No description provided for @adminUserProtected.
+  ///
+  /// In en, this message translates to:
+  /// **'PROTECTED'**
+  String get adminUserProtected;
+
+  /// No description provided for @adminUserProtectedTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.'**
+  String get adminUserProtectedTooltip;
+
+  /// No description provided for @adminUserDisableConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable account'**
+  String get adminUserDisableConfirmTitle;
+
+  /// No description provided for @adminUserDisableConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable {name}? The account will be signed out and denied login until re-enabled.'**
+  String adminUserDisableConfirmMessage(Object name);
+
+  /// No description provided for @adminUserEnableConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable account'**
+  String get adminUserEnableConfirmTitle;
+
+  /// No description provided for @adminUserEnableConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable {name}? The account will be allowed to sign in again.'**
+  String adminUserEnableConfirmMessage(Object name);
+
+  /// No description provided for @adminDeleteUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete user'**
+  String get adminDeleteUser;
+
+  /// No description provided for @adminDeleteUserConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete {name}. Only empty accounts with no content ownership can be deleted; type the username to confirm.'**
+  String adminDeleteUserConfirmMessage(Object name);
+
+  /// No description provided for @adminEditRolesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign one or more system roles. Changing roles immediately updates the user\'s permissions and visible menus.'**
+  String get adminEditRolesHint;
+
+  /// No description provided for @adminCreateRole.
+  ///
+  /// In en, this message translates to:
+  /// **'New custom role'**
+  String get adminCreateRole;
+
+  /// No description provided for @adminRoleCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Role code'**
+  String get adminRoleCode;
+
+  /// No description provided for @adminRoleCodeRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Must start with ROLE_ and contain only uppercase letters, digits and underscores (7-66 chars in total).'**
+  String get adminRoleCodeRule;
+
+  /// No description provided for @adminRoleDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get adminRoleDisplayName;
+
+  /// No description provided for @adminRoleDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get adminRoleDescription;
+
+  /// No description provided for @adminRoleBaseTemplate.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission template'**
+  String get adminRoleBaseTemplate;
+
+  /// No description provided for @adminRoleTemplateNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty permission set (configure later)'**
+  String get adminRoleTemplateNone;
+
+  /// No description provided for @adminRoleTemplateMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Clone ROLE_MEMBER baseline'**
+  String get adminRoleTemplateMember;
+
+  /// No description provided for @adminRoleTemplateAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Clone ROLE_ADMIN baseline'**
+  String get adminRoleTemplateAdmin;
+
+  /// No description provided for @adminRoleNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name is required'**
+  String get adminRoleNameRequired;
+
+  /// No description provided for @adminRoleDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete role'**
+  String get adminRoleDelete;
+
+  /// No description provided for @adminRoleDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete role {name} ({code})? Roles still bound to users cannot be deleted.'**
+  String adminRoleDeleteConfirmMessage(Object code, Object name);
+
+  /// No description provided for @adminRoleSuperAdminLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'SUPER_ADMIN holds every permission and is read-only by design.'**
+  String get adminRoleSuperAdminLocked;
+
+  /// No description provided for @adminRolePermissionSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} permissions granted across {modules} modules'**
+  String adminRolePermissionSummary(Object count, Object modules);
+
+  /// No description provided for @adminRoleBuiltinTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get adminRoleBuiltinTag;
+
+  /// No description provided for @adminRoleCustomTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get adminRoleCustomTag;
+
+  /// No description provided for @adminPermissionMatrixTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Business module permission matrix'**
+  String get adminPermissionMatrixTitle;
+
+  /// No description provided for @adminPermissionMatrixSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Derived from the permission catalog grouped by module; open a role to edit its bindings.'**
+  String get adminPermissionMatrixSubtitle;
+
+  /// No description provided for @adminPermissionSelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} / {total} permissions selected'**
+  String adminPermissionSelectedCount(Object selected, Object total);
+
+  /// No description provided for @adminPermissionSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get adminPermissionSelectAll;
+
+  /// No description provided for @adminPermissionClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get adminPermissionClear;
+
+  /// No description provided for @adminPermissionGroupToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle group'**
+  String get adminPermissionGroupToggle;
+
+  /// No description provided for @adminPermissionToggleModule.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse / expand module'**
+  String get adminPermissionToggleModule;
+
+  /// No description provided for @adminModuleActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get adminModuleActivity;
+
+  /// No description provided for @adminModulePreference.
+  ///
+  /// In en, this message translates to:
+  /// **'Preference'**
+  String get adminModulePreference;
+
+  /// No description provided for @adminModuleProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get adminModuleProfile;
+
+  /// No description provided for @adminModuleFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get adminModuleFile;
+
+  /// No description provided for @adminModuleMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Media'**
+  String get adminModuleMedia;
+
+  /// No description provided for @adminModulePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get adminModulePhoto;
+
+  /// No description provided for @adminModuleBackdrop.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop'**
+  String get adminModuleBackdrop;
+
+  /// No description provided for @adminModuleTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Task'**
+  String get adminModuleTask;
+
+  /// No description provided for @adminModuleSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get adminModuleSystem;
+
+  /// No description provided for @adminServiceColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get adminServiceColumn;
+
+  /// No description provided for @adminStatusColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get adminStatusColumn;
+
+  /// No description provided for @adminLatencyColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency'**
+  String get adminLatencyColumn;
+
+  /// No description provided for @adminViewAllAuditLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'View all audit logs'**
+  String get adminViewAllAuditLogs;
+
+  /// No description provided for @adminAutoRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Live refresh'**
+  String get adminAutoRefresh;
+
+  /// No description provided for @adminThroughputTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'Task Throughput Trend'**
+  String get adminThroughputTrend;
+
+  /// No description provided for @adminThroughputTrendSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed and failed task throughput for this week (Mon-Sun).'**
+  String get adminThroughputTrendSubtitle;
+
+  /// No description provided for @adminLoadStateNormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get adminLoadStateNormal;
+
+  /// No description provided for @adminLoadStateWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get adminLoadStateWarning;
+
+  /// No description provided for @adminLoadStateCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get adminLoadStateCritical;
+
+  /// No description provided for @adminFailedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get adminFailedCount;
+
   /// No description provided for @adminNoAuditLogs.
   ///
   /// In en, this message translates to:
@@ -5928,6 +6810,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Platform'**
   String get adminFilterPlatform;
+
+  /// No description provided for @adminFilterRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention'**
+  String get adminFilterRetention;
 
   /// No description provided for @adminCleanup.
   ///
@@ -6042,6 +6930,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Updated at'**
   String get adminTaskUpdatedAt;
+
+  /// No description provided for @adminTaskCreatedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Created at'**
+  String get adminTaskCreatedAt;
+
+  /// No description provided for @adminTaskRetryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Retries'**
+  String get adminTaskRetryCount;
+
+  /// No description provided for @adminTaskIdColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Task ID'**
+  String get adminTaskIdColumn;
 
   /// No description provided for @adminTaskName.
   ///
@@ -7243,6 +8149,18 @@ abstract class AppLocalizations {
   /// **'Failed tasks exhausted retries — re-queue manually'**
   String get adminDlqSubtitle;
 
+  /// No description provided for @adminDlqMetricHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Retries exhausted; manual action needed'**
+  String get adminDlqMetricHint;
+
+  /// No description provided for @adminDlqEmptyHealthy.
+  ///
+  /// In en, this message translates to:
+  /// **'No dead letter tasks — queue is healthy'**
+  String get adminDlqEmptyHealthy;
+
   /// No description provided for @adminNoDlqTasks.
   ///
   /// In en, this message translates to:
@@ -7267,29 +8185,11 @@ abstract class AppLocalizations {
   /// **'No data. Try adjusting the filters.'**
   String get adminListEmpty;
 
-  /// No description provided for @adminListRowsPerPage.
-  ///
-  /// In en, this message translates to:
-  /// **'Rows per page'**
-  String get adminListRowsPerPage;
-
   /// No description provided for @adminListPageOf.
   ///
   /// In en, this message translates to:
   /// **'Page {current} of {total}'**
   String adminListPageOf(Object current, Object total);
-
-  /// No description provided for @adminListPrevPage.
-  ///
-  /// In en, this message translates to:
-  /// **'Previous page'**
-  String get adminListPrevPage;
-
-  /// No description provided for @adminListNextPage.
-  ///
-  /// In en, this message translates to:
-  /// **'Next page'**
-  String get adminListNextPage;
 
   /// No description provided for @adminListActions.
   ///
@@ -7957,6 +8857,24 @@ abstract class AppLocalizations {
   /// **'IP address'**
   String get adminSessionIp;
 
+  /// No description provided for @adminAuditActorColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Actor'**
+  String get adminAuditActorColumn;
+
+  /// No description provided for @adminAuditActorIdColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Account ID'**
+  String get adminAuditActorIdColumn;
+
+  /// No description provided for @adminLoginClientColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Client'**
+  String get adminLoginClientColumn;
+
   /// No description provided for @adminResourceType.
   ///
   /// In en, this message translates to:
@@ -8125,6 +9043,18 @@ abstract class AppLocalizations {
   /// **'Location · Root'**
   String get adminLibraryColumnLocation;
 
+  /// No description provided for @adminLibraryColumnVisibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Visibility'**
+  String get adminLibraryColumnVisibility;
+
+  /// No description provided for @adminLibraryColumnHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get adminLibraryColumnHealth;
+
   /// No description provided for @adminLibraryColumnScanStatus.
   ///
   /// In en, this message translates to:
@@ -8213,42 +9143,6 @@ abstract class AppLocalizations {
   /// **'Discover updates'**
   String get adminLibraryDiscoverUpdates;
 
-  /// No description provided for @adminListTotalCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} items'**
-  String adminListTotalCount(Object count);
-
-  /// No description provided for @adminListRange.
-  ///
-  /// In en, this message translates to:
-  /// **'Items {start}-{end}'**
-  String adminListRange(Object start, Object end);
-
-  /// No description provided for @adminListFirstPage.
-  ///
-  /// In en, this message translates to:
-  /// **'First page'**
-  String get adminListFirstPage;
-
-  /// No description provided for @adminListLastPage.
-  ///
-  /// In en, this message translates to:
-  /// **'Last page'**
-  String get adminListLastPage;
-
-  /// No description provided for @adminListJumpTo.
-  ///
-  /// In en, this message translates to:
-  /// **'Go to'**
-  String get adminListJumpTo;
-
-  /// No description provided for @adminListPageUnit.
-  ///
-  /// In en, this message translates to:
-  /// **''**
-  String get adminListPageUnit;
-
   /// No description provided for @adminConfigGroupColumn.
   ///
   /// In en, this message translates to:
@@ -8266,6 +9160,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry selected'**
   String get adminBatchRetryTasks;
+
+  /// No description provided for @adminBatchCancelTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel selected'**
+  String get adminBatchCancelTasks;
+
+  /// No description provided for @adminBatchCancelConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will cancel {count} queued or retry-waiting tasks; running tasks are unaffected. Failed items are skipped.'**
+  String adminBatchCancelConfirmMessage(Object count);
+
+  /// No description provided for @adminBatchDiscardConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will permanently discard {count} dead-letter tasks; discarded tasks cannot be retried. Failed items are skipped.'**
+  String adminBatchDiscardConfirmMessage(Object count);
 
   /// No description provided for @adminBatchClearSelection.
   ///
@@ -8507,6 +9419,12 @@ abstract class AppLocalizations {
   /// **'No matching users.'**
   String get adminNoMatchingUsers;
 
+  /// No description provided for @adminNoUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'No users yet.'**
+  String get adminNoUsers;
+
   /// No description provided for @adminLoadMore.
   ///
   /// In en, this message translates to:
@@ -8554,6 +9472,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Business access'**
   String get adminBusinessAccess;
+
+  /// No description provided for @adminSuperAdminDisableNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be disabled'**
+  String get adminSuperAdminDisableNote;
+
+  /// No description provided for @adminAssignableRoles.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignable roles'**
+  String get adminAssignableRoles;
+
+  /// No description provided for @adminQuotaUsedBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'Used {size}'**
+  String adminQuotaUsedBytes(Object size);
 
   /// No description provided for @adminNotSetEmail.
   ///
@@ -8608,6 +9544,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Batch Set Storage Quota ({count} users)'**
   String adminBatchSetStorageQuota(Object count);
+
+  /// No description provided for @adminBatchDisableUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch disable'**
+  String get adminBatchDisableUsers;
+
+  /// No description provided for @adminBatchEnableUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch enable'**
+  String get adminBatchEnableUsers;
+
+  /// No description provided for @adminBatchDisableConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will disable {count} users: all their sessions are revoked immediately and they cannot sign in until re-enabled. Failed items are skipped.'**
+  String adminBatchDisableConfirmMessage(Object count);
+
+  /// No description provided for @adminBatchEnableConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will enable {count} users, restoring their ability to sign in. Failed items are skipped.'**
+  String adminBatchEnableConfirmMessage(Object count);
 
   /// No description provided for @adminBatchQuotaHint.
   ///
@@ -8842,6 +9802,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Objects'**
   String get adminObjects;
+
+  /// No description provided for @adminTaskThroughput7d.
+  ///
+  /// In en, this message translates to:
+  /// **'Task Throughput (7D)'**
+  String get adminTaskThroughput7d;
+
+  /// No description provided for @adminOverviewThroughputTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'Task Throughput Trend (Last 7 Days)'**
+  String get adminOverviewThroughputTrend;
+
+  /// No description provided for @adminGrowthPanelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity & Storage Growth'**
+  String get adminGrowthPanelTitle;
+
+  /// No description provided for @adminGrowthPanelSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily user growth and storage growth from analytics.'**
+  String get adminGrowthPanelSubtitle;
+
+  /// No description provided for @adminUserGrowthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'User Growth'**
+  String get adminUserGrowthLabel;
+
+  /// No description provided for @adminStorageGrowthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage Growth'**
+  String get adminStorageGrowthLabel;
+
+  /// No description provided for @adminFilesFoldersObjects.
+  ///
+  /// In en, this message translates to:
+  /// **'{files} files · {folders} folders · {objects} objects'**
+  String adminFilesFoldersObjects(Object files, Object folders, Object objects);
 
   /// No description provided for @adminHealthy.
   ///
@@ -9166,6 +10168,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Refresh'**
   String get adminRefresh;
+
+  /// No description provided for @adminOverviewAutoRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto refresh'**
+  String get adminOverviewAutoRefresh;
+
+  /// No description provided for @adminOverviewRefreshOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get adminOverviewRefreshOff;
+
+  /// No description provided for @adminOverviewRefresh30s.
+  ///
+  /// In en, this message translates to:
+  /// **'30s'**
+  String get adminOverviewRefresh30s;
+
+  /// No description provided for @adminOverviewRefresh5m.
+  ///
+  /// In en, this message translates to:
+  /// **'5m'**
+  String get adminOverviewRefresh5m;
 
   /// No description provided for @adminRecalculate.
   ///
@@ -10738,12 +11764,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bookshelf'**
   String get readerBookshelfSection;
-
-  /// No description provided for @readerShowAllBooks.
-  ///
-  /// In en, this message translates to:
-  /// **'Show all {count} more'**
-  String readerShowAllBooks(Object count);
 
   /// No description provided for @readerViewAll.
   ///
@@ -15767,12 +16787,6 @@ abstract class AppLocalizations {
   /// **'Filter file type'**
   String get filesOpFilterFileType;
 
-  /// No description provided for @filesOpLoadMore.
-  ///
-  /// In en, this message translates to:
-  /// **'Load more files'**
-  String get filesOpLoadMore;
-
   /// No description provided for @filesOpCreateFolder.
   ///
   /// In en, this message translates to:
@@ -17403,6 +18417,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scanned — confirm on your phone'**
   String get musicQrScanned;
+
+  /// No description provided for @musicQrConfirmedSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed — syncing your library…'**
+  String get musicQrConfirmedSyncing;
 
   /// No description provided for @musicQrExpired.
   ///
@@ -19089,6 +20109,624 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'System action'**
   String get adminAuditActionUnknown;
+
+  /// No description provided for @adminAuditDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit detail'**
+  String get adminAuditDetailTitle;
+
+  /// No description provided for @adminAuditFieldAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get adminAuditFieldAction;
+
+  /// No description provided for @adminAuditFieldTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Timestamp'**
+  String get adminAuditFieldTime;
+
+  /// No description provided for @adminAuditFieldActor.
+  ///
+  /// In en, this message translates to:
+  /// **'Actor'**
+  String get adminAuditFieldActor;
+
+  /// No description provided for @adminAuditFieldIp.
+  ///
+  /// In en, this message translates to:
+  /// **'Client IP'**
+  String get adminAuditFieldIp;
+
+  /// No description provided for @adminAuditChangeSnapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Change snapshot'**
+  String get adminAuditChangeSnapshot;
+
+  /// No description provided for @adminAuditOldValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Old value'**
+  String get adminAuditOldValue;
+
+  /// No description provided for @adminAuditNewValue.
+  ///
+  /// In en, this message translates to:
+  /// **'New value'**
+  String get adminAuditNewValue;
+
+  /// No description provided for @adminAuditPayload.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw payload'**
+  String get adminAuditPayload;
+
+  /// No description provided for @adminAuditPayloadEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry has no extended payload.'**
+  String get adminAuditPayloadEmpty;
+
+  /// No description provided for @adminCleanupTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get adminCleanupTarget;
+
+  /// No description provided for @adminCleanupRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention'**
+  String get adminCleanupRetention;
+
+  /// No description provided for @adminCleanupPreviewCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated rows'**
+  String get adminCleanupPreviewCount;
+
+  /// No description provided for @adminCleanupPhysicalWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Records beyond the retention window are physically deleted and cannot be recovered.'**
+  String get adminCleanupPhysicalWarning;
+
+  /// No description provided for @adminCleanupExportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Export the current page as CSV before cleanup to keep a copy.'**
+  String get adminCleanupExportHint;
+
+  /// No description provided for @adminCleanupSessionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only expired and revoked sessions are removed; active sessions are unaffected.'**
+  String get adminCleanupSessionsHint;
+
+  /// No description provided for @adminCleanupTargetSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired & revoked sessions'**
+  String get adminCleanupTargetSessions;
+
+  /// No description provided for @adminTaskDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Task detail'**
+  String get adminTaskDetailTitle;
+
+  /// No description provided for @adminTaskFieldHandler.
+  ///
+  /// In en, this message translates to:
+  /// **'Handler'**
+  String get adminTaskFieldHandler;
+
+  /// No description provided for @adminTaskFieldQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue'**
+  String get adminTaskFieldQueue;
+
+  /// No description provided for @adminTaskFieldRetryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry rounds'**
+  String get adminTaskFieldRetryCount;
+
+  /// No description provided for @adminTaskCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel task'**
+  String get adminTaskCancel;
+
+  /// No description provided for @adminTaskCancelConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this task'**
+  String get adminTaskCancelConfirmTitle;
+
+  /// No description provided for @adminTaskCancelConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The task will stop before execution and cannot be resumed.'**
+  String get adminTaskCancelConfirmMessage;
+
+  /// No description provided for @adminTaskDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get adminTaskDiscard;
+
+  /// No description provided for @adminTaskDiscardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard DLQ task'**
+  String get adminTaskDiscardTitle;
+
+  /// No description provided for @adminTaskDiscardMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A discarded task reaches a terminal state and can never be retried.'**
+  String get adminTaskDiscardMessage;
+
+  /// No description provided for @adminTaskStatusDiscarded.
+  ///
+  /// In en, this message translates to:
+  /// **'Discarded'**
+  String get adminTaskStatusDiscarded;
+
+  /// No description provided for @adminTaskStatusRetryWait.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry waiting'**
+  String get adminTaskStatusRetryWait;
+
+  /// No description provided for @adminMetricQueuedReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued / ready'**
+  String get adminMetricQueuedReady;
+
+  /// No description provided for @adminMetricDlq.
+  ///
+  /// In en, this message translates to:
+  /// **'Dead letter'**
+  String get adminMetricDlq;
+
+  /// No description provided for @adminSessionMetricRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked'**
+  String get adminSessionMetricRevoked;
+
+  /// No description provided for @adminSessionClientMix.
+  ///
+  /// In en, this message translates to:
+  /// **'Client mix'**
+  String get adminSessionClientMix;
+
+  /// No description provided for @adminSessionPlatformWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Web'**
+  String get adminSessionPlatformWeb;
+
+  /// No description provided for @adminSessionPlatformPc.
+  ///
+  /// In en, this message translates to:
+  /// **'PC'**
+  String get adminSessionPlatformPc;
+
+  /// No description provided for @adminSessionPlatformMobile.
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile'**
+  String get adminSessionPlatformMobile;
+
+  /// No description provided for @notificationUnreadCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unread'**
+  String notificationUnreadCount(Object count);
+
+  /// No description provided for @notificationFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All ({count})'**
+  String notificationFilterAll(Object count);
+
+  /// No description provided for @notificationFilterUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread ({count})'**
+  String notificationFilterUnread(Object count);
+
+  /// No description provided for @notificationFilterAllTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'View all notifications'**
+  String get notificationFilterAllTooltip;
+
+  /// No description provided for @notificationFilterUnreadTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'View unread notifications only'**
+  String get notificationFilterUnreadTooltip;
+
+  /// No description provided for @notificationTotalSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'TOTAL: {count} ITEMS'**
+  String notificationTotalSummary(Object count);
+
+  /// No description provided for @notificationPrevPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get notificationPrevPage;
+
+  /// No description provided for @notificationNextPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get notificationNextPage;
+
+  /// No description provided for @profileHeaderAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account Profile'**
+  String get profileHeaderAccount;
+
+  /// No description provided for @profileHeaderAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get profileHeaderAppearance;
+
+  /// No description provided for @profileHeaderNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification Preferences'**
+  String get profileHeaderNotifications;
+
+  /// No description provided for @profileHeaderSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Security & Sessions'**
+  String get profileHeaderSecurity;
+
+  /// No description provided for @profileHeaderServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server Configuration'**
+  String get profileHeaderServer;
+
+  /// No description provided for @profileHeaderAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get profileHeaderAbout;
+
+  /// No description provided for @profileSectionAccountSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage your basic profile, avatar and account status.'**
+  String get profileSectionAccountSubtitle;
+
+  /// No description provided for @profileSectionAppearanceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust theme, language, font scale and local backdrop.'**
+  String get profileSectionAppearanceSubtitle;
+
+  /// No description provided for @profileSectionNotificationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure notification types and foreground toasts.'**
+  String get profileSectionNotificationsSubtitle;
+
+  /// No description provided for @profileSectionSecuritySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage password, two-factor authentication and active sessions.'**
+  String get profileSectionSecuritySubtitle;
+
+  /// No description provided for @profileSectionServerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View and switch the connected server.'**
+  String get profileSectionServerSubtitle;
+
+  /// No description provided for @profileSectionAboutSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View system version and updates.'**
+  String get profileSectionAboutSubtitle;
+
+  /// No description provided for @profileGeneralInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'General Information'**
+  String get profileGeneralInfoTitle;
+
+  /// No description provided for @profileDisplayNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Display Name'**
+  String get profileDisplayNameLabel;
+
+  /// No description provided for @profileAvatarHint.
+  ///
+  /// In en, this message translates to:
+  /// **'JPG/PNG/WebP up to 5MB'**
+  String get profileAvatarHint;
+
+  /// No description provided for @profileRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get profileRoleLabel;
+
+  /// No description provided for @profilePasswordRowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get profilePasswordRowTitle;
+
+  /// No description provided for @profileCredentialsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Credentials & 2FA'**
+  String get profileCredentialsTitle;
+
+  /// No description provided for @profileTwoFactorManageAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage 2FA'**
+  String get profileTwoFactorManageAction;
+
+  /// No description provided for @profileActiveSessionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Active Sessions'**
+  String get profileActiveSessionsTitle;
+
+  /// No description provided for @profileSessionDeviceColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Device / Browser'**
+  String get profileSessionDeviceColumn;
+
+  /// No description provided for @profileSessionIpColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'IP Address'**
+  String get profileSessionIpColumn;
+
+  /// No description provided for @profileSessionLoginTimeColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get profileSessionLoginTimeColumn;
+
+  /// No description provided for @profileSessionExpiresColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires'**
+  String get profileSessionExpiresColumn;
+
+  /// No description provided for @profileSessionLastActiveColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Last active'**
+  String get profileSessionLastActiveColumn;
+
+  /// No description provided for @profileSessionStatusColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get profileSessionStatusColumn;
+
+  /// No description provided for @profileSessionActionColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get profileSessionActionColumn;
+
+  /// No description provided for @profileSessionCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get profileSessionCurrent;
+
+  /// No description provided for @notificationActionViewFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'View files'**
+  String get notificationActionViewFiles;
+
+  /// No description provided for @notificationActionOpenMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Open media center'**
+  String get notificationActionOpenMedia;
+
+  /// No description provided for @notificationActionManageSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage sessions'**
+  String get notificationActionManageSessions;
+
+  /// No description provided for @notificationActionViewShares.
+  ///
+  /// In en, this message translates to:
+  /// **'View shares'**
+  String get notificationActionViewShares;
+
+  /// No description provided for @profileSaveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Changes'**
+  String get profileSaveChanges;
+
+  /// No description provided for @profileUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save profile'**
+  String get profileUpdateFailed;
+
+  /// No description provided for @profileUpdateSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile updated'**
+  String get profileUpdateSuccess;
+
+  /// No description provided for @notificationCenterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationCenterTitle;
+
+  /// No description provided for @profileBreadcrumbTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile & Settings'**
+  String get profileBreadcrumbTitle;
+
+  /// No description provided for @videoAutoImportStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Import result could not be confirmed yet; check the notification and task center later'**
+  String get videoAutoImportStatusUnknown;
+
+  /// No description provided for @readerAnnotationSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save the annotation, please retry'**
+  String get readerAnnotationSaveFailed;
+
+  /// No description provided for @musicFavoriteToggleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to toggle favorite, please retry'**
+  String get musicFavoriteToggleFailed;
+
+  /// No description provided for @readerImportCandidatesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load import candidates'**
+  String get readerImportCandidatesLoadFailed;
+
+  /// No description provided for @syncReplayPendingWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} offline operations are pending and will retry automatically when back online'**
+  String syncReplayPendingWarning(Object count);
+
+  /// No description provided for @commonRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get commonRetry;
+
+  /// No description provided for @profileEditProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get profileEditProfile;
+
+  /// No description provided for @profileEditProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Profile'**
+  String get profileEditProfileTitle;
+
+  /// No description provided for @profileSessionLoginAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in {time}'**
+  String profileSessionLoginAt(Object time);
+
+  /// No description provided for @profileDisplayNameInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name must be 1-120 characters'**
+  String get profileDisplayNameInvalid;
+
+  /// No description provided for @profileEmailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid email format'**
+  String get profileEmailInvalid;
+
+  /// No description provided for @profileSessionExpiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {time}'**
+  String profileSessionExpiresAt(Object time);
+
+  /// No description provided for @notificationTypeMediaImportCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Media import completed'**
+  String get notificationTypeMediaImportCompleted;
+
+  /// No description provided for @notificationTypeMediaImportCompletedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'An uploaded file was imported into the library automatically'**
+  String get notificationTypeMediaImportCompletedDesc;
+
+  /// No description provided for @notificationTypeMediaImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Media import failed'**
+  String get notificationTypeMediaImportFailed;
+
+  /// No description provided for @notificationTypeMediaImportFailedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'An uploaded file could not be imported automatically'**
+  String get notificationTypeMediaImportFailedDesc;
+
+  /// No description provided for @notificationMediaImportCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Media was imported into the library automatically'**
+  String get notificationMediaImportCompleted;
+
+  /// No description provided for @notificationMediaImportCompletedWithName.
+  ///
+  /// In en, this message translates to:
+  /// **'File {fileName} was imported into the library automatically'**
+  String notificationMediaImportCompletedWithName(Object fileName);
+
+  /// No description provided for @notificationMediaImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic media import failed; check the file and re-upload or import manually'**
+  String get notificationMediaImportFailed;
+
+  /// No description provided for @notificationMediaImportFailedWithName.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic import of file {fileName} failed; check the file and re-upload or import manually'**
+  String notificationMediaImportFailedWithName(Object fileName);
+
+  /// No description provided for @favoriteAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to favorites'**
+  String get favoriteAdded;
+
+  /// No description provided for @favoriteRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from favorites'**
+  String get favoriteRemoved;
 }
 
 class _AppLocalizationsDelegate

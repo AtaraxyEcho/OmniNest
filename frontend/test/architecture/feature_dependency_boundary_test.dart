@@ -11,6 +11,8 @@ const _allowedViolations = <String>{
   'APP_SHELL_FEATURE_INTERNAL lib/app/mobile_shell/mobile_app_shell.dart -> package:omninest/features/photos/presentation/widgets/frame_palette.dart',
   'CROSS_FEATURE_INTERNAL lib/features/files/application/media_import_service.dart -> package:omninest/features/tasks/data/task_api.dart',
   'CROSS_FEATURE_INTERNAL lib/features/music/presentation/deck/music_deck_content.dart -> package:omninest/features/files/presentation/widgets/media_import_button.dart',
+  // 文件检视面板经仓储端口取节点详情，0.1.0 前登记的存量分层债，修复后移除。
+  'PRESENTATION_DATA lib/features/files/presentation/widgets/file_inspector_panel.dart -> package:omninest/features/files/data/file_providers.dart',
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/portal_mobile_shell.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',
   // Portal 阅读进度卡与 hosted 内容复用阅读模块认证封面组件。
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/reading_progress_widget.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 /// 统一执行永久删除确认，并在存在共享引用时提供级联二次确认。
 Future<bool> confirmAndRunFilePurge(
@@ -51,7 +52,7 @@ Future<bool> _showConfirmation(
   required String confirmLabel,
 }) async {
   final l10n = AppLocalizations.of(context);
-  return await showDialog<bool>(
+  return await showWorkstationDialog<bool>(
         context: context,
         builder:
             (dialogContext) => AlertDialog(

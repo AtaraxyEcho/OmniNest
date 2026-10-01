@@ -19,10 +19,7 @@ void main() {
 
     test('桌面与 Web 不提供 PiP / 音量键翻页', () {
       expect(PlatformCapabilities.desktop().supportsPictureInPicture, isFalse);
-      expect(
-        PlatformCapabilities.desktop().supportsVolumeKeyPageTurn,
-        isFalse,
-      );
+      expect(PlatformCapabilities.desktop().supportsVolumeKeyPageTurn, isFalse);
       expect(PlatformCapabilities.web().supportsPictureInPicture, isFalse);
       expect(PlatformCapabilities.web().supportsVolumeKeyPageTurn, isFalse);
     });
@@ -36,10 +33,7 @@ void main() {
         PlatformCapabilities.android().supportsFileSystemSaveDialog,
         isFalse,
       );
-      expect(
-        PlatformCapabilities.ios().supportsFileSystemSaveDialog,
-        isFalse,
-      );
+      expect(PlatformCapabilities.ios().supportsFileSystemSaveDialog, isFalse);
     });
 
     test('桌面 OS 粒度：通知/媒体键/深链', () {
@@ -74,9 +68,6 @@ void main() {
   test('current() 在非 Web 测试环境跟随 defaultTargetPlatform', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    expect(
-      PlatformCapabilities.current().supportsVolumeKeyPageTurn,
-      isTrue,
-    );
+    expect(PlatformCapabilities.current().supportsVolumeKeyPageTurn, isTrue);
   });
 }

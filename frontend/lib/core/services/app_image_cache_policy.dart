@@ -73,4 +73,16 @@ abstract final class AppImageCachePolicy {
     cache.maximumSize = budget.maximumEntries;
     cache.maximumSizeBytes = budget.maximumBytes;
   }
+
+  /// 按需抬高图片缓存字节预算下限（只升不降）。
+  ///
+  /// 查看器等页面已知解码工作集大小（当前页+相邻预取的位图总量）时声明
+  /// 需求：工作集逼近预算会被 LRU 互相驱逐，翻页时重新解码表现为闪烁。
+  /// 不传 [cache] 时作用于全局图片缓存。
+  static void ensureMinimumBytes(int bytes, {ImageCache? cache}) {
+    final target = cache ?? PaintingBinding.instance.imageCache;
+    if (target.maximumSizeBytes < bytes) {
+      target.maximumSizeBytes = bytes;
+    }
+  }
 }

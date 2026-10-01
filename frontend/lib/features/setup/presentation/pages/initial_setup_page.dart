@@ -18,6 +18,7 @@ import 'package:omninest/features/setup/application/initial_setup_controller.dar
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 
 class InitialSetupPage extends ConsumerStatefulWidget {
   const InitialSetupPage({super.key});
@@ -340,12 +341,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
           onPressed: () async {
             final copied = await copyTextToClipboard(setup.secret);
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-                ),
-              ),
+            showOmniFeedback(
+              context,
+              copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+              severity: OmniFeedbackSeverity.error,
             );
           },
           icon: const Icon(Icons.copy_rounded, size: 18),
@@ -417,14 +416,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                     if (!context.mounted) {
                       return;
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          copied
-                              ? l10n.twoFactorCopied
-                              : l10n.clipboardCopyFailed,
-                        ),
-                      ),
+                    showOmniFeedback(
+                      context,
+                      copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+                      severity: OmniFeedbackSeverity.error,
                     );
                   },
                   icon: const Icon(Icons.copy_all_rounded, size: 18),

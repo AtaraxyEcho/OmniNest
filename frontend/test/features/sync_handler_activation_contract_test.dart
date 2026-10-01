@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/application/file_sync_handler.dart';
@@ -52,7 +53,35 @@ void main() {
 
   test('task handler reloads task list when module activated', () async {
     final container = ProviderContainer.test(
-      overrides: [taskListProvider.overrideWith(_SpyTaskListNotifier.new)],
+      overrides: [
+        taskListProvider.overrideWith(_SpyTaskListNotifier.new),
+        // GUEST 门控会跳过列表重载；本用例验证 task:read 用户的重载路径。
+        userCapabilitiesProvider.overrideWithValue(
+          const UserCapabilities(
+            canBrowseContent: true,
+            canContributeContent: true,
+            canManageOwnActivity: true,
+            canManagePreferences: true,
+            canManageAccount: true,
+            canUseBackdropLibrary: true,
+            canUploadBackdrop: true,
+            canViewOwnTasks: true,
+            canAdminTasks: true,
+            canManageMediaLibrary: true,
+            canManagePhotos: true,
+            canAdminUsers: true,
+            canReadSystemConfig: true,
+            canManageSystemConfig: true,
+            canAccessAdminConsole: true,
+            canSharedBrowse: true,
+            canSharedUpload: true,
+            canReadWeather: true,
+            canReportLocation: true,
+            canManageTwoFactor: true,
+            canReadActivity: true,
+          ),
+        ),
+      ],
     );
     addTearDown(container.dispose);
     container.read(taskListProvider.notifier);

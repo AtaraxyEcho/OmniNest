@@ -20,10 +20,7 @@ void main() {
             body: HostedTouchCanvas(
               hosted: true,
               maxContentWidth: MobileLayoutTokens.chromeMaxWidth,
-              child: _Probe(
-                key: stateKey,
-                controller: scrollController,
-              ),
+              child: _Probe(key: stateKey, controller: scrollController),
             ),
           ),
         ),

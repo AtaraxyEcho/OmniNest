@@ -36,14 +36,21 @@ class ConnectivityListener {
   bool _hasConnection = false;
   bool _connectivityInitialized = false;
   bool _replaying = false;
+  int _lastReportedFailures = 0;
   final StreamController<bool> _onlineController =
       StreamController<bool>.broadcast();
+  final StreamController<int> _replayFailureController =
+      StreamController<int>.broadcast();
 
   /// 当前是否在线，初始化完成前返回 null。
   bool? get isOnline => _connectivityInitialized ? _hasConnection : null;
 
   /// 网络可用性变化流。
   Stream<bool> get onlineStream => _onlineController.stream;
+
+  /// 重放失败事件流：仅在出现「新增」失败时上报一次数量，避免周期
+  /// 重放对同一批失败反复打扰；全部重试成功后计数归零。
+  Stream<int> get replayFailureStream => _replayFailureController.stream;
 
   /// 开始监听网络状态变化。
   void start() {
@@ -66,6 +73,9 @@ class ConnectivityListener {
     _replayTimer = null;
     if (!_onlineController.isClosed) {
       unawaited(_onlineController.close());
+    }
+    if (!_replayFailureController.isClosed) {
+      unawaited(_replayFailureController.close());
     }
   }
 
@@ -105,6 +115,7 @@ class ConnectivityListener {
       return;
     }
     _replaying = true;
+    var failures = 0;
     try {
       await _replayReaderSyncQueue();
       await _syncQueue.retryFailed();
@@ -117,11 +128,20 @@ class ConnectivityListener {
           if (kDebugMode) {
             devLog('同步操作失败: id=${op.id}, type=${op.type}, error=$e');
           }
+          failures++;
           await _syncQueue.markFailed(op.id);
         }
       }
     } finally {
       _replaying = false;
+      if (failures == 0) {
+        _lastReportedFailures = 0;
+      } else if (failures > _lastReportedFailures) {
+        _lastReportedFailures = failures;
+        if (!_replayFailureController.isClosed) {
+          _replayFailureController.add(failures);
+        }
+      }
     }
   }
 

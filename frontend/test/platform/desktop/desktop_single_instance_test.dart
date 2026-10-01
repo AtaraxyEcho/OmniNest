@@ -45,8 +45,10 @@ void main() {
         arguments: ['omninest://photos/9'],
       );
       expect(ok, isTrue);
-      expect(await received.future.timeout(const Duration(seconds: 2)),
-          'OMNINEST_ACTIVATE omninest://photos/9');
+      expect(
+        await received.future.timeout(const Duration(seconds: 2)),
+        'OMNINEST_ACTIVATE omninest://photos/9',
+      );
     });
 
     test('无深链时仅发送激活前缀', () async {
@@ -67,8 +69,10 @@ void main() {
 
       final ok = await forwardSingleInstanceActivate(port: server.port);
       expect(ok, isTrue);
-      expect(await received.future.timeout(const Duration(seconds: 2)),
-          'OMNINEST_ACTIVATE');
+      expect(
+        await received.future.timeout(const Duration(seconds: 2)),
+        'OMNINEST_ACTIVATE',
+      );
     });
 
     test('端口无监听时返回 false（放弃保护或转发失败）', () async {

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 /// 相册查看器 chrome 配色：信息面板、幻灯片遮罩、面板宿主与分享面板。
 abstract final class PhotosChromeColors {
-  /// 玻璃面板底色（近黑）。
-  static const Color panelFill = Color(0xF00A0A0A);
+  /// 面板底色（近黑，不透明，避免照片透出）。
+  static const Color panelFill = Color(0xFF0A0A0A);
 
   /// 白色叠层 8%（信息行分隔线）。
   static const Color white14 = Color(0x14FFFFFF);

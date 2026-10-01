@@ -10,6 +10,7 @@ class ResponsiveSearchField extends StatelessWidget {
   const ResponsiveSearchField({
     required this.onChanged,
     this.controller,
+    this.focusNode,
     this.hintText,
     this.maxWidth,
     this.style,
@@ -21,6 +22,9 @@ class ResponsiveSearchField extends StatelessWidget {
 
   /// 可选外部控制器；不传时由输入框自行管理。
   final TextEditingController? controller;
+
+  /// 可选外部焦点节点；顶栏搜索槽接入 Ctrl/Cmd+F 全局聚焦注册表时传入。
+  final FocusNode? focusNode;
   final String? hintText;
 
   /// 最大宽度；为空时取 [AppControlTokens.searchFieldWidth]。
@@ -39,6 +43,7 @@ class ResponsiveSearchField extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
         onChanged: onChanged,
         style: style,
         decoration:

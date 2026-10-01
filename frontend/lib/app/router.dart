@@ -19,7 +19,6 @@ import 'package:omninest/features/files/presentation/pages/file_browser_page.dar
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_center_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_history_page.dart';
-import 'package:omninest/features/music/presentation/pages/music_metadata_edit_page.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_page.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_settings_page.dart';
@@ -181,12 +180,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   }
                 },
               ),
-        ),
-      ),
-      _animatedRoute(
-        '/music/tracks/:trackId/metadata',
-        (state) => MusicMetadataEditPage(
-          trackId: state.pathParameters['trackId'] ?? '',
         ),
       ),
       _animatedRoute('/music/history', (_) => const MusicHistoryPage()),

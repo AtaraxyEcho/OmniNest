@@ -871,6 +871,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coreBack => 'Back';
 
   @override
+  String get coreBackToPortal => 'Back to Portal';
+
+  @override
   String get coreDelete => 'Delete';
 
   @override
@@ -1203,6 +1206,244 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesSoftDeleted => 'Soft Deleted Files';
 
   @override
+  String get filesColumnName => 'Name';
+
+  @override
+  String get filesColumnModified => 'Modified';
+
+  @override
+  String get filesColumnSharedAt => 'Shared at';
+
+  @override
+  String get filesColumnExpiresAt => 'Expires at';
+
+  @override
+  String paginationTotal(Object count) {
+    return '$count total';
+  }
+
+  @override
+  String paginationRange(Object start, Object end) {
+    return '$start-$end';
+  }
+
+  @override
+  String get paginationFirst => 'First page';
+
+  @override
+  String get paginationPrev => 'Previous page';
+
+  @override
+  String get paginationNext => 'Next page';
+
+  @override
+  String get paginationLast => 'Last page';
+
+  @override
+  String get paginationJumpTo => 'Jump to';
+
+  @override
+  String get paginationRowsPerPage => 'Rows per page';
+
+  @override
+  String get filesColumnSize => 'Size';
+
+  @override
+  String get filesColumnUpdatedAt => 'Updated';
+
+  @override
+  String get filesColumnCreatedAt => 'Created';
+
+  @override
+  String get filesImportFileCount => 'Files';
+
+  @override
+  String get filesColumnType => 'Type';
+
+  @override
+  String get filesColumnFormat => 'Format';
+
+  @override
+  String get filesColumnStatus => 'Status';
+
+  @override
+  String get filesTaskCancel => 'Cancel Task';
+
+  @override
+  String get filesOfflineSpeed => 'Speed';
+
+  @override
+  String get filesStatusDownloading => 'Downloading';
+
+  @override
+  String get filesStatusRunning => 'Running';
+
+  @override
+  String get filesStatusCompleted => 'Completed';
+
+  @override
+  String get filesOfflineCancelConfirm => 'Cancel offline download?';
+
+  @override
+  String get filesOfflineCancelMessage =>
+      'Task progress and resume state will be discarded.';
+
+  @override
+  String get filesImportCancelConfirm => 'Cancel import task?';
+
+  @override
+  String get filesImportCancelMessage =>
+      'The running import pipeline will be aborted.';
+
+  @override
+  String get filesShareLink => 'Share Link';
+
+  @override
+  String get filesShareAccess => 'Access';
+
+  @override
+  String get filesShareRemaining => 'Remaining';
+
+  @override
+  String get filesShareExpires => 'Expires';
+
+  @override
+  String get filesShareCreated => 'Created';
+
+  @override
+  String get filesShareExtract => 'Extract Code';
+
+  @override
+  String get filesMetricSharedOwners => 'Share Owners';
+
+  @override
+  String get filesMetricSharedItems => 'Shared Items';
+
+  @override
+  String get filesMetricSharedSize => 'Total Size';
+
+  @override
+  String get filesMetricTotalShares => 'Total Links';
+
+  @override
+  String get filesMetricActiveShares => 'Active Links';
+
+  @override
+  String get filesMetricExpiredShares => 'Expired';
+
+  @override
+  String get filesMetricRevokedShares => 'Revoked';
+
+  @override
+  String get filesSharePublic => 'Public';
+
+  @override
+  String get filesSharePermanent => 'Permanent';
+
+  @override
+  String get filesShareExpiredShort => 'Inactive';
+
+  @override
+  String get filesOpEdit => 'Edit';
+
+  @override
+  String get filesOpRevoke => 'Revoke';
+
+  @override
+  String get filesMetricUploading => 'Uploading';
+
+  @override
+  String get filesMetricQueued => 'Queued';
+
+  @override
+  String get filesMetricCompleted => 'Completed';
+
+  @override
+  String get filesMetricFailed => 'Failed';
+
+  @override
+  String get filesMetricMounts => 'Mounts';
+
+  @override
+  String get filesMetricReady => 'Credentials Ready';
+
+  @override
+  String get filesMetricAbnormal => 'Abnormal';
+
+  @override
+  String get filesOpBrowse => 'Browse';
+
+  @override
+  String get filesOpUnmount => 'Unmount';
+
+  @override
+  String get filesOpConfig => 'Configure';
+
+  @override
+  String get filesTaskSource => 'Source';
+
+  @override
+  String get filesProgress => 'Progress';
+
+  @override
+  String get filesStatusFilterAll => 'All';
+
+  @override
+  String get filesInspectorTitle => 'File Details';
+
+  @override
+  String get filesColumnUploader => 'Uploader';
+
+  @override
+  String get filesNewFolderDefault => 'New Folder';
+
+  @override
+  String get filesToolbarTableView => 'Table View';
+
+  @override
+  String get filesToolbarGridView => 'Grid View';
+
+  @override
+  String get filesToggleInspector => 'Details Panel';
+
+  @override
+  String get filesInspectorTabOverview => 'Overview';
+
+  @override
+  String get filesInspectorTabVersions => 'Versions';
+
+  @override
+  String get filesInspectorTabActivity => 'Activity';
+
+  @override
+  String get filesInspectorEmptyHint =>
+      'Select an item to inspect its technical details';
+
+  @override
+  String get filesInspectorPath => 'Path';
+
+  @override
+  String get filesInspectorNode => 'Node';
+
+  @override
+  String get filesInspectorExactBytes => 'Exact bytes';
+
+  @override
+  String get filesInspectorResolution => 'Resolution';
+
+  @override
+  String get filesInspectorDuration => 'Duration';
+
+  @override
+  String get filesInspectorMime => 'MIME';
+
+  @override
+  String get filesInspectorSpace => 'Space';
+
+  @override
+  String get filesInspectorNoVersions => 'No version history';
+
+  @override
   String get filesEmpty => 'No files';
 
   @override
@@ -1216,11 +1457,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesUploadFile => 'Upload File';
-
-  @override
-  String filesLoadMore(Object loaded, Object total) {
-    return 'Load more ($loaded / $total loaded)';
-  }
 
   @override
   String get filesDropToUpload => 'Drop files here to upload';
@@ -1308,6 +1544,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesPreview => 'Preview';
+
+  @override
+  String get filesPreviewFullscreen => 'Fullscreen';
+
+  @override
+  String get filesPreviewExitFullscreen => 'Exit fullscreen';
 
   @override
   String get filesRestore => 'Restore';
@@ -1468,9 +1710,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesStatusFailed => 'Failed';
-
-  @override
-  String get filesStatusCompleted => 'Completed';
 
   @override
   String get filesStatusCancelled => 'Cancelled';
@@ -1638,6 +1877,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesShareActive => 'Active';
+
+  @override
+  String get filesShareScopeMine => 'Mine';
+
+  @override
+  String get filesShareScopeAll => 'All links';
 
   @override
   String get filesShareRevoked => 'Revoked';
@@ -1980,6 +2225,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesStatusConflict => 'Conflict';
+
+  @override
+  String get filesStatusPending => 'Queued';
+
+  @override
+  String get filesUploadOrigin => 'Origin';
+
+  @override
+  String get filesUploadOriginLocal => 'Local';
+
+  @override
+  String get filesUploadOriginServer => 'Server';
+
+  @override
+  String get filesUploadPartsUnit => 'parts';
 
   @override
   String get filesStatusCreated => 'Created';
@@ -3114,6 +3374,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Current snapshot of database, Redis, RabbitMQ, MinIO and index components.';
 
   @override
+  String get adminMiddlewareTopologyTitle =>
+      'Middleware & Infrastructure Topology';
+
+  @override
+  String adminChartTipCompleted(Object count) {
+    return 'Completed $count';
+  }
+
+  @override
+  String adminChartTipFailed(Object count) {
+    return 'Failed $count';
+  }
+
+  @override
+  String adminChartTipRunning(Object count) {
+    return 'Running $count';
+  }
+
+  @override
   String get adminNoComponentHealth => 'No component health data.';
 
   @override
@@ -3172,6 +3451,200 @@ class AppLocalizationsEn extends AppLocalizations {
       'From audit_logs, sorted by creation time descending.';
 
   @override
+  String get adminServiceInspect => 'Inspect';
+
+  @override
+  String get adminUserColumn => 'User';
+
+  @override
+  String get adminUserQuotaUsageColumn => 'Quota Usage';
+
+  @override
+  String get adminUserCreatedAtColumn => 'Created';
+
+  @override
+  String get adminUserTwoFactorColumn => '2FA';
+
+  @override
+  String adminUserPermissionsCount(int count) {
+    return '$count permissions';
+  }
+
+  @override
+  String get adminUserProtected => 'PROTECTED';
+
+  @override
+  String get adminUserProtectedTooltip =>
+      'Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.';
+
+  @override
+  String get adminUserDisableConfirmTitle => 'Disable account';
+
+  @override
+  String adminUserDisableConfirmMessage(Object name) {
+    return 'Disable $name? The account will be signed out and denied login until re-enabled.';
+  }
+
+  @override
+  String get adminUserEnableConfirmTitle => 'Enable account';
+
+  @override
+  String adminUserEnableConfirmMessage(Object name) {
+    return 'Enable $name? The account will be allowed to sign in again.';
+  }
+
+  @override
+  String get adminDeleteUser => 'Delete user';
+
+  @override
+  String adminDeleteUserConfirmMessage(Object name) {
+    return 'Permanently delete $name. Only empty accounts with no content ownership can be deleted; type the username to confirm.';
+  }
+
+  @override
+  String get adminEditRolesHint =>
+      'Assign one or more system roles. Changing roles immediately updates the user\'s permissions and visible menus.';
+
+  @override
+  String get adminCreateRole => 'New custom role';
+
+  @override
+  String get adminRoleCode => 'Role code';
+
+  @override
+  String get adminRoleCodeRule =>
+      'Must start with ROLE_ and contain only uppercase letters, digits and underscores (7-66 chars in total).';
+
+  @override
+  String get adminRoleDisplayName => 'Display name';
+
+  @override
+  String get adminRoleDescription => 'Description';
+
+  @override
+  String get adminRoleBaseTemplate => 'Permission template';
+
+  @override
+  String get adminRoleTemplateNone => 'Empty permission set (configure later)';
+
+  @override
+  String get adminRoleTemplateMember => 'Clone ROLE_MEMBER baseline';
+
+  @override
+  String get adminRoleTemplateAdmin => 'Clone ROLE_ADMIN baseline';
+
+  @override
+  String get adminRoleNameRequired => 'Display name is required';
+
+  @override
+  String get adminRoleDelete => 'Delete role';
+
+  @override
+  String adminRoleDeleteConfirmMessage(Object code, Object name) {
+    return 'Delete role $name ($code)? Roles still bound to users cannot be deleted.';
+  }
+
+  @override
+  String get adminRoleSuperAdminLocked =>
+      'SUPER_ADMIN holds every permission and is read-only by design.';
+
+  @override
+  String adminRolePermissionSummary(Object count, Object modules) {
+    return '$count permissions granted across $modules modules';
+  }
+
+  @override
+  String get adminRoleBuiltinTag => 'Built-in';
+
+  @override
+  String get adminRoleCustomTag => 'Custom';
+
+  @override
+  String get adminPermissionMatrixTitle => 'Business module permission matrix';
+
+  @override
+  String get adminPermissionMatrixSubtitle =>
+      'Derived from the permission catalog grouped by module; open a role to edit its bindings.';
+
+  @override
+  String adminPermissionSelectedCount(Object selected, Object total) {
+    return '$selected / $total permissions selected';
+  }
+
+  @override
+  String get adminPermissionSelectAll => 'Select all';
+
+  @override
+  String get adminPermissionClear => 'Clear';
+
+  @override
+  String get adminPermissionGroupToggle => 'Toggle group';
+
+  @override
+  String get adminPermissionToggleModule => 'Collapse / expand module';
+
+  @override
+  String get adminModuleActivity => 'Activity';
+
+  @override
+  String get adminModulePreference => 'Preference';
+
+  @override
+  String get adminModuleProfile => 'Profile';
+
+  @override
+  String get adminModuleFile => 'File';
+
+  @override
+  String get adminModuleMedia => 'Media';
+
+  @override
+  String get adminModulePhoto => 'Photo';
+
+  @override
+  String get adminModuleBackdrop => 'Backdrop';
+
+  @override
+  String get adminModuleTask => 'Task';
+
+  @override
+  String get adminModuleSystem => 'System';
+
+  @override
+  String get adminServiceColumn => 'Service';
+
+  @override
+  String get adminStatusColumn => 'Status';
+
+  @override
+  String get adminLatencyColumn => 'Latency';
+
+  @override
+  String get adminViewAllAuditLogs => 'View all audit logs';
+
+  @override
+  String get adminAutoRefresh => 'Live refresh';
+
+  @override
+  String get adminThroughputTrend => 'Task Throughput Trend';
+
+  @override
+  String get adminThroughputTrendSubtitle =>
+      'Completed and failed task throughput for this week (Mon-Sun).';
+
+  @override
+  String get adminLoadStateNormal => 'Normal';
+
+  @override
+  String get adminLoadStateWarning => 'Warning';
+
+  @override
+  String get adminLoadStateCritical => 'Critical';
+
+  @override
+  String get adminFailedCount => 'Failed';
+
+  @override
   String get adminNoAuditLogs => 'No audit logs.';
 
   @override
@@ -3203,6 +3676,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminFilterPlatform => 'Platform';
+
+  @override
+  String get adminFilterRetention => 'Retention';
 
   @override
   String get adminCleanup => 'Clean up';
@@ -3266,6 +3742,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminTaskUpdatedAt => 'Updated at';
+
+  @override
+  String get adminTaskCreatedAt => 'Created at';
+
+  @override
+  String get adminTaskRetryCount => 'Retries';
+
+  @override
+  String get adminTaskIdColumn => 'Task ID';
 
   @override
   String get adminTaskName => 'Task name';
@@ -3937,6 +4422,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Failed tasks exhausted retries — re-queue manually';
 
   @override
+  String get adminDlqMetricHint => 'Retries exhausted; manual action needed';
+
+  @override
+  String get adminDlqEmptyHealthy => 'No dead letter tasks — queue is healthy';
+
+  @override
   String get adminNoDlqTasks => 'No DLQ tasks';
 
   @override
@@ -3949,18 +4440,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminListEmpty => 'No data. Try adjusting the filters.';
 
   @override
-  String get adminListRowsPerPage => 'Rows per page';
-
-  @override
   String adminListPageOf(Object current, Object total) {
     return 'Page $current of $total';
   }
-
-  @override
-  String get adminListPrevPage => 'Previous page';
-
-  @override
-  String get adminListNextPage => 'Next page';
 
   @override
   String get adminListActions => 'Actions';
@@ -4321,6 +4803,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminSessionIp => 'IP address';
 
   @override
+  String get adminAuditActorColumn => 'Actor';
+
+  @override
+  String get adminAuditActorIdColumn => 'Account ID';
+
+  @override
+  String get adminLoginClientColumn => 'Client';
+
+  @override
   String get adminResourceType => 'Resource type';
 
   @override
@@ -4416,6 +4907,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLibraryColumnLocation => 'Location · Root';
 
   @override
+  String get adminLibraryColumnVisibility => 'Visibility';
+
+  @override
+  String get adminLibraryColumnHealth => 'Health';
+
+  @override
   String get adminLibraryColumnScanStatus => 'Scan status';
 
   @override
@@ -4466,28 +4963,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLibraryDiscoverUpdates => 'Discover updates';
 
   @override
-  String adminListTotalCount(Object count) {
-    return '$count items';
-  }
-
-  @override
-  String adminListRange(Object start, Object end) {
-    return 'Items $start-$end';
-  }
-
-  @override
-  String get adminListFirstPage => 'First page';
-
-  @override
-  String get adminListLastPage => 'Last page';
-
-  @override
-  String get adminListJumpTo => 'Go to';
-
-  @override
-  String get adminListPageUnit => '';
-
-  @override
   String get adminConfigGroupColumn => 'Group';
 
   @override
@@ -4495,6 +4970,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminBatchRetryTasks => 'Retry selected';
+
+  @override
+  String get adminBatchCancelTasks => 'Cancel selected';
+
+  @override
+  String adminBatchCancelConfirmMessage(Object count) {
+    return 'This will cancel $count queued or retry-waiting tasks; running tasks are unaffected. Failed items are skipped.';
+  }
+
+  @override
+  String adminBatchDiscardConfirmMessage(Object count) {
+    return 'This will permanently discard $count dead-letter tasks; discarded tasks cannot be retried. Failed items are skipped.';
+  }
 
   @override
   String get adminBatchClearSelection => 'Clear selection';
@@ -4630,6 +5118,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminNoMatchingUsers => 'No matching users.';
 
   @override
+  String get adminNoUsers => 'No users yet.';
+
+  @override
   String adminLoadMore(Object loaded, Object total) {
     return 'Load more (loaded $loaded / $total)';
   }
@@ -4654,6 +5145,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminBusinessAccess => 'Business access';
+
+  @override
+  String get adminSuperAdminDisableNote => 'Cannot be disabled';
+
+  @override
+  String get adminAssignableRoles => 'Assignable roles';
+
+  @override
+  String adminQuotaUsedBytes(Object size) {
+    return 'Used $size';
+  }
 
   @override
   String get adminNotSetEmail => 'Email not set';
@@ -4684,6 +5186,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String adminBatchSetStorageQuota(Object count) {
     return 'Batch Set Storage Quota ($count users)';
+  }
+
+  @override
+  String get adminBatchDisableUsers => 'Batch disable';
+
+  @override
+  String get adminBatchEnableUsers => 'Batch enable';
+
+  @override
+  String adminBatchDisableConfirmMessage(Object count) {
+    return 'This will disable $count users: all their sessions are revoked immediately and they cannot sign in until re-enabled. Failed items are skipped.';
+  }
+
+  @override
+  String adminBatchEnableConfirmMessage(Object count) {
+    return 'This will enable $count users, restoring their ability to sign in. Failed items are skipped.';
   }
 
   @override
@@ -4818,6 +5336,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminObjects => 'Objects';
+
+  @override
+  String get adminTaskThroughput7d => 'Task Throughput (7D)';
+
+  @override
+  String get adminOverviewThroughputTrend =>
+      'Task Throughput Trend (Last 7 Days)';
+
+  @override
+  String get adminGrowthPanelTitle => 'Activity & Storage Growth';
+
+  @override
+  String get adminGrowthPanelSubtitle =>
+      'Daily user growth and storage growth from analytics.';
+
+  @override
+  String get adminUserGrowthLabel => 'User Growth';
+
+  @override
+  String get adminStorageGrowthLabel => 'Storage Growth';
+
+  @override
+  String adminFilesFoldersObjects(
+    Object files,
+    Object folders,
+    Object objects,
+  ) {
+    return '$files files · $folders folders · $objects objects';
+  }
 
   @override
   String get adminHealthy => 'Healthy';
@@ -4992,6 +5539,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminRefresh => 'Refresh';
+
+  @override
+  String get adminOverviewAutoRefresh => 'Auto refresh';
+
+  @override
+  String get adminOverviewRefreshOff => 'Off';
+
+  @override
+  String get adminOverviewRefresh30s => '30s';
+
+  @override
+  String get adminOverviewRefresh5m => '5m';
 
   @override
   String get adminRecalculate => 'Recalculate';
@@ -5878,11 +6437,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerBookshelfSection => 'Bookshelf';
-
-  @override
-  String readerShowAllBooks(Object count) {
-    return 'Show all $count more';
-  }
 
   @override
   String get readerViewAll => 'View all';
@@ -8627,9 +9181,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesOpFilterFileType => 'Filter file type';
 
   @override
-  String get filesOpLoadMore => 'Load more files';
-
-  @override
   String get filesOpCreateFolder => 'Create folder';
 
   @override
@@ -9539,6 +10090,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicQrScanned => 'Scanned — confirm on your phone';
+
+  @override
+  String get musicQrConfirmedSyncing => 'Confirmed — syncing your library…';
 
   @override
   String get musicQrExpired =>
@@ -10475,4 +11029,351 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminAuditActionUnknown => 'System action';
+
+  @override
+  String get adminAuditDetailTitle => 'Audit detail';
+
+  @override
+  String get adminAuditFieldAction => 'Action';
+
+  @override
+  String get adminAuditFieldTime => 'Timestamp';
+
+  @override
+  String get adminAuditFieldActor => 'Actor';
+
+  @override
+  String get adminAuditFieldIp => 'Client IP';
+
+  @override
+  String get adminAuditChangeSnapshot => 'Change snapshot';
+
+  @override
+  String get adminAuditOldValue => 'Old value';
+
+  @override
+  String get adminAuditNewValue => 'New value';
+
+  @override
+  String get adminAuditPayload => 'Raw payload';
+
+  @override
+  String get adminAuditPayloadEmpty => 'This entry has no extended payload.';
+
+  @override
+  String get adminCleanupTarget => 'Target';
+
+  @override
+  String get adminCleanupRetention => 'Retention';
+
+  @override
+  String get adminCleanupPreviewCount => 'Estimated rows';
+
+  @override
+  String get adminCleanupPhysicalWarning =>
+      'Records beyond the retention window are physically deleted and cannot be recovered.';
+
+  @override
+  String get adminCleanupExportHint =>
+      'Export the current page as CSV before cleanup to keep a copy.';
+
+  @override
+  String get adminCleanupSessionsHint =>
+      'Only expired and revoked sessions are removed; active sessions are unaffected.';
+
+  @override
+  String get adminCleanupTargetSessions => 'Expired & revoked sessions';
+
+  @override
+  String get adminTaskDetailTitle => 'Task detail';
+
+  @override
+  String get adminTaskFieldHandler => 'Handler';
+
+  @override
+  String get adminTaskFieldQueue => 'Queue';
+
+  @override
+  String get adminTaskFieldRetryCount => 'Retry rounds';
+
+  @override
+  String get adminTaskCancel => 'Cancel task';
+
+  @override
+  String get adminTaskCancelConfirmTitle => 'Cancel this task';
+
+  @override
+  String get adminTaskCancelConfirmMessage =>
+      'The task will stop before execution and cannot be resumed.';
+
+  @override
+  String get adminTaskDiscard => 'Discard';
+
+  @override
+  String get adminTaskDiscardTitle => 'Discard DLQ task';
+
+  @override
+  String get adminTaskDiscardMessage =>
+      'A discarded task reaches a terminal state and can never be retried.';
+
+  @override
+  String get adminTaskStatusDiscarded => 'Discarded';
+
+  @override
+  String get adminTaskStatusRetryWait => 'Retry waiting';
+
+  @override
+  String get adminMetricQueuedReady => 'Queued / ready';
+
+  @override
+  String get adminMetricDlq => 'Dead letter';
+
+  @override
+  String get adminSessionMetricRevoked => 'Revoked';
+
+  @override
+  String get adminSessionClientMix => 'Client mix';
+
+  @override
+  String get adminSessionPlatformWeb => 'Web';
+
+  @override
+  String get adminSessionPlatformPc => 'PC';
+
+  @override
+  String get adminSessionPlatformMobile => 'Mobile';
+
+  @override
+  String notificationUnreadCount(Object count) {
+    return '$count unread';
+  }
+
+  @override
+  String notificationFilterAll(Object count) {
+    return 'All ($count)';
+  }
+
+  @override
+  String notificationFilterUnread(Object count) {
+    return 'Unread ($count)';
+  }
+
+  @override
+  String get notificationFilterAllTooltip => 'View all notifications';
+
+  @override
+  String get notificationFilterUnreadTooltip =>
+      'View unread notifications only';
+
+  @override
+  String notificationTotalSummary(Object count) {
+    return 'TOTAL: $count ITEMS';
+  }
+
+  @override
+  String get notificationPrevPage => 'Previous';
+
+  @override
+  String get notificationNextPage => 'Next';
+
+  @override
+  String get profileHeaderAccount => 'Account Profile';
+
+  @override
+  String get profileHeaderAppearance => 'Appearance';
+
+  @override
+  String get profileHeaderNotifications => 'Notification Preferences';
+
+  @override
+  String get profileHeaderSecurity => 'Security & Sessions';
+
+  @override
+  String get profileHeaderServer => 'Server Configuration';
+
+  @override
+  String get profileHeaderAbout => 'About';
+
+  @override
+  String get profileSectionAccountSubtitle =>
+      'Manage your basic profile, avatar and account status.';
+
+  @override
+  String get profileSectionAppearanceSubtitle =>
+      'Adjust theme, language, font scale and local backdrop.';
+
+  @override
+  String get profileSectionNotificationsSubtitle =>
+      'Configure notification types and foreground toasts.';
+
+  @override
+  String get profileSectionSecuritySubtitle =>
+      'Manage password, two-factor authentication and active sessions.';
+
+  @override
+  String get profileSectionServerSubtitle =>
+      'View and switch the connected server.';
+
+  @override
+  String get profileSectionAboutSubtitle => 'View system version and updates.';
+
+  @override
+  String get profileGeneralInfoTitle => 'General Information';
+
+  @override
+  String get profileDisplayNameLabel => 'Display Name';
+
+  @override
+  String get profileAvatarHint => 'JPG/PNG/WebP up to 5MB';
+
+  @override
+  String get profileRoleLabel => 'Role';
+
+  @override
+  String get profilePasswordRowTitle => 'Password';
+
+  @override
+  String get profileCredentialsTitle => 'Credentials & 2FA';
+
+  @override
+  String get profileTwoFactorManageAction => 'Manage 2FA';
+
+  @override
+  String get profileActiveSessionsTitle => 'Active Sessions';
+
+  @override
+  String get profileSessionDeviceColumn => 'Device / Browser';
+
+  @override
+  String get profileSessionIpColumn => 'IP Address';
+
+  @override
+  String get profileSessionLoginTimeColumn => 'Signed in';
+
+  @override
+  String get profileSessionExpiresColumn => 'Expires';
+
+  @override
+  String get profileSessionLastActiveColumn => 'Last active';
+
+  @override
+  String get profileSessionStatusColumn => 'Status';
+
+  @override
+  String get profileSessionActionColumn => 'Actions';
+
+  @override
+  String get profileSessionCurrent => 'Current';
+
+  @override
+  String get notificationActionViewFiles => 'View files';
+
+  @override
+  String get notificationActionOpenMedia => 'Open media center';
+
+  @override
+  String get notificationActionManageSessions => 'Manage sessions';
+
+  @override
+  String get notificationActionViewShares => 'View shares';
+
+  @override
+  String get profileSaveChanges => 'Save Changes';
+
+  @override
+  String get profileUpdateFailed => 'Failed to save profile';
+
+  @override
+  String get profileUpdateSuccess => 'Profile updated';
+
+  @override
+  String get notificationCenterTitle => 'Notifications';
+
+  @override
+  String get profileBreadcrumbTitle => 'Profile & Settings';
+
+  @override
+  String get videoAutoImportStatusUnknown =>
+      'Import result could not be confirmed yet; check the notification and task center later';
+
+  @override
+  String get readerAnnotationSaveFailed =>
+      'Failed to save the annotation, please retry';
+
+  @override
+  String get musicFavoriteToggleFailed =>
+      'Failed to toggle favorite, please retry';
+
+  @override
+  String get readerImportCandidatesLoadFailed =>
+      'Failed to load import candidates';
+
+  @override
+  String syncReplayPendingWarning(Object count) {
+    return '$count offline operations are pending and will retry automatically when back online';
+  }
+
+  @override
+  String get commonRetry => 'Retry';
+
+  @override
+  String get profileEditProfile => 'Edit Profile';
+
+  @override
+  String get profileEditProfileTitle => 'Edit Profile';
+
+  @override
+  String profileSessionLoginAt(Object time) {
+    return 'Signed in $time';
+  }
+
+  @override
+  String get profileDisplayNameInvalid =>
+      'Display name must be 1-120 characters';
+
+  @override
+  String get profileEmailInvalid => 'Invalid email format';
+
+  @override
+  String profileSessionExpiresAt(Object time) {
+    return 'Expires $time';
+  }
+
+  @override
+  String get notificationTypeMediaImportCompleted => 'Media import completed';
+
+  @override
+  String get notificationTypeMediaImportCompletedDesc =>
+      'An uploaded file was imported into the library automatically';
+
+  @override
+  String get notificationTypeMediaImportFailed => 'Media import failed';
+
+  @override
+  String get notificationTypeMediaImportFailedDesc =>
+      'An uploaded file could not be imported automatically';
+
+  @override
+  String get notificationMediaImportCompleted =>
+      'Media was imported into the library automatically';
+
+  @override
+  String notificationMediaImportCompletedWithName(Object fileName) {
+    return 'File $fileName was imported into the library automatically';
+  }
+
+  @override
+  String get notificationMediaImportFailed =>
+      'Automatic media import failed; check the file and re-upload or import manually';
+
+  @override
+  String notificationMediaImportFailedWithName(Object fileName) {
+    return 'Automatic import of file $fileName failed; check the file and re-upload or import manually';
+  }
+
+  @override
+  String get favoriteAdded => 'Added to favorites';
+
+  @override
+  String get favoriteRemoved => 'Removed from favorites';
 }

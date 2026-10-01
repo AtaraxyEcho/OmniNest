@@ -22,9 +22,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      probe(hoverCapable: true, mobileForm: false),
-    );
+    await tester.pumpWidget(probe(hoverCapable: true, mobileForm: false));
     expect(find.byType(SingleChildScrollView), findsOneWidget);
   });
 
@@ -34,9 +32,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      probe(hoverCapable: false, mobileForm: false),
-    );
+    await tester.pumpWidget(probe(hoverCapable: false, mobileForm: false));
     expect(find.byType(SingleChildScrollView), findsNothing);
   });
 

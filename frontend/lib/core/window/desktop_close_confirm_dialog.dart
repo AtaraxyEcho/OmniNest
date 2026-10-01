@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
 
 /// 弹出关闭确认窗，返回用户决策；null 表示取消，保持窗口现状。
 Future<DesktopCloseDecision?> showDesktopCloseConfirmDialog(
   BuildContext context,
 ) {
-  return showDialog<DesktopCloseDecision>(
+  return showWorkstationDialog<DesktopCloseDecision>(
     context: context,
     builder: (dialogContext) => const DesktopCloseConfirmDialog(),
   );

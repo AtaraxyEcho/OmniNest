@@ -16,7 +16,9 @@ import 'package:omninest/app/desktop_tray_locale_binding.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/top_bar_search_focus.dart';
 import 'package:omninest/app/session/session_reset_coordinator.dart';
 import 'package:omninest/app/app_scroll_behavior.dart';
 import 'package:omninest/app/sync/app_sync_coordinator.dart';
@@ -63,6 +65,18 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     ref.watch(offlineDataInitializationProvider);
     // 启动网络恢复监听器，重放文件、音乐和阅读离线同步队列
     ref.watch(connectivityListenerProvider);
+    // 离线同步出现新增失败时全局提示一次；恢复后自动重试，不打断操作。
+    ref.listen(syncReplayFailuresProvider, (_, next) {
+      final count = next.asData?.value;
+      if (count == null || count <= 0 || !mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).syncReplayPendingWarning(count),
+        severity: OmniFeedbackSeverity.warning,
+      );
+    });
     // 启动单一实时连接及持久失效记录的定向刷新分发。
     ref.watch(appSyncCoordinatorProvider);
     final router = ref.watch(appRouterProvider);
@@ -81,7 +95,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     // omninest:// 深链：接住冷启动与运行期链接并落位白名单路由。
     ref.watch(deepLinkServiceProvider);
 
-    return MaterialApp.router(
+    final app = MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'OmniNest',
       theme: OmniNestTheme.light(),
@@ -122,6 +136,9 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
         );
       },
     );
+    // 全局瞬时反馈宿主：独立于 ScaffoldMessenger 的顶部居中 Overlay，
+    // 配置（对齐、限宽、堆叠上限）统一由 core 反馈门面提供。
+    return ToastificationWrapper(config: omniFeedbackToastConfig, child: app);
   }
 
   /// 根 builder 的正常内容（路由子树外的缩放、通知与桌面宽度护栏）。
@@ -190,6 +207,14 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
             HardwareKeyboard.instance.isMetaPressed)) {
       _openSearch();
       return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyF &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed)) {
+      // Ctrl/Cmd+F 聚焦当前页顶栏搜索框；仅命中时消费（web 端随之阻断
+      // 浏览器原生查找），未命中放行到焦点树，保留 Reader 书内查找等
+      // 既有焦树级绑定与浏览器查找兜底。
+      return TopBarSearchFocusRegistry.instance.focusActiveTarget();
     }
     return false;
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 /// 空间选择结果。
 enum SpaceSelection { personal, shared }
@@ -28,7 +29,7 @@ Future<SpaceSelection?> showSpaceSelectorSheet(
       builder: (_) => const _SpaceSelectorContent(),
     );
   }
-  return showDialog<SpaceSelection>(
+  return showWorkstationDialog<SpaceSelection>(
     context: context,
     builder:
         (_) => Dialog(

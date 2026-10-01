@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 Future<bool> confirmDestructiveAction(
   BuildContext context, {
@@ -8,7 +9,7 @@ Future<bool> confirmDestructiveAction(
   String? confirmLabel,
 }) async {
   final l10n = AppLocalizations.of(context);
-  final result = await showDialog<bool>(
+  final result = await showWorkstationDialog<bool>(
     context: context,
     builder:
         (context) => AlertDialog(

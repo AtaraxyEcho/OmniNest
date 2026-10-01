@@ -67,6 +67,7 @@ dependencies:
   flutter_launcher_icons_plus: ^0.15.0
   pdfrx: ^2.6.1
   share_plus: ^13.3.0
+  toastification: ^3.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

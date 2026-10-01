@@ -24,4 +24,14 @@ void main() {
     expect(cache.maximumSize, 160);
     expect(cache.maximumSizeBytes, 64 * 1024 * 1024);
   });
+
+  test('ensureMinimumBytes 抬高预算下限且只升不降', () {
+    final cache = ImageCache()..maximumSizeBytes = 64 * 1024 * 1024;
+
+    AppImageCachePolicy.ensureMinimumBytes(128 * 1024 * 1024, cache: cache);
+    expect(cache.maximumSizeBytes, 128 * 1024 * 1024);
+
+    AppImageCachePolicy.ensureMinimumBytes(32 * 1024 * 1024, cache: cache);
+    expect(cache.maximumSizeBytes, 128 * 1024 * 1024, reason: '低于现值的声明不应降低预算');
+  });
 }

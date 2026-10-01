@@ -480,19 +480,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileAccountInfo => '账户信息';
 
   @override
-  String get profileSectionAccount => '账户';
+  String get profileSectionAccount => '个人信息 (Account)';
 
   @override
-  String get profileSectionAppearance => '外观与语言';
+  String get profileSectionAppearance => '外观个性化 (Appearance)';
 
   @override
-  String get profileSectionNotifications => '通知';
+  String get profileSectionNotifications => '通知偏好 (Notifications)';
 
   @override
-  String get profileSectionSecurity => '安全与设备';
+  String get profileSectionSecurity => '安全与会话 (Security)';
 
   @override
-  String get profileSectionAbout => '关于';
+  String get profileSectionAbout => '关于系统 (About)';
 
   @override
   String get profileManageBackdrop => '管理背景';
@@ -827,6 +827,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get coreBack => '返回';
 
   @override
+  String get coreBackToPortal => '返回 Portal';
+
+  @override
   String get coreDelete => '删除';
 
   @override
@@ -1147,6 +1150,241 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesSoftDeleted => '软删除文件';
 
   @override
+  String get filesColumnName => '名称';
+
+  @override
+  String get filesColumnModified => '修改时间';
+
+  @override
+  String get filesColumnSharedAt => '分享时间';
+
+  @override
+  String get filesColumnExpiresAt => '有效期';
+
+  @override
+  String paginationTotal(Object count) {
+    return '共 $count 条';
+  }
+
+  @override
+  String paginationRange(Object start, Object end) {
+    return '第 $start-$end 条';
+  }
+
+  @override
+  String get paginationFirst => '首页';
+
+  @override
+  String get paginationPrev => '上一页';
+
+  @override
+  String get paginationNext => '下一页';
+
+  @override
+  String get paginationLast => '末页';
+
+  @override
+  String get paginationJumpTo => '跳至';
+
+  @override
+  String get paginationRowsPerPage => '每页条数';
+
+  @override
+  String get filesColumnSize => '大小';
+
+  @override
+  String get filesColumnUpdatedAt => '更新时间';
+
+  @override
+  String get filesColumnCreatedAt => '创建时间';
+
+  @override
+  String get filesImportFileCount => '文件数';
+
+  @override
+  String get filesColumnType => '类型';
+
+  @override
+  String get filesColumnFormat => '格式';
+
+  @override
+  String get filesColumnStatus => '状态';
+
+  @override
+  String get filesTaskCancel => '取消任务';
+
+  @override
+  String get filesOfflineSpeed => '速率';
+
+  @override
+  String get filesStatusDownloading => '下载中';
+
+  @override
+  String get filesStatusRunning => '执行中';
+
+  @override
+  String get filesStatusCompleted => '已完成';
+
+  @override
+  String get filesOfflineCancelConfirm => '取消离线下载？';
+
+  @override
+  String get filesOfflineCancelMessage => '任务进度与断点将被清理，且不可恢复。';
+
+  @override
+  String get filesImportCancelConfirm => '取消导入任务？';
+
+  @override
+  String get filesImportCancelMessage => '进行中的导入流水线将被中止。';
+
+  @override
+  String get filesShareLink => '分享直链';
+
+  @override
+  String get filesShareAccess => '访问/下载';
+
+  @override
+  String get filesShareRemaining => '剩余有效';
+
+  @override
+  String get filesShareExpires => '到期时间';
+
+  @override
+  String get filesShareCreated => '创建于';
+
+  @override
+  String get filesShareExtract => '提取码';
+
+  @override
+  String get filesMetricSharedOwners => '共享来源所有者';
+
+  @override
+  String get filesMetricSharedItems => '接收共享文件';
+
+  @override
+  String get filesMetricSharedSize => '累计占用';
+
+  @override
+  String get filesMetricTotalShares => '分享总数';
+
+  @override
+  String get filesMetricActiveShares => '生效外链';
+
+  @override
+  String get filesMetricExpiredShares => '已过期';
+
+  @override
+  String get filesMetricRevokedShares => '已撤销';
+
+  @override
+  String get filesSharePublic => '公开无密';
+
+  @override
+  String get filesSharePermanent => '永久有效';
+
+  @override
+  String get filesShareExpiredShort => '已失效';
+
+  @override
+  String get filesOpEdit => '修改';
+
+  @override
+  String get filesOpRevoke => '撤销';
+
+  @override
+  String get filesMetricUploading => '进行中任务';
+
+  @override
+  String get filesMetricQueued => '队列中';
+
+  @override
+  String get filesMetricCompleted => '已完成';
+
+  @override
+  String get filesMetricFailed => '失败';
+
+  @override
+  String get filesMetricMounts => '挂载点';
+
+  @override
+  String get filesMetricReady => '凭据就绪';
+
+  @override
+  String get filesMetricAbnormal => '异常';
+
+  @override
+  String get filesOpBrowse => '进入目录浏览';
+
+  @override
+  String get filesOpUnmount => '卸载';
+
+  @override
+  String get filesOpConfig => '挂载配置';
+
+  @override
+  String get filesTaskSource => '任务来源';
+
+  @override
+  String get filesProgress => '进度';
+
+  @override
+  String get filesStatusFilterAll => '全部';
+
+  @override
+  String get filesInspectorTitle => '文件属性详情';
+
+  @override
+  String get filesColumnUploader => '上传者';
+
+  @override
+  String get filesNewFolderDefault => '新建文件夹';
+
+  @override
+  String get filesToolbarTableView => '表格视图';
+
+  @override
+  String get filesToolbarGridView => '卡片视图';
+
+  @override
+  String get filesToggleInspector => '详情栏';
+
+  @override
+  String get filesInspectorTabOverview => '概览';
+
+  @override
+  String get filesInspectorTabVersions => '版本';
+
+  @override
+  String get filesInspectorTabActivity => '活动';
+
+  @override
+  String get filesInspectorEmptyHint => '在列表中选择一个条目查看技术规格';
+
+  @override
+  String get filesInspectorPath => '路径';
+
+  @override
+  String get filesInspectorNode => '节点';
+
+  @override
+  String get filesInspectorExactBytes => '精确字节';
+
+  @override
+  String get filesInspectorResolution => '分辨率';
+
+  @override
+  String get filesInspectorDuration => '时长';
+
+  @override
+  String get filesInspectorMime => 'MIME';
+
+  @override
+  String get filesInspectorSpace => '所属空间';
+
+  @override
+  String get filesInspectorNoVersions => '暂无版本记录';
+
+  @override
   String get filesEmpty => '暂无文件';
 
   @override
@@ -1160,11 +1398,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesUploadFile => '上传文件';
-
-  @override
-  String filesLoadMore(Object loaded, Object total) {
-    return '加载更多（已加载 $loaded / $total）';
-  }
 
   @override
   String get filesDropToUpload => '拖放文件到此处上传';
@@ -1252,6 +1485,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesPreview => '预览';
+
+  @override
+  String get filesPreviewFullscreen => '全屏';
+
+  @override
+  String get filesPreviewExitFullscreen => '退出全屏';
 
   @override
   String get filesRestore => '恢复';
@@ -1412,9 +1651,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesStatusFailed => '失败';
-
-  @override
-  String get filesStatusCompleted => '已完成';
 
   @override
   String get filesStatusCancelled => '已取消';
@@ -1578,6 +1814,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesShareActive => '有效';
+
+  @override
+  String get filesShareScopeMine => '我的创建';
+
+  @override
+  String get filesShareScopeAll => '全部链接';
 
   @override
   String get filesShareRevoked => '已撤销';
@@ -1912,6 +2154,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesStatusConflict => '冲突';
+
+  @override
+  String get filesStatusPending => '排队中';
+
+  @override
+  String get filesUploadOrigin => '来源';
+
+  @override
+  String get filesUploadOriginLocal => '本地';
+
+  @override
+  String get filesUploadOriginServer => '服务器';
+
+  @override
+  String get filesUploadPartsUnit => '分片';
 
   @override
   String get filesStatusCreated => '已创建';
@@ -3024,6 +3281,24 @@ class AppLocalizationsZh extends AppLocalizations {
       '数据库、Redis、RabbitMQ、MinIO 和索引组件的当前快照。';
 
   @override
+  String get adminMiddlewareTopologyTitle => '中间件与底层连接拓扑';
+
+  @override
+  String adminChartTipCompleted(Object count) {
+    return '完成 $count';
+  }
+
+  @override
+  String adminChartTipFailed(Object count) {
+    return '失败 $count';
+  }
+
+  @override
+  String adminChartTipRunning(Object count) {
+    return '运行 $count';
+  }
+
+  @override
   String get adminNoComponentHealth => '当前没有组件健康数据。';
 
   @override
@@ -3077,6 +3352,194 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminRecentAuditSubtitle => '来自 audit_logs，按创建时间倒序展示。';
 
   @override
+  String get adminServiceInspect => '检查';
+
+  @override
+  String get adminUserColumn => '用户主体';
+
+  @override
+  String get adminUserQuotaUsageColumn => '配额使用';
+
+  @override
+  String get adminUserCreatedAtColumn => '创建时间';
+
+  @override
+  String get adminUserTwoFactorColumn => '两步验证';
+
+  @override
+  String adminUserPermissionsCount(int count) {
+    return '权限 $count 项';
+  }
+
+  @override
+  String get adminUserProtected => '受保护';
+
+  @override
+  String get adminUserProtectedTooltip => '超级管理员账户受策略保护，不可禁用、删除或批量操作。';
+
+  @override
+  String get adminUserDisableConfirmTitle => '禁用账号';
+
+  @override
+  String adminUserDisableConfirmMessage(Object name) {
+    return '确定禁用 $name？禁用后该账号将被强制下线并拒绝登录，直至重新启用。';
+  }
+
+  @override
+  String get adminUserEnableConfirmTitle => '启用账号';
+
+  @override
+  String adminUserEnableConfirmMessage(Object name) {
+    return '确定启用 $name？启用后该账号可重新登录。';
+  }
+
+  @override
+  String get adminDeleteUser => '删除用户';
+
+  @override
+  String adminDeleteUserConfirmMessage(Object name) {
+    return '永久删除 $name。仅未持有任何内容归属的空账户可删除；请键入该用户名确认。';
+  }
+
+  @override
+  String get adminEditRolesHint => '可多选分配系统角色。变更角色将立即调整该用户的权限策略与可见菜单。';
+
+  @override
+  String get adminCreateRole => '新增自定义角色';
+
+  @override
+  String get adminRoleCode => '角色编码';
+
+  @override
+  String get adminRoleCodeRule => '必须以 ROLE_ 开头，仅含大写字母、数字与下划线（总长 7-66 字符）。';
+
+  @override
+  String get adminRoleDisplayName => '显示名称';
+
+  @override
+  String get adminRoleDescription => '职责描述';
+
+  @override
+  String get adminRoleBaseTemplate => '初始权限模板';
+
+  @override
+  String get adminRoleTemplateNone => '空白权限集合（稍后手动配置）';
+
+  @override
+  String get adminRoleTemplateMember => '克隆普通成员 (ROLE_MEMBER) 基线';
+
+  @override
+  String get adminRoleTemplateAdmin => '克隆系统管理员 (ROLE_ADMIN) 基线';
+
+  @override
+  String get adminRoleNameRequired => '显示名称必填';
+
+  @override
+  String get adminRoleDelete => '删除角色';
+
+  @override
+  String adminRoleDeleteConfirmMessage(Object code, Object name) {
+    return '确定删除角色 $name（$code）？仍有用户绑定的角色不可删除。';
+  }
+
+  @override
+  String get adminRoleSuperAdminLocked => 'SUPER_ADMIN 包含全部权限绑定，设计上只读锁定。';
+
+  @override
+  String adminRolePermissionSummary(Object count, Object modules) {
+    return '已授予 $count 项权限，覆盖 $modules 个业务模块';
+  }
+
+  @override
+  String get adminRoleBuiltinTag => '系统预置';
+
+  @override
+  String get adminRoleCustomTag => '自定义';
+
+  @override
+  String get adminPermissionMatrixTitle => '业务模块权限矩阵';
+
+  @override
+  String get adminPermissionMatrixSubtitle => '由权限目录按模块分组派生；打开角色即可编辑其权限绑定。';
+
+  @override
+  String adminPermissionSelectedCount(Object selected, Object total) {
+    return '已选 $selected / $total 项权限';
+  }
+
+  @override
+  String get adminPermissionSelectAll => '全选所有';
+
+  @override
+  String get adminPermissionClear => '清空勾选';
+
+  @override
+  String get adminPermissionGroupToggle => '全选/反选';
+
+  @override
+  String get adminPermissionToggleModule => '收起 / 展开模块';
+
+  @override
+  String get adminModuleActivity => '本人活动';
+
+  @override
+  String get adminModulePreference => '本人偏好';
+
+  @override
+  String get adminModuleProfile => '个人资料';
+
+  @override
+  String get adminModuleFile => '文件';
+
+  @override
+  String get adminModuleMedia => '媒体';
+
+  @override
+  String get adminModulePhoto => '照片';
+
+  @override
+  String get adminModuleBackdrop => '背景库';
+
+  @override
+  String get adminModuleTask => '任务';
+
+  @override
+  String get adminModuleSystem => '系统';
+
+  @override
+  String get adminServiceColumn => '服务';
+
+  @override
+  String get adminStatusColumn => '状态';
+
+  @override
+  String get adminLatencyColumn => '延迟';
+
+  @override
+  String get adminViewAllAuditLogs => '查看全部审计日志';
+
+  @override
+  String get adminAutoRefresh => '实时刷新';
+
+  @override
+  String get adminThroughputTrend => '任务吞吐趋势';
+
+  @override
+  String get adminThroughputTrendSubtitle => '本周（周一至周日）的完成任务与失败任务吞吐量。';
+
+  @override
+  String get adminLoadStateNormal => '正常';
+
+  @override
+  String get adminLoadStateWarning => '注意';
+
+  @override
+  String get adminLoadStateCritical => '偏高';
+
+  @override
+  String get adminFailedCount => '失败';
+
+  @override
   String get adminNoAuditLogs => '当前没有审计日志。';
 
   @override
@@ -3107,6 +3570,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminFilterPlatform => '平台';
+
+  @override
+  String get adminFilterRetention => '留存周期';
 
   @override
   String get adminCleanup => '清理';
@@ -3168,6 +3634,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminTaskUpdatedAt => '更新时间';
+
+  @override
+  String get adminTaskCreatedAt => '创建时间';
+
+  @override
+  String get adminTaskRetryCount => '重试';
+
+  @override
+  String get adminTaskIdColumn => '任务 ID';
 
   @override
   String get adminTaskName => '任务名称';
@@ -3795,6 +4270,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminDlqSubtitle => '重试耗尽的失败任务，可手动重新入队';
 
   @override
+  String get adminDlqMetricHint => '重试耗尽，需人工介入';
+
+  @override
+  String get adminDlqEmptyHealthy => '暂无死信任务，队列运行健康';
+
+  @override
   String get adminNoDlqTasks => '暂无死信任务';
 
   @override
@@ -3807,18 +4288,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminListEmpty => '暂无数据，可调整筛选条件';
 
   @override
-  String get adminListRowsPerPage => '每页条数';
-
-  @override
   String adminListPageOf(Object current, Object total) {
     return '第 $current/$total 页';
   }
-
-  @override
-  String get adminListPrevPage => '上一页';
-
-  @override
-  String get adminListNextPage => '下一页';
 
   @override
   String get adminListActions => '操作';
@@ -4175,6 +4647,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminSessionIp => 'IP 地址';
 
   @override
+  String get adminAuditActorColumn => '操作人';
+
+  @override
+  String get adminAuditActorIdColumn => '账号 ID';
+
+  @override
+  String get adminLoginClientColumn => '客户端';
+
+  @override
   String get adminResourceType => '资源类型';
 
   @override
@@ -4267,6 +4748,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminLibraryColumnLocation => '存储位置 · 根目录';
 
   @override
+  String get adminLibraryColumnVisibility => '可见性';
+
+  @override
+  String get adminLibraryColumnHealth => '健康';
+
+  @override
   String get adminLibraryColumnScanStatus => '扫描状态';
 
   @override
@@ -4317,28 +4804,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminLibraryDiscoverUpdates => '发现更新';
 
   @override
-  String adminListTotalCount(Object count) {
-    return '共 $count 条';
-  }
-
-  @override
-  String adminListRange(Object start, Object end) {
-    return '第 $start-$end 条';
-  }
-
-  @override
-  String get adminListFirstPage => '首页';
-
-  @override
-  String get adminListLastPage => '末页';
-
-  @override
-  String get adminListJumpTo => '跳至';
-
-  @override
-  String get adminListPageUnit => '页';
-
-  @override
   String get adminConfigGroupColumn => '分组';
 
   @override
@@ -4346,6 +4811,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminBatchRetryTasks => '批量重试';
+
+  @override
+  String get adminBatchCancelTasks => '批量取消';
+
+  @override
+  String adminBatchCancelConfirmMessage(Object count) {
+    return '将取消 $count 个排队或等待重试的任务，执行中的任务不受影响。失败项会跳过。';
+  }
+
+  @override
+  String adminBatchDiscardConfirmMessage(Object count) {
+    return '将永久丢弃 $count 条死信任务，丢弃后不可再重试。失败项会跳过。';
+  }
 
   @override
   String get adminBatchClearSelection => '取消选择';
@@ -4478,6 +4956,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminNoMatchingUsers => '当前没有匹配用户。';
 
   @override
+  String get adminNoUsers => '暂无用户。';
+
+  @override
   String adminLoadMore(Object loaded, Object total) {
     return '加载更多（已加载 $loaded / $total）';
   }
@@ -4502,6 +4983,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminBusinessAccess => '业务访问';
+
+  @override
+  String get adminSuperAdminDisableNote => '不可禁用';
+
+  @override
+  String get adminAssignableRoles => '可分配角色';
+
+  @override
+  String adminQuotaUsedBytes(Object size) {
+    return '已用 $size';
+  }
 
   @override
   String get adminNotSetEmail => '未设置邮箱';
@@ -4532,6 +5024,22 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String adminBatchSetStorageQuota(Object count) {
     return '批量设置存储配额（$count 个用户）';
+  }
+
+  @override
+  String get adminBatchDisableUsers => '批量禁用';
+
+  @override
+  String get adminBatchEnableUsers => '批量启用';
+
+  @override
+  String adminBatchDisableConfirmMessage(Object count) {
+    return '将禁用 $count 个用户：其全部会话立即失效且无法登录，直至重新启用。失败项会跳过。';
+  }
+
+  @override
+  String adminBatchEnableConfirmMessage(Object count) {
+    return '将启用 $count 个用户，恢复其登录能力。失败项会跳过。';
   }
 
   @override
@@ -4664,6 +5172,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminObjects => '对象';
+
+  @override
+  String get adminTaskThroughput7d => '任务吞吐（近 7 日）';
+
+  @override
+  String get adminOverviewThroughputTrend => '任务吞吐趋势（近 7 日）';
+
+  @override
+  String get adminGrowthPanelTitle => '活动与存储增长';
+
+  @override
+  String get adminGrowthPanelSubtitle => '基于分析数据的用户与存储增长走势。';
+
+  @override
+  String get adminUserGrowthLabel => '用户增长';
+
+  @override
+  String get adminStorageGrowthLabel => '存储增长';
+
+  @override
+  String adminFilesFoldersObjects(
+    Object files,
+    Object folders,
+    Object objects,
+  ) {
+    return '$files 文件 · $folders 文件夹 · $objects 对象';
+  }
 
   @override
   String get adminHealthy => '健康';
@@ -4826,6 +5361,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminRefresh => '刷新';
+
+  @override
+  String get adminOverviewAutoRefresh => '自动刷新';
+
+  @override
+  String get adminOverviewRefreshOff => '关闭';
+
+  @override
+  String get adminOverviewRefresh30s => '30秒';
+
+  @override
+  String get adminOverviewRefresh5m => '5分钟';
 
   @override
   String get adminRecalculate => '重算用量';
@@ -5693,11 +6240,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerBookshelfSection => '书架';
-
-  @override
-  String readerShowAllBooks(Object count) {
-    return '显示全部 $count 本';
-  }
 
   @override
   String get readerViewAll => '查看全部';
@@ -8368,9 +8910,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesOpFilterFileType => '筛选文件类型';
 
   @override
-  String get filesOpLoadMore => '加载更多文件';
-
-  @override
   String get filesOpCreateFolder => '新建文件夹';
 
   @override
@@ -9247,6 +9786,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicQrScanned => '已扫码，请在手机上确认';
 
   @override
+  String get musicQrConfirmedSyncing => '已确认，正在同步曲库…';
+
+  @override
   String get musicQrExpired => '二维码已过期，请重新发起登录获取新二维码。';
 
   @override
@@ -10058,7 +10600,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get serverSetupErrorRejected => '服务器返回异常状态，请确认地址是否正确';
 
   @override
-  String get profileSectionServer => '服务器与连接';
+  String get profileSectionServer => '服务器配置 (Server)';
 
   @override
   String get serverPanelCurrent => '当前服务器';
@@ -10137,4 +10679,331 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminAuditActionUnknown => '系统操作';
+
+  @override
+  String get adminAuditDetailTitle => '操作审计详情';
+
+  @override
+  String get adminAuditFieldAction => '操作行为';
+
+  @override
+  String get adminAuditFieldTime => '触发时间';
+
+  @override
+  String get adminAuditFieldActor => '操作账号';
+
+  @override
+  String get adminAuditFieldIp => '客户端 IP';
+
+  @override
+  String get adminAuditChangeSnapshot => '变更快照比对';
+
+  @override
+  String get adminAuditOldValue => '旧值';
+
+  @override
+  String get adminAuditNewValue => '新值';
+
+  @override
+  String get adminAuditPayload => '原始负载';
+
+  @override
+  String get adminAuditPayloadEmpty => '该记录没有扩展负载。';
+
+  @override
+  String get adminCleanupTarget => '目标类型';
+
+  @override
+  String get adminCleanupRetention => '保留期';
+
+  @override
+  String get adminCleanupPreviewCount => '预估清理';
+
+  @override
+  String get adminCleanupPhysicalWarning => '保留期之外的记录将被物理删除，不可恢复。';
+
+  @override
+  String get adminCleanupExportHint => '建议清理前先将当前页导出 CSV 留存。';
+
+  @override
+  String get adminCleanupSessionsHint => '仅清理过期与已吊销会话，在线会话不受影响。';
+
+  @override
+  String get adminCleanupTargetSessions => '过期与已吊销会话';
+
+  @override
+  String get adminTaskDetailTitle => '任务详情';
+
+  @override
+  String get adminTaskFieldHandler => '处理器';
+
+  @override
+  String get adminTaskFieldQueue => '队列';
+
+  @override
+  String get adminTaskFieldRetryCount => '重试轮次';
+
+  @override
+  String get adminTaskCancel => '取消任务';
+
+  @override
+  String get adminTaskCancelConfirmTitle => '确认取消任务';
+
+  @override
+  String get adminTaskCancelConfirmMessage => '任务将在执行前停止，且无法恢复。';
+
+  @override
+  String get adminTaskDiscard => '丢弃';
+
+  @override
+  String get adminTaskDiscardTitle => '丢弃死信任务';
+
+  @override
+  String get adminTaskDiscardMessage => '丢弃后任务进入终态，不可再重试。';
+
+  @override
+  String get adminTaskStatusDiscarded => '已丢弃';
+
+  @override
+  String get adminTaskStatusRetryWait => '等待重试';
+
+  @override
+  String get adminMetricQueuedReady => '排队 / 就绪';
+
+  @override
+  String get adminMetricDlq => '死信';
+
+  @override
+  String get adminSessionMetricRevoked => '已吊销';
+
+  @override
+  String get adminSessionClientMix => '客户端分布';
+
+  @override
+  String get adminSessionPlatformWeb => 'Web';
+
+  @override
+  String get adminSessionPlatformPc => 'PC';
+
+  @override
+  String get adminSessionPlatformMobile => '移动端';
+
+  @override
+  String notificationUnreadCount(Object count) {
+    return '$count 未读';
+  }
+
+  @override
+  String notificationFilterAll(Object count) {
+    return '全部通知 ($count)';
+  }
+
+  @override
+  String notificationFilterUnread(Object count) {
+    return '未读消息 ($count)';
+  }
+
+  @override
+  String get notificationFilterAllTooltip => '查看全部通知';
+
+  @override
+  String get notificationFilterUnreadTooltip => '仅查看未读通知';
+
+  @override
+  String notificationTotalSummary(Object count) {
+    return 'TOTAL: $count ITEMS';
+  }
+
+  @override
+  String get notificationPrevPage => '上一页';
+
+  @override
+  String get notificationNextPage => '下一页';
+
+  @override
+  String get profileHeaderAccount => '账户资料与凭据';
+
+  @override
+  String get profileHeaderAppearance => '外观个性化';
+
+  @override
+  String get profileHeaderNotifications => '通知偏好';
+
+  @override
+  String get profileHeaderSecurity => '安全与会话';
+
+  @override
+  String get profileHeaderServer => '服务器配置';
+
+  @override
+  String get profileHeaderAbout => '关于系统';
+
+  @override
+  String get profileSectionAccountSubtitle => '管理个人基础信息、头像与账户状态。';
+
+  @override
+  String get profileSectionAppearanceSubtitle => '调整主题、语言、字号与本地壁纸。';
+
+  @override
+  String get profileSectionNotificationsSubtitle => '配置站内通知类型与前台提示行为。';
+
+  @override
+  String get profileSectionSecuritySubtitle => '管理登录密码、双因子认证与活跃登录会话。';
+
+  @override
+  String get profileSectionServerSubtitle => '查看与更换当前连接的服务器。';
+
+  @override
+  String get profileSectionAboutSubtitle => '查看系统版本与更新。';
+
+  @override
+  String get profileGeneralInfoTitle => '基本信息 (General Information)';
+
+  @override
+  String get profileDisplayNameLabel => '显示昵称';
+
+  @override
+  String get profileAvatarHint => '支持 JPG/PNG/WebP，最大 5MB';
+
+  @override
+  String get profileRoleLabel => '角色';
+
+  @override
+  String get profilePasswordRowTitle => '登录密码';
+
+  @override
+  String get profileCredentialsTitle => '安全凭证 (Credentials & 2FA)';
+
+  @override
+  String get profileTwoFactorManageAction => '管理 2FA';
+
+  @override
+  String get profileActiveSessionsTitle => '活跃登录会话 (Active Sessions)';
+
+  @override
+  String get profileSessionDeviceColumn => '设备 / 浏览器';
+
+  @override
+  String get profileSessionIpColumn => 'IP 地址';
+
+  @override
+  String get profileSessionLoginTimeColumn => '登录时间';
+
+  @override
+  String get profileSessionExpiresColumn => '有效期';
+
+  @override
+  String get profileSessionLastActiveColumn => '最后活跃';
+
+  @override
+  String get profileSessionStatusColumn => '状态';
+
+  @override
+  String get profileSessionActionColumn => '操作';
+
+  @override
+  String get profileSessionCurrent => '当前会话';
+
+  @override
+  String get notificationActionViewFiles => '查看文件';
+
+  @override
+  String get notificationActionOpenMedia => '进入媒体中心';
+
+  @override
+  String get notificationActionManageSessions => '立即管理会话';
+
+  @override
+  String get notificationActionViewShares => '查看分享';
+
+  @override
+  String get profileSaveChanges => '保存修改';
+
+  @override
+  String get profileUpdateFailed => '资料保存失败';
+
+  @override
+  String get profileUpdateSuccess => '资料已更新';
+
+  @override
+  String get notificationCenterTitle => '通知 (Notifications)';
+
+  @override
+  String get profileBreadcrumbTitle => '个人设置 (Profile & Settings)';
+
+  @override
+  String get videoAutoImportStatusUnknown => '导入结果暂时无法确认，稍后可在通知与任务中心查看';
+
+  @override
+  String get readerAnnotationSaveFailed => '批注保存失败，请重试';
+
+  @override
+  String get musicFavoriteToggleFailed => '收藏操作失败，请重试';
+
+  @override
+  String get readerImportCandidatesLoadFailed => '导入候选加载失败';
+
+  @override
+  String syncReplayPendingWarning(Object count) {
+    return '有 $count 项离线操作暂未同步，恢复联网后将自动重试';
+  }
+
+  @override
+  String get commonRetry => '重试';
+
+  @override
+  String get profileEditProfile => '编辑资料';
+
+  @override
+  String get profileEditProfileTitle => '编辑个人资料';
+
+  @override
+  String profileSessionLoginAt(Object time) {
+    return '登录于 $time';
+  }
+
+  @override
+  String get profileDisplayNameInvalid => '显示昵称长度须为 1-120 个字符';
+
+  @override
+  String get profileEmailInvalid => '邮箱格式不正确';
+
+  @override
+  String profileSessionExpiresAt(Object time) {
+    return '有效期至 $time';
+  }
+
+  @override
+  String get notificationTypeMediaImportCompleted => '媒体导入完成';
+
+  @override
+  String get notificationTypeMediaImportCompletedDesc => '上传文件已自动导入媒体库';
+
+  @override
+  String get notificationTypeMediaImportFailed => '媒体导入失败';
+
+  @override
+  String get notificationTypeMediaImportFailedDesc => '上传文件自动导入未完成';
+
+  @override
+  String get notificationMediaImportCompleted => '媒体已自动导入媒体库';
+
+  @override
+  String notificationMediaImportCompletedWithName(Object fileName) {
+    return '文件 $fileName 已自动导入媒体库';
+  }
+
+  @override
+  String get notificationMediaImportFailed => '媒体自动导入失败，请检查文件后重新上传或手动导入';
+
+  @override
+  String notificationMediaImportFailedWithName(Object fileName) {
+    return '文件 $fileName 自动导入失败，请检查文件后重新上传或手动导入';
+  }
+
+  @override
+  String get favoriteAdded => '已收藏';
+
+  @override
+  String get favoriteRemoved => '已取消收藏';
 }

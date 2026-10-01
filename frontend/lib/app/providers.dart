@@ -177,6 +177,12 @@ final appOnlineStatusProvider = StreamProvider<bool>((ref) async* {
   yield* listener.onlineStream;
 });
 
+/// 离线同步重放失败事件：出现新增失败时携带待重试数量，供根部提示。
+final syncReplayFailuresProvider = StreamProvider<int>((ref) {
+  final listener = ref.watch(connectivityListenerProvider);
+  return listener.replayFailureStream;
+});
+
 /// 启动时自动清理超过 30 天未访问的章节和图片缓存。
 Future<void> _autoCleanExpiredCache(
   ReaderLocalStorage localStorage,

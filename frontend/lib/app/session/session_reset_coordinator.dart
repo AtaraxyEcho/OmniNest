@@ -57,7 +57,6 @@ final List<ProviderOrFamily> _resetProviders = <ProviderOrFamily>[
   adminTasksProvider,
   adminDlqProvider,
   adminLogsProvider,
-  adminMonitoringProvider,
   adminStorageProvider,
   adminExternalStorageProvider,
   adminConnectorOAuthAppsProvider,

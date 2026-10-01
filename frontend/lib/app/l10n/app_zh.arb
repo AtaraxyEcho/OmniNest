@@ -186,11 +186,11 @@
   "profileAccountStatus": "账户状态",
   "profileStatusNormal": "正常",
   "profileAccountInfo": "账户信息",
-  "profileSectionAccount": "账户",
-  "profileSectionAppearance": "外观与语言",
-  "profileSectionNotifications": "通知",
-  "profileSectionSecurity": "安全与设备",
-  "profileSectionAbout": "关于",
+  "profileSectionAccount": "个人信息 (Account)",
+  "profileSectionAppearance": "外观个性化 (Appearance)",
+  "profileSectionNotifications": "通知偏好 (Notifications)",
+  "profileSectionSecurity": "安全与会话 (Security)",
+  "profileSectionAbout": "关于系统 (About)",
   "profileManageBackdrop": "管理背景",
   "profileUsername": "用户名",
   "profileEmail": "邮箱",
@@ -299,6 +299,7 @@
   "coreSave": "保存",
   "coreClose": "关闭",
   "coreBack": "返回",
+  "coreBackToPortal": "返回 Portal",
   "coreDelete": "删除",
   "coreClear": "清除",
   "coreUnknownDate": "未知日期",
@@ -413,12 +414,101 @@
   "filesCurrentView": "当前视图",
   "filesCurrentViewTotal": "当前视图合计",
   "filesSoftDeleted": "软删除文件",
+  "filesColumnName": "名称",
+  "filesColumnModified": "修改时间",
+  "filesColumnSharedAt": "分享时间",
+  "filesColumnExpiresAt": "有效期",
+    "paginationTotal": "共 {count} 条",
+  "@paginationTotal": { "placeholders": { "count": {} } },
+  "paginationRange": "第 {start}-{end} 条",
+  "@paginationRange": { "placeholders": { "start": {}, "end": {} } },
+  "paginationFirst": "首页",
+  "paginationPrev": "上一页",
+  "paginationNext": "下一页",
+  "paginationLast": "末页",
+  "paginationJumpTo": "跳至",
+  "paginationRowsPerPage": "每页条数",
+  "@filesPaginationTotal": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@filesPaginationRange": {
+    "placeholders": {
+      "start": {},
+      "end": {}
+    }
+  },
+  "filesColumnSize": "大小",
+  "filesColumnUpdatedAt": "更新时间",
+  "filesColumnCreatedAt": "创建时间",
+  "filesImportFileCount": "文件数",
+  "filesColumnType": "类型",
+  "filesColumnFormat": "格式",
+  "filesColumnStatus": "状态",
+  "filesTaskCancel": "取消任务",
+  "filesOfflineSpeed": "速率",
+  "filesStatusDownloading": "下载中",
+  "filesStatusRunning": "执行中",
+  "filesStatusCompleted": "已完成",
+  "filesOfflineCancelConfirm": "取消离线下载？",
+  "filesOfflineCancelMessage": "任务进度与断点将被清理，且不可恢复。",
+  "filesImportCancelConfirm": "取消导入任务？",
+  "filesImportCancelMessage": "进行中的导入流水线将被中止。",
+  "filesShareLink": "分享直链",
+  "filesShareAccess": "访问/下载",
+  "filesShareRemaining": "剩余有效",
+  "filesShareExpires": "到期时间",
+  "filesShareCreated": "创建于",
+  "filesShareExtract": "提取码",
+  "filesMetricSharedOwners": "共享来源所有者",
+  "filesMetricSharedItems": "接收共享文件",
+  "filesMetricSharedSize": "累计占用",
+  "filesMetricTotalShares": "分享总数",
+  "filesMetricActiveShares": "生效外链",
+  "filesMetricExpiredShares": "已过期",
+  "filesMetricRevokedShares": "已撤销",
+  "filesSharePublic": "公开无密",
+  "filesSharePermanent": "永久有效",
+  "filesShareExpiredShort": "已失效",
+  "filesOpEdit": "修改",
+  "filesOpRevoke": "撤销",
+  "filesMetricUploading": "进行中任务",
+  "filesMetricQueued": "队列中",
+  "filesMetricCompleted": "已完成",
+  "filesMetricFailed": "失败",
+  "filesMetricMounts": "挂载点",
+  "filesMetricReady": "凭据就绪",
+  "filesMetricAbnormal": "异常",
+  "filesOpBrowse": "进入目录浏览",
+  "filesOpUnmount": "卸载",
+  "filesOpConfig": "挂载配置",
+  "filesTaskSource": "任务来源",
+  "filesProgress": "进度",
+  "filesStatusFilterAll": "全部",
+  "filesInspectorTitle": "文件属性详情",
+  "filesColumnUploader": "上传者",
+  "filesNewFolderDefault": "新建文件夹",
+  "filesToolbarTableView": "表格视图",
+  "filesToolbarGridView": "卡片视图",
+  "filesToggleInspector": "详情栏",
+  "filesInspectorTabOverview": "概览",
+  "filesInspectorTabVersions": "版本",
+  "filesInspectorTabActivity": "活动",
+  "filesInspectorEmptyHint": "在列表中选择一个条目查看技术规格",
+  "filesInspectorPath": "路径",
+  "filesInspectorNode": "节点",
+  "filesInspectorExactBytes": "精确字节",
+  "filesInspectorResolution": "分辨率",
+  "filesInspectorDuration": "时长",
+  "filesInspectorMime": "MIME",
+  "filesInspectorSpace": "所属空间",
+  "filesInspectorNoVersions": "暂无版本记录",
   "filesEmpty": "暂无文件",
   "filesRecycleBinEmpty": "回收站为空",
   "filesCameraTakePhoto": "拍照上传",
   "filesCameraRecordVideo": "录像上传",
   "filesUploadFile": "上传文件",
-  "filesLoadMore": "加载更多（已加载 {loaded} / {total}）",
   "@filesLoadMore": {
     "placeholders": {
       "loaded": {},
@@ -452,6 +542,8 @@
   "filesShare": "分享",
   "filesOpen": "打开",
   "filesPreview": "预览",
+  "filesPreviewFullscreen": "全屏",
+  "filesPreviewExitFullscreen": "退出全屏",
   "filesRestore": "恢复",
   "filesMoreActions": "更多操作",
   "filesMoreSections": "更多分区",
@@ -503,7 +595,6 @@
   "filesStatusUploading": "上传中",
   "filesStatusPaused": "已暂停",
   "filesStatusFailed": "失败",
-  "filesStatusCompleted": "已完成",
   "filesStatusCancelled": "已取消",
   "filesStatusCancelling": "取消中",
   "filesOfflineEmpty": "暂无离线下载任务",
@@ -553,6 +644,8 @@
   "filesLoadFailed": "加载失败：{error}",
   "filesAccessUnlimited": "不限",
   "filesShareActive": "有效",
+  "filesShareScopeMine": "我的创建",
+  "filesShareScopeAll": "全部链接",
   "filesShareRevoked": "已撤销",
   "filesShareExpired": "已过期",
   "filesShareExhausted": "已达上限",
@@ -671,6 +764,11 @@
   "filesOpenTooltip": "打开",
   "filesConflictMsg": "回收站存在同名文件\"{name}\"，需清理后重试",
   "filesStatusConflict": "冲突",
+  "filesStatusPending": "排队中",
+  "filesUploadOrigin": "来源",
+  "filesUploadOriginLocal": "本地",
+  "filesUploadOriginServer": "服务器",
+  "filesUploadPartsUnit": "分片",
   "filesStatusCreated": "已创建",
   "filesLocalUpload": "本地上传",
   "filesUploadTaskCount": "{count} 个任务",
@@ -1201,6 +1299,25 @@
   "adminRequests": "请求",
   "adminComponentHealth": "组件健康状态",
   "adminComponentHealthSubtitle": "数据库、Redis、RabbitMQ、MinIO 和索引组件的当前快照。",
+  "adminMiddlewareTopologyTitle": "中间件与底层连接拓扑",
+  "adminChartTipCompleted": "完成 {count}",
+  "@adminChartTipCompleted": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminChartTipFailed": "失败 {count}",
+  "@adminChartTipFailed": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminChartTipRunning": "运行 {count}",
+  "@adminChartTipRunning": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "adminNoComponentHealth": "当前没有组件健康数据。",
   "adminRecentAlerts": "最近系统告警",
   "adminRecentAlertsSubtitle": "按快照规则生成，后续可接入真实告警表。",
@@ -1223,6 +1340,71 @@
   "adminTabLoginLog": "登录日志",
   "adminRecentAudit": "最近审计",
   "adminRecentAuditSubtitle": "来自 audit_logs，按创建时间倒序展示。",
+  "adminServiceInspect": "检查",
+  "adminUserColumn": "用户主体",
+  "adminUserQuotaUsageColumn": "配额使用",
+  "adminUserCreatedAtColumn": "创建时间",
+  "adminUserTwoFactorColumn": "两步验证",
+  "adminUserPermissionsCount": "权限 {count} 项",
+  "@adminUserPermissionsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminUserProtected": "受保护",
+  "adminUserProtectedTooltip": "超级管理员账户受策略保护，不可禁用、删除或批量操作。",
+  "adminUserDisableConfirmTitle": "禁用账号",
+  "adminUserDisableConfirmMessage": "确定禁用 {name}？禁用后该账号将被强制下线并拒绝登录，直至重新启用。",
+  "adminUserEnableConfirmTitle": "启用账号",
+  "adminUserEnableConfirmMessage": "确定启用 {name}？启用后该账号可重新登录。",
+  "adminDeleteUser": "删除用户",
+  "adminDeleteUserConfirmMessage": "永久删除 {name}。仅未持有任何内容归属的空账户可删除；请键入该用户名确认。",
+  "adminEditRolesHint": "可多选分配系统角色。变更角色将立即调整该用户的权限策略与可见菜单。",
+  "adminCreateRole": "新增自定义角色",
+  "adminRoleCode": "角色编码",
+  "adminRoleCodeRule": "必须以 ROLE_ 开头，仅含大写字母、数字与下划线（总长 7-66 字符）。",
+  "adminRoleDisplayName": "显示名称",
+  "adminRoleDescription": "职责描述",
+  "adminRoleBaseTemplate": "初始权限模板",
+  "adminRoleTemplateNone": "空白权限集合（稍后手动配置）",
+  "adminRoleTemplateMember": "克隆普通成员 (ROLE_MEMBER) 基线",
+  "adminRoleTemplateAdmin": "克隆系统管理员 (ROLE_ADMIN) 基线",
+  "adminRoleNameRequired": "显示名称必填",
+  "adminRoleDelete": "删除角色",
+  "adminRoleDeleteConfirmMessage": "确定删除角色 {name}（{code}）？仍有用户绑定的角色不可删除。",
+  "adminRoleSuperAdminLocked": "SUPER_ADMIN 包含全部权限绑定，设计上只读锁定。",
+  "adminRolePermissionSummary": "已授予 {count} 项权限，覆盖 {modules} 个业务模块",
+  "adminRoleBuiltinTag": "系统预置",
+  "adminRoleCustomTag": "自定义",
+  "adminPermissionMatrixTitle": "业务模块权限矩阵",
+  "adminPermissionMatrixSubtitle": "由权限目录按模块分组派生；打开角色即可编辑其权限绑定。",
+  "adminPermissionSelectedCount": "已选 {selected} / {total} 项权限",
+  "adminPermissionSelectAll": "全选所有",
+  "adminPermissionClear": "清空勾选",
+  "adminPermissionGroupToggle": "全选/反选",
+  "adminPermissionToggleModule": "收起 / 展开模块",
+  "adminModuleActivity": "本人活动",
+  "adminModulePreference": "本人偏好",
+  "adminModuleProfile": "个人资料",
+  "adminModuleFile": "文件",
+  "adminModuleMedia": "媒体",
+  "adminModulePhoto": "照片",
+  "adminModuleBackdrop": "背景库",
+  "adminModuleTask": "任务",
+  "adminModuleSystem": "系统",
+  "adminServiceColumn": "服务",
+  "adminStatusColumn": "状态",
+  "adminLatencyColumn": "延迟",
+  "adminViewAllAuditLogs": "查看全部审计日志",
+  "adminAutoRefresh": "实时刷新",
+  "adminThroughputTrend": "任务吞吐趋势",
+  "adminThroughputTrendSubtitle": "本周（周一至周日）的完成任务与失败任务吞吐量。",
+  "adminLoadStateNormal": "正常",
+  "adminLoadStateWarning": "注意",
+  "adminLoadStateCritical": "偏高",
+  "adminFailedCount": "失败",
   "adminNoAuditLogs": "当前没有审计日志。",
   "adminNoLoginLogs": "当前没有登录日志。",
   "adminLoadFailed": "加载失败: {error}",
@@ -1238,6 +1420,7 @@
   "adminFilterAction": "操作类型",
   "adminFilterStatus": "状态",
   "adminFilterPlatform": "平台",
+  "adminFilterRetention": "留存周期",
   "adminCleanup": "清理",
   "adminRetentionDays": "保留 {days} 天",
   "@adminRetentionDays": {
@@ -1267,8 +1450,10 @@
   "adminTaskStatusDlq": "死信",
   "adminTaskErrorSummary": "错误摘要",
   "adminTaskUpdatedAt": "更新时间",
+  "adminTaskCreatedAt": "创建时间",
+  "adminTaskRetryCount": "重试",
+  "adminTaskIdColumn": "任务 ID",
   "adminTaskName": "任务名称",
-  "adminTaskOwner": "归属人",
   "adminTaskOwner": "归属人",
   "adminTaskExecutionStatus": "执行状态",
   "adminTaskListSubtitle": "失败、取消、死信状态支持重新入队。",
@@ -1495,11 +1680,12 @@
   "adminNoReason": "无备注",
   "adminDlq": "死信队列",
   "adminDlqSubtitle": "重试耗尽的失败任务，可手动重新入队",
+  "adminDlqMetricHint": "重试耗尽，需人工介入",
+  "adminDlqEmptyHealthy": "暂无死信任务，队列运行健康",
   "adminNoDlqTasks": "暂无死信任务",
   "adminNoErrorSummary": "无错误摘要",
   "adminStorageManagement": "存储管理",
   "adminListEmpty": "暂无数据，可调整筛选条件",
-  "adminListRowsPerPage": "每页条数",
   "adminListPageOf": "第 {current}/{total} 页",
   "@adminListPageOf": {
     "placeholder": {
@@ -1508,8 +1694,6 @@
       }
     }
   },
-  "adminListPrevPage": "上一页",
-  "adminListNextPage": "下一页",
   "adminListActions": "操作",
   "adminListIndex": "序号",
   "adminListSelectedCount": "已选 {count} 项",
@@ -1659,6 +1843,9 @@
   "adminSessionExpiresAt": "过期时间",
   "adminSessionLastActive": "最后活跃时间",
   "adminSessionIp": "IP 地址",
+  "adminAuditActorColumn": "操作人",
+  "adminAuditActorIdColumn": "账号 ID",
+  "adminLoginClientColumn": "客户端",
   "adminResourceType": "资源类型",
   "adminLogContent": "操作内容",
   "adminLogTime": "时间",
@@ -1708,6 +1895,8 @@
   "adminLibraryCleanupOrphan": "清理挂载位置",
   "adminLibraryColumnName": "库名称",
   "adminLibraryColumnLocation": "存储位置 · 根目录",
+  "adminLibraryColumnVisibility": "可见性",
+  "adminLibraryColumnHealth": "健康",
   "adminLibraryColumnScanStatus": "扫描状态",
   "adminLibraryColumnLastScan": "上次扫描",
   "adminLibraryManageInfoSection": "库源信息",
@@ -1734,26 +1923,33 @@
   "adminStorageColumnRoot": "根目录",
   "adminStorageColumnHealth": "健康状态",
   "adminLibraryDiscoverUpdates": "发现更新",
-  "adminListTotalCount": "共 {count} 条",
   "@adminListTotalCount": {
     "placeholders": {
       "count": {}
     }
   },
-  "adminListRange": "第 {start}-{end} 条",
   "@adminListRange": {
     "placeholders": {
       "start": {},
       "end": {}
     }
   },
-  "adminListFirstPage": "首页",
-  "adminListLastPage": "末页",
-  "adminListJumpTo": "跳至",
-  "adminListPageUnit": "页",
   "adminConfigGroupColumn": "分组",
   "adminBatchRevokeSessions": "批量强制下线",
   "adminBatchRetryTasks": "批量重试",
+  "adminBatchCancelTasks": "批量取消",
+  "adminBatchCancelConfirmMessage": "将取消 {count} 个排队或等待重试的任务，执行中的任务不受影响。失败项会跳过。",
+  "@adminBatchCancelConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminBatchDiscardConfirmMessage": "将永久丢弃 {count} 条死信任务，丢弃后不可再重试。失败项会跳过。",
+  "@adminBatchDiscardConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "adminBatchClearSelection": "取消选择",
   "adminBatchCompleted": "批量操作完成：成功 {success} 项，失败 {failed} 项",
   "@adminBatchCompleted": {
@@ -1821,6 +2017,7 @@
   "adminSearchUsers": "搜索用户名、昵称或邮箱",
   "adminAll": "全部",
   "adminNoMatchingUsers": "当前没有匹配用户。",
+  "adminNoUsers": "暂无用户。",
   "adminLoadMore": "加载更多（已加载 {loaded} / {total}）",
   "@adminLoadMore": {
     "placeholders": {
@@ -1835,6 +2032,14 @@
   "adminSystemMaintenance": "系统维护",
   "adminMemberGuest": "成员 / 访客",
   "adminBusinessAccess": "业务访问",
+  "adminSuperAdminDisableNote": "不可禁用",
+  "adminAssignableRoles": "可分配角色",
+  "adminQuotaUsedBytes": "已用 {size}",
+  "@adminQuotaUsedBytes": {
+    "placeholders": {
+      "size": {}
+    }
+  },
   "adminNotSetEmail": "未设置邮箱",
   "adminDisable": "禁用",
   "adminRole": "角色",
@@ -1850,6 +2055,20 @@
   },
   "adminBatchSetStorageQuota": "批量设置存储配额（{count} 个用户）",
   "@adminBatchSetStorageQuota": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminBatchDisableUsers": "批量禁用",
+  "adminBatchEnableUsers": "批量启用",
+  "adminBatchDisableConfirmMessage": "将禁用 {count} 个用户：其全部会话立即失效且无法登录，直至重新启用。失败项会跳过。",
+  "@adminBatchDisableConfirmMessage": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminBatchEnableConfirmMessage": "将启用 {count} 个用户，恢复其登录能力。失败项会跳过。",
+  "@adminBatchEnableConfirmMessage": {
     "placeholders": {
       "count": {}
     }
@@ -1930,6 +2149,20 @@
     }
   },
   "adminObjects": "对象",
+  "adminTaskThroughput7d": "任务吞吐（近 7 日）",
+  "adminOverviewThroughputTrend": "任务吞吐趋势（近 7 日）",
+  "adminGrowthPanelTitle": "活动与存储增长",
+  "adminGrowthPanelSubtitle": "基于分析数据的用户与存储增长走势。",
+  "adminUserGrowthLabel": "用户增长",
+  "adminStorageGrowthLabel": "存储增长",
+  "adminFilesFoldersObjects": "{files} 文件 · {folders} 文件夹 · {objects} 对象",
+  "@adminFilesFoldersObjects": {
+    "placeholders": {
+      "files": {},
+      "folders": {},
+      "objects": {}
+    }
+  },
   "adminHealthy": "健康",
   "adminFiles": "文件",
   "adminFolders": "文件夹",
@@ -1984,6 +2217,10 @@
   "adminStorageSubtitle": "管理 MinIO 桶、容量与索引维护。",
   "adminExternalStorageTitle": "外部存储",
   "adminRefresh": "刷新",
+  "adminOverviewAutoRefresh": "自动刷新",
+  "adminOverviewRefreshOff": "关闭",
+  "adminOverviewRefresh30s": "30秒",
+  "adminOverviewRefresh5m": "5分钟",
   "adminRecalculate": "重算用量",
   "adminRecalculateDone": "已更新 {count} 位用户的存储用量",
   "@adminRecalculateDone": {
@@ -2439,7 +2676,6 @@
   },
   "readerContinueBtn": "继续阅读",
   "readerBookshelfSection": "书架",
-  "readerShowAllBooks": "显示全部 {count} 本",
   "@readerShowAllBooks": {
     "placeholder": {
       "count": {
@@ -3667,7 +3903,6 @@
   "filesOpNavigateToRoot": "返回根目录",
   "filesOpChangeDirectory": "切换目录",
   "filesOpFilterFileType": "筛选文件类型",
-  "filesOpLoadMore": "加载更多文件",
   "filesOpCreateFolder": "新建文件夹",
   "filesOpRename": "重命名文件",
   "filesOpCopy": "复制文件",
@@ -4123,6 +4358,7 @@
   "musicQrLoginInstruction": "打开网易云音乐 App，扫描此二维码。",
   "musicQrWaiting": "等待扫码…",
   "musicQrScanned": "已扫码，请在手机上确认",
+  "musicQrConfirmedSyncing": "已确认，正在同步曲库…",
   "musicQrExpired": "二维码已过期，请重新发起登录获取新二维码。",
   "musicQrStatusFailed": "登录状态刷新失败，请检查网络后重试。",
   "musicQrRetry": "重试",
@@ -4515,7 +4751,7 @@
   "serverSetupErrorTimeout": "连接超时，请确认服务器可达后重试",
   "serverSetupErrorNotOmniNest": "目标不是 OmniNest 服务器",
   "serverSetupErrorRejected": "服务器返回异常状态，请确认地址是否正确",
-  "profileSectionServer": "服务器与连接",
+  "profileSectionServer": "服务器配置 (Server)",
   "serverPanelCurrent": "当前服务器",
   "serverPanelBadgeCustom": "自定义",
   "serverPanelBadgePreset": "预置（未修改）",
@@ -4541,5 +4777,138 @@
   "adminAuditActionSessionCleanup": "会话清理",
   "adminAuditActionAuditLogCleanup": "审计日志清理",
   "adminAuditActionLoginAuditCleanup": "登录日志清理",
-  "adminAuditActionUnknown": "系统操作"
+  "adminAuditActionUnknown": "系统操作",
+  "adminAuditDetailTitle": "操作审计详情",
+  "adminAuditFieldAction": "操作行为",
+  "adminAuditFieldTime": "触发时间",
+  "adminAuditFieldActor": "操作账号",
+  "adminAuditFieldIp": "客户端 IP",
+  "adminAuditChangeSnapshot": "变更快照比对",
+  "adminAuditOldValue": "旧值",
+  "adminAuditNewValue": "新值",
+  "adminAuditPayload": "原始负载",
+  "adminAuditPayloadEmpty": "该记录没有扩展负载。",
+  "adminCleanupTarget": "目标类型",
+  "adminCleanupRetention": "保留期",
+  "adminCleanupPreviewCount": "预估清理",
+  "adminCleanupPhysicalWarning": "保留期之外的记录将被物理删除，不可恢复。",
+  "adminCleanupExportHint": "建议清理前先将当前页导出 CSV 留存。",
+  "adminCleanupSessionsHint": "仅清理过期与已吊销会话，在线会话不受影响。",
+  "adminCleanupTargetSessions": "过期与已吊销会话",
+  "adminTaskDetailTitle": "任务详情",
+  "adminTaskFieldHandler": "处理器",
+  "adminTaskFieldQueue": "队列",
+  "adminTaskFieldRetryCount": "重试轮次",
+  "adminTaskCancel": "取消任务",
+  "adminTaskCancelConfirmTitle": "确认取消任务",
+  "adminTaskCancelConfirmMessage": "任务将在执行前停止，且无法恢复。",
+  "adminTaskDiscard": "丢弃",
+  "adminTaskDiscardTitle": "丢弃死信任务",
+  "adminTaskDiscardMessage": "丢弃后任务进入终态，不可再重试。",
+  "adminTaskStatusDiscarded": "已丢弃",
+  "adminTaskStatusRetryWait": "等待重试",
+  "adminMetricQueuedReady": "排队 / 就绪",
+  "adminMetricDlq": "死信",
+  "adminSessionMetricRevoked": "已吊销",
+  "adminSessionClientMix": "客户端分布",
+  "adminSessionPlatformWeb": "Web",
+  "adminSessionPlatformPc": "PC",
+  "adminSessionPlatformMobile": "移动端",
+  "notificationUnreadCount": "{count} 未读",
+  "@notificationUnreadCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationFilterAll": "全部通知 ({count})",
+  "@notificationFilterAll": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationFilterUnread": "未读消息 ({count})",
+  "@notificationFilterUnread": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationFilterAllTooltip": "查看全部通知",
+  "notificationFilterUnreadTooltip": "仅查看未读通知",
+  "notificationTotalSummary": "TOTAL: {count} ITEMS",
+  "@notificationTotalSummary": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "notificationPrevPage": "上一页",
+  "notificationNextPage": "下一页",
+  "profileHeaderAccount": "账户资料与凭据",
+  "profileHeaderAppearance": "外观个性化",
+  "profileHeaderNotifications": "通知偏好",
+  "profileHeaderSecurity": "安全与会话",
+  "profileHeaderServer": "服务器配置",
+  "profileHeaderAbout": "关于系统",
+  "profileSectionAccountSubtitle": "管理个人基础信息、头像与账户状态。",
+  "profileSectionAppearanceSubtitle": "调整主题、语言、字号与本地壁纸。",
+  "profileSectionNotificationsSubtitle": "配置站内通知类型与前台提示行为。",
+  "profileSectionSecuritySubtitle": "管理登录密码、双因子认证与活跃登录会话。",
+  "profileSectionServerSubtitle": "查看与更换当前连接的服务器。",
+  "profileSectionAboutSubtitle": "查看系统版本与更新。",
+  "profileGeneralInfoTitle": "基本信息 (General Information)",
+  "profileDisplayNameLabel": "显示昵称",
+  "profileAvatarHint": "支持 JPG/PNG/WebP，最大 5MB",
+  "profileRoleLabel": "角色",
+  "profilePasswordRowTitle": "登录密码",
+  "profileCredentialsTitle": "安全凭证 (Credentials & 2FA)",
+  "profileTwoFactorManageAction": "管理 2FA",
+  "profileActiveSessionsTitle": "活跃登录会话 (Active Sessions)",
+  "profileSessionDeviceColumn": "设备 / 浏览器",
+  "profileSessionIpColumn": "IP 地址",
+  "profileSessionLoginTimeColumn": "登录时间",
+  "profileSessionExpiresColumn": "有效期",
+  "profileSessionLastActiveColumn": "最后活跃",
+  "profileSessionStatusColumn": "状态",
+  "profileSessionActionColumn": "操作",
+  "profileSessionCurrent": "当前会话",
+  "notificationActionViewFiles": "查看文件",
+  "notificationActionOpenMedia": "进入媒体中心",
+  "notificationActionManageSessions": "立即管理会话",
+  "notificationActionViewShares": "查看分享",
+  "profileSaveChanges": "保存修改",
+  "profileUpdateFailed": "资料保存失败",
+  "profileUpdateSuccess": "资料已更新",
+  "notificationCenterTitle": "通知 (Notifications)",
+  "profileBreadcrumbTitle": "个人设置 (Profile & Settings)",
+  "videoAutoImportStatusUnknown": "导入结果暂时无法确认，稍后可在通知与任务中心查看",
+  "readerAnnotationSaveFailed": "批注保存失败，请重试",
+  "musicFavoriteToggleFailed": "收藏操作失败，请重试",
+  "readerImportCandidatesLoadFailed": "导入候选加载失败",
+  "syncReplayPendingWarning": "有 {count} 项离线操作暂未同步，恢复联网后将自动重试",
+  "commonRetry": "重试",
+  "profileEditProfile": "编辑资料",
+  "profileEditProfileTitle": "编辑个人资料",
+  "profileSessionLoginAt": "登录于 {time}",
+  "@profileSessionLoginAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "profileDisplayNameInvalid": "显示昵称长度须为 1-120 个字符",
+  "profileEmailInvalid": "邮箱格式不正确",
+  "profileSessionExpiresAt": "有效期至 {time}",
+  "@profileSessionExpiresAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "notificationTypeMediaImportCompleted": "媒体导入完成",
+  "notificationTypeMediaImportCompletedDesc": "上传文件已自动导入媒体库",
+  "notificationTypeMediaImportFailed": "媒体导入失败",
+  "notificationTypeMediaImportFailedDesc": "上传文件自动导入未完成",
+  "notificationMediaImportCompleted": "媒体已自动导入媒体库",
+  "notificationMediaImportCompletedWithName": "文件 {fileName} 已自动导入媒体库",
+  "notificationMediaImportFailed": "媒体自动导入失败，请检查文件后重新上传或手动导入",
+  "notificationMediaImportFailedWithName": "文件 {fileName} 自动导入失败，请检查文件后重新上传或手动导入",
+  "favoriteAdded": "已收藏",
+  "favoriteRemoved": "已取消收藏"
 }
