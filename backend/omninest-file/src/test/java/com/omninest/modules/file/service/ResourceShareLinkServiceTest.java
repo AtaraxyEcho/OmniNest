@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.repository.ShareLinkRepository;
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
@@ -41,12 +42,14 @@ class ResourceShareLinkServiceTest {
     private final ShareAccessSessionService sessionService = new ShareAccessSessionService();
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
+    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final ResourceShareLinkService service = new ResourceShareLinkService(
             shareLinkRepository,
             passwordEncoder,
             sessionService,
             rateLimitService,
-            credentialCipher
+            credentialCipher,
+            readThroughCache
     );
 
     /**

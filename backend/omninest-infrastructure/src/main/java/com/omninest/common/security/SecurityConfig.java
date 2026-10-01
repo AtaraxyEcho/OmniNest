@@ -119,7 +119,6 @@ public class SecurityConfig {
                         .requestMatchers("/js/**", "/css/**").permitAll()
                         .requestMatchers("/assets/**", "/icons/**", "/canvaskit/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/app/version").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/setup/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/super-admin").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/2fa/secret").permitAll()

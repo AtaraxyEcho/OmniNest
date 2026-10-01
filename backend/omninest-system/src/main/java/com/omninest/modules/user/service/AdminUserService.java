@@ -237,7 +237,9 @@ public class AdminUserService {
         if (normalized.length() > MAX_SEARCH_LENGTH) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "搜索条件长度不能超过 200 个字符");
         }
-        return "%" + normalized + "%";
+        // 剥离 LIKE 通配符，避免管理端搜索被构造成全表模糊扫描
+        String sanitized = normalized.replace("%", "").replace("_", "");
+        return "%" + sanitized + "%";
     }
 
     /**

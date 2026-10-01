@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
@@ -37,6 +38,7 @@ public class ResourceShareLinkService {
     private final ShareAccessSessionService shareAccessSessionService;
     private final RateLimitService rateLimitService;
     private final CredentialCipher credentialCipher;
+    private final ReadThroughCache readThroughCache;
 
     /**
      * 校验密码并创建短期会话，不消费分享访问次数。
@@ -288,6 +290,10 @@ public class ResourceShareLinkService {
             return 0;
         }
         shareLinkRepository.disableByResourceId(resourceId, Instant.now());
+        // 批量撤销同步失效访问缓存，否则持有 token 者最长 5 分钟仍可读取
+        for (ShareLink link : active) {
+            readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
+        }
         return active.size();
     }
 
