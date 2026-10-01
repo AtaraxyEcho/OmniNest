@@ -1,0 +1,9 @@
+# 真实 .env（含 JWT/KEK/SetupToken）不得进入构建上下文传给 Docker daemon
+.env*
+# 运行时产物与本地数据
+logs/
+.omninest/
+webapp/
+# 各模块构建输出全部排除，仅负向放行镜像 COPY 所需的应用 jar
+**/target/*
+!omninest-app/target/*.jar

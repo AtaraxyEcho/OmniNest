@@ -10,7 +10,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omninest}
       TZ: Asia/Shanghai
     ports:
-      - "5432:5432"
+      # 默认仅本机回环；局域网实机验收在 dev .env 设 OMNINEST_DEV_BIND=0.0.0.0 或本机局域网 IP
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -26,7 +27,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     ports:
-      - "6379:6379"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -42,8 +43,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-omninest}
       TZ: Asia/Shanghai
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:5672:5672"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 15s
@@ -63,8 +64,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       TZ: Asia/Shanghai
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:9000:9000"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:9001:9001"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/live"]
       interval: 15s
@@ -83,9 +84,9 @@ services:
       LISTEN_PORT: 6888
       TZ: Asia/Shanghai
     ports:
-      - "6800:6800"
-      - "6888:6888"
-      - "6888:6888/udp"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6800:6800"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6888:6888"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6888:6888/udp"
     healthcheck:
       test: ["CMD-SHELL", "curl --silent --show-error --output /dev/null http://127.0.0.1:$${RPC_PORT}/jsonrpc"]
       interval: 15s
@@ -127,7 +128,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     ports:
-      - "3001:3000"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:3001:3000"
     healthcheck:
       test:
         - CMD
@@ -178,7 +179,7 @@ services:
       --rc-enable-metrics
       --log-level INFO
     ports:
-      - "5572:5572"
+      - "${OMNINEST_DEV_BIND:-127.0.0.1}:5572:5572"
     healthcheck:
       test:
         - CMD-SHELL

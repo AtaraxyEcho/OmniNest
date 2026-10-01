@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.1</version>
+        <version>4.0.8</version>
         <relativePath/>
     </parent>
 
@@ -53,7 +53,7 @@
         <jaxb.version>4.0.7</jaxb.version>
         <jakarta.xml.bind.api.version>4.0.5</jakarta.xml.bind.api.version>
         <nimbus.jose.jwt.version>10.4</nimbus.jose.jwt.version>
-        <error.prone.annotations.version>2.43.0</error.prone.annotations.version>
+        <error.prone.annotations.version>2.49.0</error.prone.annotations.version>
         <maven.enforcer.version>3.6.3</maven.enforcer.version>
         <license.maven.version>2.7.1</license.maven.version>
     </properties>

@@ -40,6 +40,19 @@ public class ProductionSecretsValidator implements ApplicationRunner {
 
     private static final Map<String, String> REQUIRED_SECRETS = new LinkedHashMap<>();
 
+    /**
+     * 众所周知的服务默认口令与通用弱词，命中即拒绝启动。
+     */
+    private static final Set<String> WEAK_SECRET_VALUES = Set.of(
+            "omninest", "minioadmin", "minio", "secret", "password", "changeme",
+            "rabbitmq", "postgres", "redis", "admin", "omninest123", "123456"
+    );
+
+    /**
+     * 口令类凭据的最小长度；访问密钥类用户名不受此约束。
+     */
+    private static final int MIN_SECRET_LENGTH = 16;
+
     static {
         REQUIRED_SECRETS.put("spring.datasource.password", "OMNINEST_DB_PASSWORD");
         REQUIRED_SECRETS.put("spring.rabbitmq.password", "OMNINEST_RABBITMQ_PASSWORD");
@@ -65,12 +78,16 @@ public class ProductionSecretsValidator implements ApplicationRunner {
         for (Map.Entry<String, String> entry : REQUIRED_SECRETS.entrySet()) {
             requireConfigured(entry.getKey(), entry.getValue());
             requireNotPublishedDefault(entry.getKey(), entry.getValue());
+            requireNotWeakSecret(entry.getKey(), entry.getValue());
         }
         requireNotPublishedDefault("omninest.security.jwt-secret", "OMNINEST_SECURITY_JWT_SECRET");
+        requireNotWeakSecret("omninest.security.jwt-secret", "OMNINEST_SECURITY_JWT_SECRET");
         requireNotPublishedDefault("photo.ai.secret", "OMNINEST_AI_SIDECAR_SECRET");
+        requireNotWeakSecret("photo.ai.secret", "OMNINEST_AI_SIDECAR_SECRET");
         if (environment.getProperty("omninest.setup.enabled", Boolean.class, Boolean.FALSE)) {
             requireConfigured("omninest.setup.token", "OMNINEST_SETUP_TOKEN");
             requireNotPublishedDefault("omninest.setup.token", "OMNINEST_SETUP_TOKEN");
+            requireNotWeakSecret("omninest.setup.token", "OMNINEST_SETUP_TOKEN");
         }
     }
 
@@ -79,6 +96,31 @@ public class ProductionSecretsValidator implements ApplicationRunner {
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(
                     "生产环境必须配置 %s（%s），禁止依赖空默认值启动".formatted(envName, propertyKey));
+        }
+    }
+
+    /**
+     * 拦截"非文档示例值但仍然众所周知"的弱口令（服务默认名、通用词）。
+     * 访问密钥类用户名（MinIO access-key）只做黑名单不做长度要求。
+     */
+    private void requireNotWeakSecret(String propertyKey, String envName) {
+        String value = environment.getProperty(propertyKey);
+        if (value == null) {
+            return;
+        }
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if (WEAK_SECRET_VALUES.contains(normalized)) {
+            throw new IllegalStateException(
+                    "生产环境禁止使用弱口令：%s（%s）的值是服务默认名或通用词，请用 openssl rand -base64 32 生成独立凭据"
+                            .formatted(envName, propertyKey));
+        }
+        if ("omninest.minio.access-key".equals(propertyKey)) {
+            return;
+        }
+        if (value.trim().length() < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException(
+                    "生产环境凭据长度不足：%s（%s）至少 %d 个字符，请用 openssl rand -base64 32 生成"
+                            .formatted(envName, propertyKey, MIN_SECRET_LENGTH));
         }
     }
 

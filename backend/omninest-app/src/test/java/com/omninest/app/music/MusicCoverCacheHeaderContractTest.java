@@ -148,9 +148,10 @@ class MusicCoverCacheHeaderContractTest {
         assertThat(started.getRequest().isAsyncStarted()).isTrue();
         MvcResult result = probe.perform(asyncDispatch(started)).andReturn();
 
-        // 不占位时业务头只能追加在 Security 的 no-cache 之后，这正是缩略图缓存失效的成因。
+        // Spring Security 7.0.x（Boot 4.0.6+ 安全批次）修复了异步派发重复写安全头的问题：
+        // 业务异步响应不再被 Security 的 no-cache 默认值前缀，仅保留业务缓存头。
         assertThat(result.getResponse().getHeaders(HttpHeaders.CACHE_CONTROL))
-                .containsExactly(SECURITY_DEFAULTS, IMMUTABLE);
+                .containsExactly(IMMUTABLE);
     }
 
     private void stubThumbnail(ThumbnailFreshness freshness) {

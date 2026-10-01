@@ -99,13 +99,13 @@ class ProductionSecretsValidatorTest {
         environment.getPropertySources().addFirst(new MapPropertySource(
                 "prod-secrets",
                 Map.of(
-                        "spring.datasource.password", "db-secret",
-                        "spring.rabbitmq.password", "mq-secret",
-                        "spring.data.redis.password", "redis-secret",
+                        "spring.datasource.password", "db-secret-0123456789abcdef",
+                        "spring.rabbitmq.password", "mq-secret-0123456789abcdef",
+                        "spring.data.redis.password", "redis-secret-0123456789ab",
                         "omninest.minio.access-key", "minio-access",
-                        "omninest.minio.secret-key", "minio-secret",
-                        "omninest.rclone.password", "rclone-secret",
-                        "omninest.aria2.rpc-secret", "aria2-secret",
+                        "omninest.minio.secret-key", "minio-secret-0123456789abcd",
+                        "omninest.rclone.password", "rclone-secret-0123456789ab",
+                        "omninest.aria2.rpc-secret", "aria2-secret-0123456789abcd",
                         "omninest.security.credential-encryption-key",
                                 "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
                         "omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!"
@@ -123,18 +123,52 @@ class ProductionSecretsValidatorTest {
 
     private static MockEnvironment completeProdEnvironment() {
         MockEnvironment environment = prodEnvironment();
-        environment.setProperty("spring.datasource.password", "db-secret");
-        environment.setProperty("spring.rabbitmq.password", "mq-secret");
-        environment.setProperty("spring.data.redis.password", "redis-secret");
+        environment.setProperty("spring.datasource.password", "db-secret-0123456789abcdef");
+        environment.setProperty("spring.rabbitmq.password", "mq-secret-0123456789abcdef");
+        environment.setProperty("spring.data.redis.password", "redis-secret-0123456789ab");
         environment.setProperty("omninest.minio.access-key", "minio-access");
-        environment.setProperty("omninest.minio.secret-key", "minio-secret");
-        environment.setProperty("omninest.rclone.password", "rclone-secret");
-        environment.setProperty("omninest.aria2.rpc-secret", "aria2-secret");
+        environment.setProperty("omninest.minio.secret-key", "minio-secret-0123456789abcd");
+        environment.setProperty("omninest.rclone.password", "rclone-secret-0123456789ab");
+        environment.setProperty("omninest.aria2.rpc-secret", "aria2-secret-0123456789abcd");
         environment.setProperty("omninest.security.credential-encryption-key",
                 "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
         environment.setProperty("omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!");
-        environment.setProperty("photo.ai.secret", "ai-sidecar-secret");
+        environment.setProperty("photo.ai.secret", "ai-sidecar-secret-0123456789");
         environment.setProperty("omninest.setup.enabled", "false");
         return environment;
+    }
+
+    @Test
+    @DisplayName("prod 启动失败：口令为服务默认名等弱词")
+    void failsWhenSecretIsWellKnownWeakValue() {
+        MockEnvironment environment = completeProdEnvironment();
+        environment.setProperty("spring.datasource.password", "omninest");
+        assertThatThrownBy(() -> new ProductionSecretsValidator(environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("弱口令");
+    }
+
+    @Test
+    @DisplayName("prod 启动失败：口令长度不足 16")
+    void failsWhenSecretShorterThanMinimumLength() {
+        MockEnvironment environment = completeProdEnvironment();
+        environment.setProperty("spring.data.redis.password", "short-pass");
+        assertThatThrownBy(() -> new ProductionSecretsValidator(environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("长度不足");
+    }
+
+    @Test
+    @DisplayName("MinIO access-key 豁免长度要求但不豁免弱词黑名单")
+    void accessKeyExemptFromLengthButNotBlacklist() {
+        MockEnvironment environment = completeProdEnvironment();
+        environment.setProperty("omninest.minio.access-key", "mn-ak");
+        assertThatCode(() -> new ProductionSecretsValidator(environment).validate())
+                .doesNotThrowAnyException();
+
+        environment.setProperty("omninest.minio.access-key", "minioadmin");
+        assertThatThrownBy(() -> new ProductionSecretsValidator(environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("弱口令");
     }
 }

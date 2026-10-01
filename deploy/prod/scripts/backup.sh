@@ -18,7 +18,10 @@ POSTGRES_DB="${POSTGRES_DB:-omninest}"
 POSTGRES_USER="${POSTGRES_USER:-omninest}"
 PROJECT_NAME="${PROJECT_NAME:-omninest}"
 
+# 备份包含全部用户数据与凭据哈希，创建即收紧权限，避免多用户主机上被其他账户读取
+umask 077
 mkdir -p "${BACKUP_DIR}"
+chmod 700 "${BACKUP_DIR}"
 
 echo "[1/3] PostgreSQL 逻辑备份 (${POSTGRES_DB})..."
 docker compose -f "${COMPOSE_FILE}" exec -T postgres \

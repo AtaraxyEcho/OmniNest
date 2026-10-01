@@ -42,7 +42,7 @@ abstract class ApplicationProfileContextSmokeSupport {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(POSTGRES_IMAGE)
             .withDatabaseName("omninest_context_smoke")
             .withUsername("omninest")
-            .withPassword("omninest");
+            .withPassword("omninest-smoke-0123456789");
 
     @Autowired
     private ConfigurableApplicationContext applicationContext;

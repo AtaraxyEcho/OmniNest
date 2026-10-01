@@ -365,7 +365,9 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
   仅在确认无保留价值时才考虑 `rabbitmqctl` 重置——重置会清空**全部**队列、
   用户与 vhost 定义，属于破坏性操作，必须在停机窗口执行。
 - **Aria2 端口**：6888 tcp/udp 是 BT/DHT 监听口（功能必需、默认映射到宿主机），
-  公网部署建议用防火墙限制来源网段。
+  公网部署**必须**用防火墙限制来源网段（必做项，非建议）。
+- **入口协议**：公网部署**必须**设置 `OMNINEST_HTTPS_ENABLED=true`（compose 已强制显式设置）；
+  保持 false 时登录密码、JWT 与刷新 Cookie 全部明文传输。
 - **MinIO 发布面**：托管桶保持私有，下载只签发短期签名 URL；经 Nginx 发布时不开放
   桶的匿名读，客户端仅通过 `OMNINEST_MINIO_PUBLIC_ENDPOINT` 访问。
 - **备份脚本**：见上文「备份与恢复」章节，宿主 crontab 每日执行。
