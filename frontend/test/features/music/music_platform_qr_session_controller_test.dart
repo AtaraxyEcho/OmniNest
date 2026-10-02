@@ -19,13 +19,13 @@ class _StubCenterController extends MusicCenterController {
 
   @override
   Future<MusicCenterState> build() async => MusicCenterState(
-        dashboard: MusicDashboard.empty(),
-        tracks: const <MusicTrack>[],
-        albums: const <MusicAlbum>[],
-        artists: const <MusicArtist>[],
-        playlists: const <MusicPlaylist>[],
-        neteaseUserInfo: userInfo,
-      );
+    dashboard: MusicDashboard.empty(),
+    tracks: const <MusicTrack>[],
+    albums: const <MusicAlbum>[],
+    artists: const <MusicArtist>[],
+    playlists: const <MusicPlaylist>[],
+    neteaseUserInfo: userInfo,
+  );
 }
 
 /// 轮询循环在 application 层，这里锁定它的状态机契约：
