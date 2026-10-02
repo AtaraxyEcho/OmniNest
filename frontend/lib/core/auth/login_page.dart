@@ -1,12 +1,9 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/core/auth/auth_controller.dart';
-import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/core/auth/login_page_controller.dart';
 import 'package:omninest/core/auth/login_two_factor_panel.dart';
-import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 
@@ -22,9 +19,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _submitting = false;
-  String? _errorMessage;
-  AuthChallenge? _challenge;
 
   @override
   void dispose() {
@@ -37,45 +31,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
-    final l10n = AppLocalizations.of(context);
-
-    setState(() {
-      _submitting = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final result = await ref
-          .read(authSessionProvider.notifier)
-          .signInWithCredentials(
-            username: _usernameController.text.trim(),
-            password: _passwordController.text,
-          );
-
-      if (!mounted) {
-        return;
-      }
-      if (result.requiresTwoFactor) {
-        setState(() => _challenge = result.challenge);
-        return;
-      }
-      context.go(_redirectLocation() ?? '/portal');
-    } on DioException catch (error) {
-      setState(() => _errorMessage = _messageFromDio(error, l10n));
-    } on AppException catch (error) {
-      setState(() => _errorMessage = error.message);
-    } catch (_) {
-      setState(() => _errorMessage = l10n.loginFailed);
-    } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+    final completed = await ref
+        .read(loginPageControllerProvider.notifier)
+        .submit(
+          username: _usernameController.text.trim(),
+          password: _passwordController.text,
+        );
+    if (!mounted || !completed) {
+      return;
     }
-  }
-
-  void _exitChallenge() {
-    setState(() => _challenge = null);
+    context.go(_redirectLocation() ?? '/portal');
   }
 
   void _onTwoFactorLoginSucceeded() {
@@ -85,18 +50,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     context.go(_redirectLocation() ?? '/portal');
   }
 
-  String _messageFromDio(DioException error, AppLocalizations l10n) {
-    final data = error.response?.data;
-    if (data is Map<String, dynamic>) {
-      final message = data['message'];
-      if (message != null && message.toString().isNotEmpty) {
-        return message.toString();
-      }
-    }
-    if (error.type == DioExceptionType.connectionError) {
-      return l10n.loginConnectionError;
-    }
-    return l10n.loginRequestFailed;
+  String? _errorText(LoginPageError? error, AppLocalizations l10n) {
+    return switch (error) {
+      null => null,
+      LoginPageMessage(:final text) => text,
+      LoginPageConnectionError() => l10n.loginConnectionError,
+      LoginPageRequestError() => l10n.loginRequestFailed,
+      LoginPageGenericError() => l10n.loginFailed,
+    };
   }
 
   @override
@@ -145,12 +106,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Widget _buildAuthCard() {
-    final challenge = _challenge;
+    final loginState = ref.watch(loginPageControllerProvider);
+    final challenge = loginState.challenge;
     if (challenge != null) {
       return LoginTwoFactorPanel(
         challenge: challenge,
         onLoginSucceeded: _onTwoFactorLoginSucceeded,
-        onBackToLogin: _exitChallenge,
+        onBackToLogin:
+            () =>
+                ref.read(loginPageControllerProvider.notifier).exitChallenge(),
       );
     }
     return _LoginFormCard(
@@ -158,8 +122,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       usernameController: _usernameController,
       passwordController: _passwordController,
       obscurePassword: _obscurePassword,
-      submitting: _submitting,
-      errorMessage: _errorMessage,
+      submitting: loginState.submitting,
+      errorMessage: _errorText(loginState.error, AppLocalizations.of(context)),
       onTogglePassword: _togglePassword,
       onSubmit: _submit,
     );

@@ -59,6 +59,22 @@ AuthChallenge _verifyChallenge(String token) {
   });
 }
 
+/// 密码登录固定抛出指定异常的假客户端，用于错误文案映射测试。
+class _ErrorAuthClient extends AuthClient {
+  _ErrorAuthClient(this.error)
+    : super(Dio(BaseOptions(validateStatus: (status) => true)));
+
+  final DioException error;
+
+  @override
+  Future<AuthLoginResult> login({
+    required String username,
+    required String password,
+  }) async {
+    throw error;
+  }
+}
+
 void main() {
   testWidgets('密码登录返回挑战时展示验证码面板且不再显示登录表单', (tester) async {
     final fake = _FakeAuthClient();
@@ -76,6 +92,58 @@ void main() {
     expect(find.byKey(const Key('twoFactorCodeField')), findsOneWidget);
     expect(find.byType(TextFormField), findsOneWidget);
     expect(fake.lastChallengeToken, isNull);
+  });
+
+  testWidgets('连接失败时登录页映射为连接错误文案', (tester) async {
+    final fake = _ErrorAuthClient(
+      DioException(
+        requestOptions: RequestOptions(path: '/api/v1/auth/login'),
+        type: DioExceptionType.connectionError,
+      ),
+    );
+    await tester.pumpWidget(_host(fake));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'admin@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'secret123');
+    await tester.tap(find.byType(FilledButton).first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Cannot connect to backend, please confirm the service is running',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('twoFactorCodeField')), findsNothing);
+  });
+
+  testWidgets('服务端返回 message 时登录页直接展示该文案', (tester) async {
+    final fake = _ErrorAuthClient(
+      DioException.badResponse(
+        statusCode: 401,
+        requestOptions: RequestOptions(path: '/api/v1/auth/login'),
+        response: Response<dynamic>(
+          requestOptions: RequestOptions(path: '/api/v1/auth/login'),
+          data: {'message': '用户名或密码错误'},
+        ),
+      ),
+    );
+    await tester.pumpWidget(_host(fake));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'admin@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'secret123');
+    await tester.tap(find.byType(FilledButton).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('用户名或密码错误'), findsOneWidget);
   });
 
   testWidgets('提交验证码后调用两步验证登录并跳转门户', (tester) async {
@@ -104,7 +172,7 @@ void main() {
   });
 }
 
-Widget _host(_FakeAuthClient client) {
+Widget _host(AuthClient client) {
   final router = GoRouter(
     initialLocation: '/',
     routes: [
