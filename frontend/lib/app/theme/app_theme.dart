@@ -4,6 +4,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
+import 'package:omninest/app/theme/feature/command_palette_colors.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
@@ -453,6 +454,9 @@ class OmniNestTheme {
         readerColors ?? ReaderColors.fromGlobal(_readerAccent(colors, isDark)),
         photosColors ?? PhotosColors.fromGlobal(_photosAccent(colors, isDark)),
         filesColors ?? FilesColors.fromGlobal(_filesAccent(colors, isDark)),
+        isDark
+            ? const CommandPaletteColors.dark()
+            : const CommandPaletteColors.light(),
       ],
     );
   }

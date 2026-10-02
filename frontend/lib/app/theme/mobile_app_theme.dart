@@ -3,6 +3,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/app/theme/feature/command_palette_colors.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
@@ -128,6 +129,7 @@ abstract final class MobileAppTheme {
         outlineVariant: colors.outlineVariant,
       ),
       MusicColors value => value,
+      CommandPaletteColors value => value,
       VideoColors value => value.copyWith(
         surface: colors.surface,
         surfaceContainerLow: colors.surfaceContainerLow,

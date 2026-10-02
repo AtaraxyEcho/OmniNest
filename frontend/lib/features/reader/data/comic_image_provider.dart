@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// 漫画图片加载服务。
 ///
@@ -10,8 +11,10 @@ import 'package:omninest/features/reader/domain/comic_models.dart';
 ///
 /// 缓存按字节预算淘汰，并合并同一页面的并发请求。
 class ComicImageLoader {
-  ComicImageLoader(this._api, {this.maxCacheBytes = 32 * 1024 * 1024})
-    : assert(maxCacheBytes >= 0);
+  ComicImageLoader(
+    this._api, {
+    this.maxCacheBytes = FileSizeThresholds.readerImageCacheMaxBytes,
+  }) : assert(maxCacheBytes >= 0);
 
   final ReaderApi _api;
 

@@ -10,6 +10,7 @@ import 'package:omninest/core/security/encrypted_file_vault.dart';
 import 'package:omninest/core/security/offline_key_store.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/data/reader_image_repository_base.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// 创建原生平台阅读图片缓存仓库。
 ReaderImageRepository createReaderImageRepository({
@@ -37,7 +38,7 @@ class IoReaderImageRepository implements ReaderImageRepository {
        _rootDirectory = rootDirectory;
 
   static const _cacheType = 'reader-image';
-  static const _maxImageBytes = 64 * 1024 * 1024;
+  static const _maxImageBytes = FileSizeThresholds.readerImageMaxBytes;
   static final RegExp _storageKeyPattern = RegExp(r'^[0-9a-f]{64}$');
 
   final LocalDatabase _database;

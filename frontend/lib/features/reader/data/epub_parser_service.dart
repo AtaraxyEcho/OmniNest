@@ -55,10 +55,11 @@ class EpubParseLimitException implements Exception {
 /// 使用 archive + xml 包，不依赖 epubx（避免 image 版本冲突）。
 class EpubParserService {
   static const _maxArchiveEntries = 10000;
-  static const _maxExpandedBytes = 1024 * 1024 * 1024;
+  static const _maxExpandedBytes = FileSizeThresholds.epubMaxExpandedBytes;
   static const _maxExpansionRatio = 250;
-  static const _ratioCheckThresholdBytes = 64 * 1024 * 1024;
-  static const _maxTextEntryBytes = 8 * 1024 * 1024;
+  static const _ratioCheckThresholdBytes =
+      FileSizeThresholds.epubRatioCheckThresholdBytes;
+  static const _maxTextEntryBytes = FileSizeThresholds.epubMaxTextEntryBytes;
   static const _maxCoverBytes = FileSizeThresholds.epubCoverMaxBytes;
 
   /// 缓存已解压的 Archive，避免重复解压整个 ZIP 归档。

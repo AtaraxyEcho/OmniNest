@@ -6,6 +6,7 @@ import 'package:gbk_codec/gbk_codec.dart';
 import 'package:omninest/core/utils/yield_to_event_loop.dart';
 import 'package:omninest/features/reader/domain/parsed_book.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// TXT 文件解析服务
 ///
@@ -101,7 +102,8 @@ class TxtParserService {
     return TxtParserService().decodeText(bytes);
   }
 
-  static const int _decodeIsolateThresholdBytes = 2 * 1024 * 1024;
+  static const int _decodeIsolateThresholdBytes =
+      FileSizeThresholds.txtDecodeIsolateThresholdBytes;
 
   String? _decodedItemId;
   String? _decodedCacheText;

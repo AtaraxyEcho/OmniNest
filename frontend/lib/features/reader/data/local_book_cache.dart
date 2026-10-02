@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/data/cached_book_handle.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// 阅读器本地文件缓存管理
 ///
@@ -34,14 +35,16 @@ class LocalBookCache {
   static final Random _secureRandom = Random.secure();
 
   /// 本地平台缓存大小上限（500MB）
-  static const _maxCacheBytes = 500 * 1024 * 1024;
+  static const _maxCacheBytes = FileSizeThresholds.readerLocalCacheMaxBytes;
 
   /// Web 与 TXT 整包解析上限。
-  static const maxInMemoryParseBytes = 32 * 1024 * 1024;
+  static const maxInMemoryParseBytes =
+      FileSizeThresholds.readerInMemoryParseMaxBytes;
 
   /// 原生平台 TXT 会话级解码上限（整本解码一次并缓存，峰值内存约为
   /// 文件体积的 2-3 倍，桌面端可承受；Web 保持整包内存上限不变）。
-  static const maxNativeParseBytes = 64 * 1024 * 1024;
+  static const maxNativeParseBytes =
+      FileSizeThresholds.readerNativeParseMaxBytes;
 
   /// 确保文件已缓存，并返回会话级解析句柄。
   Future<CachedBookHandle> ensureCachedHandle(

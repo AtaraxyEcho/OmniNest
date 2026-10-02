@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:omninest/core/utils/yield_to_event_loop.dart';
 import 'package:omninest/features/reader/data/reader_image_cache.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// XHTML 内容预处理器。
 ///
@@ -14,8 +15,9 @@ class ReaderContentPreprocessor {
   static const _imgPlaceholderPrefix = '__IMG_';
   static const _imgPlaceholderSuffix = '__';
   static const _maxChapterImages = 100;
-  static const _maxImageBytes = 20 * 1024 * 1024;
-  static const _maxChapterImageBytes = 64 * 1024 * 1024;
+  static const _maxImageBytes = FileSizeThresholds.readerInlineImageMaxBytes;
+  static const _maxChapterImageBytes =
+      FileSizeThresholds.readerChapterImageMaxBytes;
 
   /// 提取 `<body>` 内容，将图片保存到磁盘缓存，
   /// HTML 中用占位符替代 base64 data URI。

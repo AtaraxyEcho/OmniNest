@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_image_previ
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// 渲染阅读正文中的网络、data URI 或本地缓存图片。
 class ReaderContentImage extends StatelessWidget {
@@ -321,7 +322,7 @@ class _DataUriDecodeCache {
 
   _DataUriDecodeCache._();
 
-  static const _maxCacheBytes = 32 * 1024 * 1024;
+  static const _maxCacheBytes = FileSizeThresholds.readerImageCacheMaxBytes;
   final LinkedHashMap<String, Uint8List> _entries = LinkedHashMap();
 
   Uint8List decode(String dataUri, Uint8List Function() decode) {

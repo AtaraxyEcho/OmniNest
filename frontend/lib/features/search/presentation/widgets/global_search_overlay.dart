@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/command_palette_colors.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
@@ -33,73 +34,6 @@ Future<void> showGlobalSearchDialog(BuildContext context) async {
   } finally {
     _globalSearchOpen = false;
   }
-}
-
-/// 设计稿双主题色板（Light: F7F8F6 纸感 / Dark: 0D1117 架构终端）。
-class _Palette {
-  const _Palette.light()
-    : isDark = false,
-      canvas = const Color(0xFFF7F8F6),
-      surface = const Color(0xFFFFFFFF),
-      surfaceSub = const Color(0xFFF7F9F7),
-      surfaceMuted = const Color(0xFFF0F2EF),
-      surfaceActive = const Color(0xFFE7EAE6),
-      ink = const Color(0xFF1A1D1B),
-      inkMuted = const Color(0xFF58605B),
-      inkPlaceholder = const Color(0xFF8A938D),
-      icon = const Color(0xFF58605B),
-      hairline = const Color(0xFFE2E8F0),
-      border = const Color(0xFFD2D7D2),
-      accent = const Color(0xFF0B6B61),
-      statusOk = const Color(0xFF217A45),
-      kbdBg = const Color(0xFFF0F2EF),
-      kbdBorder = const Color(0xFFD2D7D2),
-      scrim = const Color(0xCCF7F8F6),
-      panelShadow = true;
-
-  const _Palette.dark()
-    : isDark = true,
-      canvas = const Color(0xFF0D1117),
-      surface = const Color(0xFF161B22),
-      surfaceSub = const Color(0xFF161B22),
-      surfaceMuted = const Color(0xFF1F242C),
-      surfaceActive = const Color(0xFF21262D),
-      ink = const Color(0xFFEDEDED),
-      inkMuted = const Color(0xFF8B949E),
-      inkPlaceholder = const Color(0xFF484F58),
-      icon = const Color(0xFF94A3B8),
-      hairline = const Color(0xFF30363D),
-      border = const Color(0xFF30363D),
-      accent = const Color(0xFF79D6C8),
-      statusOk = const Color(0xFF10B981),
-      kbdBg = const Color(0xFF1F242C),
-      kbdBorder = const Color(0xFF30363D),
-      scrim = const Color(0xCC0D1117),
-      panelShadow = false;
-
-  factory _Palette.of(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? const _Palette.dark()
-          : const _Palette.light();
-
-  final bool isDark;
-  final Color canvas;
-  final Color surface;
-  final Color surfaceSub;
-  final Color surfaceMuted;
-  final Color surfaceActive;
-  final Color ink;
-  final Color inkMuted;
-  final Color inkPlaceholder;
-  final Color icon;
-  final Color hairline;
-  final Color border;
-  final Color accent;
-  final Color statusOk;
-  final Color kbdBg;
-  final Color kbdBorder;
-  final Color scrim;
-  final bool panelShadow;
 }
 
 enum _PaletteTab { all, video, music, book, photo, file, command }
@@ -371,7 +305,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final p = _Palette.of(context);
+    final p = context.commandPaletteColors;
     final dashboard = ref.watch(portalMovieDashboardProvider).asData?.value;
     final query = _controller.text.trim();
     final all = _buildHits(
@@ -530,7 +464,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   }
 
   /// 设计稿 Top Search Input Bar：h-56 / px-20 / icon-22 / text-15 / ESC kbd。
-  Widget _searchBar(_Palette p, AppLocalizations l10n) {
+  Widget _searchBar(CommandPaletteColors p, AppLocalizations l10n) {
     return Material(
       color: p.surface,
       child: Container(
@@ -626,7 +560,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
         .toList();
   }
 
-  Widget _filterBar(_Palette p, AppLocalizations l10n) {
+  Widget _filterBar(CommandPaletteColors p, AppLocalizations l10n) {
     final tabs = <(_PaletteTab, String, String)>[
       (_PaletteTab.all, l10n.searchScopeAll, '1'),
       (_PaletteTab.video, l10n.searchGroupVideo, '2'),
@@ -667,7 +601,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     );
   }
 
-  Widget _empty(_Palette p, AppLocalizations l10n, String query) {
+  Widget _empty(CommandPaletteColors p, AppLocalizations l10n, String query) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
       child: Center(
@@ -683,7 +617,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   }
 
   Widget _listRow(
-    _Palette p,
+    CommandPaletteColors p,
     _Hit hit, {
     required bool selected,
     required VoidCallback onTap,
@@ -740,7 +674,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   }
 
   Widget _mediaCard(
-    _Palette p,
+    CommandPaletteColors p,
     _Hit hit, {
     required bool selected,
     required VoidCallback onTap,
@@ -853,7 +787,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     );
   }
 
-  Widget _footer(_Palette p, AppLocalizations l10n) {
+  Widget _footer(CommandPaletteColors p, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -884,7 +818,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     );
   }
 
-  Widget _hint(_Palette p, String key, String label) {
+  Widget _hint(CommandPaletteColors p, String key, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -918,7 +852,7 @@ class _Kbd extends StatelessWidget {
   const _Kbd({required this.label, required this.p, this.muted = false});
 
   final String label;
-  final _Palette p;
+  final CommandPaletteColors p;
   final bool muted;
 
   @override
@@ -956,7 +890,7 @@ class _TabChip extends StatelessWidget {
   final String label;
   final String shortcut;
   final bool selected;
-  final _Palette p;
+  final CommandPaletteColors p;
   final VoidCallback onTap;
 
   @override

@@ -22,4 +22,37 @@ abstract final class FileSizeThresholds {
 
   /// EPUB 封面提取上限（12 MiB）。
   static const int epubCoverMaxBytes = 12 * 1024 * 1024;
+
+  /// Reader 本地缓存目录上限（500 MiB）。
+  static const int readerLocalCacheMaxBytes = 500 * 1024 * 1024;
+
+  /// Web 与 TXT 整包解析内存上限（32 MiB）。
+  static const int readerInMemoryParseMaxBytes = 32 * 1024 * 1024;
+
+  /// 原生平台整包解析内存上限（64 MiB）。
+  static const int readerNativeParseMaxBytes = 64 * 1024 * 1024;
+
+  /// 阅读章节图片总量上限（64 MiB）。
+  static const int readerChapterImageMaxBytes = 64 * 1024 * 1024;
+
+  /// 阅读章节内联单图上限（20 MiB）。
+  static const int readerInlineImageMaxBytes = 20 * 1024 * 1024;
+
+  /// 阅读单张图片读取上限（64 MiB）。
+  static const int readerImageMaxBytes = 64 * 1024 * 1024;
+
+  /// 阅读图片缓存上限（32 MiB，内容图与漫画加载器共用）。
+  static const int readerImageCacheMaxBytes = 32 * 1024 * 1024;
+
+  /// EPUB 解压总量上限（1 GiB，压缩炸弹防护）。
+  static const int epubMaxExpandedBytes = 1024 * 1024 * 1024;
+
+  /// EPUB 文本条目上限（8 MiB）。
+  static const int epubMaxTextEntryBytes = 8 * 1024 * 1024;
+
+  /// EPUB 解压比率检查启用阈值（64 MiB）。
+  static const int epubRatioCheckThresholdBytes = 64 * 1024 * 1024;
+
+  /// TXT 解码转入 isolate 的阈值（2 MiB）。
+  static const int txtDecodeIsolateThresholdBytes = 2 * 1024 * 1024;
 }
