@@ -20,7 +20,7 @@ COPY --chown=omninest:omninest omninest-app/target/omninest-app-*.jar app.jar
 ARG OMNINEST_PROFILE=prod
 ENV OMNINEST_PROFILE=${OMNINEST_PROFILE} \
     OMNINEST_ROLE=api \
-    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=70.0"
+    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=70.0 -XX:+UseCompactObjectHeaders"
 EXPOSE 8080
 
 USER omninest
