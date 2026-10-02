@@ -12,9 +12,15 @@ if [ ! -f "${BACKUP_DIR}/postgres.dump" ] || [ ! -f "${BACKUP_DIR}/minio-data.ta
     exit 1
 fi
 
+# .env 是 Compose 的属性文件而非 shell 脚本（值可能含括号/空格），整体
+# source 会语法错误，只提取所需键。
+read_env_value() {
+    sed -n "s/^$1=//p" .env | tail -n 1
+}
 if [ -f .env ]; then
-    # shellcheck disable=SC1091
-    . ./.env
+    POSTGRES_DB="$(read_env_value POSTGRES_DB)"
+    POSTGRES_USER="$(read_env_value POSTGRES_USER)"
+    PROJECT_NAME="$(read_env_value COMPOSE_PROJECT_NAME)"
 fi
 POSTGRES_DB="${POSTGRES_DB:-omninest}"
 POSTGRES_USER="${POSTGRES_USER:-omninest}"

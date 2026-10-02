@@ -10,9 +10,15 @@ BACKUP_DIR="${BACKUP_ROOT}/omninest-${STAMP}"
 COMPOSE_FILE="docker-compose.yml"
 
 # 数据库与对象存储凭据从 .env 读取（与 Compose 一致）。
+# .env 是 Compose 的属性文件而非 shell 脚本（值可能含括号/空格，模板的
+# MusicBrainz User-Agent 即如此），整体 source 会语法错误，只提取所需键。
+read_env_value() {
+    sed -n "s/^$1=//p" .env | tail -n 1
+}
 if [ -f .env ]; then
-    # shellcheck disable=SC1091
-    . ./.env
+    POSTGRES_DB="$(read_env_value POSTGRES_DB)"
+    POSTGRES_USER="$(read_env_value POSTGRES_USER)"
+    PROJECT_NAME="$(read_env_value COMPOSE_PROJECT_NAME)"
 fi
 POSTGRES_DB="${POSTGRES_DB:-omninest}"
 POSTGRES_USER="${POSTGRES_USER:-omninest}"

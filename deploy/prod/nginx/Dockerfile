@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim AS web-builder
 
-ARG FLUTTER_VERSION=3.44.8
-ARG FLUTTER_SHA256=672089e001571a9fbb209a495c583580c0c6c73ef98999264ba07fa93ace332d
+ARG FLUTTER_VERSION=3.47.6
+ARG FLUTTER_SHA256=f1631b9c2c8b3529323db412b0d1beacf4a748f8783b0d7cf599a8fd5f461675
 # 站点基准路径：根部署保持 "/"，反代子路径部署时形如 "/omninest/"。
 ARG WEB_BASE_HREF=/
 
@@ -10,6 +10,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --fail --location --silent --show-error \
+        --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --continue-at - \
         "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
         --output /tmp/flutter.tar.xz \
     && echo "${FLUTTER_SHA256}  /tmp/flutter.tar.xz" | sha256sum --check --strict \
