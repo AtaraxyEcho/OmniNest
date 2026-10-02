@@ -12,6 +12,16 @@ if [ ! -f "${BACKUP_DIR}/postgres.dump" ] || [ ! -f "${BACKUP_DIR}/minio-data.ta
     exit 1
 fi
 
+# 旧版本产物没有校验文件，跳过并告警；校验不匹配时直接中止，避免恢复损坏数据。
+if [ -f "${BACKUP_DIR}/SHA256SUMS" ]; then
+    (cd "${BACKUP_DIR}" && sha256sum -c SHA256SUMS) || {
+        echo "错误: 备份文件 SHA-256 校验失败" >&2
+        exit 1
+    }
+else
+    echo "警告: 备份缺少 SHA256SUMS（旧版本产物），跳过完整性校验" >&2
+fi
+
 # .env 是 Compose 的属性文件而非 shell 脚本（值可能含括号/空格），整体
 # source 会语法错误，只提取所需键。
 read_env_value() {
@@ -33,7 +43,17 @@ docker run --rm --volumes-from "${PROJECT_NAME}-minio-1" \
 
 echo "[2/4] 启动 PostgreSQL..."
 docker compose -f "${COMPOSE_FILE}" up -d postgres
-sleep 8
+# 等待 PostgreSQL 就绪：首次初始化（建库、恢复基线卷）耗时不定，固定 sleep 会竞态失败。
+attempts=0
+until docker compose -f "${COMPOSE_FILE}" exec -T postgres \
+        pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 30 ]; then
+        echo "错误: PostgreSQL 在 ${attempts} 次探测（约 60 秒）后仍未就绪" >&2
+        exit 1
+    fi
+    sleep 2
+done
 
 echo "[3/4] 重建数据库 ${POSTGRES_DB}..."
 # dropdb/recreatedb 需要连接可用；容器内本地信任认证。

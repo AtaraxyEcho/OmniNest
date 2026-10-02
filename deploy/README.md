@@ -159,6 +159,60 @@ docker compose -f docker-compose.yml up -d
 VM 实测（仅 OmniNest、关闭 ClamAV）：三角色 available 约 1.2Gi；单实例 available
 约 2.0Gi，探针 `/api/v1/setup/status`、`/health`、`/actuator/health` 均为 200。
 
+### 受限网络部署（镜像转运）
+
+目标主机无法直连 Docker Hub / storage.googleapis.com 时（国内服务器常见），自建镜像
+与部分官方镜像在目标机拉不下来，改用「有网工作机构建 + SSH 转运」：
+
+1. **在工作机构建镜像**。需要代理时给 docker build 挂上代理环境（BuildKit 会自动
+   转发到构建容器内；Docker Desktop 下代理地址写 `http://host.docker.internal:<端口>`
+   而非 127.0.0.1）。nginx 镜像内的 Flutter 工具链下载约 1GB，务必使用 Dockerfile 内
+   已有的 retry/断点续传参数重试，勿删。
+
+   ```bash
+   cd ../../backend && mvn -q -pl omninest-app -am -DskipTests package && cd ../deploy/prod
+   docker compose build
+   ```
+
+2. **转运到目标机**。`scripts/ship-images.sh` 打包三个自建镜像经
+   `docker save | gzip | ssh docker load` 注入；目标机已有相同镜像时幂等（层复用，
+   秒级完成）。镜像加速源对 MinIO 的部分 RELEASE 标签返回 403 时加 `--minio` 一并转运：
+
+   ```bash
+   sh scripts/ship-images.sh root@<目标机> --key ~/.ssh/id_rsa --minio
+   # 先核对清单不传输
+   sh scripts/ship-images.sh root@<目标机> --dry-run
+   ```
+
+3. **目标机只需从镜像加速源拉基础镜像**（postgres / redis / rabbitmq / minio /
+   ffmpeg / rclone / aria2 / certbot），并在 `deploy/prod` 目标机侧执行 `up -d`。
+   目标机 Docker 需配置 `registry-mirrors`（daemon.json）。
+
+**项目名隔离**：同一台主机复用过 OmniNest 部署时，旧项目会残留 `omninest_*` 数据卷和
+固定网段 `172.30.0.0/24` 的网络，与新部署直接撞名（卷被复用导致旧凭据生效、网络子网
+冲突拒绝创建）。干净做法是在目标机 `.env` 追加一行独立项目名，`up`、`exec` 与
+`scripts/backup.sh` / `restore.sh` 随之全部一致：
+
+```bash
+echo "COMPOSE_PROJECT_NAME=omninest-test" >> .env
+```
+
+不想保留旧数据时再显式 `docker volume rm` / `docker network rm` 清理残留。
+
+### MinIO 社区版 EOL 与版本钉扎
+
+MinIO 社区版仓库已于 2026-04 归档只读，官方社区文档重定向至 AiStor 企业版。最后一个
+版本 `RELEASE.2025-10-15T17-29-55Z`（修复 Service Accounts / STS 会话策略绕过 CVE）
+不再提供预构建容器镜像，官方要求克隆源码自行构建。OmniNest 仅使用单 root 凭据 +
+S3 API + 预签名 URL，不使用 STS 与 Service Accounts，该 CVE 不影响当前用法。
+
+Compose 钉扎的 `RELEASE.2025-04-22T22-12-26Z` 是本项目部署环境实测可得的最后一个
+预构建镜像（2026-10 验证：Docker Hub 直连、daocloud / rainbond / 1ms.run /
+dockerproxy / atomhub 镜像源与 quay.io 均无法取得更新版本；部分源对 minio/minio
+整仓库 403，转运走 `scripts/ship-images.sh --minio`）。后续两个方向择机决策：按官方
+指引源码自建终版镜像，或评估迁移到其他 S3 兼容存储。MinIO 数据卷只支持向前升级、
+不支持降级，任何版本变更前必须先执行 `scripts/backup.sh`。
+
 ### Docker 部署下的 ClamAV 主机
 
 配置中心键 `clamav.host`（默认 `localhost`）**优先于** 环境变量

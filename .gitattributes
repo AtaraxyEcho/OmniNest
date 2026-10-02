@@ -1,1 +1,6 @@
 *.sh text eol=lf
+*.conf.template text eol=lf
+Dockerfile* text eol=lf
+*.env.example text eol=lf
+*.env.*.example text eol=lf
+deploy/**/*.yml text eol=lf

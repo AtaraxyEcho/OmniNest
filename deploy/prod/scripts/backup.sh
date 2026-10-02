@@ -29,22 +29,27 @@ umask 077
 mkdir -p "${BACKUP_DIR}"
 chmod 700 "${BACKUP_DIR}"
 
-echo "[1/3] PostgreSQL 逻辑备份 (${POSTGRES_DB})..."
+echo "[1/4] PostgreSQL 逻辑备份 (${POSTGRES_DB})..."
 docker compose -f "${COMPOSE_FILE}" exec -T postgres \
     pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -Fc \
     > "${BACKUP_DIR}/postgres.dump"
 
-echo "[2/3] MinIO 数据卷打包 (omninest-minio)..."
+echo "[2/4] MinIO 数据卷打包 (omninest-minio)..."
 docker run --rm --volumes-from "${PROJECT_NAME}-minio-1" \
     -v "$(cd "${BACKUP_DIR}" && pwd):/backup" alpine \
     sh -c "umask 077 && tar czf /backup/minio-data.tar.gz -C /data ."
-    chmod 600 "${BACKUP_DIR}/minio-data.tar.gz" 2>/dev/null || true
+chmod 600 "${BACKUP_DIR}/minio-data.tar.gz" 2>/dev/null || true
 
-echo "[3/3] 写入清单..."
+echo "[3/4] 生成 SHA-256 校验和..."
+(cd "${BACKUP_DIR}" && sha256sum postgres.dump minio-data.tar.gz > SHA256SUMS)
+chmod 600 "${BACKUP_DIR}/SHA256SUMS"
+
+echo "[4/4] 写入清单..."
 {
     echo "omninest backup ${STAMP}"
     echo "postgres: ${POSTGRES_DB} (custom format dump)"
     echo "minio: omninest-minio volume tarball"
+    echo "integrity: sha256sum -c SHA256SUMS"
     du -sh "${BACKUP_DIR}"/* 2>/dev/null || true
 } > "${BACKUP_DIR}/MANIFEST.txt"
 

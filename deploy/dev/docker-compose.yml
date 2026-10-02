@@ -5,7 +5,7 @@ services:
     image: postgres:18-alpine
     container_name: omninest-postgres
     environment:
-      POSTGRES_DB: omninest
+      POSTGRES_DB: ${POSTGRES_DB:-omninest}
       POSTGRES_USER: ${POSTGRES_USER:-omninest}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omninest}
       TZ: Asia/Shanghai
@@ -76,7 +76,8 @@ services:
     restart: unless-stopped
 
   aria2:
-    image: p3terx/aria2-pro:latest
+    # 以 digest 固定（上游只发布 latest 标签），与 prod 保持一致；升级时重新解析并替换。
+    image: p3terx/aria2-pro@sha256:086d1a37c586edb07ec0fb956bf9edd89d1d38d138ad5309ff96d510c8c9a011
     container_name: omninest-aria2
     environment:
       RPC_SECRET: ${RPC_SECRET:-omninest}

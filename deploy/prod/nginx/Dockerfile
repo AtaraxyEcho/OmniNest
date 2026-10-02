@@ -1,5 +1,8 @@
 FROM debian:bookworm-slim AS web-builder
 
+# 工具链联动约束：升级 Flutter 后必须同步更新此钉扎（版本与 sha256 取自
+# https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json），
+# 且不得低于 frontend/pubspec.lock 的 sdks.flutter 下限，否则镜像内 pub get 直接失败。
 ARG FLUTTER_VERSION=3.47.6
 ARG FLUTTER_SHA256=f1631b9c2c8b3529323db412b0d1beacf4a748f8783b0d7cf599a8fd5f461675
 # 站点基准路径：根部署保持 "/"，反代子路径部署时形如 "/omninest/"。
