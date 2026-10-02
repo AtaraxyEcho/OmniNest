@@ -19,6 +19,7 @@ import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +48,7 @@ public class OfflineDownloadRequestService {
         if (spaceType == null || spaceType.isBlank()) {
             return "PERSONAL";
         }
-        String normalized = spaceType.trim().toUpperCase(java.util.Locale.ROOT);
+        String normalized = spaceType.trim().toUpperCase(Locale.ROOT);
         if (!"PERSONAL".equals(normalized) && !"SHARED".equals(normalized)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的空间类型");
         }

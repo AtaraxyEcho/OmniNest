@@ -791,8 +791,8 @@ public class FileQueryService {
     }
 
     private FileNodeDto toDto(FileNode node) {
-        Map<UUID, UUID> covers = resolveAliveCovers(java.util.List.of(node));
-        return toDto(node, resolveUploaderNames(java.util.List.of(node)), covers.get(node.getId()));
+        Map<UUID, UUID> covers = resolveAliveCovers(List.of(node));
+        return toDto(node, resolveUploaderNames(List.of(node)), covers.get(node.getId()));
     }
 
     /**
@@ -873,7 +873,7 @@ public class FileQueryService {
      * 批量解析一批节点的上传者显示名，供列表接口一次查询填充。
      */
     private Map<UUID, String> resolveUploaderNames(List<FileNode> nodes) {
-        Set<UUID> uploaderIds = new java.util.HashSet<>();
+        Set<UUID> uploaderIds = new HashSet<>();
         for (FileNode node : nodes) {
             UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
             if (uploaderId != null) {

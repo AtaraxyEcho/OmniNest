@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,6 @@ class GeoLocationFormatterTest {
 
     @Test
     void displayNameJoinsWithMiddleDotSeparator() {
-        assertEquals("A · B · C", GeoLocationFormatter.displayName(java.util.Arrays.asList("A", null, "B", " ", "C")));
+        assertEquals("A · B · C", GeoLocationFormatter.displayName(Arrays.asList("A", null, "B", " ", "C")));
     }
 }

@@ -1,5 +1,7 @@
 package com.omninest.common.api;
 
+
+import java.util.Locale;
 /**
  * 后台任务列表排序列白名单。
  *
@@ -34,7 +36,7 @@ public enum SafeOrderSpec {
         if (raw == null || raw.isBlank()) {
             return UPDATED_AT;
         }
-        String normalized = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
         for (SafeOrderSpec spec : values()) {
             if (spec.column.equals(normalized)) {
                 return spec;

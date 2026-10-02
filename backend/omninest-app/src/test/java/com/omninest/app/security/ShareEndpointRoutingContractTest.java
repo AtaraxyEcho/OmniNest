@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.omninest.modules.file.controller.FileController;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.DisplayName;
@@ -44,15 +45,15 @@ class ShareEndpointRoutingContractTest {
         Set<String> paths = new TreeSet<>();
         RequestMapping requestMapping = method.getAnnotation(RequestMapping.class);
         if (requestMapping != null) {
-            paths.addAll(java.util.List.of(requestMapping.value()));
+            paths.addAll(List.of(requestMapping.value()));
         }
         GetMapping getMapping = method.getAnnotation(GetMapping.class);
         if (getMapping != null) {
-            paths.addAll(java.util.List.of(getMapping.value()));
+            paths.addAll(List.of(getMapping.value()));
         }
         PostMapping postMapping = method.getAnnotation(PostMapping.class);
         if (postMapping != null) {
-            paths.addAll(java.util.List.of(postMapping.value()));
+            paths.addAll(List.of(postMapping.value()));
         }
         return paths;
     }

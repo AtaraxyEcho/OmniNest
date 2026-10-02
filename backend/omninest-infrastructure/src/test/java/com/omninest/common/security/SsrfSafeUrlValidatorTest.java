@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import com.omninest.common.error.BusinessException;
 import java.net.InetAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +36,7 @@ class SsrfSafeUrlValidatorTest {
         })
         @DisplayName("allowSiteLocal=true 时放行 RFC1918 地址")
         void allowsSiteLocalWhenSwitchOn(String url) {
-            assertDoesNotThrow(() -> validator.requireSafeHost(java.net.URI.create(url), true));
+            assertDoesNotThrow(() -> validator.requireSafeHost(URI.create(url), true));
         }
 
         @ParameterizedTest
@@ -46,7 +47,7 @@ class SsrfSafeUrlValidatorTest {
         })
         @DisplayName("allowSiteLocal=true 时链路本地、环回与云元数据地址仍被拒绝")
         void stillBlocksLoopbackAndLinkLocalWhenSwitchOn(String url) {
-            assertThatThrownBy(() -> validator.requireSafeHost(java.net.URI.create(url), true))
+            assertThatThrownBy(() -> validator.requireSafeHost(URI.create(url), true))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("内网地址");
         }
@@ -54,13 +55,13 @@ class SsrfSafeUrlValidatorTest {
         @Test
         @DisplayName("allowSiteLocal=true 时 IPv6 唯一本地地址随开关放行")
         void allowsIpv6UniqueLocalWhenSwitchOn() {
-            assertDoesNotThrow(() -> validator.requireSafeHost(java.net.URI.create("http://[fd00::1]/dav"), true));
+            assertDoesNotThrow(() -> validator.requireSafeHost(URI.create("http://[fd00::1]/dav"), true));
         }
 
         @Test
         @DisplayName("allowSiteLocal=false 时 RFC1918 地址维持拒绝")
         void blocksSiteLocalWhenSwitchOff() {
-            assertThatThrownBy(() -> validator.requireSafeHost(java.net.URI.create("http://192.168.1.10/dav"), false))
+            assertThatThrownBy(() -> validator.requireSafeHost(URI.create("http://192.168.1.10/dav"), false))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("内网地址");
         }

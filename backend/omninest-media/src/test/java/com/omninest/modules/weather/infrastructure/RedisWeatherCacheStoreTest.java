@@ -10,6 +10,7 @@ import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.weather.dto.WeatherDto;
 import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLocation;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -199,10 +200,10 @@ class RedisWeatherCacheStoreTest {
                 "2",
                 "多云",
                 "晴",
-                java.util.List.of(
+                List.of(
                         new WeatherDto.HourlyForecast("2026-07-22T13:00+08:00", 22, "101", "多云")
                 ),
-                java.util.List.of(
+                List.of(
                         new WeatherDto.DailyForecast(
                                 "2026-07-22", 27, 18, "101", "多云", "150", "晴"
                         )

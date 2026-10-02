@@ -11,6 +11,7 @@ import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -75,7 +76,7 @@ public class PhotoGeoBackfillRetryService {
      * @param heartbeatCutoff 心跳截止时间
      */
     @Transactional(rollbackFor = Exception.class)
-    public void recoverStaleTask(java.util.UUID taskId, Instant heartbeatCutoff) {
+    public void recoverStaleTask(UUID taskId, Instant heartbeatCutoff) {
         PhotoGeoBackfillEvent event = rebuildBackfillEvent(taskId, null);
         StaleTaskRecovery recovery = taskRecordService.recoverStaleTask(
                 taskId,
@@ -95,7 +96,7 @@ public class PhotoGeoBackfillRetryService {
         }
     }
 
-    private PhotoGeoBackfillEvent rebuildBackfillEvent(java.util.UUID taskId, PhotoGeoBackfillEvent fallback) {
+    private PhotoGeoBackfillEvent rebuildBackfillEvent(UUID taskId, PhotoGeoBackfillEvent fallback) {
         if (fallback != null) {
             return fallback;
         }

@@ -132,10 +132,10 @@ public class FileNodeSupport {
      * @return 文件节点 DTO
      */
     public FileNodeDto toNodeDto(FileNode node) {
-        Map<UUID, UUID> covers = resolveAliveCovers(java.util.List.of(node));
+        Map<UUID, UUID> covers = resolveAliveCovers(List.of(node));
         return toNodeDto(
                 node,
-                resolveUploaderNames(java.util.List.of(node)),
+                resolveUploaderNames(List.of(node)),
                 covers.get(node.getId())
         );
     }

@@ -123,7 +123,7 @@ class MusicLibraryServiceTest {
         album.setOwnerUserId(OWNER_ID);
         when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.of(album));
         when(trackRepository.findAlbumTracks(OWNER_ID, albumId))
-                .thenReturn(java.util.List.of(track(), track(), track()));
+                .thenReturn(List.of(track(), track(), track()));
 
         var first = libraryService.albumTracksPage(OWNER_ID, albumId, 0, 2);
         var second = libraryService.albumTracksPage(OWNER_ID, albumId, 1, 2);

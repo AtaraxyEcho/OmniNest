@@ -7,6 +7,7 @@ import com.omninest.common.security.Roles;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.repository.AuthUserRepository;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -87,7 +88,7 @@ public class TwoFactorPolicyService extends BaseRuntimeConfigService {
         if (raw == null || raw.isBlank()) {
             return Set.of();
         }
-        return java.util.Arrays.stream(raw.split(","))
+        return Arrays.stream(raw.split(","))
                 .map(String::trim)
                 .filter(code -> !code.isBlank())
                 .map(code -> code.toUpperCase(Locale.ROOT))

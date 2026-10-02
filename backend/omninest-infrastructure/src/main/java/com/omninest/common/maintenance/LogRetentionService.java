@@ -52,7 +52,6 @@ public class LogRetentionService {
      * @param runtimeConfigCache 运行时配置缓存（可为 null）
      * @param activeLogPath 当前活跃日志文件路径（logging.file.name）
      */
-    @Autowired
     public LogRetentionService(
             ConfigValueProvider configValueProvider,
             RuntimeConfigCache runtimeConfigCache,

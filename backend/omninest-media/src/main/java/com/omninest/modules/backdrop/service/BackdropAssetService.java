@@ -18,6 +18,8 @@ import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Locale;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -180,7 +182,7 @@ public class BackdropAssetService {
             try (InputStream input = file.getInputStream()) {
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 try (DigestInputStream digestInput = new DigestInputStream(input, digest);
-                     java.io.OutputStream output = Files.newOutputStream(stagingFile)) {
+                     OutputStream output = Files.newOutputStream(stagingFile)) {
                     writtenBytes = digestInput.transferTo(output);
                 }
                 sha256 = HexFormat.of().formatHex(digest.digest());
@@ -695,7 +697,7 @@ public class BackdropAssetService {
         if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
             throw new BusinessException(ErrorCode.BACKDROP_UNSUPPORTED_FORMAT, "无法识别的文件扩展名");
         }
-        String extension = fileName.substring(dotIndex + 1).toLowerCase(java.util.Locale.ROOT);
+        String extension = fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
         if (!IMAGE_EXTENSIONS.contains(extension) && !VIDEO_EXTENSIONS.contains(extension)) {
             throw new BusinessException(ErrorCode.BACKDROP_UNSUPPORTED_FORMAT,
                     "仅支持 JPG/PNG/WebP/GIF 图片或 MP4/WebM/MOV/M4V 视频");

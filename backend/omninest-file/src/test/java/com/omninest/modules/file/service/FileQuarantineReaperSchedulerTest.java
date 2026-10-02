@@ -46,8 +46,8 @@ class FileQuarantineReaperSchedulerTest {
         uploadSessionRepository = mock(FileUploadSessionRepository.class);
         ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
         RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
-        when(runtimeConfigCache.get(anyString())).thenReturn(java.util.Optional.empty());
-        when(configValueProvider.findByKey(anyString())).thenReturn(java.util.Optional.empty());
+        when(runtimeConfigCache.get(anyString())).thenReturn(Optional.empty());
+        when(configValueProvider.findByKey(anyString())).thenReturn(Optional.empty());
         scheduler = new FileQuarantineReaperScheduler(
                 ingressItemRepository,
                 objectStorageClient,

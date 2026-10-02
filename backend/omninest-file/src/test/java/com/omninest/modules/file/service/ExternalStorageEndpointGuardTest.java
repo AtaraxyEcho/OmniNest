@@ -14,6 +14,8 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.file.config.ExternalStorageEndpointPolicyProperties;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -76,7 +78,7 @@ class ExternalStorageEndpointGuardTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("端口不在允许清单");
 
-        properties.setAllowedPorts(new java.util.ArrayList<>(java.util.List.of(80, 443, 6379)));
+        properties.setAllowedPorts(new ArrayList<>(List.of(80, 443, 6379)));
         assertThatCode(() -> guard().validate("WEBDAV",
                         JSON.parseObject("{\"url\":\"https://dav.example.com:6379\"}")))
                 .doesNotThrowAnyException();

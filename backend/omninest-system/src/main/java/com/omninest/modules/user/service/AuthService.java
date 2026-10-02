@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -273,7 +274,7 @@ public class AuthService {
     }
 
     private void requireUserLoginAttemptBudget(UUID userId, String keyPattern, int limit, Duration window) {
-        if (!rateLimitService.tryAcquire(String.format(java.util.Locale.ROOT, keyPattern, userId), limit, window)) {
+        if (!rateLimitService.tryAcquire(String.format(Locale.ROOT, keyPattern, userId), limit, window)) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "两步验证尝试过于频繁，请稍后再试");
         }
     }

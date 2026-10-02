@@ -81,7 +81,7 @@ class BackdropAssetServiceTest {
         rateLimitService = mock(RateLimitService.class);
         videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
         when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
-                .thenReturn(java.util.Optional.empty());
+                .thenReturn(Optional.empty());
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);
         when(runtimeConfigService.maxAssetsPerUser()).thenReturn(30);

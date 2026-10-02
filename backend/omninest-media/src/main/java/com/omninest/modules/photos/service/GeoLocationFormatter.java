@@ -1,6 +1,8 @@
 package com.omninest.modules.photos.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +33,7 @@ public final class GeoLocationFormatter {
      */
     public static Map<String, Object> toGpsLocation(GeoCityMatch match) {
         GeoCitySnapshot.Entry city = match.city();
-        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         putIfNotBlank(result, "city", city.name());
         putIfNotBlank(result, "cityZh", city.nameZh());
         putIfNotBlank(result, "state", city.provinceNameEn());
@@ -39,9 +41,9 @@ public final class GeoLocationFormatter {
         putIfNotBlank(result, "country", city.countryNameEn());
         putIfNotBlank(result, "countryZh", city.countryNameZh());
         putIfNotBlank(result, "displayName", displayName(
-                java.util.Arrays.asList(city.countryNameEn(), city.provinceNameEn(), city.name())));
+                Arrays.asList(city.countryNameEn(), city.provinceNameEn(), city.name())));
         putIfNotBlank(result, "displayNameZh", displayName(
-                java.util.Arrays.asList(city.countryNameZh(), city.provinceNameZh(), city.nameZh())));
+                Arrays.asList(city.countryNameZh(), city.provinceNameZh(), city.nameZh())));
         result.put("geonameId", city.geonameId());
         result.put("distanceKm", roundKm(match.distanceKm()));
         result.put("geocoder", GEOCODER_GEONAMES);

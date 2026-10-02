@@ -20,6 +20,8 @@ import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -187,8 +189,8 @@ public class MoviePlaybackService {
 
     /** 使用媒体短期令牌流式写出字幕，且每次请求重新校验媒体库授权。 */
     @Transactional(readOnly = true)
-    public void writeSubtitleContentByToken(String token, UUID videoItemId, UUID subtitleId, java.io.OutputStream out)
-            throws java.io.IOException {
+    public void writeSubtitleContentByToken(String token, UUID videoItemId, UUID subtitleId, OutputStream out)
+            throws IOException {
         MediaPlaybackTokenService.MediaGrant grant = mediaPlaybackTokenService.requireGrant(token, videoItemId);
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
@@ -204,8 +206,8 @@ public class MoviePlaybackService {
      * 内嵌字幕：从 File 读取探测时提取的 WebVTT；若未提取则实时提取。
      */
     @Transactional(readOnly = true)
-    public void writeSubtitleContent(UUID ownerUserId, UUID subtitleId, java.io.OutputStream out)
-            throws java.io.IOException {
+    public void writeSubtitleContent(UUID ownerUserId, UUID subtitleId, OutputStream out)
+            throws IOException {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, track.getVideoItemId());
@@ -237,7 +239,7 @@ public class MoviePlaybackService {
             }
         } catch (BusinessException e) {
             throw e;
-        } catch (java.io.IOException e) {
+        } catch (IOException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕内容读取失败: " + e.getMessage());

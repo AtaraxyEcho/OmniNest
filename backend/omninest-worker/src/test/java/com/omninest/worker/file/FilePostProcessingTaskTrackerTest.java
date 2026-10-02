@@ -18,6 +18,7 @@ import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,7 +96,7 @@ class FilePostProcessingTaskTrackerTest {
 
     @Test
     void completeIgnoresUntrackedTask() {
-        assertDoesNotThrow(() -> tracker.complete(null, java.util.Map.of()));
+        assertDoesNotThrow(() -> tracker.complete(null, Map.of()));
         verify(taskRecordService, never()).markCompleted(any(), any());
     }
 

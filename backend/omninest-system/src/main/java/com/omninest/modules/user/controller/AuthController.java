@@ -325,7 +325,7 @@ public class AuthController {
     }
 
     private String normalizeUsernameKey(String rawUsername) {
-        return rawUsername == null ? "" : rawUsername.trim().toLowerCase(java.util.Locale.ROOT);
+        return rawUsername == null ? "" : rawUsername.trim().toLowerCase(Locale.ROOT);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

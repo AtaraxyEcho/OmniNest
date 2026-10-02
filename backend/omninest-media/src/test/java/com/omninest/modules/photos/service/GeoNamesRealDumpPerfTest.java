@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -157,7 +158,7 @@ class GeoNamesRealDumpPerfTest {
 
     private double percentileNanos(long[] nanos, int percentile) {
         long[] sorted = nanos.clone();
-        java.util.Arrays.sort(sorted);
+        Arrays.sort(sorted);
         int index = (int) Math.ceil(percentile / 100.0 * sorted.length) - 1;
         return sorted[Math.max(0, Math.min(sorted.length - 1, index))];
     }

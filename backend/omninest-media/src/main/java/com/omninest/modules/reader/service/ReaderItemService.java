@@ -516,7 +516,7 @@ public class ReaderItemService {
         }
         // 封面以内联方式直出：仅放行位图类图片，svg 等浏览器可执行类型拒绝，
         // 阻断把上传文件设为封面获得同源 inline image/svg+xml 的通道
-        String normalizedType = contentType.toLowerCase(java.util.Locale.ROOT);
+        String normalizedType = contentType.toLowerCase(Locale.ROOT);
         if (!normalizedType.startsWith("image/") || normalizedType.contains("svg")) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "封面仅支持位图类图片");
         }

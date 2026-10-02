@@ -13,6 +13,7 @@ import com.omninest.modules.file.dto.OAuthStartResponse;
 import com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest;
 import com.omninest.modules.file.repository.StorageConnectorOAuthAppRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -331,7 +332,7 @@ public class ExternalStorageOAuthService {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "OAuth 请求被中断");
-        } catch (java.io.IOException exception) {
+        } catch (IOException exception) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "无法访问 OAuth 服务");
         }
     }

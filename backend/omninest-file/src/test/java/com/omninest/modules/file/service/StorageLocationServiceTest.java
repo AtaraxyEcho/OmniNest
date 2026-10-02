@@ -11,6 +11,7 @@ import com.omninest.modules.file.dto.StorageLocationDtos.CreateStorageLocationRe
 import com.omninest.modules.file.repository.FileContentRefRepository;
 import com.omninest.modules.file.repository.StorageLocationRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -100,7 +101,7 @@ class StorageLocationServiceTest {
         Mockito.when(runtimeConfigService.isEnabled()).thenReturn(true);
         StorageLocation existing = systemLocation("media", ".");
         Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
-                "media", ".", "SYSTEM")).thenReturn(java.util.Optional.of(existing));
+                "media", ".", "SYSTEM")).thenReturn(Optional.of(existing));
 
         var resolution = service.findOrCreateSystemLocation(UUID.randomUUID(), "media", ".");
 
@@ -115,7 +116,7 @@ class StorageLocationServiceTest {
         StorageLocation disabled = systemLocation("media", ".");
         disabled.setEnabled(false);
         Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
-                "media", ".", "SYSTEM")).thenReturn(java.util.Optional.of(disabled));
+                "media", ".", "SYSTEM")).thenReturn(Optional.of(disabled));
 
         assertThatThrownBy(() -> service.findOrCreateSystemLocation(UUID.randomUUID(), "media", "."))
                 .isInstanceOf(BusinessException.class)
@@ -128,7 +129,7 @@ class StorageLocationServiceTest {
     void findOrCreateSystemLocationCreatesValidatedLocationWithAutoName() {
         Mockito.when(runtimeConfigService.isEnabled()).thenReturn(true);
         Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
-                "media", ".", "SYSTEM")).thenReturn(java.util.Optional.empty());
+                "media", ".", "SYSTEM")).thenReturn(Optional.empty());
         Mockito.when(locationInserter.insert(Mockito.any(StorageLocation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -151,7 +152,7 @@ class StorageLocationServiceTest {
         String longSegment = "影".repeat(200);
         Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
                 Mockito.eq("media"), Mockito.eq(longSegment), Mockito.eq("SYSTEM")))
-                .thenReturn(java.util.Optional.empty());
+                .thenReturn(Optional.empty());
         Mockito.when(locationInserter.insert(Mockito.any(StorageLocation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -169,8 +170,8 @@ class StorageLocationServiceTest {
         StorageLocation winner = systemLocation("media", ".");
         Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
                 "media", ".", "SYSTEM"))
-                .thenReturn(java.util.Optional.empty())
-                .thenReturn(java.util.Optional.of(winner));
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winner));
         Mockito.when(locationInserter.insert(Mockito.any(StorageLocation.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("唯一键冲突"));
 

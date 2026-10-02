@@ -1,5 +1,7 @@
 package com.omninest.modules.user.util;
 
+import java.io.ByteArrayOutputStream;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -186,7 +188,7 @@ public final class TotpUtil {
      */
     static byte[] base32Decode(String text) {
         String cleaned = text.replace("=", "").replace(" ", "").trim();
-        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream(Math.max(1, cleaned.length() * 5 / 8));
+        ByteArrayOutputStream output = new ByteArrayOutputStream(Math.max(1, cleaned.length() * 5 / 8));
         int buffer = 0;
         int bits = 0;
         for (int i = 0; i < cleaned.length(); i++) {
@@ -206,6 +208,6 @@ public final class TotpUtil {
 
     private static String urlEncode(String value) {
         // URLEncoder 按表单编码把空格编成 "+"，otpauth 路径段使用百分号编码更兼容
-        return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 }

@@ -7,6 +7,7 @@ import com.omninest.modules.photos.repository.GeoCityRepository;
 import com.omninest.modules.photos.repository.GeoDatasetRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -191,7 +192,7 @@ public class GeoCityIndex {
         return dataset.get().getDatasetVersion();
     }
 
-    private void swapTo(String datasetVersion, java.util.UUID datasetId) {
+    private void swapTo(String datasetVersion, UUID datasetId) {
         List<GeoCityRepository.GeoCityRow> rows = geoCityRepository.findRowsByDatasetId(datasetId);
         snapshot.set(GeoCitySnapshot.from(datasetVersion, rows));
         log.info("GeoNames 离线城市索引已切换: datasetVersion={}, cityCount={}",

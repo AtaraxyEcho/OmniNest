@@ -23,6 +23,7 @@ import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -86,7 +87,7 @@ class MoviePlaybackServiceTest {
                 "text/vtt"
         ));
 
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         playbackService.writeSubtitleContent(OWNER_ID, SUBTITLE_ID, out);
 
         String content = out.toString(StandardCharsets.UTF_8);

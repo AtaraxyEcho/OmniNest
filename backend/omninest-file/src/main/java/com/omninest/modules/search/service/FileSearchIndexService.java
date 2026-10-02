@@ -66,7 +66,6 @@ public class FileSearchIndexService implements Closeable {
     /** 按用户缓存的索引状态，淘汰时同步关闭 Lucene 资源。 */
     private final Cache<UUID, UserIndexState> userIndexes;
 
-    @Autowired
     public FileSearchIndexService(
             @Value("${omninest.search.index-path:${user.home}/.omninest/lucene-index}") String indexPath
     ) throws IOException {

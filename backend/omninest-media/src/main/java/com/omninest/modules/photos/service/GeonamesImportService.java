@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -175,7 +176,7 @@ public class GeonamesImportService {
         Map<String, CountryEntry> countryByCode = parseRequired(importDir.resolve(COUNTRY_FILE), parser::parseCountryInfo);
         int batchSize = configService.geoImportBatchSize();
 
-        List<CityRow> buffer = new java.util.ArrayList<>(batchSize);
+        List<CityRow> buffer = new ArrayList<>(batchSize);
         long[] written = {0};
         long[] skipped = {0};
         int[] batchesSinceHeartbeat = {0};

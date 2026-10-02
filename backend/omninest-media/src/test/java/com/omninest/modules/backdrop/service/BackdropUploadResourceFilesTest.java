@@ -33,6 +33,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.HexFormat;
 import java.util.List;
 import java.security.MessageDigest;
@@ -76,7 +79,7 @@ class BackdropUploadResourceFilesTest {
     BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     BackdropAssetService service;
     final AtomicReference<BackdropAsset> storedAsset = new AtomicReference<>();
-    final List<BackdropAsset> storedAssets = new java.util.ArrayList<>();
+    final List<BackdropAsset> storedAssets = new ArrayList<>();
     final AtomicInteger storeCalls = new AtomicInteger();
 
     @BeforeAll
@@ -105,7 +108,7 @@ class BackdropUploadResourceFilesTest {
         rateLimitService = mock(RateLimitService.class);
         videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
         when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
-                .thenReturn(java.util.Optional.empty());
+                .thenReturn(Optional.empty());
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);
         when(runtimeConfigService.maxAssetsPerUser()).thenReturn(30);
@@ -275,7 +278,7 @@ class BackdropUploadResourceFilesTest {
     @DisplayName("截断到 8 字节且无有效魔数的视频被拒绝(8002)")
     void truncatedVideoRejected() throws Exception {
         byte[] bytes = Files.readAllBytes(RESOURCE_DIR.resolve("horizon-sky.mp4"));
-        byte[] head = java.util.Arrays.copyOf(bytes, 8);
+        byte[] head = Arrays.copyOf(bytes, 8);
 
         assertThatThrownBy(() -> service.uploadAsset(OWNER_ID,
                         new MockMultipartFile("file", "broken.mp4", "application/octet-stream", head)))

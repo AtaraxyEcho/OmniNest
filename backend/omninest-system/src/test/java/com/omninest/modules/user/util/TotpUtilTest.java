@@ -3,6 +3,7 @@ package com.omninest.modules.user.util;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -61,7 +62,7 @@ class TotpUtilTest {
         byte[] bytes = {(byte) 0xFF, 0x00, (byte) 0xAB, 0x11, 0x7F, 0x33};
         String encoded = TotpUtil.base32Encode(bytes);
         assertThat(TotpUtil.base32Decode(encoded)).isEqualTo(bytes);
-        assertThat(TotpUtil.base32Decode(encoded.toLowerCase(java.util.Locale.ROOT))).isEqualTo(bytes);
+        assertThat(TotpUtil.base32Decode(encoded.toLowerCase(Locale.ROOT))).isEqualTo(bytes);
         assertThat(TotpUtil.base32Decode(encoded + "====")).isEqualTo(bytes);
         assertThat(TotpUtil.base32Decode(encoded + " ")).isEqualTo(bytes);
         assertThat(TotpUtil.base32Decode(encoded + "1!")).isEmpty();

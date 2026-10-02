@@ -52,6 +52,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -188,7 +189,7 @@ public class PhotoLibraryController {
     @PostMapping("/api/v1/admin/photos/geo/reload")
     ApiResponse<Map<String, Object>> reloadGeoIndex() {
         String datasetVersion = geoDatasetService.reloadCurrentPublished();
-        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("datasetVersion", datasetVersion);
         return ApiResponse.success(body);
     }

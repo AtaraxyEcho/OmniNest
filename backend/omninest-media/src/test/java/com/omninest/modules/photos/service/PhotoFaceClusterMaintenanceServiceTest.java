@@ -7,6 +7,8 @@ import com.omninest.modules.photos.domain.PhotoFaceCluster;
 import com.omninest.modules.photos.repository.PhotoFaceClusterRepository;
 import com.omninest.modules.photos.repository.PhotoFaceRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Optional;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -67,7 +69,7 @@ class PhotoFaceClusterMaintenanceServiceTest {
         Mockito.verify(clusterRepository).deleteAll(List.of(oldCluster));
         Mockito.verify(faceRepository).clearClusterIdsByOwnerUserId(ownerUserId);
         Mockito.verify(faceRepository).saveAll(Mockito.argThat(faces -> {
-            List<PhotoFace> assigned = new java.util.ArrayList<>();
+            List<PhotoFace> assigned = new ArrayList<>();
             faces.forEach(assigned::add);
             return assigned.size() == 2
                     && assigned.stream().allMatch(face -> face.getClusterId() != null);
@@ -108,7 +110,7 @@ class PhotoFaceClusterMaintenanceServiceTest {
         cluster.setFaceCount(3);
 
         Mockito.when(clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId))
-                .thenReturn(java.util.Optional.of(cluster));
+                .thenReturn(Optional.of(cluster));
         Mockito.when(faceRepository.findByClusterId(clusterId))
                 .thenReturn(List.of(cover, survivor));
 
@@ -135,7 +137,7 @@ class PhotoFaceClusterMaintenanceServiceTest {
         cluster.setFaceCount(3);
 
         Mockito.when(clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId))
-                .thenReturn(java.util.Optional.of(cluster));
+                .thenReturn(Optional.of(cluster));
         Mockito.when(faceRepository.findByClusterId(clusterId))
                 .thenReturn(List.of(laterSurvivor, earliestSurvivor));
 
@@ -160,7 +162,7 @@ class PhotoFaceClusterMaintenanceServiceTest {
         cluster.setFaceCount(3);
 
         Mockito.when(clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId))
-                .thenReturn(java.util.Optional.of(cluster));
+                .thenReturn(Optional.of(cluster));
         Mockito.when(faceRepository.findByClusterId(clusterId))
                 .thenReturn(List.of(lastSurvivor));
 

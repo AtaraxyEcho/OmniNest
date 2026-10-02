@@ -8,6 +8,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +49,7 @@ public class FileSecurityScanConsumer {
             }
             taskRecordService.markRunning(event.taskId(), "SCANNING");
             FileIngressPromotionService.PromotionOutcome outcome = promotionService.process(event);
-            Map<String, Object> result = new java.util.LinkedHashMap<>();
+            Map<String, Object> result = new LinkedHashMap<>();
             result.put("ingressItemId", event.ingressItemId().toString());
             if (outcome.fileNodeId() != null) {
                 result.put("fileNodeId", outcome.fileNodeId().toString());

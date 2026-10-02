@@ -1,6 +1,7 @@
 package com.omninest.common.config;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -110,7 +111,7 @@ public class ProductionSecretsValidator implements ApplicationRunner {
         if (value == null) {
             return;
         }
-        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
         if (WEAK_SECRET_VALUES.contains(normalized)) {
             throw new IllegalStateException(
                     "生产环境禁止使用弱口令：%s（%s）的值是服务默认名或通用词，请用 openssl rand -base64 32 生成独立凭据"

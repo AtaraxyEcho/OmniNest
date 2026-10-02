@@ -22,6 +22,7 @@ import com.omninest.modules.user.repository.AuthTotpCredentialRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -157,21 +158,21 @@ class AdminUserServiceTest {
         user.setId(userId);
         user.setUsername("bob");
         user.setPasswordHash("hash");
-        when(authUserRepository.findWithRolesById(userId)).thenReturn(java.util.Optional.of(user));
+        when(authUserRepository.findWithRolesById(userId)).thenReturn(Optional.of(user));
         when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(authRoleRepository.findByCode("ROLE_MEDIA_OPERATOR"))
-                .thenReturn(java.util.Optional.of(role(customRoleId, "ROLE_MEDIA_OPERATOR")));
+                .thenReturn(Optional.of(role(customRoleId, "ROLE_MEDIA_OPERATOR")));
 
-        AuthUserDto saved = service.updateUserRoles(userId, java.util.Set.of("role_media_operator"));
+        AuthUserDto saved = service.updateUserRoles(userId, Set.of("role_media_operator"));
 
         assertThat(saved.roles()).containsExactly("ROLE_MEDIA_OPERATOR");
 
-        when(authRoleRepository.findByCode("ROLE_GHOST")).thenReturn(java.util.Optional.empty());
-        assertThatThrownBy(() -> service.updateUserRoles(userId, java.util.Set.of("ROLE_GHOST")))
+        when(authRoleRepository.findByCode("ROLE_GHOST")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.updateUserRoles(userId, Set.of("ROLE_GHOST")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.PARAM_ERROR);
-        assertThatThrownBy(() -> service.updateUserRoles(userId, java.util.Set.of("SUPER_ADMIN")))
+        assertThatThrownBy(() -> service.updateUserRoles(userId, Set.of("SUPER_ADMIN")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.FORBIDDEN);
@@ -189,19 +190,19 @@ class AdminUserServiceTest {
         superAdmin.setId(superAdminId);
         superAdmin.setUsername("root");
         superAdmin.getRoles().add(role(UUID.randomUUID(), "SUPER_ADMIN"));
-        when(authUserRepository.findWithRolesById(okId)).thenReturn(java.util.Optional.of(member));
-        when(authUserRepository.findWithRolesById(missingId)).thenReturn(java.util.Optional.empty());
-        when(authUserRepository.findWithRolesById(superAdminId)).thenReturn(java.util.Optional.of(superAdmin));
+        when(authUserRepository.findWithRolesById(okId)).thenReturn(Optional.of(member));
+        when(authUserRepository.findWithRolesById(missingId)).thenReturn(Optional.empty());
+        when(authUserRepository.findWithRolesById(superAdminId)).thenReturn(Optional.of(superAdmin));
         when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(currentUserContext.requireCurrentUserId()).thenReturn(okId);
 
         var result = service.batchUpdateUserStatus(
-                java.util.List.of(okId, missingId, superAdminId), "DISABLED");
+                List.of(okId, missingId, superAdminId), "DISABLED");
 
         assertThat(result.successCount()).isEqualTo(1);
         assertThat(result.failedIds()).containsExactly(missingId, superAdminId);
         assertThat(member.getStatus()).isEqualTo("DISABLED");
-        verify(userSessionRevocationService).revokeAll(java.util.List.of(okId), "管理员更新用户状态");
+        verify(userSessionRevocationService).revokeAll(List.of(okId), "管理员更新用户状态");
         verify(auditLogService).recordWithMetadata(
                 eq(okId), eq("ADMIN_USER_STATUS_UPDATE"), eq("auth_users"), eq(okId), any());
     }
@@ -209,7 +210,7 @@ class AdminUserServiceTest {
     @Test
     void batchUpdateUserStatusRejectsIllegalStatusUpFront() {
         assertThatThrownBy(() -> service.batchUpdateUserStatus(
-                java.util.List.of(UUID.randomUUID()), "PAUSED"))
+                List.of(UUID.randomUUID()), "PAUSED"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.PARAM_ERROR);
