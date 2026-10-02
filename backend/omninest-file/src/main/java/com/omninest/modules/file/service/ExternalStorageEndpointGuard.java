@@ -47,8 +47,8 @@ public class ExternalStorageEndpointGuard {
         String normalizedProvider = provider == null ? "" : provider.trim().toUpperCase(Locale.ROOT);
         String endpoint;
         switch (normalizedProvider) {
-            case "WEBDAV" -> endpoint = asText(credentials.get("url"));
-            case "S3", "MINIO" -> endpoint = asText(credentials.get("endpoint"));
+            case "WEBDAV" -> endpoint = asString(credentials.get("url"));
+            case "S3", "MINIO" -> endpoint = asString(credentials.get("endpoint"));
             default -> {
                 return;
             }
@@ -84,7 +84,7 @@ public class ExternalStorageEndpointGuard {
         return new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, message);
     }
 
-    private String asText(Object value) {
+    private String asString(Object value) {
         return value == null ? null : value.toString();
     }
 }

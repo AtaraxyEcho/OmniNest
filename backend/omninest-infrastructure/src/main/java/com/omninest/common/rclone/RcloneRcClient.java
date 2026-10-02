@@ -130,7 +130,7 @@ public class RcloneRcClient implements RcloneGateway {
         JsonNode result = call("config/listremotes", Map.of());
         List<String> names = new ArrayList<>();
         for (JsonNode remote : result.path("remotes")) {
-            names.add(remote.asText());
+            names.add(remote.asString());
         }
         return names;
     }
@@ -364,7 +364,7 @@ public class RcloneRcClient implements RcloneGateway {
         if (value.isNumber()) {
             return value.isFloatingPointNumber() ? value.doubleValue() : value.longValue();
         }
-        return value.asText();
+        return value.asString();
     }
 
     private static Instant parseInstant(String value) {

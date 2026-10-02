@@ -167,6 +167,6 @@ public final class JsonSupport {
      */
     public static String textOrNull(JsonNode node, String field) {
         JsonNode value = node.path(field);
-        return value.isMissingNode() || value.isNull() ? null : value.asText();
+        return value.isMissingNode() || value.isNull() ? null : value.asString();
     }
 }

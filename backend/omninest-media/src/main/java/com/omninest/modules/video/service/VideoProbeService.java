@@ -446,7 +446,7 @@ public class VideoProbeService {
 
         for (int i = 0; i < streams.size(); i++) {
             JsonNode stream = streams.get(i);
-            String codecType = stream.path("codec_type").asText(null);
+            String codecType = stream.path("codec_type").asString(null);
             if ("video".equals(codecType)) {
                 applyVideoStream(item, stream);
             } else if ("audio".equals(codecType)) {
@@ -461,12 +461,12 @@ public class VideoProbeService {
 
         JsonNode format = probeResult.path("format");
         if (format.isObject()) {
-            String formatName = format.path("format_name").asText(null);
+            String formatName = format.path("format_name").asString(null);
             if (formatName != null && !formatName.isBlank()) {
                 item.setContainerFormat(formatName);
             }
             // 提取视频总时长（秒），ffprobe 返回浮点字符串如 "7200.123456"
-            String durationStr = format.path("duration").asText(null);
+            String durationStr = format.path("duration").asString(null);
             if (durationStr != null && !durationStr.isBlank()) {
                 try {
                     item.setDurationSeconds((int) Double.parseDouble(durationStr));
@@ -482,7 +482,7 @@ public class VideoProbeService {
     }
 
     private void applyVideoStream(MediaVideoItem item, JsonNode stream) {
-        String codecName = stream.path("codec_name").asText(null);
+        String codecName = stream.path("codec_name").asString(null);
         if (codecName != null && !codecName.isBlank()) {
             item.setVideoCodec(codecName);
         }
@@ -497,7 +497,7 @@ public class VideoProbeService {
     }
 
     private void applyAudioStream(MediaVideoItem item, JsonNode stream) {
-        String codecName = stream.path("codec_name").asText(null);
+        String codecName = stream.path("codec_name").asString(null);
         if (codecName != null && !codecName.isBlank()) {
             item.setAudioCodec(codecName);
         }
@@ -509,7 +509,7 @@ public class VideoProbeService {
     );
 
     private MediaSubtitleTrack buildEmbeddedSubtitle(MediaVideoItem item, JsonNode stream, int index) {
-        String codecName = stream.path("codec_name").asText(null);
+        String codecName = stream.path("codec_name").asString(null);
         if (codecName == null || codecName.isBlank()) {
             return null;
         }
@@ -517,10 +517,10 @@ public class VideoProbeService {
         if (BITMAP_SUBTITLE_CODECS.contains(codecName.trim().toLowerCase())) {
             return null;
         }
-        String language = stream.path("tags").path("language").asText(null);
+        String language = stream.path("tags").path("language").asString(null);
         if (language == null || language.isBlank()) {
             JsonNode tags = stream.path("tags");
-            language = tags.isObject() ? tags.path("language").asText(null) : null;
+            language = tags.isObject() ? tags.path("language").asString(null) : null;
         }
         if (language == null || language.isBlank()) {
             language = "und";
@@ -528,7 +528,7 @@ public class VideoProbeService {
         String title = null;
         JsonNode tags = stream.path("tags");
         if (tags.isObject()) {
-            title = tags.path("title").asText(null);
+            title = tags.path("title").asString(null);
         }
         String label = (title != null && !title.isBlank()) ? title : language + " #" + (index + 1);
 

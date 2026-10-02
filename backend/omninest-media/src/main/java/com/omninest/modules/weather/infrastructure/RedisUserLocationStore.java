@@ -63,8 +63,8 @@ public class RedisUserLocationStore implements UserLocationStore {
             }
             var json = JsonSupport.readTree(value);
             return Optional.of(new UserLocationSnapshot(
-                    json.path("latLon").asText(null),
-                    json.path("source").asText(null),
+                    json.path("latLon").asString(null),
+                    json.path("source").asString(null),
                     Instant.ofEpochMilli(json.path("ts").asLong())
             ));
         } catch (RuntimeException exception) {

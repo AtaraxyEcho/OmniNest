@@ -300,7 +300,7 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
                     if (trackTitle.isBlank()) {
                         continue;
                     }
-                    Integer trackNumber = parseInteger(track.path("number").asText(null));
+                    Integer trackNumber = parseInteger(track.path("number").asString(null));
                     if (trackNumber == null) {
                         trackNumber = track.path("position").asInt();
                     }
@@ -485,7 +485,7 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
     }
 
     private String text(JsonNode item, String key) {
-        String value = item.path(key).asText(null);
+        String value = item.path(key).asString(null);
         return value == null ? "" : value.trim();
     }
 

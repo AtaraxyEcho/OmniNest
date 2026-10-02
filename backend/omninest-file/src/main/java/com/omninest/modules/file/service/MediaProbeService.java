@@ -97,17 +97,17 @@ public class MediaProbeService {
             Double duration = null;
             JsonNode format = root.get("format");
             if (format != null && format.hasNonNull("duration")) {
-                duration = Double.parseDouble(format.get("duration").asText());
+                duration = Double.parseDouble(format.get("duration").asString());
             }
             Integer width = null;
             Integer height = null;
             if (root.has("streams")) {
                 for (JsonNode stream : root.get("streams")) {
-                    if ("video".equals(stream.path("codec_type").asText())) {
+                    if ("video".equals(stream.path("codec_type").asString())) {
                         width = stream.hasNonNull("width") ? stream.get("width").asInt() : null;
                         height = stream.hasNonNull("height") ? stream.get("height").asInt() : null;
                         if (duration == null && stream.hasNonNull("duration")) {
-                            duration = Double.parseDouble(stream.get("duration").asText());
+                            duration = Double.parseDouble(stream.get("duration").asString());
                         }
                         break;
                     }

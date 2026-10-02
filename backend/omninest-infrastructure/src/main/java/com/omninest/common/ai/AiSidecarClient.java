@@ -139,8 +139,8 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         ));
         List<ContentObservation> observations = new ArrayList<>();
         for (JsonNode observation : object.path("observations")) {
-            String namespace = observation.path("namespace").asText(null);
-            String code = normalizeObservationCode(namespace, observation.path("code").asText(null));
+            String namespace = observation.path("namespace").asString(null);
+            String code = normalizeObservationCode(namespace, observation.path("code").asString(null));
             float confidence = (float) observation.path("confidence").asDouble();
             if (namespace == null || namespace.isBlank()
                     || code == null || code.isBlank()
@@ -151,13 +151,13 @@ public class AiSidecarClient implements ImageAnalysisGateway {
                     namespace,
                     code,
                     confidence,
-                    observation.path("source").asText(null),
+                    observation.path("source").asString(null),
                     parseBoundingBoxes(observation.path("boxes"))
             ));
         }
         return new ContentAnalysis(
                 Math.max(1, object.path("schemaVersion").asInt()),
-                object.path("pipelineVersion").asText(null),
+                object.path("pipelineVersion").asString(null),
                 observations
         );
     }
@@ -190,7 +190,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         List<SceneLabel> labels = new ArrayList<>();
         for (JsonNode labelObject : object.path("labels")) {
             labels.add(new SceneLabel(
-                    places365LabelCatalog.normalize(labelObject.path("name").asText(null)),
+                    places365LabelCatalog.normalize(labelObject.path("name").asString(null)),
                     (float) labelObject.path("confidence").asDouble()
             ));
         }

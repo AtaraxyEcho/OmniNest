@@ -311,7 +311,7 @@ public class WeatherService {
             URI uri = URI.create(baseUrl + "/geo/v2/city/lookup?location=" + encoded);
             JsonNode result = httpGet(uri, jwt);
 
-            if (result == null || !"200".equals(result.path("code").asText(null))) {
+            if (result == null || !"200".equals(result.path("code").asString(null))) {
                 weatherCacheStore.markLocationMissing(cityName);
                 return null;
             }
@@ -323,9 +323,9 @@ public class WeatherService {
             }
 
             JsonNode first = locations.get(0);
-            String id = first.path("id").asText(null);
-            String lat = first.path("lat").asText(null);
-            String lon = first.path("lon").asText(null);
+            String id = first.path("id").asString(null);
+            String lat = first.path("lat").asString(null);
+            String lon = first.path("lon").asString(null);
             if (id == null || lat == null || lon == null) {
                 return null;
             }
@@ -405,7 +405,7 @@ public class WeatherService {
             if (aqiEntry == null) aqiEntry = findByCode(indexes, "qaqi");
             if (aqiEntry != null) {
                 now.put("aqi", getIntSafe(aqiEntry, "aqiDisplay"));
-                now.put("category", aqiEntry.path("category").asText(null));
+                now.put("category", aqiEntry.path("category").asString(null));
             }
         }
 
@@ -424,7 +424,7 @@ public class WeatherService {
         if (health.isObject()) {
             JsonNode advice = health.path("advice");
             if (advice.isObject()) {
-                now.put("advice", advice.path("generalPopulation").asText(null));
+                now.put("advice", advice.path("generalPopulation").asString(null));
             }
         }
 
@@ -435,7 +435,7 @@ public class WeatherService {
     private JsonNode findByCode(JsonNode array, String code) {
         for (int i = 0; i < array.size(); i++) {
             JsonNode item = array.get(i);
-            if (code.equals(item.path("code").asText(null))) return item;
+            if (code.equals(item.path("code").asString(null))) return item;
         }
         return null;
     }
@@ -446,17 +446,17 @@ public class WeatherService {
             JsonNode weather7d,
             JsonNode weather24h,
             String locationName) {
-        if (weatherNow == null || !"200".equals(weatherNow.path("code").asText(null))) {
+        if (weatherNow == null || !"200".equals(weatherNow.path("code").asString(null))) {
             return WeatherDto.empty();
         }
         JsonNode now = weatherNow.path("now");
         if (!now.isObject()) return WeatherDto.empty();
 
-        JsonNode air = airNow != null && "200".equals(airNow.path("code").asText(null))
+        JsonNode air = airNow != null && "200".equals(airNow.path("code").asString(null))
                 ? airNow.path("now") : null;
         JsonNode today = null;
         List<WeatherDto.DailyForecast> dailyForecasts = List.of();
-        if (weather7d != null && "200".equals(weather7d.path("code").asText(null))) {
+        if (weather7d != null && "200".equals(weather7d.path("code").asString(null))) {
             JsonNode daily = weather7d.path("daily");
             if (daily.isArray() && !daily.isEmpty()) {
                 today = daily.get(0);
@@ -464,27 +464,27 @@ public class WeatherService {
             }
         }
         List<WeatherDto.HourlyForecast> hourlyForecasts = List.of();
-        if (weather24h != null && "200".equals(weather24h.path("code").asText(null))) {
+        if (weather24h != null && "200".equals(weather24h.path("code").asString(null))) {
             hourlyForecasts = parseHourlyForecasts(weather24h.path("hourly"));
         }
 
         return new WeatherDto(
             now.path("temp").asDouble(), now.path("feelsLike").asDouble(),
-            now.path("text").asText(null), now.path("icon").asText(null),
-            now.path("humidity").asText(null) + "%", now.path("windSpeed").asText(null) + " km/h",
-            now.path("windDir").asText(null), now.path("pressure").asText(null) + " hPa",
-            now.path("vis").asText(null) + " km",
+            now.path("text").asString(null), now.path("icon").asString(null),
+            now.path("humidity").asString(null) + "%", now.path("windSpeed").asString(null) + " km/h",
+            now.path("windDir").asString(null), now.path("pressure").asString(null) + " hPa",
+            now.path("vis").asString(null) + " km",
             today != null ? today.path("uvIndex").asInt() : 0,
-            today != null ? today.path("sunrise").asText(null) : "--",
-            today != null ? today.path("sunset").asText(null) : "--",
+            today != null ? today.path("sunrise").asString(null) : "--",
+            today != null ? today.path("sunset").asString(null) : "--",
             air != null ? getIntSafe(air, "aqi") : 0,
             air != null ? getIntSafe(air, "pm2p5") : 0,
             air != null ? getStringSafe(air, "category", "--") : "--",
-            weatherNow.path("updateTime").asText(null),
+            weatherNow.path("updateTime").asString(null),
             air != null ? getStringSafe(air, "advice", "") : "",
             today != null ? today.path("tempMax").asDouble() : 0.0,
             today != null ? today.path("tempMin").asDouble() : 0.0,
-            now.path("precip").asText(null) + " mm",
+            now.path("precip").asString(null) + " mm",
             getStringSafe(now, "windScale", "--"),
             today != null ? getStringSafe(today, "textDay", "--") : "--",
             today != null ? getStringSafe(today, "textNight", "--") : "--",
@@ -660,13 +660,13 @@ public class WeatherService {
     }
 
     private int getIntSafe(JsonNode obj, String key) {
-        String val = obj.path(key).asText(null);
+        String val = obj.path(key).asString(null);
         if (val == null || val.isBlank()) return 0;
         try { return (int) Double.parseDouble(val); } catch (NumberFormatException e) { return 0; }
     }
 
     private String getStringSafe(JsonNode obj, String key, String defaultValue) {
-        String val = obj.path(key).asText(null);
+        String val = obj.path(key).asString(null);
         return val != null ? val : defaultValue;
     }
 

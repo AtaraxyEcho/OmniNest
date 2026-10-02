@@ -174,9 +174,9 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                     continue;
                 }
                 JsonNode songData = data.get(0);
-                String url = songData.path("url").asText(null);
+                String url = songData.path("url").asString(null);
                 if (url != null && !url.isBlank()) {
-                    String format = songData.path("type").asText(null);
+                    String format = songData.path("type").asString(null);
                     log.info("网易云播放URL获取成功: songId={}, quality={}, format={}", songId, level, format);
                     return new PlaybackUrlResult(url, level, format, null);
                 }
@@ -212,10 +212,10 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             }
             // 同步歌词（LRC 格式，带时间戳）
             JsonNode lrcObj = json.path("lrc");
-            String syncedLyrics = lrcObj.isObject() ? lrcObj.path("lyric").asText(null) : null;
+            String syncedLyrics = lrcObj.isObject() ? lrcObj.path("lyric").asString(null) : null;
             // 翻译歌词（LRC 格式带时间戳，与同步歌词行对齐）
             JsonNode tlyricObj = json.path("tlyric");
-            String translatedLyrics = tlyricObj.isObject() ? tlyricObj.path("lyric").asText(null) : null;
+            String translatedLyrics = tlyricObj.isObject() ? tlyricObj.path("lyric").asString(null) : null;
             // 逐字歌词来自附加接口，失败时降级为不可用，不影响行级歌词
             String wordLyrics = fetchWordLyrics(songId, cookie);
             log.info(
@@ -254,7 +254,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 return null;
             }
             JsonNode yrcObj = json.path("yrc");
-            return blankToNull(yrcObj.isObject() ? yrcObj.path("lyric").asText(null) : null);
+            return blankToNull(yrcObj.isObject() ? yrcObj.path("lyric").asString(null) : null);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.warn("网易云逐字歌词请求被中断: songId={}", songId);
@@ -353,7 +353,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 int end = Math.min(start + SONG_DETAIL_CHUNK_SIZE, total);
                 List<String> songIds = new ArrayList<>();
                 for (int index = start; index < end; index++) {
-                    songIds.add(ids.get(index).asText());
+                    songIds.add(ids.get(index).asString());
                 }
                 detailPaths.add("/song/detail?ids=" + encode(String.join(",", songIds))
                         + "&timestamp=" + System.currentTimeMillis());
@@ -459,7 +459,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 log.warn("网易云QR登录：unikey数据为空");
                 return null;
             }
-            String unikey = keyData.path("unikey").asText(null);
+            String unikey = keyData.path("unikey").asString(null);
             if (unikey == null || unikey.isBlank()) {
                 log.warn("网易云QR登录：unikey为空");
                 return null;
@@ -478,8 +478,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 log.warn("网易云QR登录：二维码数据为空");
                 return null;
             }
-            String qrUrl = createData.path("qrurl").asText(null);
-            String qrImageBase64 = createData.path("qrimg").asText(null);
+            String qrUrl = createData.path("qrurl").asString(null);
+            String qrImageBase64 = createData.path("qrimg").asString(null);
 
             log.info("网易云QR登录会话已创建: unikey={}", unikey);
             return new QrLoginSession(unikey, qrUrl, qrImageBase64);
@@ -514,7 +514,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             int code = json.path("code").asInt(-1);
             String cookie = mergeCookieHeaders(
                     apiResponse.cookie(),
-                    json.path("cookie").asText(null)
+                    json.path("cookie").asString(null)
             );
 
             return switch (code) {
@@ -529,7 +529,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                         NeteaseApiResponse retryResponse = request(retryPath, null);
                         cookie = mergeCookieHeaders(
                                 retryResponse.cookie(),
-                                retryResponse.body() == null ? null : retryResponse.body().path("cookie").asText(null)
+                                retryResponse.body() == null ? null : retryResponse.body().path("cookie").asString(null)
                         );
                     }
                     if (cookie == null || cookie.isBlank()) {
@@ -606,14 +606,14 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         }
         boolean profilePresent = profile.isObject();
         boolean accountPresent = account.isObject();
-        String userId = valueOrEmpty(profilePresent ? profile.path("userId").asText(null) : null);
-        String nickname = valueOrEmpty(profilePresent ? profile.path("nickname").asText(null) : null);
-        String avatarUrl = valueOrEmpty(profilePresent ? profile.path("avatarUrl").asText(null) : null);
+        String userId = valueOrEmpty(profilePresent ? profile.path("userId").asString(null) : null);
+        String nickname = valueOrEmpty(profilePresent ? profile.path("nickname").asString(null) : null);
+        String avatarUrl = valueOrEmpty(profilePresent ? profile.path("avatarUrl").asString(null) : null);
         if (userId.isBlank() && accountPresent) {
-            userId = valueOrEmpty(account.path("id").asText(null));
+            userId = valueOrEmpty(account.path("id").asString(null));
         }
         if (nickname.isBlank() && accountPresent) {
-            nickname = valueOrEmpty(account.path("userName").asText(null));
+            nickname = valueOrEmpty(account.path("userName").asString(null));
         }
         boolean vip = (accountPresent && account.path("vipType").asInt() > 0)
                 || (profilePresent && profile.path("vipType").asInt() > 0);
@@ -638,7 +638,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
      */
     private OnlineTrackDto parseSearchResult(JsonNode song) {
         String songId = String.valueOf(song.path("id").asLong());
-        String title = song.path("name").asText(null);
+        String title = song.path("name").asString(null);
         if (songId.isBlank() || title == null || title.isBlank()) {
             return null;
         }
@@ -648,7 +648,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         if (artists.isArray() && !artists.isEmpty()) {
             List<String> names = new ArrayList<>();
             for (int i = 0; i < artists.size(); i++) {
-                String name = artists.get(i).path("name").asText(null);
+                String name = artists.get(i).path("name").asString(null);
                 if (name != null && !name.isBlank()) {
                     names.add(name);
                 }
@@ -660,8 +660,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         String albumTitle = "";
         String coverUrl = null;
         if (album.isObject()) {
-            albumTitle = album.path("name").asText(null);
-            coverUrl = album.path("picUrl").asText(null);
+            albumTitle = album.path("name").asString(null);
+            coverUrl = album.path("picUrl").asString(null);
         }
         // 时长（毫秒转秒）
         Integer durationSeconds = null;
@@ -841,8 +841,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         if (playlist == null) {
             return null;
         }
-        String playlistId = playlist.path("id").asText(null);
-        String name = playlist.path("name").asText(null);
+        String playlistId = playlist.path("id").asString(null);
+        String name = playlist.path("name").asString(null);
         if (playlistId == null || playlistId.isBlank() || name == null || name.isBlank()) {
             return null;
         }
@@ -850,19 +850,19 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         boolean creatorPresent = creator.isObject();
         Map<String, Object> extra = new LinkedHashMap<>();
         if (creatorPresent) {
-            extra.put("creatorUserId", creator.path("userId").asText(null));
+            extra.put("creatorUserId", creator.path("userId").asString(null));
         }
         return new OnlinePlaylistDto(
                 MusicPlatform.NETEASE.apiValue(),
                 playlistId,
                 name,
-                playlist.path("description").asText(null),
-                playlist.path("coverImgUrl").asText(null),
+                playlist.path("description").asString(null),
+                playlist.path("coverImgUrl").asString(null),
                 playlist.hasNonNull("trackCount") ? playlist.path("trackCount").asInt() : null,
-                creatorPresent ? creator.path("nickname").asText(null) : null,
+                creatorPresent ? creator.path("nickname").asString(null) : null,
                 playlist.path("subscribed").asBoolean(),
                 extra,
-                thumbnailUrl(playlist.path("coverImgUrl").asText(null))
+                thumbnailUrl(playlist.path("coverImgUrl").asString(null))
         );
     }
 

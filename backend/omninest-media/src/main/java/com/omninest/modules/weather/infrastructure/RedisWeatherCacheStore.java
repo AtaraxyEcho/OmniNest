@@ -262,30 +262,30 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
         return new WeatherDto(
                 json.path("temp").asDouble(),
                 json.path("feelsLike").asDouble(),
-                json.path("text").asText(null),
-                json.path("icon").asText(null),
-                json.path("humidity").asText(null),
-                json.path("windSpeed").asText(null),
-                json.path("windDir").asText(null),
-                json.path("pressure").asText(null),
-                json.path("visibility").asText(null),
+                json.path("text").asString(null),
+                json.path("icon").asString(null),
+                json.path("humidity").asString(null),
+                json.path("windSpeed").asString(null),
+                json.path("windDir").asString(null),
+                json.path("pressure").asString(null),
+                json.path("visibility").asString(null),
                 json.path("uvIndex").asInt(),
-                json.path("sunrise").asText(null),
-                json.path("sunset").asText(null),
+                json.path("sunrise").asString(null),
+                json.path("sunset").asString(null),
                 json.path("aqi").asInt(),
                 json.path("pm2p5").asInt(),
-                json.path("aqiCategory").asText(null),
-                json.path("updateTime").asText(null),
-                json.path("healthAdvice").asText(""),
+                json.path("aqiCategory").asString(null),
+                json.path("updateTime").asString(null),
+                json.path("healthAdvice").asString(""),
                 json.path("tempMax").asDouble(),
                 json.path("tempMin").asDouble(),
-                json.path("precip").asText("--"),
-                json.path("windScale").asText("--"),
-                json.path("textDay").asText("--"),
-                json.path("textNight").asText("--"),
+                json.path("precip").asString("--"),
+                json.path("windScale").asString("--"),
+                json.path("textDay").asString("--"),
+                json.path("textNight").asString("--"),
                 parseHourly(json.path("hourly")),
                 parseDaily(json.path("daily")),
-                json.path("locationName").asText("")
+                json.path("locationName").asString("")
         );
     }
 
@@ -300,10 +300,10 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
                 continue;
             }
             items.add(new WeatherDto.HourlyForecast(
-                    item.path("time").asText(null),
+                    item.path("time").asString(null),
                     item.path("temp").asInt(),
-                    item.path("icon").asText(null),
-                    item.path("text").asText(null)
+                    item.path("icon").asString(null),
+                    item.path("text").asString(null)
             ));
         }
         return List.copyOf(items);
@@ -320,13 +320,13 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
                 continue;
             }
             items.add(new WeatherDto.DailyForecast(
-                    item.path("date").asText(null),
+                    item.path("date").asString(null),
                     item.path("tempMax").asInt(),
                     item.path("tempMin").asInt(),
-                    item.path("iconDay").asText(null),
-                    item.path("textDay").asText(null),
-                    item.path("iconNight").asText(null),
-                    item.path("textNight").asText(null)
+                    item.path("iconDay").asString(null),
+                    item.path("textDay").asString(null),
+                    item.path("iconNight").asString(null),
+                    item.path("textNight").asString(null)
             ));
         }
         return List.copyOf(items);

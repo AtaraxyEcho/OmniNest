@@ -272,7 +272,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 String backdropUrl = backdropUrl(text(detail, "backdrop_path"));
 
                 List<String> genres = extractGenreNames(detail.path("genres"));
-                String tagline = detail.path("tagline").asText(null);
+                String tagline = detail.path("tagline").asString(null);
                 Integer voteCount = detail.hasNonNull("vote_count") ? detail.path("vote_count").asInt() : null;
                 Double popularity = detail.hasNonNull("popularity") ? detail.path("popularity").asDouble() : null;
                 String originalLanguage = text(detail, "original_language");
@@ -441,7 +441,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
         }
         List<String> names = new ArrayList<>();
         for (int i = 0; i < genres.size(); i++) {
-            String name = genres.get(i).path("name").asText(null);
+            String name = genres.get(i).path("name").asString(null);
             if (name != null && !name.isBlank()) {
                 names.add(name);
             }
@@ -558,7 +558,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
     }
 
     private String text(JsonNode item, String key) {
-        String value = item.path(key).asText(null);
+        String value = item.path(key).asString(null);
         return value == null ? "" : value.trim();
     }
 

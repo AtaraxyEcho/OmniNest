@@ -106,10 +106,10 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
 
     private String callForString(String method, List<Object> params) {
         JsonNode result = call(method, params);
-        if (!result.isTextual() || result.asText().isBlank()) {
+        if (!result.isTextual() || result.asString().isBlank()) {
             throw new IllegalStateException("aria2 响应缺少结果");
         }
-        return result.asText();
+        return result.asString();
     }
 
     private JsonNode call(String method, List<Object> params) {
@@ -178,7 +178,7 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
         if (value.isNumber()) {
             return value.longValue();
         }
-        String text = value.asText().trim();
+        String text = value.asString().trim();
         if (text.isEmpty()) {
             return 0L;
         }

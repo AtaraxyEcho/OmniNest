@@ -90,11 +90,11 @@ public class LrclibLyricsService {
     }
 
     private LyricsResult parseResult(JsonNode json) {
-        String plainLyrics = json.path("plainLyrics").asText(null);
-        String syncedLyrics = json.path("syncedLyrics").asText(null);
-        String trackName = json.path("trackName").asText(null);
-        String artistName = json.path("artistName").asText(null);
-        String albumName = json.path("albumName").asText(null);
+        String plainLyrics = json.path("plainLyrics").asString(null);
+        String syncedLyrics = json.path("syncedLyrics").asString(null);
+        String trackName = json.path("trackName").asString(null);
+        String artistName = json.path("artistName").asString(null);
+        String albumName = json.path("albumName").asString(null);
         if (isBlank(plainLyrics) && isBlank(syncedLyrics)) {
             return null;
         }

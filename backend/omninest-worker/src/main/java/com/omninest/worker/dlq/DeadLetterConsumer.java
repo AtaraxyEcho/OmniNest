@@ -71,7 +71,7 @@ public class DeadLetterConsumer {
     private String extractStackSummary(String body) {
         try {
             JsonNode json = JsonSupport.readTree(body);
-            return json == null ? null : json.path("stackSummary").asText(null);
+            return json == null ? null : json.path("stackSummary").asString(null);
         } catch (RuntimeException exception) {
             log.debug("死信消息体不是 JSON，不提取堆栈摘要");
             return null;
@@ -93,11 +93,11 @@ public class DeadLetterConsumer {
         } catch (RuntimeException exception) {
             log.debug("死信消息体不是 JSON，仅记录路由键");
         }
-        if (json != null && json.path("errorCode").asText(null) != null) {
-            summary.append("; 投递失败: ").append(json.path("failureType").asText(null))
-                    .append('/').append(json.path("errorCode").asText(null));
-            if (json.path("instanceId").asText(null) != null) {
-                summary.append(" @").append(json.path("instanceId").asText(null));
+        if (json != null && json.path("errorCode").asString(null) != null) {
+            summary.append("; 投递失败: ").append(json.path("failureType").asString(null))
+                    .append('/').append(json.path("errorCode").asString(null));
+            if (json.path("instanceId").asString(null) != null) {
+                summary.append(" @").append(json.path("instanceId").asString(null));
             }
             summary.append("; 死信载荷: ").append(body);
         }
@@ -119,7 +119,7 @@ public class DeadLetterConsumer {
         try {
             JsonNode json = JsonSupport.readTree(body);
             if (json != null && json.has("taskId")) {
-                return Optional.of(UUID.fromString(json.path("taskId").asText()));
+                return Optional.of(UUID.fromString(json.path("taskId").asString()));
             }
         } catch (RuntimeException exception) {
             log.debug("死信消息体不包含有效任务标识");

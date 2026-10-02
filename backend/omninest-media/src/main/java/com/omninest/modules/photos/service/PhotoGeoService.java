@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.ratelimit.RateLimitService;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import jakarta.annotation.PostConstruct;
@@ -173,23 +174,23 @@ public class PhotoGeoService {
             }
             JsonNode json = JsonSupport.readTree(response.body());
             Map<String, Object> result = new HashMap<>();
-            putIfNotBlank(result, "displayName", json.path("display_name").asText(null));
+            putIfNotBlank(result, "displayName", json.path("display_name").asString(null));
             JsonNode address = json.path("address");
             if (address.isObject()) {
                 String city = firstNotBlank(
-                        address.path("city").asText(null),
-                        address.path("town").asText(null),
-                        address.path("village").asText(null),
-                        address.path("municipality").asText(null));
+                        address.path("city").asString(null),
+                        address.path("town").asString(null),
+                        address.path("village").asString(null),
+                        address.path("municipality").asString(null));
                 String district = firstNotBlank(
-                        address.path("city_district").asText(null),
-                        address.path("district").asText(null),
-                        address.path("county").asText(null),
-                        address.path("suburb").asText(null));
+                        address.path("city_district").asString(null),
+                        address.path("district").asString(null),
+                        address.path("county").asString(null),
+                        address.path("suburb").asString(null));
                 putIfNotBlank(result, "city", city);
-                putIfNotBlank(result, "state", address.path("state").asText(null));
+                putIfNotBlank(result, "state", address.path("state").asString(null));
                 putIfNotBlank(result, "district", district);
-                putIfNotBlank(result, "country", address.path("country").asText(null));
+                putIfNotBlank(result, "country", address.path("country").asString(null));
                 result.put("geocoder", "nominatim");
             }
 
@@ -231,7 +232,7 @@ public class PhotoGeoService {
                 && lng >= -180.0 && lng <= 180.0;
     }
 
-    private io.micrometer.core.instrument.Counter counter(String name) {
+    private Counter counter(String name) {
         return meterRegistry.counter(name);
     }
 
