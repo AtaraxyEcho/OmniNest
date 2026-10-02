@@ -380,6 +380,8 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
 
 要点：
 
+- `backup.sh` 产物附带 `SHA256SUMS` 校验和；`restore.sh` 恢复前自动校验，不匹配
+  直接中止，无校验文件的旧版本备份在告警后继续。
 - 建议宿主 crontab 每日执行 `backup.sh`，并将备份目录同步到异地存储。
 - MinIO 卷为运行中快照（crash-consistent）；恢复后以数据库记录为准核对
   派生资产，缺失的缩略图等可重建资产会由系统自动补齐。

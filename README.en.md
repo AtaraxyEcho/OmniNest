@@ -165,8 +165,8 @@ Screenshot folders:
 ## Requirements
 
 - Git; Docker Desktop and Docker Compose
-- JDK 21 and Maven
-- Flutter stable (baseline: 3.44.8 / Dart 3.12.2)
+- JDK 25 and Maven
+- Flutter stable (baseline: 3.47.6 / Dart 3.13.5)
 - Chrome (Web); Android Studio/SDK (Android); Windows toolchain (desktop)
 
 ---

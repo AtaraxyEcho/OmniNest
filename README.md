@@ -165,8 +165,8 @@ OmniNest 内置的开源音乐播放模块并非网易云音乐或其关联公�
 ## 环境要求
 
 - Git；Docker Desktop 与 Docker Compose（基础设施）
-- JDK 21 与 Maven（后端）
-- Flutter stable（验证基线：Flutter 3.44.8 / Dart 3.12.2）
+- JDK 25 与 Maven（后端）
+- Flutter stable（验证基线：Flutter 3.47.6 / Dart 3.13.5）
 - Chrome（Web）；Android Studio / SDK（Android）；Windows 工具链（桌面端）
 
 ---
