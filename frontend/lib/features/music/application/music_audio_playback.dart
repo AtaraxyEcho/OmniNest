@@ -133,7 +133,8 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       StreamController<MusicAudioLog>.broadcast();
 
   MusicAudioPlayerState _state = const MusicAudioPlayerState();
-  AudioData? _audioData;
+  AudioVisualizationData? _latestVisualization;
+  StreamSubscription<AudioVisualizationData>? _visualizationSub;
   AudioSource? _source;
   SoundHandle? _handle;
   StreamSubscription<StreamSoundEvent>? _soundEventSub;
@@ -356,22 +357,17 @@ class MusicAudioPlayer implements MusicAudioPlayback {
   /// 读取与真实播放同源的频谱帧。
   @override
   MusicSpectrumFrame? readSpectrumFrame({required MusicTrack track}) {
-    final audioData = _audioData;
+    final visualization = _latestVisualization;
     final handle = _handle;
-    if (audioData == null || handle == null || !_state.playing) {
+    if (visualization == null || handle == null || !_state.playing) {
       return null;
     }
     try {
-      audioData.updateSamples();
-      final samples = audioData.getAudioData(alwaysReturnData: false);
-      if (samples.length < 256) {
+      final fftBins = visualization.fftData;
+      if (fftBins == null || fftBins.length < 256) {
         return null;
       }
-      final fftBins = Float32List.sublistView(samples, 0, 256);
-      final waveform =
-          samples.length >= 512
-              ? Float32List.sublistView(samples, 256, 512)
-              : Float32List(0);
+      final waveform = visualization.waveData ?? Float32List(0);
       if (!_hasSignal(fftBins, waveform)) {
         return null;
       }
@@ -396,7 +392,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     _disposed = true;
     _stopTicker();
     await _disposeCurrentSource();
-    _audioData?.dispose();
+    await _visualizationSub?.cancel();
     _spectrumSampler.dispose();
     await _positionController.close();
     await _durationController.close();
@@ -413,7 +409,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _soLoud.setVisualizationEnabled(true);
     }
     _soLoud.setFftSmoothing(0);
-    _audioData ??= AudioData(GetSamplesKind.linear);
+    _visualizationSub ??= _soLoud.audioVisualizationEvents.listen(
+      (data) => _latestVisualization = data,
+    );
   }
 
   void _startTicker() {
