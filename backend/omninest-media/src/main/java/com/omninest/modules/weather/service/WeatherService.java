@@ -38,6 +38,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -78,8 +79,14 @@ public class WeatherService {
     private final WeatherCacheStore weatherCacheStore;
     private final RestTemplate restTemplate = createRestTemplate();
 
-    /** 天气 API 专用线程池（虚拟线程，无需手动 shutdown） */
+    /** 天气 API 专用线程池（虚拟线程） */
     private final ExecutorService weatherExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    /** 停机时中断挂起的天气请求，与其余受管线程池的关闭风格一致。 */
+    @PreDestroy
+    void shutdownWeatherExecutor() {
+        weatherExecutor.shutdownNow();
+    }
 
     /** JWT 生成锁 */
     private final Object jwtLock = new Object();
