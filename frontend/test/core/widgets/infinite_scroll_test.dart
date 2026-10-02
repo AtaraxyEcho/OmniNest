@@ -4,12 +4,17 @@ import 'package:omninest/core/widgets/infinite_scroll.dart';
 
 void main() {
   group('InfiniteScrollTrigger', () {
-    Widget host({bool enabled = true, required VoidCallback onLoadMore}) {
+    Widget host({
+      bool enabled = true,
+      required VoidCallback onLoadMore,
+      DateTime Function()? now,
+    }) {
       return MaterialApp(
         home: Scaffold(
           body: InfiniteScrollTrigger(
             enabled: enabled,
             onLoadMore: onLoadMore,
+            now: now ?? DateTime.now,
             child: ListView.builder(
               itemCount: 200,
               itemBuilder:
@@ -49,7 +54,10 @@ void main() {
 
     testWidgets('触发后有 200ms 节流不连发', (tester) async {
       var calls = 0;
-      await tester.pumpWidget(host(onLoadMore: () => calls++));
+      // 注入手动步进时钟：节流判断不受真实墙钟抖动影响。
+      var fakeNow = DateTime.fromMillisecondsSinceEpoch(60_000_000);
+      DateTime stepClock() => fakeNow;
+      await tester.pumpWidget(host(onLoadMore: () => calls++, now: stepClock));
 
       await tester.dragUntilVisible(
         find.text('item-195'),
@@ -61,11 +69,13 @@ void main() {
       expect(afterFirstDrag, greaterThan(0));
 
       // 立即小幅回滚再前进：节流窗口内的重复触发应被吞掉。
+      fakeNow = fakeNow.add(const Duration(milliseconds: 30));
       await tester.timedDrag(
         find.byType(ListView),
         const Offset(0, 50),
         const Duration(milliseconds: 100),
       );
+      fakeNow = fakeNow.add(const Duration(milliseconds: 30));
       await tester.timedDrag(
         find.byType(ListView),
         const Offset(0, -50),

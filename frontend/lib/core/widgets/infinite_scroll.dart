@@ -26,8 +26,12 @@ class InfiniteScrollTrigger extends StatefulWidget {
     required this.child,
     this.enabled = true,
     this.threshold = 600,
+    this.now = DateTime.now,
     super.key,
   });
+
+  /// 节流时间源；测试注入可控时钟避免真实墙钟抖动导致 flaky。
+  final DateTime Function() now;
 
   /// 距底触发阈值（像素）：统一 600，预留一屏渲染余量实现无感续页。
   final double threshold;
@@ -69,7 +73,7 @@ class _InfiniteScrollTriggerState extends State<InfiniteScrollTrigger> {
         if (metrics.extentAfter > widget.threshold) {
           return false;
         }
-        final now = DateTime.now();
+        final now = widget.now();
         if (now.difference(_lastTriggered).inMilliseconds < 200) {
           return false;
         }
