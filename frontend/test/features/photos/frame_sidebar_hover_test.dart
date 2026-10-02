@@ -8,6 +8,8 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_sidebar.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -91,6 +93,34 @@ Color _navItemTextColor(WidgetTester tester, Finder label) {
 }
 
 void main() {
+  testWidgets('侧栏被父级约束压窄时品牌行降级为居中 Logo 不溢出', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        theme: OmniNestTheme.from(AppThemePalette.light),
+        home: Scaffold(
+          body: SizedBox(
+            width: 90,
+            child: FrameSidebar(
+              activeView: FrameView.grid,
+              onSelectView: (_) {},
+              photoCount: 0,
+              albumCount: 0,
+              trashCount: 0,
+              collapsed: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '窄约束下品牌行不得溢出');
+    expect(find.byType(BrandLogo), findsOneWidget);
+  });
+
   testWidgets('侧栏悬停进入显示悬停底色与墨色文字，移出后恢复', (tester) async {
     tester.view.physicalSize = const Size(2560, 1600);
     tester.view.devicePixelRatio = 2.0;

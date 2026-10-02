@@ -155,26 +155,36 @@ class _FrameLogo extends StatelessWidget {
     }
     return SizedBox(
       height: 60,
-      child: Row(
-        children: [
-          const SizedBox(width: 16),
-          mark,
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              AppLocalizations.of(context).photosModuleDisplayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: FramePalette.serifFamily,
-                fontFamilyFallback: FramePalette.serifFallback,
-                color: colors.ink,
-                fontSize: AppTypography.titleLarge,
-                height: 1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 窗口压窄时侧栏被父级约束挤压，固定 width 失效；空间不足以容纳
+          // 品牌行（16+logo36+12+名称最小宽）时降级为折叠形态，避免溢出。
+          if (constraints.maxWidth <
+              AppControlTokens.sidebarCollapsedWidth + 76) {
+            return Center(child: mark);
+          }
+          return Row(
+            children: [
+              const SizedBox(width: 16),
+              mark,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  AppLocalizations.of(context).photosModuleDisplayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: FramePalette.serifFamily,
+                    fontFamilyFallback: FramePalette.serifFallback,
+                    color: colors.ink,
+                    fontSize: AppTypography.titleLarge,
+                    height: 1,
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
