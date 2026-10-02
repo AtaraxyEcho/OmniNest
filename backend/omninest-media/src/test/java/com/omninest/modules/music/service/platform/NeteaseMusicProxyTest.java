@@ -9,10 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlatformUserInfo;
 import com.omninest.modules.music.service.MusicPlatformCredentialService;
 import com.omninest.modules.music.service.MusicRuntimeConfigService;
@@ -29,6 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -44,7 +44,7 @@ class NeteaseMusicProxyTest {
 
     @Test
     void parsePlaylistMapsAccountPlaylistMetadata() {
-        JSONObject payload = JSONObject.parseObject("""
+        JsonNode payload = JsonSupport.readTree("""
                 {
                   "id": 123456,
                   "name": "Daily Mix",
@@ -80,7 +80,7 @@ class NeteaseMusicProxyTest {
 
     @Test
     void parseSongsMapsPlaylistTrackShape() {
-        JSONArray songs = JSONArray.parseArray("""
+        JsonNode songs = JsonSupport.readTree("""
                 [{
                   "id": 1001,
                   "name": "Night Drive",
@@ -102,7 +102,7 @@ class NeteaseMusicProxyTest {
 
     @Test
     void parseDailyRecommendedTracksKeepsOrderAndRemovesDuplicates() {
-        JSONObject payload = JSONObject.parseObject("""
+        JsonNode payload = JsonSupport.readTree("""
                 {
                   "code": 200,
                   "data": {
@@ -206,7 +206,7 @@ class NeteaseMusicProxyTest {
 
     @Test
     void parseUserInfoSupportsAccountResponse() {
-        JSONObject payload = JSONObject.parseObject("""
+        JsonNode payload = JsonSupport.readTree("""
                 {
                   "profile": {
                     "userId": 10001,
@@ -226,7 +226,7 @@ class NeteaseMusicProxyTest {
 
     @Test
     void parseUserInfoSupportsNestedLoginStatusResponse() {
-        JSONObject payload = JSONObject.parseObject("""
+        JsonNode payload = JsonSupport.readTree("""
                 {
                   "data": {
                     "account": {"id": 20002, "userName": "Fallback Account"},
@@ -248,7 +248,7 @@ class NeteaseMusicProxyTest {
 
     @Test
     void parseUserInfoFallsBackToAccountIdentity() {
-        JSONObject payload = JSONObject.parseObject("""
+        JsonNode payload = JsonSupport.readTree("""
                 {
                   "data": {
                     "account": {"id": 30003, "userName": "Account Only"}

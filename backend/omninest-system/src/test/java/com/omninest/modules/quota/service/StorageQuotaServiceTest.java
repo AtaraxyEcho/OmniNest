@@ -183,7 +183,7 @@ class StorageQuotaServiceTest {
         service.updateQuota(USER_ID, 2000, operatorId);
 
         verify(userStorageCommand).updateQuota(USER_ID, 2000);
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditRecorder).recordWithPayload(
                 any(), eq("ADMIN_QUOTA_UPDATE"), eq("auth_users"), eq(USER_ID), payloadCaptor.capture());
         assertThat(payloadCaptor.getValue())

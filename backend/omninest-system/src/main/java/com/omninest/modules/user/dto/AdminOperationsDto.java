@@ -1,6 +1,6 @@
 package com.omninest.modules.user.dto;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.user.domain.AuditLog;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * 汇总管理后台操作相关的数据传输对象。
@@ -172,7 +173,11 @@ public final class AdminOperationsDto {
                 return Map.of();
             }
             try {
-                Map<String, Object> parsed = JSON.parseObject(detailPayload);
+                Map<String, Object> parsed = JsonSupport.fromJson(
+                        detailPayload,
+                        new TypeReference<Map<String, Object>>() {
+                        }
+                );
                 return parsed == null ? Map.of() : parsed;
             } catch (RuntimeException ex) {
                 return Map.of();

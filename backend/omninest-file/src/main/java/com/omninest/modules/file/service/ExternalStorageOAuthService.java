@@ -1,9 +1,8 @@
 package com.omninest.modules.file.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.security.CredentialCipher;
 import com.omninest.modules.file.domain.StorageConnectorOAuthApp;
 import com.omninest.modules.file.domain.StorageExternalAccount;
@@ -28,6 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import tools.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -66,7 +66,7 @@ public class ExternalStorageOAuthService {
      * @param credentials 规范化后的完整凭据
      * @param refreshed 是否实际执行了 token 刷新
      */
-    public record TokenRefreshResult(JSONObject credentials, boolean refreshed) {
+    public record TokenRefreshResult(Map<String, Object> credentials, boolean refreshed) {
     }
 
     /**
@@ -122,7 +122,7 @@ public class ExternalStorageOAuthService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "连接器与账户类型不一致");
         }
         String state = UUID.randomUUID().toString().replace("-", "");
-        String payload = JSON.toJSONString(Map.of(
+        String payload = JsonSupport.toJson(Map.of(
                 "state", state,
                 "userId", ownerUserId.toString(),
                 "accountId", accountId.toString(),
@@ -145,17 +145,17 @@ public class ExternalStorageOAuthService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth state 无效或已过期");
         }
         oauthStates.invalidate(state);
-        JSONObject payload = JSON.parseObject(raw);
-        UUID userId = UUID.fromString(payload.getString("userId"));
-        UUID accountId = UUID.fromString(payload.getString("accountId"));
-        String connectorCode = payload.getString("code");
+        Map<String, Object> payload = parseCredentials(raw);
+        UUID userId = UUID.fromString(textOrNull(payload, "userId"));
+        UUID accountId = UUID.fromString(textOrNull(payload, "accountId"));
+        String connectorCode = textOrNull(payload, "code");
         StorageConnectorOAuthApp app = requireApp(connectorCode);
         StorageExternalAccount account = accountRepository.findByIdAndOwnerUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
 
-        JSONObject tokens = exchangeCode(connectorCode, app, code.trim());
-        JSONObject canonical = canonicalizeTokens(tokens);
-        account.setEncryptedCredentials(credentialService.encrypt(canonical.toJSONString()));
+        Map<String, Object> tokens = exchangeCode(connectorCode, app, code.trim());
+        Map<String, Object> canonical = canonicalizeTokens(tokens);
+        account.setEncryptedCredentials(credentialService.encrypt(JsonSupport.toJson(canonical)));
         account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
         account.setLastErrorCode(null);
         account.setLastCheckedAt(Instant.now());
@@ -170,28 +170,28 @@ public class ExternalStorageOAuthService {
      * @return 规范化凭据与是否实际执行了刷新
      */
     public TokenRefreshResult ensureAccessToken(StorageExternalAccount account) {
-        JSONObject credentials = JSON.parseObject(
+        Map<String, Object> credentials = parseCredentials(
                 credentialService.decryptToJson(account.getEncryptedCredentials())
         );
         if (credentials == null || credentials.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接尚未完成 OAuth 授权，请先在连接列表中发起授权");
         }
-        String access = credentials.getString("access_token");
+        String access = textOrNull(credentials, "access_token");
         Object expiry = credentials.get("expiry");
         if (access != null && !access.isBlank() && !isExpired(expiry)) {
             return new TokenRefreshResult(credentials, false);
         }
-        String refresh = credentials.getString("refresh_token");
+        String refresh = textOrNull(credentials, "refresh_token");
         if (refresh == null || refresh.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "缺少 refresh_token，请重新授权");
         }
         StorageConnectorOAuthApp app = requireApp(account.getProvider());
-        JSONObject refreshed = refreshTokens(account.getProvider(), app, refresh);
-        JSONObject canonical = canonicalizeTokens(refreshed);
+        Map<String, Object> refreshed = refreshTokens(account.getProvider(), app, refresh);
+        Map<String, Object> canonical = canonicalizeTokens(refreshed);
         if (!canonical.containsKey("refresh_token")) {
             canonical.put("refresh_token", refresh);
         }
-        account.setEncryptedCredentials(credentialService.encrypt(canonical.toJSONString()));
+        account.setEncryptedCredentials(credentialService.encrypt(JsonSupport.toJson(canonical)));
         accountRepository.save(account);
         return new TokenRefreshResult(canonical, true);
     }
@@ -219,22 +219,22 @@ public class ExternalStorageOAuthService {
      * @param tokens 提供方 token 端点原始响应
      * @return 规范化凭据
      */
-    private JSONObject canonicalizeTokens(JSONObject tokens) {
-        String access = tokens.getString("access_token");
+    private Map<String, Object> canonicalizeTokens(Map<String, Object> tokens) {
+        String access = textOrNull(tokens, "access_token");
         if (access == null || access.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 授权失败：提供方未返回 access_token");
         }
-        JSONObject canonical = new JSONObject(new LinkedHashMap<>());
+        Map<String, Object> canonical = new LinkedHashMap<>();
         canonical.put("access_token", access);
-        String refresh = tokens.getString("refresh_token");
+        String refresh = textOrNull(tokens, "refresh_token");
         if (refresh != null && !refresh.isBlank()) {
             canonical.put("refresh_token", refresh);
         }
-        String tokenType = tokens.getString("token_type");
+        String tokenType = textOrNull(tokens, "token_type");
         canonical.put("token_type", tokenType == null || tokenType.isBlank() ? "Bearer" : tokenType);
-        String expiry = tokens.getString("expiry");
+        String expiry = textOrNull(tokens, "expiry");
         if (expiry == null || expiry.isBlank()) {
-            Long expiresIn = tokens.getLong("expires_in");
+            Long expiresIn = nullableLong(tokens, "expires_in");
             if (expiresIn != null && expiresIn > 0) {
                 expiry = Instant.now().plusSeconds(expiresIn).toString();
             }
@@ -243,6 +243,30 @@ public class ExternalStorageOAuthService {
             canonical.put("expiry", expiry);
         }
         return canonical;
+    }
+
+    private static Map<String, Object> parseCredentials(String json) {
+        return JsonSupport.fromJson(json, new TypeReference<Map<String, Object>>() {});
+    }
+
+    private static String textOrNull(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? null : value.toString();
+    }
+
+    private static Long nullableLong(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private boolean isExpired(Object expiry) {
@@ -291,7 +315,7 @@ public class ExternalStorageOAuthService {
         };
     }
 
-    private JSONObject exchangeCode(String code, StorageConnectorOAuthApp app, String authorizationCode) {
+    private Map<String, Object> exchangeCode(String code, StorageConnectorOAuthApp app, String authorizationCode) {
         return postToken(code, app, Map.of(
                 "grant_type", "authorization_code",
                 "code", authorizationCode,
@@ -301,7 +325,7 @@ public class ExternalStorageOAuthService {
         ));
     }
 
-    private JSONObject refreshTokens(String provider, StorageConnectorOAuthApp app, String refreshToken) {
+    private Map<String, Object> refreshTokens(String provider, StorageConnectorOAuthApp app, String refreshToken) {
         return postToken(provider, app, Map.of(
                 "grant_type", "refresh_token",
                 "refresh_token", refreshToken,
@@ -310,7 +334,7 @@ public class ExternalStorageOAuthService {
         ));
     }
 
-    private JSONObject postToken(String provider, StorageConnectorOAuthApp app, Map<String, String> form) {
+    private Map<String, Object> postToken(String provider, StorageConnectorOAuthApp app, Map<String, String> form) {
         String endpoint = tokenEndpoint(provider);
         String body = form.entrySet().stream()
                 .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)
@@ -328,7 +352,7 @@ public class ExternalStorageOAuthService {
                 log.warn("OAuth token 交换失败: provider={}, status={}", provider, response.statusCode());
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 授权失败，请重试或检查应用配置");
             }
-            return JSON.parseObject(response.body());
+            return JsonSupport.fromJson(response.body(), new TypeReference<Map<String, Object>>() {});
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "OAuth 请求被中断");

@@ -1,8 +1,8 @@
 package com.omninest.common.util;
 
-import com.alibaba.fastjson2.JSON;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.concurrency.DistributedLock;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.security.ExpiringOwnershipRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -173,7 +173,7 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
             String cached = get(key);
             if (cached != null) {
                 try {
-                    return JSON.parseObject(cached, type);
+                    return JsonSupport.fromJson(cached, type);
                 } catch (Exception ex) {
                     log.warn("缓存解析失败，回退到数据源: key={}", key, ex);
                 }
@@ -210,7 +210,7 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
         }
         if (value != null) {
             try {
-                set(key, JSON.toJSONString(value), ttl);
+                set(key, JsonSupport.toJson(value), ttl);
             } catch (Exception ex) {
                 log.warn("写入缓存失败: key={}", key, ex);
             }

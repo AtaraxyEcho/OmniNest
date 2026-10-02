@@ -1,9 +1,8 @@
 package com.omninest.modules.photos.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
@@ -54,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * 照片批量处理服务，支持批量标签、移动到相册、更新拍摄时间。
@@ -110,7 +110,7 @@ public class PhotoBatchService {
         task.setOwnerUserId(ownerUserId);
         task.setTaskType(request.taskType());
         task.setTotalItems(photoIds.size());
-        task.setParams(JSON.toJSONString(taskParams));
+        task.setParams(JsonSupport.toJson(taskParams));
         batchTaskRepository.save(task);
 
         PhotoBatchEvent event = new PhotoBatchEvent(task.getId(), ownerUserId);
@@ -210,7 +210,8 @@ public class PhotoBatchService {
         if (task.getParams() == null || task.getParams().isBlank()) {
             return List.of();
         }
-        Map<String, Object> params = JSON.parseObject(task.getParams(), new TypeReference<>() {});
+        Map<String, Object> params = JsonSupport.fromJson(
+                task.getParams(), new TypeReference<Map<String, Object>>() {});
         Object ids = params.get("photoIds");
         if (ids instanceof List<?> list) {
             return list.stream()
@@ -236,7 +237,8 @@ public class PhotoBatchService {
     }
 
     private void executeTagTask(UUID ownerUserId, List<UUID> photoIds, PhotoBatchTask task) {
-        Map<String, Object> params = JSON.parseObject(task.getParams(), new TypeReference<>() {});
+        Map<String, Object> params = JsonSupport.fromJson(
+                task.getParams(), new TypeReference<Map<String, Object>>() {});
         String tag = (String) params.get("tag");
         if (tag == null || tag.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "标签不能为空");
@@ -265,7 +267,8 @@ public class PhotoBatchService {
     }
 
     private void executeMoveTask(UUID ownerUserId, List<UUID> photoIds, PhotoBatchTask task) {
-        Map<String, Object> params = JSON.parseObject(task.getParams(), new TypeReference<>() {});
+        Map<String, Object> params = JsonSupport.fromJson(
+                task.getParams(), new TypeReference<Map<String, Object>>() {});
         String albumIdStr = (String) params.get("albumId");
         if (albumIdStr == null || albumIdStr.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "相册ID不能为空");
@@ -275,7 +278,8 @@ public class PhotoBatchService {
     }
 
     private void executeUpdateDateTask(UUID ownerUserId, List<UUID> photoIds, PhotoBatchTask task) {
-        Map<String, Object> params = JSON.parseObject(task.getParams(), new TypeReference<>() {});
+        Map<String, Object> params = JsonSupport.fromJson(
+                task.getParams(), new TypeReference<Map<String, Object>>() {});
         String dateTakenStr = (String) params.get("dateTaken");
         if (dateTakenStr == null || dateTakenStr.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "拍摄时间不能为空");

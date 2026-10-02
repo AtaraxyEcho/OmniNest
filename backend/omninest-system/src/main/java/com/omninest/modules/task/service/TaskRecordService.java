@@ -1,10 +1,9 @@
 package com.omninest.modules.task.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
@@ -25,6 +24,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * 系统任务记录服务，统一创建和更新通用任务状态。
@@ -105,8 +105,8 @@ public class TaskRecordService {
         record.setPhase(phase);
         record.setResourceType(resourceType);
         record.setResourceId(resourceId);
-        record.setPayload(JSON.toJSONString(payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload)));
-        record.setResult(JSON.toJSONString(new LinkedHashMap<>()));
+        record.setPayload(JsonSupport.toJson(payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload)));
+        record.setResult(JsonSupport.toJson(new LinkedHashMap<>()));
         record.setRetryCount(0);
         record.setMaxRetries(3);
         TaskRecord saved = taskRecordRepository.save(record);
@@ -202,7 +202,7 @@ public class TaskRecordService {
         }
         record.setStatus(TaskStatus.COMPLETED.getValue());
         record.setProgress(100);
-        record.setResult(JSON.toJSONString(result == null ? new LinkedHashMap<>() : new LinkedHashMap<>(result)));
+        record.setResult(JsonSupport.toJson(result == null ? new LinkedHashMap<>() : new LinkedHashMap<>(result)));
         record.setErrorMessage(null);
         record.setCompletedAt(Instant.now());
         record.setHeartbeatAt(Instant.now());
@@ -223,7 +223,7 @@ public class TaskRecordService {
         if (isTerminal(record)) {
             return;
         }
-        record.setResult(JSON.toJSONString(result == null ? new LinkedHashMap<>() : new LinkedHashMap<>(result)));
+        record.setResult(JsonSupport.toJson(result == null ? new LinkedHashMap<>() : new LinkedHashMap<>(result)));
         record.setHeartbeatAt(Instant.now());
         taskRecordRepository.save(record);
     }
@@ -784,7 +784,7 @@ public class TaskRecordService {
             return new LinkedHashMap<>();
         }
         try {
-            Map<String, Object> parsed = JSON.parseObject(json, MAP_TYPE);
+            Map<String, Object> parsed = JsonSupport.fromJson(json, MAP_TYPE);
             return parsed == null ? new LinkedHashMap<>() : parsed;
         } catch (RuntimeException ex) {
             return new LinkedHashMap<>();

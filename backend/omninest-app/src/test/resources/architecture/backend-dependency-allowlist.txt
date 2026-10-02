@@ -1,1 +1,4 @@
 CROSS_MODULE_REPOSITORY omninest-system/src/main/java/com/omninest/modules/user/service/InitialSetupService.java -> com.omninest.modules.configcenter.repository.ConfigEntryRepository
+# Jackson 3 (tools.jackson) 的注解兼容包沿用 com.fasterxml.jackson.annotation 包名；
+# JsonSupport 以 NON_NULL 对齐历史 fastjson2 线格式，属 common 共享 JSON 能力的必要输入
+COMMON_INFRASTRUCTURE omninest-common/src/main/java/com/omninest/common/json/JsonSupport.java -> import com.fasterxml.jackson.annotation.JsonInclude;

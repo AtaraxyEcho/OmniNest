@@ -117,14 +117,14 @@ class PhotoGeoBackfillServiceTest {
                 eq(firstId), anyString(), any());
         verify(photoItemRepository).updateGeocodeLocationIfAbsent(
                 eq(thirdId), anyString(), any());
-        ArgumentCaptor<Map<String, Object>> resultCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> resultCaptor = ArgumentCaptor.captor();
         verify(taskRecordService, Mockito.atLeastOnce()).updateResult(any(), resultCaptor.capture());
         Map<String, Object> lastResult = resultCaptor.getValue();
         assertEquals(CREATED_AT.toString(),
                 ((Map<?, ?>) lastResult.get("cursor")).get("createdAt"));
         assertEquals(thirdId.toString(),
                 ((Map<?, ?>) lastResult.get("cursor")).get("id"));
-        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.captor();
         verify(taskRecordService).markCompleted(any(), completedCaptor.capture());
         assertEquals(3L, completedCaptor.getValue().get("updated"));
         assertEquals(0L, completedCaptor.getValue().get("skippedDistance"));
@@ -145,7 +145,7 @@ class PhotoGeoBackfillServiceTest {
 
         verify(photoItemRepository, never())
                 .updateGeocodeLocationIfAbsent(any(), anyString(), any());
-        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.captor();
         verify(taskRecordService).markCompleted(any(), completedCaptor.capture());
         assertEquals(0L, completedCaptor.getValue().get("updated"));
         assertEquals(2L, completedCaptor.getValue().get("skippedDistance"));
@@ -166,7 +166,7 @@ class PhotoGeoBackfillServiceTest {
 
         service.executeBackfillTask(UUID.randomUUID());
 
-        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.captor();
         verify(taskRecordService).markCompleted(any(), completedCaptor.capture());
         assertEquals(0L, completedCaptor.getValue().get("updated"));
         assertEquals(1L, completedCaptor.getValue().get("skippedExisting"));
@@ -210,7 +210,7 @@ class PhotoGeoBackfillServiceTest {
 
         service.executeBackfillTask(UUID.randomUUID());
 
-        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> completedCaptor = ArgumentCaptor.captor();
         verify(taskRecordService).markCompleted(any(), completedCaptor.capture());
         assertEquals(1L, completedCaptor.getValue().get("failed"));
         assertEquals(1L, completedCaptor.getValue().get("updated"));

@@ -1,6 +1,6 @@
 package com.omninest.common.config;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
@@ -446,7 +446,7 @@ public class RabbitMqConfig {
             @Override
             public Message toMessage(Object object, MessageProperties messageProperties)
                     throws MessageConversionException {
-                byte[] body = JSON.toJSONBytes(object, StandardCharsets.UTF_8);
+                byte[] body = JsonSupport.toBytes(object);
                 validateMessageSize(body);
                 messageProperties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
                 messageProperties.setContentEncoding(StandardCharsets.UTF_8.name());
@@ -464,9 +464,9 @@ public class RabbitMqConfig {
                 validateMessageSize(body);
                 Type targetType = message.getMessageProperties().getInferredArgumentType();
                 if (targetType == null || Object.class.equals(targetType)) {
-                    return JSON.parse(body);
+                    return JsonSupport.fromJson(body, Object.class);
                 }
-                return JSON.parseObject(body, targetType);
+                return JsonSupport.fromJson(body, targetType);
             }
         };
     }

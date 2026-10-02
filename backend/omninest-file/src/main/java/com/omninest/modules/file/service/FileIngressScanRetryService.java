@@ -1,6 +1,6 @@
 package com.omninest.modules.file.service;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileUploadSession;
@@ -16,6 +16,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import tools.jackson.core.type.TypeReference;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -136,7 +137,8 @@ public class FileIngressScanRetryService {
         Map<String, Object> payload = Map.of();
         Optional<TaskRecord> record = taskRecordService.findTaskRecord(taskId);
         if (record.isPresent() && record.get().getPayload() != null) {
-            payload = JSON.parseObject(record.get().getPayload());
+            payload = JsonSupport.fromJson(
+                    record.get().getPayload(), new TypeReference<Map<String, Object>>() {});
         }
         return new FileSecurityScanRequestedEvent(
                 taskId,

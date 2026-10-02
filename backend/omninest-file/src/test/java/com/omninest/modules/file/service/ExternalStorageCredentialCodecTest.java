@@ -2,8 +2,8 @@ package com.omninest.modules.file.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
+import tools.jackson.core.type.TypeReference;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -54,12 +54,13 @@ class ExternalStorageCredentialCodecTest {
                 }
                 """;
 
-        JSONObject merged = JSON.parseObject(
-                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted)
+        Map<String, Object> merged = JsonSupport.fromJson(
+                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted),
+                new TypeReference<Map<String, Object>>() {}
         );
 
-        assertThat(merged.getString("url")).isEqualTo("https://new.example.com/dav");
-        assertThat(merged.getString("pass")).isEqualTo("stored-password");
+        assertThat(merged.get("url")).isEqualTo("https://new.example.com/dav");
+        assertThat(merged.get("pass")).isEqualTo("stored-password");
     }
 
     @Test
@@ -75,11 +76,12 @@ class ExternalStorageCredentialCodecTest {
                 }
                 """;
 
-        JSONObject merged = JSON.parseObject(
-                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted)
+        Map<String, Object> merged = JsonSupport.fromJson(
+                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted),
+                new TypeReference<Map<String, Object>>() {}
         );
 
-        assertThat(merged.getString("PASSWORD")).isEqualTo("stored-password");
+        assertThat(merged.get("PASSWORD")).isEqualTo("stored-password");
     }
 
     @Test
@@ -95,8 +97,9 @@ class ExternalStorageCredentialCodecTest {
                 }
                 """;
 
-        JSONObject sanitized = JSON.parseObject(
-                ExternalStorageCredentialCodec.sanitize("WEBDAV", credentials)
+        Map<String, Object> sanitized = JsonSupport.fromJson(
+                ExternalStorageCredentialCodec.sanitize("WEBDAV", credentials),
+                new TypeReference<Map<String, Object>>() {}
         );
 
         assertThat(sanitized).containsOnlyKeys("vendor", "url", "user", "pass");
@@ -119,12 +122,13 @@ class ExternalStorageCredentialCodecTest {
                 }
                 """;
 
-        JSONObject merged = JSON.parseObject(
-                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted)
+        Map<String, Object> merged = JsonSupport.fromJson(
+                ExternalStorageCredentialCodec.mergeForUpdate("WEBDAV", existing, submitted),
+                new TypeReference<Map<String, Object>>() {}
         );
 
         assertThat(merged).containsOnlyKeys("vendor", "url", "user");
-        assertThat(merged.getString("url")).isEqualTo("https://new.example.com");
+        assertThat(merged.get("url")).isEqualTo("https://new.example.com");
     }
 
     @Test
@@ -139,8 +143,9 @@ class ExternalStorageCredentialCodecTest {
                 }
                 """;
 
-        JSONObject sanitized = JSON.parseObject(
-                ExternalStorageCredentialCodec.sanitize("S3", credentials)
+        Map<String, Object> sanitized = JsonSupport.fromJson(
+                ExternalStorageCredentialCodec.sanitize("S3", credentials),
+                new TypeReference<Map<String, Object>>() {}
         );
 
         assertThat(sanitized).containsOnlyKeys("access_key_id", "secret_access_key", "endpoint", "region");

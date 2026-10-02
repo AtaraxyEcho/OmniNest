@@ -1,9 +1,8 @@
 package com.omninest.modules.task.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
@@ -14,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * 任务重新投递服务：从任务记录重建消费方事件载荷并经 Outbox 重发。
@@ -54,7 +54,7 @@ public class TaskRedispatchService {
                     record.getId(),
                     QueueNames.TASK_EXCHANGE,
                     dispatch.getRoutingKey(),
-                    JSON.parse(dispatch.getPayload())
+                    JsonSupport.fromJson(dispatch.getPayload(), Object.class)
             );
             return;
         }
@@ -231,7 +231,7 @@ public class TaskRedispatchService {
             return Map.of();
         }
         try {
-            Map<String, Object> parsed = JSON.parseObject(payloadJson, MAP_TYPE);
+            Map<String, Object> parsed = JsonSupport.fromJson(payloadJson, MAP_TYPE);
             return parsed == null ? Map.of() : parsed;
         } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "任务载荷不是合法 JSON，无法重试");

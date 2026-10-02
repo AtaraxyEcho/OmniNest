@@ -1,6 +1,6 @@
 package com.omninest.common.security;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.enums.ErrorCode;
 import jakarta.servlet.FilterChain;
@@ -66,6 +66,6 @@ public class SessionRevocationFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(
-                JSON.toJSONString(ApiResponse.error(ErrorCode.UNAUTHORIZED, "会话已在其他设备登录")));
+                JsonSupport.toJson(ApiResponse.error(ErrorCode.UNAUTHORIZED, "会话已在其他设备登录")));
     }
 }

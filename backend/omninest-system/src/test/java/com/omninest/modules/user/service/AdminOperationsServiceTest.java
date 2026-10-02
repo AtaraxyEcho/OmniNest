@@ -145,7 +145,7 @@ class AdminOperationsServiceTest {
         assertThat(updated.permissions()).containsExactly(Permissions.SYSTEM_USER_MANAGE);
         assertThat(admin.getPermissions()).containsExactly(manageUsers);
         verify(userSessionRevocationService).revokeAll(List.of(affectedUser.getId()), "管理员更新角色权限");
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_ROLE_PERMISSIONS_UPDATE"), eq("auth_roles"), eq(admin.getId()),
                 payloadCaptor.capture());
@@ -207,7 +207,7 @@ class AdminOperationsServiceTest {
         assertThat(created.enabled()).isTrue();
         assertThat(created.permissions())
                 .containsExactly(Permissions.SYSTEM_USER_MANAGE, Permissions.SYSTEM_USER_READ);
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_ROLE_CREATE"), eq("auth_roles"), isNull(),
                 payloadCaptor.capture());
@@ -228,7 +228,7 @@ class AdminOperationsServiceTest {
         );
 
         assertThat(created.permissions()).isEmpty();
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_ROLE_CREATE"), eq("auth_roles"), isNull(),
                 payloadCaptor.capture());
@@ -315,7 +315,7 @@ class AdminOperationsServiceTest {
 
         assertThat(custom.getPermissions()).isEmpty();
         verify(authRoleRepository).delete(custom);
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_ROLE_DELETE"), eq("auth_roles"), eq(custom.getId()),
                 payloadCaptor.capture());
@@ -456,7 +456,7 @@ class AdminOperationsServiceTest {
         assertThat(retried.status()).isEqualTo("QUEUED");
         assertThat(retried.progress()).isZero();
 
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(taskDispatchService).enqueue(
                 eq(taskId), eq(QueueNames.TASK_EXCHANGE), eq("file.index"), payloadCaptor.capture());
         assertThat(payloadCaptor.getValue())
@@ -516,7 +516,7 @@ class AdminOperationsServiceTest {
 
         service.retryTask(actorUserId, taskId);
 
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(taskDispatchService).enqueue(
                 eq(taskId),
                 eq(QueueNames.TASK_EXCHANGE),
@@ -567,7 +567,7 @@ class AdminOperationsServiceTest {
 
         service.retryTask(actorUserId, systemTaskId);
 
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(taskDispatchService).enqueue(
                 eq(systemTaskId),
                 eq(QueueNames.TASK_EXCHANGE),
@@ -628,7 +628,7 @@ class AdminOperationsServiceTest {
         );
 
         assertThat(updated.value()).isEqualTo("180");
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_CONFIG_UPDATE"), eq("config_entries"), isNull(),
                 payloadCaptor.capture());
@@ -656,7 +656,7 @@ class AdminOperationsServiceTest {
                 new AdminOperationsDto.UpdateConfigRequest("new-token", null)
         );
 
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_CONFIG_UPDATE"), eq("config_entries"), isNull(),
                 payloadCaptor.capture());
@@ -678,7 +678,7 @@ class AdminOperationsServiceTest {
         var cancelled = service.cancelTask(actorUserId, taskId);
 
         assertThat(cancelled.status()).isEqualTo("CANCELLED");
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_TASK_CANCEL"), eq("sys_tasks"), eq(taskId), payloadCaptor.capture());
         assertThat(payloadCaptor.getValue())
@@ -731,7 +731,7 @@ class AdminOperationsServiceTest {
         var discarded = service.discardDlqTask(actorUserId, taskId);
 
         assertThat(discarded.status()).isEqualTo("DISCARDED");
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_TASK_DLQ_DISCARD"), eq("sys_tasks"), eq(taskId), payloadCaptor.capture());
         assertThat(payloadCaptor.getValue()).containsEntry("previousStatus", "DLQ");

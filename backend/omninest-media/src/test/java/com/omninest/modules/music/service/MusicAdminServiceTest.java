@@ -3,6 +3,8 @@ import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -129,7 +131,7 @@ class MusicAdminServiceTest {
                 eq(OWNER_ID),
                 eq("MUSIC_SCAN"),
                 eq(QueueNames.MUSIC_SCAN_ROUTING_KEY),
-                any(Map.class));
+                anyMap());
         verify(taskDispatchService).enqueue(
                 eq(result.id()),
                 eq(QueueNames.TASK_EXCHANGE),
@@ -155,7 +157,7 @@ class MusicAdminServiceTest {
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
 
         verify(trackRepository).save(any(MusicTrack.class));
-        verify(taskRecordService).markCompleted(eq(SCAN_JOB_ID), any(Map.class));
+        verify(taskRecordService).markCompleted(eq(SCAN_JOB_ID), anyMap());
         verify(trackRepository, never()).findByOwnerUserIdAndFileNodeId(OWNER_ID, document.id());
     }
 
@@ -170,7 +172,7 @@ class MusicAdminServiceTest {
 
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
 
-        verify(catalogService).refreshStatisticsBatch(eq(OWNER_ID), any(Set.class), any(Set.class));
+        verify(catalogService).refreshStatisticsBatch(eq(OWNER_ID), anySet(), anySet());
     }
 
     @Test

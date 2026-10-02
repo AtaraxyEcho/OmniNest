@@ -96,7 +96,7 @@ class SessionRevocationServiceTest {
 
         service.recordRevocations(userId, List.of(firstSessionId, secondSessionId));
 
-        ArgumentCaptor<List<SessionRevocationEntity>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<SessionRevocationEntity>> captor = ArgumentCaptor.captor();
         Mockito.verify(repository).saveAll(captor.capture());
         Assertions.assertThat(captor.getValue())
                 .extracting(SessionRevocationEntity::getSessionId)

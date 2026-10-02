@@ -71,7 +71,7 @@ deploy/ai-sidecar/ 图像分析侧车服务、模型适配与容器定义
 - `controller` 只能调用本模块 service 或明确暴露的 application service；`repository` 不得跨模块调用（业务仓储 JPQL 中 JOIN File 模块实体的既有写法属既有约定，予以豁免）；跨模块协作优先使用 service 接口或领域事件；`common` 不依赖业务模块。
 - Worker Consumer 只负责消息编排、幂等检查和任务状态转换，复杂业务必须在 Service 中实现。
 - REST 统一前缀为 `/api/v1`，分页使用 `page`、`size`、`sort`，响应使用 `ApiResponse` 和稳定错误码。写接口返回业务对象或 `taskId`，批量操作返回逐项结果，并同步 SpringDoc 注解。
-- Java 使用 Java 21、Maven、Spring Boot、Spring Security、JPA/Hibernate、Flyway、AMQP、Redis、Lucene、Tika、MinIO SDK 与 SpringDoc。关键依赖无法兼容时必须说明临时版本策略与升级路径。
+- Java 使用 Java 25（LTS）、Maven、Spring Boot、Spring Security、JPA/Hibernate、Flyway、AMQP、Redis、Lucene、Tika、MinIO SDK 与 SpringDoc。关键依赖无法兼容时必须说明临时版本策略与升级路径。
 - 对外 API、重要业务类型、复杂约束和非直观行为需要中文 Javadoc；不要为显而易见的私有成员堆砌模板化注释。
 - JPA Entity 不默认使用 Lombok `@Data`。优先按需使用 `@Getter`、`@Setter`、`@NoArgsConstructor` 等注解；`equals`、`hashCode`、`toString` 必须依据实体标识、可变字段和懒加载边界显式设计，默认不得包含关联字段或关联集合。
 - 所有类型必须在文件头部显式 import，禁止通配符 import，也不得以完全限定类名（FQCN）绕过正常 import。仅当同一文件确实需要区分两个同名类型时，允许正常 import 其中一个类型，并在无法避免的最小声明或表达式位置使用另一个类型的 FQCN；必须在代码审查说明中记录冲突原因，禁止将 FQCN 扩散到无关字段、方法、泛型或业务逻辑。

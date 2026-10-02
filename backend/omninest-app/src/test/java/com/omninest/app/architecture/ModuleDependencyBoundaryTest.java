@@ -72,6 +72,14 @@ class ModuleDependencyBoundaryTest {
                     + "com\\.alibaba\\.fastjson2|com\\.fasterxml\\.jackson)[^;]*;",
             Pattern.MULTILINE
     );
+    /**
+     * 禁止我方代码直接使用 Jackson 2 运行时（AWS SDK 等传递依赖携带，仅限其内部消费）。
+     * com.fasterxml.jackson.annotation 不在此列：它是 Jackson 3 官方注解兼容包。
+     */
+    private static final Pattern LEGACY_JACKSON_RUNTIME_IMPORT_PATTERN = Pattern.compile(
+            "^import (com\\.fasterxml\\.jackson\\.(?:core|databind|dataformat|datatype|module)[^;]*);",
+            Pattern.MULTILINE
+    );
     private static final Pattern MINIO_PROPERTIES_IMPORT_PATTERN = Pattern.compile(
             "^import com\\.omninest\\.common\\.config\\.MinioProperties;",
             Pattern.MULTILINE
@@ -341,6 +349,11 @@ class ModuleDependencyBoundaryTest {
     ) {
         String relativePath = normalize(root.relativize(path));
         String sourceFeature = extractSourceFeature(relativePath);
+        Matcher legacyJacksonMatcher = LEGACY_JACKSON_RUNTIME_IMPORT_PATTERN.matcher(content);
+        while (legacyJacksonMatcher.find()) {
+            violations.add("LEGACY_JACKSON2_RUNTIME " + relativePath + " -> "
+                    + legacyJacksonMatcher.group(1));
+        }
         Matcher repositoryMatcher = REPOSITORY_IMPORT_PATTERN.matcher(content);
         while (repositoryMatcher.find()) {
             String targetFeature = repositoryMatcher.group(1);

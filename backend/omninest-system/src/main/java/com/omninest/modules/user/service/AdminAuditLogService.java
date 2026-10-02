@@ -1,7 +1,7 @@
 package com.omninest.modules.user.service;
 
-import com.alibaba.fastjson2.JSON;
 import com.omninest.common.audit.AdminAuditRecorder;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.user.repository.AdminAuditLogRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -90,7 +90,7 @@ public class AdminAuditLogService implements AdminAuditRecorder {
     ) {
         Map<String, Object> enriched = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
         appendRequestContext(enriched);
-        String detailPayload = enriched.isEmpty() ? null : JSON.toJSONString(enriched);
+        String detailPayload = enriched.isEmpty() ? null : JsonSupport.toJson(enriched);
         adminAuditLogRepository.insert(actorUserId, action, resourceType, resourceId, Map.of(), detailPayload);
         adminSyncEventService.record(action, resourceType, resourceId);
     }

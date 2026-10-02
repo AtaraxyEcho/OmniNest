@@ -155,7 +155,7 @@ class GeonamesImportServiceTest {
         verify(cityRepository, never()).updateCityNameZh(eq(dataset.getId()), eq(9999999L), anyString());
 
         assertEquals(GeoDataset.STATUS_PUBLISHED, dataset.getStatus());
-        ArgumentCaptor<Map<String, Object>> resultCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> resultCaptor = ArgumentCaptor.captor();
         verify(taskRecordService).markCompleted(any(), resultCaptor.capture());
         assertEquals("2026-09-05-cities5000-001", resultCaptor.getValue().get("datasetVersion"));
         assertEquals(2L, resultCaptor.getValue().get("cities"));

@@ -1,6 +1,6 @@
 package com.omninest.common.runtime;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -43,7 +43,7 @@ public class RedisWorkerRuntimeRegistry implements WorkerRuntimeRegistry {
         long nowEpochMillis = System.currentTimeMillis();
         long expiresAtEpochMillis = nowEpochMillis + ttl.toMillis();
         try {
-            String value = JSON.toJSONString(StoredWorkerRuntimeState.from(state));
+            String value = JsonSupport.toJson(StoredWorkerRuntimeState.from(state));
             redisTemplate.opsForValue().set(instanceKey(state.instanceId()), value, ttl);
             ZSetOperations<String, String> indexOperations = redisTemplate.opsForZSet();
             indexOperations.add(INSTANCE_INDEX_KEY, state.instanceId(), expiresAtEpochMillis);
@@ -110,7 +110,7 @@ public class RedisWorkerRuntimeRegistry implements WorkerRuntimeRegistry {
             return null;
         }
         try {
-            StoredWorkerRuntimeState stored = JSON.parseObject(value, StoredWorkerRuntimeState.class);
+            StoredWorkerRuntimeState stored = JsonSupport.fromJson(value, StoredWorkerRuntimeState.class);
             WorkerRuntimeState state = stored.toRuntimeState();
             if (!instanceId.equals(state.instanceId())) {
                 removeInvalidIndex(instanceId);

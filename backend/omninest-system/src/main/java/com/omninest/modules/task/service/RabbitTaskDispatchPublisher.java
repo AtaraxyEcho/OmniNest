@@ -1,6 +1,6 @@
 package com.omninest.modules.task.service;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.config.TaskOutboxProperties;
 import java.time.Instant;
@@ -43,7 +43,7 @@ public class RabbitTaskDispatchPublisher {
     public void publish(ClaimedTaskDispatch dispatch) {
         Object payload;
         try {
-            payload = JSON.parse(dispatch.payload());
+            payload = JsonSupport.fromJson(dispatch.payload(), Object.class);
         } catch (RuntimeException exception) {
             throw failure("PAYLOAD_INVALID", false, exception);
         }
@@ -126,7 +126,7 @@ public class RabbitTaskDispatchPublisher {
 
     private Object sanitizedPayload(String payload) {
         try {
-            return sanitize(JSON.parse(payload), 0);
+            return sanitize(JsonSupport.fromJson(payload, Object.class), 0);
         } catch (RuntimeException exception) {
             return Map.of("invalidPayload", true, "payloadLength", payload == null ? 0 : payload.length());
         }

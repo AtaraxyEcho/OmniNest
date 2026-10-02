@@ -1,7 +1,6 @@
 package com.omninest.modules.music.service;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -12,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 /**
  * LRCLIB 歌词搜索服务。
@@ -70,7 +70,7 @@ public class LrclibLyricsService {
         if (!isBlank(albumName)) {
             params.append("&album_name=").append(encode(albumName));
         }
-        JSONObject json = get("/get?" + params);
+        JsonNode json = get("/get?" + params);
         if (json == null) {
             return null;
         }
@@ -81,28 +81,27 @@ public class LrclibLyricsService {
      * 模糊搜索: GET /api/search?q=X+Y
      */
     private LyricsResult searchFuzzy(String query) throws IOException, InterruptedException {
-        JSONArray results = getArray("/search?q=" + encode(query));
-        if (results == null || results.isEmpty()) {
+        JsonNode results = getArray("/search?q=" + encode(query));
+        if (results == null || !results.isArray() || results.isEmpty()) {
             return null;
         }
         // 取第一个结果
-        return parseResult(results.getJSONObject(0));
+        return parseResult(results.get(0));
     }
 
-    private LyricsResult parseResult(JSONObject json) {
-        String plainLyrics = json.getString("plainLyrics");
-        String syncedLyrics = json.getString("syncedLyrics");
-        String trackName = json.getString("trackName");
-        String artistName = json.getString("artistName");
-        String albumName = json.getString("albumName");
-
+    private LyricsResult parseResult(JsonNode json) {
+        String plainLyrics = json.path("plainLyrics").asText(null);
+        String syncedLyrics = json.path("syncedLyrics").asText(null);
+        String trackName = json.path("trackName").asText(null);
+        String artistName = json.path("artistName").asText(null);
+        String albumName = json.path("albumName").asText(null);
         if (isBlank(plainLyrics) && isBlank(syncedLyrics)) {
             return null;
         }
         return new LyricsResult(plainLyrics, syncedLyrics, trackName, artistName, albumName);
     }
 
-    private JSONObject get(String path) throws IOException, InterruptedException {
+    private JsonNode get(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder(URI.create(BASE_URL + path))
                 .timeout(TIMEOUT)
                 .header("User-Agent", USER_AGENT)
@@ -117,10 +116,10 @@ public class LrclibLyricsService {
             log.warn("LRCLIB 请求失败: status={}, path={}", response.statusCode(), path);
             return null;
         }
-        return JSONObject.parseObject(response.body());
+        return JsonSupport.readTree(response.body());
     }
 
-    private JSONArray getArray(String path) throws IOException, InterruptedException {
+    private JsonNode getArray(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder(URI.create(BASE_URL + path))
                 .timeout(TIMEOUT)
                 .header("User-Agent", USER_AGENT)
@@ -132,7 +131,7 @@ public class LrclibLyricsService {
             log.warn("LRCLIB 请求失败: status={}, path={}", response.statusCode(), path);
             return null;
         }
-        return JSONArray.parseArray(response.body());
+        return JsonSupport.readTree(response.body());
     }
 
     private String encode(String value) {

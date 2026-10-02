@@ -8,8 +8,8 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.alibaba.fastjson2.JSON;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.file.config.ExternalStorageEndpointPolicyProperties;
@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -37,11 +38,15 @@ class ExternalStorageEndpointGuardTest {
         return new ExternalStorageEndpointGuard(safeUrlValidator, properties);
     }
 
+    private static Map<String, Object> credentials(String json) {
+        return JsonSupport.fromJson(json, new TypeReference<Map<String, Object>>() {});
+    }
+
     @Test
     @DisplayName("WEBDAV 公网地址按开关状态校验主机")
     void validatesWebdavUrlThroughHostValidator() {
         properties.setAllowPrivateNetwork(false);
-        guard().validate("WEBDAV", JSON.parseObject("{\"url\":\"https://dav.example.com/dav\"}"));
+        guard().validate("WEBDAV", credentials("{\"url\":\"https://dav.example.com/dav\"}"));
 
         verify(safeUrlValidator).requireSafeHost(any(URI.class), anyBoolean());
     }
@@ -53,7 +58,7 @@ class ExternalStorageEndpointGuardTest {
                 .when(safeUrlValidator).requireSafeHost(any(URI.class), anyBoolean());
 
         assertThatThrownBy(() -> guard().validate("WEBDAV",
-                        JSON.parseObject("{\"url\":\"http://192.168.1.10/dav\"}")))
+                        credentials("{\"url\":\"http://192.168.1.10/dav\"}")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("allow-private-network");
     }
@@ -61,11 +66,11 @@ class ExternalStorageEndpointGuardTest {
     @Test
     @DisplayName("非 HTTP(S) 协议与携带用户信息的地址被拒")
     void rejectsNonHttpSchemeAndUserInfo() {
-        assertThatThrownBy(() -> guard().validate("WEBDAV", JSON.parseObject("{\"url\":\"ftp://dav.example.com\"}")))
+        assertThatThrownBy(() -> guard().validate("WEBDAV", credentials("{\"url\":\"ftp://dav.example.com\"}")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("HTTP/HTTPS");
         assertThatThrownBy(() -> guard().validate("S3",
-                        JSON.parseObject("{\"endpoint\":\"https://user:pass@s3.example.com\"}")))
+                        credentials("{\"endpoint\":\"https://user:pass@s3.example.com\"}")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("用户信息");
     }
@@ -74,13 +79,13 @@ class ExternalStorageEndpointGuardTest {
     @DisplayName("端口不在白名单时被拒，白名单可扩展")
     void rejectsPortsOutsideWhitelist() {
         assertThatThrownBy(() -> guard().validate("WEBDAV",
-                        JSON.parseObject("{\"url\":\"https://dav.example.com:6379\"}")))
+                        credentials("{\"url\":\"https://dav.example.com:6379\"}")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("端口不在允许清单");
 
         properties.setAllowedPorts(new ArrayList<>(List.of(80, 443, 6379)));
         assertThatCode(() -> guard().validate("WEBDAV",
-                        JSON.parseObject("{\"url\":\"https://dav.example.com:6379\"}")))
+                        credentials("{\"url\":\"https://dav.example.com:6379\"}")))
                 .doesNotThrowAnyException();
     }
 
@@ -88,7 +93,7 @@ class ExternalStorageEndpointGuardTest {
     @DisplayName("OAuth 连接器与未填写端点的凭据直接放行")
     void skipsOAuthAndMissingEndpoint() {
         assertThatCode(() -> guard().validate("GDRIVE",
-                        JSON.parseObject("{\"access_token\":\"token\"}")))
+                        credentials("{\"access_token\":\"token\"}")))
                 .doesNotThrowAnyException();
         assertThatCode(() -> guard().validate("WEBDAV", Map.of()))
                 .doesNotThrowAnyException();

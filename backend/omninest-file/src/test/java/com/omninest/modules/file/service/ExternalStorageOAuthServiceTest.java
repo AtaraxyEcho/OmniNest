@@ -61,7 +61,7 @@ class ExternalStorageOAuthServiceTest {
         ExternalStorageOAuthService.TokenRefreshResult result = service.ensureAccessToken(account);
 
         assertThat(result.refreshed()).isFalse();
-        assertThat(result.credentials().getString("access_token")).isEqualTo("at");
+        assertThat(result.credentials().get("access_token")).isEqualTo("at");
     }
 
     @Test

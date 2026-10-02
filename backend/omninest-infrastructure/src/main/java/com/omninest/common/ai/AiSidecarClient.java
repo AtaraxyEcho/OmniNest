@@ -1,8 +1,5 @@
 package com.omninest.common.ai;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.ai.ImageAnalysisGateway.FaceDetection;
 import com.omninest.common.ai.ImageAnalysisGateway.BoundingBox;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
@@ -10,6 +7,7 @@ import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.ai.ImageAnalysisGateway.SceneClassification;
 import com.omninest.common.ai.ImageAnalysisGateway.SceneLabel;
 import com.omninest.common.config.AiSidecarProperties;
+import com.omninest.common.json.JsonSupport;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +21,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.MediaType;
@@ -31,6 +30,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 图像分析侧车服务 HTTP 客户端。
@@ -101,23 +101,22 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      */
     @Override
     public List<FaceDetection> detectFaces(Path imagePath, String endpoint, int timeoutSeconds) {
-        JSONArray array = JSON.parseArray(sendImageRequest(
+        JsonNode array = JsonSupport.readTree(sendImageRequest(
                 imagePath,
                 endpoint + "/detect-faces",
                 timeoutSeconds
         ));
         List<FaceDetection> result = new ArrayList<>();
-        if (array == null) {
+        if (!array.isArray()) {
             return result;
         }
-        for (int index = 0; index < array.size(); index++) {
-            JSONObject object = array.getJSONObject(index);
+        for (JsonNode object : array) {
             result.add(new FaceDetection(
-                    object.getIntValue("bbox_x"),
-                    object.getIntValue("bbox_y"),
-                    object.getIntValue("bbox_w"),
-                    object.getIntValue("bbox_h"),
-                    parseFloatArray(object.getJSONArray("embedding"))
+                    object.path("bbox_x").asInt(),
+                    object.path("bbox_y").asInt(),
+                    object.path("bbox_w").asInt(),
+                    object.path("bbox_h").asInt(),
+                    parseFloatArray(object.path("embedding"))
             ));
         }
         return result;
@@ -133,36 +132,32 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      */
     @Override
     public ContentAnalysis analyzeContent(Path imagePath, String endpoint, int timeoutSeconds) {
-        JSONObject object = JSON.parseObject(sendImageRequest(
+        JsonNode object = JsonSupport.readTree(sendImageRequest(
                 imagePath,
                 endpoint + "/analyze-content",
                 timeoutSeconds
         ));
-        JSONArray observationsArray = object.getJSONArray("observations");
         List<ContentObservation> observations = new ArrayList<>();
-        if (observationsArray != null) {
-            for (int index = 0; index < observationsArray.size(); index++) {
-                JSONObject observation = observationsArray.getJSONObject(index);
-                String namespace = observation.getString("namespace");
-                String code = normalizeObservationCode(namespace, observation.getString("code"));
-                float confidence = observation.getFloatValue("confidence");
-                if (namespace == null || namespace.isBlank()
-                        || code == null || code.isBlank()
-                        || !Float.isFinite(confidence)) {
-                    continue;
-                }
-                observations.add(new ContentObservation(
-                        namespace,
-                        code,
-                        confidence,
-                        observation.getString("source"),
-                        parseBoundingBoxes(observation.getJSONArray("boxes"))
-                ));
+        for (JsonNode observation : object.path("observations")) {
+            String namespace = observation.path("namespace").asText(null);
+            String code = normalizeObservationCode(namespace, observation.path("code").asText(null));
+            float confidence = (float) observation.path("confidence").asDouble();
+            if (namespace == null || namespace.isBlank()
+                    || code == null || code.isBlank()
+                    || !Float.isFinite(confidence)) {
+                continue;
             }
+            observations.add(new ContentObservation(
+                    namespace,
+                    code,
+                    confidence,
+                    observation.path("source").asText(null),
+                    parseBoundingBoxes(observation.path("boxes"))
+            ));
         }
         return new ContentAnalysis(
-                Math.max(1, object.getIntValue("schemaVersion")),
-                object.getString("pipelineVersion"),
+                Math.max(1, object.path("schemaVersion").asInt()),
+                object.path("pipelineVersion").asText(null),
                 observations
         );
     }
@@ -187,21 +182,17 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      */
     @Override
     public SceneClassification classifyScene(Path imagePath, String endpoint, int timeoutSeconds) {
-        JSONObject object = JSON.parseObject(sendImageRequest(
+        JsonNode object = JsonSupport.readTree(sendImageRequest(
                 imagePath,
                 endpoint + "/classify-scene",
                 timeoutSeconds
         ));
-        JSONArray labelsArray = object.getJSONArray("labels");
         List<SceneLabel> labels = new ArrayList<>();
-        if (labelsArray != null) {
-            for (int index = 0; index < labelsArray.size(); index++) {
-                JSONObject labelObject = labelsArray.getJSONObject(index);
-                labels.add(new SceneLabel(
-                        places365LabelCatalog.normalize(labelObject.getString("name")),
-                        labelObject.getFloatValue("confidence")
-                ));
-            }
+        for (JsonNode labelObject : object.path("labels")) {
+            labels.add(new SceneLabel(
+                    places365LabelCatalog.normalize(labelObject.path("name").asText(null)),
+                    (float) labelObject.path("confidence").asDouble()
+            ));
         }
         return new SceneClassification(labels);
     }
@@ -217,17 +208,16 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         return places365LabelCatalog.normalize(code);
     }
 
-    private List<BoundingBox> parseBoundingBoxes(JSONArray boxesArray) {
-        if (boxesArray == null || boxesArray.isEmpty()) {
+    private List<BoundingBox> parseBoundingBoxes(JsonNode boxesArray) {
+        if (!boxesArray.isArray()) {
             return List.of();
         }
         List<BoundingBox> boxes = new ArrayList<>();
-        for (int index = 0; index < boxesArray.size(); index++) {
-            JSONObject box = boxesArray.getJSONObject(index);
-            float x = box.getFloatValue("x");
-            float y = box.getFloatValue("y");
-            float width = box.getFloatValue("width");
-            float height = box.getFloatValue("height");
+        for (JsonNode box : boxesArray) {
+            float x = (float) box.path("x").asDouble();
+            float y = (float) box.path("y").asDouble();
+            float width = (float) box.path("width").asDouble();
+            float height = (float) box.path("height").asDouble();
             if (Float.isFinite(x) && Float.isFinite(y)
                     && Float.isFinite(width) && Float.isFinite(height)
                     && width > 0 && height > 0) {
@@ -257,30 +247,20 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      */
     @Override
     public List<Integer> clusterFaces(List<float[]> embeddings, String endpoint, int timeoutSeconds) {
-        JSONArray embeddingsArray = new JSONArray();
-        for (float[] embedding : embeddings) {
-            JSONArray embeddingArray = new JSONArray();
-            for (float value : embedding) {
-                embeddingArray.add(value);
-            }
-            embeddingsArray.add(embeddingArray);
-        }
-
-        JSONObject requestBody = new JSONObject();
-        requestBody.put("embeddings", embeddingsArray);
+        Map<String, Object> requestBody = Map.of("embeddings", embeddings);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/cluster-faces"))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Content-Type", "application/json")
                 .header(SIDECAR_TOKEN_HEADER, requireSecret())
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toJSONString(), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(JsonSupport.toJson(requestBody), StandardCharsets.UTF_8))
                 .build();
 
-        JSONArray array = JSON.parseArray(sendRequest(request));
+        JsonNode array = JsonSupport.readTree(sendRequest(request));
         List<Integer> result = new ArrayList<>();
-        if (array != null) {
-            for (int index = 0; index < array.size(); index++) {
-                result.add(array.getIntValue(index));
+        if (array.isArray()) {
+            for (JsonNode value : array) {
+                result.add(value.asInt());
             }
         }
         return result;
@@ -405,13 +385,13 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         return normalized.substring(0, MAX_ERROR_SUMMARY_CHARS);
     }
 
-    private float[] parseFloatArray(JSONArray array) {
-        if (array == null) {
+    private float[] parseFloatArray(JsonNode array) {
+        if (array == null || array.isMissingNode()) {
             return new float[0];
         }
         float[] result = new float[array.size()];
         for (int index = 0; index < array.size(); index++) {
-            result[index] = array.getFloatValue(index);
+            result[index] = array.get(index).floatValue();
         }
         return result;
     }

@@ -1,8 +1,7 @@
 package com.omninest.modules.music.service.platform;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlinePlaylistDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackDto;
@@ -33,6 +32,7 @@ import java.util.concurrent.CompletionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 网易云音乐平台代理实现。
@@ -116,21 +116,21 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             String path = "/cloudsearch?keywords=" + encode(keyword)
                     + "&limit=" + limit
                     + "&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, cookie(ownerUserId));
+            JsonNode json = requestJson(path, cookie(ownerUserId));
             if (json == null) {
                 return List.of();
             }
-            JSONObject result = json.getJSONObject("result");
-            if (result == null) {
+            JsonNode result = json.path("result");
+            if (!result.isObject()) {
                 return List.of();
             }
-            JSONArray songs = result.getJSONArray("songs");
-            if (songs == null || songs.isEmpty()) {
+            JsonNode songs = result.path("songs");
+            if (!songs.isArray() || songs.isEmpty()) {
                 return List.of();
             }
             List<OnlineTrackDto> tracks = new ArrayList<>();
             for (int i = 0; i < songs.size(); i++) {
-                JSONObject song = songs.getJSONObject(i);
+                JsonNode song = songs.get(i);
                 OnlineTrackDto track = parseSearchResult(song);
                 if (track != null) {
                     tracks.add(track);
@@ -165,18 +165,18 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 String path = "/song/url/v1?id=" + songId
                         + "&level=" + level
                         + "&timestamp=" + System.currentTimeMillis();
-                JSONObject json = requestJson(path, cookie(ownerUserId));
+                JsonNode json = requestJson(path, cookie(ownerUserId));
                 if (json == null) {
                     continue;
                 }
-                JSONArray data = json.getJSONArray("data");
-                if (data == null || data.isEmpty()) {
+                JsonNode data = json.path("data");
+                if (!data.isArray() || data.isEmpty()) {
                     continue;
                 }
-                JSONObject songData = data.getJSONObject(0);
-                String url = songData.getString("url");
+                JsonNode songData = data.get(0);
+                String url = songData.path("url").asText(null);
                 if (url != null && !url.isBlank()) {
-                    String format = songData.getString("type");
+                    String format = songData.path("type").asText(null);
                     log.info("网易云播放URL获取成功: songId={}, quality={}, format={}", songId, level, format);
                     return new PlaybackUrlResult(url, level, format, null);
                 }
@@ -206,16 +206,16 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             String cookie = cookie(ownerUserId);
             String path = "/lyric?id=" + songId
                     + "&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, cookie);
+            JsonNode json = requestJson(path, cookie);
             if (json == null) {
                 return new LyricsResult(null, null);
             }
             // 同步歌词（LRC 格式，带时间戳）
-            JSONObject lrcObj = json.getJSONObject("lrc");
-            String syncedLyrics = lrcObj != null ? lrcObj.getString("lyric") : null;
+            JsonNode lrcObj = json.path("lrc");
+            String syncedLyrics = lrcObj.isObject() ? lrcObj.path("lyric").asText(null) : null;
             // 翻译歌词（LRC 格式带时间戳，与同步歌词行对齐）
-            JSONObject tlyricObj = json.getJSONObject("tlyric");
-            String translatedLyrics = tlyricObj != null ? tlyricObj.getString("lyric") : null;
+            JsonNode tlyricObj = json.path("tlyric");
+            String translatedLyrics = tlyricObj.isObject() ? tlyricObj.path("lyric").asText(null) : null;
             // 逐字歌词来自附加接口，失败时降级为不可用，不影响行级歌词
             String wordLyrics = fetchWordLyrics(songId, cookie);
             log.info(
@@ -249,12 +249,12 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         try {
             String path = "/lyric/new?id=" + songId
                     + "&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, cookie);
+            JsonNode json = requestJson(path, cookie);
             if (json == null) {
                 return null;
             }
-            JSONObject yrcObj = json.getJSONObject("yrc");
-            return blankToNull(yrcObj == null ? null : yrcObj.getString("lyric"));
+            JsonNode yrcObj = json.path("yrc");
+            return blankToNull(yrcObj.isObject() ? yrcObj.path("lyric").asText(null) : null);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.warn("网易云逐字歌词请求被中断: songId={}", songId);
@@ -289,14 +289,14 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         try {
             String path = "/user/playlist?uid=" + encode(credential.externalUserId())
                     + "&limit=100&offset=0&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, credential.cookie());
-            JSONArray playlists = json == null ? null : json.getJSONArray("playlist");
-            if (playlists == null || playlists.isEmpty()) {
+            JsonNode json = requestJson(path, credential.cookie());
+            JsonNode playlists = json == null ? null : json.path("playlist");
+            if (playlists == null || !playlists.isArray() || playlists.isEmpty()) {
                 return List.of();
             }
             List<OnlinePlaylistDto> results = new ArrayList<>();
             for (int index = 0; index < playlists.size(); index++) {
-                OnlinePlaylistDto playlist = parsePlaylist(playlists.getJSONObject(index));
+                OnlinePlaylistDto playlist = parsePlaylist(playlists.get(index));
                 if (playlist != null) {
                     results.add(playlist);
                 }
@@ -321,8 +321,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             String path = "/playlist/track/all?id=" + encode(playlistId)
                     + "&limit=" + MAX_ACCOUNT_TRACKS
                     + "&offset=0&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, cookie(ownerUserId));
-            return parseSongs(json == null ? null : json.getJSONArray("songs"));
+            JsonNode json = requestJson(path, cookie(ownerUserId));
+            return parseSongs(json == null ? null : json.path("songs"));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             log.warn("网易云歌单曲目请求被中断: userId={}", ownerUserId);
@@ -342,9 +342,9 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         try {
             String path = "/likelist?uid=" + encode(credential.externalUserId())
                     + "&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, credential.cookie());
-            JSONArray ids = json == null ? null : json.getJSONArray("ids");
-            if (ids == null || ids.isEmpty()) {
+            JsonNode json = requestJson(path, credential.cookie());
+            JsonNode ids = json == null ? null : json.path("ids");
+            if (ids == null || !ids.isArray() || ids.isEmpty()) {
                 return List.of();
             }
             int total = Math.min(ids.size(), MAX_ACCOUNT_TRACKS);
@@ -353,7 +353,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 int end = Math.min(start + SONG_DETAIL_CHUNK_SIZE, total);
                 List<String> songIds = new ArrayList<>();
                 for (int index = start; index < end; index++) {
-                    songIds.add(ids.getString(index));
+                    songIds.add(ids.get(index).asText());
                 }
                 detailPaths.add("/song/detail?ids=" + encode(String.join(",", songIds))
                         + "&timestamp=" + System.currentTimeMillis());
@@ -365,8 +365,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                     .toList();
             List<OnlineTrackDto> results = new ArrayList<>();
             for (CompletableFuture<NeteaseApiResponse> detail : details) {
-                JSONObject payload = awaitResponse(detail).body();
-                results.addAll(parseSongs(payload == null ? null : payload.getJSONArray("songs")));
+                JsonNode payload = awaitResponse(detail).body();
+                results.addAll(parseSongs(payload == null ? null : payload.path("songs")));
             }
             return results;
         } catch (InterruptedException exception) {
@@ -389,14 +389,14 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             );
         }
         try {
-            JSONObject json = requestJson(
+            JsonNode json = requestJson(
                     "/recommend/songs?timestamp=" + System.currentTimeMillis(),
                     credential.cookie()
             );
             if (json == null) {
                 throw recommendationUnavailable();
             }
-            int code = json.getIntValue("code");
+            int code = json.path("code").asInt();
             if (code == 301) {
                 handleExpiredCredential(ownerUserId, credential.cookie());
             }
@@ -449,17 +449,17 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         try {
             // 步骤1：获取 unikey
             String keyPath = "/login/qr/key?timestamp=" + System.currentTimeMillis();
-            JSONObject keyJson = requestJson(keyPath, null);
+            JsonNode keyJson = requestJson(keyPath, null);
             if (keyJson == null) {
                 log.warn("网易云QR登录：获取unikey失败");
                 return null;
             }
-            JSONObject keyData = keyJson.getJSONObject("data");
-            if (keyData == null) {
+            JsonNode keyData = keyJson.path("data");
+            if (!keyData.isObject()) {
                 log.warn("网易云QR登录：unikey数据为空");
                 return null;
             }
-            String unikey = keyData.getString("unikey");
+            String unikey = keyData.path("unikey").asText(null);
             if (unikey == null || unikey.isBlank()) {
                 log.warn("网易云QR登录：unikey为空");
                 return null;
@@ -468,18 +468,18 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             // 步骤2：生成二维码
             String createPath = "/login/qr/create?key=" + encode(unikey)
                     + "&qrimg=true&timestamp=" + System.currentTimeMillis();
-            JSONObject createJson = requestJson(createPath, null);
+            JsonNode createJson = requestJson(createPath, null);
             if (createJson == null) {
                 log.warn("网易云QR登录：生成二维码失败");
                 return null;
             }
-            JSONObject createData = createJson.getJSONObject("data");
-            if (createData == null) {
+            JsonNode createData = createJson.path("data");
+            if (!createData.isObject()) {
                 log.warn("网易云QR登录：二维码数据为空");
                 return null;
             }
-            String qrUrl = createData.getString("qrurl");
-            String qrImageBase64 = createData.getString("qrimg");
+            String qrUrl = createData.path("qrurl").asText(null);
+            String qrImageBase64 = createData.path("qrimg").asText(null);
 
             log.info("网易云QR登录会话已创建: unikey={}", unikey);
             return new QrLoginSession(unikey, qrUrl, qrImageBase64);
@@ -507,14 +507,14 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             String path = "/login/qr/check?key=" + encode(loginKey)
                     + "&timestamp=" + System.currentTimeMillis();
             NeteaseApiResponse apiResponse = request(path, null);
-            JSONObject json = apiResponse.body();
+            JsonNode json = apiResponse.body();
             if (json == null) {
                 return new QrLoginStatus("pending", null);
             }
-            int code = json.getIntValue("code", -1);
+            int code = json.path("code").asInt(-1);
             String cookie = mergeCookieHeaders(
                     apiResponse.cookie(),
-                    json.getString("cookie")
+                    json.path("cookie").asText(null)
             );
 
             return switch (code) {
@@ -529,7 +529,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                         NeteaseApiResponse retryResponse = request(retryPath, null);
                         cookie = mergeCookieHeaders(
                                 retryResponse.cookie(),
-                                retryResponse.body() == null ? null : retryResponse.body().getString("cookie")
+                                retryResponse.body() == null ? null : retryResponse.body().path("cookie").asText(null)
                         );
                     }
                     if (cookie == null || cookie.isBlank()) {
@@ -565,7 +565,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     private PlatformUserInfo fetchUserInfo(String cookie) {
         for (String pathPrefix : ACCOUNT_PROFILE_PATHS) {
             try {
-                JSONObject json = requestJson(pathPrefix + System.currentTimeMillis(), cookie);
+                JsonNode json = requestJson(pathPrefix + System.currentTimeMillis(), cookie);
                 PlatformUserInfo userInfo = parseUserInfo(json);
                 if (userInfo.userId() != null && !userInfo.userId().isBlank()) {
                     return userInfo;
@@ -591,30 +591,32 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
      * @param json 网易云接口响应
      * @return 平台账号资料
      */
-    PlatformUserInfo parseUserInfo(JSONObject json) {
+    PlatformUserInfo parseUserInfo(JsonNode json) {
         if (json == null) {
             return emptyUserInfo();
         }
-        JSONObject payload = json.getJSONObject("data");
-        if (payload == null) {
+        JsonNode payload = json.path("data");
+        if (!payload.isObject()) {
             payload = json;
         }
-        JSONObject profile = payload.getJSONObject("profile");
-        JSONObject account = payload.getJSONObject("account");
-        if (account == null && payload != json) {
-            account = json.getJSONObject("account");
+        JsonNode profile = payload.path("profile");
+        JsonNode account = payload.path("account");
+        if (!account.isObject() && payload != json) {
+            account = json.path("account");
         }
-        String userId = valueOrEmpty(profile == null ? null : profile.getString("userId"));
-        String nickname = valueOrEmpty(profile == null ? null : profile.getString("nickname"));
-        String avatarUrl = valueOrEmpty(profile == null ? null : profile.getString("avatarUrl"));
-        if (userId.isBlank() && account != null) {
-            userId = valueOrEmpty(account.getString("id"));
+        boolean profilePresent = profile.isObject();
+        boolean accountPresent = account.isObject();
+        String userId = valueOrEmpty(profilePresent ? profile.path("userId").asText(null) : null);
+        String nickname = valueOrEmpty(profilePresent ? profile.path("nickname").asText(null) : null);
+        String avatarUrl = valueOrEmpty(profilePresent ? profile.path("avatarUrl").asText(null) : null);
+        if (userId.isBlank() && accountPresent) {
+            userId = valueOrEmpty(account.path("id").asText(null));
         }
-        if (nickname.isBlank() && account != null) {
-            nickname = valueOrEmpty(account.getString("userName"));
+        if (nickname.isBlank() && accountPresent) {
+            nickname = valueOrEmpty(account.path("userName").asText(null));
         }
-        boolean vip = (account != null && account.getIntValue("vipType") > 0)
-                || (profile != null && profile.getIntValue("vipType") > 0);
+        boolean vip = (accountPresent && account.path("vipType").asInt() > 0)
+                || (profilePresent && profile.path("vipType").asInt() > 0);
         return new PlatformUserInfo(
                 MusicPlatform.NETEASE.apiValue(),
                 userId,
@@ -634,19 +636,19 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     /**
      * 解析搜索结果为 DTO。
      */
-    private OnlineTrackDto parseSearchResult(JSONObject song) {
-        String songId = String.valueOf(song.getLongValue("id"));
-        String title = song.getString("name");
+    private OnlineTrackDto parseSearchResult(JsonNode song) {
+        String songId = String.valueOf(song.path("id").asLong());
+        String title = song.path("name").asText(null);
         if (songId.isBlank() || title == null || title.isBlank()) {
             return null;
         }
         // 解析艺术家列表
-        JSONArray artists = song.getJSONArray("ar");
+        JsonNode artists = song.path("ar");
         String artistName = "";
-        if (artists != null && !artists.isEmpty()) {
+        if (artists.isArray() && !artists.isEmpty()) {
             List<String> names = new ArrayList<>();
             for (int i = 0; i < artists.size(); i++) {
-                String name = artists.getJSONObject(i).getString("name");
+                String name = artists.get(i).path("name").asText(null);
                 if (name != null && !name.isBlank()) {
                     names.add(name);
                 }
@@ -654,21 +656,21 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             artistName = String.join(", ", names);
         }
         // 解析专辑信息
-        JSONObject album = song.getJSONObject("al");
+        JsonNode album = song.path("al");
         String albumTitle = "";
         String coverUrl = null;
-        if (album != null) {
-            albumTitle = album.getString("name");
-            coverUrl = album.getString("picUrl");
+        if (album.isObject()) {
+            albumTitle = album.path("name").asText(null);
+            coverUrl = album.path("picUrl").asText(null);
         }
         // 时长（毫秒转秒）
         Integer durationSeconds = null;
-        long dt = song.getLongValue("dt");
+        long dt = song.path("dt").asLong();
         if (dt > 0) {
             durationSeconds = (int) (dt / 1000);
         }
         Map<String, Object> extra = new LinkedHashMap<>();
-        extra.put("albumId", album != null ? album.getLongValue("id") : null);
+        extra.put("albumId", album.isObject() ? album.path("id").asLong() : null);
         return new OnlineTrackDto(
                 "netease",
                 songId,
@@ -689,7 +691,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
      * @param path 请求路径（含查询参数）
      * @return JSON 响应，失败返回 null
      */
-    private JSONObject requestJson(String path, String cookie) throws IOException, InterruptedException {
+    private JsonNode requestJson(String path, String cookie) throws IOException, InterruptedException {
         return request(path, cookie).body();
     }
 
@@ -772,8 +774,9 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             log.warn("网易云API请求失败: status={}, uri={}", response.statusCode(), response.uri());
             return new NeteaseApiResponse(null, "");
         }
+        String responseBody = response.body();
         return new NeteaseApiResponse(
-                JSONObject.parseObject(response.body()),
+                responseBody == null || responseBody.isBlank() ? null : JsonSupport.readTree(responseBody),
                 responseCookie(response)
         );
     }
@@ -834,37 +837,38 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 + THUMBNAIL_SIZE;
     }
 
-    OnlinePlaylistDto parsePlaylist(JSONObject playlist) {
+    OnlinePlaylistDto parsePlaylist(JsonNode playlist) {
         if (playlist == null) {
             return null;
         }
-        String playlistId = playlist.getString("id");
-        String name = playlist.getString("name");
+        String playlistId = playlist.path("id").asText(null);
+        String name = playlist.path("name").asText(null);
         if (playlistId == null || playlistId.isBlank() || name == null || name.isBlank()) {
             return null;
         }
-        JSONObject creator = playlist.getJSONObject("creator");
+        JsonNode creator = playlist.path("creator");
+        boolean creatorPresent = creator.isObject();
         Map<String, Object> extra = new LinkedHashMap<>();
-        if (creator != null) {
-            extra.put("creatorUserId", creator.getString("userId"));
+        if (creatorPresent) {
+            extra.put("creatorUserId", creator.path("userId").asText(null));
         }
         return new OnlinePlaylistDto(
                 MusicPlatform.NETEASE.apiValue(),
                 playlistId,
                 name,
-                playlist.getString("description"),
-                playlist.getString("coverImgUrl"),
-                playlist.getInteger("trackCount"),
-                creator == null ? null : creator.getString("nickname"),
-                playlist.getBooleanValue("subscribed"),
+                playlist.path("description").asText(null),
+                playlist.path("coverImgUrl").asText(null),
+                playlist.hasNonNull("trackCount") ? playlist.path("trackCount").asInt() : null,
+                creatorPresent ? creator.path("nickname").asText(null) : null,
+                playlist.path("subscribed").asBoolean(),
                 extra,
-                thumbnailUrl(playlist.getString("coverImgUrl"))
+                thumbnailUrl(playlist.path("coverImgUrl").asText(null))
         );
     }
 
-    List<OnlineTrackDto> parseDailyRecommendedTracks(JSONObject payload) {
-        JSONObject data = payload == null ? null : payload.getJSONObject("data");
-        JSONArray songs = data == null ? null : data.getJSONArray("dailySongs");
+    List<OnlineTrackDto> parseDailyRecommendedTracks(JsonNode payload) {
+        JsonNode data = payload == null ? null : payload.path("data");
+        JsonNode songs = data == null ? null : data.path("dailySongs");
         List<OnlineTrackDto> tracks = parseSongs(songs);
         List<OnlineTrackDto> deduplicated = new ArrayList<>();
         Set<String> seenSongIds = new HashSet<>();
@@ -892,18 +896,18 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     }
 
     private Boolean verifyLoginStatus(String cookie) throws IOException, InterruptedException {
-        JSONObject status = requestJson(
+        JsonNode status = requestJson(
                 "/login/status?timestamp=" + System.currentTimeMillis(),
                 cookie
         );
         if (status == null) {
             return null;
         }
-        JSONObject data = status.getJSONObject("data");
-        if (data == null) {
+        JsonNode data = status.path("data");
+        if (!data.isObject()) {
             return false;
         }
-        return data.getJSONObject("account") != null || data.getJSONObject("profile") != null;
+        return data.path("account").isObject() || data.path("profile").isObject();
     }
 
     private BusinessException recommendationUnavailable() {
@@ -913,13 +917,13 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         );
     }
 
-    List<OnlineTrackDto> parseSongs(JSONArray songs) {
-        if (songs == null || songs.isEmpty()) {
+    List<OnlineTrackDto> parseSongs(JsonNode songs) {
+        if (songs == null || !songs.isArray() || songs.isEmpty()) {
             return List.of();
         }
         List<OnlineTrackDto> results = new ArrayList<>();
         for (int index = 0; index < songs.size(); index++) {
-            OnlineTrackDto track = parseSearchResult(songs.getJSONObject(index));
+            OnlineTrackDto track = parseSearchResult(songs.get(index));
             if (track != null) {
                 results.add(track);
             }
@@ -975,7 +979,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         return value == null ? "" : value;
     }
 
-    private record NeteaseApiResponse(JSONObject body, String cookie) {
+    private record NeteaseApiResponse(JsonNode body, String cookie) {
     }
 
     /**

@@ -9,7 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
+import tools.jackson.core.type.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
@@ -208,7 +209,8 @@ class ExternalStorageServiceTest {
         assertThat(params).containsOnlyKeys("token", "client_id", "client_secret");
         assertThat(params.get("client_id")).isEqualTo("cid");
         assertThat(params.get("client_secret")).isEqualTo("csec");
-        assertThat(JSONObject.parseObject(params.get("token")))
+        assertThat(JsonSupport.fromJson(
+                        params.get("token"), new TypeReference<Map<String, Object>>() {}))
                 .containsEntry("access_token", "at")
                 .containsEntry("refresh_token", "rt")
                 .containsEntry("token_type", "Bearer")
@@ -240,7 +242,7 @@ class ExternalStorageServiceTest {
         when(accountRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(oauthService.ensureAccessToken(account)).thenReturn(
                 new ExternalStorageOAuthService.TokenRefreshResult(
-                        JSONObject.parseObject("{\"access_token\":\"at2\"}"), true));
+                        Map.of("access_token", "at2"), true));
         when(oauthService.findAppCredentials("ONEDRIVE")).thenReturn(Optional.empty());
         String remoteName = "omni-" + ACCOUNT_ID.toString().replace("-", "").substring(0, 8);
         when(rcloneGateway.listRemoteNames()).thenReturn(List.of(remoteName + ":"));

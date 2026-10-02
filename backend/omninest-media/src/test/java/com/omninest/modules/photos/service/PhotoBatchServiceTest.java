@@ -2,6 +2,7 @@ package com.omninest.modules.photos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -11,7 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.SpaceType;
@@ -130,7 +131,7 @@ class PhotoBatchServiceTest {
         task.setOwnerUserId(OWNER_ID);
         task.setTaskType("TAG");
         task.setTotalItems(1);
-        task.setParams(JSON.toJSONString(
+        task.setParams(JsonSupport.toJson(
                 Map.of("photoIds", List.of(PHOTO_ID.toString()), "tag", "holiday")));
 
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
@@ -154,7 +155,7 @@ class PhotoBatchServiceTest {
                 eq(SyncAction.UPDATED),
                 isNull(),
                 eq(Map.of()));
-        verify(taskRecordService).markCompleted(eq(TASK_ID), any(Map.class));
+        verify(taskRecordService).markCompleted(eq(TASK_ID), anyMap());
     }
 
     @Test
@@ -198,7 +199,7 @@ class PhotoBatchServiceTest {
         assertThat(task.getResult()).isEqualTo(ZIP_FILE_ID.toString());
         assertThat(uploadedPath.get()).isNotNull();
         assertThat(Files.exists(uploadedPath.get())).isFalse();
-        verify(taskRecordService).markCompleted(eq(TASK_ID), any(Map.class));
+        verify(taskRecordService).markCompleted(eq(TASK_ID), anyMap());
     }
 
     @Test
@@ -354,7 +355,7 @@ class PhotoBatchServiceTest {
     void executeTagTaskRunsInsideShortTransaction() {
         PhotoBatchTask task = downloadTask();
         task.setTaskType("TAG");
-        task.setParams(JSON.toJSONString(Map.of(
+        task.setParams(JsonSupport.toJson(Map.of(
                 "photoIds", List.of(PHOTO_ID.toString()),
                 "tag", "family"
         )));
@@ -382,7 +383,7 @@ class PhotoBatchServiceTest {
         task.setOwnerUserId(OWNER_ID);
         task.setTaskType("DOWNLOAD");
         task.setTotalItems(1);
-        task.setParams(JSON.toJSONString(Map.of("photoIds", List.of(PHOTO_ID.toString()))));
+        task.setParams(JsonSupport.toJson(Map.of("photoIds", List.of(PHOTO_ID.toString()))));
         return task;
     }
 

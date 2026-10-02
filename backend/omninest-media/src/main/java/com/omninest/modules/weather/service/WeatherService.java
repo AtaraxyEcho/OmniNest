@@ -1,8 +1,5 @@
 package com.omninest.modules.weather.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.Ed25519Signer;
@@ -15,6 +12,7 @@ import com.omninest.common.config.ConfigRefreshEvent;
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.weather.dto.WeatherDto;
 import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLocation;
 import java.io.ByteArrayInputStream;
@@ -49,6 +47,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 天气服务
@@ -172,25 +172,25 @@ public class WeatherService {
             try {
                 // 预生成 JWT，并行请求外部 API
                 String jwt = generateJwt(config);
-                CompletableFuture<JSONObject> weatherNowFuture = CompletableFuture.supplyAsync(
+                CompletableFuture<JsonNode> weatherNowFuture = CompletableFuture.supplyAsync(
                         () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt),
                         weatherExecutor
                 );
-                CompletableFuture<JSONObject> airNowFuture = CompletableFuture.supplyAsync(
+                CompletableFuture<JsonNode> airNowFuture = CompletableFuture.supplyAsync(
                         () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt), weatherExecutor);
-                CompletableFuture<JSONObject> weather7dFuture = CompletableFuture.supplyAsync(
+                CompletableFuture<JsonNode> weather7dFuture = CompletableFuture.supplyAsync(
                         () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt),
                         weatherExecutor
                 );
-                CompletableFuture<JSONObject> weather24hFuture = CompletableFuture.supplyAsync(
+                CompletableFuture<JsonNode> weather24hFuture = CompletableFuture.supplyAsync(
                         () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt),
                         weatherExecutor
                 );
 
-                JSONObject weatherNow = getOrNull(weatherNowFuture);
-                JSONObject airNow = getOrNull(airNowFuture);
-                JSONObject weather7d = getOrNull(weather7dFuture);
-                JSONObject weather24h = getOrNull(weather24hFuture);
+                JsonNode weatherNow = getOrNull(weatherNowFuture);
+                JsonNode airNow = getOrNull(airNowFuture);
+                JsonNode weather7d = getOrNull(weather7dFuture);
+                JsonNode weather24h = getOrNull(weather24hFuture);
 
                 if (weatherNow == null) {
                     return WeatherDto.empty();
@@ -309,23 +309,23 @@ public class WeatherService {
             String baseUrl = config.get("weather.qweather.url");
             String encoded = URLEncoder.encode(cityName, StandardCharsets.UTF_8);
             URI uri = URI.create(baseUrl + "/geo/v2/city/lookup?location=" + encoded);
-            JSONObject result = httpGet(uri, jwt);
+            JsonNode result = httpGet(uri, jwt);
 
-            if (result == null || !"200".equals(result.getString("code"))) {
+            if (result == null || !"200".equals(result.path("code").asText(null))) {
                 weatherCacheStore.markLocationMissing(cityName);
                 return null;
             }
 
-            JSONArray locations = result.getJSONArray("location");
-            if (locations == null || locations.isEmpty()) {
+            JsonNode locations = result.path("location");
+            if (!locations.isArray() || locations.isEmpty()) {
                 weatherCacheStore.markLocationMissing(cityName);
                 return null;
             }
 
-            JSONObject first = locations.getJSONObject(0);
-            String id = first.getString("id");
-            String lat = first.getString("lat");
-            String lon = first.getString("lon");
+            JsonNode first = locations.get(0);
+            String id = first.path("id").asText(null);
+            String lat = first.path("lat").asText(null);
+            String lon = first.path("lon").asText(null);
             if (id == null || lat == null || lon == null) {
                 return null;
             }
@@ -343,7 +343,7 @@ public class WeatherService {
 
     // ==================== 外部 API 调用 ====================
 
-    private JSONObject fetchApi(String baseUrl, String path, String location, String jwt) {
+    private JsonNode fetchApi(String baseUrl, String path, String location, String jwt) {
         try {
             String encoded = URLEncoder.encode(location, StandardCharsets.UTF_8);
             URI uri = URI.create(baseUrl + path + "?location=" + encoded);
@@ -354,14 +354,14 @@ public class WeatherService {
         }
     }
 
-    private JSONObject fetchAirQuality(String baseUrl, String latLon, String jwt) {
+    private JsonNode fetchAirQuality(String baseUrl, String latLon, String jwt) {
         try {
             String[] parts = latLon.split(",");
             if (parts.length != 2) {
                 return null;
             }
             URI uri = URI.create(baseUrl + "/airquality/v1/current/" + parts[1].trim() + "/" + parts[0].trim());
-            JSONObject json = httpGet(uri, jwt);
+            JsonNode json = httpGet(uri, jwt);
             return json != null ? parseAirQualityResponse(json) : null;
         } catch (Exception e) {
             log.error("调用空气质量 API 失败", e);
@@ -372,10 +372,10 @@ public class WeatherService {
     /**
      * 公共 HTTP GET
      *
-     * @return 解析后的 JSONObject；非 2xx 或非 JSON 响应返回 null
+     * @return 解析后的 JSON 树；非 2xx 或非 JSON 响应返回 null
      * @throws RuntimeException 网络异常等不可恢复错误
      */
-    private JSONObject httpGet(URI uri, String jwt) {
+    private JsonNode httpGet(URI uri, String jwt) {
         var headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + jwt);
         headers.set("Accept", "application/json");
@@ -386,7 +386,7 @@ public class WeatherService {
         if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
             String body = decompressGzip(response.getBody());
             if (body.trim().startsWith("{")) {
-                return JSON.parseObject(body);
+                return JsonSupport.readTree(body);
             }
         }
         return null;
@@ -394,97 +394,97 @@ public class WeatherService {
 
     // ==================== 响应解析 ====================
 
-    private JSONObject parseAirQualityResponse(JSONObject response) {
-        JSONObject result = new JSONObject();
+    private JsonNode parseAirQualityResponse(JsonNode response) {
+        ObjectNode result = JsonSupport.mapper().createObjectNode();
         result.put("code", "200");
-        JSONObject now = new JSONObject();
+        ObjectNode now = JsonSupport.mapper().createObjectNode();
 
-        JSONArray indexes = response.getJSONArray("indexes");
-        if (indexes != null) {
-            JSONObject aqiEntry = findByCode(indexes, "us-epa");
+        JsonNode indexes = response.path("indexes");
+        if (indexes.isArray()) {
+            JsonNode aqiEntry = findByCode(indexes, "us-epa");
             if (aqiEntry == null) aqiEntry = findByCode(indexes, "qaqi");
             if (aqiEntry != null) {
                 now.put("aqi", getIntSafe(aqiEntry, "aqiDisplay"));
-                now.put("category", aqiEntry.getString("category"));
+                now.put("category", aqiEntry.path("category").asText(null));
             }
         }
 
-        JSONArray pollutants = response.getJSONArray("pollutants");
-        if (pollutants != null) {
-            JSONObject pm25 = findByCode(pollutants, "pm2p5");
+        JsonNode pollutants = response.path("pollutants");
+        if (pollutants.isArray()) {
+            JsonNode pm25 = findByCode(pollutants, "pm2p5");
             if (pm25 != null) {
-                JSONObject concentration = pm25.getJSONObject("concentration");
-                if (concentration != null) {
+                JsonNode concentration = pm25.path("concentration");
+                if (concentration.isObject()) {
                     now.put("pm2p5", getIntSafe(concentration, "value"));
                 }
             }
         }
 
-        JSONObject health = response.getJSONObject("health");
-        if (health != null) {
-            JSONObject advice = health.getJSONObject("advice");
-            if (advice != null) {
-                now.put("advice", advice.getString("generalPopulation"));
+        JsonNode health = response.path("health");
+        if (health.isObject()) {
+            JsonNode advice = health.path("advice");
+            if (advice.isObject()) {
+                now.put("advice", advice.path("generalPopulation").asText(null));
             }
         }
 
-        result.put("now", now);
+        result.set("now", now);
         return result;
     }
 
-    private JSONObject findByCode(JSONArray array, String code) {
+    private JsonNode findByCode(JsonNode array, String code) {
         for (int i = 0; i < array.size(); i++) {
-            JSONObject item = array.getJSONObject(i);
-            if (code.equals(item.getString("code"))) return item;
+            JsonNode item = array.get(i);
+            if (code.equals(item.path("code").asText(null))) return item;
         }
         return null;
     }
 
     private WeatherDto aggregateWeather(
-            JSONObject weatherNow,
-            JSONObject airNow,
-            JSONObject weather7d,
-            JSONObject weather24h,
+            JsonNode weatherNow,
+            JsonNode airNow,
+            JsonNode weather7d,
+            JsonNode weather24h,
             String locationName) {
-        if (weatherNow == null || !"200".equals(weatherNow.getString("code"))) {
+        if (weatherNow == null || !"200".equals(weatherNow.path("code").asText(null))) {
             return WeatherDto.empty();
         }
-        JSONObject now = weatherNow.getJSONObject("now");
-        if (now == null) return WeatherDto.empty();
+        JsonNode now = weatherNow.path("now");
+        if (!now.isObject()) return WeatherDto.empty();
 
-        JSONObject air = airNow != null && "200".equals(airNow.getString("code"))
-                ? airNow.getJSONObject("now") : null;
-        JSONObject today = null;
+        JsonNode air = airNow != null && "200".equals(airNow.path("code").asText(null))
+                ? airNow.path("now") : null;
+        JsonNode today = null;
         List<WeatherDto.DailyForecast> dailyForecasts = List.of();
-        if (weather7d != null && "200".equals(weather7d.getString("code"))) {
-            var daily = weather7d.getJSONArray("daily");
-            if (daily != null && !daily.isEmpty()) {
-                today = daily.getJSONObject(0);
+        if (weather7d != null && "200".equals(weather7d.path("code").asText(null))) {
+            JsonNode daily = weather7d.path("daily");
+            if (daily.isArray() && !daily.isEmpty()) {
+                today = daily.get(0);
                 dailyForecasts = parseDailyForecasts(daily);
             }
         }
         List<WeatherDto.HourlyForecast> hourlyForecasts = List.of();
-        if (weather24h != null && "200".equals(weather24h.getString("code"))) {
-            hourlyForecasts = parseHourlyForecasts(weather24h.getJSONArray("hourly"));
+        if (weather24h != null && "200".equals(weather24h.path("code").asText(null))) {
+            hourlyForecasts = parseHourlyForecasts(weather24h.path("hourly"));
         }
 
         return new WeatherDto(
-            now.getDoubleValue("temp"), now.getDoubleValue("feelsLike"),
-            now.getString("text"), now.getString("icon"),
-            now.getString("humidity") + "%", now.getString("windSpeed") + " km/h",
-            now.getString("windDir"), now.getString("pressure") + " hPa",
-            now.getString("vis") + " km",
-            today != null ? today.getIntValue("uvIndex") : 0,
-            today != null ? today.getString("sunrise") : "--",
-            today != null ? today.getString("sunset") : "--",
+            now.path("temp").asDouble(), now.path("feelsLike").asDouble(),
+            now.path("text").asText(null), now.path("icon").asText(null),
+            now.path("humidity").asText(null) + "%", now.path("windSpeed").asText(null) + " km/h",
+            now.path("windDir").asText(null), now.path("pressure").asText(null) + " hPa",
+            now.path("vis").asText(null) + " km",
+            today != null ? today.path("uvIndex").asInt() : 0,
+            today != null ? today.path("sunrise").asText(null) : "--",
+            today != null ? today.path("sunset").asText(null) : "--",
             air != null ? getIntSafe(air, "aqi") : 0,
             air != null ? getIntSafe(air, "pm2p5") : 0,
             air != null ? getStringSafe(air, "category", "--") : "--",
-            weatherNow.getString("updateTime"),
+            weatherNow.path("updateTime").asText(null),
             air != null ? getStringSafe(air, "advice", "") : "",
-            today != null ? today.getDoubleValue("tempMax") : 0.0,
-            today != null ? today.getDoubleValue("tempMin") : 0.0,
-            now.getString("precip") + " mm",
+            today != null ? today.path("tempMax").asDouble() : 0.0,
+            today != null ? today.path("tempMin").asDouble() : 0.0,
+            now.path("precip").asText(null) + " mm",
             getStringSafe(now, "windScale", "--"),
             today != null ? getStringSafe(today, "textDay", "--") : "--",
             today != null ? getStringSafe(today, "textNight", "--") : "--",
@@ -494,20 +494,20 @@ public class WeatherService {
         );
     }
 
-    private List<WeatherDto.HourlyForecast> parseHourlyForecasts(JSONArray hourly) {
-        if (hourly == null || hourly.isEmpty()) {
+    private List<WeatherDto.HourlyForecast> parseHourlyForecasts(JsonNode hourly) {
+        if (hourly == null || !hourly.isArray() || hourly.isEmpty()) {
             return List.of();
         }
         int limit = Math.min(hourly.size(), 24);
         ArrayList<WeatherDto.HourlyForecast> items = new ArrayList<>(limit);
         for (int i = 0; i < limit; i++) {
-            JSONObject item = hourly.getJSONObject(i);
-            if (item == null) {
+            JsonNode item = hourly.get(i);
+            if (item == null || !item.isObject()) {
                 continue;
             }
             items.add(new WeatherDto.HourlyForecast(
                     getStringSafe(item, "fxTime", "--"),
-                    (int) item.getDoubleValue("temp"),
+                    (int) item.path("temp").asDouble(),
                     getStringSafe(item, "icon", "999"),
                     getStringSafe(item, "text", "--")
             ));
@@ -515,21 +515,21 @@ public class WeatherService {
         return List.copyOf(items);
     }
 
-    private List<WeatherDto.DailyForecast> parseDailyForecasts(JSONArray daily) {
-        if (daily == null || daily.isEmpty()) {
+    private List<WeatherDto.DailyForecast> parseDailyForecasts(JsonNode daily) {
+        if (daily == null || !daily.isArray() || daily.isEmpty()) {
             return List.of();
         }
         int limit = Math.min(daily.size(), 7);
         ArrayList<WeatherDto.DailyForecast> items = new ArrayList<>(limit);
         for (int i = 0; i < limit; i++) {
-            JSONObject item = daily.getJSONObject(i);
-            if (item == null) {
+            JsonNode item = daily.get(i);
+            if (item == null || !item.isObject()) {
                 continue;
             }
             items.add(new WeatherDto.DailyForecast(
                     getStringSafe(item, "fxDate", "--"),
-                    (int) item.getDoubleValue("tempMax"),
-                    (int) item.getDoubleValue("tempMin"),
+                    (int) item.path("tempMax").asDouble(),
+                    (int) item.path("tempMin").asDouble(),
                     getStringSafe(item, "iconDay", "999"),
                     getStringSafe(item, "textDay", "--"),
                     getStringSafe(item, "iconNight", "999"),
@@ -648,7 +648,7 @@ public class WeatherService {
 
     // ==================== 工具方法 ====================
 
-    private JSONObject getOrNull(CompletableFuture<JSONObject> future) {
+    private JsonNode getOrNull(CompletableFuture<JsonNode> future) {
         try {
             return future.get(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -659,14 +659,14 @@ public class WeatherService {
         }
     }
 
-    private int getIntSafe(JSONObject obj, String key) {
-        String val = obj.getString(key);
+    private int getIntSafe(JsonNode obj, String key) {
+        String val = obj.path(key).asText(null);
         if (val == null || val.isBlank()) return 0;
         try { return (int) Double.parseDouble(val); } catch (NumberFormatException e) { return 0; }
     }
 
-    private String getStringSafe(JSONObject obj, String key, String defaultValue) {
-        String val = obj.getString(key);
+    private String getStringSafe(JsonNode obj, String key, String defaultValue) {
+        String val = obj.path(key).asText(null);
         return val != null ? val : defaultValue;
     }
 

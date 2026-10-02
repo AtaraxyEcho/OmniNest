@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 # curl 供容器 healthcheck 使用；ffmpeg 供探测/转码。
 RUN apt-get update && \

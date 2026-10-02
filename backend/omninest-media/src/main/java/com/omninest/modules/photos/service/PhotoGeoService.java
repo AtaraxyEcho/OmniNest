@@ -1,9 +1,8 @@
 package com.omninest.modules.photos.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.ratelimit.RateLimitService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
@@ -21,6 +20,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 /**
  * GPS 逆地理编码服务：离线 GeoNames 优先，Nominatim 仅作为可选兜底。
@@ -171,25 +171,25 @@ public class PhotoGeoService {
                 log.warn("Nominatim 请求失败: status={}", response.statusCode());
                 return Map.of();
             }
-            JSONObject json = JSON.parseObject(response.body());
+            JsonNode json = JsonSupport.readTree(response.body());
             Map<String, Object> result = new HashMap<>();
-            putIfNotBlank(result, "displayName", json.getString("display_name"));
-            JSONObject address = json.getJSONObject("address");
-            if (address != null) {
+            putIfNotBlank(result, "displayName", json.path("display_name").asText(null));
+            JsonNode address = json.path("address");
+            if (address.isObject()) {
                 String city = firstNotBlank(
-                        address.getString("city"),
-                        address.getString("town"),
-                        address.getString("village"),
-                        address.getString("municipality"));
+                        address.path("city").asText(null),
+                        address.path("town").asText(null),
+                        address.path("village").asText(null),
+                        address.path("municipality").asText(null));
                 String district = firstNotBlank(
-                        address.getString("city_district"),
-                        address.getString("district"),
-                        address.getString("county"),
-                        address.getString("suburb"));
+                        address.path("city_district").asText(null),
+                        address.path("district").asText(null),
+                        address.path("county").asText(null),
+                        address.path("suburb").asText(null));
                 putIfNotBlank(result, "city", city);
-                putIfNotBlank(result, "state", address.getString("state"));
+                putIfNotBlank(result, "state", address.path("state").asText(null));
                 putIfNotBlank(result, "district", district);
-                putIfNotBlank(result, "country", address.getString("country"));
+                putIfNotBlank(result, "country", address.path("country").asText(null));
                 result.put("geocoder", "nominatim");
             }
 

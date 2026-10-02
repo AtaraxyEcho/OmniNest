@@ -1,7 +1,6 @@
 package com.omninest.modules.file.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.messaging.QueueNames;
@@ -32,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import tools.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -437,14 +437,14 @@ public class ExternalStorageService {
      * 不支持自定义应用，只下发 token。
      */
     private Map<String, String> buildOAuthRcloneParameters(String provider, Map<String, String> flat) {
-        JSONObject token = new JSONObject(new LinkedHashMap<>());
+        Map<String, Object> token = new LinkedHashMap<>();
         appendIfPresent(token, "access_token", flat);
         appendIfPresent(token, "token_type", flat);
         appendIfPresent(token, "refresh_token", flat);
         appendIfPresent(token, "expiry", flat);
         Map<String, String> params = new LinkedHashMap<>();
         if (!token.isEmpty()) {
-            params.put("token", token.toJSONString());
+            params.put("token", JsonSupport.toJson(token));
         }
         if ("ONEDRIVE".equals(provider) || "GDRIVE".equals(provider) || "GOOGLE_DRIVE".equals(provider)) {
             oauthService.findAppCredentials(provider).ifPresent(app -> {
@@ -455,7 +455,7 @@ public class ExternalStorageService {
         return params;
     }
 
-    private void appendIfPresent(JSONObject token, String key, Map<String, String> source) {
+    private void appendIfPresent(Map<String, Object> token, String key, Map<String, String> source) {
         String value = source.get(key);
         if (value != null && !value.isBlank()) {
             token.put(key, value);
@@ -479,11 +479,11 @@ public class ExternalStorageService {
     /**
      * 解密外部存储凭证，返回 rclone 参数 map。
      */
-    @SuppressWarnings("unchecked")
     private Map<String, String> decryptCredentials(StorageExternalAccount account) {
         String plaintextJson = externalStorageCredentialService.decryptToJson(account.getEncryptedCredentials());
         try {
-            JSONObject json = JSON.parseObject(plaintextJson);
+            Map<String, Object> json = JsonSupport.fromJson(
+                    plaintextJson, new TypeReference<Map<String, Object>>() {});
             return json.entrySet().stream()
                     .collect(Collectors.toMap(
                             Map.Entry::getKey,

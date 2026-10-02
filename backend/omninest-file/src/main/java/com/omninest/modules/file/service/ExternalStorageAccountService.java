@@ -1,6 +1,6 @@
 package com.omninest.modules.file.service;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
@@ -10,7 +10,9 @@ import com.omninest.modules.file.dto.ExternalStorageAccountDto;
 import com.omninest.modules.file.dto.UpdateExternalStorageRequest;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import tools.jackson.core.type.TypeReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,13 +66,17 @@ public class ExternalStorageAccountService {
         account.setProvider(provider);
         account.setDisplayName(request.displayName().trim());
         String sanitizedCredentials = ExternalStorageCredentialCodec.sanitize(provider, request.encryptedCredentials());
-        endpointGuard.validate(provider, JSON.parseObject(sanitizedCredentials));
+        endpointGuard.validate(provider, parseCredentials(sanitizedCredentials));
         account.setEncryptedCredentials(externalStorageCredentialService.encrypt(sanitizedCredentials));
         return toExternalAccountDto(externalAccountRepository.save(account));
     }
 
     private boolean isOAuthProvider(String provider) {
         return ExternalStorageProviders.isOAuth(provider);
+    }
+
+    private Map<String, Object> parseCredentials(String credentialsJson) {
+        return JsonSupport.fromJson(credentialsJson, new TypeReference<Map<String, Object>>() {});
     }
 
     /**
@@ -93,7 +99,7 @@ public class ExternalStorageAccountService {
                 existingJson,
                 request.encryptedCredentials()
         );
-        endpointGuard.validate(account.getProvider(), JSON.parseObject(mergedJson));
+        endpointGuard.validate(account.getProvider(), parseCredentials(mergedJson));
         boolean credentialsChanged = !mergedJson.equals(existingJson);
         account.setDisplayName(request.displayName().trim());
         if (credentialsChanged) {

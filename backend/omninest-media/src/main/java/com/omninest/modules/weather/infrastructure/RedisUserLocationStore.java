@@ -1,13 +1,14 @@
 package com.omninest.modules.weather.infrastructure;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.weather.service.UserLocationStore;
 import com.omninest.modules.weather.service.UserLocationStore.UserLocationSnapshot;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,12 +37,12 @@ public class RedisUserLocationStore implements UserLocationStore {
      */
     @Override
     public void save(UUID userId, UserLocationSnapshot location, Duration ttl) {
-        JSONObject json = new JSONObject();
+        Map<String, Object> json = new LinkedHashMap<>();
         json.put("latLon", location.latLon());
         json.put("source", location.source());
         json.put("ts", location.reportedAt().toEpochMilli());
         try {
-            redisUtil.set(key(userId), json.toJSONString(), ttl);
+            redisUtil.set(key(userId), JsonSupport.toJson(json), ttl);
         } catch (RuntimeException exception) {
             log.error("保存用户位置失败: userId={}", userId, exception);
         }
@@ -60,11 +61,11 @@ public class RedisUserLocationStore implements UserLocationStore {
             if (value == null || value.isBlank()) {
                 return Optional.empty();
             }
-            JSONObject json = JSON.parseObject(value);
+            var json = JsonSupport.readTree(value);
             return Optional.of(new UserLocationSnapshot(
-                    json.getString("latLon"),
-                    json.getString("source"),
-                    Instant.ofEpochMilli(json.getLongValue("ts"))
+                    json.path("latLon").asText(null),
+                    json.path("source").asText(null),
+                    Instant.ofEpochMilli(json.path("ts").asLong())
             ));
         } catch (RuntimeException exception) {
             log.error("读取用户位置失败: userId={}", userId, exception);

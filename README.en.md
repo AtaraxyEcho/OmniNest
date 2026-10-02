@@ -145,7 +145,7 @@ Screenshot folders:
 | Layer | Technology |
 | --- | --- |
 | Client | Flutter / Dart (Web · Android · Windows) |
-| Server | Java 21 · Spring Boot modular monolith (API / Worker / Scheduler) |
+| Server | Java 25 · Spring Boot modular monolith (API / Worker / Scheduler) |
 | Data | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · optional image analysis sidecar |
 
 ---

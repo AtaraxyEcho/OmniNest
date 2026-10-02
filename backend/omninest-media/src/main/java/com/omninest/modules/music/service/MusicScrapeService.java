@@ -1,6 +1,6 @@
 package com.omninest.modules.music.service;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.media.domain.AssetType;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.media.domain.MetadataStatus;
@@ -335,7 +335,7 @@ public class MusicScrapeService {
     }
 
     private String scrapeDetails(boolean force, int processed, int matched, int skipped, int unmatched, int failed) {
-        return JSON.toJSONString(new LinkedHashMap<>(Map.of(
+        return JsonSupport.toJson(new LinkedHashMap<>(Map.of(
                 "force", force,
                 "processed", processed,
                 "matched", matched,

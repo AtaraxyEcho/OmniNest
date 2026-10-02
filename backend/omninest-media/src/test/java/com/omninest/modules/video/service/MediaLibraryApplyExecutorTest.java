@@ -160,7 +160,7 @@ class MediaLibraryApplyExecutorTest {
                 eq(RUN_ID),
                 eq("PENDING"),
                 any(PageRequest.class)
-        )).thenReturn(firstPage, emptyPage);
+        )).thenReturn(firstPage).thenReturn(emptyPage);
 
         when(localMediaIndexService.registerSelected(OWNER_ID, LOCATION_ID, "千与千寻.mkv"))
                 .thenReturn(new LocalMediaScanEntry(FILE_NODE_ID, "千与千寻.mkv", "千与千寻.mkv"));

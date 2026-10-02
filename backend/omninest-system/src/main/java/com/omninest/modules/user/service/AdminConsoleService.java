@@ -229,7 +229,7 @@ public class AdminConsoleService {
         // CPU 和磁盘使用通过 ManagementFactory 获取
         OperatingSystemMXBean osBean =
                 (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-        double cpuUsage = osBean.getSystemCpuLoad() * 100;
+        double cpuUsage = osBean.getCpuLoad() * 100;
         File root = new File("/");
         long totalSpace = root.getTotalSpace();
         long freeSpace = root.getFreeSpace();

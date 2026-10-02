@@ -1,7 +1,6 @@
 package com.omninest.modules.integration.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.security.CredentialCipher;
 import com.omninest.modules.integration.domain.IntegrationAccount;
 import com.omninest.modules.integration.repository.IntegrationAccountRepository;
@@ -17,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * 管理用户外部集成账号及其加密凭据。
@@ -137,7 +137,7 @@ public class IntegrationAccountService {
         account.setExternalUserId(externalUserId);
         account.setDisplayName(displayName);
         account.setAvatarUrl(avatarUrl);
-        account.setEncryptedCredentials(credentialCipher.encrypt(JSON.toJSONString(credentials)));
+        account.setEncryptedCredentials(credentialCipher.encrypt(JsonSupport.toJson(credentials)));
         account.setCredentialKeyVersion(credentialCipher.currentKeyVersion());
         account.setStatus(ACTIVE_STATUS);
         account.setLastVerifiedAt(Instant.now());
@@ -163,7 +163,7 @@ public class IntegrationAccountService {
 
     private IntegrationAccountData toData(IntegrationAccount account) {
         String plaintext = credentialCipher.decrypt(account.getEncryptedCredentials());
-        Map<String, String> credentials = JSON.parseObject(
+        Map<String, String> credentials = JsonSupport.fromJson(
                 plaintext,
                 new TypeReference<Map<String, String>>() {
                 }

@@ -2,10 +2,10 @@ package com.omninest.common.download;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.download.OfflineDownloadGateway.TaskSnapshot;
+import com.omninest.common.json.JsonSupport;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Aria2RpcClient 返回模型转换测试。
@@ -16,28 +16,19 @@ class Aria2RpcClientTest {
 
     @Test
     void toTaskSnapshotReturnsTypedStatusAndTorrentName() {
-        JSONObject firstFile = new JSONObject();
-        firstFile.put("path", "D:/downloads/movie/video.mkv");
-        firstFile.put("selected", "true");
-        JSONObject secondFile = new JSONObject();
-        secondFile.put("path", "D:/downloads/movie/sample.mkv");
-        secondFile.put("selected", "false");
-        JSONArray files = new JSONArray();
-        files.add(firstFile);
-        files.add(secondFile);
-
-        JSONObject info = new JSONObject();
-        info.put("name", "Example Movie");
-        JSONObject bittorrent = new JSONObject();
-        bittorrent.put("info", info);
-
-        JSONObject result = new JSONObject();
-        result.put("status", "active");
-        result.put("totalLength", "4096");
-        result.put("completedLength", "1024");
-        result.put("downloadSpeed", "512");
-        result.put("files", files);
-        result.put("bittorrent", bittorrent);
+        JsonNode result = JsonSupport.readTree("""
+                {
+                  "status": "active",
+                  "totalLength": "4096",
+                  "completedLength": "1024",
+                  "downloadSpeed": "512",
+                  "files": [
+                    {"path": "D:/downloads/movie/video.mkv", "selected": "true"},
+                    {"path": "D:/downloads/movie/sample.mkv", "selected": "false"}
+                  ],
+                  "bittorrent": {"info": {"name": "Example Movie"}}
+                }
+                """);
 
         TaskSnapshot snapshot = Aria2RpcClient.toTaskSnapshot(result);
 
@@ -53,12 +44,9 @@ class Aria2RpcClientTest {
 
     @Test
     void toTaskSnapshotFallsBackToFirstFileName() {
-        JSONObject file = new JSONObject();
-        file.put("path", "D:/downloads/archive.zip");
-        JSONArray files = new JSONArray();
-        files.add(file);
-        JSONObject result = new JSONObject();
-        result.put("files", files);
+        JsonNode result = JsonSupport.readTree("""
+                {"files": [{"path": "D:/downloads/archive.zip"}]}
+                """);
 
         TaskSnapshot snapshot = Aria2RpcClient.toTaskSnapshot(result);
 

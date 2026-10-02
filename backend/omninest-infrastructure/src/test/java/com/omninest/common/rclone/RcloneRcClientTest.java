@@ -2,12 +2,12 @@ package com.omninest.common.rclone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * RcloneRcClient 返回模型转换测试。
@@ -18,26 +18,19 @@ class RcloneRcClientTest {
 
     @Test
     void parseDirectoryEntriesReturnsTypedValuesAndPlainMetadata() {
-        JSONObject checksum = new JSONObject();
-        checksum.put("sha1", "abc123");
-        JSONArray tags = new JSONArray();
-        tags.add("document");
-
-        JSONObject item = new JSONObject();
-        item.put("Name", "report.pdf");
-        item.put("Path", "documents/report.pdf");
-        item.put("IsDir", false);
-        item.put("Size", 2048L);
-        item.put("ModTime", "2026-07-22T08:30:00Z");
-        item.put("MimeType", "application/pdf");
-        item.put("Hash", "abc123");
-        item.put("Checksums", checksum);
-        item.put("Tags", tags);
-
-        JSONArray entriesArray = new JSONArray();
-        entriesArray.add(item);
-        JSONObject result = new JSONObject();
-        result.put("list", entriesArray);
+        JsonNode result = JsonSupport.readTree("""
+                {"list": [{
+                  "Name": "report.pdf",
+                  "Path": "documents/report.pdf",
+                  "IsDir": false,
+                  "Size": 2048,
+                  "ModTime": "2026-07-22T08:30:00Z",
+                  "MimeType": "application/pdf",
+                  "Hash": "abc123",
+                  "Checksums": {"sha1": "abc123"},
+                  "Tags": ["document"]
+                }]}
+                """);
 
         List<RcloneGateway.DirectoryEntry> entries = RcloneRcClient.parseDirectoryEntries(result);
 
@@ -52,20 +45,15 @@ class RcloneRcClientTest {
             assertThat(entry.metadata().get("Checksums")).isInstanceOf(Map.class);
             assertThat(entry.metadata().get("Tags")).isInstanceOf(List.class);
             assertThat(entry.metadata().values())
-                    .noneMatch(value -> value instanceof JSONObject || value instanceof JSONArray);
+                    .noneMatch(value -> value instanceof JsonNode);
         });
     }
 
     @Test
     void parseDirectoryEntriesIgnoresInvalidModificationTime() {
-        JSONObject item = new JSONObject();
-        item.put("Name", "legacy.txt");
-        item.put("ModTime", "not-an-instant");
-
-        JSONArray entriesArray = new JSONArray();
-        entriesArray.add(item);
-        JSONObject result = new JSONObject();
-        result.put("list", entriesArray);
+        JsonNode result = JsonSupport.readTree("""
+                {"list": [{"Name": "legacy.txt", "ModTime": "not-an-instant"}]}
+                """);
 
         List<RcloneGateway.DirectoryEntry> entries = RcloneRcClient.parseDirectoryEntries(result);
 

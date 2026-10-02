@@ -1,14 +1,14 @@
 package com.omninest.modules.file.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * 外部存储凭据的安全展示与增量更新工具。
@@ -59,7 +59,7 @@ public final class ExternalStorageCredentialCodec {
             String provider,
             String credentialsJson
     ) {
-        JSONObject credentials = parseSafely(credentialsJson);
+        Map<String, Object> credentials = parseSafely(credentialsJson);
         if (credentials == null) {
             return Map.of();
         }
@@ -94,8 +94,8 @@ public final class ExternalStorageCredentialCodec {
             String existingCredentialsJson,
             String submittedCredentialsJson
     ) {
-        JSONObject existing = parseRequired(existingCredentialsJson);
-        JSONObject submitted = parseRequired(submittedCredentialsJson);
+        Map<String, Object> existing = parseRequired(existingCredentialsJson);
+        Map<String, Object> submitted = parseRequired(submittedCredentialsJson);
         Set<String> allowed = allowedFields(provider);
         Map<String, Object> original = new LinkedHashMap<>(existing);
         for (Map.Entry<String, Object> entry : submitted.entrySet()) {
@@ -113,7 +113,7 @@ public final class ExternalStorageCredentialCodec {
         if (original.equals(existing)) {
             return existingCredentialsJson;
         }
-        return JSON.toJSONString(existing);
+        return JsonSupport.toJson(existing);
     }
 
     /**
@@ -124,15 +124,15 @@ public final class ExternalStorageCredentialCodec {
      * @return 过滤后的凭据 JSON；无可识别键时返回空对象 JSON
      */
     public static String sanitize(String provider, String credentialsJson) {
-        JSONObject credentials = parseRequired(credentialsJson);
+        Map<String, Object> credentials = parseRequired(credentialsJson);
         Set<String> allowed = allowedFields(provider);
-        JSONObject filtered = new JSONObject();
+        Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : credentials.entrySet()) {
             if (isAllowedField(allowed, entry.getKey())) {
                 filtered.put(entry.getKey(), entry.getValue());
             }
         }
-        return filtered.isEmpty() ? "{}" : JSON.toJSONString(filtered);
+        return filtered.isEmpty() ? "{}" : JsonSupport.toJson(filtered);
     }
 
     private static boolean isAllowedField(Set<String> allowed, String field) {
@@ -144,19 +144,19 @@ public final class ExternalStorageCredentialCodec {
         return ALLOWED_FIELDS.getOrDefault(normalized, Set.of());
     }
 
-    private static JSONObject parseSafely(String credentialsJson) {
+    private static Map<String, Object> parseSafely(String credentialsJson) {
         if (credentialsJson == null || credentialsJson.isBlank()) {
             return null;
         }
         try {
-            return JSON.parseObject(credentialsJson);
+            return JsonSupport.fromJson(credentialsJson, new TypeReference<Map<String, Object>>() {});
         } catch (RuntimeException exception) {
             return null;
         }
     }
 
-    private static JSONObject parseRequired(String credentialsJson) {
-        JSONObject credentials = parseSafely(credentialsJson);
+    private static Map<String, Object> parseRequired(String credentialsJson) {
+        Map<String, Object> credentials = parseSafely(credentialsJson);
         if (credentials == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "外部存储凭据格式无效");
         }

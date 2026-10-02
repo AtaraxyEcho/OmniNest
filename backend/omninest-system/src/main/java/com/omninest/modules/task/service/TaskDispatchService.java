@@ -1,6 +1,6 @@
 package com.omninest.modules.task.service;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.task.config.TaskOutboxProperties;
 import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
@@ -62,7 +62,7 @@ public class TaskDispatchService {
         dispatch.setTaskId(taskId);
         dispatch.setExchangeName(exchangeName);
         dispatch.setRoutingKey(routingKey);
-        dispatch.setPayload(JSON.toJSONString(payload));
+        dispatch.setPayload(JsonSupport.toJson(payload));
         dispatch.setNextAttemptAt(nextAttemptAt);
         repository.save(dispatch);
     }

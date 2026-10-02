@@ -1,7 +1,6 @@
 package com.omninest.modules.music.service;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.dto.MusicDtos.MusicScrapeCandidateDto;
 import java.io.IOException;
@@ -25,6 +24,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 @Slf4j
 @Component
@@ -127,17 +127,17 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
                 "limit", String.valueOf(MAX_SEARCH_RESULTS),
                 "offset", "0"
         ));
-        JSONObject json = requestJson(uri);
+        JsonNode json = requestJson(uri);
         if (json == null) {
             return List.of();
         }
-        JSONArray releases = json.getJSONArray("releases");
-        if (releases == null || releases.isEmpty()) {
+        JsonNode releases = json.path("releases");
+        if (!releases.isArray() || releases.isEmpty()) {
             return List.of();
         }
         List<ReleaseSearchResult> results = new ArrayList<>();
         for (int index = 0; index < releases.size() && results.size() < MAX_SEARCH_RESULTS; index++) {
-            JSONObject item = releases.getJSONObject(index);
+            JsonNode item = releases.get(index);
             String id = text(item, "id");
             String title = text(item, "title");
             if (id.isBlank() || title.isBlank()) {
@@ -146,11 +146,11 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
             results.add(new ReleaseSearchResult(
                     id,
                     title,
-                    artistCreditName(item.getJSONArray("artist-credit")),
+                    artistCreditName(item.path("artist-credit")),
                     parseDate(text(item, "date")),
-                    item.getIntValue("score"),
+                    item.path("score").asInt(),
                     releaseGroupId(item),
-                    releaseArtistId(item.getJSONArray("artist-credit"))
+                    releaseArtistId(item.path("artist-credit"))
             ));
         }
         return results;
@@ -161,7 +161,7 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
                 "inc", "recordings+artist-credits+release-groups+media+tags+genres",
                 "fmt", "json"
         ));
-        JSONObject json = requestJson(uri);
+        JsonNode json = requestJson(uri);
         if (json == null) {
             return null;
         }
@@ -277,48 +277,48 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
         return best;
     }
 
-    private ReleaseDetail parseReleaseDetail(JSONObject json) {
+    private ReleaseDetail parseReleaseDetail(JsonNode json) {
         String releaseId = text(json, "id");
         String title = text(json, "title");
         String releaseGroupId = releaseGroupId(json);
-        String artistId = releaseArtistId(json.getJSONArray("artist-credit"));
-        String artistName = artistCreditName(json.getJSONArray("artist-credit"));
+        String artistId = releaseArtistId(json.path("artist-credit"));
+        String artistName = artistCreditName(json.path("artist-credit"));
         LocalDate releaseDate = parseDate(text(json, "date"));
         List<ReleaseTrack> tracks = new ArrayList<>();
-        JSONArray media = json.getJSONArray("media");
-        if (media != null) {
+        JsonNode media = json.path("media");
+        if (media.isArray()) {
             for (int mediumIndex = 0; mediumIndex < media.size(); mediumIndex++) {
-                JSONObject medium = media.getJSONObject(mediumIndex);
-                Integer discNumber = medium.getIntValue("position");
-                JSONArray trackArray = medium.getJSONArray("tracks");
-                if (trackArray == null) {
+                JsonNode medium = media.get(mediumIndex);
+                Integer discNumber = medium.path("position").asInt();
+                JsonNode trackArray = medium.path("tracks");
+                if (!trackArray.isArray()) {
                     continue;
                 }
                 for (int trackIndex = 0; trackIndex < trackArray.size(); trackIndex++) {
-                    JSONObject track = trackArray.getJSONObject(trackIndex);
+                    JsonNode track = trackArray.get(trackIndex);
                     String trackTitle = text(track, "title");
                     if (trackTitle.isBlank()) {
                         continue;
                     }
-                    Integer trackNumber = parseInteger(track.getString("number"));
+                    Integer trackNumber = parseInteger(track.path("number").asText(null));
                     if (trackNumber == null) {
-                        trackNumber = track.getIntValue("position");
+                        trackNumber = track.path("position").asInt();
                     }
-                    String recordingId = track.getJSONObject("recording") == null
-                            ? text(track, "id")
-                            : text(track.getJSONObject("recording"), "id");
+                    JsonNode recording = track.path("recording");
+                    String recordingId = recording.isObject() ? text(recording, "id") : text(track, "id");
                     tracks.add(new ReleaseTrack(
                             recordingId,
                             trackTitle,
                             trackNumber,
                             discNumber,
-                            durationSeconds(track.getInteger("length"))
+                            durationSeconds(track.hasNonNull("length") ? track.path("length").asInt() : null)
                     ));
                 }
             }
         }
         // 解析 genre: 优先取 release-group 的 genres，其次 release 的 tags
-        String genre = parseGenre(json, releaseGroupId != null ? json.getJSONObject("release-group") : null);
+        JsonNode releaseGroup = releaseGroupId != null ? json.path("release-group") : null;
+        String genre = parseGenre(json, releaseGroup);
         return new ReleaseDetail(releaseId, title, releaseGroupId, artistId, artistName, releaseDate, tracks, genre);
     }
 
@@ -326,19 +326,19 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
      * 从 MusicBrainz release JSON 中提取 genre。
      * 优先取 release-group.genres[0].name，其次 release.tags[0].name。
      */
-    private String parseGenre(JSONObject releaseJson, JSONObject releaseGroup) {
+    private String parseGenre(JsonNode releaseJson, JsonNode releaseGroup) {
         // 优先 release-group 的 genres（更权威）
-        if (releaseGroup != null) {
-            JSONArray genres = releaseGroup.getJSONArray("genres");
-            if (genres != null && !genres.isEmpty()) {
-                String name = text(genres.getJSONObject(0), "name");
+        if (releaseGroup != null && releaseGroup.isObject()) {
+            JsonNode genres = releaseGroup.path("genres");
+            if (genres.isArray() && !genres.isEmpty()) {
+                String name = text(genres.get(0), "name");
                 if (!name.isBlank()) return name;
             }
         }
         // 其次 release 的 tags
-        JSONArray tags = releaseJson.getJSONArray("tags");
-        if (tags != null && !tags.isEmpty()) {
-            String name = text(tags.getJSONObject(0), "name");
+        JsonNode tags = releaseJson.path("tags");
+        if (tags.isArray() && !tags.isEmpty()) {
+            String name = text(tags.get(0), "name");
             if (!name.isBlank()) return name;
         }
         return null;
@@ -400,7 +400,7 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
         return baseUrl + "/" + releaseId + "/front-500";
     }
 
-    private JSONObject requestJson(URI uri) throws IOException, InterruptedException {
+    private JsonNode requestJson(URI uri) throws IOException, InterruptedException {
         throttle();
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(REQUEST_TIMEOUT)
@@ -413,7 +413,7 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
             log.warn("MusicBrainz 请求失败: status={}, uri={}", response.statusCode(), uri);
             return null;
         }
-        return JSONObject.parseObject(response.body());
+        return JsonSupport.readTree(response.body());
     }
 
     private void throttle() throws InterruptedException {
@@ -484,8 +484,8 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
         return Math.min(14, common * 3);
     }
 
-    private String text(JSONObject item, String key) {
-        String value = item.getString(key);
+    private String text(JsonNode item, String key) {
+        String value = item.path(key).asText(null);
         return value == null ? "" : value.trim();
     }
 
@@ -532,28 +532,28 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
         return !"unknown album".equals(normalized) && !"未知专辑".equals(normalized);
     }
 
-    private String releaseGroupId(JSONObject item) {
-        JSONObject releaseGroup = item.getJSONObject("release-group");
-        return releaseGroup == null ? null : text(releaseGroup, "id");
+    private String releaseGroupId(JsonNode item) {
+        JsonNode releaseGroup = item.path("release-group");
+        return releaseGroup.isObject() ? text(releaseGroup, "id") : null;
     }
 
-    private String releaseArtistId(JSONArray artistCredit) {
-        if (artistCredit == null || artistCredit.isEmpty()) {
+    private String releaseArtistId(JsonNode artistCredit) {
+        if (artistCredit == null || !artistCredit.isArray() || artistCredit.isEmpty()) {
             return null;
         }
-        JSONObject first = artistCredit.getJSONObject(0);
-        JSONObject artist = first == null ? null : first.getJSONObject("artist");
-        return artist == null ? null : text(artist, "id");
+        JsonNode first = artistCredit.get(0);
+        JsonNode artist = first == null ? null : first.path("artist");
+        return artist == null || !artist.isObject() ? null : text(artist, "id");
     }
 
-    private String artistCreditName(JSONArray artistCredit) {
-        if (artistCredit == null || artistCredit.isEmpty()) {
+    private String artistCreditName(JsonNode artistCredit) {
+        if (artistCredit == null || !artistCredit.isArray() || artistCredit.isEmpty()) {
             return "";
         }
         List<String> names = new ArrayList<>();
         for (int index = 0; index < artistCredit.size(); index++) {
-            JSONObject credit = artistCredit.getJSONObject(index);
-            if (credit == null) {
+            JsonNode credit = artistCredit.get(index);
+            if (credit == null || !credit.isObject()) {
                 continue;
             }
             String name = text(credit, "name");

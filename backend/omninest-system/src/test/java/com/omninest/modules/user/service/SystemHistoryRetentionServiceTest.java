@@ -54,7 +54,7 @@ class SystemHistoryRetentionServiceTest {
         Mockito.when(auditLogRepository.findIdsCreatedBefore(
                 ArgumentMatchers.any(Instant.class),
                 ArgumentMatchers.any()
-        )).thenReturn(List.of(first, second), List.of(third));
+        )).thenReturn(List.of(first, second)).thenReturn(List.of(third));
         Mockito.when(auditLogRepository.deleteByIds(List.of(first, second))).thenReturn(2);
         Mockito.when(auditLogRepository.deleteByIds(List.of(third))).thenReturn(1);
         Mockito.when(configHistoryRetentionService.deleteExpiredBatch(

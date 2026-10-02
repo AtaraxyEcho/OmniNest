@@ -1,9 +1,7 @@
 package com.omninest.common.download;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.config.Aria2Properties;
+import com.omninest.common.json.JsonSupport;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 通过 JSON-RPC 调用 Aria2 的离线下载适配器。
@@ -88,7 +87,7 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
         List<Object> params = new ArrayList<>();
         params.add(gid);
         params.add(STATUS_FIELDS);
-        JSONObject result = call("aria2.tellStatus", params);
+        JsonNode result = call("aria2.tellStatus", params);
         return toTaskSnapshot(result);
     }
 
@@ -106,15 +105,14 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
     }
 
     private String callForString(String method, List<Object> params) {
-        JSONObject result = call(method, params);
-        String value = result.getString("result");
-        if (value == null || value.isBlank()) {
+        JsonNode result = call(method, params);
+        if (!result.isTextual() || result.asText().isBlank()) {
             throw new IllegalStateException("aria2 响应缺少结果");
         }
-        return value;
+        return result.asText();
     }
 
-    private JSONObject call(String method, List<Object> params) {
+    private JsonNode call(String method, List<Object> params) {
         List<Object> authorizedParams = authorize(params);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("jsonrpc", "2.0");
@@ -125,7 +123,7 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
         HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(properties.getRpcUrl()))
                 .timeout(Duration.ofSeconds(properties.getRpcTimeoutSeconds()))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.toJSONString(request), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(JsonSupport.toJson(request), StandardCharsets.UTF_8))
                 .build();
         try {
             HttpResponse<String> response = httpClient.send(
@@ -135,33 +133,23 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
             if (response.statusCode() >= 400) {
                 throw new IllegalStateException("aria2 RPC 调用失败，状态码=" + response.statusCode());
             }
-            JSONObject body = JSON.parseObject(response.body());
-            if (body == null) {
+            if (response.body() == null || response.body().isBlank()) {
                 throw new IllegalStateException("aria2 RPC 响应为空");
             }
-            JSONObject error = body.getJSONObject("error");
-            if (error != null) {
-                String message = error.getString("message");
+            JsonNode body = JsonSupport.readTree(response.body());
+            JsonNode error = body.path("error");
+            if (error.isObject()) {
+                String message = JsonSupport.textOrNull(error, "message");
                 throw new IllegalStateException(message == null || message.isBlank()
                         ? "aria2 RPC 调用失败"
                         : message);
             }
-            Object rawResult = body.get("result");
-            // addUri 等方法返回字符串 GID；tellStatus 等返回对象。不可对字符串调 getJSONObject。
-            if (rawResult instanceof String stringResult) {
-                JSONObject wrapper = new JSONObject();
-                wrapper.put("result", stringResult);
-                return wrapper;
-            }
-            if (rawResult instanceof JSONObject resultObject) {
-                return resultObject;
-            }
-            if (rawResult == null) {
+            JsonNode rawResult = body.path("result");
+            if (rawResult.isMissingNode() || rawResult.isNull()) {
                 throw new IllegalStateException("aria2 RPC 响应缺少结果");
             }
-            JSONObject wrapper = new JSONObject();
-            wrapper.put("result", rawResult);
-            return wrapper;
+            // addUri 等方法返回字符串 GID；tellStatus 等返回对象，调用方按需取文本或导航。
+            return rawResult;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("aria2 RPC 调用被中断", exception);
@@ -183,14 +171,14 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
         return authorized;
     }
 
-    private static long parseLong(Object value) {
-        if (value == null) {
+    private static long parseLong(JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
             return 0L;
         }
-        if (value instanceof Number number) {
-            return number.longValue();
+        if (value.isNumber()) {
+            return value.longValue();
         }
-        String text = value.toString().trim();
+        String text = value.asText().trim();
         if (text.isEmpty()) {
             return 0L;
         }
@@ -201,35 +189,35 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
         }
     }
 
-    static TaskSnapshot toTaskSnapshot(JSONObject result) {
+    static TaskSnapshot toTaskSnapshot(JsonNode result) {
         List<DownloadedFile> files = new ArrayList<>();
-        JSONArray fileValues = result.getJSONArray("files");
-        if (fileValues != null) {
-            for (Object value : fileValues) {
-                if (!(value instanceof JSONObject file)) {
+        JsonNode fileValues = result.path("files");
+        if (fileValues.isArray()) {
+            for (JsonNode value : fileValues) {
+                if (!value.isObject()) {
                     continue;
                 }
-                String path = file.getString("path");
-                boolean selected = !"false".equalsIgnoreCase(file.getString("selected"));
+                String path = JsonSupport.textOrNull(value, "path");
+                boolean selected = !"false".equalsIgnoreCase(JsonSupport.textOrNull(value, "selected"));
                 files.add(new DownloadedFile(path, selected));
             }
         }
         return new TaskSnapshot(
-                result.getString("status"),
-                parseLong(result.get("totalLength")),
-                parseLong(result.get("completedLength")),
-                parseLong(result.get("downloadSpeed")),
+                JsonSupport.textOrNull(result, "status"),
+                parseLong(result.path("totalLength")),
+                parseLong(result.path("completedLength")),
+                parseLong(result.path("downloadSpeed")),
                 files,
-                resolveDisplayName(result.getJSONObject("bittorrent"), files),
-                result.getString("errorMessage")
+                resolveDisplayName(result.path("bittorrent"), files),
+                JsonSupport.textOrNull(result, "errorMessage")
         );
     }
 
-    private static String resolveDisplayName(JSONObject bittorrent, List<DownloadedFile> files) {
-        if (bittorrent != null) {
-            JSONObject info = bittorrent.getJSONObject("info");
-            if (info != null) {
-                String name = info.getString("name");
+    private static String resolveDisplayName(JsonNode bittorrent, List<DownloadedFile> files) {
+        if (bittorrent != null && bittorrent.isObject()) {
+            JsonNode info = bittorrent.path("info");
+            if (info.isObject()) {
+                String name = JsonSupport.textOrNull(info, "name");
                 if (name != null && !name.isBlank()) {
                     return name.trim();
                 }

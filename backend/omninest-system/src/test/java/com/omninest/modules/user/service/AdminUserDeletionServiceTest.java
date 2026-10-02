@@ -169,7 +169,7 @@ class AdminUserDeletionServiceTest {
         verify(userSessionRevocationService).revokeAll(List.of(targetUserId), "管理员删除用户");
         assertThat(user.getRoles()).isEmpty();
         verify(authUserRepository).delete(user);
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_USER_DELETE"), eq("auth_users"), eq(targetUserId),
                 payloadCaptor.capture());

@@ -1,6 +1,6 @@
 package com.omninest.common.security;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.config.SecurityProperties;
@@ -197,6 +197,6 @@ public class SecurityConfig {
         response.setStatus(status);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(JSON.toJSONString(ApiResponse.error(errorCode)));
+        response.getWriter().write(JsonSupport.toJson(ApiResponse.error(errorCode)));
     }
 }

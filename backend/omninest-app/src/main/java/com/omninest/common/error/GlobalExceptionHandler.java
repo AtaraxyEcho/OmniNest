@@ -1,8 +1,8 @@
 package com.omninest.common.error;
 
-import com.alibaba.fastjson2.JSON;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.json.JsonSupport;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import java.io.IOException;
@@ -48,8 +48,8 @@ public class GlobalExceptionHandler {
             case NOT_FOUND, TASK_NOT_FOUND, CONFIG_NOT_FOUND, FILE_NOT_FOUND,
                     MEDIA_NOT_FOUND, BOOK_NOT_FOUND, BACKDROP_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
-            case BACKDROP_FILE_TOO_LARGE -> HttpStatus.PAYLOAD_TOO_LARGE;
-            case BACKDROP_UNSUPPORTED_FORMAT -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case BACKDROP_FILE_TOO_LARGE -> HttpStatus.CONTENT_TOO_LARGE;
+            case BACKDROP_UNSUPPORTED_FORMAT -> HttpStatus.UNPROCESSABLE_CONTENT;
             case DEPENDENCY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case CONFLICT, TASK_STATUS_ILLEGAL, TASK_ALREADY_COMPLETED,
                     PREFERENCE_VERSION_CONFLICT, RESOURCE_IN_USE,
@@ -241,7 +241,7 @@ public class GlobalExceptionHandler {
         }
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(JSON.toJSONString(
+        response.getWriter().write(JsonSupport.toJson(
                 ApiResponse.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试")));
     }
 

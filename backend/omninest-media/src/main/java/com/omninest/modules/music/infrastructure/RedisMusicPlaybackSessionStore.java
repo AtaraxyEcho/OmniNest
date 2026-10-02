@@ -1,10 +1,10 @@
 package com.omninest.modules.music.infrastructure;
 
-import com.alibaba.fastjson2.JSON;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.music.service.MusicPlaybackSession;
 import com.omninest.modules.music.service.MusicPlaybackSessionStore;
@@ -49,7 +49,7 @@ public class RedisMusicPlaybackSessionStore implements MusicPlaybackSessionStore
             return;
         }
         try {
-            redisUtil.set(key(session.sessionId()), JSON.toJSONString(session), ttl);
+            redisUtil.set(key(session.sessionId()), JsonSupport.toJson(session), ttl);
         } catch (RuntimeException exception) {
             requireNonProductionFallback("写入音乐播放会话失败");
             log.warn("写入音乐播放会话 Redis 失败，使用进程内缓存降级: sessionId={}", session.sessionId());
@@ -70,7 +70,7 @@ public class RedisMusicPlaybackSessionStore implements MusicPlaybackSessionStore
         try {
             String payload = redisUtil.get(key(sessionId));
             if (payload != null && !payload.isBlank()) {
-                MusicPlaybackSession session = JSON.parseObject(payload, MusicPlaybackSession.class);
+                MusicPlaybackSession session = JsonSupport.fromJson(payload, MusicPlaybackSession.class);
                 if (!isProduction()) {
                     fallback.put(sessionId, session);
                 }

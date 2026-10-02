@@ -1,7 +1,6 @@
 package com.omninest.modules.video.service;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.video.dto.MovieDtos.CastMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.CrewMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
@@ -27,6 +26,7 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 @Slf4j
 @Component
@@ -197,18 +197,18 @@ public class TmdbMetadataProvider implements MetadataProvider {
     }
 
     private List<ScrapeCandidateDto> parseCandidates(String body, boolean tv) {
-        JSONObject json = JSONObject.parseObject(body);
-        JSONArray results = json.getJSONArray("results");
-        if (results == null || results.isEmpty()) {
+        JsonNode json = JsonSupport.readTree(body);
+        JsonNode results = json.path("results");
+        if (!results.isArray() || results.isEmpty()) {
             log.info("TMDB 解析结果为空: totalResults=0");
             return List.of();
         }
-        int totalResults = json.getIntValue("total_results");
+        int totalResults = json.path("total_results").asInt();
         log.info("TMDB 解析候选: totalResults={}, returnedResults={}, tv={}", totalResults, results.size(), tv);
         List<ScrapeCandidateDto> candidates = new ArrayList<>();
         int maxResults = maxResults();
         for (int index = 0; index < results.size() && candidates.size() < maxResults; index++) {
-            JSONObject item = results.getJSONObject(index);
+            JsonNode item = results.get(index);
             String title = text(item, tv ? "name" : "title");
             if (title.isBlank()) {
                 continue;
@@ -217,7 +217,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
             LocalDate releaseDate = parseDate(dateStr);
             candidates.add(new ScrapeCandidateDto(
                     providerName(),
-                    String.valueOf(item.getInteger("id")),
+                    String.valueOf(item.hasNonNull("id") ? item.path("id").asInt() : null),
                     title,
                     text(item, "original_title").isBlank() ? text(item, "original_name") : text(item, "original_title"),
                     releaseDate,
@@ -226,7 +226,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     posterUrl(text(item, "poster_path")),
                     backdropUrl(text(item, "backdrop_path")),
                     null,
-                    item.getDouble("vote_average"),
+                    item.hasNonNull("vote_average") ? item.path("vote_average").asDouble() : null,
                     null,
                     null, null, null, null, null, null, null, null, null, null, null
             ));
@@ -255,29 +255,29 @@ public class TmdbMetadataProvider implements MetadataProvider {
             HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 String body = response.body();
-                JSONObject detail = JSONObject.parseObject(body);
+                JsonNode detail = JsonSupport.readTree(body);
                 log.info("TMDB 详情返回: externalId={}, bodyLength={}", top.externalId(), body.length());
                 Integer runtime = null;
                 if (tv) {
-                    JSONArray episodeRunTime = detail.getJSONArray("episode_run_time");
-                    if (episodeRunTime != null && !episodeRunTime.isEmpty()) {
-                        runtime = episodeRunTime.getInteger(0);
+                    JsonNode episodeRunTime = detail.path("episode_run_time");
+                    if (episodeRunTime.isArray() && !episodeRunTime.isEmpty()) {
+                        runtime = episodeRunTime.hasNonNull(0) ? episodeRunTime.get(0).asInt() : null;
                     }
                 } else {
-                    runtime = detail.getInteger("runtime");
+                    runtime = detail.hasNonNull("runtime") ? detail.path("runtime").asInt() : null;
                 }
                 String imdbId = text(detail, "imdb_id");
                 ImageFallback imageFallback = imageFallback(top, credential, tv);
                 String posterUrl = posterUrl(text(detail, "poster_path"));
                 String backdropUrl = backdropUrl(text(detail, "backdrop_path"));
 
-                List<String> genres = extractGenreNames(detail.getJSONArray("genres"));
-                String tagline = detail.getString("tagline");
-                Integer voteCount = detail.getInteger("vote_count");
-                Double popularity = detail.getDouble("popularity");
+                List<String> genres = extractGenreNames(detail.path("genres"));
+                String tagline = detail.path("tagline").asText(null);
+                Integer voteCount = detail.hasNonNull("vote_count") ? detail.path("vote_count").asInt() : null;
+                Double popularity = detail.hasNonNull("popularity") ? detail.path("popularity").asDouble() : null;
                 String originalLanguage = text(detail, "original_language");
-                List<Map<String, Object>> studios = parseCompanyList(detail.getJSONArray("production_companies"));
-                List<Map<String, Object>> countries = parseCountryList(detail.getJSONArray("production_countries"));
+                List<Map<String, Object>> studios = parseCompanyList(detail.path("production_companies"));
+                List<Map<String, Object>> countries = parseCountryList(detail.path("production_countries"));
                 List<CastMemberDto> cast = List.of();
                 List<CrewMemberDto> crew = List.of();
                 try {
@@ -301,7 +301,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                         posterUrl == null ? imageFallback.posterUrl() : posterUrl,
                         backdropUrl == null ? imageFallback.backdropUrl() : backdropUrl,
                         runtime,
-                        detail.getDouble("vote_average"),
+                        detail.hasNonNull("vote_average") ? detail.path("vote_average").asDouble() : null,
                         imdbId.isBlank() ? null : imdbId,
                         genres, cast, crew, voteCount,
                         contentRating,
@@ -339,27 +339,27 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 log.warn("TMDB 演职员请求失败: status={}, externalId={}", response.statusCode(), externalId);
                 return new CreditsResult(List.of(), List.of());
             }
-            JSONObject json = JSONObject.parseObject(response.body());
+            JsonNode json = JsonSupport.readTree(response.body());
             List<CastMemberDto> cast = new ArrayList<>();
-            JSONArray castArray = json.getJSONArray("cast");
-            if (castArray != null) {
+            JsonNode castArray = json.path("cast");
+            if (castArray.isArray()) {
                 int limit = Math.min(castArray.size(), 20);
                 for (int i = 0; i < limit; i++) {
-                    JSONObject c = castArray.getJSONObject(i);
+                    JsonNode c = castArray.get(i);
                     cast.add(new CastMemberDto(
                             text(c, "name"),
                             text(c, "character"),
                             profileUrl(text(c, "profile_path")),
-                            c.getInteger("order")
+                            c.hasNonNull("order") ? c.path("order").asInt() : null
                     ));
                 }
             }
             List<CrewMemberDto> crew = new ArrayList<>();
-            JSONArray crewArray = json.getJSONArray("crew");
-            if (crewArray != null) {
+            JsonNode crewArray = json.path("crew");
+            if (crewArray.isArray()) {
                 int limit = Math.min(crewArray.size(), 20);
                 for (int i = 0; i < limit; i++) {
-                    JSONObject c = crewArray.getJSONObject(i);
+                    JsonNode c = crewArray.get(i);
                     crew.add(new CrewMemberDto(
                             text(c, "name"),
                             text(c, "job"),
@@ -392,32 +392,32 @@ public class TmdbMetadataProvider implements MetadataProvider {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 return null;
             }
-            JSONObject json = JSONObject.parseObject(response.body());
+            JsonNode json = JsonSupport.readTree(response.body());
             if (tv) {
-                JSONArray results = json.getJSONArray("results");
-                if (results != null) {
+                JsonNode results = json.path("results");
+                if (results.isArray()) {
                     for (int i = 0; i < results.size(); i++) {
-                        JSONObject entry = results.getJSONObject(i);
+                        JsonNode entry = results.get(i);
                         if ("US".equals(text(entry, "iso_3166_1"))) {
                             String rating = text(entry, "rating");
                             return rating.isBlank() ? null : rating;
                         }
                     }
                     if (!results.isEmpty()) {
-                        String rating = text(results.getJSONObject(0), "rating");
+                        String rating = text(results.get(0), "rating");
                         return rating.isBlank() ? null : rating;
                     }
                 }
             } else {
-                JSONArray results = json.getJSONArray("results");
-                if (results != null) {
+                JsonNode results = json.path("results");
+                if (results.isArray()) {
                     for (int i = 0; i < results.size(); i++) {
-                        JSONObject entry = results.getJSONObject(i);
+                        JsonNode entry = results.get(i);
                         if ("US".equals(text(entry, "iso_3166_1"))) {
-                            JSONArray releaseDates = entry.getJSONArray("release_dates");
-                            if (releaseDates != null) {
+                            JsonNode releaseDates = entry.path("release_dates");
+                            if (releaseDates.isArray()) {
                                 for (int j = 0; j < releaseDates.size(); j++) {
-                                    String cert = text(releaseDates.getJSONObject(j), "certification");
+                                    String cert = text(releaseDates.get(j), "certification");
                                     if (!cert.isBlank()) {
                                         return cert;
                                     }
@@ -435,13 +435,13 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return null;
     }
 
-    private List<String> extractGenreNames(JSONArray genres) {
-        if (genres == null || genres.isEmpty()) {
+    private List<String> extractGenreNames(JsonNode genres) {
+        if (genres == null || !genres.isArray() || genres.isEmpty()) {
             return List.of();
         }
         List<String> names = new ArrayList<>();
         for (int i = 0; i < genres.size(); i++) {
-            String name = genres.getJSONObject(i).getString("name");
+            String name = genres.get(i).path("name").asText(null);
             if (name != null && !name.isBlank()) {
                 names.add(name);
             }
@@ -449,15 +449,15 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return names;
     }
 
-    private List<Map<String, Object>> parseCompanyList(JSONArray companies) {
-        if (companies == null || companies.isEmpty()) {
+    private List<Map<String, Object>> parseCompanyList(JsonNode companies) {
+        if (companies == null || !companies.isArray() || companies.isEmpty()) {
             return List.of();
         }
         List<Map<String, Object>> result = new ArrayList<>();
         for (int i = 0; i < companies.size(); i++) {
-            JSONObject c = companies.getJSONObject(i);
+            JsonNode c = companies.get(i);
             Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", c.getInteger("id"));
+            map.put("id", c.hasNonNull("id") ? c.path("id").asInt() : null);
             map.put("name", text(c, "name"));
             map.put("origin_country", text(c, "origin_country"));
             result.add(map);
@@ -465,13 +465,13 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return result;
     }
 
-    private List<Map<String, Object>> parseCountryList(JSONArray countries) {
-        if (countries == null || countries.isEmpty()) {
+    private List<Map<String, Object>> parseCountryList(JsonNode countries) {
+        if (countries == null || !countries.isArray() || countries.isEmpty()) {
             return List.of();
         }
         List<Map<String, Object>> result = new ArrayList<>();
         for (int i = 0; i < countries.size(); i++) {
-            JSONObject c = countries.getJSONObject(i);
+            JsonNode c = countries.get(i);
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("iso_3166_1", text(c, "iso_3166_1"));
             map.put("name", text(c, "name"));
@@ -504,12 +504,12 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 log.warn("TMDB 图片请求失败: status={}, externalId={}", response.statusCode(), top.externalId());
                 return new ImageFallback(top.posterUrl(), top.backdropUrl());
             }
-            JSONObject json = JSONObject.parseObject(response.body());
+            JsonNode json = JsonSupport.readTree(response.body());
             String posterUrl = top.posterUrl() == null || top.posterUrl().isBlank()
-                    ? posterUrl(firstImagePath(json.getJSONArray("posters")))
+                    ? posterUrl(firstImagePath(json.path("posters")))
                     : top.posterUrl();
             String backdropUrl = top.backdropUrl() == null || top.backdropUrl().isBlank()
-                    ? backdropUrl(firstImagePath(json.getJSONArray("backdrops")))
+                    ? backdropUrl(firstImagePath(json.path("backdrops")))
                     : top.backdropUrl();
             return new ImageFallback(posterUrl, backdropUrl);
         } catch (Exception ex) {
@@ -518,12 +518,12 @@ public class TmdbMetadataProvider implements MetadataProvider {
         }
     }
 
-    private String firstImagePath(JSONArray images) {
-        if (images == null || images.isEmpty()) {
+    private String firstImagePath(JsonNode images) {
+        if (images == null || !images.isArray() || images.isEmpty()) {
             return null;
         }
         for (int index = 0; index < images.size(); index++) {
-            String filePath = text(images.getJSONObject(index), "file_path");
+            String filePath = text(images.get(index), "file_path");
             if (!filePath.isBlank()) {
                 return filePath;
             }
@@ -557,8 +557,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
         }
     }
 
-    private String text(JSONObject item, String key) {
-        String value = item.getString(key);
+    private String text(JsonNode item, String key) {
+        String value = item.path(key).asText(null);
         return value == null ? "" : value.trim();
     }
 
@@ -694,14 +694,14 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 log.warn("TMDB 剧照请求失败: status={}, externalId={}", response.statusCode(), externalId);
                 return List.of();
             }
-            JSONObject json = JSONObject.parseObject(response.body());
-            JSONArray backdrops = json.getJSONArray("backdrops");
-            if (backdrops == null || backdrops.isEmpty()) {
+            JsonNode json = JsonSupport.readTree(response.body());
+            JsonNode backdrops = json.path("backdrops");
+            if (!backdrops.isArray() || backdrops.isEmpty()) {
                 return List.of();
             }
             List<String> urls = new ArrayList<>();
             for (int i = 0; i < backdrops.size() && urls.size() < MAX_SCREENSHOTS; i++) {
-                JSONObject img = backdrops.getJSONObject(i);
+                JsonNode img = backdrops.get(i);
                 String filePath = text(img, "file_path");
                 if (!filePath.isBlank()) {
                     urls.add(backdropUrl(filePath));

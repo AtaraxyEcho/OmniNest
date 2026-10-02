@@ -90,7 +90,7 @@ class ComicParseTaskServiceTest {
         Mockito.verify(comicManifestService).refreshItemImportStatus(ITEM_ID);
         Mockito.verify(comicManifestService, Mockito.never())
                 .parseExistingSource(Mockito.eq(ITEM_ID), Mockito.eq(SOURCE_ID), Mockito.any());
-        Mockito.verify(taskRecordService).markCompleted(Mockito.eq(TASK_ID), Mockito.any(Map.class));
+        Mockito.verify(taskRecordService).markCompleted(Mockito.eq(TASK_ID), Mockito.anyMap());
     }
 
     @Test
@@ -102,14 +102,14 @@ class ComicParseTaskServiceTest {
 
         Mockito.verify(comicManifestService)
                 .parseExistingSource(Mockito.eq(ITEM_ID), Mockito.eq(SOURCE_ID), Mockito.any());
-        Mockito.verify(taskRecordService).markCompleted(Mockito.eq(TASK_ID), Mockito.any(Map.class));
+        Mockito.verify(taskRecordService).markCompleted(Mockito.eq(TASK_ID), Mockito.anyMap());
     }
 
     @Test
     void processPersistsBusinessFailureAndCompletesFailureHandling() {
         ReaderItemSource source = sourceWithStatus(ReaderSourceStatus.PARSING);
         Mockito.when(sourceRepository.findById(SOURCE_ID))
-                .thenReturn(Optional.of(source), Optional.of(source));
+                .thenReturn(Optional.of(source)).thenReturn(Optional.of(source));
         Mockito.doThrow(new BusinessException(ErrorCode.PARAM_ERROR, "parse failed"))
                 .when(comicManifestService)
                 .parseExistingSource(Mockito.eq(ITEM_ID), Mockito.eq(SOURCE_ID), Mockito.any());
@@ -145,7 +145,7 @@ class ComicParseTaskServiceTest {
     void processPropagatesBusinessFailureWhenStatusPersistenceFails() {
         ReaderItemSource source = sourceWithStatus(ReaderSourceStatus.PARSING);
         Mockito.when(sourceRepository.findById(SOURCE_ID))
-                .thenReturn(Optional.of(source), Optional.of(source));
+                .thenReturn(Optional.of(source)).thenReturn(Optional.of(source));
         Mockito.doThrow(new BusinessException(ErrorCode.PARAM_ERROR, "parse failed"))
                 .when(comicManifestService)
                 .parseExistingSource(Mockito.eq(ITEM_ID), Mockito.eq(SOURCE_ID), Mockito.any());
@@ -166,7 +166,7 @@ class ComicParseTaskServiceTest {
                 .thenThrow(new BusinessException(ErrorCode.TASK_NOT_FOUND, "task not found"));
         Mockito.doThrow(new BusinessException(ErrorCode.TASK_NOT_FOUND, "task not found"))
                 .when(taskRecordService)
-                .markCompleted(Mockito.eq(TASK_ID), Mockito.any(Map.class));
+                .markCompleted(Mockito.eq(TASK_ID), Mockito.anyMap());
 
         taskService.process(event());
 

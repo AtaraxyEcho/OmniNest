@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -103,7 +104,7 @@ class FileDeletionServiceTest {
                 eq("PLANNING"),
                 eq("FILE_NODE"),
                 eq(FILE_NODE_ID),
-                any(Map.class)
+                anyMap()
         );
         verify(taskDispatchService).enqueue(
                 eq(taskId),
@@ -216,7 +217,7 @@ class FileDeletionServiceTest {
                 eq("PLANNING"),
                 eq("FILE_NODE"),
                 eq(FILE_NODE_ID),
-                any(Map.class)
+                anyMap()
         );
         verify(taskDispatchService).enqueue(
                 eq(taskId),

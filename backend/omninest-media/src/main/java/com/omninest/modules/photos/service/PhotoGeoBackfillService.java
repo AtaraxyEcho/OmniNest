@@ -1,9 +1,9 @@
 package com.omninest.modules.photos.service;
 
-import com.alibaba.fastjson2.JSON;
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
@@ -172,7 +172,7 @@ public class PhotoGeoBackfillService {
                 }
                 int affected = photoItemRepository.updateGeocodeLocationIfAbsent(
                         row.getId(),
-                        JSON.toJSONString(geoInfo),
+                        JsonSupport.toJson(geoInfo),
                         Instant.now());
                 if (affected > 0) {
                     updated++;

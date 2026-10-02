@@ -1,10 +1,9 @@
 package com.omninest.worker.dlq;
 
-import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
-
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 死信队列消费者，解析消息中的任务标识并委托任务服务更新状态。
@@ -70,8 +70,8 @@ public class DeadLetterConsumer {
      */
     private String extractStackSummary(String body) {
         try {
-            JSONObject json = JSONObject.parseObject(body);
-            return json == null ? null : json.getString("stackSummary");
+            JsonNode json = JsonSupport.readTree(body);
+            return json == null ? null : json.path("stackSummary").asText(null);
         } catch (RuntimeException exception) {
             log.debug("死信消息体不是 JSON，不提取堆栈摘要");
             return null;
@@ -87,17 +87,17 @@ public class DeadLetterConsumer {
      */
     private String describeDeadLetter(String body, String routingKey) {
         StringBuilder summary = new StringBuilder("消息进入死信队列，原始路由键: ").append(routingKey);
-        JSONObject json = null;
+        JsonNode json = null;
         try {
-            json = JSONObject.parseObject(body);
+            json = JsonSupport.readTree(body);
         } catch (RuntimeException exception) {
             log.debug("死信消息体不是 JSON，仅记录路由键");
         }
-        if (json != null && json.getString("errorCode") != null) {
-            summary.append("; 投递失败: ").append(json.getString("failureType"))
-                    .append('/').append(json.getString("errorCode"));
-            if (json.getString("instanceId") != null) {
-                summary.append(" @").append(json.getString("instanceId"));
+        if (json != null && json.path("errorCode").asText(null) != null) {
+            summary.append("; 投递失败: ").append(json.path("failureType").asText(null))
+                    .append('/').append(json.path("errorCode").asText(null));
+            if (json.path("instanceId").asText(null) != null) {
+                summary.append(" @").append(json.path("instanceId").asText(null));
             }
             summary.append("; 死信载荷: ").append(body);
         }
@@ -117,11 +117,9 @@ public class DeadLetterConsumer {
             }
         }
         try {
-            JSONObject json = JSONObject.parseObject(body);
-            if (json != null) {
-                if (json.containsKey("taskId")) {
-                    return Optional.of(UUID.fromString(json.getString("taskId")));
-                }
+            JsonNode json = JsonSupport.readTree(body);
+            if (json != null && json.has("taskId")) {
+                return Optional.of(UUID.fromString(json.path("taskId").asText()));
             }
         } catch (RuntimeException exception) {
             log.debug("死信消息体不包含有效任务标识");

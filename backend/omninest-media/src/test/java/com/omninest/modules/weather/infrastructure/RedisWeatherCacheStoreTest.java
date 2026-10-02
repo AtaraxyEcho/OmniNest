@@ -4,13 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
+import tools.jackson.core.type.TypeReference;
 import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.weather.dto.WeatherDto;
 import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLocation;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -142,7 +143,8 @@ class RedisWeatherCacheStoreTest {
                 payloadCaptor.capture(),
                 Mockito.eq(Duration.ofMinutes(10))
         );
-        JSONObject payload = JSON.parseObject(payloadCaptor.getValue());
+        Map<String, Object> payload = JsonSupport.fromJson(
+                payloadCaptor.getValue(), new TypeReference<Map<String, Object>>() {});
         assertThat(payload).containsKeys(
                 "temp",
                 "feelsLike",
@@ -170,9 +172,9 @@ class RedisWeatherCacheStoreTest {
                 "hourly",
                 "daily"
         );
-        assertThat(payload.getJSONArray("hourly")).hasSize(1);
-        assertThat(payload.getJSONArray("daily")).hasSize(1);
-        assertThat(payload.getString("text")).isEqualTo(weather.text());
+        assertThat((List<?>) payload.get("hourly")).hasSize(1);
+        assertThat((List<?>) payload.get("daily")).hasSize(1);
+        assertThat(payload.get("text")).isEqualTo(weather.text());
     }
 
     private WeatherDto weather() {

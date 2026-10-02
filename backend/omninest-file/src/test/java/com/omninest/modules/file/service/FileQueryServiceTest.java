@@ -381,7 +381,7 @@ class FileQueryServiceTest {
                 ArgumentMatchers.eq(OWNER_ID),
                 ArgumentMatchers.eq("/Docs/"),
                 ArgumentMatchers.any()
-        )).thenReturn(new SliceImpl<>(List.of(childId)), new SliceImpl<>(List.of()));
+        )).thenReturn(new SliceImpl<>(List.of(childId))).thenReturn(new SliceImpl<>(List.of()));
         when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -406,7 +406,7 @@ class FileQueryServiceTest {
                 ArgumentMatchers.eq(OWNER_ID),
                 ArgumentMatchers.eq("/Media/"),
                 ArgumentMatchers.any()
-        )).thenReturn(new SliceImpl<>(List.of(childId)), new SliceImpl<>(List.of()));
+        )).thenReturn(new SliceImpl<>(List.of(childId))).thenReturn(new SliceImpl<>(List.of()));
         when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         fileQueryService.deleteNode(OWNER_ID, folderId);

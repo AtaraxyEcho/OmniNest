@@ -12,9 +12,7 @@ import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.event.VideoProbeEvent;
 import com.omninest.modules.video.repository.MediaSubtitleTrackRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.omninest.common.json.JsonSupport;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -25,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import tools.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -142,7 +141,7 @@ public class VideoProbeService {
             if (tempFile == null) {
                 return;
             }
-            JSONObject probeResult = probeMode == ProbeMode.DOCKER
+            JsonNode probeResult = probeMode == ProbeMode.DOCKER
                     ? runFfprobeDocker(tempFile)
                     : runFfprobeLocal(tempFile);
             if (probeResult == null) {
@@ -346,7 +345,7 @@ public class VideoProbeService {
         }
     }
 
-    private JSONObject runFfprobeLocal(Path file) {
+    private JsonNode runFfprobeLocal(Path file) {
         try {
             VideoProcessExecutor.Result result = processExecutor.execute(List.of(
                     "ffprobe",
@@ -364,7 +363,7 @@ public class VideoProbeService {
                 log.warn("ffprobe 退出码异常: exitCode={}", result.exitCode());
                 return null;
             }
-            return JSON.parseObject(result.output());
+            return JsonSupport.readTree(result.output());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("ffprobe 执行被中断");
@@ -375,7 +374,7 @@ public class VideoProbeService {
         }
     }
 
-    private JSONObject runFfprobeDocker(Path hostFile) {
+    private JsonNode runFfprobeDocker(Path hostFile) {
         String containerFile = DOCKER_PROBE_DIR + "/" + hostFile.getFileName().toString();
         try {
             VideoProcessExecutor.Result copyResult = processExecutor.execute(List.of(
@@ -409,7 +408,7 @@ public class VideoProbeService {
                 log.warn("Docker ffprobe 退出码异常: exitCode={}", probeResult.exitCode());
                 return null;
             }
-            return JSON.parseObject(probeResult.output());
+            return JsonSupport.readTree(probeResult.output());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Docker ffprobe 执行被中断");
@@ -438,16 +437,16 @@ public class VideoProbeService {
         }
     }
 
-    private void applyProbeResult(MediaVideoItem item, JSONObject probeResult) {
-        JSONArray streams = probeResult.getJSONArray("streams");
-        if (streams == null) {
+    private void applyProbeResult(MediaVideoItem item, JsonNode probeResult) {
+        JsonNode streams = probeResult.path("streams");
+        if (!streams.isArray()) {
             return;
         }
         List<MediaSubtitleTrack> embeddedSubtitles = new ArrayList<>();
 
         for (int i = 0; i < streams.size(); i++) {
-            JSONObject stream = streams.getJSONObject(i);
-            String codecType = stream.getString("codec_type");
+            JsonNode stream = streams.get(i);
+            String codecType = stream.path("codec_type").asText(null);
             if ("video".equals(codecType)) {
                 applyVideoStream(item, stream);
             } else if ("audio".equals(codecType)) {
@@ -460,14 +459,14 @@ public class VideoProbeService {
             }
         }
 
-        JSONObject format = probeResult.getJSONObject("format");
-        if (format != null) {
-            String formatName = format.getString("format_name");
+        JsonNode format = probeResult.path("format");
+        if (format.isObject()) {
+            String formatName = format.path("format_name").asText(null);
             if (formatName != null && !formatName.isBlank()) {
                 item.setContainerFormat(formatName);
             }
             // 提取视频总时长（秒），ffprobe 返回浮点字符串如 "7200.123456"
-            String durationStr = format.getString("duration");
+            String durationStr = format.path("duration").asText(null);
             if (durationStr != null && !durationStr.isBlank()) {
                 try {
                     item.setDurationSeconds((int) Double.parseDouble(durationStr));
@@ -482,13 +481,13 @@ public class VideoProbeService {
         }
     }
 
-    private void applyVideoStream(MediaVideoItem item, JSONObject stream) {
-        String codecName = stream.getString("codec_name");
+    private void applyVideoStream(MediaVideoItem item, JsonNode stream) {
+        String codecName = stream.path("codec_name").asText(null);
         if (codecName != null && !codecName.isBlank()) {
             item.setVideoCodec(codecName);
         }
-        Integer width = stream.getInteger("width");
-        Integer height = stream.getInteger("height");
+        Integer width = stream.hasNonNull("width") ? stream.path("width").asInt() : null;
+        Integer height = stream.hasNonNull("height") ? stream.path("height").asInt() : null;
         if (width != null && width > 0) {
             item.setResolutionWidth(width);
         }
@@ -497,8 +496,8 @@ public class VideoProbeService {
         }
     }
 
-    private void applyAudioStream(MediaVideoItem item, JSONObject stream) {
-        String codecName = stream.getString("codec_name");
+    private void applyAudioStream(MediaVideoItem item, JsonNode stream) {
+        String codecName = stream.path("codec_name").asText(null);
         if (codecName != null && !codecName.isBlank()) {
             item.setAudioCodec(codecName);
         }
@@ -509,8 +508,8 @@ public class VideoProbeService {
             "hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle"
     );
 
-    private MediaSubtitleTrack buildEmbeddedSubtitle(MediaVideoItem item, JSONObject stream, int index) {
-        String codecName = stream.getString("codec_name");
+    private MediaSubtitleTrack buildEmbeddedSubtitle(MediaVideoItem item, JsonNode stream, int index) {
+        String codecName = stream.path("codec_name").asText(null);
         if (codecName == null || codecName.isBlank()) {
             return null;
         }
@@ -518,18 +517,18 @@ public class VideoProbeService {
         if (BITMAP_SUBTITLE_CODECS.contains(codecName.trim().toLowerCase())) {
             return null;
         }
-        String language = stream.getString("tags.language");
+        String language = stream.path("tags").path("language").asText(null);
         if (language == null || language.isBlank()) {
-            JSONObject tags = stream.getJSONObject("tags");
-            language = tags != null ? tags.getString("language") : null;
+            JsonNode tags = stream.path("tags");
+            language = tags.isObject() ? tags.path("language").asText(null) : null;
         }
         if (language == null || language.isBlank()) {
             language = "und";
         }
         String title = null;
-        JSONObject tags = stream.getJSONObject("tags");
-        if (tags != null) {
-            title = tags.getString("title");
+        JsonNode tags = stream.path("tags");
+        if (tags.isObject()) {
+            title = tags.path("title").asText(null);
         }
         String label = (title != null && !title.isBlank()) ? title : language + " #" + (index + 1);
 

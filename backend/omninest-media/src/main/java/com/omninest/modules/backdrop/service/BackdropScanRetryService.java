@@ -1,6 +1,6 @@
 package com.omninest.modules.backdrop.service;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
@@ -19,6 +19,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import tools.jackson.core.type.TypeReference;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -145,7 +146,8 @@ public class BackdropScanRetryService {
         Map<String, Object> payload = Map.of();
         Optional<TaskRecord> record = taskRecordService.findTaskRecord(taskId);
         if (record.isPresent() && record.get().getPayload() != null) {
-            payload = JSON.parseObject(record.get().getPayload());
+            payload = JsonSupport.fromJson(
+                    record.get().getPayload(), new TypeReference<Map<String, Object>>() {});
         }
         UUID assetId = parseUuid(payload.get("assetId"));
         return new BackdropSecurityScanRequestedEvent(

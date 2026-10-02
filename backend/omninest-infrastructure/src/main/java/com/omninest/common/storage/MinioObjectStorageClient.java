@@ -3,9 +3,7 @@ package com.omninest.common.storage;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -278,9 +276,9 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
      */
     @Override
     public void copyObject(ObjectStorageKey source, ObjectStorageKey target) {
-        String copySource = copySource(source);
         s3Client.copyObject(CopyObjectRequest.builder()
-                .copySource(copySource)
+                .sourceBucket(source.bucket())
+                .sourceKey(source.objectKey())
                 .destinationBucket(target.bucket())
                 .destinationKey(target.objectKey())
                 .build());
@@ -291,23 +289,14 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
      */
     @Override
     public void copyObject(ObjectStorageKey source, ObjectStorageKey target, String contentType) {
-        String copySource = copySource(source);
         s3Client.copyObject(CopyObjectRequest.builder()
-                .copySource(copySource)
+                .sourceBucket(source.bucket())
+                .sourceKey(source.objectKey())
                 .destinationBucket(target.bucket())
                 .destinationKey(target.objectKey())
                 .metadataDirective(MetadataDirective.REPLACE)
                 .contentType(contentType)
                 .build());
-    }
-
-    private String copySource(ObjectStorageKey source) {
-        return URLEncoder.encode(
-                        source.bucket() + "/" + source.objectKey(),
-                        StandardCharsets.UTF_8
-                )
-                .replace("%2F", "/")
-                .replace("+", "%20");
     }
 
     /**

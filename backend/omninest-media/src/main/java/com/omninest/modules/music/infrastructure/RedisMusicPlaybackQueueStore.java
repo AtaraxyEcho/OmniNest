@@ -1,8 +1,8 @@
 package com.omninest.modules.music.infrastructure;
 
-import com.alibaba.fastjson2.JSON;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueDto;
 import com.omninest.modules.music.service.MusicPlaybackQueueStore;
@@ -44,7 +44,7 @@ public class RedisMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
         try {
             String payload = redisUtil.get(key(ownerUserId));
             if (payload != null && !payload.isBlank()) {
-                MusicPlaybackQueueDto snapshot = JSON.parseObject(payload, MusicPlaybackQueueDto.class);
+                MusicPlaybackQueueDto snapshot = JsonSupport.fromJson(payload, MusicPlaybackQueueDto.class);
                 fallback.put(ownerUserId, snapshot);
                 return Optional.of(snapshot);
             }
@@ -64,7 +64,7 @@ public class RedisMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
     public void save(UUID ownerUserId, MusicPlaybackQueueDto snapshot) {
         fallback.put(ownerUserId, snapshot);
         try {
-            redisUtil.set(key(ownerUserId), JSON.toJSONString(snapshot), CACHE_TTL);
+            redisUtil.set(key(ownerUserId), JsonSupport.toJson(snapshot), CACHE_TTL);
         } catch (RuntimeException exception) {
             log.warn("写入音乐播放队列 Redis 缓存失败，保留进程内缓存: userId={}", ownerUserId);
         }

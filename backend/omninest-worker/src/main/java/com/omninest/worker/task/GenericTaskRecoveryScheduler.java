@@ -1,6 +1,6 @@
 package com.omninest.worker.task;
 
-import com.alibaba.fastjson2.JSON;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
@@ -149,7 +149,7 @@ public class GenericTaskRecoveryScheduler {
                     taskId,
                     QueueNames.TASK_EXCHANGE,
                     dispatch.getRoutingKey(),
-                    JSON.parse(dispatch.getPayload()),
+                    JsonSupport.fromJson(dispatch.getPayload(), Object.class),
                     nextRetryAt
             );
             log.warn("通用任务心跳超时已恢复重投: taskType={}, taskId={}, routingKey={}, nextRetryAt={}",

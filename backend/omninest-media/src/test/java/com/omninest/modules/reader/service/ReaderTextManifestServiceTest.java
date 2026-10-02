@@ -72,7 +72,7 @@ class ReaderTextManifestServiceTest {
         service.replaceManifest(ITEM_ID, parsed);
 
         verify(chapterRepository).deleteByReaderItemId(ITEM_ID);
-        ArgumentCaptor<List<ReaderTextChapter>> chapters = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<ReaderTextChapter>> chapters = ArgumentCaptor.captor();
         verify(chapterRepository).saveAll(chapters.capture());
         assertThat(chapters.getValue()).singleElement().satisfies(chapter -> {
             assertThat(chapter.getChapterKey()).isEqualTo("chapter_0");
