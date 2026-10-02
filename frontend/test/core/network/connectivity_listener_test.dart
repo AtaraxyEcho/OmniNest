@@ -216,7 +216,8 @@ void main() {
         ),
       ).called(1);
       final operations = await db.select(db.syncOperations).get();
-      expect(operations.single.status, 'completed');
+      // 同步成功的 reader 操作 payload 含笔记/批注明文，成功后即从本地库清理。
+      expect(operations, isEmpty);
     });
   });
 }
