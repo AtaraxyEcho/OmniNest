@@ -112,9 +112,10 @@ try {
     if ($RequireHttps) {
         $dartDefines += '--dart-define=OMNINEST_REQUIRE_HTTPS=true'
     }
-    Invoke-CheckedCommand -Command $flutter -Arguments @(
+    # 参数模式下 + 不会自动拼接数组实参，必须先在表达式内求值再传入。
+    Invoke-CheckedCommand -Command $flutter -Arguments (@(
         'build', 'appbundle', '--release', '--no-pub'
-    ) + $dartDefines
+    ) + $dartDefines)
     if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) {
         throw "Android App Bundle was not found: $bundle"
     }
