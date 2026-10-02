@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.8</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -34,14 +34,14 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <omninest.version>${project.version}</omninest.version>
-        <!-- 覆盖 Spring Boot 管理的 Jackson 3（tools.jackson）基线 -->
-        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <!-- Spring Boot 4.1.1 的 BOM 仍管理 amqp-client 5.30.0，落后 spring-rabbit 4.1.1 声明的 5.31.0 -->
+        <rabbit-amqp-client.version>5.31.0</rabbit-amqp-client.version>
         <lombok.version>1.18.48</lombok.version>
-        <lucene.version>10.1.0</lucene.version>
+        <lucene.version>10.5.1</lucene.version>
         <minio.version>8.5.12</minio.version>
-        <aws.sdk.version>2.29.52</aws.sdk.version>
+        <aws.sdk.version>2.55.10</aws.sdk.version>
         <testcontainers.version>1.21.4</testcontainers.version>
-        <springdoc.version>3.0.3</springdoc.version>
+        <springdoc.version>3.1.1</springdoc.version>
         <swagger.annotations.version>2.2.55</swagger.annotations.version>
         <commons.compress.version>1.28.0</commons.compress.version>
         <commons.io.version>2.21.0</commons.io.version>
@@ -50,7 +50,7 @@
         <commons.codec.version>1.21.0</commons.codec.version>
         <commons.lang3.version>3.21.0</commons.lang3.version>
         <commons.logging.version>1.4.0</commons.logging.version>
-        <jackson.bom.version>2.21.5</jackson.bom.version>
+        <jackson.bom.version>2.22.3</jackson.bom.version>
         <jaxb.version>4.0.9</jaxb.version>
         <jakarta.xml.bind.api.version>4.0.5</jakarta.xml.bind.api.version>
         <nimbus.jose.jwt.version>10.10</nimbus.jose.jwt.version>
