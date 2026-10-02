@@ -79,8 +79,12 @@ dev_dependencies:
 hooks:
   user_defines:
     sqlite3:
-      source: system
-      name_windows: winsqlite3
+      # Android 7+ 的 linker namespace 禁止应用 dlopen 系统 libsqlite3.so，
+      # 因此仅 Windows 链接系统 winsqlite3；其余平台用官方预编译 SQLite 捆绑。
+      source:
+        windows: system
+      name:
+        windows: winsqlite3
 
 flutter:
   generate: true
