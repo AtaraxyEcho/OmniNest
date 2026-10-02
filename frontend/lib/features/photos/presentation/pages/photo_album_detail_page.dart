@@ -158,6 +158,9 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           onShare: () => _showShareDialog(context, ref, albumId),
           onAddPhotos: () async {
             await context.push('/photos/albums/$albumId/add');
+            if (!mounted) {
+              return;
+            }
             // 选择页返回后刷新详情，无论是否新增都以服务端数据为准。
             ref.invalidate(photoAlbumDetailProvider(albumId));
           },
@@ -179,6 +182,9 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                         FilledButton.icon(
                           onPressed: () async {
                             await context.push('/photos/albums/$albumId/add');
+                            if (!mounted) {
+                              return;
+                            }
                             ref.invalidate(photoAlbumDetailProvider(albumId));
                           },
                           icon: const Icon(Icons.add_photo_alternate_outlined),
@@ -241,6 +247,9 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                                         await context.push(
                                           '/photos/albums/$albumId/add',
                                         );
+                                        if (!mounted) {
+                                          return;
+                                        }
                                         ref.invalidate(
                                           photoAlbumDetailProvider(albumId),
                                         );

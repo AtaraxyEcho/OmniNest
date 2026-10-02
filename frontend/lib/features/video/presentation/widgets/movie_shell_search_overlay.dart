@@ -2,9 +2,8 @@ part of 'movie_shell.dart';
 
 /// 在屏幕中间显示影视搜索输入区域。
 class _MovieSearchOverlay extends StatefulWidget {
-  const _MovieSearchOverlay({required this.controller, required this.onSearch});
+  const _MovieSearchOverlay({required this.onSearch});
 
-  final TextEditingController controller;
   final ValueChanged<String> onSearch;
 
   @override
@@ -12,6 +11,14 @@ class _MovieSearchOverlay extends StatefulWidget {
 }
 
 class _MovieSearchOverlayState extends State<_MovieSearchOverlay> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -52,7 +59,7 @@ class _MovieSearchOverlayState extends State<_MovieSearchOverlay> {
           ),
           const SizedBox(height: 16),
           TextField(
-            controller: widget.controller,
+            controller: _controller,
             autofocus: true,
             style: TextStyle(
               color: context.videoColors.onSurface,
@@ -92,7 +99,7 @@ class _MovieSearchOverlayState extends State<_MovieSearchOverlay> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => widget.onSearch(widget.controller.text),
+              onPressed: () => widget.onSearch(_controller.text),
               style: FilledButton.styleFrom(
                 backgroundColor: context.videoColors.primaryContainer,
                 foregroundColor: context.videoColors.onPrimaryContainer,

@@ -354,7 +354,6 @@ class _MovieMobileTopBar extends StatelessWidget {
 
   void _showSearchDialog(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController();
     showWorkstationGeneralDialog<void>(
       context: context,
       dismissible: true,
@@ -365,7 +364,6 @@ class _MovieMobileTopBar extends StatelessWidget {
           (context, animation, secondaryAnimation) => Dialog(
             backgroundColor: Colors.transparent,
             child: _MovieSearchOverlay(
-              controller: controller,
               onSearch: (query) {
                 if (query.trim().isNotEmpty) {
                   Navigator.of(context).pop();

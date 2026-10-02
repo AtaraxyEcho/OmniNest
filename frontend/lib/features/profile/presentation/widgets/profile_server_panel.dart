@@ -29,6 +29,9 @@ class ProfileServerPanel extends ConsumerWidget {
     if (!confirmed) {
       return;
     }
+    if (!context.mounted) {
+      return;
+    }
     await ref.read(authSessionProvider.notifier).clearSession();
     await ref.read(serverConfigProvider.notifier).clear();
     if (!context.mounted) {
