@@ -76,7 +76,7 @@ output `flutter_assets/NOTICES`. Main direct dependencies (`frontend/pubspec.yam
 | dio | MIT | https://pub.dev/packages/dio |
 | flutter_riverpod | MIT | https://pub.dev/packages/flutter_riverpod |
 | go_router | BSD-3-Clause | https://pub.dev/packages/go_router |
-| drift / sqlite3_flutter_libs | MIT | https://pub.dev/packages/drift |
+| drift / sqlite3 | MIT | https://pub.dev/packages/drift |
 | media_kit family | MIT | https://pub.dev/packages/media_kit |
 | flutter_soloud | MIT | https://pub.dev/packages/flutter_soloud |
 | cached_network_image family | BSD-3-Clause | https://pub.dev/packages/cached_network_image |
