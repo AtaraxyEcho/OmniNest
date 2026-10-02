@@ -18,6 +18,8 @@ import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_detail_text_content.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/reader/presentation/widgets/book_detail_space.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -51,6 +53,35 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
     // 漫画与正文分支自带 Sliver 滚动体（章节/批注/书签需懒建），声明后骨架不再二次包裹。
     final detailItem = detailAsync.asData?.value.item;
     final isComicDetail = detailItem?.isComic ?? false;
+
+    // 移动壳层（四空间）的文本书籍走原型 BookDetail 空间；PDF/漫画与
+    // 桌面端继续使用模块详情视图。
+    final hostedBook =
+        MobileShellScope.isHosted(context) &&
+        detailItem != null &&
+        !isComicDetail &&
+        detailItem.itemType.toUpperCase() != 'PDF';
+    if (hostedBook) {
+      return ReaderPageScaffold(
+        target: ReaderPageTarget.library,
+        enablePopGuard: false,
+        childOwnScroll: true,
+        headerPadding: EdgeInsets.zero,
+        header: _DetailBackBar(onTap: _handleBack),
+        child: BookDetailSpace(
+          itemId: widget.itemId,
+          bookshelfBusy: _bookshelfBusy,
+          bookshelfAdded: detailItem.addedToBookshelf,
+          onToggleBookshelf: _toggleBookshelf,
+          onReadChapter: (chapterId, {required resume}) {
+            context.push(
+              '/reader/items/${widget.itemId}/chapters/$chapterId'
+              '${resume ? '' : '?entry=chapter'}',
+            );
+          },
+        ),
+      );
+    }
     final isPdfDetail =
         detailItem != null &&
         detailItem.itemType.toUpperCase() == 'PDF' &&

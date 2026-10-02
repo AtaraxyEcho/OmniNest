@@ -2,6 +2,20 @@ part of 'reader_view_page.dart';
 
 /// [_ReaderViewPageState] 的根构建树：路由退出、详情/章节错误与骨架态。
 extension _ReaderViewPageRootBuild on _ReaderViewPageState {
+  /// 移动壳层 + 夜间玻璃调色板：底色降为 92% 玻璃，路由注册的 focus
+  /// 环境层透出（原型 ReaderFocus 的 rgba(23,26,23,.92) + 环境模糊）。
+  Color _resolveSurface() {
+    final mobileShell = shouldUseResponsiveMobileShell(
+      mobilePlatform: isMobilePlatform,
+      width: MediaQuery.sizeOf(context).width,
+    );
+    if (mobileShell &&
+        _settings.paletteId == ReaderReadingPalette.nightGlass.id) {
+      return _settings.surfaceColor.withValues(alpha: 0.92);
+    }
+    return _settings.surfaceColor;
+  }
+
   Widget buildReaderView(BuildContext context) {
     final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
     final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
@@ -34,7 +48,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
         safePop();
       },
       child: Scaffold(
-        backgroundColor: _settings.surfaceColor,
+        backgroundColor: _resolveSurface(),
         body: detailAsync.when(
           data: (detail) {
             if (bookAsync.hasError && parsedBook == null) {
@@ -72,7 +86,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
                 );
               }
               if (_isSwitchingChapter && !_showChapterLoadingOverlay) {
-                return ColoredBox(color: _settings.surfaceColor);
+                return ColoredBox(color: _resolveSurface());
               }
               return _buildReaderSkeleton();
             }

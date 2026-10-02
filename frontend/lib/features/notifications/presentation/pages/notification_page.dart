@@ -15,6 +15,9 @@ import 'package:omninest/features/notifications/domain/notification_models.dart'
 import 'package:omninest/features/notifications/presentation/utils/notification_action.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_type_l10n.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/notifications/presentation/pages/notification_page_mobile.dart';
+import 'package:omninest/features/notifications/presentation/utils/notification_time_format.dart';
 
 /// 通知中心：建筑极简主义工位形态。
 ///
@@ -53,6 +56,11 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 移动壳层托管态（MobileHostedRoute 挂 scope）切换为移动形态：
+    // 玻璃横幅 + 两档分段 + 分组发丝线列表，桌面工位路径零变化。
+    if (MobileShellScope.isHosted(context)) {
+      return const NotificationMobileView();
+    }
     final state = ref.watch(notificationControllerProvider);
     final unreadCount = ref.watch(unreadCountProvider);
     // 无 activity:write 的角色隐藏全部主动写入口，只保留浏览。
@@ -230,12 +238,16 @@ class _NotificationTopBar extends StatelessWidget {
             child: VerticalDivider(width: 1, color: scheme.outlineVariant),
           ),
           const SizedBox(width: 12),
-          Text(
-            l10n.notificationCenterTitle,
-            style: TextStyle(
-              fontSize: AppTypography.bodyMedium,
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurface,
+          Flexible(
+            child: Text(
+              l10n.notificationCenterTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
             ),
           ),
           if (unreadCount > 0) ...[
@@ -259,9 +271,11 @@ class _NotificationTopBar extends StatelessWidget {
             ),
           ],
           const Spacer(),
+          // 移动窄屏收纳：全部已读降为图标钮，清空/设置保留图标钮形态。
           if (canManage && unreadCount > 0) ...[
-            WorkstationActionButton(
-              label: l10n.notificationMarkAllRead,
+            WorkstationIconButton(
+              tooltip: l10n.notificationMarkAllRead,
+              icon: Icons.done_all_outlined,
               onPressed: onMarkAllRead,
             ),
             const SizedBox(width: 8),
@@ -608,14 +622,7 @@ class _NotificationCard extends StatelessWidget {
   }
 
   String _formatTime(BuildContext context, DateTime dateTime) {
-    final l10n = AppLocalizations.of(context);
-    final diff = DateTime.now().difference(dateTime);
-    if (diff.inMinutes < 1) return l10n.notificationTimeNow;
-    if (diff.inHours < 1) return l10n.notificationTimeMinutes(diff.inMinutes);
-    if (diff.inDays < 1) return l10n.notificationTimeHours(diff.inHours);
-    if (diff.inDays < 7) return l10n.notificationTimeDays(diff.inDays);
-    String twoDigits(int value) => value.toString().padLeft(2, '0');
-    return '${dateTime.year}-${twoDigits(dateTime.month)}-${twoDigits(dateTime.day)} ${twoDigits(dateTime.hour)}:${twoDigits(dateTime.minute)}';
+    return formatNotificationTime(context, dateTime);
   }
 }
 

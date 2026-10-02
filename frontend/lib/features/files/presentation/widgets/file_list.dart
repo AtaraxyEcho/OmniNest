@@ -7,6 +7,8 @@ import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
@@ -62,6 +64,7 @@ class FileList extends StatelessWidget {
     final mobile =
         Theme.of(context).platform == TargetPlatform.android ||
         Theme.of(context).platform == TargetPlatform.iOS;
+    final colors = context.filesColors;
     return ListView.builder(
       itemCount: files.length + (draftFolderName == null ? 0 : 1),
       itemBuilder: (context, index) {
@@ -74,7 +77,7 @@ class FileList extends StatelessWidget {
                 onSubmit: onDraftFolderSubmit ?? (_) {},
                 onCancel: onDraftFolderCancel ?? () {},
               ),
-              Divider(height: 1),
+              Divider(height: 1, color: colors.outlineVariant),
             ],
           );
         }
@@ -93,7 +96,7 @@ class FileList extends StatelessWidget {
         );
         return Column(
           mainAxisSize: MainAxisSize.min,
-          children: [row, const Divider(height: 1)],
+          children: [row, Divider(height: 1, color: colors.outlineVariant)],
         );
       },
     );
@@ -166,6 +169,21 @@ class _FileRowState extends State<_FileRow> {
               actions.onToggleSelection!(file.id);
             }
             : null;
+    // 移动壳层：原型行皮肤（彩色类型图标 + 发丝线 + lime 选中），交互
+    // 语义与工位行完全一致（单击检视/双击打开/长按多选）。
+    if (MobileShellScope.isHosted(context)) {
+      // 移动语义：单击直接打开/预览，长按进入多选，检视经行尾 more。
+      return FileEnvRow(
+        file: file,
+        selected: widget.selected,
+        onTap: activate,
+        onLongPress: longPress,
+        onMore:
+            widget.enabled && actions.onInspect != null
+                ? () => actions.onInspect!(file.id)
+                : null,
+      );
+    }
     final row = Semantics(
       button: activate != null,
       enabled: activate != null,

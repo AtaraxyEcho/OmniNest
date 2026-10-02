@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
+
+import 'package:intl/intl.dart' show DateFormat;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -13,7 +16,6 @@ import 'package:omninest/core/widgets/animated_card.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
-import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
@@ -24,20 +26,21 @@ import 'package:omninest/features/portal/presentation/widgets/storage_overview_w
 import 'package:omninest/features/portal/presentation/widgets/now_playing_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/reading_progress_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_dialog.dart';
+import 'package:omninest/features/portal/presentation/widgets/weather_detail_sheet.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_glass_components.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_glass_sliver_app_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
-import 'package:omninest/core/utils/file_size_formatter.dart';
-import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
+import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'portal_mobile_system_widgets.dart';
@@ -521,36 +524,6 @@ class _ErrorCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PortalInlineRetry extends StatelessWidget {
-  const _PortalInlineRetry({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context);
-    return Row(
-      children: [
-        Icon(Icons.sync_problem_rounded, size: 16, color: scheme.error),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            message,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ),
-        TextButton(onPressed: onRetry, child: Text(l10n.coreRetry)),
-      ],
     );
   }
 }

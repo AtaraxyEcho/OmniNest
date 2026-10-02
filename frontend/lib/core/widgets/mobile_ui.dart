@@ -1,6 +1,8 @@
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 
 /// 移动端页面的半透明内容表面。
 class MobilePageSurface extends StatelessWidget {
@@ -17,6 +19,15 @@ class MobilePageSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 托管模块页固定环境深底（样例 module-overlay rgba(10,15,14,.94)）：
+    // pageMask 取自主题，浅色主题下为浅色会导致浅字内容不可见。
+    if (MobileShellScope.isHosted(context)) {
+      final double alpha = (backdropOpacity ?? 0.94).clamp(0.0, 1.0).toDouble();
+      return ColoredBox(
+        color: MobileEnvColors.stage.withValues(alpha: alpha),
+        child: child,
+      );
+    }
     return ColoredBox(
       color:
           exposeBackdrop
@@ -126,28 +137,36 @@ class MobileSegmentedControl<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 样例 .segmented：紧凑胶囊容器（r16·内衬 4·白 9% 描边），
+    // 选中段酸绿实心 + 墨绿深字 + 投影。段数超出可用宽度时整体
+    // 等比缩放兜底（样例最多四档，不会触达该路径）。
     return Semantics(
       container: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.mobileColors.surface,
-          borderRadius: BorderRadius.circular(MobileLayoutTokens.radius),
-          border: Border.all(color: context.mobileColors.outline),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(3),
-          child: Row(
-            children: [
-              for (final value in values)
-                Expanded(
-                  child: _MobileSegment(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: MobileEnvColors.segmentBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: MobileEnvColors.line09),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final value in values) ...[
+                  _MobileSegment(
                     label: labelBuilder(value),
                     icon: iconBuilder?.call(value),
                     selected: value == selected,
                     onTap: () => onSelected(value),
                   ),
-                ),
-            ],
+                  if (value != values.last) const SizedBox(width: 4),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -164,9 +183,9 @@ class _MobileSegment extends StatelessWidget {
   });
 
   final String label;
-  final IconData? icon;
   final bool selected;
   final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -177,23 +196,31 @@ class _MobileSegment extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(12),
           onTap: onTap,
           child: AnimatedContainer(
             duration: MobileLayoutTokens.stateDuration,
             curve: MobileLayoutTokens.motionCurve,
-            constraints: const BoxConstraints(
-              minHeight: MobileLayoutTokens.minimumTarget,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            constraints: const BoxConstraints(minWidth: 66, minHeight: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color:
+              color: selected ? MobileEnvColors.accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow:
                   selected
-                      ? context.mobileColors.surfaceSelected
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
+                      ? const [
+                        BoxShadow(
+                          color: Color(0x2E000000),
+                          offset: Offset(0, 3),
+                          blurRadius: 10,
+                        ),
+                      ]
+                      : null,
             ),
+            // 紧凑分段下宽度由文字自定（minWidth 66 兜底），不得使用
+            // 弹性子级，避免 shrink-wrap 链路的无界宽度断言。
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (icon != null) ...[
@@ -202,24 +229,22 @@ class _MobileSegment extends StatelessWidget {
                     size: 18,
                     color:
                         selected
-                            ? context.mobileColors.musicAccent
-                            : context.mobileColors.textSecondary,
+                            ? MobileEnvColors.onAccentDeep
+                            : MobileEnvColors.inkMuted,
                   ),
                   const SizedBox(width: 7),
                 ],
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color:
-                          selected
-                              ? context.mobileColors.textPrimary
-                              : context.mobileColors.textSecondary,
-                      fontSize: AppTypography.bodyMedium,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color:
+                        selected
+                            ? MobileEnvColors.onAccentDeep
+                            : MobileEnvColors.inkMuted,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ],
@@ -520,6 +545,340 @@ class MobileSettingsTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 模块全屏页的玻璃圆动作钮（样例 .icon-button：48px 圆、深绿玻璃底、
+/// 白 10% 细描边）。
+class MobileGlassIconButton extends StatelessWidget {
+  const MobileGlassIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 48,
+      child: Tooltip(
+        message: tooltip,
+        child: IconButton(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 20, color: MobileEnvColors.ink),
+          style: IconButton.styleFrom(
+            backgroundColor: MobileEnvColors.iconButtonGlass,
+            foregroundColor: MobileEnvColors.ink,
+            side: const BorderSide(color: MobileEnvColors.line10),
+            minimumSize: const Size.square(48),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 模块全屏页玻璃横幅（样例 module-overlay > header）：返回圆钮 +
+/// 居中标题/副题 + 右侧动作钮位；hosted 模块页（音乐/照片/影视/通知）
+/// 由根级路由承载时统一使用。
+class MobileModuleHeader extends StatelessWidget {
+  const MobileModuleHeader({
+    required this.title,
+    required this.subtitle,
+    required this.onBack,
+    this.backTooltip,
+    this.actions = const <Widget>[],
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onBack;
+  final String? backTooltip;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 90,
+        padding: const EdgeInsets.fromLTRB(14, 18, 14, 7),
+        child: Center(
+          child: Row(
+            children: [
+              MobileGlassIconButton(
+                tooltip:
+                    backTooltip ??
+                    MaterialLocalizations.of(context).backButtonTooltip,
+                icon: Icons.arrow_back_rounded,
+                onPressed: onBack,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: MobileEnvColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: MobileEnvColors.inkMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              for (final action in actions) ...[
+                const SizedBox(width: 8),
+                action,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例形态确认弹窗（底部玻璃 sheet）：眉标 + 衬线标题 + 说明 +
+/// 整宽确认钮（destructive 绯红描边 / 常规酸绿实底）+ 文本取消。
+/// 托管态所有二次确认统一走本入口，替代工位直角确认窗。
+Future<bool> showMobileConfirmSheet(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String? confirmLabel,
+  String? cancelLabel,
+  bool destructive = false,
+}) async {
+  final l10n = MaterialLocalizations.of(context);
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    useRootNavigator: true,
+    backgroundColor: MobileEnvColors.sheetSolid,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                destructive ? 'CONFIRM' : 'CONTINUE',
+                style: TextStyle(
+                  fontSize: 8, // ignore: font_size_whitelist
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                  color:
+                      destructive
+                          ? const Color(0xFFE2A1A1)
+                          : MobileEnvColors.accent,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 21, // ignore: font_size_whitelist
+                  fontWeight: FontWeight.w400,
+                  color: MobileEnvColors.ink,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 11, // ignore: font_size_whitelist
+                  height: 1.5,
+                  color: MobileEnvColors.inkMuted,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.of(sheetContext).pop(true),
+                style:
+                    destructive
+                        ? TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFE2A1A1),
+                          minimumSize: const Size.fromHeight(46),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(13),
+                            side: const BorderSide(
+                              color: Color(0x38E2A1A1),
+                            ),
+                          ),
+                        )
+                        : TextButton.styleFrom(
+                          backgroundColor: MobileEnvColors.accent,
+                          foregroundColor: MobileEnvColors.onAccent,
+                          minimumSize: const Size.fromHeight(46),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                        ),
+                child: Text(
+                  confirmLabel ?? l10n.okButtonLabel,
+                  style: const TextStyle(
+                    fontSize: 12, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(sheetContext).pop(false),
+                style: TextButton.styleFrom(
+                  foregroundColor: MobileEnvColors.inkMuted,
+                  minimumSize: const Size.fromHeight(42),
+                ),
+                child: Text(
+                  cancelLabel ?? l10n.cancelButtonLabel,
+                  style: const TextStyle(
+                    fontSize: 11, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+  return result ?? false;
+}
+
+/// 样例 .env-switch：34×20 胶囊轨道（关=白 14%，开=酸绿）+ 14px 圆点
+/// （关=墨白，开=深墨右移 14px），200ms ease。
+class MobileEnvSwitch extends StatelessWidget {
+  const MobileEnvSwitch({
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      toggled: value,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onChanged == null ? null : () => onChanged!(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.ease,
+          width: 34,
+          height: 20,
+          decoration: BoxDecoration(
+            color: value ? MobileEnvColors.accent : const Color(0x24FFFFFF),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.ease,
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color:
+                      value
+                          ? MobileEnvColors.onAccentDeep
+                          : MobileEnvColors.ink,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例 section-title 段头：眉标（9px 语义档·字距 1.5·w700 弱化）+
+/// Instrument Serif 标题 + 右侧动作钮位；模块页 hosted 内容统一使用。
+class MobileEnvSectionHeader extends StatelessWidget {
+  const MobileEnvSectionHeader({
+    required this.title,
+    this.eyebrow,
+    this.action,
+    super.key,
+  });
+
+  final String title;
+  final String? eyebrow;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (eyebrow != null && eyebrow!.isNotEmpty)
+          Text(
+            eyebrow!.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: MobileEnvColors.inkFaint,
+              fontSize: AppTypography.labelSmall,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: AppTypography.serifFamily,
+                  fontFamilyFallback: AppTypography.serifFamilyFallback,
+                  color: MobileEnvColors.ink,
+                  fontSize: AppTypography.headlineSmall,
+                  fontWeight: FontWeight.w600,
+                  height: 1.15,
+                ),
+              ),
+            ),
+            if (action != null) ...[const SizedBox(width: 12), action!],
+          ],
+        ),
+      ],
     );
   }
 }

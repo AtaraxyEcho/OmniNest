@@ -920,6 +920,41 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
+  /// 无感续载：滚动近底时追加主列表下一页（保留当前目录/空间/分类
+  /// 上下文）；上下文在请求期间变化则丢弃结果。
+  Future<void> loadMoreFiles() async {
+    final current = state.asData?.value;
+    if (current == null ||
+        current.isBusy ||
+        current.filePage + 1 >= current.fileTotalPages) {
+      return;
+    }
+    await _runAction(FileOperation.refresh, () async {
+      final result = await _listFilePageForSpace(
+        spaceType: current.spaceType,
+        parentId: current.parentId,
+        category: current.fileCategory,
+        page: current.filePage + 1,
+        size: current.filePageSize,
+      );
+      final latest = state.asData?.value;
+      if (latest == null ||
+          latest.parentId != current.parentId ||
+          latest.spaceType != current.spaceType ||
+          latest.filePage != current.filePage) {
+        return;
+      }
+      state = AsyncData(
+        latest.copyWith(
+          files: [...latest.files, ...result.items],
+          filePage: result.page,
+          fileTotalElements: result.totalElements,
+          fileTotalPages: result.totalPages,
+        ),
+      );
+    });
+  }
+
   /// 跳转到主列表指定页：refreshFiles 按目标页重放窗口（向前收缩、
   /// 向后扩页），页式导航语义；正在加载或分区不符时忽略。
   Future<void> goToFilePage(int page) async {

@@ -5,10 +5,12 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_section_swipe.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
@@ -165,8 +167,10 @@ class _MovieShellState extends ConsumerState<MovieShell> {
       final prev = _sectionHistory.removeLast();
       _lastSection = prev;
       widget.onSectionSelected?.call(prev);
+    } else if (context.canPop()) {
+      context.pop();
     } else {
-      context.go('/portal');
+      context.go(modulePortalLinkTarget(context));
     }
   }
 
@@ -339,7 +343,9 @@ class MovieTopBar extends StatelessWidget {
                           )
                           .toList(),
             ),
-          WorkstationPortalLink(onTap: () => context.go('/portal')),
+          WorkstationPortalLink(
+            onTap: () => context.go(modulePortalLinkTarget(context)),
+          ),
           const SizedBox(width: 12),
           if (wide) ...[
             // 三端统一品牌入口：以 logo 替代原电影图标，与 Portal 顶栏同语言。

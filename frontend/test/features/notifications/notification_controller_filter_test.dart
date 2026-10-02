@@ -89,6 +89,40 @@ void main() {
     expect(after.allTotal, before.allTotal + 1);
   });
 
+  test('loadMore 追加下一页并按 id 去重，越界不再请求', () async {
+    final paged = _PagedNotificationApi();
+    final box = ProviderContainer.test(
+      overrides: [notificationApiProvider.overrideWithValue(paged)],
+    );
+    addTearDown(box.dispose);
+    box.listen(notificationControllerProvider, (_, _) {});
+    final pagedController = box.read(notificationControllerProvider.notifier);
+
+    await pagedController.load(size: 2);
+    var state = box.read(notificationControllerProvider);
+    expect(state.items.map((item) => item.id), ['a', 'b']);
+    expect(state.currentPage, 0);
+
+    // 第二页返回 [b, c]：重复 id b 去重后仅追加 c。
+    await pagedController.loadMore(size: 2);
+    state = box.read(notificationControllerProvider);
+    expect(state.items.map((item) => item.id), ['a', 'b', 'c']);
+    expect(state.currentPage, 1);
+    expect(state.isLoading, isFalse);
+
+    // total=5、size=2 共 3 页（0-2）：第三页仍返回 [b, c]，去重后不变。
+    await pagedController.loadMore(size: 2);
+    state = box.read(notificationControllerProvider);
+    expect(state.items.map((item) => item.id), ['a', 'b', 'c']);
+    expect(state.currentPage, 2);
+
+    // 越过最后一页后不再发起请求。
+    final callsBefore = paged.listCalls.length;
+    await pagedController.loadMore(size: 2);
+    expect(paged.listCalls.length, callsBefore);
+    expect(box.read(notificationControllerProvider).currentPage, 2);
+  });
+
   test('全部视图 markRead 就地置已读且 total 不变', () async {
     await controller().load();
     final target = container.read(notificationControllerProvider).items.first;
@@ -99,6 +133,23 @@ void main() {
     expect(state.items.firstWhere((item) => item.id == target.id).read, isTrue);
     expect(state.total, 3);
   });
+}
+
+/// 分页去重回归专用：total=5，页 0 返回 [a, b]，页 1 返回 [b, c]。
+class _PagedNotificationApi extends _FakeNotificationApi {
+  @override
+  Future<({List<NotificationDto> items, int total})> list({
+    int page = 0,
+    int size = 20,
+    bool unreadOnly = false,
+  }) async {
+    listCalls.add((page: page, unreadOnly: unreadOnly));
+    final ids = page == 0 ? ['a', 'b'] : ['b', 'c'];
+    final List<NotificationDto> items = [
+      for (final id in ids) _FakeNotificationApi._dto(id, false),
+    ];
+    return (items: items, total: 5);
+  }
 }
 
 class _FakeNotificationApi extends NotificationApi {

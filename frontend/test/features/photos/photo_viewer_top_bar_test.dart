@@ -48,6 +48,7 @@ Future<void> _pumpTopBar(
           onShare: () {},
           showInfo: false,
           compact: true,
+          countText: '3 / 24',
         ),
       ),
     ),
@@ -56,33 +57,16 @@ Future<void> _pumpTopBar(
 }
 
 void main() {
-  testWidgets('紧凑档更多菜单提供收藏动作并触发回调', (tester) async {
-    var toggled = 0;
-    await _pumpTopBar(
-      tester,
-      favorite: false,
-      onToggleFavorite: () => toggled++,
-    );
+  testWidgets('紧凑档头部只保留幻灯片直达，动作行移至底部', (tester) async {
+    await _pumpTopBar(tester, favorite: false, onToggleFavorite: () {});
 
-    await tester.tap(find.byIcon(Icons.more_vert_rounded));
-    await tester.pumpAndSettle();
-
-    expect(find.text('收藏'), findsOneWidget);
-    expect(find.text('取消收藏'), findsNothing);
-
-    await tester.tap(find.text('收藏'));
-    await tester.pumpAndSettle();
-
-    expect(toggled, 1);
+    expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
   });
 
-  testWidgets('已收藏照片在更多菜单显示取消收藏', (tester) async {
-    await _pumpTopBar(tester, favorite: true, onToggleFavorite: () {});
+  testWidgets('紧凑档计数与拍摄日期同显', (tester) async {
+    await _pumpTopBar(tester, favorite: false, onToggleFavorite: () {});
 
-    await tester.tap(find.byIcon(Icons.more_vert_rounded));
-    await tester.pumpAndSettle();
-
-    expect(find.text('取消收藏'), findsOneWidget);
-    expect(find.text('收藏'), findsNothing);
+    expect(find.text('3 / 24 · 2026-01-01'), findsOneWidget);
   });
 }

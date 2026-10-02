@@ -131,7 +131,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('全部已读'), findsOneWidget);
+    expect(find.byTooltip('全部已读'), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline_outlined), findsOneWidget);
     expect(find.byIcon(Icons.close_rounded), findsOneWidget);
     expect(find.text('[1 未读]'), findsOneWidget);

@@ -628,11 +628,9 @@ void main() {
     await tester.pumpWidget(_harness(scope: scope).child);
     await tester.pumpAndSettle();
 
-    // 信息入口在弹出菜单中；紧凑宽度为底部滑入面板。
+    // 信息入口在底部动作行；紧凑宽度为底部滑入面板。
     expect(find.byType(AnimatedSize), findsNothing);
-    await tester.tap(find.byIcon(Icons.more_vert_rounded));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Show Info').last);
+    await tester.tap(find.byIcon(Icons.info_outline_rounded));
     await tester.pumpAndSettle();
 
     expect(find.text('Photo Info'), findsOneWidget);

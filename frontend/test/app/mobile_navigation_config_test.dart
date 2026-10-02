@@ -4,23 +4,21 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 
 void main() {
   group('MobileNavigationConfig', () {
-    test('导航顺序为 首页·音乐·照片·媒体·阅读·文件', () {
+    test('一级导航为四个空间：首页·媒体库·阅读·文件', () {
       expect(MobileNavigationConfig.portalBranch, 0);
-      expect(MobileNavigationConfig.musicBranch, 1);
-      expect(MobileNavigationConfig.photosBranch, 2);
-      expect(MobileNavigationConfig.videoBranch, 3);
-      expect(MobileNavigationConfig.readerBranch, 4);
-      expect(MobileNavigationConfig.filesBranch, 5);
+      expect(MobileNavigationConfig.libraryBranch, 1);
+      expect(MobileNavigationConfig.readerBranch, 2);
+      expect(MobileNavigationConfig.filesBranch, 3);
     });
 
     test('分支与一级导航项双向映射保持一致', () {
-      for (var index = 0; index < 6; index++) {
+      for (var index = 0; index < 4; index++) {
         expect(MobileNavigationConfig.destinationIndexForBranch(index), index);
         expect(MobileNavigationConfig.branchForDestination(index), index);
       }
       expect(
         MobileNavigationConfig.branchForDestination(99),
-        MobileNavigationConfig.readerBranch,
+        MobileNavigationConfig.libraryBranch,
       );
     });
 
@@ -33,9 +31,9 @@ void main() {
       );
       expect(
         MobileNavigationConfig.searchScopeForBranch(
-          MobileNavigationConfig.videoBranch,
+          MobileNavigationConfig.readerBranch,
         ),
-        'video',
+        'reader',
       );
       expect(
         MobileNavigationConfig.searchScopeForBranch(
@@ -45,28 +43,36 @@ void main() {
       );
     });
 
-    test('动态壁纸仅保留给首页与音乐，内容模块隐藏壁纸', () {
+    test('四空间共享壁纸身份并按环境档位降存在感', () {
       expect(
         MobileNavigationConfig.backdropPolicyForBranch(
           MobileNavigationConfig.portalBranch,
         ),
         AppBackdropPolicy.portalMobile,
       );
-      expect(
-        MobileNavigationConfig.backdropPolicyForBranch(
-          MobileNavigationConfig.musicBranch,
-        ),
-        AppBackdropPolicy.musicDeck,
+      final libraryPolicy = MobileNavigationConfig.backdropPolicyForBranch(
+        MobileNavigationConfig.libraryBranch,
       );
-      for (final branch in <int>[
-        MobileNavigationConfig.filesBranch,
-        MobileNavigationConfig.photosBranch,
-        MobileNavigationConfig.videoBranch,
+      expect(libraryPolicy, AppBackdropPolicy.ambientMedia);
+      expect(libraryPolicy.visible, isTrue);
+      expect(libraryPolicy.environmentMode, AppEnvironmentMode.ambient);
+      final readerPolicy = MobileNavigationConfig.backdropPolicyForBranch(
         MobileNavigationConfig.readerBranch,
+      );
+      expect(readerPolicy.environmentMode, AppEnvironmentMode.focus);
+      final filesPolicy = MobileNavigationConfig.backdropPolicyForBranch(
+        MobileNavigationConfig.filesBranch,
+      );
+      expect(filesPolicy.environmentMode, AppEnvironmentMode.utility);
+      expect(filesPolicy.visible, isTrue);
+      // 环境档位全部静态化或连续化由档位决定，但一律可见（共享身份）。
+      for (final branch in <int>[
+        MobileNavigationConfig.libraryBranch,
+        MobileNavigationConfig.readerBranch,
+        MobileNavigationConfig.filesBranch,
       ]) {
         final policy = MobileNavigationConfig.backdropPolicyForBranch(branch);
-        expect(policy, AppBackdropPolicy.work);
-        expect(policy.visible, isFalse);
+        expect(policy.visible, isTrue);
         expect(policy.playbackMode, AppBackdropPlaybackMode.paused);
         expect(policy.motionAllowed, isFalse);
       }

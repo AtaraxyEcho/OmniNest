@@ -22,6 +22,10 @@ import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/app/theme/mobile_env_theme.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/app_form_factor.dart';
@@ -30,6 +34,7 @@ import 'package:omninest/core/widgets/hosted_touch_canvas.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -76,6 +81,8 @@ part 'file_browser_page_folder_picker.dart';
 part 'file_browser_page_dialogs.dart';
 part 'file_browser_page_mobile_actions.dart';
 part 'file_browser_page_mobile_home.dart';
+part 'file_mobile_folder_view.dart';
+part 'file_mobile_section_views.dart';
 
 /// Inspector 常驻 dock 的自适应阈值：窗口窄于该值时隐藏 dock，
 /// 检视改走贴底抽屉，为表格保留完整宽度。
@@ -299,9 +306,28 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
     final narrow = MediaQuery.sizeOf(context).width < 1100;
     if (hosted && narrow && !_mobileHomeOpen) {
       ref.read(fileBrowserControllerProvider.notifier).clearSelection();
+      // 目录逐级回退：子目录内先回上一级，根目录才回模块首页。
+      final crumbs =
+          ref.read(fileBrowserControllerProvider).asData?.value.breadcrumbs ??
+          const <FileNode>[];
+      if (crumbs.length > 1) {
+        unawaited(
+          ref
+              .read(fileBrowserControllerProvider.notifier)
+              .goToBreadcrumb(crumbs.length - 2),
+        );
+        return;
+      }
       // 回到首页即回到导航根：清空分区历史栈，首页态的返回直接离站，
       // 否则历史栈残留会让返回做一次不可见的分区回退（返回键失灵观感）。
+      // 目录态回首页需同时回根列表，否则首页内联列表残留子目录内容。
       _sectionHistory.clear();
+      final rootState = ref.read(fileBrowserControllerProvider).asData?.value;
+      if (rootState != null &&
+          rootState.section == FileManagerSection.allFiles &&
+          rootState.breadcrumbs.isNotEmpty) {
+        unawaited(ref.read(fileBrowserControllerProvider.notifier).goToRoot());
+      }
       setState(() => _mobileHomeOpen = true);
       return;
     }
@@ -317,6 +343,14 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   /// 从首页打开分区：进入列表态。
   void _openMobileSection(FileManagerSection section) {
     _onSectionChanged(section);
+    if (!_mobileHomeOpen) {
+      return;
+    }
+    setState(() => _mobileHomeOpen = false);
+  }
+
+  /// 从首页内联列表直接进入工作区（不切换分区，保留当前列表态）。
+  void _enterMobileWorkspace() {
     if (!_mobileHomeOpen) {
       return;
     }
@@ -355,6 +389,7 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
             onSectionChanged: _onSectionChanged,
             mobileHomeOpen: _mobileHomeOpen,
             onOpenMobileSection: _openMobileSection,
+            onEnterMobileWorkspace: _enterMobileWorkspace,
           );
         },
         error:
@@ -379,6 +414,7 @@ class _FileManagerShell extends ConsumerStatefulWidget {
     required this.onSectionChanged,
     required this.mobileHomeOpen,
     required this.onOpenMobileSection,
+    required this.onEnterMobileWorkspace,
   });
 
   final FileBrowserState state;
@@ -388,6 +424,7 @@ class _FileManagerShell extends ConsumerStatefulWidget {
   /// 移动首页态与其打开分区的回调（仅托管窄屏使用）。
   final bool mobileHomeOpen;
   final void Function(FileManagerSection) onOpenMobileSection;
+  final VoidCallback onEnterMobileWorkspace;
 
   @override
   ConsumerState<_FileManagerShell> createState() => _FileManagerShellState();
@@ -428,7 +465,7 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
         }
       },
     );
-    return LayoutBuilder(
+    final content = LayoutBuilder(
       builder: (context, constraints) {
         // 桌面侧栏路径仅非托管窗口使用；托管态（手机/平板）一律走触屏布局。
         // 阈值与 DesktopFormMinWidth 同源于 ResponsiveBreakpoints.workbenchRail。
@@ -466,8 +503,51 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                       child: Column(
                         children: [
                           if (hosted && !isWide && !widget.mobileHomeOpen) ...[
-                            _FileMobileBackRow(onBack: widget.onBack),
-                            _FileHostedSearchBar(section: state.section),
+                            _MobileFolderHeader(
+                              state: state,
+                              controller: controller,
+                              onBack: widget.onBack,
+                            ),
+                            if (_isMobileFolderSection(state.section))
+                              _MobileFolderSegments(state: state)
+                            else
+                              const SizedBox(height: 8),
+                            if (_isMobileFolderSection(state.section) &&
+                                state.section == FileManagerSection.allFiles &&
+                                state.breadcrumbs.length > 1)
+                              _MobileGoUpBar(
+                                parentName:
+                                    state
+                                        .breadcrumbs[state.breadcrumbs.length -
+                                            2]
+                                        .name,
+                                onTap:
+                                    () => unawaited(
+                                      _runFileAction(
+                                        context,
+                                        () => ref
+                                            .read(
+                                              fileBrowserControllerProvider
+                                                  .notifier,
+                                            )
+                                            .goToBreadcrumb(
+                                              state.breadcrumbs.length - 2,
+                                            ),
+                                      ),
+                                    ),
+                              ),
+                            if (state.section == FileManagerSection.sharedSpace)
+                              _MobileShareManageEntry(
+                                onTap:
+                                    () => unawaited(
+                                      _runFileAction(
+                                        context,
+                                        () => controller.loadSection(
+                                          FileManagerSection.myShares,
+                                        ),
+                                      ),
+                                    ),
+                              ),
                           ],
                           if (state.lastActionError case final error?)
                             Padding(
@@ -535,6 +615,7 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                               child: _FileMobileHome(
                                 state: state,
                                 onOpenSection: widget.onOpenMobileSection,
+                                onEnterWorkspace: widget.onEnterMobileWorkspace,
                               ),
                             )
                           else
@@ -543,7 +624,10 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                                 displacement: 40,
                                 edgeOffset: 64,
                                 strokeWidth: 2.5,
-                                color: context.filesColors.onSurfaceVariant,
+                                color:
+                                    hosted
+                                        ? MobileEnvColors.accent
+                                        : context.filesColors.onSurfaceVariant,
                                 onRefresh: () async {
                                   await _runFileAction(
                                     context,
@@ -559,7 +643,7 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                                     16,
                                     10,
                                     16,
-                                    hosted ? 96 : 112,
+                                    hosted ? 16 : 112,
                                   ),
                                   child: _AnimatedSectionBody(state: state),
                                 ),
@@ -579,10 +663,10 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                     ),
                 ],
               ),
+              // 托管移动态不使用悬浮新建钮：上传/新建入口收敛到目录页
+              // 头部与首页工具栏，避免与底栏叠加形成大面积死区。
               floatingActionButton:
-                  isWide ||
-                          state.hasSelection ||
-                          (hosted && widget.mobileHomeOpen)
+                  isWide || state.hasSelection || hosted
                       ? null
                       : _FileMobileCreateButton(
                         state: state,
@@ -616,6 +700,15 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
         );
       },
     );
+    // 移动壳层样式隔离：托管态把 Files 工位调色板整体重绑为环境玻璃族，
+    // 桌面端（非托管）继续使用原始工位皮肤。
+    if (hosted) {
+      return Theme(
+        data: MobileEnvTheme.withFilesInEnv(context),
+        child: content,
+      );
+    }
+    return content;
   }
 
   /// 窄屏贴底抽屉：Inspector 的移动形态（Header/Footer 常驻、Body 滚动、
@@ -655,7 +748,12 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                 bottom: MediaQuery.viewInsetsOf(context).bottom,
               ),
               decoration: BoxDecoration(
-                color: context.filesColors.surfaceContainer,
+                // 托管态环境重绑后的 surfaceContainer 是玻璃半透明，
+                // 贴底抽屉需实底（样例 glass-sheet #171E1C）。
+                color:
+                    MobileShellScope.isHosted(context)
+                        ? MobileEnvColors.sheetSolid
+                        : context.filesColors.surfaceContainer,
                 border: Border(
                   top: BorderSide(color: context.filesColors.selectedBorder),
                 ),

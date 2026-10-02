@@ -2,9 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
-import 'package:omninest/features/photos/application/photo_controller.dart';
 
-/// 将文件与照片模块的选择状态聚合为壳层只读状态。
+/// 将文件空间的选择状态聚合为壳层只读状态。
+///
+/// 照片多选只存在于全屏照片模块页（无壳层 chrome），不再参与壳层抑制。
 final mobileShellSelectionActiveProvider = Provider.family<bool, int>((
   ref,
   branch,
@@ -12,9 +13,6 @@ final mobileShellSelectionActiveProvider = Provider.family<bool, int>((
   return switch (branch) {
     MobileNavigationConfig.filesBranch =>
       ref.watch(fileBrowserControllerProvider).asData?.value.hasSelection ??
-          false,
-    MobileNavigationConfig.photosBranch =>
-      ref.watch(photoCenterControllerProvider).asData?.value.isSelectionMode ??
           false,
     _ => false,
   };

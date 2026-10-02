@@ -10,6 +10,8 @@ import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle;
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
@@ -128,29 +130,115 @@ class ReaderBookshelfPage extends ConsumerWidget {
                     MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
                     40,
                   ),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final item = shelved[index];
-                      return Container(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: rc.outlineVariant.withValues(alpha: 0.6),
-                            ),
+                  // 托管/紧凑档为纸封网格（样例两页签书架），桌面宽档保持行式。
+                  sliver:
+                      MobileShellScope.isHosted(context) ||
+                              MediaQuery.sizeOf(context).width < 600
+                          ? SliverGrid(
+                            gridDelegate:
+                                SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 220,
+                                  mainAxisSpacing: 18,
+                                  crossAxisSpacing: 14,
+                                  childAspectRatio: 0.52,
+                                ),
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              final item = shelved[index];
+                              return _BookshelfCoverTile(item: item);
+                            }, childCount: shelved.length),
+                          )
+                          : SliverList(
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              final item = shelved[index];
+                              return Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: rc.outlineVariant.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                child: ReaderShelfRow(
+                                  index: index,
+                                  item: item,
+                                  onTap:
+                                      () => context.push(
+                                        '/reader/items/${item.id}',
+                                      ),
+                                ),
+                              );
+                            }, childCount: shelved.length),
                           ),
-                        ),
-                        child: ReaderShelfRow(
-                          index: index,
-                          item: item,
-                          onTap: () => context.push('/reader/items/${item.id}'),
-                        ),
-                      );
-                    }, childCount: shelved.length),
-                  ),
                 ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 书架纸封网格瓦片（样例 shelf-cover）：封面 + 题名 + 类型/进度微行。
+class _BookshelfCoverTile extends StatelessWidget {
+  const _BookshelfCoverTile({required this.item});
+
+  final ReaderItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final progress = item.progressPercent ?? 0;
+    return InkWell(
+      onTap: () => context.push('/reader/items/${item.id}'),
+      borderRadius: BorderRadius.circular(6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(6),
+                bottom: Radius.circular(3),
+              ),
+              child: ReaderBookCover(item: item, size: ReaderCoverSize.large),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.bodySmall,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          if (progress > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                l10n.readerReadingProgress((progress * 100).round()),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.labelSmall,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

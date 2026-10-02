@@ -203,8 +203,8 @@ class MusicDeckMobileNavigation extends StatelessWidget {
     final primary = const <MusicDeckSection>[
       MusicDeckSection.home,
       MusicDeckSection.library,
-      MusicDeckSection.favorites,
       MusicDeckSection.playlists,
+      MusicDeckSection.favorites,
     ];
     final effective = primary.contains(selected) ? selected : primary.first;
     return MobileSegmentedControl<MusicDeckSection>(

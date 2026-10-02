@@ -13,6 +13,14 @@ class _ContentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 托管模块页：样例 section-title（副题作眉标 + 衬线标题 + 右槽）。
+    if (MobileShellScope.isHosted(context)) {
+      return MobileEnvSectionHeader(
+        eyebrow: subtitle,
+        title: title,
+        action: trailing,
+      );
+    }
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -173,6 +181,9 @@ class _LibraryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 移动端子 chip 对齐样例三档；genres 仅桌面保留（分段隐藏后 hosted
+    // 下不可达，无需回落）。
+    final hosted = MobileShellScope.isHosted(context);
     final selector = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SegmentedButton<MusicDeckLibraryView>(
@@ -189,10 +200,11 @@ class _LibraryHeader extends StatelessWidget {
             value: MusicDeckLibraryView.artists,
             label: Text(l10n.musicNavArtists),
           ),
-          ButtonSegment(
-            value: MusicDeckLibraryView.genres,
-            label: Text(l10n.musicNavGenres),
-          ),
+          if (!hosted)
+            ButtonSegment(
+              value: MusicDeckLibraryView.genres,
+              label: Text(l10n.musicNavGenres),
+            ),
         ],
         selected: <MusicDeckLibraryView>{view},
         showSelectedIcon: false,
@@ -233,6 +245,28 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 托管模块页：样例 section-title（衬线标题 + 弱化动作钮）。
+    if (MobileShellScope.isHosted(context)) {
+      return MobileEnvSectionHeader(
+        title: title,
+        action:
+            actionLabel == null
+                ? null
+                : TextButton(
+                  onPressed: onAction,
+                  style: TextButton.styleFrom(
+                    foregroundColor: MobileEnvColors.inkMuted,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 38),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(fontSize: AppTypography.labelSmall),
+                  ),
+                ),
+      );
+    }
     return Row(
       children: [
         Expanded(

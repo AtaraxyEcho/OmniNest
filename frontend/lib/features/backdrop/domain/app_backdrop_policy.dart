@@ -14,6 +14,62 @@ enum AppBackdropScene {
   musicImmersive,
 }
 
+/// 全局环境模式：同一壁纸身份在移动壳层下的四档存在强度。
+///
+/// 环境连续性不等于全页面持续播放动态壁纸：各空间按任务选择档位，
+/// 由宿主统一折算为壁纸不透明度、环境模糊与静态化策略。
+enum AppEnvironmentMode {
+  /// 首页与沉浸式音乐：壁纸完整存在，动态素材允许连续播放。
+  immersive,
+
+  /// 媒体库/照片/影视浏览：保留环境身份，降低动态与对比，内容为主。
+  ambient,
+
+  /// 阅读专注：壁纸静态化并大幅弱化，提高表面可读性。
+  focus,
+
+  /// 文件与系统工具：环境退到极弱存在感，接近实底表面。
+  utility,
+}
+
+/// 环境模式对应的壁纸呈现参数（仅移动壳层消费）。
+class AppEnvironmentPresentation {
+  const AppEnvironmentPresentation({
+    required this.wallpaperOpacity,
+    required this.blurSigma,
+  });
+
+  /// 壁纸不透明度。
+  final double wallpaperOpacity;
+
+  /// 非视频壁纸叠加的环境模糊 sigma；视频由宿主以遮罩降存在感。
+  final double blurSigma;
+
+  static const AppEnvironmentPresentation _immersive =
+      AppEnvironmentPresentation(wallpaperOpacity: 1, blurSigma: 0);
+  static const AppEnvironmentPresentation _ambient = AppEnvironmentPresentation(
+    wallpaperOpacity: 0.48,
+    blurSigma: 12,
+  );
+  static const AppEnvironmentPresentation _focus = AppEnvironmentPresentation(
+    wallpaperOpacity: 0.28,
+    blurSigma: 28,
+  );
+  static const AppEnvironmentPresentation _utility = AppEnvironmentPresentation(
+    wallpaperOpacity: 0.14,
+    blurSigma: 34,
+  );
+
+  static AppEnvironmentPresentation of(AppEnvironmentMode mode) {
+    return switch (mode) {
+      AppEnvironmentMode.immersive => _immersive,
+      AppEnvironmentMode.ambient => _ambient,
+      AppEnvironmentMode.focus => _focus,
+      AppEnvironmentMode.utility => _utility,
+    };
+  }
+}
+
 /// 前景模块提交给应用背景宿主的场景策略。
 class AppBackdropPolicy {
   const AppBackdropPolicy({
@@ -22,6 +78,7 @@ class AppBackdropPolicy {
     required this.playbackMode,
     required this.readabilityMode,
     required this.motionAllowed,
+    this.environmentMode = AppEnvironmentMode.immersive,
   });
 
   const AppBackdropPolicy.hidden()
@@ -29,13 +86,17 @@ class AppBackdropPolicy {
       visible = false,
       playbackMode = AppBackdropPlaybackMode.paused,
       readabilityMode = AppBackdropReadabilityMode.content,
-      motionAllowed = false;
+      motionAllowed = false,
+      environmentMode = AppEnvironmentMode.utility;
 
   final AppBackdropScene scene;
   final bool visible;
   final AppBackdropPlaybackMode playbackMode;
   final AppBackdropReadabilityMode readabilityMode;
   final bool motionAllowed;
+
+  /// 移动壳层下的环境档位；桌面端不消费该字段，行为保持原语义。
+  final AppEnvironmentMode environmentMode;
 
   /// Portal 使用低遮挡、连续播放的背景库策略。
   static const portal = AppBackdropPolicy(
@@ -71,6 +132,7 @@ class AppBackdropPolicy {
     playbackMode: AppBackdropPlaybackMode.paused,
     readabilityMode: AppBackdropReadabilityMode.content,
     motionAllowed: false,
+    environmentMode: AppEnvironmentMode.focus,
   );
 
   /// 工具和管理页面隐藏背景并使用主题纯色。
@@ -80,6 +142,7 @@ class AppBackdropPolicy {
     playbackMode: AppBackdropPlaybackMode.paused,
     readabilityMode: AppBackdropReadabilityMode.work,
     motionAllowed: false,
+    environmentMode: AppEnvironmentMode.utility,
   );
 
   /// Music 内容浏览使用局部可读性保护和连续播放策略。
@@ -98,6 +161,36 @@ class AppBackdropPolicy {
     playbackMode: AppBackdropPlaybackMode.continuous,
     readabilityMode: AppBackdropReadabilityMode.immersive,
     motionAllowed: true,
+  );
+
+  /// 移动端媒体空间（Library/照片/影视）环境档：静态化、降存在感。
+  static const ambientMedia = AppBackdropPolicy(
+    scene: AppBackdropScene.content,
+    visible: true,
+    playbackMode: AppBackdropPlaybackMode.paused,
+    readabilityMode: AppBackdropReadabilityMode.content,
+    motionAllowed: false,
+    environmentMode: AppEnvironmentMode.ambient,
+  );
+
+  /// 移动端阅读空间环境档：极弱静态壁纸 + 高可读表面。
+  static const focusReading = AppBackdropPolicy(
+    scene: AppBackdropScene.content,
+    visible: true,
+    playbackMode: AppBackdropPlaybackMode.paused,
+    readabilityMode: AppBackdropReadabilityMode.content,
+    motionAllowed: false,
+    environmentMode: AppEnvironmentMode.focus,
+  );
+
+  /// 移动端工具空间（Files/系统页）环境档：接近实底、保留环境身份。
+  static const utilitySurface = AppBackdropPolicy(
+    scene: AppBackdropScene.work,
+    visible: true,
+    playbackMode: AppBackdropPlaybackMode.paused,
+    readabilityMode: AppBackdropReadabilityMode.work,
+    motionAllowed: false,
+    environmentMode: AppEnvironmentMode.utility,
   );
 }
 

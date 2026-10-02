@@ -30,6 +30,42 @@ class _MovieMobileShell extends StatelessWidget {
   final Future<void> Function()? onRefresh;
   final VoidCallback? onBack;
 
+  /// 托管四段次序（For you/Films/Series/Anime），滑动切换依据。
+  static const List<MovieSection> _hostedSections = [
+    MovieSection.continueWatching,
+    MovieSection.movies,
+    MovieSection.tvShows,
+    MovieSection.anime,
+  ];
+
+  /// 当前生效分段（不在四段内的管理分区按首段计）。
+  MovieSection get effectiveSection =>
+      _hostedSections.contains(section) ? section : _hostedSections.first;
+
+  /// 返回链路：优先走调用方回调；缺省时直弹 Navigator（页面被
+  /// PopScope(canPop: false) 拦截，maybePop 会回落到自身形成递归），
+  /// 栈底直达链接回到媒体库空间。
+  void _handleBack(BuildContext context) {
+    // 模块内逐级回退：非首栏先回 For you，首栏才离开模块。
+    if (MobileShellScope.isHosted(context) &&
+        effectiveSection != _hostedSections.first &&
+        onSectionSelected != null) {
+      onSectionSelected!(_hostedSections.first);
+      return;
+    }
+    final back = onBack;
+    if (back != null) {
+      back();
+      return;
+    }
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      context.go('/library');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hosted = MobileShellScope.isHosted(context);
@@ -115,7 +151,7 @@ class _MovieMobileShell extends StatelessWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        onBack?.call();
+        _handleBack(context);
       },
       child: Scaffold(
         backgroundColor: context.movieRedesign.background,
@@ -124,21 +160,59 @@ class _MovieMobileShell extends StatelessWidget {
           builder: (context) {
             final content = Column(
               children: [
+                if (hosted) ...[
+                  MobileModuleHeader(
+                    title: AppLocalizations.of(context).moduleMoviesTitle,
+                    subtitle: AppLocalizations.of(context).moviesModuleSubtitle(
+                      counts[MovieSection.movies] ?? 0,
+                      counts[MovieSection.continueWatching] ?? 0,
+                    ),
+                    onBack: () => _handleBack(context),
+                    actions: [
+                      MobileGlassIconButton(
+                        tooltip: AppLocalizations.of(context).videoSearch,
+                        icon: Icons.search_rounded,
+                        onPressed: () => _showMovieMobileSearchDialog(context),
+                      ),
+                    ],
+                  ),
+                ],
                 if (hosted)
                   _MovieMobileSectionBar(
                     section: section,
                     onSectionSelected: onSectionSelected,
                   ),
-                Expanded(child: pageContent),
+                Expanded(
+                  child: MobileSectionSwipe(
+                    onSwipe: (toNext) {
+                      final target = adjacentSection(
+                        _hostedSections,
+                        effectiveSection,
+                        toNext,
+                      );
+                      if (target != null) {
+                        onSectionSelected?.call(target);
+                      }
+                    },
+                    child: pageContent,
+                  ),
+                ),
               ],
             );
             if (!hosted) {
               return content;
             }
+            // 样例 module-overlay：深玻璃表面（≈.94 不透明）+ 650 限宽居中。
             return MobilePageSurface(
               exposeBackdrop: true,
-              backdropOpacity: 0.54,
-              child: content,
+              backdropOpacity: 0.92,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 650),
+                  child: content,
+                ),
+              ),
             );
           },
         ),
@@ -335,7 +409,7 @@ class _MovieMobileTopBar extends StatelessWidget {
             },
           ),
           IconButton(
-            onPressed: () => _showSearchDialog(context),
+            onPressed: () => _showMovieMobileSearchDialog(context),
             icon: Icon(
               Icons.search_rounded,
               size: 20,
@@ -351,41 +425,42 @@ class _MovieMobileTopBar extends StatelessWidget {
       ),
     );
   }
+}
 
-  void _showSearchDialog(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    showWorkstationGeneralDialog<void>(
-      context: context,
-      dismissible: true,
-      barrierLabel: l10n.videoSearch,
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder:
-          (context, animation, secondaryAnimation) => Dialog(
-            backgroundColor: Colors.transparent,
-            child: _MovieSearchOverlay(
-              onSearch: (query) {
-                if (query.trim().isNotEmpty) {
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
+/// 移动影视搜索浮层（hosted 横幅与非托管顶栏共用）。
+void _showMovieMobileSearchDialog(BuildContext context) {
+  final l10n = AppLocalizations.of(context);
+  showWorkstationGeneralDialog<void>(
+    context: context,
+    dismissible: true,
+    barrierLabel: l10n.videoSearch,
+    barrierColor: Colors.black54,
+    transitionDuration: const Duration(milliseconds: 250),
+    pageBuilder:
+        (context, animation, secondaryAnimation) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: _MovieSearchOverlay(
+            onSearch: (query) {
+              if (query.trim().isNotEmpty) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
+        ),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
 }
 
 /// 新版移动端底部导航：5 个主分区 + 更多抽屉入口。
@@ -598,56 +673,29 @@ class _MovieMobileSectionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final palette = context.movieRedesign;
     const sections = <MovieSection>[
+      MovieSection.continueWatching,
       MovieSection.movies,
       MovieSection.tvShows,
       MovieSection.anime,
-      MovieSection.favorites,
     ];
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(bottom: BorderSide(color: palette.border)),
-      ),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        itemCount: sections.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (context, index) {
-          final value = sections[index];
-          final selected = value == section;
-          return Material(
-            color: selected ? palette.foreground : Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: MovieRedesignPalette.borderRadius,
-              side: BorderSide(
-                color: selected ? palette.foreground : palette.border,
-              ),
-            ),
-            child: InkWell(
-              onTap: () => onSectionSelected?.call(value),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Center(
-                  child: Text(
-                    value.labelOf(l10n),
-                    style: context.movieRedesignText.body(
-                      size: 12,
-                      weight: FontWeight.w500,
-                      color:
-                          selected
-                              ? palette.background
-                              : palette.mutedForeground,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+    String labelOf(MovieSection value) => switch (value) {
+      MovieSection.continueWatching => l10n.videoSectionForYou,
+      MovieSection.movies => l10n.videoSectionFilms,
+      MovieSection.tvShows => l10n.videoSectionSeries,
+      _ => value.labelOf(l10n),
+    };
+    final effective = sections.contains(section) ? section : sections.first;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+        child: MobileSegmentedControl<MovieSection>(
+          values: sections,
+          selected: effective,
+          labelBuilder: labelOf,
+          onSelected: (value) => onSectionSelected?.call(value),
+        ),
       ),
     );
   }

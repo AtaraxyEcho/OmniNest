@@ -540,6 +540,44 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     }
   }
 
+  /// 查看器收藏切换（头部与紧凑底部动作行共用）。
+  Future<void> _toggleViewerFavorite(PhotoItem photo) async {
+    // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
+    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).errorForbidden,
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+      return;
+    }
+    try {
+      final wasFavorite = photo.favorite;
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .toggleFavorite(photo.id, currentFavorite: photo.favorite);
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        wasFavorite
+            ? AppLocalizations.of(context).favoriteRemoved
+            : AppLocalizations.of(context).favoriteAdded,
+        severity: OmniFeedbackSeverity.success,
+      );
+      ref.invalidate(photoDetailProvider(photo.id));
+    } on Exception {
+      if (mounted) {
+        showOmniFeedback(
+          context,
+          AppLocalizations.of(context).photosOperationFailed,
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 700;
@@ -638,47 +676,8 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
           child: PhotoViewerTopBar(
             photo: currentFresh,
             onClose: _closeViewer,
-            onToggleFavorite: () async {
-              // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
-              if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
-                if (context.mounted) {
-                  showOmniFeedback(
-                    context,
-                    AppLocalizations.of(context).errorForbidden,
-                    severity: OmniFeedbackSeverity.error,
-                  );
-                }
-                return;
-              }
-              try {
-                if (!context.mounted) return;
-                final wasFavorite = currentFresh.favorite;
-                await ref
-                    .read(photoCenterControllerProvider.notifier)
-                    .toggleFavorite(
-                      currentFresh.id,
-                      currentFavorite: currentFresh.favorite,
-                    );
-                if (!context.mounted) return;
-                showOmniFeedback(
-                  context,
-                  wasFavorite
-                      ? AppLocalizations.of(context).favoriteRemoved
-                      : AppLocalizations.of(context).favoriteAdded,
-                  severity: OmniFeedbackSeverity.success,
-                );
-                // 刷新详情
-                ref.invalidate(photoDetailProvider(currentFresh.id));
-              } on Exception {
-                if (context.mounted) {
-                  showOmniFeedback(
-                    context,
-                    AppLocalizations.of(context).photosOperationFailed,
-                    severity: OmniFeedbackSeverity.error,
-                  );
-                }
-              }
-            },
+            onToggleFavorite:
+                () => unawaited(_toggleViewerFavorite(currentFresh)),
             onDelete: _confirmDelete,
             onToggleInfo:
                 () => ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
@@ -694,6 +693,28 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
             countText: '${_currentPage + 1} / ${_pages.length}',
           ),
         ),
+        // 紧凑档底部七钮动作行（样例 photo-actions）：信息面板以底部
+        // sheet 呈现时不渲染，避免两层叠底。
+        if (compact && !_showInfo)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: PhotoViewerBottomActions(
+              photo: currentFresh,
+              onToggleFavorite:
+                  () => unawaited(_toggleViewerFavorite(currentFresh)),
+              onShare: _openSharePanel,
+              onDownload: () => unawaited(_downloadPhoto()),
+              onEdit: () => context.push('/photos/${currentFresh.id}/edit'),
+              onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
+              onToggleInfo:
+                  () =>
+                      ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
+              onDelete: _confirmDelete,
+              showInfo: _showInfo,
+            ),
+          ),
         // 分享侧栏：与幻灯片共用组件，scrim 在面板之下。
         if (_showSharePanel)
           Positioned.fill(
@@ -827,15 +848,15 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                 onTap: () => _setMotionPinned(!_motionPinnedPlaying),
               ),
             ),
-          // 紧凑档去常驻箭头（滑动翻页）；≥700 档保留。
-          if (MediaQuery.sizeOf(context).width >= 700 && index > 0)
+          // 圆形翻页钮（样例 photo-nav）：各宽度档常驻，仅首尾页隐藏。
+          if (index > 0)
             PhotoViewerArrowButton(
               icon: Icons.chevron_left_rounded,
               tooltip: AppLocalizations.of(context).photosPrevPhoto,
               alignRight: false,
               onTap: () => _goToPage(index - 1),
             ),
-          if (MediaQuery.sizeOf(context).width >= 700 && index < total - 1)
+          if (index < total - 1)
             PhotoViewerArrowButton(
               icon: Icons.chevron_right_rounded,
               tooltip: AppLocalizations.of(context).photosNextPhoto,

@@ -112,6 +112,15 @@ class ProfileTwoFactorCard extends ConsumerWidget {
   }
 
   Future<void> _showEnableDialog(BuildContext context, WidgetRef ref) {
+    return showEnableWizard(context);
+  }
+
+  Future<void> _showDisableDialog(BuildContext context, WidgetRef ref) {
+    return showDisableWizard(context);
+  }
+
+  /// 开启向导（密码复核 → 扫码 → 备份码）：供移动行开关等外部入口复用。
+  static Future<void> showEnableWizard(BuildContext context) {
     return showWorkstationDialog<void>(
       context: context,
       dismissible: false,
@@ -119,7 +128,8 @@ class ProfileTwoFactorCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _showDisableDialog(BuildContext context, WidgetRef ref) {
+  /// 关闭流程（密码复核）：供移动行开关复用。
+  static Future<void> showDisableWizard(BuildContext context) {
     return showWorkstationDialog<void>(
       context: context,
       builder: (_) => const _TwoFactorDisableDialog(),

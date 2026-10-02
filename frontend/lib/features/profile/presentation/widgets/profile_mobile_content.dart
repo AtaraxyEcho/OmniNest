@@ -19,7 +19,15 @@ import 'package:omninest/features/profile/presentation/widgets/profile_two_facto
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 
 /// 个人中心在移动端使用的单列信息架构。
-class ProfileMobileContent extends ConsumerWidget {
+/// 深链分区锚定键：与桌面 rail 的 section id 对应（notifications 无
+/// 独立分组，由 /profile/notifications 专页承担）。
+const Set<String> _profileAnchorSections = <String>{
+  'account',
+  'appearance',
+  'security',
+};
+
+class ProfileMobileContent extends ConsumerStatefulWidget {
   const ProfileMobileContent({
     required this.displayName,
     required this.username,
@@ -36,8 +44,12 @@ class ProfileMobileContent extends ConsumerWidget {
     required this.onFontScaleChanged,
     this.avatarUrl,
     this.weatherCity,
+    this.initialSection,
     super.key,
   });
+
+  /// 深链目标分区（?section=）：移动端长页滚动锚定到对应设置组。
+  final String? initialSection;
 
   final String displayName;
   final String username;
@@ -56,7 +68,37 @@ class ProfileMobileContent extends ConsumerWidget {
   final ValueChanged<FontScalePreset> onFontScaleChanged;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileMobileContent> createState() =>
+      _ProfileMobileContentState();
+}
+
+class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
+  final Map<String, GlobalKey> _sectionKeys = {
+    for (final section in _profileAnchorSections)
+      section: GlobalKey(debugLabel: 'profile-section-$section'),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final section = widget.initialSection;
+    if (section == null || !_profileAnchorSections.contains(section)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _sectionKeys[section]?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0.06,
+          duration: const Duration(milliseconds: 280),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return MobilePageSurface(
       exposeBackdrop: true,
@@ -69,30 +111,31 @@ class ProfileMobileContent extends ConsumerWidget {
         ),
         children: [
           _ProfileIdentityHeader(
-            displayName: displayName,
-            username: username,
+            displayName: widget.displayName,
+            username: widget.username,
             role: _roleLabel(l10n),
-            avatarUrl: avatarUrl,
-            onEditAvatar: onEditAvatar,
+            avatarUrl: widget.avatarUrl,
+            onEditAvatar: widget.onEditAvatar,
           ),
           const SizedBox(height: MobileLayoutTokens.sectionGap),
           MobileSettingsGroup(
+            key: _sectionKeys['account'],
             title: l10n.profileAccountInfo,
             children: [
               MobileSettingsTile(
                 icon: Icons.alternate_email_rounded,
                 title: l10n.profileUsername,
-                subtitle: username,
+                subtitle: widget.username,
               ),
               MobileSettingsTile(
                 icon: Icons.mail_outline_rounded,
                 title: l10n.profileEmail,
-                subtitle: email,
+                subtitle: widget.email,
               ),
               MobileSettingsTile(
                 icon: Icons.notifications_none_rounded,
                 title: l10n.notificationTitle,
-                subtitle: l10n.notificationTitleWithCount(unreadCount),
+                subtitle: l10n.notificationTitleWithCount(widget.unreadCount),
                 onTap: () => context.push('/notifications'),
               ),
               MobileSettingsTile(
@@ -105,6 +148,7 @@ class ProfileMobileContent extends ConsumerWidget {
           ),
           const SizedBox(height: MobileLayoutTokens.sectionGap),
           MobileSettingsGroup(
+            key: _sectionKeys['appearance'],
             title: l10n.settingsAppearance,
             children: [
               MobileSettingsTile(
@@ -118,10 +162,10 @@ class ProfileMobileContent extends ConsumerWidget {
                 icon: Icons.location_city_rounded,
                 title: l10n.profileWeatherCity,
                 subtitle:
-                    weatherCity?.isNotEmpty == true
-                        ? weatherCity
+                    widget.weatherCity?.isNotEmpty == true
+                        ? widget.weatherCity
                         : l10n.profileWeatherCityNotSet,
-                onTap: onEditWeatherCity,
+                onTap: widget.onEditWeatherCity,
               ),
               MobileSettingsTile(
                 icon: Icons.contrast_rounded,
@@ -139,7 +183,7 @@ class ProfileMobileContent extends ConsumerWidget {
                 icon: Icons.language_rounded,
                 title: l10n.settingsLanguage,
                 subtitle:
-                    languageCode == 'zh'
+                    widget.languageCode == 'zh'
                         ? l10n.settingsLanguageChinese
                         : l10n.settingsLanguageEnglish,
                 onTap: () => _showLanguagePicker(context),
@@ -148,6 +192,7 @@ class ProfileMobileContent extends ConsumerWidget {
           ),
           const SizedBox(height: MobileLayoutTokens.sectionGap),
           MobileSettingsGroup(
+            key: _sectionKeys['security'],
             title: l10n.settingsSecurity,
             children: [
               MobileSettingsTile(
@@ -215,7 +260,7 @@ class ProfileMobileContent extends ConsumerWidget {
   }
 
   String _roleLabel(AppLocalizations l10n) {
-    return switch (role) {
+    return switch (widget.role) {
       'SUPER_ADMIN' => l10n.profileRoleSuperAdmin,
       'ADMIN' => l10n.profileRoleAdmin,
       _ => l10n.profileRoleMember,
@@ -223,7 +268,7 @@ class ProfileMobileContent extends ConsumerWidget {
   }
 
   String _themeLabel(AppLocalizations l10n) {
-    return switch (themeMode) {
+    return switch (widget.themeMode) {
       ThemeMode.system => l10n.settingsThemeSystem,
       ThemeMode.light => l10n.settingsThemeLight,
       ThemeMode.dark => l10n.settingsThemeDark,
@@ -243,27 +288,27 @@ class ProfileMobileContent extends ConsumerWidget {
                 _ChoiceTile(
                   icon: Icons.brightness_auto_rounded,
                   label: l10n.settingsThemeSystem,
-                  selected: themeMode == ThemeMode.system,
+                  selected: widget.themeMode == ThemeMode.system,
                   onTap: () {
-                    onThemeChanged(ThemeMode.system);
+                    widget.onThemeChanged(ThemeMode.system);
                     Navigator.pop(sheetContext);
                   },
                 ),
                 _ChoiceTile(
                   icon: Icons.light_mode_rounded,
                   label: l10n.settingsThemeLight,
-                  selected: themeMode == ThemeMode.light,
+                  selected: widget.themeMode == ThemeMode.light,
                   onTap: () {
-                    onThemeChanged(ThemeMode.light);
+                    widget.onThemeChanged(ThemeMode.light);
                     Navigator.pop(sheetContext);
                   },
                 ),
                 _ChoiceTile(
                   icon: Icons.dark_mode_rounded,
                   label: l10n.settingsThemeDark,
-                  selected: themeMode == ThemeMode.dark,
+                  selected: widget.themeMode == ThemeMode.dark,
                   onTap: () {
-                    onThemeChanged(ThemeMode.dark);
+                    widget.onThemeChanged(ThemeMode.dark);
                     Navigator.pop(sheetContext);
                   },
                 ),
@@ -291,9 +336,9 @@ class ProfileMobileContent extends ConsumerWidget {
                               ? Icons.brightness_auto_rounded
                               : Icons.format_size_rounded,
                       label: _presetLabel(preset, l10n),
-                      selected: fontScalePreset == preset,
+                      selected: widget.fontScalePreset == preset,
                       onTap: () {
-                        onFontScaleChanged(preset);
+                        widget.onFontScaleChanged(preset);
                         Navigator.pop(sheetContext);
                       },
                     ),
@@ -305,7 +350,7 @@ class ProfileMobileContent extends ConsumerWidget {
   }
 
   String _fontScaleLabel(AppLocalizations l10n) {
-    return _presetLabel(fontScalePreset, l10n);
+    return _presetLabel(widget.fontScalePreset, l10n);
   }
 
   String _presetLabel(FontScalePreset preset, AppLocalizations l10n) {
@@ -331,18 +376,18 @@ class ProfileMobileContent extends ConsumerWidget {
                 _ChoiceTile(
                   icon: Icons.translate_rounded,
                   label: l10n.settingsLanguageChinese,
-                  selected: languageCode == 'zh',
+                  selected: widget.languageCode == 'zh',
                   onTap: () {
-                    onLanguageChanged('zh');
+                    widget.onLanguageChanged('zh');
                     Navigator.pop(sheetContext);
                   },
                 ),
                 _ChoiceTile(
                   icon: Icons.language_rounded,
                   label: l10n.settingsLanguageEnglish,
-                  selected: languageCode == 'en',
+                  selected: widget.languageCode == 'en',
                   onTap: () {
-                    onLanguageChanged('en');
+                    widget.onLanguageChanged('en');
                     Navigator.pop(sheetContext);
                   },
                 ),

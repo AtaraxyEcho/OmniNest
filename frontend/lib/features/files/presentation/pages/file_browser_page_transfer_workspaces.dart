@@ -388,6 +388,12 @@ class _OfflineDownloadWorkspaceState
 
   @override
   Widget build(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      return _HostedOfflineDownloads(
+        state: widget.state,
+        onCreate: () => unawaited(_createOfflineDownloadWithSpace(context)),
+      );
+    }
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(fileBrowserControllerProvider.notifier);
     final enabled = !widget.state.isBusy;
@@ -592,6 +598,26 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
     final controller = ref.read(fileBrowserControllerProvider.notifier);
     final enabled = !state.isBusy;
     final browsing = state.externalBrowseAccountId != null;
+    if (MobileShellScope.isHosted(context) && !browsing) {
+      return _HostedExternalStorage(
+        state: state,
+        onAdd:
+            () => unawaited(
+              _addExternalStorage(
+                context: context,
+                ref: ref,
+                controller: controller,
+              ),
+            ),
+        onOpenAccount:
+            (accountId) => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalStorage(accountId),
+              ),
+            ),
+      );
+    }
     if (browsing) {
       return _ExternalBrowsePanel(state: state);
     }
@@ -865,6 +891,9 @@ class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
 
   @override
   Widget build(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      return _HostedImportTasks(state: widget.state);
+    }
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).toString();
     final controller = ref.read(fileBrowserControllerProvider.notifier);

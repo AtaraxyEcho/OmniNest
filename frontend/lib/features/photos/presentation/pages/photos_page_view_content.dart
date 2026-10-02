@@ -46,28 +46,33 @@ class _FrameViewContent extends ConsumerWidget {
           () => ref
               .read(photoCenterControllerProvider.notifier)
               .loadTimeline(force: true),
-          PhotoTimelineView(
-            key: const ValueKey('frame-timeline'),
-            onOpenPhoto: (photo) {
-              // 时间线的浏览/幻灯片范围限定为点击照片所在月份，
-              // 与 period 页口径一致（sourceKey = 年-月）。
-              final timeline = state.timeline;
-              if (timeline != null) {
-                final month = _findTimelineMonthOf(timeline, photo.id);
-                if (month != null) {
-                  ref
-                      .read(photoBrowseScopeProvider.notifier)
-                      .set(
-                        month.$2.previewPhotos,
-                        PhotoBrowseSource.timeline,
-                        sourceKey: '${month.$1}-${month.$2.month}',
-                      );
-                }
-              }
-              onOpenPhoto(photo);
-            },
-            state: state,
-          ),
+          MobileShellScope.isHosted(context)
+              ? _HostedTimelineBody(
+                key: const ValueKey('frame-timeline'),
+                state: state,
+              )
+              : PhotoTimelineView(
+                key: const ValueKey('frame-timeline'),
+                onOpenPhoto: (photo) {
+                  // 时间线的浏览/幻灯片范围限定为点击照片所在月份，
+                  // 与 period 页口径一致（sourceKey = 年-月）。
+                  final timeline = state.timeline;
+                  if (timeline != null) {
+                    final month = _findTimelineMonthOf(timeline, photo.id);
+                    if (month != null) {
+                      ref
+                          .read(photoBrowseScopeProvider.notifier)
+                          .set(
+                            month.$2.previewPhotos,
+                            PhotoBrowseSource.timeline,
+                            sourceKey: '${month.$1}-${month.$2.month}',
+                          );
+                    }
+                  }
+                  onOpenPhoto(photo);
+                },
+                state: state,
+              ),
         ),
         FrameView.locations => _compactRefreshable(
           ref,
@@ -147,9 +152,84 @@ class _FrameViewContent extends ConsumerWidget {
     );
   }
 
+  /// 托管 Library 段主体（样例定位修订）：工具行 + 全图片瀑布流本体，
+  /// 多选反馈（点击切换/长按进入）与滚动加载由网格内置承载。
+  Widget _hostedLibraryBody(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    final photos = state.visiblePhotos;
+    final notifier = ref.read(photoCenterControllerProvider.notifier);
+    return Column(
+      children: [
+        // 样例 .photo-toolbar：计数（选择态显示已选数）+ 选择胶囊
+        // （选中态酸绿描边，选择态追加全选）。
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  state.isSelectionMode
+                      ? l10n.photosSelectedCount(state.selectedPhotoIds.length)
+                      : l10n.photosHostedToolbarCount(state.photoTotalElements),
+                  style: const TextStyle(
+                    fontSize: 9, // ignore: font_size_whitelist
+                    color: MobileEnvColors.inkMuted,
+                  ),
+                ),
+              ),
+              if (state.isSelectionMode) ...[
+                _ToolbarPillButton(
+                  icon: Icons.check_rounded,
+                  label: l10n.photosSelectAll,
+                  onPressed: () => notifier.toggleSelectAllVisible(),
+                ),
+                const SizedBox(width: 7),
+              ],
+              _ToolbarPillButton(
+                icon: Icons.checklist_rounded,
+                label:
+                    state.isSelectionMode
+                        ? l10n.photosDone
+                        : l10n.photosSelectPhotos,
+                active: state.isSelectionMode,
+                onPressed: () => notifier.toggleSelectionMode(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: FrameMasonryGrid(
+            key: const ValueKey('frame-grid-hosted'),
+            photos: photos,
+            onOpenPhoto: (photo) {
+              ref
+                  .read(photoBrowseScopeProvider.notifier)
+                  .set(photos, PhotoBrowseSource.library);
+              onOpenPhoto(photo);
+            },
+            onToggleFavorite: onToggleFavorite,
+            emptyMessage: l10n.photosNoPhotos,
+            emptySubtitle: l10n.photosNoPhotosHint,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildGrid(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final isFavorites = state.tab == PhotoTab.favorites;
+    // 托管 Library 段（样例 photos-overlay Library）：工具行 + 马赛克 +
+    // 相册轨 + 时刻行；收藏页签与桌面仍走瀑布网格。
+    if (compact &&
+        !isFavorites &&
+        MobileShellScope.isHosted(context) &&
+        state.frameView == FrameView.grid) {
+      return _hostedLibraryBody(context, ref, l10n);
+    }
     final grid = FrameMasonryGrid(
       key: ValueKey(isFavorites ? 'frame-grid-favorites' : 'frame-grid-all'),
       photos: state.visiblePhotos,
@@ -197,4 +277,122 @@ class _FrameViewContent extends ConsumerWidget {
     }
   }
   return null;
+}
+
+/// 工具行胶囊钮（样例 .photo-toolbar button：r11·白 6% 底·白 9% 描边·
+/// 图标 15 + 9px 文字；选中态酸绿底 10% + 酸绿 38% 描边）。
+class _ToolbarPillButton extends StatelessWidget {
+  const _ToolbarPillButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color:
+          active
+              ? MobileEnvColors.accent.withValues(alpha: 0.1)
+              : const Color(0x0FFFFFFF),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(11),
+        side: BorderSide(
+          color:
+              active
+                  ? MobileEnvColors.accent.withValues(alpha: 0.38)
+                  : MobileEnvColors.line09,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(11),
+        onTap: onPressed,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          child: Row(
+            children: [
+              Icon(icon, size: 15, color: MobileEnvColors.ink),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 9, // ignore: font_size_whitelist
+                  color: MobileEnvColors.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 托管态时间线（样例 Timeline 档）：月份眉标 + 三列方形照片网格，
+/// 瓦片点击进入该月范围的查看器。
+class _HostedTimelineBody extends ConsumerWidget {
+  const _HostedTimelineBody({required this.state, super.key});
+
+  final PhotoCenterState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timeline = state.timeline;
+    if (timeline == null) {
+      return Center(
+        child: CircularProgressIndicator.adaptive(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(MobileEnvColors.inkMuted),
+        ),
+      );
+    }
+    final languageCode = Localizations.localeOf(context).languageCode;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      children: [
+        for (final year in timeline.years)
+          for (final month in year.months) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 16, 0, 6),
+              child: Text(
+                DateFormat.yMMMM(
+                  languageCode,
+                ).format(DateTime(year.year, month.month)).toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 9, // ignore: font_size_whitelist
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                  color: MobileEnvColors.inkFaint,
+                ),
+              ),
+            ),
+            SamplePhotoGrid(
+              tiles: [
+                for (final photo in month.previewPhotos)
+                  SamplePhotoTile(
+                    imageUrl: photo.coverUrl ?? photo.sourceUrl,
+                    onTap: () {
+                      ref
+                          .read(photoBrowseScopeProvider.notifier)
+                          .set(
+                            month.previewPhotos,
+                            PhotoBrowseSource.timeline,
+                            sourceKey: '${year.year}-${month.month}',
+                          );
+                      context.push('/photos/${photo.id}');
+                    },
+                  ),
+              ],
+            ),
+          ],
+      ],
+    );
+  }
 }

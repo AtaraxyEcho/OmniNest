@@ -138,12 +138,16 @@ class _PortalPagedListCardState<T>
                 ),
             data: (value) {
               if (value.items.isEmpty) {
+                // 空态提示居中（样例 empty-search 的居中衬线语气）。
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-                  child: Text(
-                    widget.emptyMessage,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Center(
+                    child: Text(
+                      widget.emptyMessage,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 );

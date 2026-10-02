@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 
 void main() {
   group('shouldUseResponsiveMobileShell', () {

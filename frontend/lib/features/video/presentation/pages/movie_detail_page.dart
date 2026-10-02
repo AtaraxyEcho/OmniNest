@@ -16,6 +16,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/movie_detail_action_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
@@ -314,7 +315,10 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
                       : null,
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              // 托管移动态收敛左右留白（桌面骨架不动）。
+              padding: EdgeInsets.symmetric(
+                horizontal: MobileShellScope.isHosted(context) ? 14 : 32,
+              ),
               child: Align(
                 alignment: Alignment.topLeft,
                 child: ConstrainedBox(

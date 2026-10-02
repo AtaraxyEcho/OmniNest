@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
@@ -39,6 +40,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_find_panel.
 import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_side_tap_zone.dart';

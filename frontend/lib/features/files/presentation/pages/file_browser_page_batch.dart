@@ -297,8 +297,13 @@ class _BatchActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        destructive ? context.filesColors.error : context.filesColors.onSurface;
+    // 移动壳层批量条为 lime 实底：操作钮统一深色前景（危险动作同色，
+    // 语义由图标与文案承载）。
+    final filesColors = context.filesColors;
+    final hosted = MobileShellScope.isHosted(context);
+    final base =
+        hosted ? MobileEnvColors.onSelectionBar : filesColors.onSurface;
+    final color = destructive && !hosted ? filesColors.error : base;
     return TextButton.icon(
       onPressed: enabled ? onTap : null,
       style: TextButton.styleFrom(foregroundColor: color, iconColor: color),
@@ -308,9 +313,160 @@ class _BatchActionButton extends StatelessWidget {
   }
 }
 
-/// 窄屏贴底浮动批量操作条：避开系统手势区，操作钮 44px。
+/// 窄屏贴底浮动批量操作条：移动壳层为样例单行 lime（计数 + 全选 +
+/// 关键动作 + 关闭），非托管窄窗沿用原结构。
 class _MobileStickyBatchBar extends ConsumerWidget {
   const _MobileStickyBatchBar({required this.state});
+
+  final FileBrowserState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hosted = MobileShellScope.isHosted(context);
+    if (!hosted) {
+      return _NonHostedBatchBar(state: state);
+    }
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final enabled = !state.isBusy;
+    final recycle = state.section == FileManagerSection.recycleBin;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 14,
+        right: 14,
+        bottom: MediaQuery.paddingOf(context).bottom + 12,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 57),
+        padding: const EdgeInsets.only(left: 16, right: 10),
+        decoration: BoxDecoration(
+          color: MobileEnvColors.selectionBar,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.filesSelectedCount(state.selectionCount),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MobileEnvColors.onSelectionBar,
+                  fontSize: AppTypography.labelSmall,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            _SelectionIconButton(
+              tooltip: l10n.filesSelectAll,
+              icon: OmniIcons.check,
+              onTap: enabled ? controller.selectAll : null,
+            ),
+            if (recycle) ...[
+              _SelectionIconButton(
+                tooltip: l10n.filesBatchRestore,
+                icon: OmniIcons.download,
+                onTap:
+                    enabled
+                        ? () => unawaited(controller.batchRestoreFiles())
+                        : null,
+              ),
+              _SelectionIconButton(
+                tooltip: l10n.filesBatchPurge,
+                icon: OmniIcons.close,
+                onTap:
+                    enabled
+                        ? () => unawaited(controller.batchPurgeFiles())
+                        : null,
+              ),
+            ] else ...[
+              _SelectionIconButton(
+                tooltip: l10n.filesBatchMove,
+                icon: OmniIcons.share,
+                onTap:
+                    enabled
+                        ? () => unawaited(
+                          _showBatchMoveDialog(
+                            context: context,
+                            controller: controller,
+                            count: state.selectionCount,
+                            excludeIds: state.selectedFileIds,
+                          ),
+                        )
+                        : null,
+              ),
+              _SelectionIconButton(
+                tooltip: l10n.filesBatchDelete,
+                icon: OmniIcons.close,
+                onTap:
+                    enabled
+                        ? () => unawaited(
+                          _confirmAndRun(
+                            context,
+                            title: l10n.filesBatchDeleteTitle,
+                            message: l10n.filesBatchDeleteMessage(
+                              state.selectionCount,
+                            ),
+                            confirmLabel: l10n.filesMoveToRecycleBin,
+                            action: controller.batchDeleteFiles,
+                          ),
+                        )
+                        : null,
+              ),
+            ],
+            _SelectionIconButton(
+              tooltip: l10n.coreClear,
+              icon: OmniIcons.close,
+              onTap: controller.clearSelection,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例批量条图标钮（43×43 深色前景）。
+class _SelectionIconButton extends StatelessWidget {
+  const _SelectionIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final OmniIconsData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      icon: OmniIcon(
+        icon: icon,
+        size: 19,
+        color: MobileEnvColors.onSelectionBar,
+      ),
+      style: IconButton.styleFrom(
+        foregroundColor: MobileEnvColors.onSelectionBar,
+        minimumSize: const Size.square(43),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+/// 非托管窄窗（桌面收缩/测试路径）：原两行结构。
+class _NonHostedBatchBar extends ConsumerWidget {
+  const _NonHostedBatchBar({required this.state});
 
   final FileBrowserState state;
 
@@ -345,6 +501,7 @@ class _MobileStickyBatchBar extends ConsumerWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: AppTypography.bodyMedium,
+                      color: colors.onSurface,
                     ),
                   ),
                 ),
@@ -369,31 +526,21 @@ class _MobileStickyBatchBar extends ConsumerWidget {
                         label: l10n.filesBatchRestore,
                         icon: Icons.restore_rounded,
                         enabled: enabled,
-                        onTap:
-                            () => _confirmAndRun(
-                              context,
-                              title: l10n.filesBatchRestoreTitle,
-                              message: l10n.filesBatchRestoreMessage(
-                                state.selectionCount,
-                              ),
-                              confirmLabel: l10n.filesRestore,
-                              action: controller.batchRestoreFiles,
-                            ),
+                        onTap: () => unawaited(controller.batchRestoreFiles()),
                       ),
                       _BatchActionButton(
                         label: l10n.filesBatchPurge,
-                        icon: Icons.delete_forever_outlined,
+                        icon: Icons.delete_outline_rounded,
                         enabled: enabled,
                         destructive: true,
                         onTap:
-                            () => _confirmTypedAndRun(
+                            () => _confirmAndRun(
                               context,
                               title: l10n.filesBatchPurgeTitle,
                               message: l10n.filesBatchPurgeMessage(
                                 state.selectionCount,
                               ),
-                              confirmPhrase: state.selectionCount.toString(),
-                              confirmLabel: l10n.filesPurge,
+                              confirmLabel: l10n.filesBatchPurge,
                               action: controller.batchPurgeFiles,
                             ),
                       ),

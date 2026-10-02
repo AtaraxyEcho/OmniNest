@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
@@ -75,25 +74,17 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
       ),
       child: Builder(
         builder:
-            (context) => PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, result) {
-                if (!didPop) {
-                  context.go('/portal');
-                }
-              },
-              child: Scaffold(
-                backgroundColor: Colors.transparent,
-                body: state.when(
-                  data: (music) => const MusicDeckShell(),
-                  loading: () => const _MusicDeckLoading(),
-                  error:
-                      (error, stackTrace) => _MusicDeckError(
-                        message: describeUserFacingError(error).displayMessage,
-                        onRetry:
-                            () => ref.invalidate(musicCenterControllerProvider),
-                      ),
-                ),
+            (context) => Scaffold(
+              backgroundColor: Colors.transparent,
+              body: state.when(
+                data: (music) => const MusicDeckShell(),
+                loading: () => const _MusicDeckLoading(),
+                error:
+                    (error, stackTrace) => _MusicDeckError(
+                      message: describeUserFacingError(error).displayMessage,
+                      onRetry:
+                          () => ref.invalidate(musicCenterControllerProvider),
+                    ),
               ),
             ),
       ),

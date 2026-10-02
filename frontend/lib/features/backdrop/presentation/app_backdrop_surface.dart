@@ -50,10 +50,24 @@ class AppBackdropSurface extends ConsumerWidget {
       alignment,
       motionAllowed,
     );
-    final shouldBlur = settings.blurAmount > 0.05 && asset?.isVideo != true;
+    // 环境模式对非视频壁纸叠加的环境模糊与用户设置取较大值；
+    // 视频不做全屏实时模糊（成本过高），存在感由宿主遮罩与不透明度承担。
+    final environmentSigma =
+        asset?.isVideo == true
+            ? 0.0
+            : AppEnvironmentPresentation.of(policy.environmentMode).blurSigma;
+    final userBlur = settings.blurAmount;
+    final shouldBlur =
+        (userBlur > 0.05 || environmentSigma > 0.05) && asset?.isVideo != true;
     // 全屏 ImageFilter.blur 随窗口面积线性变贵;壁纸模糊上限收敛,
     // 观感差异有限,可明显降低最大化/全屏时的 GPU 合成压力。
-    final blurSigma = shouldBlur ? settings.blurAmount.clamp(0.0, 12.0) : 0.0;
+    final blurSigma =
+        shouldBlur
+            ? (userBlur > environmentSigma ? userBlur : environmentSigma).clamp(
+              0.0,
+              28.0,
+            )
+            : 0.0;
     final mediaLayer =
         shouldBlur
             ? ImageFiltered(
@@ -167,7 +181,10 @@ class AppBackdropSurface extends ConsumerWidget {
     Alignment alignment,
   ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
-      final blurActive = settings.blurAmount > 0.05;
+      final blurActive =
+          settings.blurAmount > 0.05 ||
+          AppEnvironmentPresentation.of(policy.environmentMode).blurSigma >
+              0.05;
       final thumbnail =
           asset.thumbnailPath?.isNotEmpty == true ? asset.thumbnailPath : null;
       return AppBackdropImage(

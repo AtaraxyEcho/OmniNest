@@ -317,6 +317,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show a lightweight toast when a notification arrives';
 
   @override
+  String get notificationFilterAllLabel => 'All';
+
+  @override
+  String get notificationFilterUnreadLabel => 'Unread';
+
+  @override
   String get notificationMarkAllRead => 'Mark all read';
 
   @override
@@ -430,17 +436,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String notificationTimeMinutes(Object n) {
-    return '$n min ago';
+    return '$n min';
   }
 
   @override
   String notificationTimeHours(Object n) {
-    return '$n hr ago';
+    return '$n hr';
   }
 
   @override
   String notificationTimeDays(Object n) {
-    return '$n days ago';
+    return '$n days';
   }
 
   @override
@@ -476,6 +482,127 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileRoleSuperAdmin => 'Super Admin';
+
+  @override
+  String get envSheetSubtitle => 'The photo behind everything';
+
+  @override
+  String get envSheetLibrary => 'YOUR LIBRARY';
+
+  @override
+  String get envSheetBehavior => 'BEHAVIOR';
+
+  @override
+  String get envSheetLive => 'Live environment';
+
+  @override
+  String get envSheetLiveSub => 'Blur and dim follow the active space';
+
+  @override
+  String get envSheetActive => 'ACTIVE';
+
+  @override
+  String get envSheetUpload => 'Upload image';
+
+  @override
+  String get envSheetEmpty => 'No environment images yet';
+
+  @override
+  String get profileGroupAppearance => 'APPEARANCE';
+
+  @override
+  String get profileGroupSecurity => 'SECURITY';
+
+  @override
+  String get profileGroupServer => 'SERVER';
+
+  @override
+  String get profileGroupAbout => 'ABOUT';
+
+  @override
+  String get profileRowAccountInfo => 'Account info';
+
+  @override
+  String get profileAccountSubtitle => 'Avatar · name · email';
+
+  @override
+  String get profileRowChangePassword => 'Change password';
+
+  @override
+  String get profileRowTwoFactor => 'Two-factor';
+
+  @override
+  String get profileRowSessions => 'Devices & sessions';
+
+  @override
+  String get profileSessionsCurrent => 'This device';
+
+  @override
+  String get profileSessionsRevoke => 'Revoke';
+
+  @override
+  String get profileSessionsEmpty => 'No other active sessions';
+
+  @override
+  String get profileSaveChanges => 'Save Changes';
+
+  @override
+  String get profileDisplayNameField => 'Display name';
+
+  @override
+  String get profileEmailField => 'Email';
+
+  @override
+  String get profileChangeAvatar => 'Change avatar';
+
+  @override
+  String get profileThemeLabel => 'Theme';
+
+  @override
+  String get profileLanguageLabel => 'Language';
+
+  @override
+  String get profileFontScaleLabel => 'Font scale';
+
+  @override
+  String get profileServerAddress => 'Server address';
+
+  @override
+  String get profileSwitchServer => 'Switch server';
+
+  @override
+  String get envSheetClearAll => 'Clear all images';
+
+  @override
+  String get envSheetSeparate => 'Separate images per device';
+
+  @override
+  String get envSheetSeparateSub => 'Pick a backdrop for each device class';
+
+  @override
+  String get envSheetUploadHint => 'JPG / PNG / WEBP and short videos';
+
+  @override
+  String get profileRowEnvironment => 'Backdrop library';
+
+  @override
+  String get profileRowTheme => 'Theme & appearance';
+
+  @override
+  String get profileRowNotifications => 'Notifications';
+
+  @override
+  String get profileRowSecurity => 'Password · 2FA · devices';
+
+  @override
+  String get profileRowServer => 'Server info';
+
+  @override
+  String get profileRowAbout => 'About OmniNest';
+
+  @override
+  String get profileFooterTag =>
+      'OmniNest · self-hosted media for one household';
 
   @override
   String get profileRoleAdmin => 'Admin';
@@ -830,6 +957,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginSigningIn => 'Signing in...';
+
+  @override
+  String get loginSetupNewServer => 'Set up a new server';
 
   @override
   String get loginSignIn => 'Sign In';
@@ -1588,6 +1718,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String filesPurgeConfirmMessage(Object name) {
     return '\"$name\" will be permanently deleted from the recycle bin. This action cannot be undone.';
   }
+
+  @override
+  String filesFolderItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String get filesShareManageEntry => 'Manage share links';
 
   @override
   String filesSelectedCount(Object count) {
@@ -5736,6 +5874,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerThemeDark => 'Dark';
 
   @override
+  String get readerThemeNightGlass => 'Night glass';
+
+  @override
   String get readerThemeGreen => 'Green';
 
   @override
@@ -6689,6 +6830,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSectionRecent => 'Recently Added';
 
   @override
+  String get videoSectionForYou => 'For you';
+
+  @override
+  String get videoSectionFilms => 'Films';
+
+  @override
+  String get videoSectionSeries => 'Series';
+
+  @override
+  String get videoMobileSortRecent => 'Recent';
+
+  @override
+  String get videoToggleOrientation => 'Rotate screen';
+
+  @override
+  String get videoMobileStatusFilter => 'Status filter';
+
+  @override
+  String get videoHostedFilmsEyebrow => 'RECENTLY ADDED';
+
+  @override
+  String get videoHostedContinueEyebrow => 'PICK UP WHERE YOU LEFT OFF';
+
+  @override
+  String videoHeroMinutesLeft(Object minutes) {
+    return '$minutes min left';
+  }
+
+  @override
+  String get videoHeroResume => 'Resume';
+
+  @override
+  String get videoHeroInfo => 'Info';
+
+  @override
   String get videoSectionContinueWatching => 'Continue Watching';
 
   @override
@@ -7468,6 +7644,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String photosHostedToolbarCount(Object count) {
+    return '$count photos';
+  }
+
+  @override
+  String get photosHostedRecentTitle => 'Recent';
+
+  @override
+  String get photosHostedAlbumsEyebrow => 'MADE BY YOU';
+
+  @override
+  String get photosHostedMomentsEyebrow => 'THIS WEEK';
+
+  @override
+  String get photosHostedMomentsTitle => 'Moments worth keeping';
+
+  @override
   String get photosDone => 'Done';
 
   @override
@@ -7762,6 +7955,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photosTaskCreateFailed => 'Task creation failed';
+
+  @override
+  String get photosSelectPhotos => 'Select';
+
+  @override
+  String get photosMomentsSection => 'Moments worth keeping';
 
   @override
   String get photosSelectAlbum => 'Select Album';
@@ -11177,6 +11376,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationNextPage => 'Next';
 
   @override
+  String get moduleMusicTitle => 'Music';
+
+  @override
+  String get modulePhotosTitle => 'Photos';
+
+  @override
+  String get moduleMoviesTitle => 'Movies';
+
+  @override
+  String musicModuleSubtitle(Object albumCount, Object trackCount) {
+    return '$trackCount tracks · $albumCount albums';
+  }
+
+  @override
+  String photosModuleSubtitle(Object albumCount, Object photoCount) {
+    return '$photoCount photos · $albumCount albums';
+  }
+
+  @override
+  String moviesModuleSubtitle(Object continueCount, Object titleCount) {
+    return '$titleCount titles · $continueCount in progress';
+  }
+
+  @override
+  String get notificationGroupToday => 'TODAY';
+
+  @override
+  String get notificationGroupYesterday => 'YESTERDAY';
+
+  @override
+  String get notificationGroupEarlier => 'EARLIER';
+
+  @override
+  String get notificationSubtitleAllRead => 'All caught up';
+
+  @override
+  String get notificationDeleteConfirmMessage =>
+      'Delete this notification? This cannot be undone.';
+
+  @override
   String get profileHeaderAccount => 'Account Profile';
 
   @override
@@ -11278,9 +11517,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationActionViewShares => 'View shares';
 
   @override
-  String get profileSaveChanges => 'Save Changes';
-
-  @override
   String get profileUpdateFailed => 'Failed to save profile';
 
   @override
@@ -11376,4 +11612,459 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get favoriteRemoved => 'Removed from favorites';
+
+  @override
+  String get mobileNavLibrary => 'Library';
+
+  @override
+  String get mobileSpaceLibrarySubtitle => 'Your media, together';
+
+  @override
+  String get mobileSpaceReaderSubtitle => 'A quieter space';
+
+  @override
+  String get mobileSpaceFilesSubtitle => 'Your digital workspace';
+
+  @override
+  String get accountSheetTitle => 'Account';
+
+  @override
+  String get accountEntryNotifications => 'Notifications';
+
+  @override
+  String get accountEntryDevices => 'Devices';
+
+  @override
+  String get accountEntryEnvironment => 'Backdrop library';
+
+  @override
+  String get accountEntrySettings => 'Settings';
+
+  @override
+  String get accountManageAccount => 'Manage account';
+
+  @override
+  String get accountStatusHealthy => 'OmniNest is healthy';
+
+  @override
+  String get accountStatusOffline => 'OmniNest is offline';
+
+  @override
+  String get librarySegmentAll => 'All';
+
+  @override
+  String get libraryBannerEyebrow => 'Recent album';
+
+  @override
+  String libraryBannerPhotoCount(int count) {
+    return '$count photos';
+  }
+
+  @override
+  String get libraryOpenAlbum => 'View album';
+
+  @override
+  String get libraryRecentPhotosTitle => 'Recent photos';
+
+  @override
+  String get libraryJustInEyebrow => 'Just in';
+
+  @override
+  String get libraryCollectionEyebrow => 'Your collection';
+
+  @override
+  String get librarySectionFavorites => 'Favorite photos';
+
+  @override
+  String get libraryNoFavorites => 'No favorite photos yet';
+
+  @override
+  String libraryPhotosMore(int count) {
+    return '+$count';
+  }
+
+  @override
+  String get libraryPickUpEyebrow => 'Pick up where you left off';
+
+  @override
+  String get libraryContinueWatchingTitle => 'Continue watching';
+
+  @override
+  String get libraryNoMovies => 'Nothing to watch yet';
+
+  @override
+  String libraryMinutesLeft(int minutes) {
+    return '$minutes min left';
+  }
+
+  @override
+  String get libraryMadeForNowEyebrow => 'Made for this moment';
+
+  @override
+  String get libraryRecentListeningTitle => 'Recent listening';
+
+  @override
+  String get libraryNoMusic => 'No music in your library yet';
+
+  @override
+  String get searchMobilePlaceholder => 'Search everything';
+
+  @override
+  String get searchScopesTitle => 'Search across OmniNest';
+
+  @override
+  String get searchRecentQueries => 'Recent searches';
+
+  @override
+  String get searchLoadFailed => 'Search is unavailable right now';
+
+  @override
+  String get searchCommandHome => 'Go to Home';
+
+  @override
+  String get searchCommandLibrary => 'Go to Library';
+
+  @override
+  String get searchCommandReader => 'Go to Reader';
+
+  @override
+  String get searchCommandFiles => 'Go to Files';
+
+  @override
+  String get searchCommandPhotos => 'Open Photos';
+
+  @override
+  String get searchCommandMovies => 'Open Movies';
+
+  @override
+  String get searchCommandMusic => 'Open Music';
+
+  @override
+  String get spatialFocusEyebrow => 'Continue where you left off';
+
+  @override
+  String get spatialNowPlaying => 'Now playing';
+
+  @override
+  String get spatialResume => 'Resume';
+
+  @override
+  String get spatialPlay => 'Play';
+
+  @override
+  String get spatialRecentlyEyebrow => 'Recently';
+
+  @override
+  String get spatialRecentlyTitle => 'Recently touched';
+
+  @override
+  String get spatialActionFind => 'Find anything';
+
+  @override
+  String get spatialActionAddMedia => 'Add media';
+
+  @override
+  String get spatialViewLibrary => 'View library';
+
+  @override
+  String spatialFocusReadingSub(String chapter, int percent) {
+    return 'Chapter $chapter · $percent%';
+  }
+
+  @override
+  String spatialFocusWatchingSub(int percent) {
+    return '$percent% watched';
+  }
+
+  @override
+  String get spatialRecentPhotos => 'New photos';
+
+  @override
+  String get spatialRecentFiles => 'Recent files';
+
+  @override
+  String get readerSpaceContinueEyebrow => 'Continue reading';
+
+  @override
+  String get readerSpaceInsightEyebrow => 'This week';
+
+  @override
+  String readerInsightFocus(String duration) {
+    return '$duration in focus this week';
+  }
+
+  @override
+  String readerInsightStreak(int count) {
+    return '$count-day streak';
+  }
+
+  @override
+  String readerInsightChapters(int count) {
+    return '$count chapters finished';
+  }
+
+  @override
+  String get readerReadNextEyebrow => 'Your shelves';
+
+  @override
+  String get readerReadNextTitle => 'Read next';
+
+  @override
+  String get readerSpaceAllBooks => 'All books';
+
+  @override
+  String filesStorageQuotaLine(String used, String total) {
+    return '$used of $total used';
+  }
+
+  @override
+  String get spatialFocusMorning => 'CONTINUE YOUR MORNING';
+
+  @override
+  String get spatialFocusAfternoon => 'CONTINUE YOUR AFTERNOON';
+
+  @override
+  String get spatialFocusEvening => 'CONTINUE YOUR EVENING';
+
+  @override
+  String spatialPlayingFrom(String source) {
+    return 'Playing from $source';
+  }
+
+  @override
+  String get filesHomeTabMyFiles => 'My files';
+
+  @override
+  String get filesViewList => 'List view';
+
+  @override
+  String get filesViewGrid => 'Grid view';
+
+  @override
+  String weatherSheetLocationEyebrow(String city) {
+    return '$city · LOCAL WEATHER';
+  }
+
+  @override
+  String get weatherSheetSummary =>
+      'Clear skies through the evening. A cooler, quiet night ahead.';
+
+  @override
+  String get weatherHourNow => 'Now';
+
+  @override
+  String get weatherMetricWind => 'Wind';
+
+  @override
+  String get weatherMetricHumidity => 'Humidity';
+
+  @override
+  String get weatherMetricAirQuality => 'Air quality';
+
+  @override
+  String get weatherMetricSunset => 'Sunset';
+
+  @override
+  String weatherSunsetIn(int minutes) {
+    return '$minutes min away';
+  }
+
+  @override
+  String get weatherForecastTitle => 'Next three days';
+
+  @override
+  String get weatherSettingsAction => 'Visual environment';
+
+  @override
+  String get weatherDayTomorrow => 'Tomorrow';
+
+  @override
+  String get weatherSheetEnvironmentNote =>
+      'Your visual environment is following local light and weather.';
+
+  @override
+  String get bookDetailInLibrary => 'IN YOUR LIBRARY';
+
+  @override
+  String bookDetailMeta(String type, int year) {
+    return '$type · added $year';
+  }
+
+  @override
+  String get bookDetailContinue => 'Continue reading';
+
+  @override
+  String get bookDetailStart => 'Start reading';
+
+  @override
+  String get bookDetailMetadata => 'Edit metadata';
+
+  @override
+  String get bookDetailProgressLabel => 'Reading progress';
+
+  @override
+  String bookDetailLastOpened(String date) {
+    return 'Last opened $date';
+  }
+
+  @override
+  String get bookDetailAbout => 'About this book';
+
+  @override
+  String get bookDetailShowMore => 'Show more';
+
+  @override
+  String get bookDetailShowLess => 'Show less';
+
+  @override
+  String get bookDetailContents => 'Contents';
+
+  @override
+  String get bookDetailChapters => 'Chapters';
+
+  @override
+  String bookDetailChapterCount(int count) {
+    return '$count chapters';
+  }
+
+  @override
+  String bookDetailChapterPages(int count) {
+    return '$count pages';
+  }
+
+  @override
+  String get accountStatusSyncNote => 'Last synced just now';
+
+  @override
+  String get accountStatusOfflineNote => 'Reconnecting when network returns';
+
+  @override
+  String accountEntryNotificationsSub(int count) {
+    return '$count new updates';
+  }
+
+  @override
+  String get accountEntryNotificationsNone => 'All caught up';
+
+  @override
+  String accountEntryDevicesSub(int count) {
+    return '$count devices online';
+  }
+
+  @override
+  String get accountEntryEnvironmentDefault => 'Default environment';
+
+  @override
+  String get accountEntrySettingsSub => 'Appearance, privacy, storage';
+
+  @override
+  String get libraryEmptyPhotosTitle => 'No photos yet';
+
+  @override
+  String get libraryEmptyPhotosMessage =>
+      'Import or upload to see your moments here.';
+
+  @override
+  String get libraryEmptyFavoritesTitle => 'No favorites yet';
+
+  @override
+  String get libraryEmptyFavoritesMessage =>
+      'Long-press a photo to favorite it.';
+
+  @override
+  String get libraryEmptyMoviesTitle => 'Nothing to watch';
+
+  @override
+  String get libraryEmptyMoviesMessage =>
+      'Register a library source and scan to build your cinema.';
+
+  @override
+  String get libraryEmptyMusicTitle => 'No music yet';
+
+  @override
+  String get libraryEmptyMusicMessage =>
+      'Import tracks and they will land right here.';
+
+  @override
+  String get searchEmptyTitle => 'No matches yet';
+
+  @override
+  String get searchEmptyMessage => 'Try a broader search across OmniNest.';
+
+  @override
+  String filesPaginationTotal(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String filesLoadMore(Object loaded, Object total) {
+    return 'Load more';
+  }
+
+  @override
+  String get filesPaginationEnd => 'End of list';
+
+  @override
+  String get filesLoadMoreAction => 'Load more';
+
+  @override
+  String get readerContinueChapter => 'Continue chapter';
+
+  @override
+  String get libraryEmptyBooksTitle => 'No books yet';
+
+  @override
+  String get libraryEmptyBooksMessage =>
+      'Import EPUB or comics to fill your shelves.';
+
+  @override
+  String get readerRecentTitle => 'Recently read';
+
+  @override
+  String get readerNotesEyebrow => 'Recent notes';
+
+  @override
+  String get readerNotesTitle => 'Ideas worth returning to';
+
+  @override
+  String get weatherSheetLocalFallback => 'Local weather';
+
+  @override
+  String weatherSheetFeelsLike(int temp) {
+    return 'Feels like $temp°';
+  }
+
+  @override
+  String get musicNowPlayingMoreActions => 'More actions';
+
+  @override
+  String get musicSourceSyncError =>
+      'Platform sync failed; the local library keeps playing.';
+
+  @override
+  String get musicImmersiveEyebrow => 'Music · Immersive';
+
+  @override
+  String get musicNowPlayingEyebrow => 'NOW PLAYING';
+
+  @override
+  String get musicLiveLyrics => 'LIVE LYRICS';
+
+  @override
+  String get musicFullLyrics => 'Full lyrics';
+
+  @override
+  String get spatialStartListening => 'Nothing playing yet';
+
+  @override
+  String get spatialStartTitle => 'Start listening';
+
+  @override
+  String get spatialStartSubtitle =>
+      'Pick up where you left off, or begin something new';
+
+  @override
+  String searchResultCount(int count) {
+    return '$count RESULTS ACROSS OMNINEST';
+  }
 }

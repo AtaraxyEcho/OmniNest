@@ -7,7 +7,7 @@ import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/network/api_client.dart';
-import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -26,7 +26,7 @@ import 'package:omninest/features/music/presentation/deck/music_deck_shell.dart'
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
 void main() {
-  testWidgets('移动端查看全部页面提供返回首页控件', (tester) async {
+  testWidgets('移动端查看全部页面经常驻分段条返回首页', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -54,33 +54,23 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
-          home: const MobileShellScope(hosted: true, child: MusicDeckShell()),
+          home: const MobileHostedRoute(child: MusicDeckShell()),
         ),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(
-      find.byKey(const ValueKey<String>('music-mobile-section-back')),
-      findsNothing,
-    );
+    // 玻璃横幅（样例 module-overlay 头）+ 四段导航常驻。
+    expect(find.text('Music'), findsOneWidget);
+    final homeSegment = find.text('Home');
+    expect(homeSegment, findsOneWidget);
     await tester.tap(find.text('View All').first);
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey<String>('music-mobile-section-back')),
-      findsOneWidget,
-    );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('music-mobile-section-back')),
-    );
+    await tester.tap(homeSegment);
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey<String>('music-mobile-section-back')),
-      findsNothing,
-    );
     expect(find.text('View All'), findsNWidgets(2));
   });
 

@@ -668,6 +668,18 @@ abstract class AppLocalizations {
   /// **'Show a lightweight toast when a notification arrives'**
   String get notificationForegroundToastToggleSubtitle;
 
+  /// No description provided for @notificationFilterAllLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get notificationFilterAllLabel;
+
+  /// No description provided for @notificationFilterUnreadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notificationFilterUnreadLabel;
+
   /// No description provided for @notificationMarkAllRead.
   ///
   /// In en, this message translates to:
@@ -875,19 +887,19 @@ abstract class AppLocalizations {
   /// No description provided for @notificationTimeMinutes.
   ///
   /// In en, this message translates to:
-  /// **'{n} min ago'**
+  /// **'{n} min'**
   String notificationTimeMinutes(Object n);
 
   /// No description provided for @notificationTimeHours.
   ///
   /// In en, this message translates to:
-  /// **'{n} hr ago'**
+  /// **'{n} hr'**
   String notificationTimeHours(Object n);
 
   /// No description provided for @notificationTimeDays.
   ///
   /// In en, this message translates to:
-  /// **'{n} days ago'**
+  /// **'{n} days'**
   String notificationTimeDays(Object n);
 
   /// No description provided for @profileTitle.
@@ -955,6 +967,246 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Super Admin'**
   String get profileRoleSuperAdmin;
+
+  /// No description provided for @envSheetSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo behind everything'**
+  String get envSheetSubtitle;
+
+  /// No description provided for @envSheetLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'YOUR LIBRARY'**
+  String get envSheetLibrary;
+
+  /// No description provided for @envSheetBehavior.
+  ///
+  /// In en, this message translates to:
+  /// **'BEHAVIOR'**
+  String get envSheetBehavior;
+
+  /// No description provided for @envSheetLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Live environment'**
+  String get envSheetLive;
+
+  /// No description provided for @envSheetLiveSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Blur and dim follow the active space'**
+  String get envSheetLiveSub;
+
+  /// No description provided for @envSheetActive.
+  ///
+  /// In en, this message translates to:
+  /// **'ACTIVE'**
+  String get envSheetActive;
+
+  /// No description provided for @envSheetUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload image'**
+  String get envSheetUpload;
+
+  /// No description provided for @envSheetEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No environment images yet'**
+  String get envSheetEmpty;
+
+  /// No description provided for @profileGroupAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'APPEARANCE'**
+  String get profileGroupAppearance;
+
+  /// No description provided for @profileGroupSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'SECURITY'**
+  String get profileGroupSecurity;
+
+  /// No description provided for @profileGroupServer.
+  ///
+  /// In en, this message translates to:
+  /// **'SERVER'**
+  String get profileGroupServer;
+
+  /// No description provided for @profileGroupAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'ABOUT'**
+  String get profileGroupAbout;
+
+  /// No description provided for @profileRowAccountInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Account info'**
+  String get profileRowAccountInfo;
+
+  /// No description provided for @profileAccountSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar · name · email'**
+  String get profileAccountSubtitle;
+
+  /// No description provided for @profileRowChangePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get profileRowChangePassword;
+
+  /// No description provided for @profileRowTwoFactor.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor'**
+  String get profileRowTwoFactor;
+
+  /// No description provided for @profileRowSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices & sessions'**
+  String get profileRowSessions;
+
+  /// No description provided for @profileSessionsCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'This device'**
+  String get profileSessionsCurrent;
+
+  /// No description provided for @profileSessionsRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get profileSessionsRevoke;
+
+  /// No description provided for @profileSessionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No other active sessions'**
+  String get profileSessionsEmpty;
+
+  /// No description provided for @profileSaveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Changes'**
+  String get profileSaveChanges;
+
+  /// No description provided for @profileDisplayNameField.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get profileDisplayNameField;
+
+  /// No description provided for @profileEmailField.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get profileEmailField;
+
+  /// No description provided for @profileChangeAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Change avatar'**
+  String get profileChangeAvatar;
+
+  /// No description provided for @profileThemeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get profileThemeLabel;
+
+  /// No description provided for @profileLanguageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get profileLanguageLabel;
+
+  /// No description provided for @profileFontScaleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Font scale'**
+  String get profileFontScaleLabel;
+
+  /// No description provided for @profileServerAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Server address'**
+  String get profileServerAddress;
+
+  /// No description provided for @profileSwitchServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch server'**
+  String get profileSwitchServer;
+
+  /// No description provided for @envSheetClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all images'**
+  String get envSheetClearAll;
+
+  /// No description provided for @envSheetSeparate.
+  ///
+  /// In en, this message translates to:
+  /// **'Separate images per device'**
+  String get envSheetSeparate;
+
+  /// No description provided for @envSheetSeparateSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a backdrop for each device class'**
+  String get envSheetSeparateSub;
+
+  /// No description provided for @envSheetUploadHint.
+  ///
+  /// In en, this message translates to:
+  /// **'JPG / PNG / WEBP and short videos'**
+  String get envSheetUploadHint;
+
+  /// No description provided for @profileRowEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop library'**
+  String get profileRowEnvironment;
+
+  /// No description provided for @profileRowTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme & appearance'**
+  String get profileRowTheme;
+
+  /// No description provided for @profileRowNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get profileRowNotifications;
+
+  /// No description provided for @profileRowSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Password · 2FA · devices'**
+  String get profileRowSecurity;
+
+  /// No description provided for @profileRowServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server info'**
+  String get profileRowServer;
+
+  /// No description provided for @profileRowAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About OmniNest'**
+  String get profileRowAbout;
+
+  /// No description provided for @profileFooterTag.
+  ///
+  /// In en, this message translates to:
+  /// **'OmniNest · self-hosted media for one household'**
+  String get profileFooterTag;
 
   /// No description provided for @profileRoleAdmin.
   ///
@@ -1609,6 +1861,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Signing in...'**
   String get loginSigningIn;
+
+  /// No description provided for @loginSetupNewServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a new server'**
+  String get loginSetupNewServer;
 
   /// No description provided for @loginSignIn.
   ///
@@ -3037,6 +3295,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'\"{name}\" will be permanently deleted from the recycle bin. This action cannot be undone.'**
   String filesPurgeConfirmMessage(Object name);
+
+  /// No description provided for @filesFolderItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String filesFolderItemCount(Object count);
+
+  /// No description provided for @filesShareManageEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage share links'**
+  String get filesShareManageEntry;
 
   /// No description provided for @filesSelectedCount.
   ///
@@ -10541,6 +10811,12 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get readerThemeDark;
 
+  /// No description provided for @readerThemeNightGlass.
+  ///
+  /// In en, this message translates to:
+  /// **'Night glass'**
+  String get readerThemeNightGlass;
+
   /// No description provided for @readerThemeGreen.
   ///
   /// In en, this message translates to:
@@ -12209,6 +12485,72 @@ abstract class AppLocalizations {
   /// **'Recently Added'**
   String get videoSectionRecent;
 
+  /// No description provided for @videoSectionForYou.
+  ///
+  /// In en, this message translates to:
+  /// **'For you'**
+  String get videoSectionForYou;
+
+  /// No description provided for @videoSectionFilms.
+  ///
+  /// In en, this message translates to:
+  /// **'Films'**
+  String get videoSectionFilms;
+
+  /// No description provided for @videoSectionSeries.
+  ///
+  /// In en, this message translates to:
+  /// **'Series'**
+  String get videoSectionSeries;
+
+  /// No description provided for @videoMobileSortRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get videoMobileSortRecent;
+
+  /// No description provided for @videoToggleOrientation.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate screen'**
+  String get videoToggleOrientation;
+
+  /// No description provided for @videoMobileStatusFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Status filter'**
+  String get videoMobileStatusFilter;
+
+  /// No description provided for @videoHostedFilmsEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'RECENTLY ADDED'**
+  String get videoHostedFilmsEyebrow;
+
+  /// No description provided for @videoHostedContinueEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'PICK UP WHERE YOU LEFT OFF'**
+  String get videoHostedContinueEyebrow;
+
+  /// No description provided for @videoHeroMinutesLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min left'**
+  String videoHeroMinutesLeft(Object minutes);
+
+  /// No description provided for @videoHeroResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get videoHeroResume;
+
+  /// No description provided for @videoHeroInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get videoHeroInfo;
+
   /// No description provided for @videoSectionContinueWatching.
   ///
   /// In en, this message translates to:
@@ -13649,6 +13991,36 @@ abstract class AppLocalizations {
   /// **'{count} items completed'**
   String photosProcessedItems(Object count);
 
+  /// No description provided for @photosHostedToolbarCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} photos'**
+  String photosHostedToolbarCount(Object count);
+
+  /// No description provided for @photosHostedRecentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get photosHostedRecentTitle;
+
+  /// No description provided for @photosHostedAlbumsEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'MADE BY YOU'**
+  String get photosHostedAlbumsEyebrow;
+
+  /// No description provided for @photosHostedMomentsEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'THIS WEEK'**
+  String get photosHostedMomentsEyebrow;
+
+  /// No description provided for @photosHostedMomentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Moments worth keeping'**
+  String get photosHostedMomentsTitle;
+
   /// No description provided for @photosDone.
   ///
   /// In en, this message translates to:
@@ -14176,6 +14548,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Task creation failed'**
   String get photosTaskCreateFailed;
+
+  /// No description provided for @photosSelectPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get photosSelectPhotos;
+
+  /// No description provided for @photosMomentsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Moments worth keeping'**
+  String get photosMomentsSection;
 
   /// No description provided for @photosSelectAlbum.
   ///
@@ -20374,6 +20758,72 @@ abstract class AppLocalizations {
   /// **'Next'**
   String get notificationNextPage;
 
+  /// No description provided for @moduleMusicTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Music'**
+  String get moduleMusicTitle;
+
+  /// No description provided for @modulePhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get modulePhotosTitle;
+
+  /// No description provided for @moduleMoviesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Movies'**
+  String get moduleMoviesTitle;
+
+  /// No description provided for @musicModuleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{trackCount} tracks · {albumCount} albums'**
+  String musicModuleSubtitle(Object albumCount, Object trackCount);
+
+  /// No description provided for @photosModuleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{photoCount} photos · {albumCount} albums'**
+  String photosModuleSubtitle(Object albumCount, Object photoCount);
+
+  /// No description provided for @moviesModuleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{titleCount} titles · {continueCount} in progress'**
+  String moviesModuleSubtitle(Object continueCount, Object titleCount);
+
+  /// No description provided for @notificationGroupToday.
+  ///
+  /// In en, this message translates to:
+  /// **'TODAY'**
+  String get notificationGroupToday;
+
+  /// No description provided for @notificationGroupYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'YESTERDAY'**
+  String get notificationGroupYesterday;
+
+  /// No description provided for @notificationGroupEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'EARLIER'**
+  String get notificationGroupEarlier;
+
+  /// No description provided for @notificationSubtitleAllRead.
+  ///
+  /// In en, this message translates to:
+  /// **'All caught up'**
+  String get notificationSubtitleAllRead;
+
+  /// No description provided for @notificationDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this notification? This cannot be undone.'**
+  String get notificationDeleteConfirmMessage;
+
   /// No description provided for @profileHeaderAccount.
   ///
   /// In en, this message translates to:
@@ -20566,12 +21016,6 @@ abstract class AppLocalizations {
   /// **'View shares'**
   String get notificationActionViewShares;
 
-  /// No description provided for @profileSaveChanges.
-  ///
-  /// In en, this message translates to:
-  /// **'Save Changes'**
-  String get profileSaveChanges;
-
   /// No description provided for @profileUpdateFailed.
   ///
   /// In en, this message translates to:
@@ -20727,6 +21171,810 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Removed from favorites'**
   String get favoriteRemoved;
+
+  /// No description provided for @mobileNavLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get mobileNavLibrary;
+
+  /// No description provided for @mobileSpaceLibrarySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your media, together'**
+  String get mobileSpaceLibrarySubtitle;
+
+  /// No description provided for @mobileSpaceReaderSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A quieter space'**
+  String get mobileSpaceReaderSubtitle;
+
+  /// No description provided for @mobileSpaceFilesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your digital workspace'**
+  String get mobileSpaceFilesSubtitle;
+
+  /// No description provided for @accountSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get accountSheetTitle;
+
+  /// No description provided for @accountEntryNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get accountEntryNotifications;
+
+  /// No description provided for @accountEntryDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get accountEntryDevices;
+
+  /// No description provided for @accountEntryEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop library'**
+  String get accountEntryEnvironment;
+
+  /// No description provided for @accountEntrySettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get accountEntrySettings;
+
+  /// No description provided for @accountManageAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage account'**
+  String get accountManageAccount;
+
+  /// No description provided for @accountStatusHealthy.
+  ///
+  /// In en, this message translates to:
+  /// **'OmniNest is healthy'**
+  String get accountStatusHealthy;
+
+  /// No description provided for @accountStatusOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'OmniNest is offline'**
+  String get accountStatusOffline;
+
+  /// No description provided for @librarySegmentAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get librarySegmentAll;
+
+  /// No description provided for @libraryBannerEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent album'**
+  String get libraryBannerEyebrow;
+
+  /// No description provided for @libraryBannerPhotoCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} photos'**
+  String libraryBannerPhotoCount(int count);
+
+  /// No description provided for @libraryOpenAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'View album'**
+  String get libraryOpenAlbum;
+
+  /// No description provided for @libraryRecentPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent photos'**
+  String get libraryRecentPhotosTitle;
+
+  /// No description provided for @libraryJustInEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Just in'**
+  String get libraryJustInEyebrow;
+
+  /// No description provided for @libraryCollectionEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Your collection'**
+  String get libraryCollectionEyebrow;
+
+  /// No description provided for @librarySectionFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite photos'**
+  String get librarySectionFavorites;
+
+  /// No description provided for @libraryNoFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorite photos yet'**
+  String get libraryNoFavorites;
+
+  /// No description provided for @libraryPhotosMore.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count}'**
+  String libraryPhotosMore(int count);
+
+  /// No description provided for @libraryPickUpEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick up where you left off'**
+  String get libraryPickUpEyebrow;
+
+  /// No description provided for @libraryContinueWatchingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue watching'**
+  String get libraryContinueWatchingTitle;
+
+  /// No description provided for @libraryNoMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to watch yet'**
+  String get libraryNoMovies;
+
+  /// No description provided for @libraryMinutesLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min left'**
+  String libraryMinutesLeft(int minutes);
+
+  /// No description provided for @libraryMadeForNowEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Made for this moment'**
+  String get libraryMadeForNowEyebrow;
+
+  /// No description provided for @libraryRecentListeningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent listening'**
+  String get libraryRecentListeningTitle;
+
+  /// No description provided for @libraryNoMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'No music in your library yet'**
+  String get libraryNoMusic;
+
+  /// No description provided for @searchMobilePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Search everything'**
+  String get searchMobilePlaceholder;
+
+  /// No description provided for @searchScopesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search across OmniNest'**
+  String get searchScopesTitle;
+
+  /// No description provided for @searchRecentQueries.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent searches'**
+  String get searchRecentQueries;
+
+  /// No description provided for @searchLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Search is unavailable right now'**
+  String get searchLoadFailed;
+
+  /// No description provided for @searchCommandHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Home'**
+  String get searchCommandHome;
+
+  /// No description provided for @searchCommandLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Library'**
+  String get searchCommandLibrary;
+
+  /// No description provided for @searchCommandReader.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Reader'**
+  String get searchCommandReader;
+
+  /// No description provided for @searchCommandFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Files'**
+  String get searchCommandFiles;
+
+  /// No description provided for @searchCommandPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Photos'**
+  String get searchCommandPhotos;
+
+  /// No description provided for @searchCommandMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Movies'**
+  String get searchCommandMovies;
+
+  /// No description provided for @searchCommandMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Music'**
+  String get searchCommandMusic;
+
+  /// No description provided for @spatialFocusEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue where you left off'**
+  String get spatialFocusEyebrow;
+
+  /// No description provided for @spatialNowPlaying.
+  ///
+  /// In en, this message translates to:
+  /// **'Now playing'**
+  String get spatialNowPlaying;
+
+  /// No description provided for @spatialResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get spatialResume;
+
+  /// No description provided for @spatialPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get spatialPlay;
+
+  /// No description provided for @spatialRecentlyEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently'**
+  String get spatialRecentlyEyebrow;
+
+  /// No description provided for @spatialRecentlyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently touched'**
+  String get spatialRecentlyTitle;
+
+  /// No description provided for @spatialActionFind.
+  ///
+  /// In en, this message translates to:
+  /// **'Find anything'**
+  String get spatialActionFind;
+
+  /// No description provided for @spatialActionAddMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Add media'**
+  String get spatialActionAddMedia;
+
+  /// No description provided for @spatialViewLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'View library'**
+  String get spatialViewLibrary;
+
+  /// No description provided for @spatialFocusReadingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter {chapter} · {percent}%'**
+  String spatialFocusReadingSub(String chapter, int percent);
+
+  /// No description provided for @spatialFocusWatchingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% watched'**
+  String spatialFocusWatchingSub(int percent);
+
+  /// No description provided for @spatialRecentPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'New photos'**
+  String get spatialRecentPhotos;
+
+  /// No description provided for @spatialRecentFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent files'**
+  String get spatialRecentFiles;
+
+  /// No description provided for @readerSpaceContinueEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue reading'**
+  String get readerSpaceContinueEyebrow;
+
+  /// No description provided for @readerSpaceInsightEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get readerSpaceInsightEyebrow;
+
+  /// No description provided for @readerInsightFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'{duration} in focus this week'**
+  String readerInsightFocus(String duration);
+
+  /// No description provided for @readerInsightStreak.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}-day streak'**
+  String readerInsightStreak(int count);
+
+  /// No description provided for @readerInsightChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters finished'**
+  String readerInsightChapters(int count);
+
+  /// No description provided for @readerReadNextEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shelves'**
+  String get readerReadNextEyebrow;
+
+  /// No description provided for @readerReadNextTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Read next'**
+  String get readerReadNextTitle;
+
+  /// No description provided for @readerSpaceAllBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'All books'**
+  String get readerSpaceAllBooks;
+
+  /// No description provided for @filesStorageQuotaLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} of {total} used'**
+  String filesStorageQuotaLine(String used, String total);
+
+  /// No description provided for @spatialFocusMorning.
+  ///
+  /// In en, this message translates to:
+  /// **'CONTINUE YOUR MORNING'**
+  String get spatialFocusMorning;
+
+  /// No description provided for @spatialFocusAfternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'CONTINUE YOUR AFTERNOON'**
+  String get spatialFocusAfternoon;
+
+  /// No description provided for @spatialFocusEvening.
+  ///
+  /// In en, this message translates to:
+  /// **'CONTINUE YOUR EVENING'**
+  String get spatialFocusEvening;
+
+  /// No description provided for @spatialPlayingFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Playing from {source}'**
+  String spatialPlayingFrom(String source);
+
+  /// No description provided for @filesHomeTabMyFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'My files'**
+  String get filesHomeTabMyFiles;
+
+  /// No description provided for @filesViewList.
+  ///
+  /// In en, this message translates to:
+  /// **'List view'**
+  String get filesViewList;
+
+  /// No description provided for @filesViewGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid view'**
+  String get filesViewGrid;
+
+  /// No description provided for @weatherSheetLocationEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'{city} · LOCAL WEATHER'**
+  String weatherSheetLocationEyebrow(String city);
+
+  /// No description provided for @weatherSheetSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear skies through the evening. A cooler, quiet night ahead.'**
+  String get weatherSheetSummary;
+
+  /// No description provided for @weatherHourNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get weatherHourNow;
+
+  /// No description provided for @weatherMetricWind.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind'**
+  String get weatherMetricWind;
+
+  /// No description provided for @weatherMetricHumidity.
+  ///
+  /// In en, this message translates to:
+  /// **'Humidity'**
+  String get weatherMetricHumidity;
+
+  /// No description provided for @weatherMetricAirQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Air quality'**
+  String get weatherMetricAirQuality;
+
+  /// No description provided for @weatherMetricSunset.
+  ///
+  /// In en, this message translates to:
+  /// **'Sunset'**
+  String get weatherMetricSunset;
+
+  /// No description provided for @weatherSunsetIn.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min away'**
+  String weatherSunsetIn(int minutes);
+
+  /// No description provided for @weatherForecastTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Next three days'**
+  String get weatherForecastTitle;
+
+  /// No description provided for @weatherSettingsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Visual environment'**
+  String get weatherSettingsAction;
+
+  /// No description provided for @weatherDayTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow'**
+  String get weatherDayTomorrow;
+
+  /// No description provided for @weatherSheetEnvironmentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your visual environment is following local light and weather.'**
+  String get weatherSheetEnvironmentNote;
+
+  /// No description provided for @bookDetailInLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'IN YOUR LIBRARY'**
+  String get bookDetailInLibrary;
+
+  /// No description provided for @bookDetailMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'{type} · added {year}'**
+  String bookDetailMeta(String type, int year);
+
+  /// No description provided for @bookDetailContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue reading'**
+  String get bookDetailContinue;
+
+  /// No description provided for @bookDetailStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start reading'**
+  String get bookDetailStart;
+
+  /// No description provided for @bookDetailMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit metadata'**
+  String get bookDetailMetadata;
+
+  /// No description provided for @bookDetailProgressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading progress'**
+  String get bookDetailProgressLabel;
+
+  /// No description provided for @bookDetailLastOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Last opened {date}'**
+  String bookDetailLastOpened(String date);
+
+  /// No description provided for @bookDetailAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About this book'**
+  String get bookDetailAbout;
+
+  /// No description provided for @bookDetailShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get bookDetailShowMore;
+
+  /// No description provided for @bookDetailShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get bookDetailShowLess;
+
+  /// No description provided for @bookDetailContents.
+  ///
+  /// In en, this message translates to:
+  /// **'Contents'**
+  String get bookDetailContents;
+
+  /// No description provided for @bookDetailChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get bookDetailChapters;
+
+  /// No description provided for @bookDetailChapterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters'**
+  String bookDetailChapterCount(int count);
+
+  /// No description provided for @bookDetailChapterPages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pages'**
+  String bookDetailChapterPages(int count);
+
+  /// No description provided for @accountStatusSyncNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Last synced just now'**
+  String get accountStatusSyncNote;
+
+  /// No description provided for @accountStatusOfflineNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting when network returns'**
+  String get accountStatusOfflineNote;
+
+  /// No description provided for @accountEntryNotificationsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} new updates'**
+  String accountEntryNotificationsSub(int count);
+
+  /// No description provided for @accountEntryNotificationsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'All caught up'**
+  String get accountEntryNotificationsNone;
+
+  /// No description provided for @accountEntryDevicesSub.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} devices online'**
+  String accountEntryDevicesSub(int count);
+
+  /// No description provided for @accountEntryEnvironmentDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default environment'**
+  String get accountEntryEnvironmentDefault;
+
+  /// No description provided for @accountEntrySettingsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance, privacy, storage'**
+  String get accountEntrySettingsSub;
+
+  /// No description provided for @libraryEmptyPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos yet'**
+  String get libraryEmptyPhotosTitle;
+
+  /// No description provided for @libraryEmptyPhotosMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Import or upload to see your moments here.'**
+  String get libraryEmptyPhotosMessage;
+
+  /// No description provided for @libraryEmptyFavoritesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorites yet'**
+  String get libraryEmptyFavoritesTitle;
+
+  /// No description provided for @libraryEmptyFavoritesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a photo to favorite it.'**
+  String get libraryEmptyFavoritesMessage;
+
+  /// No description provided for @libraryEmptyMoviesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to watch'**
+  String get libraryEmptyMoviesTitle;
+
+  /// No description provided for @libraryEmptyMoviesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Register a library source and scan to build your cinema.'**
+  String get libraryEmptyMoviesMessage;
+
+  /// No description provided for @libraryEmptyMusicTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No music yet'**
+  String get libraryEmptyMusicTitle;
+
+  /// No description provided for @libraryEmptyMusicMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Import tracks and they will land right here.'**
+  String get libraryEmptyMusicMessage;
+
+  /// No description provided for @searchEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches yet'**
+  String get searchEmptyTitle;
+
+  /// No description provided for @searchEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Try a broader search across OmniNest.'**
+  String get searchEmptyMessage;
+
+  /// No description provided for @filesPaginationTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String filesPaginationTotal(Object count);
+
+  /// No description provided for @filesLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String filesLoadMore(Object loaded, Object total);
+
+  /// No description provided for @filesPaginationEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End of list'**
+  String get filesPaginationEnd;
+
+  /// No description provided for @filesLoadMoreAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get filesLoadMoreAction;
+
+  /// No description provided for @readerContinueChapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue chapter'**
+  String get readerContinueChapter;
+
+  /// No description provided for @libraryEmptyBooksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No books yet'**
+  String get libraryEmptyBooksTitle;
+
+  /// No description provided for @libraryEmptyBooksMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Import EPUB or comics to fill your shelves.'**
+  String get libraryEmptyBooksMessage;
+
+  /// No description provided for @readerRecentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently read'**
+  String get readerRecentTitle;
+
+  /// No description provided for @readerNotesEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent notes'**
+  String get readerNotesEyebrow;
+
+  /// No description provided for @readerNotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ideas worth returning to'**
+  String get readerNotesTitle;
+
+  /// No description provided for @weatherSheetLocalFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Local weather'**
+  String get weatherSheetLocalFallback;
+
+  /// No description provided for @weatherSheetFeelsLike.
+  ///
+  /// In en, this message translates to:
+  /// **'Feels like {temp}°'**
+  String weatherSheetFeelsLike(int temp);
+
+  /// No description provided for @musicNowPlayingMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get musicNowPlayingMoreActions;
+
+  /// No description provided for @musicSourceSyncError.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform sync failed; the local library keeps playing.'**
+  String get musicSourceSyncError;
+
+  /// No description provided for @musicImmersiveEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Music · Immersive'**
+  String get musicImmersiveEyebrow;
+
+  /// No description provided for @musicNowPlayingEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'NOW PLAYING'**
+  String get musicNowPlayingEyebrow;
+
+  /// No description provided for @musicLiveLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'LIVE LYRICS'**
+  String get musicLiveLyrics;
+
+  /// No description provided for @musicFullLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Full lyrics'**
+  String get musicFullLyrics;
+
+  /// No description provided for @spatialStartListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing playing yet'**
+  String get spatialStartListening;
+
+  /// No description provided for @spatialStartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start listening'**
+  String get spatialStartTitle;
+
+  /// No description provided for @spatialStartSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick up where you left off, or begin something new'**
+  String get spatialStartSubtitle;
+
+  /// No description provided for @searchResultCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} RESULTS ACROSS OMNINEST'**
+  String searchResultCount(int count);
 }
 
 class _AppLocalizationsDelegate

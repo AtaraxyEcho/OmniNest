@@ -13,7 +13,7 @@ import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/desktop_tray_locale_binding.dart';
-import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
@@ -36,6 +36,8 @@ import 'package:omninest/features/notifications/application/notification_control
 import 'package:omninest/features/search/search_ui.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
 import 'package:omninest/core/deep_link/deep_link_service.dart';
+import 'package:omninest/core/notifications/notification_tap_binding.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/features/tasks/application/task_notification_service.dart';
 
 class OmniNestApp extends ConsumerStatefulWidget {
@@ -95,6 +97,8 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     ref.watch(sessionResetCoordinatorProvider);
     // omninest:// 深链：接住冷启动与运行期链接并落位白名单路由。
     ref.watch(deepLinkServiceProvider);
+    // 系统通知点击：把通知栏 tap 落位到通知中心。
+    ref.watch(systemNotificationTapBindingProvider);
 
     final app = MaterialApp.router(
       debugShowCheckedModeBanner: false,
@@ -150,14 +154,23 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
   ) {
     final mediaQuery = MediaQuery.of(context);
     final systemScaler = mediaQuery.textScaler;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final rootTheme = Theme.of(context);
+    final mobileForm = shouldUseResponsiveMobileShell(
+      mobilePlatform: isMobilePlatform,
+      width: mediaQuery.size.width,
+    );
+    // 移动壳层在浅色根主题下仍强制暗色环境基底，系统栏样式必须跟随壳层
+    // 实际亮度，否则会出现深色图标压在暗色壳底上不可读。
+    final overlayDark = rootTheme.brightness == Brightness.dark || mobileForm;
     Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Theme.of(context).colorScheme.surface,
-        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor:
+            mobileForm ? MobileEnvColors.stage : rootTheme.colorScheme.surface,
+        statusBarIconBrightness:
+            overlayDark ? Brightness.light : Brightness.dark,
         systemNavigationBarIconBrightness:
-            isDark ? Brightness.light : Brightness.dark,
+            overlayDark ? Brightness.light : Brightness.dark,
       ),
       child: AppBackdropHost(child: child ?? const SizedBox.shrink()),
     );
@@ -176,10 +189,6 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
     // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
     // 设备例外，让它们直接走模块窄屏布局。
-    final mobileForm = shouldUseResponsiveMobileShell(
-      mobilePlatform: isMobilePlatform,
-      width: mediaQuery.size.width,
-    );
     final hoverCapable = PlatformCapabilities.current().supportsHoverPointer;
     return FontScaleScope(
       // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量

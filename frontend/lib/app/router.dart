@@ -18,11 +18,11 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
+import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_center_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_history_page.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_page.dart';
-import 'package:omninest/features/notifications/presentation/pages/notification_settings_page.dart';
 import 'package:omninest/features/profile/presentation/pages/profile_page.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -47,6 +47,7 @@ import 'package:omninest/features/reader/presentation/pages/reader_metadata_edit
 import 'package:omninest/features/reader/presentation/pages/comic_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/pdf_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_import_confirm_page.dart';
+import 'package:omninest/features/search/presentation/pages/mobile_search_page.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:omninest/features/setup/presentation/pages/initial_setup_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
@@ -54,6 +55,7 @@ import 'package:omninest/features/video/presentation/pages/movie_detail_page.dar
 import 'package:omninest/features/video/presentation/pages/movie_player_page.dart';
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRefreshListenable = ValueNotifier<int>(0);
@@ -88,10 +90,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       _animatedRoute('/setup', (state) => const InitialSetupPage()),
       _animatedRoute('/login', (state) => const LoginPage()),
       _animatedRoute('/server-setup', (state) => const ServerSetupPage()),
-      _animatedRoute('/notifications', (state) => const NotificationPage()),
+      // 通知中心为根级路由：移动壳层启用时经 MobileHostedRoute 补挂
+      // scope，页面分叉移动形态且页内弹窗走底部面板。
       _animatedRoute(
-        '/profile/notifications',
-        (state) => const NotificationSettingsPage(),
+        '/notifications',
+        (state) => const MobileHostedRoute(child: NotificationPage()),
+      ),
+      GoRoute(
+        path: '/profile/notifications',
+        // 通知偏好并入新个人中心的移动形态二级视图；桌面壳层经
+        // ProfileDesktopShell 导航进入原页面，保留桌面可达性。
+        redirect: (context, state) => '/profile?section=notifications',
       ),
       // 任务队列不再是普通用户可见概念（由管理端按归属人查阅处理），
       // 旧入口保留重定向：/notifications-tasks 是合并中心时期、/activity 是改名前。
@@ -110,8 +119,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       _animatedRoute(
         '/profile',
-        (state) =>
-            ProfilePage(initialSection: state.uri.queryParameters['section']),
+        (state) => MobileHostedRoute(
+          child: ProfilePage(
+            initialSection: state.uri.queryParameters['section'],
+          ),
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -123,15 +135,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
-              _animatedRoute('/music', (state) => const MusicCenterPage()),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [_animatedRoute('/photos', (state) => const PhotosPage())],
-          ),
-          StatefulShellBranch(
-            routes: [
-              _animatedRoute('/video', (state) => const MovieCenterPage()),
+              _animatedRoute('/library', (state) => const LibrarySpacePage()),
             ],
           ),
           StatefulShellBranch(
@@ -158,15 +162,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
+      // 全局搜索：跨内容类型的统一查找覆盖层，不属于一级导航。
+      _animatedRoute('/search', (state) => const MobileSearchPage()),
+      // 音乐/照片/影视不再占据一级导航，作为全屏模块页从 Library 或
+      // 深链进入；移动壳层启用时经 MobileHostedRoute 补挂 scope，模块
+      // 页分叉移动形态（样例 module-overlay）且页内弹窗走底部面板。
+      _animatedRoute(
+        '/music',
+        (state) => const MobileHostedRoute(child: MusicCenterPage()),
+      ),
+      _animatedRoute(
+        '/photos',
+        (state) => const MobileHostedRoute(child: PhotosPage()),
+      ),
+      _animatedRoute(
+        '/video',
+        (state) => const MobileHostedRoute(child: MovieCenterPage()),
+      ),
       _animatedRoute(
         '/video/:videoId',
-        (state) =>
-            MovieDetailPage(videoItemId: state.pathParameters['videoId'] ?? ''),
+        (state) => MobileHostedRoute(
+          child: MovieDetailPage(
+            videoItemId: state.pathParameters['videoId'] ?? '',
+          ),
+        ),
       ),
       _animatedRoute(
         '/video/series/:seriesId',
-        (state) =>
-            SeriesDetailPage(seriesId: state.pathParameters['seriesId'] ?? ''),
+        (state) => MobileHostedRoute(
+          child: SeriesDetailPage(
+            seriesId: state.pathParameters['seriesId'] ?? '',
+          ),
+        ),
       ),
       _animatedRoute(
         '/video/:videoId/play',
@@ -213,9 +240,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final sourceKey = extra['sourceKey'] as String?;
           return _materialTransition(
             state,
-            AppRouteSurface(
+            AppRouteSurface.environmental(
               owner: 'route:photos-slideshow',
-              policy: AppBackdropPolicy.staticContent,
               routePath: '/photos/slideshow',
               child: PhotoSlideshowPage(
                 photos: photos,
@@ -390,21 +416,11 @@ Widget _routeSurface(String path, Widget child) {
     return child;
   }
 
-  // 影视重设计页使用不透明主题底；继续叠加静态壁纸会在 Impeller
-  // 合成时出现对角线亮缝。照片/阅读仍保留静态背景快照。
-  final AppBackdropPolicy policy;
-  if (path.startsWith('/video')) {
-    policy = AppBackdropPolicy.work;
-  } else if (path.startsWith('/photos') ||
-      path.startsWith('/shared/photos') ||
-      path.startsWith('/reader')) {
-    policy = AppBackdropPolicy.staticContent;
-  } else {
-    policy = AppBackdropPolicy.work;
-  }
-  return AppRouteSurface(
+  // 移动壳层按全局环境模式继承（媒体 ambient/阅读 focus/其余 utility）；
+  // 桌面端保持原有语义：照片/阅读静态快照、影视与系统页实底
+  // （影视不透明底同时规避 Impeller 合成对角亮缝）。
+  return AppRouteSurface.environmental(
     owner: 'route:$path',
-    policy: policy,
     routePath: path,
     child: child,
   );
@@ -412,10 +428,9 @@ Widget _routeSurface(String path, Widget child) {
 
 const Set<String> _shellOwnedPaths = <String>{
   '/portal',
+  '/library',
   '/files',
   '/music',
-  '/photos',
-  '/video',
   '/reader',
   '/reader/bookshelf',
   '/reader/stats',
@@ -470,11 +485,12 @@ String? _redirect(Ref ref, GoRouterState state) {
 
 /// 服务器配置门控决策；返回 null 表示放行进入后续安装/登录门控链。
 ///
-/// 非 Web 端在服务器配置加载期间停泊在引导页，避免空环境下业务页面
-/// 瞬时构建；未配置进入 /server-setup 并保留 redirect 目标（配置完成后
-/// 经登录页续跳）；已配置后访问引导页则按认证状态回到登录或目标页；
-/// 携带 switch=1 的显式切换请求放行（设置页更换服务器入口使用，覆盖
-/// 预置存在时 clear 后回落预置导致引导页不可达的死角）。
+/// 非 Web 端在服务器配置加载期间停泊在引导页（避免空环境下业务页面
+/// 瞬时构建，也避免安装向导在已配置实例上闪现数秒）；加载完成且未
+/// 配置才进入 /server-setup 并保留 redirect 目标（配置完成后经登录页
+/// 续跳）；已配置后访问引导页则按认证状态回到登录或目标页；携带
+/// switch=1 的显式切换请求放行（设置页更换服务器入口使用，覆盖预置
+/// 存在时 clear 后回落预置导致引导页不可达的死角）。
 /// Web 恒有同源推导，不经过服务器门控。
 @visibleForTesting
 String? serverGateRedirectPath({
@@ -486,8 +502,22 @@ String? serverGateRedirectPath({
 }) {
   final uri = Uri.parse(location);
   final path = uri.path;
-  if (!isWeb && (isConfigLoading || !isConfigured)) {
-    return path == '/server-setup' ? null : _serverSetupLocation(uri);
+  if (!isWeb) {
+    // 配置在途：停泊引导页（带 redirect 目标），已配置实例不再闪现
+    // 安装向导；判定完成且未配置才落 /server-setup。
+    if (isConfigLoading) {
+      if (path == '/boot' || path == '/server-setup') {
+        return null;
+      }
+      final target = location == '/' ? '/portal' : location;
+      return Uri(
+        path: '/boot',
+        queryParameters: {'redirect': target},
+      ).toString();
+    }
+    if (!isConfigured) {
+      return path == '/server-setup' ? null : _serverSetupLocation(uri);
+    }
   }
   if (path == '/server-setup') {
     if (uri.queryParameters['switch'] == '1') {

@@ -50,6 +50,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
     final recycle = state.section == FileManagerSection.recycleBin;
     final actionsEnabled = !state.isBusy;
     final isNarrow = MediaQuery.sizeOf(context).width < 900;
+    final hostedNarrow = isNarrow && MobileShellScope.isHosted(context);
 
     if (isNarrow) {
       return Stack(
@@ -61,7 +62,8 @@ class _FileNodeWorkspace extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (state.section == FileManagerSection.allFiles) ...[
+                if (state.section == FileManagerSection.allFiles &&
+                    !MobileShellScope.isHosted(context)) ...[
                   Row(
                     children: [
                       Expanded(child: _Breadcrumbs(state: state)),
@@ -88,7 +90,20 @@ class _FileNodeWorkspace extends ConsumerWidget {
                         ),
                   ),
                 ],
-                const SizedBox(height: 8),
+                if (hostedNarrow)
+                  Builder(
+                    builder: (context) {
+                      final total = _sectionTotalCount(state);
+                      if (total == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return _HostedSectionMetaRow(
+                        text: AppLocalizations.of(
+                          context,
+                        ).photosHostedToolbarCount(total),
+                      );
+                    },
+                  ),
                 Expanded(
                   child: _FileViewSwitcher(
                     state: state,
@@ -170,6 +185,18 @@ class _FileNodeWorkspace extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// 托管窄屏分区的计数（总数），供眉标行本地化。
+int? _sectionTotalCount(FileBrowserState state) {
+  return switch (state.section) {
+    FileManagerSection.allFiles ||
+    FileManagerSection.sharedSpace => state.fileTotalElements,
+    FileManagerSection.recent => state.recentMeta.totalElements,
+    FileManagerSection.favorites => state.favoritesMeta.totalElements,
+    FileManagerSection.recycleBin => state.recycleMeta.totalElements,
+    _ => null,
+  };
 }
 
 /// 面包屑与顶部操作条：左侧目录路径，右侧 上传 / 新建文件夹 / 视图切换，
@@ -521,8 +548,14 @@ class _FileViewSwitcher extends ConsumerWidget {
       recycle: recycle,
       favorites: favorites,
     );
+    // 托管移动工作区固定行列表（样例 FolderView 无卡片视图），同时
+    // 规避窄屏网格的高度换算显示问题。
+    final effectiveViewMode =
+        MobileShellScope.isHosted(context)
+            ? FileBrowserViewMode.list
+            : state.viewMode;
 
-    if (!narrow && state.viewMode == FileBrowserViewMode.list) {
+    if (!narrow && effectiveViewMode == FileBrowserViewMode.list) {
       return FileTableView(
         files: state.visibleNodes,
         showingRecycleBin: recycle,
@@ -552,7 +585,7 @@ class _FileViewSwitcher extends ConsumerWidget {
                 : null,
       );
     }
-    if (state.viewMode == FileBrowserViewMode.grid) {
+    if (effectiveViewMode == FileBrowserViewMode.grid) {
       return FileGrid(
         files: state.visibleNodes,
         showingRecycleBin: recycle,
@@ -625,6 +658,36 @@ class _FileViewSwitcher extends ConsumerWidget {
     };
     if (meta == null) {
       return child;
+    }
+    // 移动壳层：无感续载——滚动近底自动追加下一页，不再渲染「加载更
+    // 多」按钮；主列表走追加语义，次分区沿用页翻转。桌面端保持工位分页条。
+    if (MobileShellScope.isHosted(context)) {
+      final mainList =
+          state.section == FileManagerSection.allFiles ||
+          state.section == FileManagerSection.sharedSpace;
+      return NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.depth != 0 ||
+              notification.metrics.axis != Axis.vertical ||
+              notification.metrics.extentAfter >= 420 ||
+              meta.page + 1 >= meta.totalPages ||
+              state.isBusy) {
+            return false;
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            unawaited(
+              _runFileAction(
+                context,
+                mainList
+                    ? () => controller.loadMoreFiles()
+                    : () => onPage!(meta.page + 1),
+              ),
+            );
+          });
+          return false;
+        },
+        child: child,
+      );
     }
     return Column(
       children: [

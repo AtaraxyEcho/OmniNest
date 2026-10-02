@@ -306,6 +306,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationForegroundToastToggleSubtitle => '通知到达时在页面底部弹出轻量提示';
 
   @override
+  String get notificationFilterAllLabel => '全部';
+
+  @override
+  String get notificationFilterUnreadLabel => '未读';
+
+  @override
   String get notificationMarkAllRead => '全部已读';
 
   @override
@@ -409,17 +415,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String notificationTimeMinutes(Object n) {
-    return '$n分钟前';
+    return '$n分钟';
   }
 
   @override
   String notificationTimeHours(Object n) {
-    return '$n小时前';
+    return '$n小时';
   }
 
   @override
   String notificationTimeDays(Object n) {
-    return '$n天前';
+    return '$n天';
   }
 
   @override
@@ -454,6 +460,126 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileRoleSuperAdmin => '超级管理员';
+
+  @override
+  String get envSheetSubtitle => '一切背后的那幅画面';
+
+  @override
+  String get envSheetLibrary => '你的图库';
+
+  @override
+  String get envSheetBehavior => '行为';
+
+  @override
+  String get envSheetLive => '实况环境';
+
+  @override
+  String get envSheetLiveSub => '模糊与明暗随当前空间联动';
+
+  @override
+  String get envSheetActive => '使用中';
+
+  @override
+  String get envSheetUpload => '上传图片';
+
+  @override
+  String get envSheetEmpty => '还没有环境图片';
+
+  @override
+  String get profileGroupAppearance => '外观';
+
+  @override
+  String get profileGroupSecurity => '安全';
+
+  @override
+  String get profileGroupServer => '服务器';
+
+  @override
+  String get profileGroupAbout => '关于';
+
+  @override
+  String get profileRowAccountInfo => '个人信息';
+
+  @override
+  String get profileAccountSubtitle => '头像 · 名称 · 邮箱';
+
+  @override
+  String get profileRowChangePassword => '修改密码';
+
+  @override
+  String get profileRowTwoFactor => '两步验证';
+
+  @override
+  String get profileRowSessions => '设备与会话';
+
+  @override
+  String get profileSessionsCurrent => '当前设备';
+
+  @override
+  String get profileSessionsRevoke => '下线';
+
+  @override
+  String get profileSessionsEmpty => '没有其他活跃会话';
+
+  @override
+  String get profileSaveChanges => '保存修改';
+
+  @override
+  String get profileDisplayNameField => '显示名称';
+
+  @override
+  String get profileEmailField => '邮箱';
+
+  @override
+  String get profileChangeAvatar => '更换头像';
+
+  @override
+  String get profileThemeLabel => '主题';
+
+  @override
+  String get profileLanguageLabel => '语言';
+
+  @override
+  String get profileFontScaleLabel => '字号';
+
+  @override
+  String get profileServerAddress => '服务器地址';
+
+  @override
+  String get profileSwitchServer => '更换服务器';
+
+  @override
+  String get envSheetClearAll => '清空全部图片';
+
+  @override
+  String get envSheetSeparate => '手机与桌面使用不同图片';
+
+  @override
+  String get envSheetSeparateSub => '为每类设备单独挑选背景';
+
+  @override
+  String get envSheetUploadHint => '支持 JPG / PNG / WEBP 与短视频';
+
+  @override
+  String get profileRowEnvironment => '背景库';
+
+  @override
+  String get profileRowTheme => '主题与外观';
+
+  @override
+  String get profileRowNotifications => '通知偏好';
+
+  @override
+  String get profileRowSecurity => '密码 · 两步验证 · 设备';
+
+  @override
+  String get profileRowServer => '服务器信息';
+
+  @override
+  String get profileRowAbout => '关于 OmniNest';
+
+  @override
+  String get profileFooterTag => 'OmniNest · 自托管家庭媒体';
 
   @override
   String get profileRoleAdmin => '管理员';
@@ -789,6 +915,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get loginSigningIn => '正在登录';
+
+  @override
+  String get loginSetupNewServer => '设置新服务器';
 
   @override
   String get loginSignIn => '登录';
@@ -1529,6 +1658,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String filesPurgeConfirmMessage(Object name) {
     return '\"$name\" 将从回收站永久删除，此操作不可撤销。';
   }
+
+  @override
+  String filesFolderItemCount(Object count) {
+    return '$count 项';
+  }
+
+  @override
+  String get filesShareManageEntry => '管理分享链接';
 
   @override
   String filesSelectedCount(Object count) {
@@ -5553,6 +5690,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerThemeDark => '深色';
 
   @override
+  String get readerThemeNightGlass => '夜间玻璃';
+
+  @override
   String get readerThemeGreen => '绿色';
 
   @override
@@ -6483,6 +6623,41 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoSectionRecent => '最近添加';
 
   @override
+  String get videoSectionForYou => '为你推荐';
+
+  @override
+  String get videoSectionFilms => '电影';
+
+  @override
+  String get videoSectionSeries => '剧集';
+
+  @override
+  String get videoMobileSortRecent => '最新';
+
+  @override
+  String get videoToggleOrientation => '旋转画面';
+
+  @override
+  String get videoMobileStatusFilter => '状态筛选';
+
+  @override
+  String get videoHostedFilmsEyebrow => '最近添加';
+
+  @override
+  String get videoHostedContinueEyebrow => '接着上次的进度';
+
+  @override
+  String videoHeroMinutesLeft(Object minutes) {
+    return '剩余 $minutes 分钟';
+  }
+
+  @override
+  String get videoHeroResume => '续播';
+
+  @override
+  String get videoHeroInfo => '详情';
+
+  @override
   String get videoSectionContinueWatching => '继续观看';
 
   @override
@@ -7243,6 +7418,23 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String photosHostedToolbarCount(Object count) {
+    return '$count 张照片';
+  }
+
+  @override
+  String get photosHostedRecentTitle => '最近';
+
+  @override
+  String get photosHostedAlbumsEyebrow => '由你创建';
+
+  @override
+  String get photosHostedMomentsEyebrow => '本周';
+
+  @override
+  String get photosHostedMomentsTitle => '值得留存的时刻';
+
+  @override
   String get photosDone => '完成';
 
   @override
@@ -7529,6 +7721,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosTaskCreateFailed => '任务创建失败';
+
+  @override
+  String get photosSelectPhotos => '选择';
+
+  @override
+  String get photosMomentsSection => '值得留存的时刻';
 
   @override
   String get photosSelectAlbum => '选择相册';
@@ -10821,6 +11019,45 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationNextPage => '下一页';
 
   @override
+  String get moduleMusicTitle => '音乐';
+
+  @override
+  String get modulePhotosTitle => '照片';
+
+  @override
+  String get moduleMoviesTitle => '影视';
+
+  @override
+  String musicModuleSubtitle(Object albumCount, Object trackCount) {
+    return '$trackCount 首曲目 · $albumCount 张专辑';
+  }
+
+  @override
+  String photosModuleSubtitle(Object albumCount, Object photoCount) {
+    return '$photoCount 张照片 · $albumCount 个相册';
+  }
+
+  @override
+  String moviesModuleSubtitle(Object continueCount, Object titleCount) {
+    return '$titleCount 部影片 · $continueCount 部在看';
+  }
+
+  @override
+  String get notificationGroupToday => '今天';
+
+  @override
+  String get notificationGroupYesterday => '昨天';
+
+  @override
+  String get notificationGroupEarlier => '更早';
+
+  @override
+  String get notificationSubtitleAllRead => '暂无未读';
+
+  @override
+  String get notificationDeleteConfirmMessage => '删除这条通知？删除后不可恢复。';
+
+  @override
   String get profileHeaderAccount => '账户资料与凭据';
 
   @override
@@ -10917,9 +11154,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationActionViewShares => '查看分享';
 
   @override
-  String get profileSaveChanges => '保存修改';
-
-  @override
   String get profileUpdateFailed => '资料保存失败';
 
   @override
@@ -11006,4 +11240,450 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get favoriteRemoved => '已取消收藏';
+
+  @override
+  String get mobileNavLibrary => '媒体库';
+
+  @override
+  String get mobileSpaceLibrarySubtitle => '你的媒体，都在这里';
+
+  @override
+  String get mobileSpaceReaderSubtitle => '更安静的空间';
+
+  @override
+  String get mobileSpaceFilesSubtitle => '你的数字工作区';
+
+  @override
+  String get accountSheetTitle => '账户';
+
+  @override
+  String get accountEntryNotifications => '通知中心';
+
+  @override
+  String get accountEntryDevices => '设备与会话';
+
+  @override
+  String get accountEntryEnvironment => '背景库';
+
+  @override
+  String get accountEntrySettings => '设置';
+
+  @override
+  String get accountManageAccount => '管理账户';
+
+  @override
+  String get accountStatusHealthy => 'OmniNest 运行正常';
+
+  @override
+  String get accountStatusOffline => 'OmniNest 当前离线';
+
+  @override
+  String get librarySegmentAll => '全部';
+
+  @override
+  String get libraryBannerEyebrow => '最近相册';
+
+  @override
+  String libraryBannerPhotoCount(int count) {
+    return '$count 张照片';
+  }
+
+  @override
+  String get libraryOpenAlbum => '查看相册';
+
+  @override
+  String get libraryRecentPhotosTitle => '最新照片';
+
+  @override
+  String get libraryJustInEyebrow => '刚刚进来';
+
+  @override
+  String get libraryCollectionEyebrow => '你的收藏';
+
+  @override
+  String get librarySectionFavorites => '收藏的照片';
+
+  @override
+  String get libraryNoFavorites => '还没有收藏照片';
+
+  @override
+  String libraryPhotosMore(int count) {
+    return '+$count';
+  }
+
+  @override
+  String get libraryPickUpEyebrow => '接着上次的看';
+
+  @override
+  String get libraryContinueWatchingTitle => '继续观看';
+
+  @override
+  String get libraryNoMovies => '还没有可看的影片';
+
+  @override
+  String libraryMinutesLeft(int minutes) {
+    return '剩 $minutes 分钟';
+  }
+
+  @override
+  String get libraryMadeForNowEyebrow => '为此刻而选';
+
+  @override
+  String get libraryRecentListeningTitle => '最近聆听';
+
+  @override
+  String get libraryNoMusic => '曲库还没有内容';
+
+  @override
+  String get searchMobilePlaceholder => '搜索一切';
+
+  @override
+  String get searchScopesTitle => '跨 OmniNest 搜索';
+
+  @override
+  String get searchRecentQueries => '最近搜索';
+
+  @override
+  String get searchLoadFailed => '搜索暂时不可用';
+
+  @override
+  String get searchCommandHome => '前往首页';
+
+  @override
+  String get searchCommandLibrary => '前往媒体库';
+
+  @override
+  String get searchCommandReader => '前往阅读';
+
+  @override
+  String get searchCommandFiles => '前往文件';
+
+  @override
+  String get searchCommandPhotos => '打开照片';
+
+  @override
+  String get searchCommandMovies => '打开影视';
+
+  @override
+  String get searchCommandMusic => '打开音乐';
+
+  @override
+  String get spatialFocusEyebrow => '继续上次的内容';
+
+  @override
+  String get spatialNowPlaying => '正在播放';
+
+  @override
+  String get spatialResume => '继续';
+
+  @override
+  String get spatialPlay => '播放';
+
+  @override
+  String get spatialRecentlyEyebrow => '最近';
+
+  @override
+  String get spatialRecentlyTitle => '最近动态';
+
+  @override
+  String get spatialActionFind => '查找任何内容';
+
+  @override
+  String get spatialActionAddMedia => '添加媒体';
+
+  @override
+  String get spatialViewLibrary => '进入媒体库';
+
+  @override
+  String spatialFocusReadingSub(String chapter, int percent) {
+    return '第 $chapter 章 · $percent%';
+  }
+
+  @override
+  String spatialFocusWatchingSub(int percent) {
+    return '已看 $percent%';
+  }
+
+  @override
+  String get spatialRecentPhotos => '新照片';
+
+  @override
+  String get spatialRecentFiles => '最近文件';
+
+  @override
+  String get readerSpaceContinueEyebrow => '继续阅读';
+
+  @override
+  String get readerSpaceInsightEyebrow => '本周';
+
+  @override
+  String readerInsightFocus(String duration) {
+    return '本周专注 $duration';
+  }
+
+  @override
+  String readerInsightStreak(int count) {
+    return '连续阅读 $count 天';
+  }
+
+  @override
+  String readerInsightChapters(int count) {
+    return '读完 $count 章';
+  }
+
+  @override
+  String get readerReadNextEyebrow => '你的书架';
+
+  @override
+  String get readerReadNextTitle => '接下来读';
+
+  @override
+  String get readerSpaceAllBooks => '全部书目';
+
+  @override
+  String filesStorageQuotaLine(String used, String total) {
+    return '已用 $used，共 $total';
+  }
+
+  @override
+  String get spatialFocusMorning => '继续你的早晨';
+
+  @override
+  String get spatialFocusAfternoon => '继续你的午后';
+
+  @override
+  String get spatialFocusEvening => '继续你的夜晚';
+
+  @override
+  String spatialPlayingFrom(String source) {
+    return '正在播放 $source';
+  }
+
+  @override
+  String get filesHomeTabMyFiles => '我的文件';
+
+  @override
+  String get filesViewList => '列表视图';
+
+  @override
+  String get filesViewGrid => '网格视图';
+
+  @override
+  String weatherSheetLocationEyebrow(String city) {
+    return '$city · 本地天气';
+  }
+
+  @override
+  String get weatherSheetSummary => '晴好将持续到傍晚，夜间转凉、安静。';
+
+  @override
+  String get weatherHourNow => '现在';
+
+  @override
+  String get weatherMetricWind => '风力';
+
+  @override
+  String get weatherMetricHumidity => '湿度';
+
+  @override
+  String get weatherMetricAirQuality => '空气质量';
+
+  @override
+  String get weatherMetricSunset => '日落';
+
+  @override
+  String weatherSunsetIn(int minutes) {
+    return '$minutes 分钟后';
+  }
+
+  @override
+  String get weatherForecastTitle => '未来三天';
+
+  @override
+  String get weatherSettingsAction => '视觉环境';
+
+  @override
+  String get weatherDayTomorrow => '明天';
+
+  @override
+  String get weatherSheetEnvironmentNote => '视觉环境正跟随本地光线与天气。';
+
+  @override
+  String get bookDetailInLibrary => '在你的书库';
+
+  @override
+  String bookDetailMeta(String type, int year) {
+    return '$type · $year 年添加';
+  }
+
+  @override
+  String get bookDetailContinue => '继续阅读';
+
+  @override
+  String get bookDetailStart => '开始阅读';
+
+  @override
+  String get bookDetailMetadata => '编辑元数据';
+
+  @override
+  String get bookDetailProgressLabel => '阅读进度';
+
+  @override
+  String bookDetailLastOpened(String date) {
+    return '最近打开 $date';
+  }
+
+  @override
+  String get bookDetailAbout => '关于本书';
+
+  @override
+  String get bookDetailShowMore => '展开更多';
+
+  @override
+  String get bookDetailShowLess => '收起';
+
+  @override
+  String get bookDetailContents => '目录';
+
+  @override
+  String get bookDetailChapters => '章节';
+
+  @override
+  String bookDetailChapterCount(int count) {
+    return '共 $count 章';
+  }
+
+  @override
+  String bookDetailChapterPages(int count) {
+    return '$count 页';
+  }
+
+  @override
+  String get accountStatusSyncNote => '刚刚同步完成';
+
+  @override
+  String get accountStatusOfflineNote => '网络恢复后自动重连';
+
+  @override
+  String accountEntryNotificationsSub(int count) {
+    return '$count 条新动态';
+  }
+
+  @override
+  String get accountEntryNotificationsNone => '暂无新动态';
+
+  @override
+  String accountEntryDevicesSub(int count) {
+    return '$count 台设备在线';
+  }
+
+  @override
+  String get accountEntryEnvironmentDefault => '默认环境';
+
+  @override
+  String get accountEntrySettingsSub => '外观、隐私、存储';
+
+  @override
+  String get libraryEmptyPhotosTitle => '还没有照片';
+
+  @override
+  String get libraryEmptyPhotosMessage => '导入或上传后，你的瞬间会出现在这里。';
+
+  @override
+  String get libraryEmptyFavoritesTitle => '还没有收藏';
+
+  @override
+  String get libraryEmptyFavoritesMessage => '长按任意照片即可加入收藏。';
+
+  @override
+  String get libraryEmptyMoviesTitle => '还没有可看的影片';
+
+  @override
+  String get libraryEmptyMoviesMessage => '登记媒体库来源并扫描，即可组建你的影院。';
+
+  @override
+  String get libraryEmptyMusicTitle => '曲库还没有内容';
+
+  @override
+  String get libraryEmptyMusicMessage => '导入音乐后就会在这里出现。';
+
+  @override
+  String get searchEmptyTitle => '暂无匹配结果';
+
+  @override
+  String get searchEmptyMessage => '换个更宽泛的关键词，跨 OmniNest 再找一次。';
+
+  @override
+  String filesPaginationTotal(Object count) {
+    return '共 $count 项';
+  }
+
+  @override
+  String filesLoadMore(Object loaded, Object total) {
+    return '加载更多';
+  }
+
+  @override
+  String get filesPaginationEnd => '已到底部';
+
+  @override
+  String get filesLoadMoreAction => '加载更多';
+
+  @override
+  String get readerContinueChapter => '继续阅读本章';
+
+  @override
+  String get libraryEmptyBooksTitle => '书库还没有书目';
+
+  @override
+  String get libraryEmptyBooksMessage => '导入 EPUB 或漫画，填满你的书架。';
+
+  @override
+  String get readerRecentTitle => '最近阅读';
+
+  @override
+  String get readerNotesEyebrow => '最近笔记';
+
+  @override
+  String get readerNotesTitle => '值得重温的想法';
+
+  @override
+  String get weatherSheetLocalFallback => '本地天气';
+
+  @override
+  String weatherSheetFeelsLike(int temp) {
+    return '体感 $temp°';
+  }
+
+  @override
+  String get musicNowPlayingMoreActions => '更多操作';
+
+  @override
+  String get musicSourceSyncError => '平台同步异常，本地曲库仍可播放。';
+
+  @override
+  String get musicImmersiveEyebrow => '音乐 · 沉浸';
+
+  @override
+  String get musicNowPlayingEyebrow => '正在播放';
+
+  @override
+  String get musicLiveLyrics => '实时歌词';
+
+  @override
+  String get musicFullLyrics => '完整歌词';
+
+  @override
+  String get spatialStartListening => '还没有正在播放的内容';
+
+  @override
+  String get spatialStartTitle => '开始聆听';
+
+  @override
+  String get spatialStartSubtitle => '从上次的地方继续，或开始一段新的';
+
+  @override
+  String searchResultCount(int count) {
+    return '共 $count 条结果';
+  }
 }

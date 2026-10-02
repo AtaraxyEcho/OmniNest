@@ -6,6 +6,7 @@ import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -14,6 +15,10 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_mobile_chips.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_collections.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_history.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
@@ -24,6 +29,7 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_poster_card.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_time.dart';
+part 'movie_center_sample_rails.dart';
 
 class MovieCenterPage extends ConsumerStatefulWidget {
   const MovieCenterPage({super.key});
@@ -36,6 +42,13 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
   // 进入页面的重进刷新节流：provider 常驻内存，posterUrl 是 2h/6h 的
   // 临时地址，不刷新则过期后海报灰块；15s 内往返不重复拉取。
   static DateTime? _lastEntryRefreshAt;
+  bool _hostedScope = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _hostedScope = MobileShellScope.isHosted(context);
+  }
 
   @override
   void initState() {
@@ -44,13 +57,20 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
       if (!mounted) {
         return;
       }
+      final controller = ref.read(movieCenterControllerProvider.notifier);
+      // 进入即定位第一栏 For you（托管态）：先同步切分区再刷新，
+      // 单一写入顺序——此前一次性切栏与 refresh 并发，refresh 以
+      // 旧分区（电影）回写，造成落地电影档/返回观感来回切换。
+      if (_hostedScope) {
+        controller.selectSection(MovieSection.continueWatching);
+      }
       final now = DateTime.now();
       final last = _lastEntryRefreshAt;
       if (last != null && now.difference(last) < const Duration(seconds: 15)) {
         return;
       }
       _lastEntryRefreshAt = now;
-      unawaited(ref.read(movieCenterControllerProvider.notifier).refresh());
+      unawaited(controller.refresh());
     });
   }
 
@@ -412,6 +432,7 @@ class _MovieLibrarySection extends ConsumerStatefulWidget {
 class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
   final ScrollController _scrollController = ScrollController();
   bool _requestingNextPage = false;
+  bool _favoritesOnly = false;
 
   @override
   void initState() {
@@ -466,7 +487,10 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
     final state = widget.state;
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(movieCenterControllerProvider.notifier);
-    final filteredItems = state.filteredMovies;
+    final hosted = MobileShellScope.isHosted(context);
+    // 收藏 chip 为移动本地展示态：直接切 favoriteItems 网格。
+    final filteredItems =
+        hosted && _favoritesOnly ? state.favoriteItems : state.filteredMovies;
     final filters = [
       MovieRedesignChip(value: 'all', label: l10n.videoRedesignFilterAll),
       MovieRedesignChip(
@@ -494,15 +518,22 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
         SliverPadding(
           padding: const EdgeInsets.only(top: 4),
           sliver: SliverToBoxAdapter(
-            child: MovieRedesignSectionHeader(
-              title: l10n.videoMovieLibrary,
-              subtitleEn: l10n.videoRedesignSubMovies,
-              count: filteredItems.isEmpty ? null : filteredItems.length,
-              subtitle: l10n.videoMovieLibrarySubtitle,
-            ),
+            child:
+                hosted
+                    ? MobileEnvSectionHeader(
+                      eyebrow: l10n.videoHostedFilmsEyebrow,
+                      title: l10n.videoMovieLibrary,
+                    )
+                    : MovieRedesignSectionHeader(
+                      title: l10n.videoMovieLibrary,
+                      subtitleEn: l10n.videoRedesignSubMovies,
+                      count:
+                          filteredItems.isEmpty ? null : filteredItems.length,
+                      subtitle: l10n.videoMovieLibrarySubtitle,
+                    ),
           ),
         ),
-        if (state.continueWatching.isNotEmpty)
+        if (!hosted && state.continueWatching.isNotEmpty)
           SliverPadding(
             padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
@@ -512,36 +543,51 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
         SliverPadding(
           padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                MovieRedesignFilterSortBar(
-                  filters: filters,
-                  filterValue: state.filter.name,
-                  onFilter: (value) {
-                    controller.setFilter(
-                      MovieLibraryFilter.values.firstWhere(
-                        (f) => f.name == value,
-                      ),
-                    );
-                  },
-                  sorts: sorts,
-                  sortValue: state.sortBy.name,
-                  onSort: (value) {
-                    controller.setSort(
-                      MovieSortBy.values.firstWhere((s) => s.name == value),
-                    );
-                  },
-                ),
-                if (state.searchQuery.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _SearchScopeNotice(loadedCount: state.movies.length),
-                ],
-              ],
-            ),
+            child:
+                hosted
+                    ? MovieRedesignMobileChips(
+                      sortBy: state.sortBy,
+                      onSortBy: controller.setSort,
+                      favoritesOnly: _favoritesOnly,
+                      onFavoritesOnly:
+                          (value) => setState(() => _favoritesOnly = value),
+                      filter: state.filter,
+                      onFilter: controller.setFilter,
+                    )
+                    : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        MovieRedesignFilterSortBar(
+                          filters: filters,
+                          filterValue: state.filter.name,
+                          onFilter: (value) {
+                            controller.setFilter(
+                              MovieLibraryFilter.values.firstWhere(
+                                (f) => f.name == value,
+                              ),
+                            );
+                          },
+                          sorts: sorts,
+                          sortValue: state.sortBy.name,
+                          onSort: (value) {
+                            controller.setSort(
+                              MovieSortBy.values.firstWhere(
+                                (s) => s.name == value,
+                              ),
+                            );
+                          },
+                        ),
+                        if (state.searchQuery.trim().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _SearchScopeNotice(loadedCount: state.movies.length),
+                        ],
+                      ],
+                    ),
           ),
         ),
-        if (filteredItems.isEmpty)
+        if (hosted && _favoritesOnly)
+          _hostedFilmRows(filteredItems)
+        else if (filteredItems.isEmpty)
           SliverPadding(
             padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
@@ -555,6 +601,8 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
               ),
             ),
           )
+        else if (hosted)
+          _hostedFilmRows(filteredItems)
         else
           SliverPadding(
             padding: EdgeInsets.zero,
@@ -604,6 +652,113 @@ class _SearchScopeNotice extends StatelessWidget {
   }
 }
 
+/// 剧集/动漫分区的移动形态（样例 Series 段）：chip 行 + 收藏覆盖 +
+/// 网格；收藏为本地展示态，分页触发仅对非收藏列表生效。
+class _HostedSeriesBody extends ConsumerStatefulWidget {
+  const _HostedSeriesBody({
+    required this.title,
+    required this.subtitleEn,
+    required this.subtitle,
+    required this.series,
+    required this.anime,
+  });
+
+  final String title;
+  final String subtitleEn;
+  final String subtitle;
+  final List<MovieSeries> series;
+  final bool anime;
+
+  @override
+  ConsumerState<_HostedSeriesBody> createState() => _HostedSeriesBodyState();
+}
+
+class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
+  bool _favoritesOnly = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final centerState = ref.watch(movieCenterControllerProvider).requireValue;
+    final controller = ref.read(movieCenterControllerProvider.notifier);
+    final effective =
+        _favoritesOnly ? centerState.favoriteSeries : widget.series;
+    final paging =
+        widget.anime
+            ? centerState.animeSeriesPaging
+            : centerState.tvSeriesPaging;
+    return InfiniteScrollTrigger(
+      enabled: !_favoritesOnly && paging.hasMore && !paging.isLoadingMore,
+      onLoadMore: () => controller.loadMoreSeries(anime: widget.anime),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: 16),
+            sliver: SliverToBoxAdapter(
+              child: MobileEnvSectionHeader(
+                eyebrow: widget.subtitleEn,
+                title: widget.title,
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: 16),
+            sliver: SliverToBoxAdapter(
+              child: MovieRedesignMobileChips(
+                sortBy: centerState.sortBy,
+                onSortBy: controller.setSort,
+                favoritesOnly: _favoritesOnly,
+                onFavoritesOnly:
+                    (value) => setState(() => _favoritesOnly = value),
+                filter: centerState.filter,
+                onFilter: controller.setFilter,
+              ),
+            ),
+          ),
+          if (effective.isEmpty)
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: SliverToBoxAdapter(
+                child: MovieRedesignEmptyState(
+                  icon: Icons.tv_outlined,
+                  title: l10n.videoNoMediaItems,
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 6),
+              sliver: SliverToBoxAdapter(
+                child: SampleRail(
+                  children: [
+                    for (final item in effective.take(12))
+                      SamplePosterCard(
+                        imageUrl: item.posterUrl,
+                        title: item.title,
+                        subtitle: item.firstAirDate?.year.toString() ?? '',
+                        badge: SampleSeriesBadge(
+                          label:
+                              widget.anime
+                                  ? l10n.videoSectionAnime
+                                  : l10n.videoSectionSeries,
+                        ),
+                        onTap:
+                            () => context.push(movieSeriesDetailRoute(item.id)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
+        ],
+      ),
+    );
+  }
+}
+
 /// 剧集/动漫分区：系列海报网格，点击进剧集详情。
 class _SeriesGridSection extends ConsumerWidget {
   const _SeriesGridSection({
@@ -624,6 +779,16 @@ class _SeriesGridSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 托管态走移动形态（chip 行 + 收藏本地覆盖），桌面路径零变化。
+    if (MobileShellScope.isHosted(context)) {
+      return _HostedSeriesBody(
+        title: title,
+        subtitleEn: subtitleEn,
+        subtitle: subtitle,
+        series: series,
+        anime: anime,
+      );
+    }
     final l10n = AppLocalizations.of(context);
     final centerState = ref.watch(movieCenterControllerProvider).requireValue;
     final controller = ref.read(movieCenterControllerProvider.notifier);
@@ -784,6 +949,71 @@ class _ContinueSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // 托管态即移动四段中的 For you：影院 hero（续播首项）+ 续播横条。
+    if (MobileShellScope.isHosted(context)) {
+      final first = state.continueWatching.firstOrNull;
+      // 样例 For you：cinema-hero（348 高）元数据行与规格徽标取自匹配
+      // 影片条目；无匹配时退化为分集信息。
+      final matchedMovie = state.movies.firstOrNull;
+      return CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
+          if (first != null)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 26),
+              sliver: SliverToBoxAdapter(
+                child: MovieMobileCinemaHero(
+                  item: first,
+                  metaLine:
+                      matchedMovie == null
+                          ? null
+                          : _movieCardSubtitle(matchedMovie),
+                  badgeText: _movieBadgeText(matchedMovie),
+                  onPlay:
+                      () => unawaited(context.push(moviePlayRoute(first.id))),
+                  onInfo:
+                      () => unawaited(
+                        context.push(
+                          movieDetailRouteFromIds(
+                            videoItemId: first.id,
+                            seriesId: first.seriesId,
+                          ),
+                        ),
+                      ),
+                ),
+              ),
+            ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            sliver: SliverToBoxAdapter(
+              child: MobileEnvSectionHeader(
+                eyebrow: l10n.videoHostedContinueEyebrow,
+                title: l10n.videoSectionContinueWatching,
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.only(left: 20),
+            sliver: SliverToBoxAdapter(
+              child: _hostedContinueRail(context, state),
+            ),
+          ),
+          if (state.continueWatching.isEmpty)
+            SliverPadding(
+              padding: EdgeInsets.zero,
+              sliver: SliverToBoxAdapter(
+                child: MovieRedesignEmptyState(
+                  icon: Icons.play_circle_outline_rounded,
+                  title: l10n.videoNoMediaItems,
+                ),
+              ),
+            ),
+          const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
+        ],
+      );
+    }
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),

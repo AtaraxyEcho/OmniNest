@@ -14,7 +14,7 @@ import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/presentation/widgets/music_mobile_mini_player_slot.dart';
 
 /// 壳层迷你播放插槽的浮起卡片规范测试：
-/// 左右 10 留边 + 圆角 12 + 高 48（不再与底栏同宽贴边）；
+/// 左右 10 留边 + 圆角 18 + 高 58（样例配方，不再与底栏同宽贴边）；
 /// 下滑收起后同曲保持隐藏、切歌自动回归。
 void main() {
   late ProviderContainer container;
@@ -51,7 +51,7 @@ void main() {
     addTearDown(() => container.dispose());
   });
 
-  testWidgets('渲染为浮起卡片：左右留边、圆角 12、高 52', (tester) async {
+  testWidgets('渲染为浮起卡片：左右留边、圆角 18、高 58（样例配方）', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 760);
     addTearDown(tester.view.resetPhysicalSize);
@@ -73,11 +73,11 @@ void main() {
     );
 
     final clip = tester.widget<ClipRRect>(find.byType(ClipRRect).first);
-    expect(clip.borderRadius, BorderRadius.circular(12));
+    expect(clip.borderRadius, BorderRadius.circular(18));
 
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is SizedBox && widget.height == 52,
+        (widget) => widget is SizedBox && widget.height == 58,
       ),
       findsOneWidget,
     );

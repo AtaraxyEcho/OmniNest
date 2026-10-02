@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -59,10 +61,14 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
   Future<void> loadSettings() async {
     final values = await ref.read(readerPreferencesProvider.future);
     if (!mounted) return;
-    final resolved =
+    final loaded =
         values.isEmpty
             ? ReaderViewSettings()
             : ReaderViewSettings.fromJson(values);
+    // 移动壳层默认：夜间玻璃 + 衬线 19/1.7（样例 ReaderFocus 书体）；
+    // 用户已显式保存非默认主题时尊重其选择。
+    final isMobileDefault = isMobilePlatform || kIsWeb;
+    final resolved = isMobileDefault ? loaded.withMobileDefaults() : loaded;
     setState(() {
       settings = resolved;
     });

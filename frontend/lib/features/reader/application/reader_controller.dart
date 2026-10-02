@@ -57,6 +57,13 @@ final readerItemAnnotationsProvider = FutureProvider.autoDispose
       return ref.watch(readerApiProvider).annotations(itemId);
     });
 
+/// Reader 空间「最近笔记」：跨书最近标注（本地缓存按创建时间倒序）。
+final readerRecentAnnotationsProvider =
+    FutureProvider.autoDispose<List<ReaderAnnotation>>((ref) {
+      final storage = ref.watch(readerLocalStorageProvider);
+      return storage.loadRecentAnnotations(limit: 6);
+    });
+
 /// 条目书签（详情页书签页签）
 final readerItemBookmarksProvider = FutureProvider.autoDispose
     .family<List<ReaderBookmark>, String>((ref, itemId) {

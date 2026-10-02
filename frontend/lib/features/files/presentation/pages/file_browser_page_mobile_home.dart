@@ -1,242 +1,455 @@
 part of 'file_browser_page.dart';
 
-/// 文件模块移动首页（Google Files 式）：
-/// 位置（个人/共享空间）双卡 + 分区卡网格 + 「更多」底部面板。
+/// 文件空间首页：存储条 + 分类格 + 页签工具栏 + 内联根列表（原型 Files）。
 ///
-/// 点分区卡进入列表态（面包屑与列表仅在列表态出现），返回经
-/// [_FileMobileBackRow] 或系统返回手势回到首页。
+/// 页签在「我的文件 / 共享」两个空间根之间原地切换；工具栏含视图
+/// 切换、新建与更多分区；内联列表直接操作当前空间根（目录原地展开，
+/// 点文件开预览），进入目录后收起首页卡片仅留工具栏与返回上级栏，
+/// 超过预览条数经「查看全部」进入完整工作区（仅根态提供）。
 class _FileMobileHome extends ConsumerWidget {
-  const _FileMobileHome({required this.state, required this.onOpenSection});
+  const _FileMobileHome({
+    required this.state,
+    required this.onOpenSection,
+    required this.onEnterWorkspace,
+  });
 
   final FileBrowserState state;
 
   /// 打开分区：进入列表态。
   final ValueChanged<FileManagerSection> onOpenSection;
 
+  /// 从内联列表进入工作区（不重载分区）。
+  final VoidCallback onEnterWorkspace;
+
+  static const int _inlinePreviewLimit = 12;
+
   static const List<FileManagerSection> _cardSections = [
-    FileManagerSection.allFiles,
     FileManagerSection.recent,
     FileManagerSection.favorites,
-    FileManagerSection.recycleBin,
+    FileManagerSection.sharedWithMe,
+    FileManagerSection.offlineDownloads,
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final controller = ref.read(fileBrowserControllerProvider.notifier);
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 108),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _HomeGroupLabel(l10n.filesHomeLocations),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _HomeSpaceCard(
-                  icon: Icons.lock_outline,
-                  label: l10n.importToPersonalSpace,
-                  hint: l10n.filesHomePersonalSpaceHint,
-                  selected: state.spaceType != 'SHARED',
-                  onTap: () => _switchSpace(context, controller, 'PERSONAL'),
-                ),
+    // 目录原地展开态：内联列表已进入某目录（面包屑非空）。此态收起
+    // 存储条与分类格，仅保留工具栏 + 返回上级栏 + 全量目录内容，
+    // 语义对齐主流网盘（同视图内导航，不切换页面 chrome）。
+    final inFolder =
+        state.section == FileManagerSection.allFiles &&
+        state.breadcrumbs.isNotEmpty;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.depth != 0 ||
+            notification.metrics.axis != Axis.vertical ||
+            notification.metrics.extentAfter >= 420 ||
+            state.isBusy ||
+            state.filePage + 1 >= state.fileTotalPages) {
+          return false;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(controller.loadMoreFiles());
+        });
+        return false;
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!inFolder) ...[
+              _HomeStorageStrip(
+                stats: state.storageStats,
+                onTap: () => onOpenSection(FileManagerSection.storageStats),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _HomeSpaceCard(
-                  icon: Icons.people_outline,
-                  label: l10n.filesSharedSpace,
-                  hint: l10n.filesSharedSpaceDesc,
-                  selected: state.spaceType == 'SHARED',
-                  onTap: () => _switchSpace(context, controller, 'SHARED'),
-                ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  for (
+                    var index = 0;
+                    index < _cardSections.length;
+                    index++
+                  ) ...[
+                    if (index > 0) const SizedBox(width: 7),
+                    Expanded(
+                      child: _HomeSectionCard(
+                        section: _cardSections[index],
+                        hint: _hintOfCard(context, _cardSections[index]),
+                        onTap: () => onOpenSection(_cardSections[index]),
+                      ),
+                    ),
+                  ],
+                ],
               ),
+              const SizedBox(height: 20),
+            ] else ...[
+              _InlineGoUpBar(state: state, controller: controller),
+              const SizedBox(height: 4),
             ],
-          ),
-          const SizedBox(height: 26),
-          _HomeGroupLabel(l10n.filesHomeSections),
-          const SizedBox(height: 10),
-          for (var row = 0; row < _cardSections.length; row += 2) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _HomeSectionCard(
-                    section: _cardSections[row],
-                    hint: _hintOf(l10n, _cardSections[row]),
-                    onTap: () => onOpenSection(_cardSections[row]),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child:
-                      row + 1 < _cardSections.length
-                          ? _HomeSectionCard(
-                            section: _cardSections[row + 1],
-                            hint: _hintOf(l10n, _cardSections[row + 1]),
-                            onTap: () => onOpenSection(_cardSections[row + 1]),
-                          )
-                          : const SizedBox.shrink(),
-                ),
-              ],
+            _HomeToolbar(
+              state: state,
+              controller: controller,
+              onOpenSection: onOpenSection,
+              onEnterWorkspace: onEnterWorkspace,
             ),
-            if (row + 2 < _cardSections.length + 1) const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            _HomeInlineList(
+              state: state,
+              controller: controller,
+              onEnterWorkspace: onEnterWorkspace,
+              onOpenSection: onOpenSection,
+            ),
           ],
-          const SizedBox(height: 12),
-          _HomeSectionCard(
-            section: null,
-            icon: Icons.grid_view_rounded,
-            label: l10n.filesMoreSections,
-            hint: l10n.filesHomeMoreHint,
-            onTap: () => showFileMoreSectionsSheet(context, ref, onOpenSection),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  String _hintOf(AppLocalizations l10n, FileManagerSection section) {
+  String _hintOfCard(BuildContext context, FileManagerSection section) {
+    final l10n = AppLocalizations.of(context);
     return switch (section) {
-      FileManagerSection.allFiles => l10n.filesHomeAllFilesHint,
       FileManagerSection.recent => l10n.filesHomeRecentHint,
       FileManagerSection.favorites => l10n.filesHomeFavoritesHint,
-      FileManagerSection.recycleBin => l10n.filesHomeTrashHint,
-      _ => section.descriptionOf(l10n),
+      FileManagerSection.sharedWithMe => l10n.filesSharedWithMeDesc,
+      _ => l10n.filesOfflineDownloadsDesc,
     };
   }
+}
 
-  void _switchSpace(
-    BuildContext context,
-    FileBrowserController controller,
-    String spaceType,
-  ) {
+/// 页签工具栏：空间页签（下划线激活）+ 视图切换 + 新建 + 更多。
+class _HomeToolbar extends StatelessWidget {
+  const _HomeToolbar({
+    required this.state,
+    required this.controller,
+    required this.onOpenSection,
+    required this.onEnterWorkspace,
+  });
+
+  final FileBrowserState state;
+  final FileBrowserController controller;
+  final ValueChanged<FileManagerSection> onOpenSection;
+  final VoidCallback onEnterWorkspace;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final shared = state.spaceType == 'SHARED';
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      ),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            _HomeToolbarTab(
+              label: l10n.filesHomeTabMyFiles,
+              active: !shared,
+              onTap: () => _switchSpace(context, 'PERSONAL'),
+            ),
+            _HomeToolbarTab(
+              label: l10n.filesSharedSpace,
+              active: shared,
+              onTap: () => _switchSpace(context, 'SHARED'),
+            ),
+            const Spacer(),
+            _ToolbarIconButton(
+              tooltip: l10n.filesViewList,
+              icon: OmniIcons.list,
+              active: state.viewMode == FileBrowserViewMode.list,
+              onTap: () => controller.setViewMode(FileBrowserViewMode.list),
+            ),
+            _ToolbarIconButton(
+              tooltip: l10n.filesViewGrid,
+              icon: OmniIcons.grid,
+              active: state.viewMode == FileBrowserViewMode.grid,
+              onTap: () => controller.setViewMode(FileBrowserViewMode.grid),
+            ),
+            _ToolbarIconButton(
+              tooltip: l10n.portalQuickUpload,
+              icon: OmniIcons.plus,
+              onTap: () => _showFileCreateActions(context, state, controller),
+            ),
+            _ToolbarMoreButton(
+              onOpenSection: onOpenSection,
+              onEnterWorkspace: onEnterWorkspace,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _switchSpace(BuildContext context, String spaceType) {
     if (spaceType == state.spaceType) {
       return;
     }
+    // 空间原地切换：内联列表内容随之更换，不离开首页 chrome。
     unawaited(_runFileAction(context, () => controller.switchSpace(spaceType)));
   }
 }
 
-/// 首页分组小标题。
-class _HomeGroupLabel extends StatelessWidget {
-  const _HomeGroupLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: context.filesColors.onSurfaceVariant,
-        fontSize: AppTypography.labelLarge,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-}
-
-/// 位置卡：个人/共享空间切换，选中态以主色图标与淡底强调。
-class _HomeSpaceCard extends StatelessWidget {
-  const _HomeSpaceCard({
-    required this.icon,
+/// 空间页签：激活态墨色 + 2px 强调色下划线。
+class _HomeToolbarTab extends StatelessWidget {
+  const _HomeToolbarTab({
     required this.label,
-    required this.hint,
-    required this.selected,
+    required this.active,
     required this.onTap,
   });
 
-  final IconData icon;
   final String label;
-  final String hint;
-  final bool selected;
+  final bool active;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.filesColors;
-    return Material(
-      color: selected ? c.sidebarSelectedBg : c.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-        side: BorderSide(color: selected ? c.outlineVariant : c.outlineVariant),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected ? c.onSurface : c.onSurfaceVariant,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: c.onSurface,
-                        fontSize: AppTypography.bodyLarge,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      hint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: c.onSurfaceVariant,
-                        fontSize: AppTypography.labelSmall,
-                      ),
-                    ),
-                  ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+      child: SizedBox(
+        height: 48,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color:
+                        active ? MobileEnvColors.ink : MobileEnvColors.inkMuted,
+                    fontSize: AppTypography.bodySmall,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
               ),
-              if (selected)
-                Icon(Icons.check_rounded, size: 18, color: c.storageAccent),
-            ],
-          ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 190),
+              width: active ? 28 : 0,
+              height: 2,
+              color: active ? MobileEnvColors.accent : Colors.transparent,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// 分区卡：图标 + 标题 + 一行说明；点击进入列表态。
-class _HomeSectionCard extends StatelessWidget {
-  const _HomeSectionCard({
-    required this.section,
-    required this.hint,
+/// 工具栏图标钮：激活态强调色前景。
+class _ToolbarIconButton extends StatelessWidget {
+  const _ToolbarIconButton({
+    required this.tooltip,
+    required this.icon,
     required this.onTap,
-    this.icon,
-    this.label,
+    this.active = false,
   });
 
-  final FileManagerSection? section;
+  final String tooltip;
+  final OmniIconsData icon;
+  final VoidCallback onTap;
+  final bool active;
 
-  /// 自定义图标/标题（「更多」卡无对应分区）。
-  final IconData? icon;
-  final String? label;
-  final String hint;
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      icon: OmniIcon(
+        icon: icon,
+        size: 19,
+        color: active ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+      ),
+      style: IconButton.styleFrom(
+        foregroundColor:
+            active ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+        minimumSize: const Size.square(43),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+/// 更多分区钮：打开回收站/上传队列/离线等低频分区面板。
+class _ToolbarMoreButton extends ConsumerWidget {
+  const _ToolbarMoreButton({
+    required this.onOpenSection,
+    required this.onEnterWorkspace,
+  });
+
+  final ValueChanged<FileManagerSection> onOpenSection;
+  final VoidCallback onEnterWorkspace;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return IconButton(
+      tooltip: l10n.filesMoreSections,
+      onPressed: () => showFileMoreSectionsSheet(context, ref, onOpenSection),
+      icon: const OmniIcon(
+        icon: OmniIcons.more,
+        size: 19,
+        color: MobileEnvColors.inkMuted,
+      ),
+      style: IconButton.styleFrom(
+        foregroundColor: MobileEnvColors.inkMuted,
+        minimumSize: const Size.square(43),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+/// 内联根列表：按当前视图模式渲染前若干条；进文件夹入工作区、点文件预览。
+class _HomeInlineList extends StatelessWidget {
+  const _HomeInlineList({
+    required this.state,
+    required this.controller,
+    required this.onEnterWorkspace,
+    required this.onOpenSection,
+  });
+
+  final FileBrowserState state;
+  final FileBrowserController controller;
+  final VoidCallback onEnterWorkspace;
+  final ValueChanged<FileManagerSection> onOpenSection;
+
+  @override
+  Widget build(BuildContext context) {
+    final files = state.files;
+    final l10n = AppLocalizations.of(context);
+    if (files.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const OmniIcon(
+              icon: OmniIcons.folder,
+              size: 22,
+              color: MobileEnvColors.white46,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              l10n.filesEmpty,
+              style: const TextStyle(
+                color: MobileEnvColors.inkMuted,
+                fontSize: AppTypography.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    // 目录原地展开态：不再截断预览条数（续载由外层滚动监听负责），
+    // 也不渲染「查看全部」。
+    final inFolder =
+        state.section == FileManagerSection.allFiles &&
+        state.breadcrumbs.isNotEmpty;
+    final visible =
+        inFolder
+            ? files.toList(growable: false)
+            : files.take(_FileMobileHome._inlinePreviewLimit).toList();
+    final Widget content;
+    if (state.viewMode == FileBrowserViewMode.grid) {
+      // 高度按实际列宽精确换算（宽/1.62 为瓦片高），避免固定 112 的
+      // 累计误差造成底部裁切或溢出。
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          final tileWidth = (constraints.maxWidth - 9) / 2;
+          final tileHeight = tileWidth / 1.62;
+          final rows = (visible.length / 2).ceil();
+          return SizedBox(
+            height: rows * tileHeight + (rows - 1) * 9.0,
+            child: GridView.count(
+              crossAxisCount: 2,
+              mainAxisSpacing: 9,
+              crossAxisSpacing: 9,
+              childAspectRatio: 1.62,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                for (final file in visible)
+                  FileEnvTile(
+                    file: file,
+                    selected: false,
+                    favorite: state.favoriteIdSet.contains(file.id),
+                    onTap: () => _activate(context, file),
+                  ),
+              ],
+            ),
+          );
+        },
+      );
+    } else {
+      content = Column(
+        children: [
+          for (var index = 0; index < visible.length; index++) ...[
+            FileEnvRow(
+              file: visible[index],
+              selected: false,
+              onTap: () => _activate(context, visible[index]),
+            ),
+            if (index + 1 < visible.length)
+              const Divider(height: 1, color: MobileEnvColors.line07),
+          ],
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        content,
+        if (!inFolder && files.length > _FileMobileHome._inlinePreviewLimit)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: TextButton(
+              onPressed: () => onOpenSection(FileManagerSection.allFiles),
+              style: TextButton.styleFrom(
+                foregroundColor: MobileEnvColors.white70,
+                minimumSize: const Size(48, 44),
+              ),
+              child: Text(l10n.portalMobileViewAll),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _activate(BuildContext context, FileNode file) {
+    if (file.isFolder) {
+      // 主流网盘语义：目录在当前视图内原地展开，不切换页面 chrome。
+      unawaited(controller.openFolder(file));
+      return;
+    }
+    _openFilePreview(context, file);
+  }
+}
+
+/// 存储条：配额用量 + 3px 进度，点击进入存储统计分区。
+class _HomeStorageStrip extends StatelessWidget {
+  const _HomeStorageStrip({required this.stats, required this.onTap});
+
+  final FileStorageStats? stats;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.filesColors;
     final l10n = AppLocalizations.of(context);
-    final title = label ?? section!.labelOf(l10n);
-    final glyph = icon ?? section!.icon;
+    final value = stats;
+    final line =
+        value == null
+            ? l10n.filesWaitingStats
+            : l10n.filesStorageQuotaLine(
+              formatFileSize(value.usedBytes),
+              formatFileSize(value.quotaBytes),
+            );
     return Material(
       color: c.surfaceContainerLow,
       shape: RoundedRectangleBorder(
@@ -246,31 +459,63 @@ class _HomeSectionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
             children: [
-              Icon(glyph, size: 24, color: c.onSurfaceVariant),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: c.onSurface,
-                  fontSize: AppTypography.bodyLarge,
-                  fontWeight: FontWeight.w600,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: c.storageAccent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.zero,
+                ),
+                child: const OmniIcon(
+                  icon: OmniIcons.cloud,
+                  size: 21,
+                  color: MobileEnvColors.storageCloud,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                hint,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: c.onSurfaceVariant,
-                  fontSize: AppTypography.labelSmall,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.filesStorageUsage,
+                      style: TextStyle(
+                        color: c.onSurface,
+                        fontSize: AppTypography.bodyLarge,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      line,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.onSurfaceVariant,
+                        fontSize: AppTypography.labelSmall,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: value == null ? 0 : value.usageRatio.clamp(0, 1),
+                        minHeight: 3,
+                        color: MobileEnvColors.storageProgressFill,
+                        backgroundColor: const Color(0x1AFFFFFF),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              const OmniIcon(
+                icon: OmniIcons.chevron,
+                size: 17,
+                color: MobileEnvColors.inkMuted,
               ),
             ],
           ),
@@ -280,25 +525,70 @@ class _HomeSectionCard extends StatelessWidget {
   }
 }
 
-/// 列表态顶部返回行：回到文件首页。
-class _FileMobileBackRow extends StatelessWidget {
-  const _FileMobileBackRow({required this.onBack});
+/// 分区卡图标映射：与设计原型一致的描边图标集。
+OmniIconsData _sectionGlyph(FileManagerSection? section) {
+  return switch (section) {
+    FileManagerSection.allFiles => OmniIcons.folder,
+    FileManagerSection.recent => OmniIcons.clock,
+    FileManagerSection.favorites => OmniIcons.heart,
+    FileManagerSection.sharedWithMe => OmniIcons.share,
+    FileManagerSection.offlineDownloads => OmniIcons.download,
+    FileManagerSection.recycleBin => OmniIcons.close,
+    _ => OmniIcons.grid,
+  };
+}
 
-  final VoidCallback onBack;
+/// 分区卡（原型 file-categories 紧凑形态）：图标居上 + 单行标签。
+class _HomeSectionCard extends StatelessWidget {
+  const _HomeSectionCard({
+    required this.section,
+    required this.hint,
+    required this.onTap,
+  });
+
+  final FileManagerSection? section;
+  final String hint;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        onPressed: onBack,
-        icon: const Icon(Icons.arrow_back_rounded, size: 18),
-        label: Text(AppLocalizations.of(context).coreBack),
-        style: TextButton.styleFrom(
-          foregroundColor: context.filesColors.onSurface,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: const Size(0, 44),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    final l10n = AppLocalizations.of(context);
+    final title = section!.labelOf(l10n);
+    final glyph = _sectionGlyph(section);
+    return Semantics(
+      button: true,
+      label: '$title, $hint',
+      child: MobilePressable(
+        semanticLabel: title,
+        onTap: onTap,
+        child: Container(
+          height: 77,
+          decoration: BoxDecoration(
+            color: const Color(0x0CFFFFFF),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(color: MobileEnvColors.line09),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OmniIcon(
+                icon: glyph,
+                size: 21,
+                color: MobileEnvColors.storageCloud,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xB8FFFFFF),
+                  fontSize: AppTypography.labelSmall,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -338,6 +628,15 @@ void showFileMoreSectionsSheet(
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    // 根级呈现：整屏遮罩盖住底部导航与迷你播放器，腾出完整纵向空间。
+    useRootNavigator: true,
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+    ),
+    // 托管态环境重绑后 filesColors 是玻璃半透明：贴底面板须实底。
+    backgroundColor:
+        MobileShellScope.isHosted(context) ? MobileEnvColors.sheetSolid : null,
     builder:
         (sheetContext) => SafeArea(
           top: false,
@@ -352,18 +651,18 @@ void showFileMoreSectionsSheet(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
                       entry.key.labelOf(l10n),
-                      style: TextStyle(
-                        fontSize: AppTypography.labelMedium,
+                      style: const TextStyle(
+                        fontSize: 9, // ignore: font_size_whitelist
+                        letterSpacing: 1.5,
                         fontWeight: FontWeight.w700,
-                        color: context.filesColors.onSurfaceVariant,
+                        color: MobileEnvColors.inkFaint,
                       ),
                     ),
                   ),
                   for (final item in entry.value)
-                    ListTile(
-                      leading: Icon(item.icon),
-                      title: Text(item.labelOf(l10n)),
-                      dense: true,
+                    _MoreSheetRow(
+                      icon: item.icon,
+                      label: item.labelOf(l10n),
                       onTap: () {
                         Navigator.of(sheetContext).pop();
                         onOpen(item);
@@ -376,4 +675,136 @@ void showFileMoreSectionsSheet(
           ),
         ),
   );
+}
+
+/// 更多分区抽屉行（环境皮肤：36r11 图标盒 + 标题 + chevron + 发丝线）。
+class _MoreSheetRow extends StatelessWidget {
+  const _MoreSheetRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 54),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: MobileEnvColors.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 17, color: MobileEnvColors.accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w600,
+                    color: MobileEnvColors.ink,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: MobileEnvColors.inkFaint,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 目录原地展开态的内联返回上级栏：一级目录回空间根，更深层回上级。
+class _InlineGoUpBar extends StatelessWidget {
+  const _InlineGoUpBar({required this.state, required this.controller});
+
+  final FileBrowserState state;
+  final FileBrowserController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final crumbs = state.breadcrumbs;
+    final atFirstLevel = crumbs.length == 1;
+    final label =
+        atFirstLevel
+            ? (state.spaceType == 'SHARED'
+                ? l10n.filesSharedSpace
+                : l10n.filesHomeTabMyFiles)
+            : crumbs[crumbs.length - 2].name;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            unawaited(
+              atFirstLevel
+                  ? controller.goToRoot()
+                  : controller.goToBreadcrumb(crumbs.length - 2),
+            );
+          },
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.expand_less_rounded,
+                  size: 20,
+                  color: MobileEnvColors.accent,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  l10n.videoBackToParentNode,
+                  style: const TextStyle(
+                    fontSize: 11, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w600,
+                    color: MobileEnvColors.ink,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 10, // ignore: font_size_whitelist
+                      color: MobileEnvColors.inkFaint,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

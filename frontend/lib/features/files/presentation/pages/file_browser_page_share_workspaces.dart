@@ -53,6 +53,9 @@ class _SharedWithMeWorkspaceState
 
   @override
   Widget build(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      return _HostedSharedWithMe(state: widget.state);
+    }
     final l10n = AppLocalizations.of(context);
     final items = widget.state.sharedWithMe;
     final owners = items.map((i) => i.ownerUserId).toSet().length;

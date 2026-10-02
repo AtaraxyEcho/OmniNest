@@ -333,7 +333,7 @@ class ComicReaderBottomBar extends StatelessWidget {
                                 settings: settings,
                                 onPressed: onShowContents,
                               ),
-                              if (!compact && onSwitchReadingMode != null)
+                              if (onSwitchReadingMode != null)
                                 _ComicControlButton(
                                   icon:
                                       isPageMode

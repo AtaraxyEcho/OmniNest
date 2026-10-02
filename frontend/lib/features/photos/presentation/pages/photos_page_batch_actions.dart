@@ -15,6 +15,10 @@ class _BatchActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 托管移动态：样例 .selection-bar（酸绿实底胶囊、计数 + 纯图标钮）。
+    if (MobileShellScope.isHosted(context)) {
+      return _buildHostedBar(context);
+    }
     // 壳层底栏隐藏后批量条贴底渲染；装饰铺满手势区，SafeArea 只避让内容。
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -114,6 +118,76 @@ class _BatchActionBar extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 样例 selection-bar：酸绿实底、r18、投影、左侧计数（11px 粗体深墨）
+  /// + 右侧 43px 纯图标动作钮（标签/移动到相册/导出/删除/清除选择）。
+  Widget _buildHostedBar(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+        constraints: const BoxConstraints(minHeight: 57),
+        padding: const EdgeInsets.only(left: 16, right: 10),
+        decoration: BoxDecoration(
+          color: MobileEnvColors.selectionBar,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x59000000),
+              offset: Offset(0, 12),
+              blurRadius: 28,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.photosSelectedCount(state.selectedPhotoIds.length),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11, // ignore: font_size_whitelist
+                  fontWeight: FontWeight.w700,
+                  color: MobileEnvColors.onSelectionBar,
+                ),
+              ),
+            ),
+            _SelectionBarIconButton(
+              icon: Icons.label_outline,
+              tooltip: l10n.photosTag,
+              onTap: () => _showBatchTagDialog(context),
+            ),
+            _SelectionBarIconButton(
+              icon: Icons.photo_album_outlined,
+              tooltip: l10n.photosMove,
+              onTap: () => _showBatchMoveDialog(context),
+            ),
+            _SelectionBarIconButton(
+              icon: Icons.archive_outlined,
+              tooltip: l10n.photosExportZip,
+              onTap: () => _startBatchDownload(context),
+            ),
+            _SelectionBarIconButton(
+              icon: Icons.delete_outline,
+              tooltip: l10n.photosDeleteShort,
+              onTap: () => _confirmBatchTrash(context),
+            ),
+            _SelectionBarIconButton(
+              icon: Icons.close_rounded,
+              tooltip: l10n.photosDeselect,
+              onTap: () {
+                ref
+                    .read(photoCenterControllerProvider.notifier)
+                    .toggleSelectionMode();
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -288,6 +362,35 @@ class _BatchAction extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例 selection-bar 的 43px 纯图标动作钮（透明底、深墨前景）。
+class _SelectionBarIconButton extends StatelessWidget {
+  const _SelectionBarIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, size: 21, color: MobileEnvColors.onSelectionBar),
+        style: IconButton.styleFrom(
+          foregroundColor: MobileEnvColors.onSelectionBar,
+          minimumSize: const Size.square(43),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
     );

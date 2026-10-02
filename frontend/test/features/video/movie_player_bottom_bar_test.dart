@@ -17,7 +17,12 @@ void main() {
     );
 
     expect(find.byKey(const Key('moviePlayerControlsCompact')), findsOneWidget);
-    expect(find.byIcon(Icons.language_rounded), findsOneWidget);
+    // 样例紧凑形态：字幕/设置在场，音轨与倍速收进设置面板，
+    // 播放交给中央键组（底部不再有传输行）。
+    expect(find.byIcon(Icons.subtitles_off_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.settings_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.language_rounded), findsNothing);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -116,7 +121,7 @@ void main() {
     expect(settingsCenter.dx, lessThan(fullscreenCenter.dx));
   });
 
-  testWidgets('compact transport controls use a dedicated left row', (
+  testWidgets('compact episode controls sit left and tools right', (
     tester,
   ) async {
     await _pumpBottomBar(tester, size: const Size(320, 568), isMobile: true);
@@ -124,27 +129,29 @@ void main() {
     final viewportRect = tester.getRect(
       find.byKey(const Key('moviePlayerControlViewport')),
     );
-    final contentPadding = tester.widget<AnimatedPadding>(
-      find.byKey(const Key('moviePlayerBottomBarContent')),
-    );
-    final transportRect = tester.getRect(
-      find.byKey(const Key('moviePlayerTransportControls')),
-    );
     final previousCenter = tester.getCenter(
       find.byIcon(Icons.skip_previous_rounded),
     );
-    final playCenter = tester.getCenter(find.byIcon(Icons.play_arrow_rounded));
     final nextCenter = tester.getCenter(find.byIcon(Icons.skip_next_rounded));
-
-    expect(
-      transportRect.left,
-      closeTo(
-        viewportRect.left + (contentPadding.padding as EdgeInsets).left,
-        0.1,
-      ),
+    final subtitleCenter = tester.getCenter(
+      find.byIcon(Icons.subtitles_off_rounded),
     );
-    expect(previousCenter.dx, lessThan(playCenter.dx));
-    expect(nextCenter.dx, greaterThan(playCenter.dx));
+    final settingsCenter = tester.getCenter(
+      find.byIcon(Icons.settings_rounded),
+    );
+
+    // 单行工具行：前后集贴左缘，字幕/设置贴右缘，无传输行。
+    expect(find.byKey(const Key('moviePlayerTransportControls')), findsNothing);
+    expect(
+      previousCenter.dx,
+      lessThan(viewportRect.left + viewportRect.width / 2),
+    );
+    expect(nextCenter.dx, greaterThan(previousCenter.dx));
+    expect(
+      subtitleCenter.dx,
+      greaterThan(viewportRect.left + viewportRect.width / 2),
+    );
+    expect(settingsCenter.dx, greaterThan(subtitleCenter.dx));
     expect(tester.takeException(), isNull);
   });
 

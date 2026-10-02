@@ -221,6 +221,32 @@ class ReaderLocalStorage {
     return annotations;
   }
 
+  /// 跨书最近标注（Reader 空间「最近笔记」数据源），按创建时间倒序。
+  Future<List<ReaderAnnotation>> loadRecentAnnotations({int limit = 6}) async {
+    final query =
+        _db.select(_db.cachedReaderAnnotations)
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+          ..limit(limit);
+    final rows = await query.get();
+    final annotations = <ReaderAnnotation>[];
+    for (final row in rows) {
+      annotations.add(
+        ReaderAnnotation(
+          id: row.id,
+          readerItemId: row.readerItemId,
+          chapterId: row.chapterId,
+          startOffset: row.startOffset,
+          endOffset: row.endOffset,
+          highlightText: await _decipherNullable(row.highlightText),
+          note: await _decipherNullable(row.note),
+          color: row.color,
+          createdAt: row.createdAt,
+        ),
+      );
+    }
+    return annotations;
+  }
+
   Future<void> updateAnnotation(
     String annotationId, {
     String? note,

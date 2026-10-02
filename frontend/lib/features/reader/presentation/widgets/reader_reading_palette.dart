@@ -67,7 +67,19 @@ class ReaderReadingPalette {
     annotation: Color(0xFFE2C75D),
   );
 
-  static const values = [light, eyeCare, dark, green];
+  /// 样例 ReaderFocus 的夜间玻璃配色：深玻璃底 + 暖白衬线正文 + lime 强调。
+  static const nightGlass = ReaderReadingPalette(
+    id: 'nightGlass',
+    surface: Color(0xFF171A17),
+    onSurface: Color(0xFFE0E0D8),
+    onSurfaceVariant: Color(0xFFA6ACA4),
+    accent: Color(0xFFD5F17D),
+    controlSurface: Color(0x14FFFFFF),
+    selection: Color(0x66D5F17D),
+    annotation: Color(0xFFE8C46B),
+  );
+
+  static const values = [light, eyeCare, dark, green, nightGlass];
 
   static ReaderReadingPalette fromId(String id) {
     return values.firstWhere((palette) => palette.id == id, orElse: () => dark);

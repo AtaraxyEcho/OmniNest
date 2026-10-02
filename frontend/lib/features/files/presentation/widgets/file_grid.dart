@@ -7,6 +7,8 @@ import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
 import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
 import 'package:omninest/core/theme/motion_token.dart';
@@ -174,6 +176,16 @@ class _FileTileState extends State<_FileTile> {
               actions.onToggleSelection!(file.id);
             }
             : null;
+    // 移动壳层：原型瓦片（17 圆角白 4% 卡面 + 类型彩色图形）。
+    if (MobileShellScope.isHosted(context)) {
+      return FileEnvTile(
+        file: file,
+        selected: widget.selected,
+        favorite: widget.favoriteIds.contains(file.id),
+        onTap: activate,
+        onLongPress: longPress,
+      );
+    }
     return Semantics(
       button: activate != null,
       enabled: activate != null,

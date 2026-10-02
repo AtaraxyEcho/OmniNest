@@ -56,7 +56,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 3 页元数据：分页条在场，页码全量展示，旧“加载更多”按钮不再出现。
+    // 3 页元数据：桌面工位分页条在场，页码全量展示。
     expect(find.byType(WorkstationPaginationBar), findsOneWidget);
     expect(find.text('共 3000 条'), findsOneWidget);
     expect(find.text('第 1-100 条'), findsOneWidget);
@@ -181,7 +181,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // totalPages=1 不再隐藏分页条：总数、范围与每页条数切换始终可达。
+    // 非托管 = 桌面工位分页条：总数、范围与每页条数切换始终可达。
     expect(find.byType(WorkstationPaginationBar), findsOneWidget);
     expect(find.text('共 8 条'), findsOneWidget);
     expect(find.text('第 1-8 条'), findsOneWidget);
@@ -206,7 +206,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('托管平板宽度下分页条贴屏幕左缘，不随画布居中', (tester) async {
+  testWidgets('托管平板宽度下内容画布贴屏幕左缘，不随画布居中', (tester) async {
     tester.view.physicalSize = const Size(1000, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -252,22 +252,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 从首页卡进入全部文件列表态。
-    await tester.tap(find.text('全部文件'));
-    await tester.pumpAndSettle();
-    expect(find.byType(WorkstationPaginationBar), findsOneWidget);
-
-    // 宽画布封顶 720 时内容列贴屏幕左缘（与 Admin 全宽工位同语言）：
-    // 画布本身不得有居中偏移，分页条计数文本左偏移只剩列表内边距。
+    // 无感续载替代页脚：不再渲染「加载更多」按钮。
+    expect(find.text('加载更多'), findsNothing);
+    // 宽画布封顶时内容列贴屏幕左缘（与 Admin 全宽工位同语言）：
+    // 画布本身不得有居中偏移。
+    expect(find.byType(HostedTouchCanvas), findsOneWidget);
     final canvasLeft = tester.getTopLeft(find.byType(HostedTouchCanvas)).dx;
     expect(canvasLeft, 0, reason: '托管宽画布须左对齐封顶，不居中');
-    final countLeft = tester.getTopLeft(find.text('共 3000 条')).dx;
-    expect(countLeft, lessThan(60), reason: '分页条随内容列贴左，无居中画布偏移');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('最近分区的每页条数候选包含默认 10 且不含 200', (tester) async {
-    tester.view.physicalSize = const Size(1440, 900);
+  testWidgets('最近分区滚动近底自动翻页（无感续载）', (tester) async {
+    final visitedPages = <int>[];
+    tester.view.physicalSize = const Size(1000, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -275,7 +272,7 @@ void main() {
     final container = ProviderContainer.test(
       overrides: [
         fileBrowserControllerProvider.overrideWith(
-          () => _RecentSectionController(),
+          () => _RecentSectionController(visitedPages),
         ),
       ],
     );
@@ -304,30 +301,22 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
+          builder:
+              (context, child) => MobileShellScope(hosted: true, child: child!),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(WorkstationPaginationBar), findsOneWidget);
-    // 打开每页条数下拉：候选 10/20/50/100，不含主列表档位 200。
-    await tester.tap(find.text('10'));
+    // 分区与假体 section 一致时保持首页态：经「最近使用」分类卡进入列表态。
+    await tester.tap(find.text('最近使用'));
     await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byType(MenuItemButton),
-        matching: find.text('10'),
-      ),
-      findsOneWidget,
-      reason: '当前默认值必须在候选内',
-    );
-    expect(
-      find.descendant(
-        of: find.byType(MenuItemButton),
-        matching: find.text('200'),
-      ),
-      findsNothing,
-    );
+
+    // 无感续载：不再渲染「加载更多」按钮，滚动近底自动触发下一页。
+    expect(find.text('加载更多'), findsNothing);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -900));
+    await tester.pumpAndSettle();
+    expect(visitedPages, contains(1), reason: '滚动近底 = 自动跳到第 2 页');
     expect(tester.takeException(), isNull);
   });
 }
@@ -348,6 +337,15 @@ class _PagedMainListController extends FileBrowserController {
       fileTotalElements: 3000,
       fileTotalPages: 3,
     );
+  }
+
+  @override
+  Future<void> switchSpace(String newSpaceType) async {
+    // 测试假体：仅切换空间类型，不发网络请求与延时任务。
+    final current = state.asData?.value;
+    if (current != null) {
+      state = AsyncData(current.copyWith(spaceType: newSpaceType));
+    }
   }
 
   @override
@@ -394,6 +392,10 @@ class _SinglePageMainListController extends FileBrowserController {
 }
 
 class _RecentSectionController extends FileBrowserController {
+  _RecentSectionController(this.visitedPages);
+
+  final List<int> visitedPages;
+
   @override
   Future<FileBrowserState> build() async {
     return FileBrowserState(
@@ -418,6 +420,11 @@ class _RecentSectionController extends FileBrowserController {
 
   @override
   Future<void> refreshForRealtime() async {}
+
+  @override
+  Future<void> showRecentFiles({int? page, int? size}) async {
+    visitedPages.add(page ?? 0);
+  }
 }
 
 FileNode _file(String id) => FileNode(

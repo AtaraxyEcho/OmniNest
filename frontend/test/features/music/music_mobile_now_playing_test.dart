@@ -38,11 +38,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Current lyric'), findsOneWidget);
-    expect(find.byIcon(Icons.lyrics_outlined), findsOneWidget);
     expect(find.byType(MusicDeckArtwork), findsNothing);
 
-    // 切到封面页：封面卡与播放控制出现，背景仍为动态壁纸透出。
-    await tester.tap(find.byIcon(Icons.album_outlined));
+    // 切到封面页（横滑 PageView，视图切换器已移除）：封面卡与播放控制出现。
+    await tester.drag(find.byType(PageView), const Offset(320, 0));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
@@ -52,8 +51,9 @@ void main() {
     expect(find.byIcon(Icons.shuffle_rounded), findsNothing);
     expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
     expect(find.byType(MusicDeckArtwork), findsAtLeastNWidgets(1));
-    // 背景改为动态壁纸透出：不再有专辑图模糊底图与重遮罩色层。
-    expect(find.byType(ImageFiltered), findsNothing);
+    // 背景改为动态壁纸透出：不再有专辑图模糊底图与重遮罩色层
+    // （aurora 光晕层是唯一的 ImageFiltered，允许恰好一层）。
+    expect(find.byType(ImageFiltered), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) =>
@@ -78,8 +78,10 @@ void main() {
       ),
       findsNothing,
     );
-    // 移动端歌词样式入口：面板只含歌词分区，不暴露封面/播放器视觉编辑。
-    expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+    // 歌词样式入口收敛进头部 ⋯ 动作面板：面板只含歌词分区，
+    // 不暴露封面/播放器视觉编辑。
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.tune_rounded));
     await tester.pumpAndSettle();
     final panel = tester.widget<MusicVisualEditorPanel>(

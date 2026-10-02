@@ -1,22 +1,18 @@
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
-import 'package:omninest/core/auth/user_capabilities.dart';
-import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
-import 'package:omninest/features/music/domain/music_models.dart';
-import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
@@ -77,9 +73,6 @@ class _MusicMobileMiniPlayerSlotState
               0.0,
               1.0,
             );
-    final canFavorite =
-        item?.ref is LocalMusicRef &&
-        ref.watch(userCapabilitiesProvider).canManageOwnActivity;
     final l10n = AppLocalizations.of(context);
     final backdrop = ref.watch(appBackdropControllerProvider).asData?.value;
     final backdropVisible = ref.watch(
@@ -94,26 +87,8 @@ class _MusicMobileMiniPlayerSlotState
       backdropActive: backdropActive,
     );
     final colors = theme.extension<MusicColors>() ?? context.musicColors;
-    final light = theme.brightness == Brightness.light;
-    final surface =
-        Color.lerp(
-          colors.surfaceContainer,
-          light ? colors.primary : colors.surfaceContainerHigh,
-          light ? 0.06 : 0.04,
-        )!;
     // 浮起卡片配方：壁纸激活（玻璃模块）保持烟熏半透；实底模块上近实底，
     // 读作一张浮起的卡而不是第二根贴边栏。
-    final requestedSurfaceAlpha =
-        backdropActive ? (light ? 0.55 : 0.80) : (light ? 0.96 : 0.94);
-    final surfaceAlpha =
-        requestedSurfaceAlpha < surface.a ? requestedSurfaceAlpha : surface.a;
-    final requestedOutlineAlpha = light ? 0.35 : 0.50;
-    final outlineAlpha =
-        requestedOutlineAlpha < colors.outline.a
-            ? requestedOutlineAlpha
-            : colors.outline.a;
-    final progressTrackAlpha =
-        0.30 < colors.outline.a ? 0.30 : colors.outline.a;
     if (track.id == _dismissedForTrackId) {
       return const SizedBox.shrink();
     }
@@ -151,31 +126,28 @@ class _MusicMobileMiniPlayerSlotState
                 },
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
+                        color: Colors.black.withValues(alpha: 0.32),
+                        blurRadius: 28,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                       child: DecoratedBox(
+                        // 样例固定配方：rgba(18,24,23,.91) + 白 13% 描边。
                         decoration: BoxDecoration(
-                          color: surface.withValues(alpha: surfaceAlpha),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colors.outline.withValues(
-                              alpha: outlineAlpha,
-                            ),
-                          ),
+                          color: const Color(0xE8121817),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0x21FFFFFF)),
                         ),
                         child: SizedBox(
-                          height: 52,
+                          height: 58,
                           child: Column(
                             children: [
                               Expanded(
@@ -183,18 +155,18 @@ class _MusicMobileMiniPlayerSlotState
                                   children: [
                                     const SizedBox(width: 6),
                                     SizedBox.square(
-                                      dimension: 38,
+                                      dimension: 46,
                                       child: InkWell(
                                         onTap: widget.onOpenPlayer,
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(12),
                                         child: MusicDeckArtwork(
                                           title: track.title,
                                           imageUrl: track.listCoverUrl,
-                                          borderRadius: 6,
+                                          borderRadius: 12,
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 10),
                                     Expanded(
                                       child: InkWell(
                                         onTap: widget.onOpenPlayer,
@@ -214,8 +186,8 @@ class _MusicMobileMiniPlayerSlotState
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   color: colors.onSurface,
-                                                  fontSize:
-                                                      AppTypography.bodyMedium,
+                                                  // ignore: font_size_whitelist
+                                                  fontSize: 11,
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                               ),
@@ -224,11 +196,12 @@ class _MusicMobileMiniPlayerSlotState
                                                 track.artistName,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
+                                                // ignore: font_size_whitelist
                                                 style: TextStyle(
                                                   color:
                                                       colors.onSurfaceVariant,
-                                                  fontSize:
-                                                      AppTypography.labelSmall,
+                                                  // ignore: font_size_whitelist
+                                                  fontSize: 9,
                                                 ),
                                               ),
                                             ],
@@ -236,67 +209,44 @@ class _MusicMobileMiniPlayerSlotState
                                         ),
                                       ),
                                     ),
-                                    IconButton(
-                                      tooltip:
-                                          track.favorite
-                                              ? l10n.musicUnfavorite
-                                              : l10n.musicFavorite,
-                                      onPressed:
-                                          canFavorite
-                                              ? () => unawaited(
-                                                _toggleFavorite(track),
-                                              )
-                                              : null,
-                                      icon: AnimatedSwitcher(
-                                        duration: const Duration(
-                                          milliseconds: 160,
-                                        ),
-                                        // 退场子树排除语义，避免与入场子树
-                                        // 同批更新触发桥失败。
-                                        layoutBuilder:
-                                            excludeExitingSemanticsStack,
-                                        child: Icon(
-                                          track.favorite
-                                              ? Icons.favorite_rounded
-                                              : Icons.favorite_border_rounded,
-                                          key: ValueKey<bool>(track.favorite),
-                                          color:
-                                              track.favorite
-                                                  ? colors.star
-                                                  : colors.onSurfaceVariant,
-                                          size: 21,
-                                        ),
-                                      ),
-                                    ),
-                                    IconButton(
+                                    _MiniStrokeButton(
                                       tooltip:
                                           center?.isPlaying == true
                                               ? l10n.musicPause
                                               : l10n.musicPlay,
-                                      onPressed:
+                                      icon:
+                                          center?.isPlaying == true
+                                              ? OmniIcons.pause
+                                              : OmniIcons.play,
+                                      onTap:
                                           () => unawaited(
                                             _runCommand(
                                               _controller.togglePlayback,
                                             ),
                                           ),
-                                      icon: Icon(
-                                        center?.isPlaying == true
-                                            ? Icons.pause_rounded
-                                            : Icons.play_arrow_rounded,
-                                        color: colors.primary,
-                                        size: 28,
-                                      ),
+                                    ),
+                                    _MiniStrokeButton(
+                                      tooltip: l10n.coreNext,
+                                      icon: OmniIcons.next,
+                                      onTap:
+                                          () => unawaited(
+                                            _runCommand(_controller.nextTrack),
+                                          ),
                                     ),
                                     const SizedBox(width: 4),
                                   ],
                                 ),
                               ),
-                              LinearProgressIndicator(
-                                minHeight: 2,
-                                value: progress,
-                                color: colors.primary,
-                                backgroundColor: colors.outline.withValues(
-                                  alpha: progressTrackAlpha,
+                              // 样例 mini-progress：2px 渐变（lime 到当前进度）。
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(1),
+                                child: SizedBox(
+                                  height: 2,
+                                  child: LinearGradientProgress(
+                                    value: progress.clamp(0, 1),
+                                    barColor: const Color(0xFFD5F17D),
+                                    trackColor: const Color(0x14FFFFFF),
+                                  ),
                                 ),
                               ),
                             ],
@@ -338,32 +288,6 @@ class _MusicMobileMiniPlayerSlotState
     });
   }
 
-  Future<void> _toggleFavorite(MusicTrack track) async {
-    final wasFavorite = track.favorite;
-    try {
-      await _controller.toggleFavorite(track);
-      if (!mounted) {
-        return;
-      }
-      showOmniFeedback(
-        context,
-        wasFavorite
-            ? AppLocalizations.of(context).favoriteRemoved
-            : AppLocalizations.of(context).favoriteAdded,
-        severity: OmniFeedbackSeverity.success,
-      );
-    } on Exception {
-      if (!mounted) {
-        return;
-      }
-      showOmniFeedback(
-        context,
-        AppLocalizations.of(context).musicFavoriteToggleFailed,
-        severity: OmniFeedbackSeverity.error,
-      );
-    }
-  }
-
   Future<void> _runCommand(Future<void> Function() command) async {
     try {
       await command();
@@ -393,5 +317,65 @@ class _MusicMobileMiniPlayerSlotState
         ref.read(musicPlaybackSessionProvider.notifier).syncFromCenterState(),
       );
     });
+  }
+}
+
+/// 迷你条描边钮（样例 41×43 命中盒）。
+class _MiniStrokeButton extends StatelessWidget {
+  const _MiniStrokeButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final OmniIconsData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 41,
+          height: 43,
+          child: Center(
+            child: OmniIcon(icon: icon, size: 19, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例 mini-progress 的渐变进度（lime 到 value 比例，其余白 8%）。
+class LinearGradientProgress extends StatelessWidget {
+  const LinearGradientProgress({
+    required this.value,
+    required this.barColor,
+    required this.trackColor,
+    super.key,
+  });
+
+  final double value;
+  final Color barColor;
+  final Color trackColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ColoredBox(color: trackColor),
+        FractionallySizedBox(
+          alignment: Alignment.centerLeft,
+          widthFactor: value <= 0 ? 0.0 : value.clamp(0, 1),
+          child: ColoredBox(color: barColor),
+        ),
+      ],
+    );
   }
 }

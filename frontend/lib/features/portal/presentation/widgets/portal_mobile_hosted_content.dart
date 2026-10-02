@@ -1,5 +1,9 @@
 part of 'portal_mobile_shell.dart';
 
+/// Spatial Home：个人数字空间的进入面。
+///
+/// 首页只承担「进入 OmniNest」：时间与环境状态、一个最重要的续接
+/// 内容、少量最近动态与高频动作；不再堆叠仪表盘卡片。
 class _HostedPortalContent extends ConsumerWidget {
   const _HostedPortalContent({required this.onRefresh});
 
@@ -7,645 +11,888 @@ class _HostedPortalContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final movie = ref.watch(portalMovieDashboardProvider);
-    final music = ref.watch(portalMusicSnapshotProvider);
-    final reader = ref.watch(portalReaderDashboardProvider);
-    final photos = ref.watch(portalPhotoDashboardProvider);
-    final storage = ref.watch(portalStorageStatsProvider);
-    final online = ref.watch(appOnlineStatusProvider).asData?.value != false;
-    final backdropState =
-        ref.watch(appBackdropControllerProvider).asData?.value;
-    final backdropActive =
-        backdropState?.settings.enabled == true &&
-        backdropState?.selectedBackdrop != null &&
-        backdropState?.selectedBackdrop?.missing == false;
-    void retry(PortalDashboardSection section) {
-      unawaited(ref.read(portalDashboardActionsProvider).retry(section));
-    }
-
-    return Theme(
-      data: PortalMobileTheme.resolve(context, backdropActive: backdropActive),
-      child: MobilePageSurface(
-        exposeBackdrop: backdropActive,
-        backdropOpacity: 0,
-        child: RefreshIndicator(
-          color: context.mobileColors.musicAccent,
-          onRefresh: onRefresh,
-          child: CustomScrollView(
+    return RefreshIndicator(
+      color: MobileEnvColors.accent,
+      onRefresh: onRefresh,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = constraints.maxHeight;
+          final spacious = viewport > 640;
+          // 样例 home-stage 顶部内边距为 5vh：时钟从视口顶部 5% 处开始，
+          // 不再使用固定高度盒子沉底（会在眉标上方堆出大片死空间）。
+          final headerTop = (viewport * 0.05).clamp(20.0, 48.0);
+          return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
               SliverToBoxAdapter(
-                child: _PortalEnvironmentHeader(backdropActive: backdropActive),
+                child: _SpatialEnvironmentHeader(topPadding: headerTop),
               ),
               SliverPadding(
                 padding: MobileLayoutTokens.pagePadding(context),
                 sliver: SliverList.list(
                   children: [
-                    const SizedBox(height: 4),
-                    const _PortalPrimaryActions(),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    MobileSectionHeader(title: l10n.portalMobileContinueUsing),
+                    // 样例手机档 time-block 与 home-focus 近乎相连
+                    //（auto-margin 余量很小），高屏略增。
+                    SizedBox(height: spacious ? 24 : 12),
+                    const _SpatialFocusCard(),
+                    SizedBox(height: spacious ? 36 : 24),
+                    const _SpatialRecentHeading(),
                     const SizedBox(height: 12),
-                    _PortalContinueStrip(
-                      movie: movie,
-                      music: music,
-                      reader: reader,
-                      onRetry: retry,
-                    ),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    MobileSectionHeader(
-                      title: l10n.portalRecentPhotos,
-                      action: _PortalTextAction(
-                        label: l10n.portalMobileViewAll,
-                        onTap: () => context.go('/photos'),
-                      ),
-                    ),
+                    const _SpatialRecentStrip(),
                     const SizedBox(height: 12),
-                    _PortalRecentPhotoGrid(
-                      photos: photos,
-                      onRetry: () => retry(PortalDashboardSection.photos),
-                    ),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    MobileSectionHeader(title: l10n.portalMobileSystemSummary),
-                    const SizedBox(height: 8),
-                    _PortalSystemSummary(
-                      storage: storage,
-                      online: online,
-                      onStorageRetry:
-                          () => retry(PortalDashboardSection.storage),
-                    ),
-                    const SizedBox(height: 28),
+                    const _SpatialQuickLine(),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _PortalEnvironmentHeader extends ConsumerWidget {
-  const _PortalEnvironmentHeader({required this.backdropActive});
+/// 环境头部：星期·日期、大时钟与天气，直接呈现在壁纸环境上。
+class _SpatialEnvironmentHeader extends ConsumerStatefulWidget {
+  const _SpatialEnvironmentHeader({required this.topPadding});
 
-  final bool backdropActive;
+  /// 顶部内边距（样例 5vh 折算，由宿主按视口高度计算）。
+  final double topPadding;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final now = DateTime.now();
-    final weather = ref.watch(realtimeWeatherProvider);
-    final greeting = switch (now.hour) {
-      < 12 => l10n.portalMobileGreetingMorning,
-      < 18 => l10n.portalMobileGreetingAfternoon,
-      _ => l10n.portalMobileGreetingEvening,
-    };
-    final pagePadding = MobileLayoutTokens.pagePadding(context);
-    final primary =
-        backdropActive ? Colors.white : context.mobileColors.textPrimary;
-    final secondary =
-        backdropActive
-            ? Colors.white.withValues(alpha: 0.82)
-            : context.mobileColors.textSecondary;
-    final shadows =
-        backdropActive
-            ? <Shadow>[
-              Shadow(
-                color: Colors.black.withValues(alpha: 0.58),
-                blurRadius: 10,
-              ),
-            ]
-            : null;
-
-    return SizedBox(
-      height: 174,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          pagePadding.left,
-          22,
-          pagePadding.right,
-          18,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    MaterialLocalizations.of(context).formatShortDate(now),
-                    style: TextStyle(
-                      color: secondary,
-                      fontSize: AppTypography.bodyMedium,
-                      fontWeight: FontWeight.w600,
-                      shadows: shadows,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    greeting,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: primary,
-                      fontSize: AppTypography.headlineMedium,
-                      fontWeight: FontWeight.w700,
-                      height: 1.15,
-                      shadows: shadows,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  weather.when(
-                    data:
-                        (value) => Text(
-                          l10n.portalWeatherFeelsLike(
-                            value.text,
-                            value.feelsLike,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: secondary,
-                            fontSize: AppTypography.bodyMedium,
-                            shadows: shadows,
-                          ),
-                        ),
-                    loading:
-                        () => const MobileSkeletonBlock(width: 128, height: 16),
-                    error:
-                        (_, _) => Text(
-                          l10n.portalWeatherDisconnected,
-                          style: TextStyle(
-                            color: secondary,
-                            fontSize: AppTypography.bodyMedium,
-                            shadows: shadows,
-                          ),
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            weather.when(
-              data:
-                  (value) => _PortalWeatherReading(
-                    icon: value.weatherIcon,
-                    temperature: value.temp,
-                    foreground: primary,
-                    shadows: shadows,
-                    onTap:
-                        () => showWeatherDetailDialog(context, weather: value),
-                  ),
-              loading: () => const MobileSkeletonBlock(width: 76, height: 64),
-              error:
-                  (_, _) => IconButton(
-                    tooltip: l10n.coreRetry,
-                    onPressed:
-                        () => unawaited(
-                          ref
-                              .read(portalDashboardActionsProvider)
-                              .retry(PortalDashboardSection.weather),
-                        ),
-                    icon: Icon(
-                      Icons.cloud_sync_outlined,
-                      color: secondary,
-                      size: 34,
-                    ),
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  ConsumerState<_SpatialEnvironmentHeader> createState() =>
+      _SpatialEnvironmentHeaderState();
 }
 
-class _PortalWeatherReading extends StatelessWidget {
-  const _PortalWeatherReading({
-    required this.icon,
-    required this.temperature,
-    required this.onTap,
-    required this.foreground,
-    required this.shadows,
-  });
-
-  final IconData icon;
-  final int temperature;
-  final VoidCallback onTap;
-  final Color foreground;
-  final List<Shadow>? shadows;
+class _SpatialEnvironmentHeaderState
+    extends ConsumerState<_SpatialEnvironmentHeader> {
+  Timer? _ticker;
+  DateTime _now = DateTime.now();
 
   @override
-  Widget build(BuildContext context) {
-    return MobilePressable(
-      onTap: onTap,
-      semanticLabel: AppLocalizations.of(context).portalWeatherTitle,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 32, color: foreground, shadows: shadows),
-          const SizedBox(width: 6),
-          Text(
-            '$temperature°',
-            style: TextStyle(
-              color: foreground,
-              fontSize: AppTypography.headlineMedium,
-              fontWeight: FontWeight.w700,
-              shadows: shadows,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PortalPrimaryActions extends StatelessWidget {
-  const _PortalPrimaryActions();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final actions = [
-      (
-        icon: Icons.upload_file_rounded,
-        label: l10n.portalQuickUpload,
-        onTap: () => context.go('/files'),
-      ),
-      (
-        icon: Icons.play_arrow_rounded,
-        label: l10n.portalQuickPlay,
-        onTap: () => context.go('/music'),
-      ),
-    ];
-    return Row(
-      children: [
-        for (var index = 0; index < actions.length; index++) ...[
-          if (index > 0) const SizedBox(width: 8),
-          Expanded(
-            child: _PortalPrimaryAction(
-              icon: actions[index].icon,
-              label: actions[index].label,
-              onTap: actions[index].onTap,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _PortalPrimaryAction extends StatelessWidget {
-  const _PortalPrimaryAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return MobilePressable(
-      onTap: onTap,
-      semanticLabel: label,
-      child: SizedBox(
-        height: MobileLayoutTokens.minimumTarget,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: context.mobileColors.surface,
-              borderRadius: BorderRadius.circular(MobileLayoutTokens.radius),
-              border: Border.all(color: context.mobileColors.outline),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: context.mobileColors.musicAccent, size: 19),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.mobileColors.textPrimary,
-                      fontSize: AppTypography.bodySmall,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PortalContinueStrip extends ConsumerWidget {
-  const _PortalContinueStrip({
-    required this.movie,
-    required this.music,
-    required this.reader,
-    required this.onRetry,
-  });
-
-  final AsyncValue<MovieDashboard> movie;
-  final AsyncValue<MusicPortalSnapshot> music;
-  final AsyncValue<ReaderDashboard> reader;
-  final ValueChanged<PortalDashboardSection> onRetry;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final items = <_PortalContinueItem>[];
-    final movieData = movie.asData?.value;
-    final readerData = reader.asData?.value;
-    final musicData = music.asData?.value;
-    if (movieData != null) {
-      for (final item in movieData.continueWatching.take(2)) {
-        items.add(
-          _PortalContinueItem(
-            title: item.title,
-            subtitle: AppLocalizations.of(context).portalContinueWatching,
-            imageUrl: item.posterUrl,
-            progress: item.progressPercent / 100,
-            icon: Icons.movie_outlined,
-            // 续播语义进播放器；要选集请走最近添加/历史的 movieDetailRoute。
-            route: moviePlayRoute(item.id),
-            shape: _PortalContinueMediaShape.portrait,
-          ),
-        );
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        setState(() => _now = DateTime.now());
       }
-    }
-    if (readerData != null && readerData.continueReading.isNotEmpty) {
-      final item = readerData.continueReading.first;
-      items.add(
-        _PortalContinueItem(
-          title: item.title,
-          subtitle: AppLocalizations.of(context).portalReading,
-          // 后端 coverUrl 是 /files/{id}/download-url 接口路径而非图片地址，
-          // 必须走 AuthCoverImage 拉认证字节；无封面时保留 null 以显示占位。
-          imageUrl: item.hasCover ? null : item.coverUrl,
-          readerItemId: item.hasCover ? item.id : null,
-          progress: (item.progressPercent ?? 0) / 100,
-          icon: Icons.menu_book_outlined,
-          route: '/reader/items/${item.id}',
-          shape: _PortalContinueMediaShape.portrait,
-        ),
-      );
-    }
-    if (musicData != null) {
-      final currentId = musicData.activeTrack?.id;
-      for (final track in musicData.recentTracks) {
-        if (track.id == currentId) {
-          continue;
-        }
-        items.add(
-          _PortalContinueItem(
-            title: track.title,
-            subtitle: track.artistName,
-            imageUrl: track.listCoverUrl,
-            progress: null,
-            icon: Icons.music_note_outlined,
-            // 点击就地切歌（与音乐页最近列表同语义），停留门户由
-            // 正在播放卡反映状态；进入音乐模块走快捷入口。
-            onTap: () {
-              unawaited(
-                ref.read(portalMusicActionsProvider).playRecentTrack(track.id),
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final weather = ref.watch(realtimeWeatherProvider);
+    final localizations = MaterialLocalizations.of(context);
+    // 原型眉标为「星期 · 短日期」，拉丁文案统一大写。
+    final eyebrow =
+        '${DateFormat('EEEE').format(_now)} · ${localizations.formatShortMonthDay(_now)}';
+    final timeOfDay = localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(_now),
+      alwaysUse24HourFormat: true,
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        MobileLayoutTokens.pagePadding(context).left,
+        widget.topPadding,
+        MobileLayoutTokens.pagePadding(context).right,
+        0,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            eyebrow.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: MobileEnvColors.inkFaint,
+              fontSize: AppTypography.labelMicro,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.65,
+            ),
+          ),
+          const SizedBox(height: 2),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = (constraints.maxWidth * 0.24).clamp(72.0, 108.0);
+              return Text(
+                timeOfDay,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: MobileEnvColors.ink,
+                  fontFamily: AppTypography.serifFamily,
+                  fontFamilyFallback: AppTypography.serifFamilyFallback,
+                  fontSize: scale,
+                  height: 1.0,
+                  letterSpacing: -4,
+                  shadows: const [
+                    Shadow(color: Colors.black54, blurRadius: 18),
+                  ],
+                ),
               );
             },
-            shape: _PortalContinueMediaShape.square,
           ),
-        );
-        if (items.length >= 5) {
-          break;
-        }
-      }
-    }
-    final failedSection =
-        movie.hasError
-            ? PortalDashboardSection.video
-            : music.hasError
-            ? PortalDashboardSection.music
-            : reader.hasError
-            ? PortalDashboardSection.reader
-            : null;
-    final failureMessage = switch (failedSection) {
-      PortalDashboardSection.video =>
-        AppLocalizations.of(context).portalLoadMovieFailed,
-      PortalDashboardSection.music =>
-        AppLocalizations.of(context).portalLoadMusicFailed,
-      PortalDashboardSection.reader =>
-        AppLocalizations.of(context).portalLoadReadingFailed,
-      _ => null,
-    };
-    if (items.isEmpty && failedSection != null && failureMessage != null) {
-      return _ErrorCard(
-        message: failureMessage,
-        onRetry: () => onRetry(failedSection),
-      );
-    }
-    if (items.isEmpty &&
-        (movie.isLoading || music.isLoading || reader.isLoading)) {
-      return SizedBox(
-        height: 108,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          physics: const NeverScrollableScrollPhysics(),
-          children: const [
-            MobileSkeletonBlock(width: 248, height: 108),
-            SizedBox(width: 12),
-            MobileSkeletonBlock(width: 248, height: 108),
-          ],
+          const SizedBox(height: 8),
+          weather.when(
+            data: (value) {
+              final location =
+                  value.locationName.isNotEmpty ? ' ${value.locationName}' : '';
+              return _WeatherLinePill(
+                onTap: () => showWeatherDetailSheet(context, weather: value),
+                semanticLabel: AppLocalizations.of(context).portalWeatherTitle,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OmniIcon(
+                      icon: OmniIcons.weatherFor(
+                        int.tryParse(value.icon) ?? -1,
+                      ),
+                      size: 19,
+                      color: MobileEnvColors.white78,
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        '${value.temp}°',
+                        style: const TextStyle(
+                          color: MobileEnvColors.white78,
+                          fontSize: AppTypography.bodyMedium,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      width: 3,
+                      height: 3,
+                      decoration: const BoxDecoration(
+                        color: Color(0x8CFFFFFF),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        '${value.text}$location',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MobileEnvColors.white78,
+                          fontSize: AppTypography.bodyMedium,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const OmniIcon(
+                      icon: OmniIcons.chevron,
+                      size: 15,
+                      color: MobileEnvColors.white52,
+                    ),
+                  ],
+                ),
+              );
+            },
+            loading: () => const MobileSkeletonBlock(width: 168, height: 16),
+            error:
+                (_, _) => MobilePressable(
+                  semanticLabel: AppLocalizations.of(context).coreRetry,
+                  onTap:
+                      () => unawaited(
+                        ref
+                            .read(portalDashboardActionsProvider)
+                            .retry(PortalDashboardSection.weather),
+                      ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const OmniIcon(
+                        icon: OmniIcons.cloud,
+                        size: 18,
+                        color: MobileEnvColors.white78,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        AppLocalizations.of(context).portalWeatherDisconnected,
+                        style: const TextStyle(
+                          color: MobileEnvColors.white78,
+                          fontSize: AppTypography.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 天气胶囊（原型 weather-line）：常态透明，悬停浮现白 7% 玻璃底 +
+/// blur(10)；几何取原型（min-height 42 / radius 21 / 横向 10 内边距）。
+class _WeatherLinePill extends StatefulWidget {
+  const _WeatherLinePill({
+    required this.child,
+    required this.onTap,
+    required this.semanticLabel,
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final String semanticLabel;
+
+  @override
+  State<_WeatherLinePill> createState() => _WeatherLinePillState();
+}
+
+class _WeatherLinePillState extends State<_WeatherLinePill> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    // blur 层常驻（sigma 随悬停切换）：BackdropFilter 取样区取决于子树
+    // 边界，若按悬停插拔会只模糊到内容行而非整颗胶囊。
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: MobilePressable(
+        semanticLabel: widget.semanticLabel,
+        onTap: widget.onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(21),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: _hovered ? 10 : 0,
+              sigmaY: _hovered ? 10 : 0,
+            ),
+            child: AnimatedContainer(
+              duration:
+                  reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              constraints: const BoxConstraints(minHeight: 42),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color:
+                    _hovered
+                        ? Colors.white.withValues(alpha: 0.07)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(21),
+              ),
+              child: widget.child,
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// 焦点续接卡：当前最重要的一个「继续」内容。
+///
+/// 优先级：正在播放 → 继续阅读 → 继续观看 → 推荐曲目（跳音乐模块）。
+/// 眉标按一天中的时段措辞，与原型「CONTINUE YOUR EVENING」同语义。
+class _SpatialFocusCard extends ConsumerWidget {
+  const _SpatialFocusCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final music = ref.watch(portalMusicSnapshotProvider).asData?.value;
+    final reader = ref.watch(portalReaderDashboardProvider).asData?.value;
+    final movie = ref.watch(portalMovieDashboardProvider).asData?.value;
+
+    final activeTrack = music?.activeTrack;
+    final continueReading = reader?.continueReading.firstOrNull;
+    final continueWatching = movie?.continueWatching.firstOrNull;
+
+    Widget? card;
+    if (activeTrack != null) {
+      card = _SpatialFocusTile(
+        eyebrow: _dayPartEyebrow(l10n),
+        contextLine:
+            activeTrack.albumTitle.isNotEmpty
+                ? l10n.spatialPlayingFrom(activeTrack.albumTitle)
+                : l10n.spatialNowPlaying,
+        title: activeTrack.title,
+        subtitle:
+            activeTrack.artistName.isEmpty
+                ? activeTrack.albumTitle
+                : activeTrack.artistName,
+        imageUrl: activeTrack.listCoverUrl ?? activeTrack.coverUrl,
+        squareArt: true,
+        actionIcon: music?.isPlaying == true ? OmniIcons.pause : OmniIcons.play,
+        actionLabel: music?.isPlaying == true ? l10n.corePause : l10n.corePlay,
+        onAction:
+            () => unawaited(
+              ref.read(portalMusicActionsProvider).togglePlayback(),
+            ),
+        onTap: () => context.push('/music/now-playing'),
+      );
+    } else if (continueReading != null) {
+      final fraction = continueReading.progressPercent ?? 0;
+      card = _SpatialFocusTile(
+        eyebrow: _dayPartEyebrow(l10n),
+        contextLine: l10n.readerSpaceContinueEyebrow,
+        title: continueReading.title,
+        subtitle:
+            fraction > 0
+                ? '${continueReading.authorName ?? ''} · ${(fraction * 100).round()}%'
+                : (continueReading.authorName ?? ''),
+        readerItemId: continueReading.hasCover ? continueReading.id : null,
+        actionIcon: OmniIcons.arrow,
+        actionLabel: l10n.spatialResume,
+        onTap: () => context.push('/reader/items/${continueReading.id}'),
+        progress: fraction,
+      );
+    } else if (continueWatching != null) {
+      card = _SpatialFocusTile(
+        eyebrow: _dayPartEyebrow(l10n),
+        contextLine: l10n.libraryContinueWatchingTitle,
+        title: continueWatching.title,
+        subtitle: l10n.spatialFocusWatchingSub(
+          continueWatching.progressPercent.round(),
+        ),
+        imageUrl: continueWatching.posterUrl,
+        actionIcon: OmniIcons.play,
+        actionLabel: l10n.corePlay,
+        onTap: () => context.push(moviePlayRoute(continueWatching.id)),
+        progress: continueWatching.progressPercent / 100,
+      );
+    } else if (music?.featuredTrack != null) {
+      final featured = music!.featuredTrack!;
+      card = _SpatialFocusTile(
+        eyebrow: _dayPartEyebrow(l10n),
+        contextLine: l10n.spatialNowPlaying,
+        title: featured.title,
+        subtitle: featured.artistName,
+        imageUrl: featured.listCoverUrl ?? featured.coverUrl,
+        squareArt: true,
+        actionIcon: OmniIcons.play,
+        actionLabel: l10n.corePlay,
+        onTap: () => context.push('/music'),
+      );
+    } else {
+      // 空库兜底：焦点栏目常驻（样例恒有 CONTINUE YOUR EVENING + 卡片）。
+      card = _SpatialFocusTile(
+        eyebrow: _dayPartEyebrow(l10n),
+        contextLine: l10n.spatialStartListening,
+        title: l10n.spatialStartTitle,
+        subtitle: l10n.spatialStartSubtitle,
+        squareArt: true,
+        actionIcon: OmniIcons.play,
+        actionLabel: l10n.corePlay,
+        onTap: () => context.push('/music'),
       );
     }
-    if (items.isEmpty) {
-      return MobileInlineState(
-        icon: Icons.history_toggle_off_rounded,
-        message: AppLocalizations.of(context).portalMobileNoContinue,
-      );
-    }
-    final visibleItems = items.take(5).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 108,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: visibleItems.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder:
-                (context, index) =>
-                    _PortalContinueTile(item: visibleItems[index]),
+        Text(
+          _dayPartEyebrow(l10n).toUpperCase(),
+          style: const TextStyle(
+            color: MobileEnvColors.inkFaint,
+            fontSize: AppTypography.labelMicro,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.65,
           ),
         ),
-        if (failedSection != null && failureMessage != null) ...[
-          const SizedBox(height: 8),
-          _PortalInlineRetry(
-            message: failureMessage,
-            onRetry: () => onRetry(failedSection),
-          ),
-        ],
+        const SizedBox(height: 10),
+        card,
       ],
     );
   }
+
+  String _dayPartEyebrow(AppLocalizations l10n) {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return l10n.spatialFocusMorning;
+    }
+    if (hour < 18) {
+      return l10n.spatialFocusAfternoon;
+    }
+    return l10n.spatialFocusEvening;
+  }
 }
 
-class _PortalContinueItem {
-  const _PortalContinueItem({
+class _SpatialFocusTile extends StatelessWidget {
+  const _SpatialFocusTile({
+    required this.eyebrow,
+    required this.contextLine,
     required this.title,
     required this.subtitle,
-    required this.imageUrl,
-    required this.progress,
-    required this.icon,
-    this.route,
-    this.onTap,
-    required this.shape,
+    required this.actionIcon,
+    required this.actionLabel,
+    required this.onTap,
+    this.imageUrl,
     this.readerItemId,
+    this.squareArt = false,
+    this.progress,
+    this.onAction,
   });
 
+  final String eyebrow;
+
+  /// 标题上方的语境行（如「正在播放 Evening Drift」）。
+  final String contextLine;
   final String title;
   final String subtitle;
   final String? imageUrl;
 
-  /// 阅读条目 ID；非空时用 AuthCoverImage 拉取认证封面。
+  /// 阅读条目封面（需鉴权下载）。
   final String? readerItemId;
+  final bool squareArt;
+  final OmniIconsData actionIcon;
+  final String actionLabel;
+  final VoidCallback onTap;
+
+  /// 圆形主按钮的独立动作；缺省与整卡一致。
+  final VoidCallback? onAction;
+
+  /// 0-1 的进度；null 不显示。
   final double? progress;
-  final IconData icon;
-
-  /// 点击跳转路由；与 [onTap] 二选一，音乐等就地操作的条目只提供 onTap。
-  final String? route;
-
-  /// 就地点击回调；优先于 [route]。
-  final VoidCallback? onTap;
-  final _PortalContinueMediaShape shape;
-}
-
-enum _PortalContinueMediaShape { portrait, square }
-
-class _PortalContinueTile extends StatelessWidget {
-  const _PortalContinueTile({required this.item});
-
-  final _PortalContinueItem item;
 
   @override
   Widget build(BuildContext context) {
-    final coverFallback = ColoredBox(
-      color: context.mobileColors.surfaceRaised,
+    final artFallback = ColoredBox(
+      color: Colors.white.withValues(alpha: 0.06),
       child: Center(
-        child: Icon(
-          item.icon,
-          color: context.mobileColors.textSecondary,
-          size: 26,
+        child: OmniIcon(
+          icon:
+              readerItemId != null
+                  ? OmniIcons.book
+                  : squareArt
+                  ? OmniIcons.music
+                  : OmniIcons.film,
+          size: 24,
+          color: MobileEnvColors.white46,
         ),
       ),
     );
-    final readerItemId = item.readerItemId?.trim();
-    final imageUrl = item.imageUrl?.trim();
-    return SizedBox(
-      width: 248,
-      child: MobilePressable(
-        onTap: item.onTap ?? () => context.push(item.route ?? '/portal'),
-        semanticLabel: item.title,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.mobileColors.surface,
-            borderRadius: BorderRadius.circular(MobileLayoutTokens.radius),
-            border: Border.all(color: context.mobileColors.outline),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                SizedBox(
-                  width:
-                      item.shape == _PortalContinueMediaShape.portrait
-                          ? 58
-                          : 88,
-                  height: 88,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // 阅读封面需鉴权下载；其余媒体用可直渲 URL。
-                        if (readerItemId != null && readerItemId.isNotEmpty)
-                          AuthCoverImage(
-                            itemId: readerItemId,
-                            fit: BoxFit.cover,
-                            fallback: coverFallback,
-                          )
-                        else if (imageUrl != null && imageUrl.isNotEmpty)
-                          // 槽位高主导（≤88 高）：仅约束解码高度，竖版海报
-                          // 与横版缩略图均无需拉伸即可 cover 裁切。
-                          PortalMediaThumbnail(
-                            imageUrl: imageUrl,
-                            fit: BoxFit.cover,
-                            cacheHeight: (88 *
-                                    MediaQuery.devicePixelRatioOf(context))
-                                .ceil()
-                                .clamp(176, 352),
-                            borderRadius: BorderRadius.zero,
-                            fallback: coverFallback,
-                          )
-                        else
-                          coverFallback,
-                        if (item.progress != null)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: LinearProgressIndicator(
-                              value: item.progress!.clamp(0, 1),
-                              minHeight: 3,
-                              color: context.mobileColors.musicAccent,
-                              backgroundColor: Colors.black45,
+    Widget art;
+    if (readerItemId != null) {
+      art = AuthCoverImage(
+        itemId: readerItemId!,
+        fit: BoxFit.cover,
+        fallback: artFallback,
+      );
+    } else if (imageUrl != null && imageUrl!.isNotEmpty) {
+      art = PortalMediaThumbnail(
+        imageUrl: imageUrl!,
+        fit: BoxFit.cover,
+        cacheHeight: 176,
+        borderRadius: BorderRadius.zero,
+        fallback: artFallback,
+      );
+    } else {
+      art = artFallback;
+    }
+    return MobilePressable(
+      semanticLabel: title,
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  MobileEnvColors.focusGradientStart,
+                  MobileEnvColors.focusGradientEnd,
+                ],
+              ),
+              border: Border.all(color: MobileEnvColors.line15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 35,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: squareArt ? 68 : 56,
+                    height: 68,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          art,
+                          if (progress != null)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: LinearProgressIndicator(
+                                value: progress!.clamp(0, 1),
+                                minHeight: 3,
+                                color: MobileEnvColors.accent,
+                                backgroundColor: Colors.black45,
+                              ),
                             ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          contextLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MobileEnvColors.inkMuted,
+                            fontSize: AppTypography.labelMicro,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MobileEnvColors.ink,
+                            // ignore: font_size_whitelist
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MobileEnvColors.white52,
+                            fontSize: AppTypography.labelSmall,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.mobileColors.textPrimary,
-                          fontSize: AppTypography.bodyLarge,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
+                  const SizedBox(width: 8),
+                  MobilePressable(
+                    semanticLabel: actionLabel,
+                    onTap: onAction ?? onTap,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: MobileEnvColors.accent,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: MobileEnvColors.accent.withValues(
+                              alpha: 0.35,
+                            ),
+                            blurRadius: 14,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: OmniIcon(
+                          icon: actionIcon,
+                          size: 21,
+                          color: MobileEnvColors.onAccent,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        item.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.mobileColors.textSecondary,
-                          fontSize: AppTypography.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 最近动态标题行：eyebrow + 「进入媒体库」文字动作。
+class _SpatialRecentHeading extends StatelessWidget {
+  const _SpatialRecentHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            l10n.spatialRecentlyEyebrow.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: MobileEnvColors.inkFaint,
+              fontSize: AppTypography.labelMicro,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.65,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => context.go('/library'),
+          style: TextButton.styleFrom(
+            foregroundColor: MobileEnvColors.white70,
+            minimumSize: const Size(48, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            textStyle: const TextStyle(fontSize: AppTypography.labelSmall),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.spatialViewLibrary),
+              const SizedBox(width: 1),
+              const OmniIcon(
+                icon: OmniIcons.chevron,
+                size: 16,
+                color: MobileEnvColors.white70,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 最近动态条：照片 / 阅读 / 文件三张紧凑卡。
+class _SpatialRecentStrip extends ConsumerWidget {
+  const _SpatialRecentStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final photos = ref.watch(portalPhotoDashboardProvider).asData?.value;
+    final reader = ref.watch(portalReaderDashboardProvider).asData?.value;
+    final recentFiles = ref.watch(fileRecentEntriesProvider).asData?.value;
+    final recentPhoto = photos?.recentPhotos.firstOrNull;
+    final readingItem =
+        reader?.continueReading.firstOrNull ?? reader?.recentItems.firstOrNull;
+    final fileNode = recentFiles?.firstOrNull;
+
+    final tiles = <Widget>[
+      _SpatialRecentTile(
+        label: l10n.spatialRecentPhotos,
+        photo: recentPhoto,
+        photoSub: l10n.libraryBannerPhotoCount(
+          photos?.recentPhotos.length ?? 0,
+        ),
+        onTap: () {
+          final list = photos?.recentPhotos ?? const <PhotoItem>[];
+          if (list.isEmpty) {
+            context.push('/photos');
+            return;
+          }
+          ref
+              .read(photoBrowseScopeProvider.notifier)
+              .set(list, PhotoBrowseSource.library);
+          context.push('/photos/${list.first.id}');
+        },
+      ),
+      _SpatialRecentTile(
+        label: l10n.mobileNavReader,
+        readerItem: readingItem,
+        onTap:
+            readingItem == null
+                ? () => context.go('/reader')
+                : () => context.push('/reader/items/${readingItem.id}'),
+      ),
+      _SpatialRecentTile(
+        label: l10n.spatialRecentFiles,
+        fileNode: fileNode,
+        onTap: () => context.go('/files'),
+      ),
+    ];
+    // 样例 1.4fr : 1fr : 1fr：照片卡更宽，阅读/文件卡等分。
+    return Row(
+      children: [
+        for (var index = 0; index < tiles.length; index++) ...[
+          if (index > 0) const SizedBox(width: 10),
+          Expanded(flex: index == 0 ? 14 : 10, child: tiles[index]),
+        ],
+      ],
+    );
+  }
+}
+
+class _SpatialRecentTile extends StatelessWidget {
+  const _SpatialRecentTile({
+    required this.label,
+    required this.onTap,
+    this.photo,
+    this.photoSub,
+    this.readerItem,
+    this.fileNode,
+  });
+
+  final String label;
+  final PhotoItem? photo;
+
+  /// 照片卡副文案（如新增张数）。
+  final String? photoSub;
+  final ReaderItem? readerItem;
+  final FileNode? fileNode;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = MaterialLocalizations.of(context);
+    String title = label;
+    String? subtitle;
+    Widget? visual;
+    if (photo != null) {
+      title = photo!.title;
+      subtitle = photoSub;
+    } else if (readerItem != null) {
+      title = readerItem!.title;
+      visual = _BookMini(title: readerItem!.title);
+      final fraction = readerItem!.progressPercent;
+      final percent = fraction == null ? null : (fraction * 100).round();
+      final chapter = readerItem!.currentChapterTitle;
+      subtitle = [
+        if (chapter?.isNotEmpty == true) chapter,
+        if (percent != null && percent > 0) '$percent%',
+      ].join(' · ');
+    } else if (fileNode != null) {
+      title = fileNode!.name;
+      visual = Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: MobileEnvColors.folderGlyphBg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: OmniIcon(
+            icon: OmniIcons.folder,
+            size: 24,
+            color: MobileEnvColors.folderGlyph,
+          ),
+        ),
+      );
+      final updated = fileNode!.updatedAt;
+      if (updated != null) {
+        subtitle = localizations.formatShortDate(updated);
+      }
+    }
+    Widget? image;
+    if (photo != null) {
+      image = PortalMediaThumbnail(
+        imageUrl: photo!.coverUrl ?? '',
+        cacheKey: photo!.coverCacheKey,
+        cacheHeight: 320,
+        fit: BoxFit.cover,
+        borderRadius: BorderRadius.zero,
+        fallback: const SizedBox.shrink(),
+      );
+    } else if (readerItem != null && readerItem!.hasCover) {
+      image = AuthCoverImage(
+        itemId: readerItem!.id,
+        fit: BoxFit.cover,
+        fallback: const SizedBox.shrink(),
+      );
+    }
+    return MobilePressable(
+      semanticLabel: label,
+      onTap: onTap,
+      child: SizedBox(
+        height: 136,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: MobileEnvColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(color: MobileEnvColors.line10),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(19),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (image != null)
+                  Positioned.fill(child: image)
+                else
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: Colors.white.withValues(alpha: 0.02),
+                    ),
+                  ),
+                if (image != null)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.05),
+                            Colors.black.withValues(alpha: 0.78),
+                          ],
+                          stops: const [0.35, 1],
                         ),
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (visual != null) visual,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: photo != null ? 1 : 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: MobileEnvColors.ink,
+                              fontSize: AppTypography.bodySmall,
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                            ),
+                          ),
+                          if (subtitle != null && subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: MobileEnvColors.inkMuted,
+                                fontSize: AppTypography.labelMicro,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -659,271 +906,112 @@ class _PortalContinueTile extends StatelessWidget {
   }
 }
 
-class _PortalRecentPhotoGrid extends ConsumerStatefulWidget {
-  const _PortalRecentPhotoGrid({required this.photos, required this.onRetry});
+/// 书脊小卡：衬线首字母 + 左侧书脊描边（原型 book-mini）。
+class _BookMini extends StatelessWidget {
+  const _BookMini({required this.title});
 
-  final AsyncValue<PhotoDashboard> photos;
-  final VoidCallback onRetry;
-
-  @override
-  ConsumerState<_PortalRecentPhotoGrid> createState() =>
-      _PortalRecentPhotoGridState();
-}
-
-class _PortalRecentPhotoGridState
-    extends ConsumerState<_PortalRecentPhotoGrid> {
-  // 缩略图自愈上限：重签后仍失败则保持降级态，避免无限重试循环。
-  static const int _maxRecoverAttempts = 2;
-  int _recoverAttempts = 0;
-
-  void _handleCoverError() {
-    if (_recoverAttempts >= _maxRecoverAttempts) {
-      return;
-    }
-    _recoverAttempts++;
-    unawaited(
-      ref
-          .read(portalDashboardActionsProvider)
-          .retry(PortalDashboardSection.photos),
-    );
-  }
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    final photos = widget.photos;
-    return photos.when(
-      data: (dashboard) {
-        final items = dashboard.recentPhotos.take(6).toList();
-        if (items.isEmpty) {
-          return MobileInlineState(
-            icon: Icons.photo_library_outlined,
-            message: AppLocalizations.of(context).portalNoPhotos,
-          );
-        }
-        // 单维约束解码：同时设宽高会把源图拉伸到精确方形（横/竖构图
-        // 被压扁），仅约束宽度并由 cover 裁切保持真实纵横比；按单元格
-        // 物理宽度加 4:3 余量，横构图裁切后仍清晰。
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final cellWidth = (constraints.maxWidth - 16) / 3;
-            final dpr = MediaQuery.devicePixelRatioOf(context);
-            final cacheWidth = (cellWidth * dpr * 4 / 3).ceil().clamp(200, 640);
-            return GridView.builder(
-              shrinkWrap: true,
-              primary: false,
-              itemCount: items.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemBuilder: (context, index) {
-                final photo = items[index];
-                return MobilePressable(
-                  semanticLabel: photo.title,
-                  onTap: () {
-                    ref
-                        .read(photoBrowseScopeProvider.notifier)
-                        .set(items, PhotoBrowseSource.library);
-                    context.push('/photos/${photo.id}');
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: PortalMediaThumbnail(
-                      imageUrl: photo.coverUrl,
-                      cacheKey: 'portal-preview:photos:${photo.id}',
-                      onLoadError: _handleCoverError,
-                      cacheWidth: cacheWidth,
-                      borderRadius: BorderRadius.zero,
-                      fallback: ColoredBox(
-                        color: context.mobileColors.surfaceRaised,
-                        child: Icon(
-                          Icons.image_outlined,
-                          color: context.mobileColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-      loading: () => const MobileSkeletonBlock(height: 232),
-      error:
-          (_, _) => _ErrorCard(
-            message: AppLocalizations.of(context).portalLoadPhotoFailed,
-            onRetry: widget.onRetry,
-          ),
-    );
-  }
-}
-
-class _PortalSystemSummary extends StatelessWidget {
-  const _PortalSystemSummary({
-    required this.storage,
-    required this.online,
-    required this.onStorageRetry,
-  });
-
-  final AsyncValue<FileStorageStats> storage;
-  final bool online;
-  final VoidCallback onStorageRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final storageValue = storage.asData?.value;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.mobileColors.surface,
-        border: Border.all(color: context.mobileColors.outline),
-        borderRadius: BorderRadius.circular(MobileLayoutTokens.radius),
-      ),
-      child: Column(
-        children: [
-          _PortalSystemRow(
-            icon: Icons.storage_rounded,
-            label: l10n.portalStorageTitle,
-            value:
-                storageValue != null
-                    ? l10n.portalMobileStorageUsed(
-                      formatFileSize(storageValue.usedBytes),
-                    )
-                    : storage.isLoading
-                    ? l10n.filesWaitingStats
-                    : l10n.portalLoadStorageFailed,
-            onTap:
-                storage.hasError ? onStorageRetry : () => context.go('/files'),
-          ),
-          Divider(height: 1, color: context.mobileColors.outline),
-          _PortalSystemRow(
-            icon: online ? Icons.sync_rounded : Icons.sync_disabled_rounded,
-            label: l10n.portalVisualSync,
-            value:
-                online
-                    ? l10n.portalMobileSyncOnline
-                    : l10n.portalMobileSyncOffline,
-            statusColor:
-                online
-                    ? context.mobileColors.success
-                    : context.mobileColors.warmAccent,
-            onTap: () => context.push('/notifications'),
+    final letter =
+        title.isNotEmpty ? title.characters.first.toUpperCase() : '?';
+    return Container(
+      width: 35,
+      height: 48,
+      decoration: const BoxDecoration(
+        color: MobileEnvColors.bookMiniBg,
+        borderRadius: BorderRadius.horizontal(
+          left: Radius.circular(2),
+          right: Radius.circular(7),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: MobileEnvColors.bookMiniSpine,
+            offset: Offset(-3, 0),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PortalSystemRow extends StatelessWidget {
-  const _PortalSystemRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-    this.statusColor,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  /// 行尾状态色点（在线/离线等状态语义），不再通过图标变色表达。
-  final Color? statusColor;
-
-  @override
-  Widget build(BuildContext context) {
-    // 三行图标同色，保持同一视觉权重。
-    final iconAccent = context.mobileColors.musicAccent;
-    final statusColor = this.statusColor;
-    return MobilePressable(
-      onTap: onTap,
-      semanticLabel: '$label, $value',
-      child: SizedBox(
-        height: MobileLayoutTokens.listRowHeight,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: iconAccent.withValues(alpha: 0.13),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: iconAccent, size: 19),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.mobileColors.textPrimary,
-                    fontSize: AppTypography.bodyLarge,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: TextStyle(
-                    color: context.mobileColors.textSecondary,
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
-              ),
-              if (statusColor != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: context.mobileColors.textSecondary,
-                size: 20,
-              ),
-            ],
-          ),
+      alignment: Alignment.center,
+      child: Text(
+        letter,
+        style: const TextStyle(
+          color: MobileEnvColors.bookMiniFg,
+          fontFamily: AppTypography.serifFamily,
+          fontFamilyFallback: AppTypography.serifFamilyFallback,
+          fontSize: AppTypography.titleLarge,
+          height: 1,
         ),
       ),
     );
   }
 }
 
-class _PortalTextAction extends StatelessWidget {
-  const _PortalTextAction({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
+/// 高频动作行：查找任何内容 / 添加媒体。
+class _SpatialQuickLine extends StatelessWidget {
+  const _SpatialQuickLine();
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onTap,
-      style: TextButton.styleFrom(
-        foregroundColor: context.mobileColors.musicAccent,
-        minimumSize: const Size(48, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-      ),
-      child: Text(label),
+    final l10n = AppLocalizations.of(context);
+    Widget action(OmniIconsData icon, String label, VoidCallback onTap) {
+      return Expanded(
+        child: MobilePressable(
+          semanticLabel: label,
+          onTap: onTap,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: MobileEnvColors.surfaceGlass,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: MobileEnvColors.line09),
+                ),
+                child: SizedBox(
+                  height: MobileLayoutTokens.minimumTarget,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      OmniIcon(
+                        icon: icon,
+                        size: 18,
+                        color: MobileEnvColors.ink,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: MobileEnvColors.ink,
+                            fontSize: AppTypography.labelSmall,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        action(OmniIcons.search, l10n.spatialActionFind, () {
+          context.push('/search');
+        }),
+        const SizedBox(width: 9),
+        action(OmniIcons.plus, l10n.spatialActionAddMedia, () {
+          context.go('/files');
+        }),
+      ],
     );
   }
 }

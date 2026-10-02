@@ -5,17 +5,6 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
-enum _PhotoMenuAction {
-  favorite,
-  info,
-  edit,
-  slideshow,
-  addToAlbum,
-  share,
-  download,
-  delete,
-}
-
 /// 详情页顶部栏：设计稿 PhotoViewer 样式的半透明浮层。
 class PhotoViewerTopBar extends StatelessWidget {
   const PhotoViewerTopBar({
@@ -121,7 +110,9 @@ class PhotoViewerTopBar extends StatelessWidget {
                       ),
                       if (compact && countText != null)
                         Text(
-                          countText!,
+                          countText != null && date != null
+                              ? '$countText · ${viewerShortDate(date)}'
+                              : countText!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -142,92 +133,17 @@ class PhotoViewerTopBar extends StatelessWidget {
                     ],
                   ),
                 ),
+                // 紧凑档：溢出菜单收编为底部动作行，头部仅留幻灯片直达。
                 if (compact)
-                  PopupMenuButton<_PhotoMenuAction>(
-                    tooltip:
-                        MaterialLocalizations.of(context).moreButtonTooltip,
-                    color: context.photosColors.surfaceContainerHigh,
-                    icon: Icon(Icons.more_vert_rounded, color: iconColor),
-                    onSelected: (action) {
-                      switch (action) {
-                        case _PhotoMenuAction.favorite:
-                          onToggleFavorite();
-                        case _PhotoMenuAction.info:
-                          onToggleInfo();
-                        case _PhotoMenuAction.edit:
-                          onEdit();
-                        case _PhotoMenuAction.slideshow:
-                          onSlideshow();
-                        case _PhotoMenuAction.addToAlbum:
-                          onAddToAlbum();
-                        case _PhotoMenuAction.share:
-                          onShare();
-                        case _PhotoMenuAction.download:
-                          onDownload();
-                        case _PhotoMenuAction.delete:
-                          onDelete();
-                      }
-                    },
-                    itemBuilder:
-                        (context) => [
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.favorite,
-                            child: Text(
-                              photo.favorite
-                                  ? AppLocalizations.of(
-                                    context,
-                                  ).photosUnfavorite
-                                  : AppLocalizations.of(context).photosFavorite,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.share,
-                            child: Text(
-                              AppLocalizations.of(context).photosSharePhoto,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.download,
-                            child: Text(
-                              AppLocalizations.of(context).photosDownloadPhoto,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.edit,
-                            child: Text(
-                              AppLocalizations.of(context).photosEdit,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.slideshow,
-                            child: Text(
-                              AppLocalizations.of(context).photosSlideshow,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.addToAlbum,
-                            child: Text(
-                              AppLocalizations.of(context).photosAddToAlbum,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.info,
-                            child: Text(
-                              showInfo
-                                  ? AppLocalizations.of(context).photosHideInfo
-                                  : AppLocalizations.of(context).photosShowInfo,
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: _PhotoMenuAction.delete,
-                            child: Text(
-                              AppLocalizations.of(context).photosDelete,
-                              style: TextStyle(
-                                color: context.photosColors.danger,
-                              ),
-                            ),
-                          ),
-                        ],
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosSlideshow,
+                    onPressed: onSlideshow,
+                    icon: Icon(
+                      Icons.play_arrow_rounded,
+                      color: iconColor,
+                      size: 22,
+                    ),
+                    visualDensity: VisualDensity.compact,
                   )
                 else ...[
                   IconButton(
@@ -333,7 +249,129 @@ String viewerShortDate(DateTime date) {
   return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }
 
-/// Frame 查看器左右切换按钮：42px 方形、圆角 8、35% 黑底、白色 60% 线形图标。
+/// 紧凑档底部动作行（样例 photo-actions）：心/分享/下载/编辑/加相册/
+/// 信息/删除 七钮，玻璃渐变横贯底部，替代原溢出菜单。
+class PhotoViewerBottomActions extends StatelessWidget {
+  const PhotoViewerBottomActions({
+    super.key,
+    required this.photo,
+    required this.onToggleFavorite,
+    required this.onShare,
+    required this.onDownload,
+    required this.onEdit,
+    required this.onAddToAlbum,
+    required this.onToggleInfo,
+    required this.onDelete,
+    required this.showInfo,
+  });
+
+  final PhotoItem photo;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onShare;
+  final VoidCallback onDownload;
+  final VoidCallback onEdit;
+  final VoidCallback onAddToAlbum;
+  final VoidCallback onToggleInfo;
+  final VoidCallback onDelete;
+  final bool showInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconColor =
+        isDark
+            ? Colors.white.withValues(alpha: 0.78)
+            : context.photosColors.onSurfaceVariant;
+    final activeColor = context.frameColors.accent;
+    final l10n = AppLocalizations.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors:
+              isDark
+                  ? [Colors.transparent, Colors.black.withValues(alpha: 0.55)]
+                  : [
+                    Colors.transparent,
+                    context.photosColors.surfaceContainer.withValues(
+                      alpha: 0.92,
+                    ),
+                  ],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                tooltip:
+                    photo.favorite
+                        ? l10n.photosUnfavorite
+                        : l10n.photosFavorite,
+                onPressed: onToggleFavorite,
+                icon: Icon(
+                  photo.favorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: photo.favorite ? activeColor : iconColor,
+                  size: 22,
+                ),
+              ),
+              IconButton(
+                tooltip: l10n.photosSharePhoto,
+                onPressed: onShare,
+                icon: Icon(Icons.share_outlined, color: iconColor, size: 22),
+              ),
+              IconButton(
+                tooltip: l10n.photosDownloadPhoto,
+                onPressed: onDownload,
+                icon: Icon(Icons.download_outlined, color: iconColor, size: 22),
+              ),
+              IconButton(
+                tooltip: l10n.photosEdit,
+                onPressed: onEdit,
+                icon: Icon(Icons.edit_outlined, color: iconColor, size: 22),
+              ),
+              IconButton(
+                tooltip: l10n.photosAddToAlbum,
+                onPressed: onAddToAlbum,
+                icon: Icon(
+                  Icons.create_new_folder_outlined,
+                  color: iconColor,
+                  size: 22,
+                ),
+              ),
+              IconButton(
+                tooltip: showInfo ? l10n.photosHideInfo : l10n.photosShowInfo,
+                onPressed: onToggleInfo,
+                icon: Icon(
+                  Icons.info_outline_rounded,
+                  color: showInfo ? activeColor : iconColor,
+                  size: 22,
+                ),
+              ),
+              IconButton(
+                tooltip: l10n.photosDelete,
+                onPressed: onDelete,
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  color: iconColor,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Frame 查看器左右切换按钮：44px 圆形、半透明底、白色线形图标（样例 photo-nav）。
 class PhotoViewerArrowButton extends StatelessWidget {
   const PhotoViewerArrowButton({
     super.key,
@@ -370,18 +408,15 @@ class PhotoViewerArrowButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Material(
             color: scrim,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: border),
-            ),
+            shape: CircleBorder(side: BorderSide(color: border)),
             child: InkWell(
-              borderRadius: BorderRadius.circular(8),
+              customBorder: const CircleBorder(),
               onTap: onTap,
               child: Tooltip(
                 message: tooltip,
                 child: SizedBox(
-                  width: 42,
-                  height: 42,
+                  width: 44,
+                  height: 44,
                   child: Icon(icon, size: 22, color: iconColor),
                 ),
               ),

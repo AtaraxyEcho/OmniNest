@@ -4,17 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
-import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/font_scale_control.dart';
+import 'package:omninest/core/widgets/mobile_section_swipe.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -35,6 +37,7 @@ import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet
 import 'package:omninest/features/music/presentation/deck/music_deck_search.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
+import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 
 /// 自适应 Music Deck 主界面。
 class MusicDeckShell extends ConsumerStatefulWidget {
@@ -274,7 +277,9 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       height: AppControlTokens.fieldHeight,
       child: Row(
         children: [
-          WorkstationPortalLink(onTap: () => context.go('/portal')),
+          WorkstationPortalLink(
+            onTap: () => context.go(modulePortalLinkTarget(context)),
+          ),
           const SizedBox(width: 12),
           // 三端统一品牌入口：桌面顶栏以 logo 领起，与 Portal 顶栏同语言。
           const BrandLogo(size: 22, radius: 6),
@@ -334,16 +339,43 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     final l10n = AppLocalizations.of(context);
     final colors = context.musicColors;
     final hosted = MobileShellScope.isHosted(context);
+    final center = ref.watch(musicCenterControllerProvider).asData?.value;
     final content = Padding(
-      padding: EdgeInsets.fromLTRB(12, hosted ? 8 : 8, 12, 8),
+      padding: EdgeInsets.fromLTRB(hosted ? 20 : 12, 8, hosted ? 20 : 12, 8),
       child: Column(
         children: [
+          if (hosted) ...[
+            MobileModuleHeader(
+              title: l10n.moduleMusicTitle,
+              subtitle: l10n.musicModuleSubtitle(
+                center?.tracks.length ?? 0,
+                center?.albums.length ?? 0,
+              ),
+              onBack: () {
+                // 模块内逐级回退：非首栏先回首页，首栏才离开模块。
+                if (_section != MusicDeckSection.home) {
+                  _selectSection(MusicDeckSection.home);
+                  return;
+                }
+                context.pop();
+              },
+              actions: [
+                MobileGlassIconButton(
+                  tooltip: l10n.musicDeckNowPlaying,
+                  icon: Icons.queue_music_rounded,
+                  onPressed: _openImmersivePlayer,
+                ),
+              ],
+            ),
+          ],
           if (!hosted)
             SizedBox(
               height: 44,
               child: Row(
                 children: [
-                  WorkstationPortalLink(onTap: () => context.go('/portal')),
+                  WorkstationPortalLink(
+                    onTap: () => context.go(modulePortalLinkTarget(context)),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -373,37 +405,46 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 ],
               ),
             ),
-          if (!hosted) ...[
-            const SizedBox(height: 8),
-            MusicDeckMobileNavigation(
+          if (!hosted) ...[const SizedBox(height: 8)],
+          // 四段导航常驻（hosted 托管态同样直达，替代"仅 Home 内链接"）。
+          Align(
+            alignment: Alignment.centerLeft,
+            child: MusicDeckMobileNavigation(
               selected: _section,
               onSelected: _selectSection,
             ),
-          ],
-          if (hosted &&
-              _section != MusicDeckSection.home &&
-              _collection == null) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: MobileSubpageBackButton(
-                key: const ValueKey<String>('music-mobile-section-back'),
-                onPressed: () => _selectSection(MusicDeckSection.home),
-              ),
-            ),
-            const SizedBox(height: 4),
+          ),
+          if (hosted) ...[
+            const SizedBox(height: 14),
+            const _MobileSourceBanner(),
+            const SizedBox(height: 12),
           ],
           const SizedBox(height: 8),
           Expanded(
-            child: MusicDeckContent(
-              section: _section,
-              libraryView: _libraryView,
-              sources: sources,
-              collection: _collection,
-              onSectionChanged: _selectSection,
-              onLibraryViewChanged:
-                  (view) => setState(() => _libraryView = view),
-              onOpenCollection: _openCollection,
-              onCloseCollection: _closeCollection,
+            child: MobileSectionSwipe(
+              onSwipe: (toNext) {
+                const sections = <MusicDeckSection>[
+                  MusicDeckSection.home,
+                  MusicDeckSection.library,
+                  MusicDeckSection.playlists,
+                  MusicDeckSection.favorites,
+                ];
+                final target = adjacentSection(sections, _section, toNext);
+                if (target != null) {
+                  _selectSection(target);
+                }
+              },
+              child: MusicDeckContent(
+                section: _section,
+                libraryView: _libraryView,
+                sources: sources,
+                collection: _collection,
+                onSectionChanged: _selectSection,
+                onLibraryViewChanged:
+                    (view) => setState(() => _libraryView = view),
+                onOpenCollection: _openCollection,
+                onCloseCollection: _closeCollection,
+              ),
             ),
           ),
           if (!hosted) ...[
@@ -420,13 +461,29 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     if (hosted) {
       // 平板宽度触屏内容按壳层 chrome 同宽封顶居中：卡片行/列表行
       // 不被整屏拉伸，与底栏 tab 组同语言；手机宽度无感直通。
-      return Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: MobileLayoutTokens.chromeMaxWidth,
-          ),
-          child: content,
+      // 右下播放设置 FAB 悬浮在壳层迷你播放条上方（样例 music-settings-fab）。
+      // 样例 module-overlay：深玻璃表面（≈.94 不透明）承载全模块。
+      return MobilePageSurface(
+        exposeBackdrop: true,
+        backdropOpacity: 0.92,
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 650),
+                child: content,
+              ),
+            ),
+            // 样例 music-settings-fab：模块页盖住壳层迷你条，FAB 贴内容底缘。
+            Positioned(
+              right: 16,
+              bottom: MediaQuery.paddingOf(context).bottom + 18,
+              child: _MobileSettingsFab(
+                onPressed: () => showMusicPlaybackSettingsDialog(context, ref),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -583,6 +640,123 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       return;
     }
     setState(() => _immersivePlayerVisible = true);
+  }
+}
+
+/// 来源状态横幅（样例 source-banner）：平台同步异常时提示本地曲库可用
+/// 并给重试；有已连接平台时显示连接徽标；无平台数据时不渲染。
+class _MobileSourceBanner extends ConsumerWidget {
+  const _MobileSourceBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(musicPlatformLibraryProvider);
+    if (async.hasError) {
+      return MusicDeckGlass(
+        opacity: 0.14,
+        blur: 12,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.sync_problem_rounded,
+              size: 15,
+              color: MusicChromeColors.goldWarning,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.musicSourceSyncError,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: AppTypography.labelSmall),
+              ),
+            ),
+            TextButton(
+              onPressed:
+                  () => unawaited(
+                    ref
+                        .read(musicCenterControllerProvider.notifier)
+                        .refreshAfterPlatformChange(),
+                  ),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(l10n.commonRetry),
+            ),
+          ],
+        ),
+      );
+    }
+    final connected =
+        async.asData?.value.connectedStatuses ?? const <MusicPlatformStatus>[];
+    if (connected.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return MusicDeckGlass(
+      opacity: 0.1,
+      blur: 12,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.cloud_done_outlined,
+            size: 14,
+            color: MusicChromeColors.tealSoft,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            l10n.musicDeckConnectedSources,
+            style: TextStyle(
+              fontSize: AppTypography.labelSmall,
+              color: context.musicColors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              children: [
+                for (final status in connected)
+                  MusicDeckSourceBadge(
+                    platform: MusicPlatform.fromApiValue(status.platform),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 右下播放设置悬浮钮（样例 music-settings-fab）：打开睡眠定时/倍速/音质。
+class _MobileSettingsFab extends StatelessWidget {
+  const _MobileSettingsFab({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox.square(
+      dimension: 46,
+      child: Tooltip(
+        message: l10n.musicPlaybackSettings,
+        child: IconButton(
+          onPressed: onPressed,
+          icon: const Icon(Icons.equalizer_rounded, size: 20),
+          style: IconButton.styleFrom(
+            backgroundColor: MusicChromeColors.panelBackground,
+            foregroundColor: MusicChromeColors.nearWhite,
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+          ),
+        ),
+      ),
+    );
   }
 }
 

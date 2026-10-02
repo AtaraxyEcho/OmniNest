@@ -155,6 +155,25 @@ class MusicPortalActions {
         .playItems(queue, startIndex: index);
   }
 
+  /// 就地播放整张专辑（补全曲目后以专辑全部曲目为队列），供 Library
+  /// 空间的专辑轨触发；不导航离开当前空间，播放状态由全局迷你条反映。
+  Future<void> playAlbum(MusicAlbum album) async {
+    final controller = _ref.read(musicCenterControllerProvider.notifier);
+    await controller.openAlbum(album);
+    final tracks = await controller.ensureCompleteAlbumTracks();
+    if (tracks.isEmpty) {
+      return;
+    }
+    await controller.playItems(
+      tracks.map(MusicPlayableItem.local).toList(),
+      source: MusicQueueSource(
+        kind: MusicQueueSourceKind.album,
+        id: album.id,
+        title: album.title,
+      ),
+    );
+  }
+
   Future<void> syncPlayback() {
     return _ref
         .read(musicPlaybackSessionProvider.notifier)

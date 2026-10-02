@@ -7,7 +7,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
 
   Widget _buildReaderSkeleton() {
     return Scaffold(
-      backgroundColor: _settings.surfaceColor,
+      backgroundColor: _resolveSurface(),
       body: SafeArea(child: ReaderContentSkeleton(settings: _settings)),
     );
   }
@@ -29,6 +29,12 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     ReaderChapterContent content,
   ) {
     final viewport = MediaQuery.sizeOf(context);
+    // 样例 ReaderFocus 皮肤只在移动壳层形态启用（Android/手机浏览器/
+    // 桌面窄窗）；桌面宽窗维持工位实底 chrome。
+    final sampleChrome = shouldUseResponsiveMobileShell(
+      mobilePlatform: isMobilePlatform,
+      width: viewport.width,
+    );
     final readerLayout = ReaderControlLayout.resolve(
       viewport: viewport,
       fontSize: _settings.fontSize,
@@ -100,9 +106,9 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             ),
           ),
         // 顶部栏（在遮罩之上，可接收点击）
-        _buildTopBar(detail, content),
+        _buildTopBar(detail, content, sampleChrome: sampleChrome),
         // 底部栏（在遮罩之上，可接收点击）
-        _buildBottomBar(detail, content),
+        _buildBottomBar(detail, content, sampleChrome: sampleChrome),
         if (chromeLayout.showPersistentProgress && !_showControls)
           ValueListenableBuilder<double>(
             valueListenable: _bookProgressNotifier,
@@ -113,6 +119,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                   progress: bookProgress,
                   currentPage: _isPageMode ? _pageModePage : null,
                   totalPages: null, // 懒分页不预知总页数
+                  sampleChrome: sampleChrome,
                 ),
           ),
         ..._buildOverlays(content),
@@ -126,7 +133,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                       ? Duration.zero
                       : const Duration(milliseconds: 120),
               child: ColoredBox(
-                color: _settings.surfaceColor,
+                color: _resolveSurface(),
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -197,7 +204,11 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
   ///
   /// 底部栏显示时，控件上移到底部栏上方。
 
-  Widget _buildTopBar(ReaderItemDetail detail, ReaderChapterContent content) {
+  Widget _buildTopBar(
+    ReaderItemDetail detail,
+    ReaderChapterContent content, {
+    bool sampleChrome = false,
+  }) {
     return Positioned(
       top: 0,
       left: 0,
@@ -219,6 +230,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
               settings: _settings,
               bookTitle: detail.item.title,
               chapterTitle: content.title,
+              sampleChrome: sampleChrome,
               onBack: () {
                 syncProgressSync();
                 safePop();
@@ -249,8 +261,9 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
 
   Widget _buildBottomBar(
     ReaderItemDetail detail,
-    ReaderChapterContent content,
-  ) {
+    ReaderChapterContent content, {
+    bool sampleChrome = false,
+  }) {
     return Positioned(
       bottom: 0,
       left: 0,
@@ -274,6 +287,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                     settings: _settings,
                     progress: bookProgress,
                     isPageMode: _isPageMode,
+                    sampleChrome: sampleChrome,
                     onPrevious: () => _navigateReader(detail, forward: false),
                     onNext: () => _navigateReader(detail, forward: true),
                     onShowContents:

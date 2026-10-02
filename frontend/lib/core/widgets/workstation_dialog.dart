@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/core/widgets/workstation_mobile_sheet.dart';
 
 /// 建筑极简主义弹窗入口（工位公共实现）。
 ///
@@ -15,6 +17,11 @@ import 'package:omninest/core/widgets/workstation_controls.dart';
 /// - 背景滚动锁定：遮罩吸收指针事件，背景不可滚动。
 ///
 /// 遮罩 = 模糊 + 半透明着色（见 [WorkstationBlurScrim]）。
+///
+/// 移动端托管态（MobileShellScope）自动分流为底部玻璃面板
+/// （[showWorkstationMobileSheet]）：调用方、builder 与返回值语义不变，
+/// [WorkstationDialogFrame] 在面板内自动切换为无边框分区形态。
+/// 桌面与未挂壳层的上下文（含桌面窄窗 compact 态）保持居中弹窗不变。
 Future<T?> showWorkstationDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -23,6 +30,19 @@ Future<T?> showWorkstationDialog<T>({
   Color? barrierColor,
 }) {
   final previousFocus = FocusManager.instance.primaryFocus;
+  // 面板路由挂根导航，其内容脱离壳层 scope：从面板内再开工位弹窗时
+  // 靠 Ambient 维持 sheet 形态，避免二级弹窗退回桌面居中形态。
+  if (MobileShellScope.isHosted(context) ||
+      WorkstationSheetAmbient.isActive(context)) {
+    return showWorkstationMobileSheet<T>(
+      context: context,
+      builder: builder,
+      dismissible: dismissible,
+      useRootNavigator: useRootNavigator,
+    ).whenComplete(() {
+      _restoreFocus(previousFocus);
+    });
+  }
   // 遮罩 = 模糊 + 半透明着色。barrierColor 置空，由路由子树内首个
   // 全屏 BackdropFilter 承担（showDialog 的 barrier 无法挂 ImageFilter）。
   return showDialog<T>(
@@ -466,6 +486,70 @@ class WorkstationDialogFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (destructive) Container(height: 2, color: scheme.error),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: destructive ? scheme.error : scheme.onSurface,
+                  ),
+                ),
+              ),
+              if (headerLabel != null) ...[
+                const SizedBox(width: 12),
+                Text(
+                  headerLabel!,
+                  style: TextStyle(
+                    fontFamily: AppTypography.monoFamily,
+                    fontFamilyFallback: AppTypography.monoFamilyFallback,
+                    fontSize: AppTypography.labelSmall,
+                    letterSpacing: 1.2,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(width: 8),
+              _WorkstationDialogCloseButton(),
+            ],
+          ),
+        ),
+        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: body,
+          ),
+        ),
+        if (actions.isNotEmpty) ...[
+          Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(spacing: 8, runSpacing: 4, children: actions),
+            ),
+          ),
+        ],
+      ],
+    );
+    // 移动面板形态：面板容器已提供底色、圆角与把手，框架退化为无边框
+    // 分区结构；[width] 与直角边框仅桌面居中弹窗使用。
+    if (WorkstationSheetAmbient.isActive(context)) {
+      return Semantics(
+        scopesRoute: true,
+        explicitChildNodes: true,
+        child: Material(color: Colors.transparent, child: column),
+      );
+    }
     return Semantics(
       scopesRoute: true,
       explicitChildNodes: true,
@@ -478,63 +562,7 @@ class WorkstationDialogFrame extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border.all(color: scheme.outline, width: 1),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (destructive) Container(height: 2, color: scheme.error),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: destructive ? scheme.error : scheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    if (headerLabel != null) ...[
-                      const SizedBox(width: 12),
-                      Text(
-                        headerLabel!,
-                        style: TextStyle(
-                          fontFamily: AppTypography.monoFamily,
-                          fontFamilyFallback: AppTypography.monoFamilyFallback,
-                          fontSize: AppTypography.labelSmall,
-                          letterSpacing: 1.2,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    _WorkstationDialogCloseButton(),
-                  ],
-                ),
-              ),
-              Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  child: body,
-                ),
-              ),
-              if (actions.isNotEmpty) ...[
-                Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Wrap(spacing: 8, runSpacing: 4, children: actions),
-                  ),
-                ),
-              ],
-            ],
-          ),
+          child: column,
         ),
       ),
     );

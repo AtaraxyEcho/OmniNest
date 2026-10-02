@@ -64,25 +64,24 @@ void main() {
     addTearDown(() => container.dispose());
   });
 
-  testWidgets('首页态渲染位置与分区卡，不渲染列表工具区', (tester) async {
+  testWidgets('首页：存储条 + 分类格 + 空间页签 + 内联根列表', (tester) async {
     await pumpHost(tester);
 
-    expect(find.text('位置'), findsOneWidget);
-    expect(find.text('分区'), findsOneWidget);
-    expect(find.text('个人空间'), findsOneWidget);
-    expect(find.text('共享空间'), findsOneWidget);
-    expect(find.text('全部文件'), findsOneWidget);
+    // 原型 Files 首页结构：存储条、四分类格、我的文件/共享页签、内联列表。
+    expect(find.text('存储用量'), findsOneWidget);
     expect(find.text('最近使用'), findsOneWidget);
     expect(find.text('我的收藏'), findsOneWidget);
-    expect(find.text('回收站'), findsOneWidget);
-    expect(find.text('更多分区'), findsOneWidget);
+    expect(find.text('共享给我'), findsOneWidget);
+    expect(find.text('离线下载'), findsOneWidget);
+    expect(find.text('我的文件'), findsOneWidget);
+    expect(find.text('共享空间'), findsOneWidget);
 
-    // 首页态不出现列表内容与 FAB。
-    expect(find.text('Documents'), findsNothing);
+    // 内联根列表直接呈现当前空间根条目；首页态无 FAB。
+    expect(find.text('Documents'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
 
-    // 「更多」面板在小屏大字号下打开不溢出（内容滚动兜底）。
-    await tester.tap(find.text('更多分区'));
+    // 「更多分区」经工具栏溢出钮打开，小屏大字号不溢出（滚动兜底）。
+    await tester.tap(find.byTooltip('更多分区'));
     await tester.pumpAndSettle();
     expect(find.byType(SingleChildScrollView), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
@@ -93,13 +92,13 @@ void main() {
     // 密度，桌面侧栏路径仅非托管窗口使用。
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);
-    addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
     await tester.pumpWidget(host());
     await tester.pump(const Duration(seconds: 1));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('位置'), findsOneWidget, reason: '移动首页卡片可见');
+    expect(find.text('存储用量'), findsOneWidget, reason: '移动首页可见');
     expect(
       find.byWidgetPredicate(
         (widget) => widget.runtimeType.toString() == '_FileSidebar',
@@ -107,35 +106,33 @@ void main() {
       findsNothing,
       reason: '托管平板不复用桌面侧栏',
     );
-    // 触屏内容按壳层 chrome 同宽封顶靠左（与 Admin 等全宽工位页同左缘
-    // 语言）：内容列左缘只剩首页 16px 内边距，无居中画布偏移。
-    final labelRect = tester.getRect(find.text('位置'));
-    expect(labelRect.left, closeTo(16, 1));
+    // 托管平板内容按壳层 chrome 同宽（720）封顶居中：左缘 = (1280-720)/2 + 16。
+    final labelRect = tester.getRect(find.text('存储用量'));
+    expect(labelRect.left, closeTo(82, 2));
   });
 
-  testWidgets('点分区卡进入列表态，返回行与系统返回都回首页', (tester) async {
+  testWidgets('点分类卡进入列表态，返回行与系统返回都回首页', (tester) async {
     await pumpHost(tester);
 
-    await tester.tap(find.text('全部文件'));
+    await tester.tap(find.text('最近使用'));
     await tester.pumpAndSettle();
 
-    // 列表态：面包屑 + 文件行 + FAB 出现。
-    expect(find.text('Documents'), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsOneWidget);
-    expect(find.text('位置'), findsNothing, reason: '列表态不再显示首页');
+    // 列表态：返回行出现，首页卸载。
+    expect(find.byTooltip('返回'), findsOneWidget);
+    expect(find.text('存储用量'), findsNothing, reason: '列表态不再显示首页');
 
     // 返回行回首页。
-    await tester.tap(find.text('返回'));
+    await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
-    expect(find.text('位置'), findsOneWidget);
-    expect(find.text('Documents'), findsNothing);
+    expect(find.text('存储用量'), findsOneWidget);
+    expect(find.text('Documents'), findsOneWidget);
 
     // 再次进入列表态，系统返回手势也回首页而非直接跳门户。
-    await tester.tap(find.text('全部文件'));
+    await tester.tap(find.text('我的收藏'));
     await tester.pumpAndSettle();
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('位置'), findsOneWidget);
+    expect(find.text('存储用量'), findsOneWidget);
     expect(find.byKey(const Key('portal-destination')), findsNothing);
 
     // 首页态返回：历史栈已清空，直接离站回门户（不出现返回键失灵）。

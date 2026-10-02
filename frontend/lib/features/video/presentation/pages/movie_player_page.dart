@@ -47,7 +47,8 @@ class MoviePlayerPage extends ConsumerStatefulWidget {
   ConsumerState<MoviePlayerPage> createState() => _MoviePlayerPageState();
 }
 
-class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
+class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
+    with WidgetsBindingObserver {
   late final Player _player;
   late final VideoController _controller;
   String? _loadedUrl;
@@ -125,11 +126,21 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
   static const _hideDelay = Duration(milliseconds: 2800);
   static const _speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
+  /// 手动方向锁：null=跟随系统；true=锁横屏；false=锁竖屏。
+  /// 设备物理方向追上手动选择时自动释放（收敛模型），退出页面兜底释放。
+  bool? _orientationLock;
+
+  /// 旋转钮仅在原生移动端提供（Web 无方向 API，桌面由窗口管理）。
+  late final bool _rotateSupported = !isWebPlatform && isMobilePlatform;
+
   void _updateState(VoidCallback callback) => setState(callback);
 
   @override
   void initState() {
     super.initState();
+    if (!isWebPlatform && isMobilePlatform) {
+      WidgetsBinding.instance.addObserver(this);
+    }
     _player = Player();
     _controller = VideoController(_player);
     _playbackService = ref.read(moviePlaybackServiceProvider);
@@ -181,7 +192,57 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     _pipListenerDisposer?.call();
     _player.dispose();
     _windowChromeLease?.release();
+    _releaseOrientationLockOnExit();
+    if (!isWebPlatform && isMobilePlatform) {
+      WidgetsBinding.instance.removeObserver(this);
+    }
     super.dispose();
+  }
+
+  /// 退出播放页兜底释放方向锁：不释放会把横屏锁泄漏到整个应用。
+  void _releaseOrientationLockOnExit() {
+    if (_orientationLock == null) {
+      return;
+    }
+    _orientationLock = null;
+    SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!mounted || _orientationLock == null) {
+      return;
+    }
+    // 收敛模型：设备物理方向追上手动选择即交还系统自由旋转。
+    final view = View.of(context);
+    final landscape = view.physicalSize.width > view.physicalSize.height;
+    if (landscape == _orientationLock) {
+      setState(() => _orientationLock = null);
+      SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
+    }
+  }
+
+  /// 当前生效方向：手动锁优先，否则跟随视口宽高。
+  bool get _effectiveLandscape {
+    final size = MediaQuery.sizeOf(context);
+    return _orientationLock ?? size.width > size.height;
+  }
+
+  void _toggleOrientation() {
+    final target = !_effectiveLandscape;
+    setState(() => _orientationLock = target);
+    SystemChrome.setPreferredOrientations(
+      target
+          ? const <DeviceOrientation>[
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]
+          : const <DeviceOrientation>[
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+          ],
+    );
   }
 
   AsyncValue<PlaybackPlan> _readPlaybackPlan() {
@@ -444,6 +505,11 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
                                 onPlayPause:
                                     () => unawaited(_requestPlayPause()),
                                 isMobile: isMobilePlatform,
+                                onRotateTap:
+                                    _rotateSupported
+                                        ? _toggleOrientation
+                                        : null,
+                                isLandscapeOrientation: _effectiveLandscape,
                                 onPreviousEpisode:
                                     previousEpisode == null
                                         ? null

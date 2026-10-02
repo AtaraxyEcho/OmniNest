@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_find_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
@@ -177,6 +178,96 @@ void main() {
 
     await tester.pumpWidget(buildApp(buildBottomBar(immersiveMode: true)));
     expect(find.byIcon(Icons.visibility_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('样例 ReaderFocus 顶栏渲染玻璃钮与居中标题收纳溢出菜单', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    var backTapped = false;
+    await tester.pumpWidget(
+      buildApp(
+        ReaderViewTopBar(
+          settings: ReaderViewSettings(paletteId: 'nightGlass'),
+          bookTitle: 'The Art of Stillness',
+          chapterTitle: 'Chapter 6',
+          sampleChrome: true,
+          onBack: () => backTapped = true,
+          onSearch: () {},
+          onShowShortcuts: () {},
+          onAddBookmark: () {},
+        ),
+        locale: const Locale('en'),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('The Art of Stillness'), findsOneWidget);
+    expect(find.text('Chapter 6'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is OmniIcon && widget.icon == OmniIcons.arrow,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is OmniIcon && widget.icon == OmniIcons.more,
+      ),
+      findsOneWidget,
+    );
+    // 样例皮肤不使用 Material 溢出钮与实底动作钮。
+    expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
+    expect(find.byIcon(Icons.arrow_back_rounded), findsNothing);
+
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) => widget is OmniIcon && widget.icon == OmniIcons.arrow,
+      ),
+    );
+    await tester.pump();
+    expect(backTapped, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('样例 ReaderFocus 页脚渲染进度百分比与 Aa 设置钮', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildApp(
+        ReaderViewBottomBar(
+          settings: ReaderViewSettings(paletteId: 'nightGlass'),
+          progress: 0.64,
+          isPageMode: false,
+          sampleChrome: true,
+          onPrevious: () {},
+          onNext: () {},
+          onShowContents: () {},
+          onShowSettings: () {},
+          onToggleImmersive: () {},
+        ),
+        locale: const Locale('en'),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('64%'), findsOneWidget);
+    expect(find.text('Aa'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is OmniIcon && widget.icon == OmniIcons.settings,
+      ),
+      findsOneWidget,
+    );
+    // 样例页脚不再出现工位实底按钮组。
+    expect(find.byKey(const Key('readerControlsCompact')), findsNothing);
+    expect(find.byIcon(Icons.toc_rounded), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

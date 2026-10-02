@@ -64,7 +64,7 @@ void main() {
     );
   });
 
-  test('配置加载期间停泊引导页', () {
+  test('配置加载期间停泊引导页不闪安装向导', () {
     expect(
       serverGateRedirectPath(
         isWeb: false,
@@ -73,7 +73,17 @@ void main() {
         isAuthenticated: false,
         location: '/portal',
       ),
-      '/server-setup?redirect=%2Fportal',
+      '/boot?redirect=%2Fportal',
+    );
+    expect(
+      serverGateRedirectPath(
+        isWeb: false,
+        isConfigLoading: true,
+        isConfigured: true,
+        isAuthenticated: false,
+        location: '/boot?redirect=%2Fportal',
+      ),
+      isNull,
     );
   });
 

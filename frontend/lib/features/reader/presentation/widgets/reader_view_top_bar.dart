@@ -1,13 +1,29 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
-/// 顶栏溢出菜单动作：紧凑/中等档收纳低频操作（对齐漫画阅读器顶栏先例）。
-enum _ReaderTopBarOverflowAction { tts, annotations, shortcuts, immersive }
+/// 顶栏溢出菜单动作：紧凑/中等档收纳低频操作（对齐漫画阅读器顶栏先例）；
+/// 样例皮肤的 more 菜单在此基础上额外承载书签/章内搜索/书架。
+enum _ReaderTopBarOverflowAction {
+  tts,
+  annotations,
+  shortcuts,
+  immersive,
+  bookmark,
+  search,
+  bookshelf,
+}
 
 /// 阅读器顶部上下文栏，按可用宽度收起低频操作。
+///
+/// [sampleChrome] 为样例 ReaderFocus 皮肤（移动壳层）：透明底 + 顶部
+/// 轻渐隐、玻璃圆钮返回、居中「书名 + 章节行」、右端 more 玻璃圆钮
+/// 承载全部低频操作；默认 false 维持工位实底皮肤。
 class ReaderViewTopBar extends StatelessWidget {
   const ReaderViewTopBar({
     required this.settings,
@@ -23,6 +39,7 @@ class ReaderViewTopBar extends StatelessWidget {
     this.onToggleImmersive,
     this.isBookmarked = false,
     this.isInBookshelf = false,
+    this.sampleChrome = false,
     super.key,
   });
 
@@ -40,8 +57,14 @@ class ReaderViewTopBar extends StatelessWidget {
   final bool isBookmarked;
   final bool isInBookshelf;
 
+  /// 样例 ReaderFocus 皮肤（移动壳层玻璃 chrome）。
+  final bool sampleChrome;
+
   @override
   Widget build(BuildContext context) {
+    if (sampleChrome) {
+      return _ReaderSampleTopBar(bar: this);
+    }
     return ColoredBox(
       color: settings.controlSurfaceColor.withValues(alpha: 0.97),
       child: SafeArea(
@@ -162,6 +185,14 @@ class ReaderViewTopBar extends StatelessWidget {
                               onShowShortcuts();
                             case _ReaderTopBarOverflowAction.immersive:
                               onToggleImmersive?.call();
+                            // 样例皮肤独有条目：工位菜单不提供，理论不可达，
+                            // 仅为 switch 穷尽性兜底。
+                            case _ReaderTopBarOverflowAction.bookmark:
+                              onAddBookmark?.call();
+                            case _ReaderTopBarOverflowAction.search:
+                              onSearch();
+                            case _ReaderTopBarOverflowAction.bookshelf:
+                              onToggleBookshelf?.call();
                           }
                         },
                         itemBuilder:
@@ -276,6 +307,246 @@ class _TopBarButton extends StatelessWidget {
         shape: const CircleBorder(),
       ),
       icon: Icon(icon, size: 21),
+    );
+  }
+}
+
+/// 样例 ReaderFocus 顶栏：透明底 + 顶部轻渐隐 + 玻璃圆钮 + 居中双行标题。
+class _ReaderSampleTopBar extends StatelessWidget {
+  const _ReaderSampleTopBar({required this.bar});
+
+  final ReaderViewTopBar bar;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      bottom: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              bar.settings.surfaceColor.withValues(alpha: 0.62),
+              bar.settings.surfaceColor.withValues(alpha: 0),
+            ],
+          ),
+        ),
+        child: SizedBox(
+          height: 56,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            child: Row(
+              children: [
+                _ReaderGlassCircleButton(
+                  icon: OmniIcons.arrow,
+                  tooltip: l10n.coreBack,
+                  settings: bar.settings,
+                  onTap: bar.onBack,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          bar.bookTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: bar.settings.onSurfaceColor,
+                            fontSize: AppTypography.bodyMedium,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                        if (bar.chapterTitle.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1),
+                            child: Text(
+                              bar.chapterTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: bar.settings.onSurfaceVariantColor,
+                                // ignore: font_size_whitelist
+                                fontSize: 9,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                _ReaderSampleOverflowMenu(bar: bar),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例 more 玻璃圆钮：低频操作全部收纳进溢出菜单。
+class _ReaderSampleOverflowMenu extends StatelessWidget {
+  const _ReaderSampleOverflowMenu({required this.bar});
+
+  final ReaderViewTopBar bar;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    PopupMenuItem<_ReaderTopBarOverflowAction> menuItem(
+      _ReaderTopBarOverflowAction value,
+      IconData icon,
+      String label,
+    ) {
+      return PopupMenuItem(
+        value: value,
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: bar.settings.onSurfaceVariantColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(color: bar.settings.onSurfaceColor),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return PopupMenuButton<_ReaderTopBarOverflowAction>(
+      tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+      color: bar.settings.surfaceColor,
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 6),
+      icon: _ReaderGlassCircleButton(
+        icon: OmniIcons.more,
+        tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+        settings: bar.settings,
+        onTap: null,
+      ),
+      onSelected: (action) {
+        switch (action) {
+          case _ReaderTopBarOverflowAction.bookmark:
+            bar.onAddBookmark?.call();
+          case _ReaderTopBarOverflowAction.search:
+            bar.onSearch();
+          case _ReaderTopBarOverflowAction.tts:
+            bar.onToggleTts?.call();
+          case _ReaderTopBarOverflowAction.annotations:
+            bar.onShowAnnotations?.call();
+          case _ReaderTopBarOverflowAction.bookshelf:
+            bar.onToggleBookshelf?.call();
+          case _ReaderTopBarOverflowAction.shortcuts:
+            bar.onShowShortcuts();
+          case _ReaderTopBarOverflowAction.immersive:
+            bar.onToggleImmersive?.call();
+        }
+      },
+      itemBuilder:
+          (context) => [
+            menuItem(
+              _ReaderTopBarOverflowAction.bookmark,
+              Icons.bookmark_rounded,
+              bar.isBookmarked
+                  ? l10n.readerRemoveBookmark
+                  : l10n.readerAddBookmark,
+            ),
+            menuItem(
+              _ReaderTopBarOverflowAction.search,
+              Icons.search_rounded,
+              l10n.readerSearchCurrentChapter,
+            ),
+            if (bar.onToggleTts != null)
+              menuItem(
+                _ReaderTopBarOverflowAction.tts,
+                Icons.graphic_eq_rounded,
+                l10n.readerReadAloud,
+              ),
+            if (bar.onShowAnnotations != null)
+              menuItem(
+                _ReaderTopBarOverflowAction.annotations,
+                Icons.edit_note_rounded,
+                l10n.readerAnnotations,
+              ),
+            if (bar.onToggleBookshelf != null)
+              menuItem(
+                _ReaderTopBarOverflowAction.bookshelf,
+                Icons.library_add_outlined,
+                bar.isInBookshelf
+                    ? l10n.readerRemoveFromBookshelf
+                    : l10n.readerAddToBookshelf,
+              ),
+            menuItem(
+              _ReaderTopBarOverflowAction.shortcuts,
+              Icons.keyboard_rounded,
+              l10n.readerShortcutsTitle,
+            ),
+          ],
+    );
+  }
+}
+
+/// 样例 icon-button：48 圆形玻璃钮（调色板底 32% + 10% 描边 + blur 16）。
+class _ReaderGlassCircleButton extends StatelessWidget {
+  const _ReaderGlassCircleButton({
+    required this.icon,
+    required this.tooltip,
+    required this.settings,
+    required this.onTap,
+  });
+
+  final OmniIconsData icon;
+  final String tooltip;
+  final ReaderViewSettings settings;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: ClipOval(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: settings.surfaceColor.withValues(alpha: 0.32),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: settings.onSurfaceColor.withValues(alpha: 0.10),
+                  ),
+                ),
+                child: Center(
+                  child: OmniIcon(
+                    icon: icon,
+                    size: 20,
+                    color: settings.onSurfaceColor,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
@@ -14,7 +15,10 @@ import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_section_swipe.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -48,10 +52,74 @@ class PhotosPage extends ConsumerStatefulWidget {
 }
 
 class _PhotosPageState extends ConsumerState<PhotosPage> {
+  /// 离开照片模块：优先返回上一路由（Library/Home 推入栈），直达链接
+  /// 作为栈底时回到媒体库空间。必须用 Navigator.pop 直弹：页面被
+  /// PopScope(canPop: false) 拦截，maybePop 会反复回落到本回调形成
+  /// 同步无限递归（真机表现为无响应后退出）。
+  void _leavePhotos(BuildContext context) {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      context.go('/library');
+    }
+  }
+
+  /// hosted 模块页返回：多选 → 回首栏（全部）→ 清搜索 → 离开模块；
+  /// 头部返回钮与系统返回共用同一入口。
+  void _handleHostedBack(BuildContext context) {
+    final photoState = ref.read(photoCenterControllerProvider).asData?.value;
+    final controller = ref.read(photoCenterControllerProvider.notifier);
+    if (photoState?.isSelectionMode == true) {
+      controller.toggleSelectionMode();
+      return;
+    }
+    if (photoState != null && photoState.frameView != FrameView.grid) {
+      controller.setFrameView(FrameView.grid);
+      return;
+    }
+    if (photoState != null && photoState.searchQuery.isNotEmpty) {
+      controller.setSearchQuery('');
+      return;
+    }
+    _leavePhotos(context);
+  }
+
   final TextEditingController _searchController = TextEditingController();
+  bool _hostedViewResetApplied = false;
   VoidCallback? _routeListener;
   GoRouter? _router;
   DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 样例模块页进入即定位第一栏（全部）：每次新挂载重置视图态，
+    // 避免上次离开的分栏（时间线/影集…）在重进时残留。
+    if (_hostedViewResetApplied) {
+      return;
+    }
+    _hostedViewResetApplied = true;
+    if (!MobileShellScope.isHosted(context)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final controller = ref.read(photoCenterControllerProvider.notifier);
+      final current = ref.read(photoCenterControllerProvider).asData?.value;
+      if (current == null) {
+        return;
+      }
+      if (current.frameView != FrameView.grid) {
+        controller.setFrameView(FrameView.grid);
+      }
+      if (current.isSelectionMode) {
+        controller.toggleSelectionMode();
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -102,10 +170,15 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
             ref.read(photoCenterControllerProvider).asData?.value;
         final controller = ref.read(photoCenterControllerProvider.notifier);
         if (photoState == null) {
-          context.go('/portal');
+          _leavePhotos(context);
           return;
         }
-        // 返回优先级：退出多选 → 回图库视图 → 清空搜索 → 回门户。
+        // 托管模块页是根级叠加层：系统返回直接 pop 回来源空间。
+        if (MobileShellScope.isHosted(context)) {
+          _handleHostedBack(context);
+          return;
+        }
+        // 返回优先级：退出多选 → 回图库视图 → 清空搜索 → 离开照片模块。
         if (photoState.isSelectionMode) {
           controller.toggleSelectionMode();
           return;
@@ -118,7 +191,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
           controller.setSearchQuery('');
           return;
         }
-        context.go('/portal');
+        _leavePhotos(context);
       },
       child: Scaffold(
         backgroundColor: hosted ? Colors.transparent : context.frameColors.bg,
@@ -227,6 +300,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     return stateAsync.when(
       data: (data) {
         final notifier = ref.read(photoCenterControllerProvider.notifier);
+        final l10n = AppLocalizations.of(context);
         final content = _FrameViewContent(
           state: data,
           compact: true,
@@ -252,23 +326,64 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                   useSafeArea: !hosted,
                 );
         if (hosted) {
-          // 极简托管布局：顶栏与底栏由壳层唯一提供，模块只渲染
-          // 页内搜索条（壳层搜索钮展开）、视图页签行与内容、批量条。
-          return Column(
-            children: [
-              _PhotosHostedSearchBar(
-                searchController: _searchController,
-                onSearchChanged: notifier.setSearchQuery,
-              ),
-              if (!data.isSelectionMode)
-                _PhotosViewTabBar(
-                  activeView: data.frameView,
-                  onSelectView: notifier.setFrameView,
+          // 托管模块页（样例 module-overlay）：深玻璃表面 + 玻璃横幅 +
+          // 页内搜索条（横幅搜索钮展开）+ 视图页签行与内容、批量条。
+          return MobilePageSurface(
+            exposeBackdrop: true,
+            backdropOpacity: 0.92,
+            child: Column(
+              children: [
+                MobileModuleHeader(
+                  title: l10n.modulePhotosTitle,
+                  subtitle: l10n.photosModuleSubtitle(
+                    data.photos.length,
+                    data.albums.length,
+                  ),
+                  onBack: () => _handleHostedBack(context),
+                  actions: [
+                    MobileGlassIconButton(
+                      tooltip: l10n.photosSearchHint,
+                      icon: Icons.search_rounded,
+                      onPressed: () {
+                        ref
+                            .read(
+                              mobileModuleSearchActiveProvider(
+                                MobileModuleSearchHosts.photos,
+                              ).notifier,
+                            )
+                            .toggle();
+                      },
+                    ),
+                  ],
                 ),
-              Expanded(child: content),
-              if (data.isSelectionMode && data.selectedPhotoIds.isNotEmpty)
-                _buildAnimatedBatchBar(data),
-            ],
+                _PhotosHostedSearchBar(
+                  searchController: _searchController,
+                  onSearchChanged: notifier.setSearchQuery,
+                ),
+                if (!data.isSelectionMode)
+                  _PhotosViewTabBar(
+                    activeView: data.frameView,
+                    onSelectView: notifier.setFrameView,
+                  ),
+                Expanded(
+                  child: MobileSectionSwipe(
+                    onSwipe: (toNext) {
+                      final target = adjacentSection(
+                        _PhotosViewTabBar.hostedViews,
+                        data.frameView,
+                        toNext,
+                      );
+                      if (target != null) {
+                        notifier.setFrameView(target);
+                      }
+                    },
+                    child: content,
+                  ),
+                ),
+                if (data.isSelectionMode && data.selectedPhotoIds.isNotEmpty)
+                  _buildAnimatedBatchBar(data),
+              ],
+            ),
           );
         }
         return Column(
@@ -598,9 +713,38 @@ class _PhotosViewTabBar extends StatelessWidget {
     FrameView.trash,
   ];
 
+  /// 托管移动页签对齐样例六段（Library/Albums/Favorites/Timeline/Places/
+  /// Trash）；Tags 仅桌面/非托管保留。
+  static const List<FrameView> hostedViews = [
+    FrameView.grid,
+    FrameView.albums,
+    FrameView.favorites,
+    FrameView.timeline,
+    FrameView.locations,
+    FrameView.trash,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final hosted = MobileShellScope.isHosted(context);
+    final views = hosted ? hostedViews : _views;
+    // 托管模块页：样例玻璃胶囊分段（无导入钮，与影视/音乐页签行同距）；
+    // 非托管保持 Frame 页签行。
+    if (hosted) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+          child: MobileSegmentedControl<FrameView>(
+            values: views,
+            selected: views.contains(activeView) ? activeView : views.first,
+            labelBuilder: (view) => frameViewLabel(l10n, view),
+            onSelected: onSelectView,
+          ),
+        ),
+      );
+    }
     final colors = context.frameColors;
     return Container(
       decoration: BoxDecoration(
@@ -615,10 +759,10 @@ class _PhotosViewTabBar extends StatelessWidget {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                itemCount: _views.length,
+                itemCount: views.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 2),
                 itemBuilder: (context, index) {
-                  final view = _views[index];
+                  final view = views[index];
                   final selected = view == activeView;
                   return TextButton(
                     style: TextButton.styleFrom(

@@ -108,7 +108,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('托管态隐藏模块顶栏与底导航，分区改为顶部页签行', (tester) async {
+    testWidgets('托管态隐藏模块顶栏/底导航与页签行（空间内导航承载分区）', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -126,10 +126,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('hosted library content'), findsOneWidget);
-      // 页签行渲染三个非管理员分区
-      expect(find.text('Library'), findsOneWidget);
-      expect(find.text('Bookshelf'), findsOneWidget);
-      expect(find.text('Stats'), findsOneWidget);
+      // 原型 Reader 空间无页签行：分区导航由空间内行动（书架/统计）承载。
+      expect(find.text('Library'), findsNothing);
+      expect(find.text('Bookshelf'), findsNothing);
+      expect(find.text('Stats'), findsNothing);
       // 模块顶栏面包屑与底导航/侧栏图标不再渲染
       expect(find.text('OmniNest'), findsNothing);
       expect(find.byIcon(Icons.admin_panel_settings_outlined), findsNothing);

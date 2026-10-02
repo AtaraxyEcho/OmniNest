@@ -180,6 +180,43 @@ class NotificationController extends Notifier<NotificationState> {
     await load(page: page, size: size);
   }
 
+  /// 追加加载下一页（移动端滚动加载）：按 id 去重后拼接到现有列表，
+  /// 失败静默保持现状，翻页游标仅在成功时前移。
+  Future<void> loadMore({int size = 20}) async {
+    if (state.isLoading) {
+      return;
+    }
+    final nextPage = state.currentPage + 1;
+    final maxPage = (state.total / size).ceil() - 1;
+    if (nextPage > maxPage) {
+      return;
+    }
+    state = state.copyWith(isLoading: true);
+    try {
+      final unreadOnly = _unreadOnly;
+      final result = await _api.list(
+        page: nextPage,
+        size: size,
+        unreadOnly: unreadOnly,
+      );
+      // 实时刷新可能已替换列表：以当前列表为准按 id 去重后追加。
+      final existingIds = state.items.map((item) => item.id).toSet();
+      state = state.copyWith(
+        items: [
+          ...state.items,
+          for (final item in result.items)
+            if (!existingIds.contains(item.id)) item,
+        ],
+        total: result.total,
+        allTotal: unreadOnly ? state.allTotal : result.total,
+        currentPage: nextPage,
+        isLoading: false,
+      );
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    }
+  }
+
   /// 严格刷新当前通知分页，失败时保留失效记录等待重试。
   Future<void> refreshForRealtime({int size = 20}) async {
     final existing = _realtimeRefresh;

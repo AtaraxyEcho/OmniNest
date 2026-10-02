@@ -10,6 +10,9 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
@@ -161,6 +164,17 @@ class _HomeContent extends ConsumerWidget {
       onOpenCollection,
     ).take(8).toList(growable: false);
     final hosted = MobileShellScope.isHosted(context);
+    if (hosted) {
+      return _hostedHomeBody(
+        context,
+        ref,
+        l10n: l10n,
+        center: center,
+        covers: covers,
+        recent: recent,
+        dailyVisible: dailySectionVisible,
+      );
+    }
     // 桌面态卡片已带播放条避让，仅留小余量；紧凑态播放条在布局流内，保留完整避让。
     final compact = hosted || MediaQuery.sizeOf(context).width < 760;
     return SingleChildScrollView(
@@ -168,10 +182,8 @@ class _HomeContent extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!hosted) ...[
-            _NowPlayingFocusStrip(center: center),
-            const SizedBox(height: 28),
-          ],
+          _NowPlayingFocusStrip(center: center),
+          const SizedBox(height: 28),
           _SectionTitle(
             title: l10n.musicDeckContinueListening,
             actionLabel: l10n.musicViewAllSimple,
@@ -1008,4 +1020,113 @@ Future<void> _confirmScrapeLibrary(BuildContext context, WidgetRef ref) async {
   } on Exception {
     // 命令层已把失败写入中心状态 errorMessage，由页面统一展示。
   }
+}
+
+/// 托管 Home（样例 MusicModule Home 段）：NOW PLAYING 卡 + 每日/收藏
+/// 专辑轨 + 编号衬线续听行。
+Widget _hostedHomeBody(
+  BuildContext context,
+  WidgetRef ref, {
+  required AppLocalizations l10n,
+  required MusicCenterState center,
+  required List<MusicDeckCoverItem> covers,
+  required List<MusicPlayableItem> recent,
+  required bool dailyVisible,
+}) {
+  final track = center.activeTrack;
+  // 播放会话在测试环境无服务器配置：NOW PLAYING 卡不读会话位置，
+  // 进度文本用 0:00 / 总时长（样例即静态卡片）。
+  const position = Duration.zero;
+  final duration =
+      track == null
+          ? Duration.zero
+          : Duration(seconds: track.durationSeconds ?? 0);
+  final controller = ref.read(musicCenterControllerProvider.notifier);
+  final recentPlayables = _recentItems(center, const <MusicPlatform>{});
+  final dailyFirst = recentPlayables.firstOrNull;
+  return SingleChildScrollView(
+    padding: const EdgeInsets.only(bottom: 96),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (track != null)
+          SampleNowPlayingCard(
+            eyebrow: l10n.musicDeckNowPlaying,
+            title: track.title,
+            subtitle: track.artistName,
+            imageUrl: track.coverUrl,
+            progress:
+                duration.inMilliseconds > 0
+                    ? position.inMilliseconds / duration.inMilliseconds
+                    : 0,
+            progressText:
+                '${_formatShortDuration(position)} / ${_formatShortDuration(duration)}',
+            onTap: () => context.push('/music/now-playing'),
+          ),
+        if (dailyVisible && recentPlayables.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          _SectionTitle(title: l10n.musicDailyRecommendationTitle),
+          const SizedBox(height: 12),
+          SampleRail(
+            children: [
+              for (final item in recentPlayables.take(8))
+                SampleAlbumCard(
+                  imageUrl: item.track.coverUrl,
+                  title: item.track.title,
+                  subtitle: item.track.artistName,
+                  onTap: () => controller.playItems([item]),
+                  onPlay: () => controller.playItems([item]),
+                  showPlayOverlay: item == dailyFirst,
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 24),
+        _SectionTitle(
+          title: l10n.musicDeckYourCollections,
+          actionLabel: l10n.musicViewAllSimple,
+        ),
+        const SizedBox(height: 12),
+        if (covers.isEmpty)
+          _InlineEmpty(message: l10n.musicPlaylistsEmptyHint)
+        else
+          SampleRail(
+            children: [
+              for (final cover in covers)
+                SampleAlbumCard(
+                  imageUrl: cover.imageUrl,
+                  title: cover.title,
+                  subtitle: cover.subtitle,
+                  onTap: cover.onTap,
+                ),
+            ],
+          ),
+        const SizedBox(height: 24),
+        _SectionTitle(
+          title: l10n.musicDeckContinueListening,
+          actionLabel: l10n.musicViewAllSimple,
+        ),
+        const SizedBox(height: 4),
+        for (final (index, item) in recent.take(6).indexed)
+          SampleSerifRow(
+            number: '${index + 1}',
+            title: item.track.title,
+            subtitle:
+                '${item.track.artistName} · ${_formatShortDuration(Duration(seconds: item.track.durationSeconds ?? 0))}',
+            onTap: () => controller.playItems(recent, startIndex: index),
+            trailing: Icon(
+              Icons.more_horiz_rounded,
+              size: 19,
+              color: MobileEnvColors.inkFaint,
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+String _formatShortDuration(Duration d) {
+  final m = d.inMinutes;
+  final sec = d.inSeconds % 60;
+  return '$m:${sec.toString().padLeft(2, '0')}';
 }

@@ -8,7 +8,6 @@ const _allowedViolations = <String>{
       'lib/features/admin/presentation/pages/admin_operations_pages.dart -> '
       'package:omninest/features/video/presentation/widgets/movie_management.dart',
   // 0.1.0 发布前登记的存量架构债，禁止新增，修复后从清单移除。
-  'APP_SHELL_FEATURE_INTERNAL lib/app/mobile_shell/mobile_app_shell.dart -> package:omninest/features/photos/presentation/widgets/frame_palette.dart',
   'CROSS_FEATURE_INTERNAL lib/features/files/application/media_import_service.dart -> package:omninest/features/tasks/data/task_api.dart',
   'CROSS_FEATURE_INTERNAL lib/features/music/presentation/deck/music_deck_content.dart -> package:omninest/features/files/presentation/widgets/media_import_button.dart',
   // 文件检视面板经仓储端口取节点详情，0.1.0 前登记的存量分层债，修复后移除。

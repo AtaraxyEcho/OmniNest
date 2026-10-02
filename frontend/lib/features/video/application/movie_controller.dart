@@ -529,7 +529,14 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       return;
     }
     _applyRefreshedState(current, next);
-    await _loadSection(current?.section ?? MovieSection.movies, force: true);
+    // 分区以刷新完成时的实况为准（进入页同步切栏/挂起待恢复分区都
+    // 可能已改变）：用启动时快照回写会让模块落地旧分区（电影）。
+    final liveSection =
+        state.asData?.value.section ??
+        _pendingSection ??
+        current?.section ??
+        MovieSection.movies;
+    await _loadSection(liveSection, force: true);
   }
 
   /// 严格刷新实时事件涉及的影视数据并保留当前视图状态。

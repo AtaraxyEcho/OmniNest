@@ -8,7 +8,6 @@ import 'package:omninest/features/video/domain/movie_models.dart'
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_progress_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_volume.dart';
-import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 播放器底部控制栏，根据输入方式使用桌面或移动布局。
 class MoviePlayerBottomBar extends StatelessWidget {
@@ -42,6 +41,8 @@ class MoviePlayerBottomBar extends StatelessWidget {
     required this.isMobile,
     this.onPreviousEpisode,
     this.onNextEpisode,
+    this.onRotateTap,
+    this.isLandscapeOrientation = false,
     super.key,
   });
 
@@ -74,6 +75,12 @@ class MoviePlayerBottomBar extends StatelessWidget {
   final bool isMobile;
   final VoidCallback? onPreviousEpisode;
   final VoidCallback? onNextEpisode;
+
+  /// 横竖屏手动旋转入口：null（Web/桌面）时隐藏旋转钮。
+  final VoidCallback? onRotateTap;
+
+  /// 当前生效方向（手动锁或设备方向），驱动旋转钮图标状态。
+  final bool isLandscapeOrientation;
 
   @override
   Widget build(BuildContext context) {
@@ -233,61 +240,55 @@ class MoviePlayerBottomBar extends StatelessWidget {
       );
     }
     final l10n = AppLocalizations.of(context);
-    final targetSize = isMobile ? 48.0 : 44.0;
-    return Column(
+    final targetSize = 48.0;
+    // 样例紧凑形态：单行工具行——剧集左前/后集、右 字幕/设置/旋转；
+    // 播放交给中央键组，音轨/倍速收进设置面板，时间由进度条呈现。
+    return SizedBox(
       key: const Key('moviePlayerControlsCompact'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: targetSize,
-          child: Row(
-            children: [
-              Expanded(child: _buildTimeLabel(context, compact: true)),
-              if (onAudioTap != null)
-                MoviePlayerIconButton(
-                  icon: Icons.language_rounded,
-                  tooltip: l10n.coreLanguage,
-                  onPressed: onAudioTap,
-                  size: targetSize,
-                ),
-              MoviePlayerIconButton(
-                icon:
-                    activeSubtitleId != null
-                        ? Icons.subtitles_rounded
-                        : Icons.subtitles_off_rounded,
-                tooltip: l10n.videoSubtitle,
-                selected: activeSubtitleId != null,
-                onPressed: onSubtitleTap,
-                size: targetSize,
-              ),
-              SpeedButton(speed: playbackSpeed, onTap: onSpeedTap),
-              MoviePlayerIconButton(
-                icon: Icons.settings_rounded,
-                tooltip: l10n.videoPlaybackSettings,
-                onPressed: onSettingsTap,
-                size: targetSize,
-              ),
-              // Android/iOS 无全屏 API：本页已由沉浸租约覆盖系统栏，
-              // 保留钮只会给出一个点了没反应且图标状态恒定的控件。
-              if (PlatformCapabilities.current().supportsFullscreenToggle)
-                MoviePlayerIconButton(
-                  icon:
-                      isFullscreen
-                          ? Icons.fullscreen_exit_rounded
-                          : Icons.fullscreen_rounded,
-                  tooltip:
-                      isFullscreen
-                          ? l10n.videoExitFullscreen
-                          : l10n.videoEnterFullscreen,
-                  onPressed: onFullscreenTap,
-                  size: targetSize,
-                ),
-            ],
+      height: targetSize,
+      child: Row(
+        children: [
+          if (onPreviousEpisode != null)
+            MoviePlayerIconButton(
+              icon: Icons.skip_previous_rounded,
+              tooltip: l10n.videoPreviousEpisode,
+              onPressed: onPreviousEpisode,
+              size: targetSize,
+            ),
+          if (onNextEpisode != null)
+            MoviePlayerIconButton(
+              icon: Icons.skip_next_rounded,
+              tooltip: l10n.videoNextEpisode,
+              onPressed: onNextEpisode,
+              size: targetSize,
+            ),
+          const Spacer(),
+          MoviePlayerIconButton(
+            icon:
+                activeSubtitleId != null
+                    ? Icons.subtitles_rounded
+                    : Icons.subtitles_off_rounded,
+            tooltip: l10n.videoSubtitle,
+            selected: activeSubtitleId != null,
+            onPressed: onSubtitleTap,
+            size: targetSize,
           ),
-        ),
-        _buildTransportControls(context, targetSize: targetSize),
-      ],
+          MoviePlayerIconButton(
+            icon: Icons.settings_rounded,
+            tooltip: l10n.videoPlaybackSettings,
+            onPressed: onSettingsTap,
+            size: targetSize,
+          ),
+          if (onRotateTap != null)
+            MoviePlayerIconButton(
+              icon: Icons.screen_rotation_rounded,
+              tooltip: l10n.videoToggleOrientation,
+              onPressed: onRotateTap,
+              selected: isLandscapeOrientation,
+              size: targetSize,
+            ),
+        ],
+      ),
     );
   }
 

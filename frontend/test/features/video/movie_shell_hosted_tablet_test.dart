@@ -5,7 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
-import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
 
@@ -24,14 +24,14 @@ void main() {
         overrides: [
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
         ],
-        child: MobileShellScope(
-          hosted: true,
-          child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('zh'),
-            theme: OmniNestTheme.dark(),
-            home: MovieShell(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          theme: OmniNestTheme.dark(),
+          // 经 MobileHostedRoute 泵入 = 真实点击链路（根级路由补挂 scope）。
+          home: MobileHostedRoute(
+            child: MovieShell(
               section: MovieSection.movies,
               child: const SizedBox(
                 key: Key('movie-hosted-content'),
@@ -48,6 +48,44 @@ void main() {
     expect(find.byType(MovieTopBar), findsNothing, reason: '托管态由壳层顶栏提供标题');
     expect(find.byType(MovieSidebar), findsNothing, reason: '托管态不复用桌面侧栏');
     expect(find.byKey(const Key('movie-hosted-content')), findsOneWidget);
+  });
+
+  testWidgets('托管分段条为样例四段：For you/Films/Series/Anime', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          theme: OmniNestTheme.dark(),
+          home: MobileHostedRoute(
+            child: MovieShell(
+              section: MovieSection.movies,
+              child: const SizedBox(height: 240),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 玻璃横幅（样例 module-overlay 头）在场。
+    expect(find.text('影视'), findsOneWidget);
+    expect(find.text('为你推荐'), findsOneWidget);
+    expect(find.text('电影'), findsOneWidget);
+    expect(find.text('剧集'), findsOneWidget);
+    expect(find.text('动漫'), findsOneWidget);
+    // 收藏不再占分段位（并入段内 chip）。
+    expect(find.text('收藏'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('非托管桌面宽度仍使用桌面顶栏与侧栏', (tester) async {

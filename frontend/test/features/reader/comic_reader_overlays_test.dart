@@ -74,7 +74,8 @@ void main() {
     );
 
     expect(find.text('3 / 12'), findsOneWidget);
-    expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
+    // 模式切换钮在移动端恢复常驻（样例底栏），窄屏不溢出为准。
+    expect(find.byIcon(Icons.swap_vert_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -352,6 +352,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
             const SizedBox(height: 8),
             TextField(
               controller: _passwordController,
+              obscureText: true,
+              enableSuggestions: false,
+              autocorrect: false,
+              textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 labelText: l10n.filesCustomPassword,
                 hintText: l10n.filesEnterPassword,

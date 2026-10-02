@@ -166,7 +166,7 @@ void main() {
       },
     );
 
-    testWidgets('返回手势按 退出多选→回图库视图→回门户 的顺序处理', (tester) async {
+    testWidgets('返回手势按 退出多选→回图库视图→离开照片模块 的顺序处理', (tester) async {
       tester.view.physicalSize = const Size(2400, 1600);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -200,7 +200,7 @@ void main() {
             builder: (context, state) => const PhotosPage(),
           ),
           GoRoute(
-            path: '/portal',
+            path: '/library',
             builder:
                 (context, state) =>
                     const SizedBox(key: Key('portal-destination')),
@@ -244,7 +244,7 @@ void main() {
       // 第三次返回：无多选、默认视图且无搜索，回到门户。
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(router.routerDelegate.currentConfiguration.uri.path, '/portal');
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/library');
       expect(find.byKey(const Key('portal-destination')), findsOneWidget);
     });
 

@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 阅读器底部导航、进度和工具控制栏。
+///
+/// [sampleChrome] 为样例 ReaderFocus 页脚皮肤（移动壳层）：底部渐隐
+/// 渐变、3px 全书进度条 + 百分比、目录与「Aa」设置玻璃方钮；默认
+/// false 维持工位实底皮肤。
 class ReaderViewBottomBar extends StatelessWidget {
   const ReaderViewBottomBar({
     required this.settings,
@@ -19,6 +24,7 @@ class ReaderViewBottomBar extends StatelessWidget {
     this.onProgressSeek,
     this.chapterIndex,
     this.chapterCount,
+    this.sampleChrome = false,
     super.key,
   });
 
@@ -36,8 +42,14 @@ class ReaderViewBottomBar extends StatelessWidget {
   final int? chapterIndex;
   final int? chapterCount;
 
+  /// 样例 ReaderFocus 页脚皮肤（移动壳层玻璃 chrome）。
+  final bool sampleChrome;
+
   @override
   Widget build(BuildContext context) {
+    if (sampleChrome) {
+      return _ReaderSampleBottomBar(bar: this);
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final layout = ReaderControlLayout.resolve(
@@ -314,6 +326,151 @@ class _ReaderDockButton extends StatelessWidget {
         shape: const CircleBorder(),
       ),
       icon: Icon(icon, size: 22),
+    );
+  }
+}
+
+/// 样例 ReaderFocus 页脚：底部渐隐渐变 + 进度条/百分比 + 玻璃方钮。
+class _ReaderSampleBottomBar extends StatelessWidget {
+  const _ReaderSampleBottomBar({required this.bar});
+
+  final ReaderViewBottomBar bar;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final percent = (bar.progress.clamp(0.0, 1.0) * 100).round();
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              bar.settings.surfaceColor.withValues(alpha: 0),
+              bar.settings.surfaceColor.withValues(alpha: 0.94),
+            ],
+            stops: const [0, 0.28],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 26, 16, 10),
+          child: Row(
+            children: [
+              _ReaderSampleFooterButton(
+                icon: OmniIcons.previous,
+                tooltip: l10n.readerPreviousPage,
+                settings: bar.settings,
+                onTap: bar.onPrevious,
+              ),
+              const SizedBox(width: 8),
+              _ReaderSampleFooterButton(
+                icon: OmniIcons.next,
+                tooltip: l10n.readerNextPage,
+                settings: bar.settings,
+                onTap: bar.onNext,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ReaderProgressSlider(
+                  settings: bar.settings,
+                  progress: bar.progress,
+                  onSeekEnd: bar.onProgressSeek,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$percent%',
+                style: TextStyle(
+                  color: bar.settings.onSurfaceVariantColor,
+                  // ignore: font_size_whitelist
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _ReaderSampleFooterButton(
+                icon: OmniIcons.list,
+                tooltip: l10n.readerTableOfContents,
+                settings: bar.settings,
+                onTap: bar.onShowContents,
+              ),
+              const SizedBox(width: 8),
+              _ReaderSampleFooterButton(
+                icon: OmniIcons.settings,
+                label: 'Aa',
+                tooltip: l10n.readerSettingsTitle,
+                settings: bar.settings,
+                onTap: bar.onShowSettings,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 样例页脚玻璃方钮：44×44 r12，底色取调色板前景 8%（原型 Aa 按钮）。
+class _ReaderSampleFooterButton extends StatelessWidget {
+  const _ReaderSampleFooterButton({
+    required this.icon,
+    required this.tooltip,
+    required this.settings,
+    required this.onTap,
+    this.label,
+  });
+
+  final OmniIconsData icon;
+  final String tooltip;
+  final ReaderViewSettings settings;
+  final VoidCallback onTap;
+
+  /// 按钮文字（如 Aa）；提供时与图标并排。
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget content =
+        label == null
+            ? OmniIcon(icon: icon, size: 19, color: settings.onSurfaceColor)
+            : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OmniIcon(icon: icon, size: 16, color: settings.onSurfaceColor),
+                const SizedBox(width: 4),
+                Text(
+                  label!,
+                  style: TextStyle(
+                    color: settings.onSurfaceColor,
+                    fontSize: AppTypography.bodyMedium,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            );
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: settings.onSurfaceColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(child: content),
+          ),
+        ),
+      ),
     );
   }
 }

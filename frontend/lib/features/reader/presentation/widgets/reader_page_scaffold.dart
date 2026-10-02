@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/app/theme/mobile_env_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
@@ -132,24 +133,21 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
         // 托管态由应用壳提供顶栏与底栏：隐藏模块 chrome，分区改为页内页签行。
         final hosted = MobileShellScope.isHosted(context);
         final isWide = constraints.maxWidth >= 1024;
-        return PopScope(
+        Widget tree = PopScope(
           canPop: !widget.enablePopGuard,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
             _goFallback();
           },
           child: Scaffold(
-            backgroundColor: rc.surface,
+            // 托管态：移动壳层环境隔离——纸感调色板整体重绑为环境暗色
+            // 玻璃族，壳底透明由环境层绘制；非托管（桌面）维持纸感实底。
+            backgroundColor: hosted ? Colors.transparent : rc.surface,
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (!hosted)
                   _ReaderModuleTopBar(target: widget.target, user: user),
-                if (hosted)
-                  _ReaderHostedSectionTabs(
-                    current: widget.target,
-                    targets: targets,
-                  ),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -174,6 +172,13 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
                     : null,
           ),
         );
+        if (hosted) {
+          return Theme(
+            data: MobileEnvTheme.withReaderInEnv(context),
+            child: tree,
+          );
+        }
+        return tree;
       },
     );
   }
@@ -256,73 +261,6 @@ class _ReaderModuleTopBar extends ConsumerWidget {
             NotificationIcon(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),
             const UserAvatarMenu(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 托管态顶部页签行：全局壳占用底栏后，模块分区改为页内横排页签。
-class _ReaderHostedSectionTabs extends StatelessWidget {
-  const _ReaderHostedSectionTabs({
-    required this.current,
-    required this.targets,
-  });
-
-  final ReaderPageTarget current;
-  final List<ReaderPageTarget> targets;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.readerColors;
-    final l10n = AppLocalizations.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: rc.surface,
-        border: Border(bottom: BorderSide(color: rc.outlineVariant)),
-      ),
-      child: SizedBox(
-        height: 44,
-        child: Row(
-          children: [
-            for (final target in targets)
-              Expanded(
-                child: InkWell(
-                  onTap: () => context.go(target.location),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        target.localizedLabel(l10n),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.bodyMedium,
-                          height: 1.2,
-                          color:
-                              target == current
-                                  ? rc.onSurface
-                                  : rc.onSurfaceVariant,
-                          fontWeight:
-                              target == current
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Container(
-                        height: 2,
-                        width: 28,
-                        color:
-                            target == current
-                                ? rc.sidebarSelectedBg
-                                : Colors.transparent,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -519,6 +457,13 @@ class _ReaderPageScrollArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final wide = MediaQuery.sizeOf(context).width >= 1024;
+    // 托管态内容区内边距对齐样例 content-scroll（8px 20px 0）+ 收尾余量；
+    // 非托管（桌面）维持工位缩进。
+    final hosted = MobileShellScope.isHosted(context);
+    final pagePadding =
+        hosted
+            ? const EdgeInsets.fromLTRB(20, 8, 20, 24)
+            : EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40);
     final Widget scroll;
     if (childOwnScroll) {
       scroll = child;
@@ -527,7 +472,7 @@ class _ReaderPageScrollArea extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
-        padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40),
+        padding: pagePadding,
         child: child,
       );
     }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 /// Files 工位弹窗兼容层。
@@ -27,7 +29,7 @@ Future<T?> showFilesDialog<T>({
   );
 }
 
-/// 标准确认弹窗（Files 兼容入口）。
+/// 标准确认弹窗（Files 兼容入口；托管态走移动确认 sheet）。
 Future<bool> showFilesConfirmDialog(
   BuildContext context, {
   required String title,
@@ -35,6 +37,15 @@ Future<bool> showFilesConfirmDialog(
   String? confirmLabel,
   bool destructive = false,
 }) {
+  if (MobileShellScope.isHosted(context)) {
+    return showMobileConfirmSheet(
+      context,
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+    );
+  }
   return showWorkstationConfirmDialog(
     context,
     title: title,

@@ -26,6 +26,8 @@ import 'package:omninest/features/notifications/application/notification_prefere
 import 'package:omninest/features/notifications/application/notification_type_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
+import 'package:omninest/features/profile/domain/user_session.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_account_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_appearance_panel.dart';
@@ -33,6 +35,9 @@ import 'package:omninest/features/profile/presentation/widgets/profile_section_c
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_preferences.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_shell.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_mobile_content.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_two_factor_card.dart';
@@ -41,6 +46,8 @@ import 'package:omninest/features/portal/application/weather_preferences_control
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+
+part 'profile_mobile_view.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({this.initialSection, super.key});
@@ -211,7 +218,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ? ref.watch(desktopCloseBehaviorProvider).asData?.value
             : null;
 
-    // 个人中心为根 Navigator 承载的顶层路由，屏幕宽即可用画布宽。
+    // 托管移动壳层：样例 ProfilePage 形态（模块横幅 + 分组行 + 复用
+    // 面板的二级视图）；非托管窄窗保留旧紧凑表单。
+    if (MobileShellScope.isHosted(context)) {
+      return ProfileMobileView(initialSection: widget.initialSection);
+    }
     if (MediaQuery.sizeOf(context).width <
         ResponsiveBreakpoints.workbenchRail) {
       return Scaffold(
@@ -244,6 +255,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           avatarUrl: avatarUrl,
           unreadCount: unreadCount,
           weatherCity: weatherCity,
+          initialSection: widget.initialSection,
           themeMode: themeMode,
           languageCode: languageCode,
           fontScalePreset: fontScalePreset,

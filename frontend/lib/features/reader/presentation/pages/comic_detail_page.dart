@@ -8,6 +8,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_source_tile.dart';
@@ -170,11 +171,13 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
 
   /// 当前可见页签：目录与来源在无数据时隐藏。
   Map<_ComicDetailTab, String> _visibleTabs(AppLocalizations l10n) {
+    // 托管移动态对齐样例两页签：来源并入 Info 尾部小节。
+    final hosted = MobileShellScope.isHosted(context);
     return {
       _ComicDetailTab.info: l10n.readerDetailInfo,
       if (widget.chapters.isNotEmpty)
         _ComicDetailTab.catalog: l10n.readerTableOfContents,
-      if (widget.sources.isNotEmpty)
+      if (!hosted && widget.sources.isNotEmpty)
         _ComicDetailTab.sources: l10n.readerComicSources,
     };
   }
@@ -592,6 +595,10 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
     final item = widget.item;
+    final hostedSources =
+        MobileShellScope.isHosted(context) && widget.sources.isNotEmpty
+            ? _buildSourcesSection(context)
+            : null;
     final lastReadAt = widget.progress?.updatedAt ?? item.updatedAt;
     final rows = <(String, String)>[
       (l10n.readerDetailType, readerTypeLabel(l10n, item.itemType)),
@@ -666,6 +673,39 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               ],
             ),
           ),
+        if (hostedSources != null) ...[
+          const SizedBox(height: 20),
+          hostedSources,
+        ],
+      ],
+    );
+  }
+
+  /// 托管态来源小节：两页签语义下并入 Info 尾部。
+  Widget _buildSourcesSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final rc = context.readerColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.readerComicSources,
+          style: TextStyle(
+            color: rc.onSurface,
+            fontSize: AppTypography.titleSmall,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final source in widget.sources) ...[
+          ComicSourceTile(
+            source: source,
+            canDelete: widget.sources.length > 1,
+            onRetry: widget.onRetrySource,
+            onDelete: widget.onDeleteSource,
+          ),
+          const SizedBox(height: 8),
+        ],
       ],
     );
   }

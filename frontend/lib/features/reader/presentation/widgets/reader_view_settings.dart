@@ -18,6 +18,7 @@ class ReaderViewSettings {
     this.immersiveMode = false,
     this.pageTurnMode = 'slide',
     this.volumeKeyPaging = true,
+    this.mobileDefaults = false,
   }) : paletteId =
            paletteId ?? ReaderReadingPalette.idFromLegacyIndex(themeIndex ?? 2);
 
@@ -37,6 +38,22 @@ class ReaderViewSettings {
 
   /// 音量键翻页：移动端将音量键映射为翻页命令，默认开启。
   final bool volumeKeyPaging;
+
+  /// 移动壳层默认值：夜间玻璃调色板 + 衬线 19/1.7（样例正文书体）。
+  /// 桌面端与已保存偏好看不见此分支。
+  final bool mobileDefaults;
+
+  ReaderViewSettings withMobileDefaults() {
+    if (mobileDefaults || paletteId != ReaderReadingPalette.dark.id) {
+      return this;
+    }
+    return copyWith(
+      paletteId: ReaderReadingPalette.nightGlass.id,
+      // ignore: font_size_whitelist
+      fontSize: 19,
+      lineHeight: 1.7,
+    );
+  }
 
   ReaderReadingPalette get palette => ReaderReadingPalette.fromId(paletteId);
   Color get surfaceColor => palette.surface;
@@ -75,6 +92,7 @@ class ReaderViewSettings {
     bool? immersiveMode,
     String? pageTurnMode,
     bool? volumeKeyPaging,
+    bool? mobileDefaults,
   }) {
     return ReaderViewSettings(
       fontFamily: fontFamily ?? this.fontFamily,
@@ -89,6 +107,7 @@ class ReaderViewSettings {
       immersiveMode: immersiveMode ?? this.immersiveMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
       volumeKeyPaging: volumeKeyPaging ?? this.volumeKeyPaging,
+      mobileDefaults: mobileDefaults ?? this.mobileDefaults,
     );
   }
 
@@ -229,7 +248,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
       1 => l10n.readerThemeEyeCare,
       2 => l10n.readerThemeDark,
       3 => l10n.readerThemeGreen,
-      _ => '',
+      _ => l10n.readerThemeNightGlass,
     };
   }
 

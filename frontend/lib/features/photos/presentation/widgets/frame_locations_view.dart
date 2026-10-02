@@ -54,24 +54,33 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
         onSelected: (name) => setState(() => _selectedLocation = name),
       );
     }
-    return _LocationDetail(
-      location: selected,
-      photos: groups[selected]!,
-      onBack: () => setState(() => _selectedLocation = null),
-      onOpenPhoto: (photo) {
-        // 地点视图的浏览/幻灯片范围限定为当前地点的照片，
-        // 与影集/时间线的区域隔离语义一致；幻灯片侧对 locations
-        // 来源保留子集，不再回退全库替换。
-        ref
-            .read(photoBrowseScopeProvider.notifier)
-            .set(
-              groups[selected]!,
-              PhotoBrowseSource.locations,
-              sourceKey: selected,
-            );
-        widget.onOpenPhoto(photo);
+    // 内层返回语义：地点详情先回地点列表，不直接离开照片模块
+    // （页级 PopScope 看不到本视图的私有选中态）。
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() => _selectedLocation = null);
       },
-      onToggleFavorite: widget.onToggleFavorite,
+      child: _LocationDetail(
+        location: selected,
+        photos: groups[selected]!,
+        onBack: () => setState(() => _selectedLocation = null),
+        onOpenPhoto: (photo) {
+          // 地点视图的浏览/幻灯片范围限定为当前地点的照片，
+          // 与影集/时间线的区域隔离语义一致；幻灯片侧对 locations
+          // 来源保留子集，不再回退全库替换。
+          ref
+              .read(photoBrowseScopeProvider.notifier)
+              .set(
+                groups[selected]!,
+                PhotoBrowseSource.locations,
+                sourceKey: selected,
+              );
+          widget.onOpenPhoto(photo);
+        },
+        onToggleFavorite: widget.onToggleFavorite,
+      ),
     );
   }
 

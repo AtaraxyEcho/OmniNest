@@ -11,7 +11,9 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle;
 import 'package:omninest/features/reader/application/reader_controller.dart';
@@ -24,6 +26,8 @@ import 'package:omninest/features/reader/presentation/widgets/reader_import_queu
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_space_content.dart';
+
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
@@ -71,8 +75,11 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
       child: ReaderPageScaffold(
         target: ReaderPageTarget.library,
         onRefresh: _onRefresh,
+        // 托管态空间内不再渲染书库页头（搜索/分段页签）：全量书库经
+        // 「书架」动作进入；桌面端维持完整页头。
         header:
-            stateAsync.asData?.value == null
+            MobileShellScope.isHosted(context) ||
+                    stateAsync.asData?.value == null
                 ? null
                 : _LibraryHeader(
                   itemCount: stateAsync.asData!.value.visibleItems.length,
@@ -118,11 +125,62 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     final l10n = AppLocalizations.of(context);
     final visibleItems = data.visibleItems;
     final importJobs = ref.watch(readerImportQueueProvider);
-    final showContinue =
+    final hosted = MobileShellScope.isHosted(context);
+    final browseAll =
         data.librarySegment == ReaderLibrarySegment.all &&
-        data.searchQuery.trim().isEmpty &&
-        data.continueItems.isNotEmpty;
+        data.searchQuery.trim().isEmpty;
 
+    if (hosted) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (data.errorMessage != null)
+            MaterialBanner(
+              content: Text(data.errorMessage!),
+              actions: [
+                TextButton(
+                  onPressed:
+                      () =>
+                          ref
+                              .read(readerCenterControllerProvider.notifier)
+                              .clearError(),
+                  child: Text(l10n.readerClose),
+                ),
+              ],
+            ),
+          if (importJobs.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            for (final job in importJobs)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ImportJobRow(job: job),
+              ),
+          ],
+          if (!browseAll) ...[
+            // 检索/分段态：书库网格保留为结果视图。
+            const SizedBox(height: 28),
+            if (visibleItems.isEmpty)
+              EnvEmptyState(
+                icon: OmniIcons.book,
+                title: l10n.libraryEmptyBooksTitle,
+                message: l10n.libraryEmptyBooksMessage,
+              )
+            else
+              _LibraryGrid(
+                items: visibleItems,
+                onOpenItem: _onOpenItem,
+                onToggleBookshelf: _onToggleBookshelf,
+                onDeleteItem: _onDeleteItem,
+              ),
+          ] else ...[
+            _buildHostedSpace(data, visibleItems),
+          ],
+        ],
+      );
+    }
+
+    final showContinue = browseAll && data.continueItems.isNotEmpty;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +208,7 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
             ),
         ],
         if (showContinue) ...[
-          const SizedBox(height: 28),
+          const SizedBox(height: 12),
           _ContinueSection(
             items: data.continueItems.take(6).toList(),
             onOpenItem: _openContinueReading,
@@ -175,6 +233,79 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
             onDeleteItem: _onDeleteItem,
           ),
       ],
+    );
+  }
+
+  /// 托管态 Reader 空间：样例 shelf 视图四段（特写/洞察/书轨/最近笔记）。
+  Widget _buildHostedSpace(
+    ReaderCenterState data,
+    List<ReaderItem> visibleItems,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final dashboard = ref.watch(readerDashboardProvider).asData?.value;
+    final recent = dashboard?.recentItems ?? const <ReaderItem>[];
+    final pool = recent.isNotEmpty ? recent : visibleItems;
+    final feature = data.continueItems.firstOrNull ?? pool.firstOrNull;
+    final railItems =
+        pool.where((item) => item.id != feature?.id).take(10).toList();
+
+    final overview = ref.watch(readerStatsOverviewProvider).asData?.value;
+    final streak = ref.watch(readerStatsProvider).asData?.value.currentStreak;
+    final weekMinutes = overview?.dailyMinutes.fold<int>(
+      0,
+      (sum, entry) => sum + entry.minutes,
+    );
+
+    final annotations =
+        ref.watch(readerRecentAnnotationsProvider).asData?.value ??
+        const <ReaderAnnotation>[];
+    final notes = <ReaderSpaceNote>[
+      for (final annotation in annotations)
+        if ((annotation.highlightText ?? annotation.note)?.isNotEmpty == true)
+          ReaderSpaceNote(
+            annotationId: annotation.id,
+            itemId: annotation.readerItemId,
+            quote: annotation.highlightText ?? annotation.note ?? '',
+            createdAt: annotation.createdAt,
+          ),
+    ];
+    final bookTitles = <String, String>{
+      for (final item in pool)
+        if (item.id.isNotEmpty) item.id: item.title,
+    };
+
+    if (feature == null && railItems.isEmpty) {
+      // 整库为空：居中空态 + 导入 CTA（空态须可行动，而非纯提示）。
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          EnvEmptyState(
+            icon: OmniIcons.book,
+            title: l10n.libraryEmptyBooksTitle,
+            message: l10n.libraryEmptyBooksMessage,
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: ReaderLibraryImportAction(
+              style: ImportButtonStyle.outlinedButton,
+              label: l10n.readerImportBooks,
+            ),
+          ),
+        ],
+      );
+    }
+    return ReaderSpaceContent(
+      featureItem: feature,
+      railItems: railItems,
+      notes: notes,
+      bookTitles: bookTitles,
+      insightMinutes: weekMinutes,
+      insightChapters: overview?.completedCount ?? 0,
+      insightStreakDays: streak,
+      onResume: _openContinueReading,
+      onOpenItem: _onOpenItem,
+      onOpenBookshelf: () => context.push('/reader/bookshelf'),
+      onOpenStats: () => context.push('/reader/stats'),
     );
   }
 
