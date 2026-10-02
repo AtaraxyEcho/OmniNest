@@ -188,10 +188,10 @@ class ApplicationEnvironmentContractTest {
                 .isEqualTo("${OMNINEST_RCLONE_RC_PASS:}");
         assertThat(prod.getProperty("omninest.aria2.rpc-secret"))
                 .isEqualTo("${OMNINEST_ARIA2_RPC_SECRET:}");
-        // 凭据加密密钥：dev 提供本地回退值便于开箱联调，prod 必须显式注入，
-        // 运行时由 ProductionSecretsValidator 拒绝空值。
+        // 凭据加密密钥：dev 与 prod 均不提供回退默认值，需要外部存储凭据
+        // 功能时显式注入；prod 运行时由 ProductionSecretsValidator 拒绝空值。
         assertThat(dev.getProperty("omninest.security.credential-encryption-key"))
-                .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}");
+                .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}");
         assertThat(prod.getProperty("omninest.security.credential-encryption-key"))
                 .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}");
     }
