@@ -4,8 +4,8 @@ import 'package:omninest/platform/platform_capabilities.dart';
 /// 通用系统通知器：后台任务完成/失败等场景的系统级通知。
 ///
 /// 能力由 [PlatformCapabilities.supportsSystemNotifications] 驱动：
-/// Android/iOS/macOS/Linux 生效；Web 与 Windows 为空操作
-/// （flutter_local_notifications 0.18 不覆盖 Windows，任务提醒走站内）。
+/// Android/iOS/macOS/Linux 生效；Web 与 Windows 暂为空操作
+/// （库自 19.0 起支持 Windows、22.0 起支持 Web，平台能力开关尚未放开）。
 class SystemNotifier {
   SystemNotifier._();
 
@@ -30,7 +30,7 @@ class SystemNotifier {
       linux: LinuxInitializationSettings(defaultActionName: '确定'),
     );
     try {
-      await _plugin.initialize(settings);
+      await _plugin.initialize(settings: settings);
       final android =
           _plugin
               .resolvePlatformSpecificImplementation<
@@ -67,7 +67,12 @@ class SystemNotifier {
       macOS: DarwinNotificationDetails(),
     );
     try {
-      await _plugin.show(id, title, body, details);
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+      );
     } on Exception {
       // 单条通知失败静默忽略，不影响任务本身。
     }

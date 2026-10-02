@@ -488,7 +488,7 @@ class EpubParserService {
       // 尝试带命名空间
       final elements = doc.findAllElements(
         localName,
-        namespace: 'http://purl.org/dc/elements/1.1/',
+        namespaceUri: 'http://purl.org/dc/elements/1.1/',
       );
       if (elements.isNotEmpty) {
         return elements.first.innerText.trim();
