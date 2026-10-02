@@ -937,7 +937,7 @@ public class PhotoLibraryService {
                 item.getGpsLocation(),
                 item.getFormat(),
                 item.getFileSize(),
-                coverUrls.get(item.getCoverFileId()),
+                coverUrlOrNull(coverUrls, item.getCoverFileId()),
                 resolveSourceUrl(ownerUserId, item.getFileNodeId()),
                 item.getMetadataStatus(),
                 favoriteIds.contains(item.getId()),

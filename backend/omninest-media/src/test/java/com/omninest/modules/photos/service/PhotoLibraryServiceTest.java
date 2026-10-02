@@ -318,6 +318,35 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
+    void listPhotosPage_nullCoverFileIdDoesNotThrow() {
+        // 封面派生尚未完成时 coverFileId 为 null；不可变 Map 的 get(null) 曾抛 NPE（D-012 漏网点）。
+        PhotoListItemProjection projection = photoProjection(PHOTO_ID_1, "封面未解析");
+        when(projection.getCoverFileId()).thenReturn(null);
+        when(photoItemRepository.findListPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(1);
+                    return new PageImpl<>(List.of(projection), pageable, 1);
+                });
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of());
+
+        Page<PhotoListItemDto> result = service.listPhotosPage(
+                OWNER_ID,
+                0,
+                50,
+                "createdAt,desc",
+                null
+        );
+
+        assertThat(result.getContent()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(PHOTO_ID_1);
+            assertThat(item.coverUrl()).isNull();
+        });
+    }
+
+    @Test
     void listPhotosPage_usesSearchQueryOnlyForNonBlankKeyword() {
         when(photoItemRepository.searchListPage(eq(OWNER_ID), eq("sunset"), any(Pageable.class)))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(2), 0));
