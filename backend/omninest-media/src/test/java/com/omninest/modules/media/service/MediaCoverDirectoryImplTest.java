@@ -10,8 +10,10 @@ import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicAlbumRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
+import com.omninest.modules.music.service.MusicCoverContributor;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
+import com.omninest.modules.reader.service.ReaderCoverContributor;
 import com.omninest.modules.video.domain.MediaMovie;
 import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -19,6 +21,7 @@ import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.modules.video.service.VideoCoverContributor;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,15 +44,11 @@ class MediaCoverDirectoryImplTest {
     private final MediaTvSeriesRepository seriesRepository = Mockito.mock(MediaTvSeriesRepository.class);
     private final ReaderItemRepository readerItemRepository = Mockito.mock(ReaderItemRepository.class);
 
-    private final MediaCoverDirectoryImpl directory = new MediaCoverDirectoryImpl(
-            musicTrackRepository,
-            musicAlbumRepository,
-            videoItemRepository,
-            movieRepository,
-            seasonRepository,
-            seriesRepository,
-            readerItemRepository
-    );
+    private final MediaCoverDirectoryImpl directory = new MediaCoverDirectoryImpl(List.of(
+            new MusicCoverContributor(musicTrackRepository, musicAlbumRepository),
+            new VideoCoverContributor(videoItemRepository, movieRepository, seasonRepository, seriesRepository),
+            new ReaderCoverContributor(readerItemRepository)
+    ));
 
     private static UUID id(int seed) {
         return UUID.fromString("10000000-0000-0000-0000-0000000000%02d".formatted(seed));
