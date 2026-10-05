@@ -111,6 +111,7 @@ deploy/ai-sidecar/ 图像分析侧车服务、模型适配与容器定义
 - OmniNest 项目内 Dart 导入统一使用 `package:omninest/...`，禁止跨目录相对导入。这是本项目为 feature-first 大型目录结构设定的一致性规则，不将其表述为 Effective Dart 的通用导入建议。文件名小写下划线，类型 UpperCamelCase，成员 lowerCamelCase，私有成员以下划线；使用单引号、尾随逗号、`dart format` 和 `analysis_options.yaml`。
 - 正式用户可见文案必须进入 ARB。主题、颜色、文本、密度和常用控件样式集中在 `app/theme` 或共享组件；不得在页面散落重复颜色常量。
 - 所有可点击图标提供 tooltip 或 semanticLabel。桌面/Web 使用左侧导航和顶部工具栏，Android 使用对应的紧凑导航，但三端保持同一信息架构。
+- 移动端触控下限分层：四空间主切换（如媒体库分段）与返回、关闭这类逃生控件不低于 48dp；次级控件沿用设计稿的 35-45dp；贴在可整卡点按内容上的装饰钮（如海报播放浮层）不计入下限。禁止为凑 48dp 机械放大次级控件。
 - 大型列表使用 builder、Sliver、分页和虚拟化；禁止以 `SingleChildScrollView + Column` 一次性构建大量动态项。缩略图优先于原图。
 - Dart 文件超过 800 行必须规划拆分，超过 1200 行必须拆分。单个 Widget 同时承担多项网络流程、轮询、导航和业务编排时，即使未超过行数也必须拆分。
 
@@ -162,7 +163,8 @@ showReaderSnackBar(context, l10n.readerImportSuccess(fileName));
 
 - Dio 拦截器统一处理 Bearer Token、串行刷新、`X-Request-Id`、错误映射和幂等请求重试。后端错误统一映射为 `AppException`。
 - Web 不把 Token 放入 localStorage；Android/Desktop 使用安全存储。离线敏感缓存使用加密存储或等价方案。
-- 离线允许浏览已缓存内容、播放/阅读已下载内容、暂存进度、笔记和书签；上传、删除、重命名和移动默认要求在线，除非单独实现离线写队列。
+- 离线能力仅在 Android 与 Desktop 承诺：允许浏览已缓存内容、播放/阅读已下载内容、暂存进度、笔记和书签；上传、删除、重命名和移动默认要求在线，除非单独实现离线写队列。
+- Web（含移动浏览器）不承诺离线：产物不做资源缓存，断网时显示离线横幅并明确提示需要网络。不得为了"看起来可离线"引入 service worker 资源预缓存；相关变更需先修订本条与发布说明。
 - 不得在 UI isolate 同步执行大文件全量读取、哈希、批量扫描、大 JSON 解析、大图解码、压缩解压或长循环。使用异步 IO、流式分块、Isolate、独立 Worker 或后端 task。
 - 大文件不得整体加载到内存。达到项目配置的大文件阈值后，必须使用 Stream、分片、multipart、可恢复会话、预签名分片 URL 或分块哈希；阈值通过统一配置定义，禁止在业务代码散落硬编码文件大小边界。任何实现不得按文件总大小申请同等内存。
 
