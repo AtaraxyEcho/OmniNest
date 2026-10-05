@@ -1,6 +1,8 @@
+/* 引擎首帧前的底色：与移动端启动屏/舞台底色一致，避免冷启动闪白。
+   取设计基准 .boot-screen 的 #09100f（应用内舞台为 #0b1110）。 */
 html, body {
   margin: 0;
   padding: 0;
-  background-color: #0b0f14;
+  background-color: #09100f;
   height: 100%;
 }
