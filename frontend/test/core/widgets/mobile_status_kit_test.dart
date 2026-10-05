@@ -157,12 +157,10 @@ void main() {
     expect(confirm, findsOneWidget);
     expect(cancel, findsOneWidget);
     // 两个按钮等宽（原型 flex:1 + gap 8）。
-    final confirmBox = find
-        .ancestor(of: confirm, matching: find.byType(Container))
-        .first;
-    final cancelBox = find
-        .ancestor(of: cancel, matching: find.byType(Container))
-        .first;
+    final confirmBox =
+        find.ancestor(of: confirm, matching: find.byType(Container)).first;
+    final cancelBox =
+        find.ancestor(of: cancel, matching: find.byType(Container)).first;
     expect(tester.getSize(confirmBox).width, tester.getSize(cancelBox).width);
     expect(tester.getSize(confirmBox).height, greaterThanOrEqualTo(45));
 
