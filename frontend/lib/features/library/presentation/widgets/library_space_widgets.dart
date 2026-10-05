@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/features/library/presentation/widgets/library_space_tier.dart';
 import 'package:omninest/features/photos/application/photo_browse_scope.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/portal/portal_ui.dart';
@@ -36,26 +37,29 @@ class LibrarySegmentBar extends StatelessWidget {
       LibrarySegment.movies: l10n.portalDockMovies,
       LibrarySegment.music: l10n.mobileNavMusic,
     };
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: MobileEnvColors.segmentBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: MobileEnvColors.line09),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final entry in LibrarySegment.values)
-              if (entry != LibrarySegment.all || true) ...[
+    // 分段是空间内主导航，按触控裁决抬到 48；标签总宽超出可用宽度时
+    // 横向可滚，不靠缩放或裁剪兜底。
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: MobileEnvColors.segmentBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: MobileEnvColors.line09),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final entry in LibrarySegment.values)
                 _LibrarySegmentChip(
                   label: labels[entry]!,
                   selected: segment == entry,
                   onTap: () => onChanged(entry),
                 ),
-              ],
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -82,7 +86,7 @@ class _LibrarySegmentChip extends StatelessWidget {
         duration: MobileLayoutTokens.stateDuration,
         curve: MobileLayoutTokens.motionCurve,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        height: 40,
+        height: MobileLayoutTokens.minimumTarget,
         decoration: BoxDecoration(
           color: selected ? MobileEnvColors.accent : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -217,11 +221,12 @@ class LibraryFeatureBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tier = LibrarySpaceTier.resolve(context);
     return MobilePressable(
       semanticLabel: title,
       onTap: onTap,
       child: SizedBox(
-        height: 300,
+        height: tier.featureHeight,
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
@@ -386,6 +391,7 @@ class LibraryPhotoMosaic extends ConsumerWidget {
         compact: true,
       );
     }
+    final tier = LibrarySpaceTier.resolve(context);
     final remaining = total > _maxTiles ? total - _maxTiles : 0;
     Widget tile(PhotoItem photo, {BoxFit fit = BoxFit.cover}) {
       return MobilePressable(
@@ -411,10 +417,11 @@ class LibraryPhotoMosaic extends ConsumerWidget {
     }
 
     if (total == 1) {
-      return SizedBox(height: 181, child: tile(photos.first));
+      // 单张铺满两行（原型 button:first-child 为 grid-row: span 2）。
+      return SizedBox(height: tier.mosaicHeight, child: tile(photos.first));
     }
     return SizedBox(
-      height: 181,
+      height: tier.mosaicHeight,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -512,7 +519,8 @@ class LibraryRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 右出血：轨道内容允许滚动到父容器右缘之外（样例 margin-right:-20）。
-    final bleed = MobileLayoutTokens.horizontalPadding.toDouble();
+    // 出血量取当前档位的页边距，保证出血后正好贴到内容盒外缘。
+    final bleed = LibrarySpaceTier.resolve(context).horizontalPadding;
     return SizedBox(
       height: height,
       child: LayoutBuilder(
@@ -562,16 +570,17 @@ class LibraryPosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tier = LibrarySpaceTier.resolve(context);
     return MobilePressable(
       semanticLabel: title,
       onTap: onTap,
       child: SizedBox(
-        width: 136,
+        width: tier.posterWidth,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              height: 187,
+              height: tier.posterHeight,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -701,16 +710,17 @@ class LibraryAlbumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = LibrarySpaceTier.resolve(context).albumSize;
     return MobilePressable(
       semanticLabel: title,
       onTap: onTap,
       child: SizedBox(
-        width: 145,
+        width: size,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              height: 145,
+              height: size,
               child: Stack(
                 fit: StackFit.expand,
                 children: [

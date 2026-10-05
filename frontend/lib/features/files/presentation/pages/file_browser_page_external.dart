@@ -134,13 +134,11 @@ class _ExternalBrowsePanel extends ConsumerWidget {
                         tooltip: l10n.filesImportFolder,
                         onPressed:
                             enabled
-                                ? () => _importExternalItem(
+                                ? () => _importExternalBrowseItem(
                                   context,
                                   controller,
                                   accountId,
-                                  item.path,
-                                  item.name,
-                                  sourceKind: 'DIRECTORY',
+                                  item,
                                 )
                                 : null,
                         icon: const Icon(
@@ -153,13 +151,11 @@ class _ExternalBrowsePanel extends ConsumerWidget {
                         tooltip: l10n.filesImportFile,
                         onPressed:
                             enabled
-                                ? () => _importExternalItem(
+                                ? () => _importExternalBrowseItem(
                                   context,
                                   controller,
                                   accountId,
-                                  item.path,
-                                  item.name,
-                                  sourceKind: 'FILE',
+                                  item,
                                 )
                                 : null,
                         icon: const Icon(Icons.download_rounded, size: 18),
@@ -195,39 +191,45 @@ class _ExternalBrowsePanel extends ConsumerWidget {
       ),
     );
   }
+}
 
-  /// 导入外部文件，先弹出空间选择器。
-  Future<void> _importExternalItem(
-    BuildContext context,
-    FileBrowserController controller,
-    String accountId,
-    String path,
-    String fileName, {
-    required String sourceKind,
-  }) async {
-    final l10n = AppLocalizations.of(context);
+/// 导入外部文件，先弹出空间选择器。
+///
+/// 工位浏览面板与托管 `.feature-list` 浏览视图共用同一确认与创建流程。
+Future<void> _importExternalBrowseItem(
+  BuildContext context,
+  FileBrowserController controller,
+  String accountId,
+  ExternalFileItem item,
+) async {
+  final l10n = AppLocalizations.of(context);
 
-    final spaceSelection = await showSpaceSelectorSheet(context);
-    if (spaceSelection == null || !context.mounted) return;
-
-    final spaceType =
-        spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
-
-    await _confirmAndRun(
-      context,
-      title: l10n.filesImportConfirm,
-      message:
-          '${l10n.filesImportMessage(fileName)}\n${l10n.filesImportSizeGuardHint}',
-      confirmLabel: l10n.filesImport,
-      action:
-          () => controller.createImportTask(
-            accountId,
-            path,
-            sourceKind: sourceKind,
-            spaceType: spaceType,
-          ),
-    );
+  final spaceSelection = await showSpaceSelectorSheet(context);
+  if (spaceSelection == null) {
+    return;
   }
+  if (!context.mounted) {
+    return;
+  }
+
+  final spaceType =
+      spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
+
+  await _confirmAndRun(
+    context,
+    title: l10n.filesImportConfirm,
+    message:
+        '${l10n.filesImportMessage(item.name)}\n'
+        '${l10n.filesImportSizeGuardHint}',
+    confirmLabel: l10n.filesImport,
+    action:
+        () => controller.createImportTask(
+          accountId,
+          item.path,
+          sourceKind: item.isDir ? 'DIRECTORY' : 'FILE',
+          spaceType: spaceType,
+        ),
+  );
 }
 
 class _ExternalBrowseLoading extends StatelessWidget {

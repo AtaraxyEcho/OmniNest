@@ -117,10 +117,7 @@ class _HarnessShellState extends ConsumerState<_HarnessShell> {
           selectedIndex: _page,
           onDestinationSelected: (v) => setState(() => _page = v),
           destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.notifications),
-              label: '通知',
-            ),
+            NavigationDestination(icon: Icon(Icons.notifications), label: '通知'),
             NavigationDestination(icon: Icon(Icons.music_note), label: '音乐'),
             NavigationDestination(icon: Icon(Icons.photo), label: '照片'),
             NavigationDestination(icon: Icon(Icons.movie), label: '影视'),
@@ -181,12 +178,7 @@ class _HarnessUnreadCountNotifier extends UnreadCountNotifier {
 
 /// 样例同款曲库数据：供 hosted 首页渲染 NOW PLAYING 卡、每日推荐横滑
 /// 与续听列表，供 390×844 截图对照。
-MusicTrack _track(
-  String id,
-  String title,
-  String artist,
-  int durationSeconds,
-) {
+MusicTrack _track(String id, String title, String artist, int durationSeconds) {
   return MusicTrack(
     id: id,
     fileNodeId: id,
@@ -298,7 +290,6 @@ class _HarnessMusicCenterController extends MusicCenterController {
   }
 }
 
-
 /// 样例同款图库数据：126 照片 / 4 影集的 hosted 首屏对照。
 class _HarnessPhotoCenterController extends PhotoCenterController {
   @override
@@ -386,7 +377,6 @@ class _HarnessPhotoCenterController extends PhotoCenterController {
     );
   }
 }
-
 
 /// 样例同款影视数据：For you 英雄图 + 继续观看横滑 + 影片列表对照。
 class _HarnessMovieCenterController extends MovieCenterController {

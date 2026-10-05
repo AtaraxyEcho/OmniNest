@@ -56,7 +56,10 @@ class _AuditFileController extends FileBrowserController {
   }
 
   @override
-  Future<void> loadSection(FileManagerSection section, {bool background = false}) async {
+  Future<void> loadSection(
+    FileManagerSection section, {
+    bool background = false,
+  }) async {
     loadedSections.add(section);
     final current = state.asData!.value;
     state = AsyncData(current.copyWith(section: section));
@@ -102,7 +105,9 @@ class _AuditFileController extends FileBrowserController {
     breadcrumbJumps.add(index);
     final current = state.asData!.value;
     final crumbs = current.breadcrumbs.take(index + 1).toList();
-    state = AsyncData(current.copyWith(breadcrumbs: crumbs, parentId: crumbs.last.id));
+    state = AsyncData(
+      current.copyWith(breadcrumbs: crumbs, parentId: crumbs.last.id),
+    );
   }
 }
 
@@ -149,9 +154,8 @@ Future<_AuditFileController> _pumpHost(WidgetTester tester) async {
       GoRoute(
         path: '/portal',
         builder:
-            (context, state) => const Scaffold(
-              body: Center(child: Text('portal-home')),
-            ),
+            (context, state) =>
+                const Scaffold(body: Center(child: Text('portal-home'))),
       ),
     ],
   );
@@ -228,8 +232,11 @@ void main() {
     await _settle(tester);
     await tester.tap(find.text('Spring trip').first);
     await _settle(tester);
-    expect(find.byType(MobileSegmentedControl<FileManagerSection>), findsNothing,
-        reason: '目录原地展开态不显示三段');
+    expect(
+      find.byType(MobileSegmentedControl<FileManagerSection>),
+      findsNothing,
+      reason: '目录原地展开态不显示三段',
+    );
   });
 
   testWidgets('返回逐级：内联展开目录后逐级回退到空间根', (tester) async {

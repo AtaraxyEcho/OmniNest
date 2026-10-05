@@ -5,21 +5,30 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
 import 'package:omninest/core/widgets/app_empty_state.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+
+part 'photo_album_detail_page_hosted.dart';
 
 /// 相册详情页面
 class PhotoAlbumDetailPage extends ConsumerWidget {
@@ -30,21 +39,42 @@ class PhotoAlbumDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detailAsync = ref.watch(photoAlbumDetailProvider(albumId));
-    return Scaffold(
-      backgroundColor: context.photosColors.surface,
-      body: detailAsync.when(
-        data:
-            (detail) => _AlbumDetailBody(
-              album: detail.album,
-              photos: detail.photos,
-              albumId: albumId,
-            ),
-        error:
-            (error, stackTrace) => AppErrorView(
-              message: describeUserFacingError(error).displayMessage,
-              onRetry: () => ref.invalidate(photoAlbumDetailProvider(albumId)),
-            ),
-        loading: () => const AppLoading.grid(),
+    final hosted = photosHostedForm(context);
+    // 托管形态由页面自补 scope：本路由未经 MobileHostedRoute 包裹。
+    return PhotoHostedScope(
+      child: Scaffold(
+        backgroundColor:
+            hosted ? Colors.transparent : context.photosColors.surface,
+        body: detailAsync.when(
+          data:
+              (detail) => _AlbumDetailBody(
+                album: detail.album,
+                photos: detail.photos,
+                albumId: albumId,
+              ),
+          error:
+              (error, stackTrace) =>
+                  hosted
+                      ? _HostedAlbumError(
+                        message: describeUserFacingError(error).displayMessage,
+                        onRetry:
+                            () => ref.invalidate(
+                              photoAlbumDetailProvider(albumId),
+                            ),
+                      )
+                      : AppErrorView(
+                        message: describeUserFacingError(error).displayMessage,
+                        onRetry:
+                            () => ref.invalidate(
+                              photoAlbumDetailProvider(albumId),
+                            ),
+                      ),
+          loading:
+              () =>
+                  hosted
+                      ? const _HostedAlbumLoading()
+                      : const AppLoading.grid(),
+        ),
       ),
     );
   }
@@ -129,8 +159,63 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
     }
   }
 
+  /// 进入候选照片选择页；返回后刷新详情，无论是否新增都以服务端数据为准。
+  Future<void> _openAlbumPhotoPicker() async {
+    await context.push('/photos/albums/${widget.albumId}/add');
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(photoAlbumDetailProvider(widget.albumId));
+  }
+
+  /// 打开查看器：浏览范围 = 当前已加载的相册照片序列。
+  void _openPhotoViewer(PhotoItem photo) {
+    ref
+        .read(photoBrowseScopeProvider.notifier)
+        .set(_photos, PhotoBrowseSource.album, sourceKey: widget.album.id);
+    context.push('/photos/${photo.id}');
+  }
+
+  /// 以相册当前序列启动沉浸幻灯片。
+  void _startSlideshow() {
+    final photos = _photos;
+    if (photos.isEmpty) {
+      return;
+    }
+    // 声明影集来源：缺省会被按全库语义处理，播放列表在 build 时
+    // 被全库照片整体替换，越出影集范围。
+    context.push(
+      '/photos/slideshow',
+      extra: {
+        'photos': photos,
+        'initialIndex': 0,
+        'source': PhotoBrowseSource.album,
+        'sourceKey': widget.albumId,
+      },
+    );
+  }
+
+  /// 滚动到底部时预取下一页。
+  bool _handleGridScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical ||
+        notification.metrics.extentAfter >= 480) {
+      return false;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadMorePhotos());
+    });
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      return buildHostedAlbumDetail(context);
+    }
     final photos = _photos;
     final album = widget.album;
     final albumId = widget.albumId;
@@ -141,29 +226,9 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           album: album,
           onBack: () => context.popOrGo('/photos'),
           onDelete: () => _confirmDelete(context, ref),
-          onSlideshow: () {
-            if (photos.isEmpty) return;
-            // 声明影集来源：缺省会被按全库语义处理，播放列表在 build 时
-            // 被全库照片整体替换，越出影集范围。
-            context.push(
-              '/photos/slideshow',
-              extra: {
-                'photos': photos,
-                'initialIndex': 0,
-                'source': PhotoBrowseSource.album,
-                'sourceKey': albumId,
-              },
-            );
-          },
+          onSlideshow: _startSlideshow,
           onShare: () => _showShareDialog(context, ref, albumId),
-          onAddPhotos: () async {
-            await context.push('/photos/albums/$albumId/add');
-            if (!mounted) {
-              return;
-            }
-            // 选择页返回后刷新详情，无论是否新增都以服务端数据为准。
-            ref.invalidate(photoAlbumDetailProvider(albumId));
-          },
+          onAddPhotos: () => unawaited(_openAlbumPhotoPicker()),
         ),
         // 照片网格
         Expanded(
@@ -180,13 +245,7 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                         ),
                         const SizedBox(height: 8),
                         FilledButton.icon(
-                          onPressed: () async {
-                            await context.push('/photos/albums/$albumId/add');
-                            if (!mounted) {
-                              return;
-                            }
-                            ref.invalidate(photoAlbumDetailProvider(albumId));
-                          },
+                          onPressed: () => unawaited(_openAlbumPhotoPicker()),
                           icon: const Icon(Icons.add_photo_alternate_outlined),
                           label: Text(
                             AppLocalizations.of(context).photosAddPhotos,
@@ -196,18 +255,7 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                     ),
                   )
                   : NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      if (notification.depth != 0 ||
-                          notification.metrics.axis != Axis.vertical ||
-                          notification.metrics.extentAfter >= 480) {
-                        return false;
-                      }
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        unawaited(_loadMorePhotos());
-                      });
-                      return false;
-                    },
+                    onNotification: _handleGridScrollNotification,
                     child: CustomScrollView(
                       slivers: [
                         SliverPadding(
@@ -243,17 +291,10 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                                 itemBuilder: (context, index) {
                                   if (index == 0) {
                                     return _AddPhotoTile(
-                                      onTap: () async {
-                                        await context.push(
-                                          '/photos/albums/$albumId/add',
-                                        );
-                                        if (!mounted) {
-                                          return;
-                                        }
-                                        ref.invalidate(
-                                          photoAlbumDetailProvider(albumId),
-                                        );
-                                      },
+                                      onTap:
+                                          () => unawaited(
+                                            _openAlbumPhotoPicker(),
+                                          ),
                                     );
                                   }
                                   if (index == photos.length + 1) {
@@ -285,19 +326,7 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                                   return PhotoGridTile(
                                     key: ValueKey(photo.id),
                                     photo: photo,
-                                    onTap: () {
-                                      // 浏览范围 = 当前已加载的相册照片序列。
-                                      ref
-                                          .read(
-                                            photoBrowseScopeProvider.notifier,
-                                          )
-                                          .set(
-                                            photos,
-                                            PhotoBrowseSource.album,
-                                            sourceKey: album.id,
-                                          );
-                                      context.push('/photos/${photo.id}');
-                                    },
+                                    onTap: () => _openPhotoViewer(photo),
                                     onLongPress:
                                         () => _confirmRemoveFromAlbum(
                                           context,
@@ -320,7 +349,7 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showFrameConfirmDialog(
+    final confirmed = await _confirmAlbumAction(
       context,
       title: l10n.photosDeleteAlbumTitle,
       body: l10n.photosDeleteAlbumConfirm(widget.album.name),
@@ -432,13 +461,13 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
     PhotoItem photo,
   ) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showFrameConfirmDialog(
+    final confirmed = await _confirmAlbumAction(
       context,
       title: l10n.photosRemoveFromAlbum,
       body: l10n.photosRemoveFromAlbumConfirm(photo.title),
       confirmLabel: l10n.photosRemove,
     );
-    if (confirmed == true && context.mounted) {
+    if (confirmed && context.mounted) {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)

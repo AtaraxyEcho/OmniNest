@@ -45,7 +45,9 @@ void main() {
     addTearDown(tester.view.reset);
     final router = GoRouter(
       initialLocation:
-          initialSection == null ? '/profile' : '/profile?section=$initialSection',
+          initialSection == null
+              ? '/profile'
+              : '/profile?section=$initialSection',
       routes: [
         GoRoute(
           path: '/profile',

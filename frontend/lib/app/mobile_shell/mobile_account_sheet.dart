@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -98,12 +99,17 @@ class MobileAccountAvatar extends ConsumerWidget {
 /// 打开账户面板：头像菜单承载通知、设备、视觉环境与设置等系统能力。
 ///
 /// 面板内容高度封顶 85% 视口并可滚动：矮屏与放大字号下不再溢出。
+/// 减弱动效时进出即时完成（noAnimation），面板终态呈现不变。
 Future<void> showOmniAccountSheet(BuildContext ownerContext) {
   return showModalBottomSheet<void>(
     context: ownerContext,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.45),
+    sheetAnimationStyle:
+        MotionToken.prefersReduced(ownerContext)
+            ? AnimationStyle.noAnimation
+            : null,
     builder: (context) => const _OmniAccountSheet(),
   );
 }

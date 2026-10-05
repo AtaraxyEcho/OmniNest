@@ -67,6 +67,7 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
                     _ProfileAvatarChip(
                       avatarUrl: avatarUrl,
                       name: displayName,
+                      semanticLabel: l10n.profileRowAccountInfo,
                       onTap: () => _openSection(ProfileSection.account),
                     ),
                     const SizedBox(width: 8),
@@ -209,6 +210,8 @@ class _PmRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = MobileEnvColors.accent;
+    // InkWell 自带 onTap 语义节点，行内标题/副题文本即读屏标签，
+    // 这里不再叠加 Semantics，避免同一行出现两个可聚焦节点。
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -316,16 +319,27 @@ class _PmSignOutButton extends StatelessWidget {
 }
 
 /// 环境输入框（玻璃底 r12 + 酸绿聚焦描边）。
+///
+/// 以 `TextFormField` 呈现：校验依赖外层 [Form]，非法输入在框下内联
+/// 提示；`maxLength` 自带计数文案已关闭，只保留环境字段的单行高度。
 class _PmTextField extends StatelessWidget {
   const _PmTextField({
     required this.label,
     required this.controller,
     this.keyboardType,
+    this.textInputAction,
+    this.autofocus = false,
+    this.maxLength,
+    this.validator,
   });
 
   final String label;
   final TextEditingController controller;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final bool autofocus;
+  final int? maxLength;
+  final String? Function(String?)? validator;
 
   @override
   Widget build(BuildContext context) {
@@ -342,15 +356,20 @@ class _PmTextField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        TextField(
+        TextFormField(
           controller: controller,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          autofocus: autofocus,
+          maxLength: maxLength,
+          validator: validator,
           style: const TextStyle(
             fontSize: 13, // ignore: font_size_whitelist
             color: MobileEnvColors.ink,
           ),
           decoration: InputDecoration(
             isCollapsed: true,
+            counterText: '',
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 13,
               vertical: 12,
@@ -418,6 +437,7 @@ class _PmAccountSection extends ConsumerStatefulWidget {
 }
 
 class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _email;
   bool _saving = false;
@@ -482,6 +502,10 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
+    // 空值与非法格式先在框内内联提示，不打后端。
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref
@@ -518,46 +542,68 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
     final avatarUrl = user?.avatarUrl;
     final displayName =
         user?.displayName ?? user?.username ?? l10n.profileUnknownUser;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      children: [
-        Center(
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: _pickAvatar,
-                child: _ProfileAvatarChip(
-                  avatarUrl: avatarUrl,
-                  name: displayName,
-                  size: 76,
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        children: [
+          Center(
+            child: Column(
+              children: [
+                Semantics(
+                  button: true,
+                  label: l10n.profileChangeAvatar,
+                  child: GestureDetector(
+                    onTap: _pickAvatar,
+                    child: _ProfileAvatarChip(
+                      avatarUrl: avatarUrl,
+                      name: displayName,
+                      size: 76,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                l10n.profileChangeAvatar,
-                style: const TextStyle(
-                  fontSize: 10, // ignore: font_size_whitelist
-                  fontWeight: FontWeight.w600,
-                  color: MobileEnvColors.accent,
+                const SizedBox(height: 10),
+                Text(
+                  l10n.profileChangeAvatar,
+                  style: const TextStyle(
+                    fontSize: 10, // ignore: font_size_whitelist
+                    fontWeight: FontWeight.w600,
+                    color: MobileEnvColors.accent,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 22),
-        _PmTextField(label: l10n.profileDisplayNameField, controller: _name),
-        const SizedBox(height: 14),
-        _PmTextField(
-          label: l10n.profileEmailField,
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 22),
-        _PmPrimaryButton(
-          label: l10n.profileSaveChanges,
-          onPressed: _saving ? null : () => unawaited(_save()),
-        ),
-      ],
+          const SizedBox(height: 22),
+          _PmTextField(
+            label: l10n.profileDisplayNameField,
+            controller: _name,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.next,
+            maxLength: ProfileEditDialog.displayNameMaxLength,
+            // 分区进入不自动聚焦：该视图还承担头像更换，软键盘会遮住首屏。
+            autofocus: false,
+            validator:
+                (value) =>
+                    ProfileEditDialog.validateDisplayName(context, value),
+          ),
+          const SizedBox(height: 14),
+          _PmTextField(
+            label: l10n.profileEmailField,
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            maxLength: ProfileEditDialog.emailMaxLength,
+            validator:
+                (value) => ProfileEditDialog.validateEmail(context, value),
+          ),
+          const SizedBox(height: 22),
+          _PmPrimaryButton(
+            label: l10n.profileSaveChanges,
+            onPressed: _saving ? null : () => unawaited(_save()),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1071,18 +1117,23 @@ class _PmAboutSection extends StatelessWidget {
 }
 
 /// 头像圆片（有图用图，无图取首字母）。
+///
+/// [onTap] 非空时该圆片即为按钮，读屏必须能播报动作含义，故同时要求
+/// [semanticLabel]（例如「个人信息」或「更换头像」）。
 class _ProfileAvatarChip extends StatelessWidget {
   const _ProfileAvatarChip({
     required this.avatarUrl,
     required this.name,
     this.size = 40,
     this.onTap,
+    this.semanticLabel,
   });
 
   final String? avatarUrl;
   final String name;
   final double size;
   final VoidCallback? onTap;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1132,10 +1183,15 @@ class _ProfileAvatarChip extends StatelessWidget {
     if (onTap == null) {
       return body;
     }
-    return InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: body,
+    // 头像圆片无文字标签：补按钮角色与动作名称，读屏才能说出这是按钮。
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: body,
+      ),
     );
   }
 }

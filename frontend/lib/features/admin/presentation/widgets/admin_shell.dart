@@ -17,6 +17,7 @@ import 'package:omninest/core/widgets/top_bar_search_focus.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/core/widgets/workstation_mobile_sheet.dart';
 import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -549,18 +550,35 @@ class _AdminTopBar extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     await showWorkstationDialog<void>(
       context: context,
-      builder:
-          (dialogContext) => WorkstationDialogFrame(
-            title: l10n.adminSearchHint,
-            width: 460,
-            body: const _AdminSearchField(autofocus: true),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(l10n.coreCancel),
-              ),
-            ],
+      builder: (dialogContext) {
+        final frame = WorkstationDialogFrame(
+          title: l10n.adminSearchHint,
+          width: 460,
+          body: const _AdminSearchField(autofocus: true),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(l10n.coreCancel),
+            ),
+          ],
+        );
+        // 共享移动面板形态已按 viewInsets 抬升并封顶高度；管理台路由不在
+        // 移动壳层分支内，居中弹窗需自行给软键盘让位。
+        if (WorkstationSheetAmbient.isActive(dialogContext)) {
+          return frame;
+        }
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(dialogContext).bottom,
           ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.85,
+            ),
+            child: frame,
+          ),
+        );
+      },
     );
   }
 
@@ -672,6 +690,8 @@ class _AdminSearchFieldState extends ConsumerState<_AdminSearchField>
     return TextField(
       autofocus: widget.autofocus,
       focusNode: _focusNode,
+      keyboardType: TextInputType.webSearch,
+      textInputAction: TextInputAction.search,
       onChanged:
           (query) => ref.read(adminSearchProvider.notifier).updateQuery(query),
       decoration: workstationInputDecoration(

@@ -319,6 +319,9 @@ class _HistoryHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
+            // 返回钮只有字形，样例每个图标钮都带 aria-label：tooltip 同时
+            // 供悬停提示与读屏播报。
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             icon: const Icon(Icons.arrow_back_rounded),
             onPressed: onBack,
           ),

@@ -334,6 +334,7 @@ class _SearchHeader extends StatelessWidget {
                         child: TextField(
                           controller: controller,
                           focusNode: focusNode,
+                          keyboardType: TextInputType.webSearch,
                           textInputAction: TextInputAction.search,
                           style: const TextStyle(
                             color: MobileEnvColors.ink,
@@ -342,18 +343,18 @@ class _SearchHeader extends StatelessWidget {
                           ),
                           onChanged: onChanged,
                           onSubmitted: onSubmitted,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          isCollapsed: true,
-                          hintStyle: const TextStyle(
-                            color: Color(0x5CFFFFFF),
-                            // ignore: font_size_whitelist
-                            fontSize: 14,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            isCollapsed: true,
+                            hintStyle: const TextStyle(
+                              color: Color(0x5CFFFFFF),
+                              // ignore: font_size_whitelist
+                              fontSize: 14,
+                            ),
+                            hintText: l10n.searchMobilePlaceholder,
                           ),
-                          hintText: l10n.searchMobilePlaceholder,
-                        ),
                         ),
                       ),
                       ValueListenableBuilder<TextEditingValue>(

@@ -66,6 +66,8 @@ class MusicImmersiveLyrics extends StatefulWidget {
     this.lyricSettings,
     this.lyricSpec,
     this.scrollMode = true,
+    this.fontFamily,
+    this.fontFamilyFallback,
     this.trackOffsetMs,
     this.onAdjustLyricOffset,
     this.lyricsLoadFailed = false,
@@ -100,6 +102,15 @@ class MusicImmersiveLyrics extends StatefulWidget {
 
   /// 滚动歌词模式（设备级偏好，非跨端同步的视觉设置）：
   final bool scrollMode;
+
+  /// 歌词字体族：留空跟随应用默认字体。移动播放页的整屏歌词按样例用衬线体
+  /// （与在读行的放大强调色共同构成歌词页身份）；排版度量与渲染共用同一
+  /// 字体族，避免实测块宽与行槽对不上。
+  final String? fontFamily;
+
+  /// 字体回退族（与 [fontFamily] 同源）：衬线体不含中日韩字形，中文歌词
+  /// 必须回退到内置衬线中文字体，否则缺字形。
+  final List<String>? fontFamilyFallback;
 
   /// 歌词补拉失败标记：空歌词时区分「加载失败」与「暂无歌词」。
   final bool lyricsLoadFailed;
@@ -295,6 +306,8 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
               textDirection: Directionality.of(context),
               ambientStyle: DefaultTextStyle.of(context).style,
               textScaler: MediaQuery.textScalerOf(context),
+              fontFamily: widget.fontFamily,
+              fontFamilyFallback: widget.fontFamilyFallback,
               spec: spec,
             );
             // 行高由内容决定（基准文字行高 + 行距间隙），"行数"只属于
@@ -437,6 +450,8 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
       hovered: index == _hoveredIndex,
       scale: widget.scale,
       spec: spec,
+      fontFamily: widget.fontFamily,
+      fontFamilyFallback: widget.fontFamilyFallback,
       // 在读行时间参考行的强调色（样例 text-primary）。
       accentColor: widget.palette.accent,
       // 与在读行的行号差：复刻形态据此取样例的不透明度档位。

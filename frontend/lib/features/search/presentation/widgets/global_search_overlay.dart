@@ -489,7 +489,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                   cursorWidth: 1.5,
                   cursorHeight: 20,
                   cursorRadius: Radius.zero,
-                  keyboardType: TextInputType.text,
+                  keyboardType: TextInputType.webSearch,
                   textInputAction: TextInputAction.search,
                   style: TextStyle(
                     fontSize: AppTypography.bodyLarge,

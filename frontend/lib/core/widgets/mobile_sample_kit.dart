@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 
@@ -153,19 +154,27 @@ class _SamplePlayCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 35,
-        height: 35,
-        decoration: const BoxDecoration(
-          color: Color(0xE6F9F9F4),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.play_arrow_rounded,
-          size: 20,
-          color: Color(0xFF101513),
+    final label = AppLocalizations.of(context).corePlay;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 35,
+            height: 35,
+            decoration: const BoxDecoration(
+              color: Color(0xE6F9F9F4),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              size: 20,
+              color: Color(0xFF101513),
+            ),
+          ),
         ),
       ),
     );
@@ -259,19 +268,23 @@ class SampleAlbumCard extends StatelessWidget {
                     Positioned(
                       right: 10,
                       bottom: 10,
-                      child: GestureDetector(
-                        onTap: onPlay,
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: const BoxDecoration(
-                            color: MobileEnvColors.accent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            size: 22,
-                            color: MobileEnvColors.onAccent,
+                      child: Semantics(
+                        button: true,
+                        label: AppLocalizations.of(context).corePlay,
+                        child: GestureDetector(
+                          onTap: onPlay,
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: const BoxDecoration(
+                              color: MobileEnvColors.accent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 22,
+                              color: MobileEnvColors.onAccent,
+                            ),
                           ),
                         ),
                       ),
@@ -460,10 +473,7 @@ class SampleFilmRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: 10),
-                trailing!,
-              ],
+              if (trailing != null) ...[const SizedBox(width: 10), trailing!],
             ],
           ),
         ),

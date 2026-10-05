@@ -26,7 +26,10 @@ class _FileSectionBody extends StatelessWidget {
         managementMode: state.shareScopeAll,
         state: state,
       ),
-      FileManagerSection.storageStats => _FileNodeWorkspace(state: state),
+      FileManagerSection.storageStats =>
+        MobileShellScope.isHosted(context)
+            ? _HostedStorageStatsPage(stats: state.storageStats)
+            : _FileNodeWorkspace(state: state),
       FileManagerSection.uploadQueue => _UploadQueueWorkspace(state: state),
       FileManagerSection.offlineDownloads => _OfflineDownloadWorkspace(
         state: state,
@@ -100,7 +103,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
                       return _HostedSectionMetaRow(
                         text: AppLocalizations.of(
                           context,
-                        ).photosHostedToolbarCount(total),
+                        ).filesHostedItemCount(total),
                       );
                     },
                   ),

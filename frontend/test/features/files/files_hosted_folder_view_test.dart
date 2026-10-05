@@ -115,9 +115,8 @@ void main() {
         GoRoute(
           path: '/portal',
           builder:
-              (context, state) => const Scaffold(
-                body: Center(child: Text('portal-home')),
-              ),
+              (context, state) =>
+                  const Scaffold(body: Center(child: Text('portal-home'))),
         ),
       ],
     );

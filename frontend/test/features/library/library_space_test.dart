@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
@@ -134,6 +135,113 @@ void main() {
     expect(find.text('还没有照片'), findsOneWidget);
     expect(find.text('还没有可看的影片'), findsOneWidget);
     expect(find.text('曲库还没有内容'), findsOneWidget);
+  });
+
+  testWidgets('分段胶囊达 48 且吸顶带模糊，宽视口内容限宽 650', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1600);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appBackdropControllerProvider.overrideWith(
+            _EmptyBackdropController.new,
+          ),
+          photoDashboardProvider.overrideWith(_FakePhotoDashboard.new),
+          photoAlbumsProvider.overrideWith((ref) async => _albums),
+          movieDashboardProvider.overrideWith((ref) async => _movieDashboard),
+          musicCenterControllerProvider.overrideWith(
+            _FakeLibraryMusicCenter.new,
+          ),
+        ],
+        child: MaterialApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          routerConfig: GoRouter(
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (context, state) => const LibrarySpacePage(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 分段是空间内主导航，按触控裁决不低于 48（稿子的次级 40 不适用）。
+    final chips = find.descendant(
+      of: find.byType(LibrarySegmentBar),
+      matching: find.byType(AnimatedContainer),
+    );
+    expect(chips, findsNWidgets(4));
+    for (final candidate in chips.evaluate()) {
+      expect(
+        tester.getSize(find.byWidget(candidate.widget)).height,
+        greaterThanOrEqualTo(48),
+      );
+    }
+    // 吸顶层带真实模糊，内容从其下方穿过。
+    expect(
+      find.ancestor(
+        of: find.byType(LibrarySegmentBar),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsOneWidget,
+    );
+    // 900 宽视口下内容仍限宽 650 居中（650 为含页边距的内容盒，
+    // 平板页边距 24，故可视内容宽 602）。
+    expect(
+      tester.getSize(find.byType(LibraryPhotoMosaic)).width,
+      650 - 2 * MobileLayoutTokens.tabletHorizontalPadding,
+    );
+  });
+
+  testWidgets('1.6x 字号下分段与轨道不溢出', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appBackdropControllerProvider.overrideWith(
+            _EmptyBackdropController.new,
+          ),
+          photoDashboardProvider.overrideWith(_FakePhotoDashboard.new),
+          photoAlbumsProvider.overrideWith((ref) async => _albums),
+          movieDashboardProvider.overrideWith((ref) async => _movieDashboard),
+          musicCenterControllerProvider.overrideWith(
+            _FakeLibraryMusicCenter.new,
+          ),
+        ],
+        child: MaterialApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          routerConfig: GoRouter(
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (context, state) => const LibrarySpacePage(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 }
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
@@ -421,6 +423,210 @@ class PhotoViewerArrowButton extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 托管查看器舞台底色（样例 `.photo-viewer` 的 #050807 实底）。
+const Color photoViewerHostedStageColor = Color(0xFF050807);
+
+/// 托管查看器横幅（样例 photo-viewer > header）：关闭圆钮 + 居中的
+/// 地名与「N of M · 时间」副题 + 幻灯片直达圆钮。
+class PhotoViewerHostedHeader extends StatelessWidget {
+  const PhotoViewerHostedHeader({
+    required this.title,
+    required this.subtitle,
+    required this.onBack,
+    required this.onSlideshow,
+    super.key,
+  });
+
+  final String title;
+
+  /// 已本地化的位置与拍摄时间组合文案。
+  final String subtitle;
+  final VoidCallback onBack;
+  final VoidCallback onSlideshow;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return MobileModuleHeader(
+      title: title,
+      subtitle: subtitle,
+      backTooltip: l10n.coreClose,
+      onBack: onBack,
+      actions: [
+        MobileGlassIconButton(
+          tooltip: l10n.photosSlideshow,
+          icon: Icons.play_arrow_rounded,
+          onPressed: onSlideshow,
+        ),
+      ],
+    );
+  }
+}
+
+/// 托管查看器动作行（样例 `.photo-actions`）：7 个 48 玻璃圆钮居中排布，
+/// 宽度不足时整行横向滚动（样例 nowrap + overflow-x:auto）。
+class PhotoViewerHostedActions extends StatelessWidget {
+  const PhotoViewerHostedActions({
+    required this.photo,
+    required this.onToggleFavorite,
+    required this.onShare,
+    required this.onDownload,
+    required this.onEdit,
+    required this.onAddToAlbum,
+    required this.onToggleInfo,
+    required this.onDelete,
+    required this.showInfo,
+    super.key,
+  });
+
+  final PhotoItem photo;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onShare;
+  final VoidCallback onDownload;
+  final VoidCallback onEdit;
+  final VoidCallback onAddToAlbum;
+  final VoidCallback onToggleInfo;
+  final VoidCallback onDelete;
+  final bool showInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final actions = <Widget>[
+      _HostedViewerActionButton(
+        icon:
+            photo.favorite
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+        tooltip: photo.favorite ? l10n.photosUnfavorite : l10n.photosFavorite,
+        active: photo.favorite,
+        onTap: onToggleFavorite,
+      ),
+      _HostedViewerActionButton(
+        icon: Icons.share_outlined,
+        tooltip: l10n.photosSharePhoto,
+        onTap: onShare,
+      ),
+      _HostedViewerActionButton(
+        icon: Icons.download_outlined,
+        tooltip: l10n.photosDownloadPhoto,
+        onTap: onDownload,
+      ),
+      _HostedViewerActionButton(
+        icon: Icons.edit_outlined,
+        tooltip: l10n.photosEdit,
+        onTap: onEdit,
+      ),
+      _HostedViewerActionButton(
+        icon: Icons.add_rounded,
+        tooltip: l10n.photosAddToAlbum,
+        onTap: onAddToAlbum,
+      ),
+      _HostedViewerActionButton(
+        icon: Icons.info_outline_rounded,
+        tooltip: showInfo ? l10n.photosHideInfo : l10n.photosShowInfo,
+        active: showInfo,
+        onTap: onToggleInfo,
+      ),
+      _HostedViewerActionButton(
+        icon: Icons.delete_outline_rounded,
+        tooltip: l10n.photosDelete,
+        onTap: onDelete,
+      ),
+    ];
+    return DecoratedBox(
+      // 样例动作行不实铺底栏，靠底部渐变把照片与钮群分层。
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x00050807), Color(0xA6050807)],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 6),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        for (
+                          var index = 0;
+                          index < actions.length;
+                          index++
+                        ) ...[
+                          if (index > 0) const SizedBox(width: 10),
+                          actions[index],
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 托管动作行圆钮：样例 `.icon-button` 48 圆 + 白 10% 描边；激活项
+/// （已收藏/信息面板展开）用酸绿前景与描边。
+class _HostedViewerActionButton extends StatelessWidget {
+  const _HostedViewerActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 48,
+      child: Tooltip(
+        message: tooltip,
+        child: IconButton(
+          onPressed: onTap,
+          icon: Icon(
+            icon,
+            size: 20,
+            color: active ? MobileEnvColors.accent : MobileEnvColors.ink,
+          ),
+          style: IconButton.styleFrom(
+            backgroundColor: MobileEnvColors.iconButtonGlass,
+            foregroundColor:
+                active ? MobileEnvColors.accent : MobileEnvColors.ink,
+            side: BorderSide(
+              color:
+                  active
+                      ? MobileEnvColors.accent.withValues(alpha: 0.45)
+                      : MobileEnvColors.line10,
+            ),
+            minimumSize: const Size.square(48),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ),
       ),

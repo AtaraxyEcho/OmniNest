@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
 /// living-glass 空态族：描边图标 + 衬线标题 + 引导句 + 可选行动。
@@ -12,7 +13,7 @@ class EnvEmptyState extends StatelessWidget {
   const EnvEmptyState({
     required this.icon,
     required this.title,
-    required this.message,
+    this.message,
     this.actionLabel,
     this.onAction,
     this.compact = false,
@@ -21,7 +22,9 @@ class EnvEmptyState extends StatelessWidget {
 
   final OmniIconsData icon;
   final String title;
-  final String message;
+
+  /// 引导句；无对应文案时可缺省，此时只排图标与标题。
+  final String? message;
 
   /// 行动按钮文案；为空时不渲染行动。
   final String? actionLabel;
@@ -33,7 +36,7 @@ class EnvEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: compact ? 18 : 34),
+      padding: EdgeInsets.fromLTRB(20, compact ? 18 : 38, 20, 10),
       // 宽度取满宿主可用宽：Column 默认收缩到最宽子项，放任其 shrink-wrap
       // 时整块会贴左，提示词看起来未居中。
       child: SizedBox(
@@ -42,12 +45,22 @@ class EnvEmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            OmniIcon(
-              icon: icon,
-              size: compact ? 26 : 36,
-              color: const Color(0x4DFFFFFF),
+            // 原型 .empty-action：54 r18 酸绿 8% 图块 + 酸绿描边图标。
+            Container(
+              width: compact ? 40 : 54,
+              height: compact ? 40 : 54,
+              decoration: BoxDecoration(
+                color: const Color(0x14D5F17D),
+                borderRadius: BorderRadius.circular(compact ? 14 : 18),
+              ),
+              alignment: Alignment.center,
+              child: OmniIcon(
+                icon: icon,
+                size: compact ? 18 : 24,
+                color: MobileEnvColors.accent,
+              ),
             ),
-            SizedBox(height: compact ? 10 : 14),
+            SizedBox(height: compact ? 10 : 12),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -55,36 +68,48 @@ class EnvEmptyState extends StatelessWidget {
                 color: MobileEnvColors.ink,
                 fontFamily: AppTypography.serifFamily,
                 fontFamilyFallback: AppTypography.serifFamilyFallback,
-                fontSize:
-                    compact
-                        ? AppTypography.titleLarge
-                        : AppTypography.headlineSmall,
+                // 原型 .empty-action strong 为衬线 400 字重 20 号；紧凑档
+                // 沿用标题号。
+                fontSize: compact ? AppTypography.titleLarge : 20,
+                fontWeight: FontWeight.w400,
                 height: 1.1,
               ),
             ),
-            const SizedBox(height: 7),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: MobileEnvColors.inkMuted,
-                fontSize: AppTypography.labelSmall,
-                height: 1.5,
+            if (message != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: MobileEnvColors.inkMuted,
+                  fontSize: 9, // ignore: font_size_whitelist
+                  height: 1.55,
+                ),
               ),
-            ),
+            ],
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: onAction,
-                style: TextButton.styleFrom(
-                  foregroundColor: MobileEnvColors.accent,
-                  minimumSize: const Size(48, 40),
-                  textStyle: const TextStyle(
-                    fontSize: AppTypography.labelSmall,
-                    fontWeight: FontWeight.w600,
+              const SizedBox(height: 13),
+              // 原型是酸绿实底小钮（9px 深墨字），不是纯文本链接。
+              MobilePressable(
+                semanticLabel: actionLabel!,
+                onTap: onAction,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: MobileEnvColors.accent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(
+                      fontSize: 9, // ignore: font_size_whitelist
+                      fontWeight: FontWeight.w700,
+                      color: MobileEnvColors.onAccent,
+                    ),
                   ),
                 ),
-                child: Text(actionLabel!),
               ),
             ],
           ],

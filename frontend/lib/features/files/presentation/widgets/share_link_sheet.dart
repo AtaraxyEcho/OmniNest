@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
@@ -11,13 +12,30 @@ import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_status_kit.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
-/// 密码模式。
+part 'share_link_sheet_mobile.dart';
+
+/// 口令模式。
 enum _PasswordMode { custom, random }
+
+/// 分享有效期预设（原型 `.segmented`：Permanent / 7 days / 30 days）。
+enum _ShareExpiryPreset {
+  permanent(0),
+  days7(7),
+  days30(30);
+
+  const _ShareExpiryPreset(this.days);
+
+  /// 距现在的天数；0 表示永久有效。
+  final int days;
+}
 
 /// 分享链接创建/查看底部弹窗。
 class ShareLinkSheet extends ConsumerStatefulWidget {
@@ -40,6 +58,9 @@ class ShareLinkSheet extends ConsumerStatefulWidget {
     FileShareLink? existingShare,
   }) {
     final l10n = AppLocalizations.of(context);
+    // 面板经根导航器呈现，默认拿不到壳层暗皮肤与 Files 环境重绑；
+    // 在调用点捕获宿主环境，面板子树内重放。
+    final ambience = MobileSheetAmbience.capture(context);
     final desktop =
         MediaQuery.sizeOf(context).width >= 600 &&
         !MobileShellScope.isHosted(context);
@@ -65,8 +86,19 @@ class ShareLinkSheet extends ConsumerStatefulWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ShareLinkSheet(file: file, existingShare: existingShare),
+      // 移动壳层：原型 `.glass-sheet` 形态（实底 #171E1C + 顶部 r28）。
+      backgroundColor:
+          ambience.hosted ? MobileEnvColors.sheetSolid : Colors.transparent,
+      shape:
+          ambience.hosted
+              ? const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              )
+              : null,
+      builder:
+          (_) => ambience.wrap(
+            ShareLinkSheet(file: file, existingShare: existingShare),
+          ),
     );
   }
 
@@ -78,6 +110,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
   final _maxAccessController = TextEditingController();
   final _passwordController = TextEditingController();
   DateTime? _expiresAt;
+  _ShareExpiryPreset? _expiryPreset;
   bool _showOptions = false;
   bool _enablePassword = false;
   _PasswordMode _passwordMode = _PasswordMode.random;
@@ -115,9 +148,12 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     final shareState = ref.watch(shareLinkControllerProvider);
     final existing =
         widget.existingShare ?? (shareState.hasValue ? shareState.value : null);
+    final hosted = !widget.embedded && MobileShellScope.isHosted(context);
 
     return Material(
-      color: context.filesColors.surfaceContainer,
+      // 托管贴底面板由 sheet 路由绘制实底圆角表面，内层保持透明避免
+      // 再叠一层半透明玻璃底。
+      color: hosted ? Colors.transparent : context.filesColors.surfaceContainer,
       child: Container(
         decoration: BoxDecoration(
           // 桌面嵌入弹窗形态由外层弹窗壳描边，内层再加边框会形成双线；
@@ -126,7 +162,12 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
               widget.embedded
                   ? null
                   : Border(
-                    top: BorderSide(color: context.filesColors.outlineVariant),
+                    top: BorderSide(
+                      color:
+                          hosted
+                              ? MobileEnvColors.line13
+                              : context.filesColors.outlineVariant,
+                    ),
                   ),
         ),
         padding: EdgeInsets.only(
@@ -147,7 +188,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
               if (existing != null) ...[
                 _buildShareInfo(existing),
               ] else ...[
-                _buildCreateSection(shareState),
+                _buildCreateSection(shareState, hosted: hosted),
               ],
             ],
           ),
@@ -157,15 +198,20 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
   }
 
   Widget _buildHandle() {
+    // 原型 `.sheet-handle`：36×4 r3 白 22%；工位形态沿用主题描边色。
+    final hosted = MobileShellScope.isHosted(context);
     return Center(
       child: Container(
         width: 36,
         height: 4,
         decoration: BoxDecoration(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.zero,
+          color:
+              hosted
+                  ? const Color(0x38FFFFFF)
+                  : Theme.of(
+                    context,
+                  ).colorScheme.outlineVariant.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(hosted ? 3 : 0),
         ),
       ),
     );
@@ -207,7 +253,31 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     );
   }
 
-  Widget _buildCreateSection(AsyncValue<FileShareLink?> shareState) {
+  Widget _buildCreateSection(
+    AsyncValue<FileShareLink?> shareState, {
+    required bool hosted,
+  }) {
+    if (hosted) {
+      return _HostedCreateSection(
+        enablePassword: _enablePassword,
+        onPasswordChanged: (value) => setState(() => _enablePassword = value),
+        passwordMode: _passwordMode,
+        onPasswordModeChanged: (mode) => setState(() => _passwordMode = mode),
+        passwordController: _passwordController,
+        expiryPreset: _hostedExpiryPreset,
+        onExpiryPresetChanged:
+            (preset) => setState(() {
+              _expiryPreset = preset;
+              _expiresAt = null;
+            }),
+        optionsExpanded: _showOptions,
+        onToggleOptions: () => setState(() => _showOptions = !_showOptions),
+        maxAccessController: _maxAccessController,
+        busy: shareState.isLoading,
+        onSubmit: _createShareLink,
+        errorMessage: shareState.hasError ? '${shareState.error}' : null,
+      );
+    }
     final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,6 +441,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
 
   Widget _buildShareInfo(FileShareLink share) {
     final l10n = AppLocalizations.of(context);
+    final hosted = !widget.embedded && MobileShellScope.isHosted(context);
     // 基址解析完成前先占位（复制按钮同时禁用）。
     final baseUrl = _shareBaseUrl;
     final shareUrl = baseUrl == null ? null : '$baseUrl/#/s/${share.shareCode}';
@@ -385,7 +456,8 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
             color: Theme.of(
               context,
             ).colorScheme.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.zero,
+            // 移动壳层按原型卡片语言取 r15，工位形态保持直角。
+            borderRadius: BorderRadius.circular(hosted ? 15 : 0),
             border: Border.all(
               color: Theme.of(
                 context,
@@ -468,6 +540,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                   _buildStatusChip(
                     _statusText(share.status),
                     isActive: share.status.toUpperCase() == 'ACTIVE',
+                    hosted: hosted,
                   ),
                   if (share.maxAccessCount != null) ...[
                     const SizedBox(width: 8),
@@ -520,7 +593,18 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     );
   }
 
-  Widget _buildStatusChip(String label, {required bool isActive}) {
+  Widget _buildStatusChip(
+    String label, {
+    required bool isActive,
+    bool hosted = false,
+  }) {
+    // 移动壳层用原型状态丸（7px 大写 + 色调底），工位保留直角小胶囊。
+    if (hosted) {
+      return MobileStatusPill(
+        label: label,
+        tone: isActive ? MobileStatusTone.calm : MobileStatusTone.danger,
+      );
+    }
     final color =
         isActive ? context.filesColors.primary : context.filesColors.error;
     return Container(
@@ -584,9 +668,35 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
           resourceType: widget.file.isFolder ? 'FOLDER' : 'FILE',
           password: password,
           generatePassword: generatePassword,
-          expiresAt: _expiresAt,
+          expiresAt: _resolvedExpiresAt(),
           maxAccessCount: maxAccess,
         );
+  }
+
+  /// 有效期取值：移动托管态由预设分段决定，桌面态沿用日期选择器。
+  DateTime? _resolvedExpiresAt() {
+    final preset = _expiryPreset;
+    if (preset == null) {
+      return _expiresAt;
+    }
+    return preset.days == 0
+        ? null
+        : DateTime.now().add(Duration(days: preset.days));
+  }
+
+  /// 分段选中档：未显式选择时按已设置的到期时间回推。
+  _ShareExpiryPreset get _hostedExpiryPreset {
+    final preset = _expiryPreset;
+    if (preset != null) {
+      return preset;
+    }
+    final expiresAt = _expiresAt;
+    if (expiresAt == null) {
+      return _ShareExpiryPreset.permanent;
+    }
+    return expiresAt.difference(DateTime.now()).inDays >= 21
+        ? _ShareExpiryPreset.days30
+        : _ShareExpiryPreset.days7;
   }
 
   Future<void> _copyToClipboard(String text) async {

@@ -13,6 +13,8 @@ class _MusicLyricLine extends StatefulWidget {
     required this.textAlign,
     required this.scrollMode,
     this.spec,
+    this.fontFamily,
+    this.fontFamilyFallback,
     this.accentColor,
     this.relativeIndex = 0,
     this.blockWidth,
@@ -43,6 +45,12 @@ class _MusicLyricLine extends StatefulWidget {
 
   /// 复刻参数（桌面沉浸舞台传入）：为 null 时沿用用户设置的通用排版。
   final MusicLyricSpec? spec;
+
+  /// 歌词字体族（宿主传入）：null 跟随主题字体。度量与渲染同源。
+  final String? fontFamily;
+
+  /// 字体回退族：衬线体无中日韩字形，中文歌词按此回退（与 [fontFamily] 同源）。
+  final List<String>? fontFamilyFallback;
 
   /// 时间参考行的强调色（样例 `text-primary`）：只在在读行的 `lyric-meta`
   /// 行使用，非复刻形态不渲染该行。

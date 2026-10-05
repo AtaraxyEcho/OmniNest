@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 
 /// 移动端页面的半透明内容表面。
 class MobilePageSurface extends StatelessWidget {
@@ -659,8 +660,10 @@ class MobileModuleHeader extends StatelessWidget {
   }
 }
 
-/// 样例形态确认弹窗（底部玻璃 sheet）：眉标 + 衬线标题 + 说明 +
-/// 整宽确认钮（destructive 绯红描边 / 常规酸绿实底）+ 文本取消。
+/// 样例形态确认面板（底部玻璃 sheet）：对齐原型 `.danger-confirm`——
+/// 52 图块 + 衬线 23 标题 + 9px 说明 + 两个等宽按钮，危险动作为 #b95f5f
+/// 实底白字，常规动作为酸绿实底深字。
+///
 /// 托管态所有二次确认统一走本入口，替代工位直角确认窗。
 Future<bool> showMobileConfirmSheet(
   BuildContext context, {
@@ -685,83 +688,76 @@ Future<bool> showMobileConfirmSheet(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                destructive ? 'CONFIRM' : 'CONTINUE',
-                style: TextStyle(
-                  fontSize: 8, // ignore: font_size_whitelist
-                  letterSpacing: 1.4,
-                  fontWeight: FontWeight.w700,
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
                   color:
                       destructive
-                          ? const Color(0xFFE2A1A1)
+                          ? const Color(0x1FDA5050)
+                          : const Color(0x14D5F17D),
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                child: OmniIcon(
+                  icon: destructive ? OmniIcons.close : OmniIcons.check,
+                  size: 22,
+                  color:
+                      destructive
+                          ? const Color(0xFFE69696)
                           : MobileEnvColors.accent,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 13),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 21, // ignore: font_size_whitelist
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTypography.serifFamily,
+                  fontFamilyFallback: AppTypography.serifFamilyFallback,
+                  // ignore: font_size_whitelist
+                  fontSize: 23,
+                  height: 1.0,
                   fontWeight: FontWeight.w400,
                   color: MobileEnvColors.ink,
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 7),
               Text(
                 message,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 11, // ignore: font_size_whitelist
-                  height: 1.5,
+                  fontSize: 9, // ignore: font_size_whitelist
+                  height: 1.55,
                   color: MobileEnvColors.inkMuted,
                 ),
               ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () => Navigator.of(sheetContext).pop(true),
-                style:
-                    destructive
-                        ? TextButton.styleFrom(
-                          foregroundColor: const Color(0xFFE2A1A1),
-                          minimumSize: const Size.fromHeight(46),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(13),
-                            side: const BorderSide(
-                              color: Color(0x38E2A1A1),
-                            ),
-                          ),
-                        )
-                        : TextButton.styleFrom(
-                          backgroundColor: MobileEnvColors.accent,
-                          foregroundColor: MobileEnvColors.onAccent,
-                          minimumSize: const Size.fromHeight(46),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                        ),
-                child: Text(
-                  confirmLabel ?? l10n.okButtonLabel,
-                  style: const TextStyle(
-                    fontSize: 12, // ignore: font_size_whitelist
-                    fontWeight: FontWeight.w700,
+              const SizedBox(height: 17),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MobileConfirmButton(
+                      label: cancelLabel ?? l10n.cancelButtonLabel,
+                      background: const Color(0x12FFFFFF),
+                      foreground: MobileEnvColors.ink,
+                      onTap: () => Navigator.of(sheetContext).pop(false),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.of(sheetContext).pop(false),
-                style: TextButton.styleFrom(
-                  foregroundColor: MobileEnvColors.inkMuted,
-                  minimumSize: const Size.fromHeight(42),
-                ),
-                child: Text(
-                  cancelLabel ?? l10n.cancelButtonLabel,
-                  style: const TextStyle(
-                    fontSize: 11, // ignore: font_size_whitelist
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _MobileConfirmButton(
+                      label: confirmLabel ?? l10n.okButtonLabel,
+                      background:
+                          destructive
+                              ? const Color(0xFFB95F5F)
+                              : MobileEnvColors.accent,
+                      foreground:
+                          destructive ? Colors.white : MobileEnvColors.onAccent,
+                      onTap: () => Navigator.of(sheetContext).pop(true),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -770,6 +766,46 @@ Future<bool> showMobileConfirmSheet(
     },
   );
   return result ?? false;
+}
+
+/// 确认面板底部按钮：45 高、r13、10px 标签（原型 `.danger-confirm button`）。
+class _MobileConfirmButton extends StatelessWidget {
+  const _MobileConfirmButton({
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MobilePressable(
+      semanticLabel: label,
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 45),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 10, // ignore: font_size_whitelist
+            color: foreground,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// 样例 .env-switch：34×20 胶囊轨道（关=白 14%，开=酸绿）+ 14px 圆点
@@ -880,5 +916,143 @@ class MobileEnvSectionHeader extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// rootNavigator 模态层的宿主环境快照。
+///
+/// `showModalBottomSheet` 默认经根导航器呈现，面板子树不在移动壳层的
+/// Theme 与 `MobileShellScope` 内：壳层暗皮肤、模块调色板重绑与托管标记
+/// 全部丢失，表现为白底输入框与浅色面板。打开面板前在宿主页面上下文
+/// 捕获环境，面板 builder 用 [wrap] 重放；非托管态原样返回子级。
+class MobileSheetAmbience {
+  MobileSheetAmbience.capture(BuildContext context)
+    : _theme = Theme.of(context),
+      _hosted = MobileShellScope.isHosted(context);
+
+  final ThemeData _theme;
+  final bool _hosted;
+
+  /// 面板是否由移动壳层承载（决定圆角与实底面板色等形态）。
+  bool get hosted => _hosted;
+
+  /// 在面板子树重放宿主主题与托管标记。
+  Widget wrap(Widget child) {
+    if (!_hosted) {
+      return child;
+    }
+    return Theme(
+      data: _theme,
+      child: MobileShellScope(hosted: true, child: child),
+    );
+  }
+}
+
+/// 原型 `.feature-list > button` 行：42 图标舱 + 名称/明细 + 尾部状态位
+/// 与可选箭头，发丝线分隔；用于挂载账户、导入/离线任务、共享条目等
+/// 无进度条的条目列表。
+///
+/// 与 `.transfer-row` 的差别是不带 3px 进度条，行高 69 由内容自撑。
+class MobileFeatureListRow extends StatelessWidget {
+  const MobileFeatureListRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.trailing,
+    this.onTap,
+    this.showChevron = false,
+    this.neutralIcon = false,
+    super.key,
+  });
+
+  final OmniIconsData icon;
+  final String title;
+  final String detail;
+
+  /// 尾部状态丸等控件；无内容时不占位。
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  /// 可进入下一层的行显示 16px 弱化箭头（原型行尾 chevron）。
+  final bool showChevron;
+
+  /// 原型 `.notif-icon.neutral`：弱化前景 + 白 5% 底，用于无状态条目。
+  final bool neutralIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Container(
+      constraints: const BoxConstraints(minHeight: 69),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color:
+                  neutralIcon
+                      ? const Color(0x0DFFFFFF)
+                      : MobileEnvColors.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: OmniIcon(
+              icon: icon,
+              size: 18,
+              color:
+                  neutralIcon
+                      ? MobileEnvColors.inkMuted
+                      : MobileEnvColors.accent,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: MobileEnvColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 9, // ignore: font_size_whitelist
+                    color: MobileEnvColors.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+          if (showChevron) ...[
+            const SizedBox(width: 8),
+            const OmniIcon(
+              icon: OmniIcons.chevron,
+              size: 16,
+              color: MobileEnvColors.ink40,
+            ),
+          ],
+        ],
+      ),
+    );
+    if (onTap == null) {
+      return row;
+    }
+    return MobilePressable(semanticLabel: title, onTap: onTap, child: row);
   }
 }

@@ -87,6 +87,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('首页工作区工具三行入口进入列表态', (tester) async {
+    await pumpHost(tester);
+
+    // 原型 `.tool-shortcuts`：外部存储 / 导入任务 / 上传队列。
+    expect(find.text('工作区工具'), findsOneWidget);
+    expect(find.text('外部存储'), findsOneWidget);
+    expect(find.text('导入任务'), findsOneWidget);
+    expect(find.text('上传队列'), findsOneWidget);
+    // 分区数据未加载时副题回退到分区说明文案，不编造计数。
+    expect(find.text('管理 OneDrive、WebDAV 等第三方存储挂载。'), findsOneWidget);
+
+    await tester.tap(find.text('上传队列'));
+    await tester.pumpAndSettle();
+    expect(find.text('存储用量'), findsNothing, reason: '已离开首页态');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('托管平板宽度仍走触屏布局：不出现桌面侧栏', (tester) async {
     // 托管态与 Photos/Music/Reader 同规则：宽度只决定触屏内容的网格
     // 密度，桌面侧栏路径仅非托管窗口使用。

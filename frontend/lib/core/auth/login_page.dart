@@ -10,6 +10,11 @@ import 'package:omninest/core/auth/login_two_factor_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 
+/// 登录入参长度上界：与后端建号/注册/改密校验一致（用户名 80、口令
+/// 8-24）。超界口令永远无法通过认证，在输入源头即截断。
+const int _loginUsernameMaxLength = 80;
+const int _loginPasswordMaxLength = 24;
+
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -287,6 +292,56 @@ class _LoginFormCard extends StatelessWidget {
     // 桌面与 Web 保持工位面板。
     final mobileForm =
         isMobilePlatform && MediaQuery.sizeOf(context).width < 920;
+    final usernameField = TextFormField(
+      controller: usernameController,
+      keyboardType: TextInputType.text,
+      // 用户名区分大小写，禁用移动端自动首字母大写与联想替换。
+      textCapitalization: TextCapitalization.none,
+      enableSuggestions: false,
+      textInputAction: TextInputAction.next,
+      maxLength: _loginUsernameMaxLength,
+      autofillHints: const [AutofillHints.username],
+      decoration: InputDecoration(
+        labelText: l10n.loginUsername,
+        prefixIcon: const Icon(Icons.person_outline_rounded),
+        counterText: '',
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return l10n.loginUsernameHint;
+        }
+        return null;
+      },
+    );
+    final passwordField = TextFormField(
+      controller: passwordController,
+      obscureText: obscurePassword,
+      textInputAction: TextInputAction.done,
+      maxLength: _loginPasswordMaxLength,
+      autofillHints: const [AutofillHints.password],
+      onFieldSubmitted: (_) => onSubmit(),
+      decoration: InputDecoration(
+        labelText: l10n.loginPassword,
+        prefixIcon: const Icon(Icons.lock_outline_rounded),
+        counterText: '',
+        suffixIcon: IconButton(
+          tooltip:
+              obscurePassword ? l10n.loginShowPassword : l10n.loginHidePassword,
+          onPressed: onTogglePassword,
+          icon: Icon(
+            obscurePassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return l10n.loginPasswordHint;
+        }
+        return null;
+      },
+    );
     final cardChild = Form(
       key: formKey,
       child: Column(
@@ -305,47 +360,17 @@ class _LoginFormCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          TextFormField(
-            controller: usernameController,
-            textInputAction: TextInputAction.next,
-            decoration: InputDecoration(
-              labelText: l10n.loginUsername,
-              prefixIcon: const Icon(Icons.person_outline_rounded),
+          // 与安装向导同策略：两个字段编入同一自动填充组，系统与浏览器
+          // 按“用户名 + 口令”成对填充，不单独提示口令。
+          AutofillGroup(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                usernameField,
+                const SizedBox(height: 16),
+                passwordField,
+              ],
             ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return l10n.loginUsernameHint;
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: passwordController,
-            obscureText: obscurePassword,
-            onFieldSubmitted: (_) => onSubmit(),
-            decoration: InputDecoration(
-              labelText: l10n.loginPassword,
-              prefixIcon: const Icon(Icons.lock_outline_rounded),
-              suffixIcon: IconButton(
-                tooltip:
-                    obscurePassword
-                        ? l10n.loginShowPassword
-                        : l10n.loginHidePassword,
-                onPressed: onTogglePassword,
-                icon: Icon(
-                  obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-              ),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return l10n.loginPasswordHint;
-              }
-              return null;
-            },
           ),
           if (errorMessage != null) ...[
             const SizedBox(height: 18),

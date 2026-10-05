@@ -394,9 +394,61 @@
   "filesShareManagementDesc": "管理有效、过期或已撤销分享链接。",
   "filesStorageStatsDesc": "查看容量、配额、文件类型分布和空间使用情况。",
   "filesUploadQueueDesc": "查看分片上传会话、断点续传进度和上传状态。",
+  "filesUploadQueueEmptyTitle": "没有正在上传的文件",
+  "filesUploadQueueEmptyMessage": "从任意文件夹点加号开始上传，进度与失败原因会保留在这里。",
+  "filesUploadQueueSummaryActive": "进行中",
+  "filesUploadQueueSummaryCompleted": "已完成",
+  "filesUploadQueueSummaryFailed": "失败",
+  "filesSharesEmptyTitle": "还没有创建分享链接",
+  "filesSharesEmptyMessage": "在文件长按选择分享，创建后的链接与访问状态会列在这里。",
+  "filesStorageEmptyTitle": "暂时取不到存储统计",
+  "filesStorageEmptyMessage": "统计由服务端汇总，恢复网络后可重试。",
+  "filesStorageRetry": "重新加载",
+  "filesStorageQuotaTitle": "配额占用",
+  "filesStorageQuotaUnlimited": "配额未限制",
+  "filesStorageSummaryFiles": "文件",
+  "filesStorageSummaryFolders": "文件夹",
+  "filesStorageSummaryUsed": "已用",
+  "filesStorageTypeDistribution": "类型分布",
+  "filesUploadQueueLoadMore": "加载更多（已加载 {loaded} / 共 {total}）",
+  "@filesUploadQueueLoadMore": {
+    "placeholders": { "loaded": { "type": "String" }, "total": { "type": "String" } }
+  },
   "filesOfflineDownloadsDesc": "管理 HTTP、BT 和磁力链离线下载任务。",
   "filesExternalStorageDesc": "管理 OneDrive、WebDAV 等第三方存储挂载。",
   "filesImportTasksDesc": "查看外部存储文件导入进度，支持取消排队中的任务。",
+  "filesHostedItemCount": "共 {count} 项",
+  "@filesHostedItemCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "filesSharedWithMeEmptyTitle": "还没有人分享文件给你",
+  "filesSharedWithMeEmptyMessage": "其他用户定向分享后，文件会列在这里并可直接预览。",
+  "filesOfflineEmptyTitle": "还没有离线下载任务",
+  "filesOfflineEmptyMessage": "用「新建离线下载」粘贴 HTTP、BT 或磁力链接开始。",
+  "filesExternalEmptyTitle": "还没有挂载存储",
+  "filesExternalEmptyMessage": "添加 OneDrive、WebDAV 等来源后，可在这里浏览并导入文件。",
+  "filesExternalCredentialsMissing": "未配置凭据",
+  "filesExternalBrowseFailedTitle": "读取挂载目录失败",
+  "filesExternalBrowseEmptyMessage": "这个目录里没有可浏览的文件。",
+  "filesImportEmptyTitle": "还没有导入任务",
+  "filesImportEmptyMessage": "在外部存储选择文件导入后，进度会列在这里。",
+  "filesHomeWorkspaceTools": "工作区工具",
+  "filesHomeShortcutMountsOnline": "{online} / {total} 个挂载在线",
+  "@filesHomeShortcutMountsOnline": {
+    "placeholders": { "online": { "type": "int" }, "total": { "type": "int" } }
+  },
+  "filesHomeShortcutTasksActive": "{count} 个任务进行中",
+  "@filesHomeShortcutTasksActive": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "filesHomeShortcutUploadRemaining": "还有 {size} 待上传",
+  "@filesHomeShortcutUploadRemaining": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "filesShareExpiryDays": "{days} 天",
+  "@filesShareExpiryDays": {
+    "placeholders": { "days": { "type": "int" } }
+  },
   "filesSharedSpace": "共享空间",
   "filesSharedSpaceDesc": "所有用户共享的文件空间",
   "filesSharedSpaceUsage": "共享空间用量",
@@ -3063,6 +3115,7 @@
   "videoProcessing": "处理中",
   "videoHistorySubtitle": "完整播放记录。",
   "videoClearHistory": "清空历史",
+  "videoRemoveHistoryEntry": "从观看历史移除",
   "videoNoWatchHistory": "暂无观看历史。",
   "videoMoreFilters": "更多筛选",
   "videoGenre": "类型",
@@ -3567,6 +3620,7 @@
   "photosEnterPassword": "输入密码",
   "photosAccess": "访问",
   "photosAlbumEmpty": "相册中还没有照片",
+  "photosAlbumEmptyHint": "从照片库中选择照片加入当前相册。",
   "photosAddPhotos": "添加照片",
   "photosPickerAddCount": "添加 {count} 张",
   "photosPickerAddSuccess": "已添加 {count} 张照片",
@@ -4385,6 +4439,21 @@
   "videoLibraryRecordsCollapse": "收起记录",
   "photosPrevPhoto": "上一张",
   "photosNextPhoto": "下一张",
+  "photosViewerPosition": "第 {index} / 共 {total} 张",
+  "@photosViewerPosition": {
+    "placeholders": {
+      "index": {},
+      "total": {}
+    }
+  },
+  "photosViewerPositionTime": "第 {index} / 共 {total} 张 · {taken}",
+  "@photosViewerPositionTime": {
+    "placeholders": {
+      "index": {},
+      "total": {},
+      "taken": {}
+    }
+  },
   "videoUnavailableEmpty": "当前没有缺失或不可读取的本地媒体。",
   "videoUnavailableCount": "{count} 项需要处理",
   "@videoUnavailableCount": {

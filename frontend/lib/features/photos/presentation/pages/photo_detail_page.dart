@@ -28,6 +28,9 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
+
+part 'photo_detail_page_image.dart';
 
 /// 桌面端信息侧栏宽度：与幻灯片信息面板及分享侧栏一致。
 /// 照片详情/查看器页面
@@ -66,46 +69,52 @@ class PhotoDetailPage extends ConsumerWidget {
     final photoAsync = ref.watch(photoDetailProvider(photoId));
     final seed = _resolveSeedPhoto(ref, photoId);
     final photo = photoAsync.asData?.value ?? seed;
+    final hosted = photosHostedForm(context);
     // 查看器为沉浸暗色场景（与幻灯片一致）：整页子树强制暗色主题，
     // 顶栏/箭头/徽标/对话框/加载与错误态自动使用暗色变体。
     return Theme(
       data: OmniNestTheme.from(AppThemePalette.dark),
-      child: Scaffold(
-        backgroundColor: context.photosColors.surface,
-        body:
-            photo != null
-                ? _PhotoDetailBody(photo: photo)
-                : photoAsync.when(
-                  data: (resolved) => _PhotoDetailBody(photo: resolved),
-                  error:
-                      (error, stackTrace) => Column(
-                        children: [
-                          SafeArea(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                tooltip:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosBackToPhotos,
-                                onPressed: () => context.popOrGo('/photos'),
-                                icon: const Icon(Icons.arrow_back_rounded),
+      child: PhotoHostedScope(
+        child: Scaffold(
+          backgroundColor:
+              hosted
+                  ? photoViewerHostedStageColor
+                  : context.photosColors.surface,
+          body:
+              photo != null
+                  ? _PhotoDetailBody(photo: photo)
+                  : photoAsync.when(
+                    data: (resolved) => _PhotoDetailBody(photo: resolved),
+                    error:
+                        (error, stackTrace) => Column(
+                          children: [
+                            SafeArea(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton(
+                                  tooltip:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).photosBackToPhotos,
+                                  onPressed: () => context.popOrGo('/photos'),
+                                  icon: const Icon(Icons.arrow_back_rounded),
+                                ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: AppErrorView(
-                              message: describeUserFacingError(error).message,
-                              onRetry:
-                                  () => ref.invalidate(
-                                    photoDetailProvider(photoId),
-                                  ),
+                            Expanded(
+                              child: AppErrorView(
+                                message: describeUserFacingError(error).message,
+                                onRetry:
+                                    () => ref.invalidate(
+                                      photoDetailProvider(photoId),
+                                    ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                  loading: () => const AppLoading.detail(),
-                ),
+                          ],
+                        ),
+                    loading: () => const AppLoading.detail(),
+                  ),
+        ),
       ),
     );
   }
@@ -118,6 +127,11 @@ class _PhotoDetailBody extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<_PhotoDetailBody> createState() => _PhotoDetailBodyState();
+}
+
+/// 中文语境下地点名优先取中文回写字段（与工位查看器口径一致）。
+bool _prefersZhLocation(BuildContext context) {
+  return Localizations.localeOf(context).languageCode == 'zh';
 }
 
 class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
@@ -581,6 +595,8 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 700;
+    final hosted = photosHostedForm(context);
+    final l10n = AppLocalizations.of(context);
     // 响应式解析浏览序列：浏览范围或照片列表晚到时页面集合随之扩展，
     // 当前照片以 id 锚定，不因序列变化丢失位置。
     // 仅订阅 photos 列表本身，避免多选/分页等无关变更重建查看器。
@@ -610,6 +626,34 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
         }
       });
     }
+
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    // 托管态（样例 photo-viewer）：横幅常驻、底部动作行在信息面板展开时
+    // 让位；工位态保持原有顶栏 + 紧凑档底部行的留白口径。
+    final actionsVisible = !_showInfo && (hosted || compact);
+    final stagePadding =
+        hosted
+            ? EdgeInsets.fromLTRB(
+              10,
+              96,
+              10,
+              (actionsVisible ? 62 : 24) + safeBottom,
+            )
+            : const EdgeInsets.fromLTRB(40, 56, 40, 24);
+    final badgeBottom = hosted ? stagePadding.bottom + 10 : 24 + safeBottom;
+    final stageImageRadius = hosted ? 10.0 : 0.0;
+    final date = currentFresh.dateTaken ?? currentFresh.createdAt;
+    final viewerTitle =
+        currentFresh.locationDisplay(preferZh: _prefersZhLocation(context)) ??
+        currentFresh.title;
+    final viewerSubtitle =
+        date == null
+            ? l10n.photosViewerPosition(_currentPage + 1, _pages.length)
+            : l10n.photosViewerPositionTime(
+              _currentPage + 1,
+              _pages.length,
+              viewerShortDate(date),
+            );
 
     return Stack(
       children: [
@@ -646,7 +690,16 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                           .asData
                           ?.value ??
                       seed;
-                  return _buildPhotoStage(context, item, index, _pages.length);
+                  return _buildPhotoStage(
+                    context,
+                    item,
+                    index,
+                    _pages.length,
+                    stagePadding: stagePadding,
+                    badgeBottom: badgeBottom,
+                    imageRadius: stageImageRadius,
+                    hosted: hosted,
+                  );
                 },
               );
             },
@@ -668,52 +721,86 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               () => ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
           child: PhotoInfoPanel(photo: currentFresh, onShare: _openSharePanel),
         ),
-        // 顶部操作栏：设计稿样式，半透明浮层横贯照片与侧栏
+        // 顶部横幅：托管态用样例玻璃横幅（地名 + N of M · 时间 + 幻灯片），
+        // 工位态保留原半透明浮层。
         Positioned(
           top: 0,
           left: 0,
           right: 0,
-          child: PhotoViewerTopBar(
-            photo: currentFresh,
-            onClose: _closeViewer,
-            onToggleFavorite:
-                () => unawaited(_toggleViewerFavorite(currentFresh)),
-            onDelete: _confirmDelete,
-            onToggleInfo:
-                () => ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
-            onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
-            onEdit: () {
-              context.push('/photos/${currentFresh.id}/edit');
-            },
-            onSlideshow: _launchSlideshow,
-            onDownload: () => unawaited(_downloadPhoto()),
-            onShare: _openSharePanel,
-            showInfo: _showInfo,
-            compact: compact,
-            countText: '${_currentPage + 1} / ${_pages.length}',
-          ),
+          child:
+              hosted
+                  ? PhotoViewerHostedHeader(
+                    title: viewerTitle,
+                    subtitle: viewerSubtitle,
+                    onBack: _closeViewer,
+                    onSlideshow: _launchSlideshow,
+                  )
+                  : PhotoViewerTopBar(
+                    photo: currentFresh,
+                    onClose: _closeViewer,
+                    onToggleFavorite:
+                        () => unawaited(_toggleViewerFavorite(currentFresh)),
+                    onDelete: _confirmDelete,
+                    onToggleInfo:
+                        () =>
+                            ref
+                                .read(photoInfoPanelVisibleProvider.notifier)
+                                .toggle(),
+                    onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
+                    onEdit: () {
+                      context.push('/photos/${currentFresh.id}/edit');
+                    },
+                    onSlideshow: _launchSlideshow,
+                    onDownload: () => unawaited(_downloadPhoto()),
+                    onShare: _openSharePanel,
+                    showInfo: _showInfo,
+                    compact: compact,
+                    countText: '${_currentPage + 1} / ${_pages.length}',
+                  ),
         ),
-        // 紧凑档底部七钮动作行（样例 photo-actions）：信息面板以底部
-        // sheet 呈现时不渲染，避免两层叠底。
-        if (compact && !_showInfo)
+        // 底部七钮动作行（样例 photo-actions）：信息面板以底部 sheet
+        // 呈现时不渲染，避免两层叠底。
+        if (actionsVisible)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: PhotoViewerBottomActions(
-              photo: currentFresh,
-              onToggleFavorite:
-                  () => unawaited(_toggleViewerFavorite(currentFresh)),
-              onShare: _openSharePanel,
-              onDownload: () => unawaited(_downloadPhoto()),
-              onEdit: () => context.push('/photos/${currentFresh.id}/edit'),
-              onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
-              onToggleInfo:
-                  () =>
-                      ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
-              onDelete: _confirmDelete,
-              showInfo: _showInfo,
-            ),
+            child:
+                hosted
+                    ? PhotoViewerHostedActions(
+                      photo: currentFresh,
+                      onToggleFavorite:
+                          () => unawaited(_toggleViewerFavorite(currentFresh)),
+                      onShare: _openSharePanel,
+                      onDownload: () => unawaited(_downloadPhoto()),
+                      onEdit:
+                          () => context.push('/photos/${currentFresh.id}/edit'),
+                      onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
+                      onToggleInfo:
+                          () =>
+                              ref
+                                  .read(photoInfoPanelVisibleProvider.notifier)
+                                  .toggle(),
+                      onDelete: _confirmDelete,
+                      showInfo: _showInfo,
+                    )
+                    : PhotoViewerBottomActions(
+                      photo: currentFresh,
+                      onToggleFavorite:
+                          () => unawaited(_toggleViewerFavorite(currentFresh)),
+                      onShare: _openSharePanel,
+                      onDownload: () => unawaited(_downloadPhoto()),
+                      onEdit:
+                          () => context.push('/photos/${currentFresh.id}/edit'),
+                      onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
+                      onToggleInfo:
+                          () =>
+                              ref
+                                  .read(photoInfoPanelVisibleProvider.notifier)
+                                  .toggle(),
+                      onDelete: _confirmDelete,
+                      showInfo: _showInfo,
+                    ),
           ),
         // 分享侧栏：与幻灯片共用组件，scrim 在面板之下。
         if (_showSharePanel)
@@ -745,16 +832,23 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     BuildContext context,
     PhotoItem photo,
     int index,
-    int total,
-  ) {
+    int total, {
+    required EdgeInsets stagePadding,
+    required double badgeBottom,
+    required double imageRadius,
+    required bool hosted,
+  }) {
     final imageUrl = photo.sourceUrl ?? photo.coverUrl;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final viewBackground =
-        isDark
+        hosted
+            ? photoViewerHostedStageColor
+            : isDark
             ? FramePalette.viewerBg
             : context.photosColors.surfaceContainerLow;
     return ColoredBox(
-      // 暗色使用设计稿查看器底色，亮色跟随主题浅色底。
+      // 托管态取样例 photo-viewer 实底，工位暗色取设计稿查看器底色，
+      // 亮色跟随主题浅色底。
       color: viewBackground,
       child: Stack(
         children: [
@@ -768,8 +862,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               onLongPressCancel:
                   photo.isMotionReady ? () => _setMotionHold(false) : null,
               child: Padding(
-                // 设计稿照片区四周留白 40px，顶部避开浮层顶栏。
-                padding: const EdgeInsets.fromLTRB(40, 56, 40, 24),
+                // 舞台留白由调用方按形态给定：工位四周 40/56/40/24，
+                // 托管按样例 photo-stage 窄留白并避开横幅与动作行。
+                padding: stagePadding,
                 child: Center(
                   child:
                       imageUrl != null && imageUrl.isNotEmpty
@@ -786,7 +881,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                                   fromHeroContext,
                                   toHeroContext,
                                 ) => (toHeroContext.widget as Hero).child,
-                            child: ClipRect(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(imageRadius),
+                              clipBehavior: Clip.hardEdge,
                               child: InteractiveViewer(
                                 minScale: 1,
                                 maxScale: 5,
@@ -839,8 +936,8 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
           // LIVE 徽标：常驻播放开关。
           if (photo.isMotionReady)
             Positioned(
-              left: 24,
-              bottom: 24 + MediaQuery.paddingOf(context).bottom,
+              left: hosted ? 16 : 24,
+              bottom: badgeBottom,
               child: _MotionBadge(
                 active: _motionPinnedPlaying,
                 label: AppLocalizations.of(context).photosLiveBadge,
@@ -864,271 +961,6 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               onTap: () => _goToPage(index + 1),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// 查看器两层图片的解码宽度档位：预取与渲染共用，保证图片缓存键一致。
-///
-/// 原图层按屏宽 256 步进量化；封面层 128 步进、上限 1024。256 档位避免
-/// 最大化/还原时屏宽连续变化反复重解码。
-({int source, int cover}) viewerDecodeWidths(BuildContext context) {
-  final size = MediaQuery.sizeOf(context);
-  final dpr = MediaQuery.devicePixelRatioOf(context);
-  return (
-    source: quantizedDecodeWidth(
-      logicalWidth: size.width,
-      devicePixelRatio: dpr,
-      step: 256,
-      min: 512,
-      max: 4096,
-    ),
-    cover: quantizedDecodeWidth(
-      logicalWidth: size.width,
-      devicePixelRatio: dpr,
-      step: 128,
-      min: 400,
-      max: 1024,
-    ),
-  );
-}
-
-/// 查看器渐进图层：列表封面先亮，原图就绪后淡入覆盖。
-///
-/// 分页列表项已携带签名 sourceUrl；首页最近/收藏条带的列表项不含
-/// sourceUrl，由相邻页详情预取与内存缓存种子补齐。原图按屏宽降采样
-/// 解码，避免移动端整幅原图解码卡顿。
-///
-/// 种子（列表/内存缓存）可能携带已过期的预签名 URL；签名 URL 失败后按
-/// 世代后缀重试并作废详情 provider 换取现签地址：CachedNetworkImage 的
-/// provider 相等性只看 cacheKey，同 key 的 URL 轮换不会重载已失败的
-/// 流，必须换 key 才能重试。
-///
-/// 解码宽度档位由 [viewerDecodeWidths] 统一提供，相邻页预取与渲染共用，
-/// 保证图片缓存键一致，预取才能真正命中已解码位图。
-class _ProgressivePhotoImage extends ConsumerStatefulWidget {
-  const _ProgressivePhotoImage({required this.photo});
-
-  final PhotoItem photo;
-
-  @override
-  ConsumerState<_ProgressivePhotoImage> createState() =>
-      _ProgressivePhotoImageState();
-}
-
-class _ProgressivePhotoImageState
-    extends ConsumerState<_ProgressivePhotoImage> {
-  static const int _maxRetryTicks = 2;
-
-  /// 原图层异步就绪后的短淡入时长；仅异步加载播放，同步缓存命中不播。
-  static const Duration _sourceFadeIn = Duration(milliseconds: 220);
-
-  int _retryTick = 0;
-  bool _recovering = false;
-
-  void _handleImageError() {
-    if (_recovering || _retryTick >= _maxRetryTicks) {
-      return;
-    }
-    // post-frame 触发，避免图片流回调（可发生于 build 期）中直接改状态。
-    _recovering = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _retryTick++;
-        _recovering = false;
-      });
-      // 作废详情取现签 URL；新 URL 配合世代后缀 cacheKey 才会真正重载。
-      ref.invalidate(photoDetailProvider(widget.photo.id));
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final photo = widget.photo;
-    final retrySuffix = _retryTick > 0 ? ':r$_retryTick' : '';
-    final coverUrl = photo.coverUrl;
-    final sourceUrl = photo.sourceUrl;
-    final widths = viewerDecodeWidths(context);
-    final sourceDecodeWidth = widths.source;
-    final coverDecodeWidth = widths.cover;
-
-    if (sourceUrl == null || sourceUrl.isEmpty) {
-      if (coverUrl == null || coverUrl.isEmpty) {
-        return const SizedBox.shrink();
-      }
-      return _ViewerNetworkImage(
-        imageUrl: coverUrl,
-        cacheKey: '${photo.coverCacheKey}$retrySuffix',
-        memCacheWidth: sourceDecodeWidth,
-        fadeInDuration: _sourceFadeIn,
-        onError: _handleImageError,
-      );
-    }
-
-    final hasCover = coverUrl != null && coverUrl.isNotEmpty;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (hasCover)
-          _ViewerNetworkImage(
-            imageUrl: coverUrl,
-            cacheKey: '${photo.coverCacheKey}$retrySuffix',
-            memCacheWidth: coverDecodeWidth,
-            onError: _handleImageError,
-          ),
-        _ViewerNetworkImage(
-          imageUrl: sourceUrl,
-          cacheKey: '${photo.sourceCacheKey}$retrySuffix',
-          memCacheWidth: sourceDecodeWidth,
-          // 封面已在底层：原图加载中不再叠 spinner，失败时保留封面；
-          // 异步就绪后短淡入，把封面→原图的清晰度跳变柔化为交叉过渡
-          //（预取命中的同步加载会被 octo 跳过淡入，仍单帧直出）。
-          fadeInDuration: _sourceFadeIn,
-          transparentWhilePending: hasCover,
-          hideError: hasCover,
-          onError: _handleImageError,
-        ),
-      ],
-    );
-  }
-}
-
-class _ViewerNetworkImage extends StatelessWidget {
-  const _ViewerNetworkImage({
-    required this.imageUrl,
-    required this.cacheKey,
-    required this.memCacheWidth,
-    this.fadeInDuration = Duration.zero,
-    this.transparentWhilePending = false,
-    this.hideError = false,
-    this.onError,
-  });
-
-  final String imageUrl;
-  final String cacheKey;
-  final int memCacheWidth;
-  final Duration fadeInDuration;
-  final bool transparentWhilePending;
-  final bool hideError;
-  final VoidCallback? onError;
-
-  @override
-  Widget build(BuildContext context) {
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      cacheKey: cacheKey,
-      memCacheWidth: memCacheWidth,
-      fit: BoxFit.contain,
-      fadeInDuration: fadeInDuration,
-      fadeOutDuration: Duration.zero,
-      useOldImageOnUrlChange: true,
-      errorListener: (_) {
-        final callback = onError;
-        if (callback != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => callback());
-        }
-      },
-      placeholder:
-          transparentWhilePending
-              ? (context, url) => const SizedBox.shrink()
-              : (context, url) => Center(
-                child: CircularProgressIndicator(
-                  color: context.photosColors.primaryContainer,
-                ),
-              ),
-      errorWidget:
-          hideError
-              ? (context, url, error) => const SizedBox.shrink()
-              : (context, url, error) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.broken_image_outlined,
-                      color: context.photosColors.onSurfaceVariant.withValues(
-                        alpha: 0.4,
-                      ),
-                      size: 48,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      AppLocalizations.of(context).photosImageLoadFailed,
-                      style: TextStyle(
-                        color: context.photosColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-    );
-  }
-}
-
-/// LIVE 徽标：胶囊样式，激活时高亮，点按切换常驻播放。
-class _MotionBadge extends StatelessWidget {
-  const _MotionBadge({
-    required this.active,
-    required this.label,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final bool active;
-  final String label;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final background =
-        active
-            ? context.photosColors.primaryContainer
-            : isDark
-            ? Colors.black.withValues(alpha: 0.55)
-            : Colors.white.withValues(alpha: 0.78);
-    final foreground =
-        active
-            ? context.photosColors.onPrimaryContainer
-            : isDark
-            ? Colors.white.withValues(alpha: 0.92)
-            : Colors.black.withValues(alpha: 0.78);
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: background,
-        shape: const StadiumBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.motion_photos_on_rounded,
-                  size: 16,
-                  color: foreground,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: AppTypography.bodySmall,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -54,7 +54,16 @@ class _SharedWithMeWorkspaceState
   @override
   Widget build(BuildContext context) {
     if (MobileShellScope.isHosted(context)) {
-      return _HostedSharedWithMe(state: widget.state);
+      final meta = widget.state.sharedWithMeMeta;
+      return _HostedSharedWithMe(
+        state: widget.state,
+        loadedCount: math.min(meta.totalElements, (meta.page + 1) * meta.size),
+        totalCount: meta.totalElements,
+        onLoadNext:
+            () => ref
+                .read(fileBrowserControllerProvider.notifier)
+                .showSharedWithMe(page: meta.page + 1),
+      );
     }
     final l10n = AppLocalizations.of(context);
     final items = widget.state.sharedWithMe;
@@ -248,6 +257,40 @@ class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
           };
         }).toList();
     final locale = Localizations.localeOf(context).toString();
+    if (MobileShellScope.isHosted(context)) {
+      // 托管态不渲染工位指标条、筛选胶囊、表格与分页条：状态丸与逐条到期
+      // 信息进发丝线行，翻页走眉标行动作，编辑/撤销在点开的分享面板里。
+      return _HostedSharesPage(
+        l10n: l10n,
+        shares: shares,
+        loadedCount: math.min(
+          widget.state.sharesMeta.totalElements,
+          (widget.state.sharesMeta.page + 1) * widget.state.sharesMeta.size,
+        ),
+        totalCount: widget.state.sharesMeta.totalElements,
+        onLoadNext:
+            () => _reloadSharesPage(
+              ref,
+              scopeAll: widget.state.shareScopeAll,
+              page: widget.state.sharesMeta.page + 1,
+            ),
+        onOpen:
+            (share) => ShareLinkSheet.show(
+              context,
+              existingShare: share,
+              file: FileNode(
+                id: share.resourceId,
+                parentId: null,
+                name: share.resourceName,
+                isFolder: share.resourceType.toUpperCase() == 'FOLDER',
+                nodeType: share.resourceType,
+                normalizedPath: share.resourceName,
+                sizeBytes: 0,
+                updatedAt: share.createdAt,
+              ),
+            ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

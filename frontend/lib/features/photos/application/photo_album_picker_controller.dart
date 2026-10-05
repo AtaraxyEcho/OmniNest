@@ -150,6 +150,26 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
     );
   }
 
+  /// 选中当前已加载的全部候选照片（托管工具行「全选」语义：只覆盖已加载
+  /// 分页，未加载部分需先滚动触底）。
+  void selectAllCandidates() {
+    final current = state;
+    if (current.candidates.isEmpty) {
+      return;
+    }
+    state = PhotoAlbumPickerState(
+      albumId: current.albumId,
+      candidates: current.candidates,
+      selectedIds: {for (final photo in current.candidates) photo.id},
+      totalElements: current.totalElements,
+      nextPage: current.nextPage,
+      hasMore: current.hasMore,
+      isLoadingMore: current.isLoadingMore,
+      isSubmitting: current.isSubmitting,
+      error: current.error,
+    );
+  }
+
   /// 提交所选照片到相册；提交中或无选择时直接返回结果。
   Future<bool> submit() async {
     final current = state;

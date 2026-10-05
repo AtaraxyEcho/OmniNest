@@ -22,6 +22,36 @@ class ProfileEditDialog extends StatefulWidget {
   /// 保存资料；返回是否成功。
   final Future<bool> Function(String displayName, String email) onSave;
 
+  /// 显示昵称校验：与后端 `CurrentUserService` 一致，须为 1-120 个字符。
+  ///
+  /// 桌面编辑窗口与移动个人信息视图共用同一规则，避免两端判定分叉。
+  static String? validateDisplayName(BuildContext context, String? value) {
+    final trimmed = (value ?? '').trim();
+    if (trimmed.isEmpty || trimmed.length > displayNameMaxLength) {
+      return AppLocalizations.of(context).profileDisplayNameInvalid;
+    }
+    return null;
+  }
+
+  /// 邮箱校验：可留空表示清除；非空时不得超 255 字符且须符合基本格式。
+  static String? validateEmail(BuildContext context, String? value) {
+    final trimmed = (value ?? '').trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    if (trimmed.length > emailMaxLength || !_emailPattern.hasMatch(trimmed)) {
+      return AppLocalizations.of(context).profileEmailInvalid;
+    }
+    return null;
+  }
+
+  /// 与后端 normalizeDisplayName/normalizeEmail 相同的长度上界。
+  static const int displayNameMaxLength = 120;
+  static const int emailMaxLength = 255;
+
+  /// 后端邮箱正则的前端等价式：单段用户名 + 带点的域名。
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
   /// 工位弹窗入口：焦点陷阱 / Esc 退栈 / 焦点还原由统一壳承担。
   static Future<void> show(
     BuildContext context, {
@@ -66,27 +96,12 @@ class _ProfileEditDialogState extends State<ProfileEditDialog> {
     super.dispose();
   }
 
-  String? _validateDisplayName(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty || trimmed.length > 120) {
-      return AppLocalizations.of(context).profileDisplayNameInvalid;
-    }
-    return null;
+  String? _validateDisplayName(String? value) {
+    return ProfileEditDialog.validateDisplayName(context, value);
   }
 
-  String? _validateEmail(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    if (trimmed.length > 255 ||
-        !trimmed.contains('@') ||
-        trimmed.startsWith('@') ||
-        trimmed.endsWith('@') ||
-        trimmed.contains(' ')) {
-      return AppLocalizations.of(context).profileEmailInvalid;
-    }
-    return null;
+  String? _validateEmail(String? value) {
+    return ProfileEditDialog.validateEmail(context, value);
   }
 
   Future<void> _submit() async {
@@ -137,10 +152,16 @@ class _ProfileEditDialogState extends State<ProfileEditDialog> {
             child: TextField(
               controller: _displayNameController,
               autofocus: true,
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.next,
+              maxLength: ProfileEditDialog.displayNameMaxLength,
               style: const TextStyle(fontSize: AppTypography.bodyMedium),
               decoration: workstationInputDecoration(
                 context,
                 prefixIcon: Icons.person_outline_rounded,
+              ).copyWith(
+                // 长度由 maxLength 拦截，不额外占用弹窗纵向空间。
+                counterText: '',
               ),
               onSubmitted: (_) => _submit(),
             ),
@@ -152,6 +173,10 @@ class _ProfileEditDialogState extends State<ProfileEditDialog> {
             height: 36,
             child: TextField(
               controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              maxLength: ProfileEditDialog.emailMaxLength,
+              autofillHints: const [AutofillHints.email],
               style: TextStyle(
                 fontSize: AppTypography.bodyMedium,
                 fontFamily: AppTypography.monoFamily,
@@ -160,7 +185,7 @@ class _ProfileEditDialogState extends State<ProfileEditDialog> {
               decoration: workstationInputDecoration(
                 context,
                 prefixIcon: Icons.mail_outline_rounded,
-              ),
+              ).copyWith(counterText: ''),
               onSubmitted: (_) => _submit(),
             ),
           ),

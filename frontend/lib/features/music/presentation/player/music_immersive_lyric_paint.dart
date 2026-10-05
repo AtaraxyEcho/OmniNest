@@ -14,6 +14,8 @@ extension _MusicImmersiveLyricPaint on _MusicLyricLineState {
     final textStyle = TextStyle(
       // 渐变用 srcIn 遮罩替换文字色，文字本体保持不透明白。
       color: resolved.gradient ? Colors.white : resolved.main.first,
+      fontFamily: widget.fontFamily,
+      fontFamilyFallback: widget.fontFamilyFallback,
       fontSize: fontSize,
       height:
           spec == null

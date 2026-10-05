@@ -394,9 +394,61 @@
   "filesShareManagementDesc": "Manage active, expired or revoked share links.",
   "filesStorageStatsDesc": "View capacity, quota, file type distribution and space usage.",
   "filesUploadQueueDesc": "View multipart upload sessions, resume progress and upload status.",
+  "filesUploadQueueEmptyTitle": "Nothing is uploading",
+  "filesUploadQueueEmptyMessage": "Start an upload from any folder; progress and failure reasons stay here.",
+  "filesUploadQueueSummaryActive": "Active",
+  "filesUploadQueueSummaryCompleted": "Completed",
+  "filesUploadQueueSummaryFailed": "Failed",
+  "filesSharesEmptyTitle": "No share links yet",
+  "filesSharesEmptyMessage": "Long-press a file and choose Share; links and their access state show up here.",
+  "filesStorageEmptyTitle": "Storage stats unavailable",
+  "filesStorageEmptyMessage": "Stats are aggregated by the server; retry once the network is back.",
+  "filesStorageRetry": "Reload",
+  "filesStorageQuotaTitle": "Quota usage",
+  "filesStorageQuotaUnlimited": "No quota limit",
+  "filesStorageSummaryFiles": "Files",
+  "filesStorageSummaryFolders": "Folders",
+  "filesStorageSummaryUsed": "Used",
+  "filesStorageTypeDistribution": "Type distribution",
+  "filesUploadQueueLoadMore": "Load more ({loaded} of {total})",
+  "@filesUploadQueueLoadMore": {
+    "placeholders": { "loaded": { "type": "String" }, "total": { "type": "String" } }
+  },
   "filesOfflineDownloadsDesc": "Manage HTTP, BT and magnet offline download tasks.",
   "filesExternalStorageDesc": "Manage OneDrive, WebDAV and other third-party storage mounts.",
   "filesImportTasksDesc": "View external storage file import progress, supports cancelling queued tasks.",
+  "filesHostedItemCount": "{count} items",
+  "@filesHostedItemCount": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "filesSharedWithMeEmptyTitle": "Nobody has shared files with you",
+  "filesSharedWithMeEmptyMessage": "Files others share with your account are listed here and open straight into preview.",
+  "filesOfflineEmptyTitle": "No offline download tasks",
+  "filesOfflineEmptyMessage": "Use New offline download and paste an HTTP, BT or magnet link to start.",
+  "filesExternalEmptyTitle": "No storage mounted",
+  "filesExternalEmptyMessage": "Add a OneDrive, WebDAV or other source to browse and import files here.",
+  "filesExternalCredentialsMissing": "Credentials missing",
+  "filesExternalBrowseFailedTitle": "Cannot read the mount directory",
+  "filesExternalBrowseEmptyMessage": "This directory has nothing to browse.",
+  "filesImportEmptyTitle": "No import tasks",
+  "filesImportEmptyMessage": "Import a file from external storage and its progress is listed here.",
+  "filesHomeWorkspaceTools": "Workspace tools",
+  "filesHomeShortcutMountsOnline": "{online} of {total} mounts online",
+  "@filesHomeShortcutMountsOnline": {
+    "placeholders": { "online": { "type": "int" }, "total": { "type": "int" } }
+  },
+  "filesHomeShortcutTasksActive": "{count} tasks running",
+  "@filesHomeShortcutTasksActive": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "filesHomeShortcutUploadRemaining": "{size} still to upload",
+  "@filesHomeShortcutUploadRemaining": {
+    "placeholders": { "size": { "type": "String" } }
+  },
+  "filesShareExpiryDays": "{days} days",
+  "@filesShareExpiryDays": {
+    "placeholders": { "days": { "type": "int" } }
+  },
   "filesSharedSpace": "Shared Space",
   "filesSharedSpaceDesc": "All users shared file space",
   "filesSharedSpaceUsage": "Shared Space Usage",
@@ -3189,6 +3241,7 @@
   "videoProcessing": "Processing",
   "videoHistorySubtitle": "Complete playback records.",
   "videoClearHistory": "Clear History",
+  "videoRemoveHistoryEntry": "Remove from history",
   "videoNoWatchHistory": "No watch history.",
   "videoMoreFilters": "More Filters",
   "videoGenre": "Genre",
@@ -3693,6 +3746,7 @@
   "photosEnterPassword": "Enter password",
   "photosAccess": "Access",
   "photosAlbumEmpty": "No photos in this album",
+  "photosAlbumEmptyHint": "Pick photos from your library to add to this album.",
   "photosAddPhotos": "Add photos",
   "photosPickerAddCount": "Add {count}",
   "photosPickerAddSuccess": "Added {count} photos",
@@ -4511,6 +4565,21 @@
   "videoLibraryRecordsCollapse": "Show fewer records",
   "photosPrevPhoto": "Previous photo",
   "photosNextPhoto": "Next photo",
+  "photosViewerPosition": "{index} of {total}",
+  "@photosViewerPosition": {
+    "placeholders": {
+      "index": {},
+      "total": {}
+    }
+  },
+  "photosViewerPositionTime": "{index} of {total} · {taken}",
+  "@photosViewerPositionTime": {
+    "placeholders": {
+      "index": {},
+      "total": {},
+      "taken": {}
+    }
+  },
   "videoUnavailableEmpty": "No local media is currently missing or unreadable.",
   "videoUnavailableCount": "{count} items need attention",
   "@videoUnavailableCount": {

@@ -1112,6 +1112,59 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesUploadQueueDesc => '查看分片上传会话、断点续传进度和上传状态。';
 
   @override
+  String get filesUploadQueueEmptyTitle => '没有正在上传的文件';
+
+  @override
+  String get filesUploadQueueEmptyMessage => '从任意文件夹点加号开始上传，进度与失败原因会保留在这里。';
+
+  @override
+  String get filesUploadQueueSummaryActive => '进行中';
+
+  @override
+  String get filesUploadQueueSummaryCompleted => '已完成';
+
+  @override
+  String get filesUploadQueueSummaryFailed => '失败';
+
+  @override
+  String get filesSharesEmptyTitle => '还没有创建分享链接';
+
+  @override
+  String get filesSharesEmptyMessage => '在文件长按选择分享，创建后的链接与访问状态会列在这里。';
+
+  @override
+  String get filesStorageEmptyTitle => '暂时取不到存储统计';
+
+  @override
+  String get filesStorageEmptyMessage => '统计由服务端汇总，恢复网络后可重试。';
+
+  @override
+  String get filesStorageRetry => '重新加载';
+
+  @override
+  String get filesStorageQuotaTitle => '配额占用';
+
+  @override
+  String get filesStorageQuotaUnlimited => '配额未限制';
+
+  @override
+  String get filesStorageSummaryFiles => '文件';
+
+  @override
+  String get filesStorageSummaryFolders => '文件夹';
+
+  @override
+  String get filesStorageSummaryUsed => '已用';
+
+  @override
+  String get filesStorageTypeDistribution => '类型分布';
+
+  @override
+  String filesUploadQueueLoadMore(String loaded, String total) {
+    return '加载更多（已加载 $loaded / 共 $total）';
+  }
+
+  @override
   String get filesOfflineDownloadsDesc => '管理 HTTP、BT 和磁力链离线下载任务。';
 
   @override
@@ -1119,6 +1172,68 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesImportTasksDesc => '查看外部存储文件导入进度，支持取消排队中的任务。';
+
+  @override
+  String filesHostedItemCount(int count) {
+    return '共 $count 项';
+  }
+
+  @override
+  String get filesSharedWithMeEmptyTitle => '还没有人分享文件给你';
+
+  @override
+  String get filesSharedWithMeEmptyMessage => '其他用户定向分享后，文件会列在这里并可直接预览。';
+
+  @override
+  String get filesOfflineEmptyTitle => '还没有离线下载任务';
+
+  @override
+  String get filesOfflineEmptyMessage => '用「新建离线下载」粘贴 HTTP、BT 或磁力链接开始。';
+
+  @override
+  String get filesExternalEmptyTitle => '还没有挂载存储';
+
+  @override
+  String get filesExternalEmptyMessage =>
+      '添加 OneDrive、WebDAV 等来源后，可在这里浏览并导入文件。';
+
+  @override
+  String get filesExternalCredentialsMissing => '未配置凭据';
+
+  @override
+  String get filesExternalBrowseFailedTitle => '读取挂载目录失败';
+
+  @override
+  String get filesExternalBrowseEmptyMessage => '这个目录里没有可浏览的文件。';
+
+  @override
+  String get filesImportEmptyTitle => '还没有导入任务';
+
+  @override
+  String get filesImportEmptyMessage => '在外部存储选择文件导入后，进度会列在这里。';
+
+  @override
+  String get filesHomeWorkspaceTools => '工作区工具';
+
+  @override
+  String filesHomeShortcutMountsOnline(int online, int total) {
+    return '$online / $total 个挂载在线';
+  }
+
+  @override
+  String filesHomeShortcutTasksActive(int count) {
+    return '$count 个任务进行中';
+  }
+
+  @override
+  String filesHomeShortcutUploadRemaining(String size) {
+    return '还有 $size 待上传';
+  }
+
+  @override
+  String filesShareExpiryDays(int days) {
+    return '$days 天';
+  }
 
   @override
   String get filesSharedSpace => '共享空间';
@@ -7101,6 +7216,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoClearHistory => '清空历史';
 
   @override
+  String get videoRemoveHistoryEntry => '从观看历史移除';
+
+  @override
   String get videoNoWatchHistory => '暂无观看历史。';
 
   @override
@@ -8222,6 +8340,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosAlbumEmpty => '相册中还没有照片';
+
+  @override
+  String get photosAlbumEmptyHint => '从照片库中选择照片加入当前相册。';
 
   @override
   String get photosAddPhotos => '添加照片';
@@ -9857,6 +9978,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosNextPhoto => '下一张';
+
+  @override
+  String photosViewerPosition(Object index, Object total) {
+    return '第 $index / 共 $total 张';
+  }
+
+  @override
+  String photosViewerPositionTime(Object index, Object total, Object taken) {
+    return '第 $index / 共 $total 张 · $taken';
+  }
 
   @override
   String get videoUnavailableEmpty => '当前没有缺失或不可读取的本地媒体。';

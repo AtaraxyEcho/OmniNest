@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/appearance/application/composed_scaler.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -344,19 +345,29 @@ class _PlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.movieRedesign;
-    return Material(
-      color: palette.primary,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onPlay,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            size: 22,
-            color: Colors.white,
+    // 播放浮钮是嵌在整卡命中区里的独立控件，读屏必须能单独报出动作；
+    // 样例里它的 aria-label 由外层 button 承担，这里两层都可点因此要自带。
+    final label = AppLocalizations.of(context).videoPlay;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: palette.primary,
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: onPlay,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                size: 22,
+                color: Colors.white,
+              ),
+            ),
           ),
         ),
       ),

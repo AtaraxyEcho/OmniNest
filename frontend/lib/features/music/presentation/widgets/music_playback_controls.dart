@@ -9,7 +9,19 @@ import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music 播放按钮的视觉层级。
-enum MusicPlaybackButtonSize { regular, compact, inline }
+enum MusicPlaybackButtonSize {
+  /// 列表行与桌面 Dock 的标准圆盘。
+  regular,
+
+  /// 密集列表行的缩小圆盘。
+  compact,
+
+  /// 行内嵌入的最小圆盘。
+  inline,
+
+  /// 移动播放详情页的沉底主播放钮（样例 `main-play` 64px 平板圆盘）。
+  primary,
+}
 
 /// Music 模块统一使用的播放与暂停按钮。
 class MusicPlaybackButton extends StatefulWidget {
@@ -21,6 +33,7 @@ class MusicPlaybackButton extends StatefulWidget {
     this.backgroundColor = MusicChromeColors.tealDeep,
     this.accentColor = MusicChromeColors.tealSoft,
     this.foregroundColor = MusicChromeColors.nearWhite,
+    this.iconSize,
     super.key,
   });
 
@@ -31,6 +44,10 @@ class MusicPlaybackButton extends StatefulWidget {
   final Color backgroundColor;
   final Color accentColor;
   final Color foregroundColor;
+
+  /// 图标边长：留空时按直径比例取（常规档位受 22 上限约束，
+  /// 大盘主播放钮需按样例单独给 30）。
+  final double? iconSize;
 
   @override
   State<MusicPlaybackButton> createState() => _MusicPlaybackButtonState();
@@ -51,10 +68,14 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
       MusicPlaybackButtonSize.regular => constrainedViewport ? 38.0 : 40.0,
       MusicPlaybackButtonSize.compact => constrainedViewport ? 34.0 : 36.0,
       MusicPlaybackButtonSize.inline => constrainedViewport ? 26.0 : 28.0,
+      // 主播放钮不随视口缩放：样例播放页的控制行是沉底固定构图，
+      // 64px 圆盘在短屏下由封面与间距让位，而不是压缩命中区。
+      MusicPlaybackButtonSize.primary => 64.0,
     };
     final scale = _pressed ? 0.95 : (_hovered && enabled ? 1.035 : 1.0);
     // 播放三角在视觉重心偏左，相对暂停/图标略微右移做光学居中。
-    final iconSize = (diameter * 0.52).clamp(14.0, 22.0);
+    final iconSize =
+        widget.iconSize ?? (diameter * 0.52).clamp(14.0, 22.0).toDouble();
     final iconOffset =
         widget.isPlaying ? Offset.zero : Offset(iconSize * 0.1, 0);
     return Semantics(

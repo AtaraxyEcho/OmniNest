@@ -189,9 +189,15 @@ class MoviePlayerBottomBar extends StatelessWidget {
     double availableWidth,
     double textScale,
   ) {
+    // 移动播放器只有一种 chrome：竖屏与横屏都是「进度条 + 双端时间 +
+    // 左下前后集 + 右下三小钮」，中央键组承担播放与 ±10s。宽屏 Android
+    // 不切回桌面密度行，否则底部会重新长出传输行与音量条。
+    if (isMobile) {
+      return _MoviePlayerControlDensity.compact;
+    }
     final scale = textScale.clamp(1.0, 1.3);
-    final compactRequirement = (isMobile ? 640.0 : 720.0) * scale;
-    final expandedRequirement = (isMobile ? 1120.0 : 1260.0) * scale;
+    final compactRequirement = 720.0 * scale;
+    final expandedRequirement = 1260.0 * scale;
     if (availableWidth < compactRequirement) {
       return _MoviePlayerControlDensity.compact;
     }
@@ -241,54 +247,97 @@ class MoviePlayerBottomBar extends StatelessWidget {
     }
     final l10n = AppLocalizations.of(context);
     final targetSize = 48.0;
-    // 样例紧凑形态：单行工具行——剧集左前/后集、右 字幕/设置/旋转；
-    // 播放交给中央键组，音轨/倍速收进设置面板，时间由进度条呈现。
-    return SizedBox(
+    // 样例紧凑形态：进度条下挂双端时间，再下面是单行工具行——剧集左前/后集、
+    // 右 字幕/设置/旋转；播放交给中央键组，音轨/倍速收进设置面板。
+    return Column(
       key: const Key('moviePlayerControlsCompact'),
-      height: targetSize,
-      child: Row(
-        children: [
-          if (onPreviousEpisode != null)
-            MoviePlayerIconButton(
-              icon: Icons.skip_previous_rounded,
-              tooltip: l10n.videoPreviousEpisode,
-              onPressed: onPreviousEpisode,
-              size: targetSize,
-            ),
-          if (onNextEpisode != null)
-            MoviePlayerIconButton(
-              icon: Icons.skip_next_rounded,
-              tooltip: l10n.videoNextEpisode,
-              onPressed: onNextEpisode,
-              size: targetSize,
-            ),
-          const Spacer(),
-          MoviePlayerIconButton(
-            icon:
-                activeSubtitleId != null
-                    ? Icons.subtitles_rounded
-                    : Icons.subtitles_off_rounded,
-            tooltip: l10n.videoSubtitle,
-            selected: activeSubtitleId != null,
-            onPressed: onSubtitleTap,
-            size: targetSize,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildEdgeTimes(context),
+        SizedBox(
+          height: targetSize,
+          child: Row(
+            children: [
+              if (onPreviousEpisode != null)
+                MoviePlayerIconButton(
+                  icon: Icons.skip_previous_rounded,
+                  tooltip: l10n.videoPreviousEpisode,
+                  onPressed: onPreviousEpisode,
+                  size: targetSize,
+                ),
+              if (onNextEpisode != null)
+                MoviePlayerIconButton(
+                  icon: Icons.skip_next_rounded,
+                  tooltip: l10n.videoNextEpisode,
+                  onPressed: onNextEpisode,
+                  size: targetSize,
+                ),
+              const Spacer(),
+              MoviePlayerIconButton(
+                icon:
+                    activeSubtitleId != null
+                        ? Icons.subtitles_rounded
+                        : Icons.subtitles_off_rounded,
+                tooltip: l10n.videoSubtitle,
+                selected: activeSubtitleId != null,
+                onPressed: onSubtitleTap,
+                size: targetSize,
+              ),
+              MoviePlayerIconButton(
+                icon: Icons.settings_rounded,
+                tooltip: l10n.videoPlaybackSettings,
+                onPressed: onSettingsTap,
+                size: targetSize,
+              ),
+              if (onRotateTap != null)
+                MoviePlayerIconButton(
+                  icon: Icons.screen_rotation_rounded,
+                  tooltip: l10n.videoToggleOrientation,
+                  onPressed: onRotateTap,
+                  selected: isLandscapeOrientation,
+                  size: targetSize,
+                ),
+            ],
           ),
-          MoviePlayerIconButton(
-            icon: Icons.settings_rounded,
-            tooltip: l10n.videoPlaybackSettings,
-            onPressed: onSettingsTap,
-            size: targetSize,
+        ),
+      ],
+    );
+  }
+
+  /// 进度条两端时间：左=当前（拖动中跟随拖动值），右=总时长。
+  Widget _buildEdgeTimes(BuildContext context) {
+    final colors = context.videoColors;
+    final style = TextStyle(
+      color: colors.playerControlMuted,
+      fontSize: AppTypography.labelSmall,
+      fontWeight: FontWeight.w600,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+    return ValueListenableBuilder<Duration>(
+      valueListenable: polledPosition,
+      builder: (context, polledPosition, _) {
+        final duration =
+            plan.durationSeconds > 0
+                ? Duration(seconds: plan.durationSeconds)
+                : playerDuration;
+        final position =
+            isSeeking
+                ? Duration(
+                  milliseconds: (seekValue * duration.inMilliseconds).round(),
+                )
+                : polledPosition;
+        return Padding(
+          key: const Key('moviePlayerEdgeTimes'),
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 6),
+          child: Row(
+            children: [
+              Text(formatDuration(position), style: style),
+              const Spacer(),
+              Text(formatDuration(duration), style: style),
+            ],
           ),
-          if (onRotateTap != null)
-            MoviePlayerIconButton(
-              icon: Icons.screen_rotation_rounded,
-              tooltip: l10n.videoToggleOrientation,
-              onPressed: onRotateTap,
-              selected: isLandscapeOrientation,
-              size: targetSize,
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 

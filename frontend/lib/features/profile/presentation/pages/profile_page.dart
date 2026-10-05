@@ -35,6 +35,7 @@ import 'package:omninest/features/profile/presentation/widgets/profile_section_c
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_preferences.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_shell.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_edit_dialog.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
@@ -158,7 +159,10 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                     opacity: _hovered ? 1 : 0,
                     child: IconButton(
                       visualDensity: VisualDensity.compact,
-                      tooltip: null,
+                      // 样例每个图标钮都带 aria-label：删除钮只有字形，
+                      // 必须给 tooltip 才能被读屏与悬停提示认出。
+                      tooltip:
+                          AppLocalizations.of(context).videoRemoveHistoryEntry,
                       onPressed: entry.onDelete,
                       icon: Icon(
                         Icons.close_rounded,

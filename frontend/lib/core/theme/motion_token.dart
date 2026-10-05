@@ -43,6 +43,21 @@ class MotionToken {
         : duration;
   }
 
+  /// 统一的减弱动效判定：当前上下文是否要求关闭动画。
+  ///
+  /// 壳层与状态族的动画必须经此判定决定时长与过渡，调用点不得再散落
+  /// 各自的 Duration.zero 分支。
+  static bool prefersReduced(BuildContext context) {
+    return MediaQuery.disableAnimationsOf(context);
+  }
+
+  /// 减弱动效下的时长出口：要求关闭动画时返回零时长，否则返回标准时长。
+  ///
+  /// 零时长只取消过渡过程，不改变动画结束后的最终视觉状态。
+  static Duration reduced(BuildContext context, Duration duration) {
+    return prefersReduced(context) ? Duration.zero : duration;
+  }
+
   // ── 曲线 ─────────────────────────────────────────────────────────
 
   /// 主曲线 — 出场/入场通用（Material 3 standard easing）

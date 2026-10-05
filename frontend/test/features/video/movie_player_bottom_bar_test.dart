@@ -23,6 +23,10 @@ void main() {
     expect(find.byIcon(Icons.settings_rounded), findsOneWidget);
     expect(find.byIcon(Icons.language_rounded), findsNothing);
     expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+    // 进度条下挂双端时间（样例 scrubber 的两个 small）。
+    expect(find.byKey(const Key('moviePlayerEdgeTimes')), findsOneWidget);
+    expect(find.text('00:12'), findsOneWidget);
+    expect(find.text('00:120'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -37,16 +41,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('medium mobile controls keep episode playback controls at left', (
+  testWidgets('mobile landscape keeps the same converged chrome at left', (
     tester,
   ) async {
     await _pumpBottomBar(tester, size: const Size(900, 500), isMobile: true);
 
-    expect(find.byKey(const Key('moviePlayerControlsMedium')), findsOneWidget);
+    // 移动播放器只有一种 chrome：横屏不再切回桌面密度行（那会重新长出
+    // 传输行与播放键），仍是前后集贴左、工具贴右的单行 + 双端时间。
+    expect(find.byKey(const Key('moviePlayerControlsExpanded')), findsNothing);
+    expect(find.byKey(const Key('moviePlayerControlsCompact')), findsOneWidget);
+    expect(find.byKey(const Key('moviePlayerTransportControls')), findsNothing);
     expect(find.byIcon(Icons.skip_previous_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
     expect(find.byIcon(Icons.volume_up_rounded), findsNothing);
+    expect(find.byKey(const Key('moviePlayerEdgeTimes')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

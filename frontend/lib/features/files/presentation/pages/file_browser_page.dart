@@ -1,4 +1,5 @@
 import 'package:omninest/core/widgets/workstation_pagination_bar.dart';
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
@@ -34,6 +35,8 @@ import 'package:omninest/core/widgets/hosted_touch_canvas.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_status_kit.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
@@ -83,6 +86,9 @@ part 'file_browser_page_mobile_actions.dart';
 part 'file_browser_page_mobile_home.dart';
 part 'file_mobile_folder_view.dart';
 part 'file_mobile_section_views.dart';
+part 'file_mobile_upload_queue.dart';
+part 'file_mobile_shares_page.dart';
+part 'file_browser_page_storage_stats.dart';
 
 /// Inspector 常驻 dock 的自适应阈值：窗口窄于该值时隐藏 dock，
 /// 检视改走贴底抽屉，为表格保留完整宽度。
@@ -716,59 +722,70 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
   Future<void> _showInspectorSheet(FileBrowserController controller) async {
     final context = this.context;
     _inspectorSheetOpen = true;
+    // 面板经根导航器呈现，默认落在壳层 Theme 与 MobileShellScope 之外；
+    // 在宿主上下文捕获环境后在面板子树内重放。
+    final ambience = MobileSheetAmbience.capture(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.6),
+      shape:
+          ambience.hosted
+              ? const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              )
+              : null,
       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
       builder: (sheetContext) {
-        return Consumer(
-          builder: (context, sheetRef, _) {
-            final state =
-                sheetRef.watch(fileBrowserControllerProvider).asData?.value;
-            final node = state?.inspectedNode;
-            if (node == null) {
-              return const SizedBox.shrink();
-            }
-            final favorites = state!.section == FileManagerSection.favorites;
-            final actions = _buildFileNodeActions(
-              context,
-              sheetRef,
-              sheetRef.read(fileBrowserControllerProvider.notifier),
-              recycle: state.section == FileManagerSection.recycleBin,
-              favorites: favorites,
-            );
-            return Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-              ),
-              margin: EdgeInsets.only(
-                bottom: MediaQuery.viewInsetsOf(context).bottom,
-              ),
-              decoration: BoxDecoration(
-                // 托管态环境重绑后的 surfaceContainer 是玻璃半透明，
-                // 贴底抽屉需实底（样例 glass-sheet #171E1C）。
-                color:
-                    MobileShellScope.isHosted(context)
-                        ? MobileEnvColors.sheetSolid
-                        : context.filesColors.surfaceContainer,
-                border: Border(
-                  top: BorderSide(color: context.filesColors.selectedBorder),
+        return ambience.wrap(
+          Consumer(
+            builder: (context, sheetRef, _) {
+              final state =
+                  sheetRef.watch(fileBrowserControllerProvider).asData?.value;
+              final node = state?.inspectedNode;
+              if (node == null) {
+                return const SizedBox.shrink();
+              }
+              final favorites = state!.section == FileManagerSection.favorites;
+              final actions = _buildFileNodeActions(
+                context,
+                sheetRef,
+                sheetRef.read(fileBrowserControllerProvider.notifier),
+                recycle: state.section == FileManagerSection.recycleBin,
+                favorites: favorites,
+              );
+              return Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.85,
                 ),
-              ),
-              child: FileInspectorPanel(
-                file: node,
-                actions: actions,
-                onClose:
-                    () =>
-                        sheetRef
-                            .read(fileBrowserControllerProvider.notifier)
-                            .clearInspection(),
-              ),
-            );
-          },
+                margin: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                decoration: BoxDecoration(
+                  // 托管态环境重绑后的 surfaceContainer 是玻璃半透明，
+                  // 贴底抽屉需实底（样例 glass-sheet #171E1C）。
+                  color:
+                      MobileShellScope.isHosted(context)
+                          ? MobileEnvColors.sheetSolid
+                          : context.filesColors.surfaceContainer,
+                  border: Border(
+                    top: BorderSide(color: context.filesColors.selectedBorder),
+                  ),
+                ),
+                child: FileInspectorPanel(
+                  file: node,
+                  actions: actions,
+                  onClose:
+                      () =>
+                          sheetRef
+                              .read(fileBrowserControllerProvider.notifier)
+                              .clearInspection(),
+                ),
+              );
+            },
+          ),
         );
       },
     ).whenComplete(() {

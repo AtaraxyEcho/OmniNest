@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 
@@ -501,6 +504,17 @@ class FileNodeEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.filesColors;
+    if (MobileShellScope.isHosted(context)) {
+      // 移动壳层不再画工位直角描边框：空态统一走环境玻璃族，
+      // 图标用稿子同源描边集。
+      return EnvEmptyState(
+        icon: showingRecycleBin ? OmniIcons.close : OmniIcons.folder,
+        title:
+            showingRecycleBin
+                ? AppLocalizations.of(context).filesRecycleBinEmpty
+                : AppLocalizations.of(context).filesEmpty,
+      );
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 56),

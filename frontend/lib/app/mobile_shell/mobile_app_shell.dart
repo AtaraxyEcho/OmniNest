@@ -12,9 +12,11 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/module_switch_transition.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -179,56 +181,72 @@ class _MobileTopBar extends ConsumerWidget {
     return SafeArea(
       bottom: false,
       child: SizedBox(
-        height: 56,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
-          child: Row(
-            children: [
-              BrandLogo(size: 28, radius: 9),
-              if (!isHome) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.ink,
-                          // ignore: font_size_whitelist
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.4,
-                          height: 1.1,
-                        ),
+        // 原型 .app-header 总高 84（含上内衬 max(20, safe-area)）；SafeArea
+        // 已给出状态栏避让，基准内容带高度取 64。微型字号是设计签名不随
+        // 无障碍字号放大，容器自撑：1.6x 下标题 35.2 + 副题 24.6 + 底内衬
+        // 8 超过 64，按字号倍率同步抬高内容带。
+        height: MobileLayoutTokens.scaleHeight(context, 64),
+        child: Center(
+          // 壳层 chrome 统一按 720 限宽居中：样例在 600 以上收拢 .app-header，
+          // 而本应用宽档不切换左侧 rail，顶栏、tab 组与托管内容列必须同宽，
+          // 否则宽屏顶行会坐到内容列之外。窄屏时该上限不产生约束。
+          child: ConstrainedBox(
+            key: const ValueKey('omninest.mobile.top-bar'),
+            constraints: const BoxConstraints(
+              maxWidth: MobileLayoutTokens.chromeMaxWidth,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  BrandLogo(size: 28, radius: 9),
+                  if (!isHome) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: MobileEnvColors.ink,
+                              // ignore: font_size_whitelist
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.4,
+                              height: 1.1,
+                            ),
+                          ),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: MobileEnvColors.inkMuted,
+                              fontSize: 11,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.inkMuted,
-                          fontSize: 11,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ] else
+                    const Spacer(),
+                  _GlassCircleButton(
+                    tooltip: l10n.searchTitle,
+                    icon: OmniIcons.search,
+                    iconSize: 20,
+                    onTap: onSearch,
                   ),
-                ),
-              ] else
-                const Spacer(),
-              _GlassCircleButton(
-                tooltip: l10n.searchTitle,
-                icon: OmniIcons.search,
-                iconSize: 20,
-                onTap: onSearch,
+                  const SizedBox(width: 4),
+                  const MobileAccountAvatar(),
+                ],
               ),
-              const SizedBox(width: 4),
-              const MobileAccountAvatar(),
-            ],
+            ),
           ),
         ),
       ),
@@ -260,34 +278,18 @@ class _MobileSystemBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return ColoredBox(
-      color: MobileEnvColors.surfaceGlass,
-      child: SizedBox(
-        height: 40,
+    // 原型 .offline-banner 是内容流内的琥珀条件条，全壳层仅此一条，
+    // 模块页不再重复渲染离线提示。宽度随内容列上限，不铺满整个视口。
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: MobileLayoutTokens.chromeMaxWidth,
+        ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              const OmniIcon(
-                icon: OmniIcons.cloud,
-                size: 17,
-                color: MobileEnvColors.inkMuted,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  l10n.mobileOfflineBanner,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.ink,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(
+            horizontal: MobileLayoutTokens.horizontalPadding,
           ),
+          child: MobileOfflineBanner(message: l10n.mobileOfflineBanner),
         ),
       ),
     );
@@ -313,48 +315,78 @@ class _MobileBottomNavigation extends ConsumerWidget {
     // 较大值，保证带手势条设备与无插图设备一致。
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final bottomPadding = bottomInset > 12 ? bottomInset : 12.0;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 0, 12, bottomPadding),
-      child: Center(
-        child: ConstrainedBox(
-          key: const ValueKey('omninest.mobile.bottom-nav'),
-          constraints: const BoxConstraints(
-            maxWidth: MobileLayoutTokens.chromeMaxWidth,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: MobileEnvColors.navGlass,
-              borderRadius: BorderRadius.circular(23),
-              border: Border.all(color: MobileEnvColors.line12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  blurRadius: 35,
-                  offset: const Offset(0, 12),
+    // 分档取布局宽度：限宽只作用于本层实际可用宽度，测试与真机都在同一
+    // 坐标系判定，避免 MediaQuery 与渲染宽度在多视图缩放下分叉。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        // 原型 600-979 档：.bottom-nav 收为 min(460px, 100%-24px) 居中（外层
+        // 12 留边已实现 100%-24px，这里再限宽 460）；其余档保持壳层 720 限宽。
+        final tabGroupMaxWidth =
+            width >= 600 && width < 980
+                ? 460.0
+                : MobileLayoutTokens.chromeMaxWidth;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(12, 0, 12, bottomPadding),
+          child: Center(
+            child: ConstrainedBox(
+              key: const ValueKey('omninest.mobile.bottom-nav'),
+              constraints: BoxConstraints(maxWidth: tabGroupMaxWidth),
+              child: DecoratedBox(
+                // 投影留在裁切之外，模糊与描边在裁切之内（对齐原型
+                // .bottom-nav：r23 + blur(28) + 白 12% 描边 + 0 12 35 投影）。
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(23),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 35,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: SizedBox(
-              height: 70,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                child: Row(
-                  children: [
-                    for (var index = 0; index < destinations.length; index++)
-                      Expanded(
-                        child: _MobileBottomDestination(
-                          destination: destinations[index],
-                          selected: selectedIndex == index,
-                          onTap: () => onSelected(index),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(23),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: MobileEnvColors.navGlass,
+                        border: Border.all(color: MobileEnvColors.line12),
+                      ),
+                      child: SizedBox(
+                        height: 70,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 5,
+                          ),
+                          child: Row(
+                            children: [
+                              for (
+                                var index = 0;
+                                index < destinations.length;
+                                index++
+                              )
+                                Expanded(
+                                  child: _MobileBottomDestination(
+                                    destination: destinations[index],
+                                    selected: selectedIndex == index,
+                                    onTap: () => onSelected(index),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -390,7 +422,11 @@ class _MobileBottomDestination extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
-                duration: MobileLayoutTokens.stateDuration,
+                // 减弱动效：选中舱直接落到终态形状与配色，跳过补间。
+                duration: MotionToken.reduced(
+                  context,
+                  MobileLayoutTokens.stateDuration,
+                ),
                 curve: MobileLayoutTokens.motionCurve,
                 width: selected ? 48 : 34,
                 height: 30,

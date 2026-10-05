@@ -44,6 +44,8 @@ class _MusicLyricsLayout {
     required TextDirection textDirection,
     required TextStyle ambientStyle,
     required TextScaler textScaler,
+    String? fontFamily,
+    List<String>? fontFamilyFallback,
     MusicLyricSpec? spec,
   }) {
     if (!availableWidth.isFinite || availableWidth <= 0) {
@@ -51,6 +53,7 @@ class _MusicLyricsLayout {
     }
     // 滚动歌词按统一块宽渲染：居中时块居中、居左/居右时贴对应边缘，
     // 三种锚点下各行都共享同一侧基线（居中锚点的文本仍按宿主排列）。
+    // 回退族拼串入键：List 的相等按实例，直接进键会让缓存每次构建都失效。
     final key = (
       lyrics: lyrics,
       availableWidth: availableWidth,
@@ -59,6 +62,8 @@ class _MusicLyricsLayout {
       currentFontSizePx: currentFontSizePx,
       ambientStyle: ambientStyle,
       textScaler: textScaler,
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback?.join(','),
       spec: spec,
     );
     if (key == _metricsKey) {
@@ -100,6 +105,8 @@ class _MusicLyricsLayout {
           maxWidth: availableWidth,
           textDirection: textDirection,
           ambientStyle: ambientStyle,
+          fontFamily: fontFamily,
+          fontFamilyFallback: fontFamilyFallback,
           textScaler: textScaler,
           height: baseHeight,
         ),
@@ -111,6 +118,8 @@ class _MusicLyricsLayout {
             maxWidth: availableWidth,
             textDirection: textDirection,
             ambientStyle: ambientStyle,
+            fontFamily: fontFamily,
+            fontFamilyFallback: fontFamilyFallback,
             textScaler: textScaler,
             height: baseHeight,
           ),
@@ -122,6 +131,8 @@ class _MusicLyricsLayout {
             maxWidth: availableWidth,
             textDirection: textDirection,
             ambientStyle: ambientStyle,
+            fontFamily: fontFamily,
+            fontFamilyFallback: fontFamilyFallback,
             textScaler: textScaler,
             height: activeHeight,
           ),
@@ -141,6 +152,8 @@ class _MusicLyricsLayout {
           maxWidth: availableWidth,
           textDirection: textDirection,
           ambientStyle: ambientStyle,
+          fontFamily: fontFamily,
+          fontFamilyFallback: fontFamilyFallback,
           textScaler: textScaler,
           height: translationHeight,
         );
@@ -286,6 +299,8 @@ class _MusicLyricsLayout {
     required double maxWidth,
     required TextDirection textDirection,
     required TextStyle ambientStyle,
+    String? fontFamily,
+    List<String>? fontFamilyFallback,
     required TextScaler textScaler,
     double height = _lyricLineHeight,
   }) {
@@ -293,7 +308,13 @@ class _MusicLyricsLayout {
       text: TextSpan(
         text: text,
         style: ambientStyle.merge(
-          TextStyle(fontSize: fontSize, height: height, fontWeight: fontWeight),
+          TextStyle(
+            fontSize: fontSize,
+            height: height,
+            fontWeight: fontWeight,
+            fontFamily: fontFamily,
+            fontFamilyFallback: fontFamilyFallback,
+          ),
         ),
       ),
       maxLines: 3,

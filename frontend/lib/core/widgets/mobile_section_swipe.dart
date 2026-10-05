@@ -6,7 +6,11 @@ import 'package:flutter/widgets.dart';
 /// 消费拖动，只有落在非滚动区域的手势才触发分段切换，避免与内容
 /// 轨道抢手势。纵向滚动不受影响。
 class MobileSectionSwipe extends StatelessWidget {
-  const MobileSectionSwipe({required this.child, required this.onSwipe, super.key});
+  const MobileSectionSwipe({
+    required this.child,
+    required this.onSwipe,
+    super.key,
+  });
 
   /// true = 向左滑（下一栏），false = 向右滑（上一栏）。
   final Widget child;

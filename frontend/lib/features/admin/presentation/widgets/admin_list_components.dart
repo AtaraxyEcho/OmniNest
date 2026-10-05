@@ -259,6 +259,8 @@ class _AdminFilterBarState extends State<AdminFilterBar> {
           width: AppControlTokens.searchFieldWidth,
           child: TextField(
             controller: _keywordController,
+            keyboardType: TextInputType.webSearch,
+            textInputAction: TextInputAction.search,
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search_rounded, size: 18),

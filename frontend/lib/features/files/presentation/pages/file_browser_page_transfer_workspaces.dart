@@ -29,6 +29,24 @@ class _UploadQueueWorkspace extends ConsumerWidget {
             .where((item) => item.status.toUpperCase() == 'FAILED')
             .length;
     final locale = Localizations.localeOf(context).toString();
+    if (MobileShellScope.isHosted(context)) {
+      // 托管态不渲染工位指标条、四列表格与分页条，改用原型传输页。
+      return _HostedUploadQueue(
+        l10n: l10n,
+        localTasks: state.localUploadTasks,
+        serverItems: state.uploadQueue,
+        loadedCount: math.min(
+          state.uploadQueueMeta.totalElements,
+          (state.uploadQueueMeta.page + 1) * state.uploadQueueMeta.size,
+        ),
+        totalCount: state.uploadQueueMeta.totalElements,
+        busy: state.isBusy,
+        onLoadNext:
+            () => controller.showUploadQueue(
+              page: state.uploadQueueMeta.page + 1,
+            ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -389,9 +407,18 @@ class _OfflineDownloadWorkspaceState
   @override
   Widget build(BuildContext context) {
     if (MobileShellScope.isHosted(context)) {
+      final meta = widget.state.offlineMeta;
       return _HostedOfflineDownloads(
         state: widget.state,
         onCreate: () => unawaited(_createOfflineDownloadWithSpace(context)),
+        loadedCount: math.min(meta.totalElements, (meta.page + 1) * meta.size),
+        totalCount: meta.totalElements,
+        onLoadNext:
+            () => unawaited(
+              ref
+                  .read(fileBrowserControllerProvider.notifier)
+                  .showOfflineDownloads(page: meta.page + 1),
+            ),
       );
     }
     final l10n = AppLocalizations.of(context);
@@ -614,6 +641,62 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
               _runFileAction(
                 context,
                 () => controller.browseExternalStorage(accountId),
+              ),
+            ),
+      );
+    }
+    if (MobileShellScope.isHosted(context) && browsing) {
+      // 触屏浏览态：工位面包屑/悬停行/分页条换成原型 `.feature-list` 形态。
+      final accountId = state.externalBrowseAccountId!;
+      final browsePath = state.externalBrowsePath ?? '/';
+      final segments = browsePath
+          .split('/')
+          .where((segment) => segment.isNotEmpty)
+          .toList(growable: false);
+      return _HostedExternalBrowse(
+        state: state,
+        space: state.externalSpace,
+        segments: segments,
+        onEnterDirectory:
+            (path) => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalSubdirectory(accountId, path),
+              ),
+            ),
+        onGoUp:
+            () => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalSubdirectory(
+                  accountId,
+                  segments.length <= 1
+                      ? '/'
+                      : '/${segments.take(segments.length - 1).join('/')}',
+                ),
+              ),
+            ),
+        onClose: controller.closeExternalBrowse,
+        onImport:
+            (item) => unawaited(
+              _importExternalBrowseItem(context, controller, accountId, item),
+            ),
+        onLoadNext:
+            () => unawaited(
+              controller.browseExternalStorage(
+                accountId,
+                path: browsePath,
+                page: state.externalMeta.page + 1,
+              ),
+            ),
+        onRetry:
+            () => unawaited(
+              _runFileAction(
+                context,
+                () => controller.browseExternalStorage(
+                  accountId,
+                  path: browsePath,
+                ),
               ),
             ),
       );
@@ -892,7 +975,18 @@ class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
   @override
   Widget build(BuildContext context) {
     if (MobileShellScope.isHosted(context)) {
-      return _HostedImportTasks(state: widget.state);
+      final meta = widget.state.importMeta;
+      return _HostedImportTasks(
+        state: widget.state,
+        loadedCount: math.min(meta.totalElements, (meta.page + 1) * meta.size),
+        totalCount: meta.totalElements,
+        onLoadNext:
+            () => unawaited(
+              ref
+                  .read(fileBrowserControllerProvider.notifier)
+                  .showImportTasks(page: meta.page + 1),
+            ),
+      );
     }
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).toString();

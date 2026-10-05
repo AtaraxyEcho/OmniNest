@@ -1165,6 +1165,62 @@ class AppLocalizationsEn extends AppLocalizations {
       'View multipart upload sessions, resume progress and upload status.';
 
   @override
+  String get filesUploadQueueEmptyTitle => 'Nothing is uploading';
+
+  @override
+  String get filesUploadQueueEmptyMessage =>
+      'Start an upload from any folder; progress and failure reasons stay here.';
+
+  @override
+  String get filesUploadQueueSummaryActive => 'Active';
+
+  @override
+  String get filesUploadQueueSummaryCompleted => 'Completed';
+
+  @override
+  String get filesUploadQueueSummaryFailed => 'Failed';
+
+  @override
+  String get filesSharesEmptyTitle => 'No share links yet';
+
+  @override
+  String get filesSharesEmptyMessage =>
+      'Long-press a file and choose Share; links and their access state show up here.';
+
+  @override
+  String get filesStorageEmptyTitle => 'Storage stats unavailable';
+
+  @override
+  String get filesStorageEmptyMessage =>
+      'Stats are aggregated by the server; retry once the network is back.';
+
+  @override
+  String get filesStorageRetry => 'Reload';
+
+  @override
+  String get filesStorageQuotaTitle => 'Quota usage';
+
+  @override
+  String get filesStorageQuotaUnlimited => 'No quota limit';
+
+  @override
+  String get filesStorageSummaryFiles => 'Files';
+
+  @override
+  String get filesStorageSummaryFolders => 'Folders';
+
+  @override
+  String get filesStorageSummaryUsed => 'Used';
+
+  @override
+  String get filesStorageTypeDistribution => 'Type distribution';
+
+  @override
+  String filesUploadQueueLoadMore(String loaded, String total) {
+    return 'Load more ($loaded of $total)';
+  }
+
+  @override
   String get filesOfflineDownloadsDesc =>
       'Manage HTTP, BT and magnet offline download tasks.';
 
@@ -1175,6 +1231,73 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get filesImportTasksDesc =>
       'View external storage file import progress, supports cancelling queued tasks.';
+
+  @override
+  String filesHostedItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get filesSharedWithMeEmptyTitle => 'Nobody has shared files with you';
+
+  @override
+  String get filesSharedWithMeEmptyMessage =>
+      'Files others share with your account are listed here and open straight into preview.';
+
+  @override
+  String get filesOfflineEmptyTitle => 'No offline download tasks';
+
+  @override
+  String get filesOfflineEmptyMessage =>
+      'Use New offline download and paste an HTTP, BT or magnet link to start.';
+
+  @override
+  String get filesExternalEmptyTitle => 'No storage mounted';
+
+  @override
+  String get filesExternalEmptyMessage =>
+      'Add a OneDrive, WebDAV or other source to browse and import files here.';
+
+  @override
+  String get filesExternalCredentialsMissing => 'Credentials missing';
+
+  @override
+  String get filesExternalBrowseFailedTitle =>
+      'Cannot read the mount directory';
+
+  @override
+  String get filesExternalBrowseEmptyMessage =>
+      'This directory has nothing to browse.';
+
+  @override
+  String get filesImportEmptyTitle => 'No import tasks';
+
+  @override
+  String get filesImportEmptyMessage =>
+      'Import a file from external storage and its progress is listed here.';
+
+  @override
+  String get filesHomeWorkspaceTools => 'Workspace tools';
+
+  @override
+  String filesHomeShortcutMountsOnline(int online, int total) {
+    return '$online of $total mounts online';
+  }
+
+  @override
+  String filesHomeShortcutTasksActive(int count) {
+    return '$count tasks running';
+  }
+
+  @override
+  String filesHomeShortcutUploadRemaining(String size) {
+    return '$size still to upload';
+  }
+
+  @override
+  String filesShareExpiryDays(int days) {
+    return '$days days';
+  }
 
   @override
   String get filesSharedSpace => 'Shared Space';
@@ -7319,6 +7442,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoClearHistory => 'Clear History';
 
   @override
+  String get videoRemoveHistoryEntry => 'Remove from history';
+
+  @override
   String get videoNoWatchHistory => 'No watch history.';
 
   @override
@@ -8462,6 +8588,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photosAlbumEmpty => 'No photos in this album';
+
+  @override
+  String get photosAlbumEmptyHint =>
+      'Pick photos from your library to add to this album.';
 
   @override
   String get photosAddPhotos => 'Add photos';
@@ -10153,6 +10283,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photosNextPhoto => 'Next photo';
+
+  @override
+  String photosViewerPosition(Object index, Object total) {
+    return '$index of $total';
+  }
+
+  @override
+  String photosViewerPositionTime(Object index, Object total, Object taken) {
+    return '$index of $total · $taken';
+  }
 
   @override
   String get videoUnavailableEmpty =>

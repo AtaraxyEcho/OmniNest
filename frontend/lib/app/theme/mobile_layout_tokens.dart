@@ -34,6 +34,19 @@ abstract final class MobileLayoutTokens {
               : horizontalPadding,
     );
   }
+
+  /// 定高容器随无障碍字号的放大倍率，区间与组合缩放封顶同源（1.0~1.6）。
+  ///
+  /// 移动壳层多数卡片与轨道是写死高度，1.6x 下正文会顶穿容器；稿子的
+  /// 微型字号不放大（签名密度），因此改容器自撑而不是改字号。
+  static double textHeightScale(BuildContext context) {
+    return MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6).toDouble();
+  }
+
+  /// 按无障碍字号放大一个基准高度。
+  static double scaleHeight(BuildContext context, double baseHeight) {
+    return baseHeight * textHeightScale(context);
+  }
 }
 
 @immutable

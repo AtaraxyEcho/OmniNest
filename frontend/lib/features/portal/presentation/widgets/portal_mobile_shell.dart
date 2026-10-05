@@ -22,6 +22,7 @@ import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_paged_list_card.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_mobile_tier.dart';
 import 'package:omninest/features/portal/presentation/widgets/storage_overview_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/now_playing_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/reading_progress_widget.dart';
@@ -47,6 +48,22 @@ part 'portal_mobile_system_widgets.dart';
 part 'portal_mobile_quick_actions.dart';
 part 'portal_mobile_weather_card.dart';
 part 'portal_mobile_hosted_content.dart';
+
+/// 取舞台（`.app-frame`）与内容列（`.content-scroll`）两个限宽里的较紧者。
+///
+/// 两者在原型里分别由不同媒体段落给出，720-979 档内容列 720 比舞台 760
+/// 更紧；无上限时返回 infinity，交给父级铺满。
+double _portalContentCap(PortalMobileTier tier) {
+  final stage = tier.stageMaxWidth;
+  final content = tier.contentMaxWidth;
+  if (stage == null) {
+    return content ?? double.infinity;
+  }
+  if (content == null) {
+    return stage;
+  }
+  return stage < content ? stage : content;
+}
 
 /// Portal 移动端入口，入场动画只在首次挂载时播放。
 class PortalMobileShell extends ConsumerStatefulWidget {
@@ -78,6 +95,10 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
     if (hosted) {
       return _HostedPortalContent(onRefresh: _onRefresh);
     }
+    // 非托管分支（窄窗直开 Portal、测试直挂页面）按原型 `.content-scroll`
+    // 处理限宽与页边距；托管 Home 由 _HostedPortalContent 按 `.home-stage`
+    // 口径处理。
+    final tier = PortalMobileTier.resolve(context);
     final storageStats = ref.watch(portalStorageStatsProvider);
     final musicSnapshot = ref.watch(portalMusicSnapshotProvider);
     final photoDashboard = ref.watch(portalPhotoDashboardProvider);
@@ -166,234 +187,257 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
               strokeWidth: 2.5,
               color: scheme.primary,
               onRefresh: _onRefresh,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                slivers: [
-                  if (!hosted)
-                    PortalGlassSliverAppBar(
-                      title: const Text('OmniNest'),
-                      actions: [
-                        IconButton(
-                          tooltip: l10n.portalLocalBackdropTitle,
-                          onPressed: () => showAppBackdropSettings(context),
-                          icon: Icon(
-                            Icons.wallpaper_rounded,
-                            color: foreground,
-                            size: 20,
-                          ),
-                        ),
-                        FontScaleControl(size: 20, color: foreground),
-                        NotificationIcon(size: 20, color: foreground),
-                        const SizedBox(width: 8),
-                        const UserAvatarMenu(),
-                      ],
-                    ),
-                  // 卡片列表
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(16, 12, 16, hosted ? 16 : 100),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        entrance(
-                          'weather',
-                          0,
-                          mobileSurface(const _WeatherCard()),
-                        ),
-                        if (hosted) ...[
-                          const SizedBox(height: 12),
-                          entrance(
-                            'hosted-quick-actions',
-                            1,
-                            mobileSurface(const _MobileQuickActions()),
-                          ),
-                        ],
-                        if (!hosted) ...[
-                          const SizedBox(height: 12),
-                          entrance(
-                            'weekly-stats',
-                            1,
-                            mobileSurface(
-                              _WeeklyStatsCard(
-                                readingCount: readerDashboard.whenOrNull(
-                                  data: (d) => d.overview.continueCount,
-                                ),
-                                musicPlays: musicSnapshot.whenOrNull(
-                                  data: (snapshot) => snapshot.recentPlayCount,
-                                ),
-                                photoCount: photoDashboard.whenOrNull(
-                                  data: (d) => d.totalPhotos,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          entrance(
-                            'quick-actions',
-                            2,
-                            mobileSurface(const _MobileQuickActions()),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        entrance(
-                          'continue-watching',
-                          3,
-                          mobileSurface(
-                            PortalPagedListCard<MovieContinueWatching>(
-                              provider: portalContinueWatchingProvider,
-                              headerIcon: Icons.movie_outlined,
-                              headerTitle: l10n.portalContinueWatching,
-                              openRoute: '/video',
-                              emptyMessage: l10n.portalNoWatchingContent,
-                              rowBuilder:
-                                  (item) =>
-                                      _PortalContinueWatchingRow(item: item),
-                            ),
-                          ),
-                        ),
-                        if (!hosted) ...[
-                          const SizedBox(height: 12),
-                          entrance(
-                            'now-playing',
-                            4,
-                            mobileSurface(
-                              musicSnapshot.when(
-                                data:
-                                    (snapshot) => NowPlayingWidget(
-                                      track: snapshot.featuredTrack,
-                                    ),
-                                loading: () => const _SkeletonCard(height: 80),
-                                error:
-                                    (_, _) => _ErrorCard(
-                                      message: l10n.portalLoadMusicFailed,
-                                      onRetry:
-                                          () => retry(
-                                            PortalDashboardSection.music,
-                                          ),
-                                    ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        if (hosted) ...[
-                          entrance(
-                            'hosted-storage',
-                            5,
-                            storageStats.when(
-                              data:
-                                  (s) => mobileSurface(
-                                    StorageOverviewWidget(stats: s),
-                                  ),
-                              loading: () => const _SkeletonCard(height: 100),
-                              error:
-                                  (_, _) => _ErrorCard(
-                                    message: l10n.portalLoadStorageFailed,
-                                    onRetry:
-                                        () => retry(
-                                          PortalDashboardSection.storage,
-                                        ),
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          entrance(
-                            'hosted-reading',
-                            5,
-                            readerDashboard.when(
-                              data:
-                                  (d) => mobileSurface(
-                                    ReadingProgressWidget(
-                                      item: d.continueReading.firstOrNull,
-                                    ),
-                                  ),
-                              loading: () => const _SkeletonCard(height: 100),
-                              error:
-                                  (_, _) => _ErrorCard(
-                                    message: l10n.portalLoadReadingFailed,
-                                    onRetry:
-                                        () => retry(
-                                          PortalDashboardSection.reader,
-                                        ),
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          entrance(
-                            'hosted-recent-photos',
-                            6,
-                            mobileSurface(
-                              PortalPagedListCard<PhotoItem>(
-                                provider: portalRecentPhotosProvider,
-                                headerIcon: Icons.photo_outlined,
-                                headerTitle: l10n.portalRecentPhotos,
-                                openRoute: '/photos',
-                                emptyMessage: l10n.portalNoPhotos,
-                                rowBuilder:
-                                    (item) => _PortalRecentPhotoRow(item: item),
-                              ),
-                            ),
-                          ),
-                        ] else ...[
-                          entrance(
-                            'storage-reading',
-                            5,
-                            _TwoColumnRow(
-                              left: storageStats.when(
-                                data:
-                                    (s) => mobileSurface(
-                                      StorageOverviewWidget(stats: s),
-                                    ),
-                                loading: () => const _SkeletonCard(height: 100),
-                                error:
-                                    (_, _) => _ErrorCard(
-                                      message: l10n.portalLoadStorageFailed,
-                                      onRetry:
-                                          () => retry(
-                                            PortalDashboardSection.storage,
-                                          ),
-                                    ),
-                              ),
-                              right: readerDashboard.when(
-                                data:
-                                    (d) => mobileSurface(
-                                      ReadingProgressWidget(
-                                        item: d.continueReading.firstOrNull,
-                                      ),
-                                    ),
-                                loading: () => const _SkeletonCard(height: 100),
-                                error:
-                                    (_, _) => _ErrorCard(
-                                      message: l10n.portalLoadReadingFailed,
-                                      onRetry:
-                                          () => retry(
-                                            PortalDashboardSection.reader,
-                                          ),
-                                    ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          entrance(
-                            'recent-photos',
-                            6,
-                            mobileSurface(
-                              PortalPagedListCard<PhotoItem>(
-                                provider: portalRecentPhotosProvider,
-                                headerIcon: Icons.photo_outlined,
-                                headerTitle: l10n.portalRecentPhotos,
-                                openRoute: '/photos',
-                                emptyMessage: l10n.portalNoPhotos,
-                                rowBuilder:
-                                    (item) => _PortalRecentPhotoRow(item: item),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ]),
-                    ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: _portalContentCap(tier),
                   ),
-                ],
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    slivers: [
+                      if (!hosted)
+                        PortalGlassSliverAppBar(
+                          title: const Text('OmniNest'),
+                          actions: [
+                            IconButton(
+                              tooltip: l10n.portalLocalBackdropTitle,
+                              onPressed: () => showAppBackdropSettings(context),
+                              icon: Icon(
+                                Icons.wallpaper_rounded,
+                                color: foreground,
+                                size: 20,
+                              ),
+                            ),
+                            FontScaleControl(size: 20, color: foreground),
+                            NotificationIcon(size: 20, color: foreground),
+                            const SizedBox(width: 8),
+                            const UserAvatarMenu(),
+                          ],
+                        ),
+                      // 卡片列表
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          tier.contentHorizontalPadding,
+                          12,
+                          tier.contentHorizontalPadding,
+                          hosted ? 16 : 100,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            entrance(
+                              'weather',
+                              0,
+                              mobileSurface(const _WeatherCard()),
+                            ),
+                            if (hosted) ...[
+                              const SizedBox(height: 12),
+                              entrance(
+                                'hosted-quick-actions',
+                                1,
+                                mobileSurface(const _MobileQuickActions()),
+                              ),
+                            ],
+                            if (!hosted) ...[
+                              const SizedBox(height: 12),
+                              entrance(
+                                'weekly-stats',
+                                1,
+                                mobileSurface(
+                                  _WeeklyStatsCard(
+                                    readingCount: readerDashboard.whenOrNull(
+                                      data: (d) => d.overview.continueCount,
+                                    ),
+                                    musicPlays: musicSnapshot.whenOrNull(
+                                      data:
+                                          (snapshot) =>
+                                              snapshot.recentPlayCount,
+                                    ),
+                                    photoCount: photoDashboard.whenOrNull(
+                                      data: (d) => d.totalPhotos,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'quick-actions',
+                                2,
+                                mobileSurface(const _MobileQuickActions()),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            entrance(
+                              'continue-watching',
+                              3,
+                              mobileSurface(
+                                PortalPagedListCard<MovieContinueWatching>(
+                                  provider: portalContinueWatchingProvider,
+                                  headerIcon: Icons.movie_outlined,
+                                  headerTitle: l10n.portalContinueWatching,
+                                  openRoute: '/video',
+                                  emptyMessage: l10n.portalNoWatchingContent,
+                                  rowBuilder:
+                                      (item) => _PortalContinueWatchingRow(
+                                        item: item,
+                                      ),
+                                ),
+                              ),
+                            ),
+                            if (!hosted) ...[
+                              const SizedBox(height: 12),
+                              entrance(
+                                'now-playing',
+                                4,
+                                mobileSurface(
+                                  musicSnapshot.when(
+                                    data:
+                                        (snapshot) => NowPlayingWidget(
+                                          track: snapshot.featuredTrack,
+                                        ),
+                                    loading:
+                                        () => const _SkeletonCard(height: 80),
+                                    error:
+                                        (_, _) => _ErrorCard(
+                                          message: l10n.portalLoadMusicFailed,
+                                          onRetry:
+                                              () => retry(
+                                                PortalDashboardSection.music,
+                                              ),
+                                        ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            if (hosted) ...[
+                              entrance(
+                                'hosted-storage',
+                                5,
+                                storageStats.when(
+                                  data:
+                                      (s) => mobileSurface(
+                                        StorageOverviewWidget(stats: s),
+                                      ),
+                                  loading:
+                                      () => const _SkeletonCard(height: 100),
+                                  error:
+                                      (_, _) => _ErrorCard(
+                                        message: l10n.portalLoadStorageFailed,
+                                        onRetry:
+                                            () => retry(
+                                              PortalDashboardSection.storage,
+                                            ),
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'hosted-reading',
+                                5,
+                                readerDashboard.when(
+                                  data:
+                                      (d) => mobileSurface(
+                                        ReadingProgressWidget(
+                                          item: d.continueReading.firstOrNull,
+                                        ),
+                                      ),
+                                  loading:
+                                      () => const _SkeletonCard(height: 100),
+                                  error:
+                                      (_, _) => _ErrorCard(
+                                        message: l10n.portalLoadReadingFailed,
+                                        onRetry:
+                                            () => retry(
+                                              PortalDashboardSection.reader,
+                                            ),
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'hosted-recent-photos',
+                                6,
+                                mobileSurface(
+                                  PortalPagedListCard<PhotoItem>(
+                                    provider: portalRecentPhotosProvider,
+                                    headerIcon: Icons.photo_outlined,
+                                    headerTitle: l10n.portalRecentPhotos,
+                                    openRoute: '/photos',
+                                    emptyMessage: l10n.portalNoPhotos,
+                                    rowBuilder:
+                                        (item) =>
+                                            _PortalRecentPhotoRow(item: item),
+                                  ),
+                                ),
+                              ),
+                            ] else ...[
+                              entrance(
+                                'storage-reading',
+                                5,
+                                _TwoColumnRow(
+                                  left: storageStats.when(
+                                    data:
+                                        (s) => mobileSurface(
+                                          StorageOverviewWidget(stats: s),
+                                        ),
+                                    loading:
+                                        () => const _SkeletonCard(height: 100),
+                                    error:
+                                        (_, _) => _ErrorCard(
+                                          message: l10n.portalLoadStorageFailed,
+                                          onRetry:
+                                              () => retry(
+                                                PortalDashboardSection.storage,
+                                              ),
+                                        ),
+                                  ),
+                                  right: readerDashboard.when(
+                                    data:
+                                        (d) => mobileSurface(
+                                          ReadingProgressWidget(
+                                            item: d.continueReading.firstOrNull,
+                                          ),
+                                        ),
+                                    loading:
+                                        () => const _SkeletonCard(height: 100),
+                                    error:
+                                        (_, _) => _ErrorCard(
+                                          message: l10n.portalLoadReadingFailed,
+                                          onRetry:
+                                              () => retry(
+                                                PortalDashboardSection.reader,
+                                              ),
+                                        ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              entrance(
+                                'recent-photos',
+                                6,
+                                mobileSurface(
+                                  PortalPagedListCard<PhotoItem>(
+                                    provider: portalRecentPhotosProvider,
+                                    headerIcon: Icons.photo_outlined,
+                                    headerTitle: l10n.portalRecentPhotos,
+                                    openRoute: '/photos',
+                                    emptyMessage: l10n.portalNoPhotos,
+                                    rowBuilder:
+                                        (item) =>
+                                            _PortalRecentPhotoRow(item: item),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             if (!hosted)

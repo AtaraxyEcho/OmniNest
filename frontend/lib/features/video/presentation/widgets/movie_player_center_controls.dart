@@ -42,7 +42,9 @@ class MoviePlayerCenterControls extends StatelessWidget {
                   children: [
                     if (isMobile) ...[
                       MoviePlayerIconButton(
-                        icon: Icons.replay_10_rounded,
+                        // 样例打磨轮：±10s 用双三角快进/快退字形（主流视频语言），
+                        // 秒数只由读屏与 tooltip 承担，不再画进图标里。
+                        icon: Icons.fast_rewind_rounded,
                         tooltip: AppLocalizations.of(
                           context,
                         ).videoSeekBackwardSeconds(10),
@@ -70,7 +72,7 @@ class MoviePlayerCenterControls extends StatelessWidget {
                     if (isMobile) ...[
                       const SizedBox(width: 24),
                       MoviePlayerIconButton(
-                        icon: Icons.forward_10_rounded,
+                        icon: Icons.fast_forward_rounded,
                         tooltip: AppLocalizations.of(
                           context,
                         ).videoSeekForwardSeconds(10),

@@ -544,32 +544,35 @@ class _NotificationActionLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        beforeNavigate?.call();
-        context.go(action.route);
-      },
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 26),
-        alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              action.label,
-              style: const TextStyle(
-                fontSize: 9, // ignore: font_size_whitelist
-                fontWeight: FontWeight.w600,
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          beforeNavigate?.call();
+          context.go(action.route);
+        },
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 26),
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                action.label,
+                style: const TextStyle(
+                  fontSize: 9, // ignore: font_size_whitelist
+                  fontWeight: FontWeight.w600,
+                  color: MobileEnvColors.accent,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
                 color: MobileEnvColors.accent,
               ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 14,
-              color: MobileEnvColors.accent,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

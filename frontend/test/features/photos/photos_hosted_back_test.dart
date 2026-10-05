@@ -46,7 +46,6 @@ class _FakePhotoCenter extends PhotoCenterController {
 
   @override
   Future<void> loadTimeline({bool force = false}) async {}
-
 }
 
 const _caps = UserCapabilities(
@@ -84,9 +83,8 @@ void main() {
         GoRoute(
           path: '/library',
           builder:
-              (context, state) => const Scaffold(
-                body: Center(child: Text('library-home')),
-              ),
+              (context, state) =>
+                  const Scaffold(body: Center(child: Text('library-home'))),
         ),
         GoRoute(
           path: '/photos',

@@ -2252,6 +2252,108 @@ abstract class AppLocalizations {
   /// **'View multipart upload sessions, resume progress and upload status.'**
   String get filesUploadQueueDesc;
 
+  /// No description provided for @filesUploadQueueEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is uploading'**
+  String get filesUploadQueueEmptyTitle;
+
+  /// No description provided for @filesUploadQueueEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Start an upload from any folder; progress and failure reasons stay here.'**
+  String get filesUploadQueueEmptyMessage;
+
+  /// No description provided for @filesUploadQueueSummaryActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get filesUploadQueueSummaryActive;
+
+  /// No description provided for @filesUploadQueueSummaryCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get filesUploadQueueSummaryCompleted;
+
+  /// No description provided for @filesUploadQueueSummaryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get filesUploadQueueSummaryFailed;
+
+  /// No description provided for @filesSharesEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No share links yet'**
+  String get filesSharesEmptyTitle;
+
+  /// No description provided for @filesSharesEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a file and choose Share; links and their access state show up here.'**
+  String get filesSharesEmptyMessage;
+
+  /// No description provided for @filesStorageEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage stats unavailable'**
+  String get filesStorageEmptyTitle;
+
+  /// No description provided for @filesStorageEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stats are aggregated by the server; retry once the network is back.'**
+  String get filesStorageEmptyMessage;
+
+  /// No description provided for @filesStorageRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get filesStorageRetry;
+
+  /// No description provided for @filesStorageQuotaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quota usage'**
+  String get filesStorageQuotaTitle;
+
+  /// No description provided for @filesStorageQuotaUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'No quota limit'**
+  String get filesStorageQuotaUnlimited;
+
+  /// No description provided for @filesStorageSummaryFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get filesStorageSummaryFiles;
+
+  /// No description provided for @filesStorageSummaryFolders.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders'**
+  String get filesStorageSummaryFolders;
+
+  /// No description provided for @filesStorageSummaryUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get filesStorageSummaryUsed;
+
+  /// No description provided for @filesStorageTypeDistribution.
+  ///
+  /// In en, this message translates to:
+  /// **'Type distribution'**
+  String get filesStorageTypeDistribution;
+
+  /// No description provided for @filesUploadQueueLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more ({loaded} of {total})'**
+  String filesUploadQueueLoadMore(String loaded, String total);
+
   /// No description provided for @filesOfflineDownloadsDesc.
   ///
   /// In en, this message translates to:
@@ -2269,6 +2371,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View external storage file import progress, supports cancelling queued tasks.'**
   String get filesImportTasksDesc;
+
+  /// No description provided for @filesHostedItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String filesHostedItemCount(int count);
+
+  /// No description provided for @filesSharedWithMeEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has shared files with you'**
+  String get filesSharedWithMeEmptyTitle;
+
+  /// No description provided for @filesSharedWithMeEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Files others share with your account are listed here and open straight into preview.'**
+  String get filesSharedWithMeEmptyMessage;
+
+  /// No description provided for @filesOfflineEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No offline download tasks'**
+  String get filesOfflineEmptyTitle;
+
+  /// No description provided for @filesOfflineEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Use New offline download and paste an HTTP, BT or magnet link to start.'**
+  String get filesOfflineEmptyMessage;
+
+  /// No description provided for @filesExternalEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No storage mounted'**
+  String get filesExternalEmptyTitle;
+
+  /// No description provided for @filesExternalEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a OneDrive, WebDAV or other source to browse and import files here.'**
+  String get filesExternalEmptyMessage;
+
+  /// No description provided for @filesExternalCredentialsMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Credentials missing'**
+  String get filesExternalCredentialsMissing;
+
+  /// No description provided for @filesExternalBrowseFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot read the mount directory'**
+  String get filesExternalBrowseFailedTitle;
+
+  /// No description provided for @filesExternalBrowseEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This directory has nothing to browse.'**
+  String get filesExternalBrowseEmptyMessage;
+
+  /// No description provided for @filesImportEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No import tasks'**
+  String get filesImportEmptyTitle;
+
+  /// No description provided for @filesImportEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Import a file from external storage and its progress is listed here.'**
+  String get filesImportEmptyMessage;
+
+  /// No description provided for @filesHomeWorkspaceTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace tools'**
+  String get filesHomeWorkspaceTools;
+
+  /// No description provided for @filesHomeShortcutMountsOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'{online} of {total} mounts online'**
+  String filesHomeShortcutMountsOnline(int online, int total);
+
+  /// No description provided for @filesHomeShortcutTasksActive.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tasks running'**
+  String filesHomeShortcutTasksActive(int count);
+
+  /// No description provided for @filesHomeShortcutUploadRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} still to upload'**
+  String filesHomeShortcutUploadRemaining(String size);
+
+  /// No description provided for @filesShareExpiryDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days'**
+  String filesShareExpiryDays(int days);
 
   /// No description provided for @filesSharedSpace.
   ///
@@ -13397,6 +13601,12 @@ abstract class AppLocalizations {
   /// **'Clear History'**
   String get videoClearHistory;
 
+  /// No description provided for @videoRemoveHistoryEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from history'**
+  String get videoRemoveHistoryEntry;
+
   /// No description provided for @videoNoWatchHistory.
   ///
   /// In en, this message translates to:
@@ -15526,6 +15736,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No photos in this album'**
   String get photosAlbumEmpty;
+
+  /// No description provided for @photosAlbumEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick photos from your library to add to this album.'**
+  String get photosAlbumEmptyHint;
 
   /// No description provided for @photosAddPhotos.
   ///
@@ -18561,6 +18777,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Next photo'**
   String get photosNextPhoto;
+
+  /// No description provided for @photosViewerPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total}'**
+  String photosViewerPosition(Object index, Object total);
+
+  /// No description provided for @photosViewerPositionTime.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total} · {taken}'**
+  String photosViewerPositionTime(Object index, Object total, Object taken);
 
   /// No description provided for @videoUnavailableEmpty.
   ///

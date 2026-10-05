@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
+import 'package:omninest/features/library/presentation/widgets/library_space_tier.dart';
 import 'package:omninest/features/library/presentation/widgets/library_space_widgets.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
@@ -22,6 +24,12 @@ import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
+
+/// 分段条吸顶层几何：胶囊 48 + 容器内衬 4×2，顶距 8。
+const double _librarySegmentTopInset = 8;
+const double _librarySegmentBarHeight = 56;
+const double _librarySegmentOverlayExtent =
+    _librarySegmentTopInset + _librarySegmentBarHeight;
 
 /// Library 媒体空间：Photos/Movies/Music 的统一媒体首页。
 ///
@@ -75,18 +83,34 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     final albums = ref.watch(photoAlbumsProvider);
     final movies = ref.watch(movieDashboardProvider);
     final musicCenter = ref.watch(musicCenterControllerProvider);
-    final padding = MobileLayoutTokens.pagePadding(context).left;
+    final tier = LibrarySpaceTier.resolve(context);
+    final padding = tier.horizontalPadding;
 
     Widget page(List<Widget> children) {
       return RefreshIndicator(
         color: MobileEnvColors.accent,
         onRefresh: _refreshDashboardSections,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
+        // 原型 `.module-overlay > main` 限宽居中，平板与桌面宽窗下内容不摊
+        // 满整幅；650 基线在 ≥980 档抬到 760（见 LibrarySpaceTier）。
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              // 分段条吸顶浮在内容之上，列表首屏需让出同等的顶部净高，
+              // 否则横幅被永久遮住。
+              padding: EdgeInsets.fromLTRB(
+                padding,
+                _librarySegmentOverlayExtent + 14,
+                padding,
+                28,
+              ),
+              children: children,
+            ),
           ),
-          padding: EdgeInsets.fromLTRB(padding, 12, padding, 28),
-          children: children,
         ),
       );
     }
@@ -96,20 +120,10 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
       onRefresh: _refreshOnEntry,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Column(
+        body: Stack(
           children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(padding, 8, padding, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: LibrarySegmentBar(
-                  segment: _segment,
-                  onChanged: _selectSegment,
-                ),
-              ),
-            ),
-            Expanded(
-              // 原生 PageView：手指跟手的丝滑横滑，分段点选带动画落页。
+            // 原生 PageView：手指跟手的丝滑横滑，分段点选带动画落页。
+            Positioned.fill(
               child: PageView(
                 controller: _pageController,
                 onPageChanged:
@@ -147,6 +161,38 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                 ],
               ),
             ),
+            // 分段条吸顶浮在内容之上：原型 .segmented 为 position: sticky +
+            // blur(22)，列表滚动时从条下方穿过而不是被推走。吸顶层与内容盒
+            // 共用同一限宽，平板宽窗下不会出现条比内容更宽的两套边界。
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      padding,
+                      _librarySegmentTopInset,
+                      padding,
+                      0,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                        child: LibrarySegmentBar(
+                          segment: _segment,
+                          onChanged: _selectSegment,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -173,7 +219,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
         ),
         const SizedBox(height: 12),
         LibraryRail(
-          height: 190,
+          height: libraryAlbumRailHeight(context),
           children: [
             for (final album in albumList.take(10))
               LibraryAlbumCard(
@@ -194,7 +240,8 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     AsyncValue<MovieDashboard> movies,
   ) {
     return movies.when(
-      loading: () => const MobileSkeletonBlock(height: 232),
+      loading:
+          () => MobileSkeletonBlock(height: libraryPosterRailHeight(context)),
       error: (_, _) => const SizedBox.shrink(),
       data: (dashboard) {
         final recent = dashboard.recentlyAdded.take(10).toList();
@@ -212,7 +259,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
             ),
             const SizedBox(height: 12),
             LibraryRail(
-              height: 232,
+              height: libraryPosterRailHeight(context),
               children: [
                 for (final item in recent)
                   LibraryPosterCard(
@@ -280,9 +327,9 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                 '${item.track.artistName} · ${_formatTrackDuration(Duration(seconds: item.track.durationSeconds ?? 0))}',
             onTap:
                 () => unawaited(
-                  ref
-                      .read(musicCenterControllerProvider.notifier)
-                      .playItems([item], startIndex: index),
+                  ref.read(musicCenterControllerProvider.notifier).playItems([
+                    item,
+                  ], startIndex: index),
                 ),
             trailing: Icon(
               Icons.more_horiz_rounded,
@@ -358,7 +405,10 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
         ),
         const SizedBox(height: 12),
         photos.when(
-          loading: () => const MobileSkeletonBlock(height: 220),
+          loading:
+              () => MobileSkeletonBlock(
+                height: LibrarySpaceTier.resolve(context).mosaicHeight,
+              ),
           error:
               (_, _) => EnvEmptyState(
                 icon: OmniIcons.image,
@@ -438,7 +488,9 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
         ),
         const SizedBox(height: 12),
         movies.when(
-          loading: () => const MobileSkeletonBlock(height: 232),
+          loading:
+              () =>
+                  MobileSkeletonBlock(height: libraryPosterRailHeight(context)),
           error:
               (_, _) => EnvEmptyState(
                 icon: OmniIcons.film,
@@ -464,7 +516,10 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                 ),
             ];
             if (children.isNotEmpty) {
-              return LibraryRail(height: 232, children: children);
+              return LibraryRail(
+                height: libraryPosterRailHeight(context),
+                children: children,
+              );
             }
             final recent =
                 dashboard.recentlyAdded.take(isMoviesSegment ? 10 : 6).toList();
@@ -477,7 +532,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
               );
             }
             return LibraryRail(
-              height: 232,
+              height: libraryPosterRailHeight(context),
               children: [
                 for (final item in recent)
                   LibraryPosterCard(
@@ -519,7 +574,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
         ),
         const SizedBox(height: 12),
         if (musicCenter.isLoading && albums.isEmpty)
-          const MobileSkeletonBlock(height: 190)
+          MobileSkeletonBlock(height: libraryAlbumRailHeight(context))
         else if (albums.isEmpty)
           EnvEmptyState(
             icon: OmniIcons.music,
@@ -529,7 +584,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
           )
         else
           LibraryRail(
-            height: 190,
+            height: libraryAlbumRailHeight(context),
             children: [
               for (final album in albums)
                 LibraryAlbumCard(

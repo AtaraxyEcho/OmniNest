@@ -618,6 +618,7 @@ class _MovieMobileDrawer extends StatelessWidget {
                     ),
                     const Spacer(),
                     IconButton(
+                      tooltip: l10n.videoClose,
                       onPressed: () => Navigator.of(context).maybePop(),
                       icon: Icon(
                         Icons.close_rounded,

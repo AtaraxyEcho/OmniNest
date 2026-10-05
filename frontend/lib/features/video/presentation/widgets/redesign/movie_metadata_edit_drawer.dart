@@ -216,6 +216,7 @@ class _MovieMetadataEditPanelState
                       ),
                     ),
                     IconButton(
+                      tooltip: l10n.videoClose,
                       onPressed: () => Navigator.of(context).pop(),
                       icon: Icon(
                         Icons.close_rounded,

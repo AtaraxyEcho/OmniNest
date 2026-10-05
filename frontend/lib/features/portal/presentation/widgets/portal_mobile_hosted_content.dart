@@ -4,6 +4,7 @@ part of 'portal_mobile_shell.dart';
 ///
 /// 首页只承担「进入 OmniNest」：时间与环境状态、一个最重要的续接
 /// 内容、少量最近动态与高频动作；不再堆叠仪表盘卡片。
+/// 舞台限宽与列数按 600/720/980 三档切换，见 [PortalMobileTier]。
 class _HostedPortalContent extends ConsumerWidget {
   const _HostedPortalContent({required this.onRefresh});
 
@@ -17,37 +18,90 @@ class _HostedPortalContent extends ConsumerWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final viewport = constraints.maxHeight;
+          final tier = PortalMobileTier.resolveWidth(constraints.maxWidth);
           final spacious = viewport > 640;
           // 样例 home-stage 顶部内边距为 5vh：时钟从视口顶部 5% 处开始，
           // 不再使用固定高度盒子沉底（会在眉标上方堆出大片死空间）。
           final headerTop = (viewport * 0.05).clamp(20.0, 48.0);
-          return CustomScrollView(
+          final horizontal = tier.homeHorizontalPadding;
+          final header = _SpatialEnvironmentHeader(
+            topPadding: headerTop,
+            leftAligned: tier.twoColumnHome,
+            heroMaxFontSize: tier.heroTimeMaxFontSize,
+          );
+          final focus = const _SpatialFocusCard();
+          final lower = <Widget>[
+            const _SpatialRecentHeading(),
+            const SizedBox(height: 12),
+            _SpatialRecentStrip(tier: tier),
+            const SizedBox(height: 12),
+            _SpatialQuickLine(tier: tier),
+          ];
+
+          final scroll = CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-              SliverToBoxAdapter(
-                child: _SpatialEnvironmentHeader(topPadding: headerTop),
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: horizontal),
+                sliver: SliverToBoxAdapter(
+                  child:
+                      tier.twoColumnHome
+                          // 原型 ≥980：`.home-stage` 为 1.1fr/.9fr 双栏，
+                          // 时间块左对齐、焦点卡同排右侧。
+                          ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(flex: 11, child: header),
+                              const SizedBox(width: 30),
+                              Expanded(flex: 9, child: focus),
+                            ],
+                          )
+                          : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              header,
+                              // 样例手机档 time-block 与 home-focus 近乎相连
+                              //（auto-margin 余量很小），高屏略增。
+                              SizedBox(height: spacious ? 24 : 12),
+                              focus,
+                            ],
+                          ),
+                ),
               ),
               SliverPadding(
-                padding: MobileLayoutTokens.pagePadding(context),
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  tier.twoColumnHome ? 36 : 0,
+                  horizontal,
+                  24,
+                ),
                 sliver: SliverList.list(
-                  children: [
-                    // 样例手机档 time-block 与 home-focus 近乎相连
-                    //（auto-margin 余量很小），高屏略增。
-                    SizedBox(height: spacious ? 24 : 12),
-                    const _SpatialFocusCard(),
-                    SizedBox(height: spacious ? 36 : 24),
-                    const _SpatialRecentHeading(),
-                    const SizedBox(height: 12),
-                    const _SpatialRecentStrip(),
-                    const SizedBox(height: 12),
-                    const _SpatialQuickLine(),
-                    const SizedBox(height: 24),
-                  ],
+                  children:
+                      tier.twoColumnHome
+                          ? lower
+                          : <Widget>[
+                            SizedBox(height: spacious ? 36 : 24),
+                            ...lower,
+                          ],
                 ),
               ),
             ],
+          );
+
+          final stageMaxWidth = tier.stageMaxWidth;
+          if (stageMaxWidth == null) {
+            return scroll;
+          }
+          // 原型 `.app-frame` 限宽：720-979 收 760，≥980 由壳层侧栏轨
+          // 约束舞台，本模块沿用基线上限避免内容摊满超宽视口。
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: stageMaxWidth),
+              child: scroll,
+            ),
           );
         },
       ),
@@ -56,11 +110,24 @@ class _HostedPortalContent extends ConsumerWidget {
 }
 
 /// 环境头部：星期·日期、大时钟与天气，直接呈现在壁纸环境上。
+///
+/// 水平内衬由宿主 [SliverPadding] 统一给出，头部只保留顶部留白；
+/// 双栏档按原型 `.time-block{text-align:left}` 左对齐。
 class _SpatialEnvironmentHeader extends ConsumerStatefulWidget {
-  const _SpatialEnvironmentHeader({required this.topPadding});
+  const _SpatialEnvironmentHeader({
+    required this.topPadding,
+    required this.leftAligned,
+    required this.heroMaxFontSize,
+  });
 
   /// 顶部内边距（样例 5vh 折算，由宿主按视口高度计算）。
   final double topPadding;
+
+  /// 是否左对齐（≥980 双栏档）。
+  final bool leftAligned;
+
+  /// 大时钟字号上限（样例 108，≥980 档 130）。
+  final double heroMaxFontSize;
 
   @override
   ConsumerState<_SpatialEnvironmentHeader> createState() =>
@@ -100,15 +167,13 @@ class _SpatialEnvironmentHeaderState
       alwaysUse24HourFormat: true,
     );
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        MobileLayoutTokens.pagePadding(context).left,
-        widget.topPadding,
-        MobileLayoutTokens.pagePadding(context).right,
-        0,
-      ),
+      padding: EdgeInsets.only(top: widget.topPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment:
+            widget.leftAligned
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
         children: [
           Text(
             eyebrow.toUpperCase(),
@@ -124,21 +189,29 @@ class _SpatialEnvironmentHeaderState
           const SizedBox(height: 2),
           LayoutBuilder(
             builder: (context, constraints) {
-              final scale = (constraints.maxWidth * 0.24).clamp(72.0, 108.0);
-              return Text(
-                timeOfDay,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: MobileEnvColors.ink,
-                  fontFamily: AppTypography.serifFamily,
-                  fontFamilyFallback: AppTypography.serifFamilyFallback,
-                  fontSize: scale,
-                  height: 1.0,
-                  letterSpacing: -4,
-                  shadows: const [
-                    Shadow(color: Colors.black54, blurRadius: 18),
-                  ],
+              final scale = (constraints.maxWidth * 0.24).clamp(
+                72.0,
+                widget.heroMaxFontSize,
+              );
+              // 衬线大时钟是氛围元素，字号已由视口宽度推导（原型
+              // clamp(72,24vw,108)）；再叠加无障碍字号会在 1.6x 下把
+              // 时间块撑到视口外，故此处不随 textScaler 二次放大。
+              return MediaQuery.withNoTextScaling(
+                child: Text(
+                  timeOfDay,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: MobileEnvColors.ink,
+                    fontFamily: AppTypography.serifFamily,
+                    fontFamilyFallback: AppTypography.serifFamilyFallback,
+                    fontSize: scale,
+                    height: 1.0,
+                    letterSpacing: -4,
+                    shadows: const [
+                      Shadow(color: Colors.black54, blurRadius: 18),
+                    ],
+                  ),
                 ),
               );
             },
@@ -683,8 +756,13 @@ class _SpatialRecentHeading extends StatelessWidget {
 }
 
 /// 最近动态条：照片 / 阅读 / 文件三张紧凑卡。
+///
+/// 手机与平板档沿用样例 `1.4fr : 1fr : 1fr`；≥980 双栏档按原型
+/// `.recent-strip{repeat(3,1fr)}` 等分三列并抬高瓦片。
 class _SpatialRecentStrip extends ConsumerWidget {
-  const _SpatialRecentStrip();
+  const _SpatialRecentStrip({required this.tier});
+
+  final PortalMobileTier tier;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -701,6 +779,7 @@ class _SpatialRecentStrip extends ConsumerWidget {
       _SpatialRecentTile(
         label: l10n.spatialRecentPhotos,
         photo: recentPhoto,
+        height: tier.recentTileHeight,
         photoSub: l10n.libraryBannerPhotoCount(
           photos?.recentPhotos.length ?? 0,
         ),
@@ -719,6 +798,7 @@ class _SpatialRecentStrip extends ConsumerWidget {
       _SpatialRecentTile(
         label: l10n.mobileNavReader,
         readerItem: readingItem,
+        height: tier.recentTileHeight,
         onTap:
             readingItem == null
                 ? () => context.go('/reader')
@@ -727,15 +807,20 @@ class _SpatialRecentStrip extends ConsumerWidget {
       _SpatialRecentTile(
         label: l10n.spatialRecentFiles,
         fileNode: fileNode,
+        height: tier.recentTileHeight,
         onTap: () => context.go('/files'),
       ),
     ];
-    // 样例 1.4fr : 1fr : 1fr：照片卡更宽，阅读/文件卡等分。
+    final photoFlex = tier.twoColumnHome ? 1 : 14;
+    final otherFlex = tier.twoColumnHome ? 1 : 10;
     return Row(
       children: [
         for (var index = 0; index < tiles.length; index++) ...[
           if (index > 0) const SizedBox(width: 10),
-          Expanded(flex: index == 0 ? 14 : 10, child: tiles[index]),
+          Expanded(
+            flex: index == 0 ? photoFlex : otherFlex,
+            child: tiles[index],
+          ),
         ],
       ],
     );
@@ -745,6 +830,7 @@ class _SpatialRecentStrip extends ConsumerWidget {
 class _SpatialRecentTile extends StatelessWidget {
   const _SpatialRecentTile({
     required this.label,
+    required this.height,
     required this.onTap,
     this.photo,
     this.photoSub,
@@ -753,6 +839,9 @@ class _SpatialRecentTile extends StatelessWidget {
   });
 
   final String label;
+
+  /// 瓦片高度（样例 136，≥980 双栏档 150）。
+  final double height;
   final PhotoItem? photo;
 
   /// 照片卡副文案（如新增张数）。
@@ -823,7 +912,7 @@ class _SpatialRecentTile extends StatelessWidget {
       semanticLabel: label,
       onTap: onTap,
       child: SizedBox(
-        height: 136,
+        height: height,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: MobileEnvColors.surfaceRaised,
@@ -948,8 +1037,13 @@ class _BookMini extends StatelessWidget {
 }
 
 /// 高频动作行：查找任何内容 / 添加媒体。
+///
+/// ≥980 双栏档按原型 `.quick-line{max-width:420}` 收成左对齐窄条，
+/// 避免两枚按钮在跨列下摊满整幅。
 class _SpatialQuickLine extends StatelessWidget {
-  const _SpatialQuickLine();
+  const _SpatialQuickLine({required this.tier});
+
+  final PortalMobileTier tier;
 
   @override
   Widget build(BuildContext context) {
@@ -1002,7 +1096,7 @@ class _SpatialQuickLine extends StatelessWidget {
       );
     }
 
-    return Row(
+    final row = Row(
       children: [
         action(OmniIcons.search, l10n.spatialActionFind, () {
           context.push('/search');
@@ -1012,6 +1106,17 @@ class _SpatialQuickLine extends StatelessWidget {
           context.go('/files');
         }),
       ],
+    );
+    final maxWidth = tier.quickLineMaxWidth;
+    if (maxWidth == null) {
+      return row;
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: row,
+      ),
     );
   }
 }

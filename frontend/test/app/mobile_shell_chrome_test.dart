@@ -127,6 +127,11 @@ void main() {
             .widgetList<DecoratedBox>(
               find.descendant(of: nav, matching: find.byType(DecoratedBox)),
             )
+            .where(
+              (widget) =>
+                  widget.decoration is BoxDecoration &&
+                  (widget.decoration as BoxDecoration).color != null,
+            )
             .toList();
     expect(matches, isNotEmpty);
     return matches.first;
@@ -175,7 +180,7 @@ void main() {
     expect(searchIcon.color, MobileEnvColors.ink);
     // 顶栏内容行之上没有带颜色背景的装饰盒（透明呈现在环境上）。
     final topRow = find.byWidgetPredicate(
-      (widget) => widget is SizedBox && widget.height == 56,
+      (widget) => widget is SizedBox && widget.height == 64,
     );
     expect(topRow, findsOneWidget);
     final paintedAncestor =
@@ -200,11 +205,16 @@ void main() {
     final rect = tester.getRect(nav);
     expect(rect.left, 12);
     expect(rect.bottom, 848, reason: '底边距 max(12, safe inset) = 12');
-    // 玻璃面板：0.78 烟熏 + 白 12% 描边。
+    // 玻璃面板：0.78 烟熏 + 白 12% 描边 + 原型 blur(28)。
     final chrome = bottomChromeOf(tester);
     final decoration = chrome.decoration as BoxDecoration;
     expect(decoration.color, const Color(0xC70E1413));
     expect(decoration.border?.top.color, const Color(0x1FFFFFFF));
+    expect(
+      find.descendant(of: nav, matching: find.byType(BackdropFilter)),
+      findsOneWidget,
+      reason: '底栏需真实模糊，不能只靠半透明底近似',
+    );
   });
 
   testWidgets('选中胶囊为原型 lime，未选中为弱化前景', (tester) async {
@@ -336,11 +346,33 @@ void main() {
     expect(tester.getSize(nav).height, 70);
     final navRect = tester.getRect(nav);
     expect(navRect.left, closeTo((1280 - 720) / 2, 0.5));
+    // 宽档不切左侧 rail，顶栏必须与 tab 组同宽同边，否则顶行坐到内容列之外。
+    final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));
+    expect(tester.getSize(topBar).width, 720);
+    expect(tester.getRect(topBar).left, closeTo(navRect.left, 0.5));
     // 平板不切换左侧 rail。
     expect(find.byType(NavigationRail), findsNothing);
     await tapNav(tester, '媒体库');
     expect(find.byIcon(Icons.wallpaper_rounded), findsNothing);
     expect(find.byType(OmniIcon), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('600-979 档：tab 组收成 460 胶囊，顶栏保持 720 限宽', (tester) async {
+    await pumpShell(
+      tester,
+      initialLocation: '/portal',
+      surface: const Size(720, 900),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('omninest.mobile.bottom-nav'))),
+      const Size(460, 70),
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('omninest.mobile.top-bar')))
+          .width,
+      720,
+    );
   });
 }
 

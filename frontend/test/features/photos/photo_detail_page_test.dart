@@ -15,6 +15,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
@@ -349,12 +350,19 @@ _Harness _harness({
   );
 }
 
+/// 桌面档：显式声明非托管作用域。
+///
+/// 测试框架默认平台是 Android，照片子页按壳层同规则推导托管形态时会被
+/// 判成移动端；作用域显式取值优先于推导，桌面断言才稳定。
+Widget _asWorkstation(Widget child) =>
+    MobileShellScope(hosted: false, child: child);
+
 Future<void> _pumpDesktop(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(child);
+  await tester.pumpWidget(_asWorkstation(child));
   await tester.pump();
   await tester.pumpAndSettle();
 }
@@ -366,7 +374,7 @@ Future<void> _pumpDesktopFrames(WidgetTester tester, Widget child) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(child);
+  await tester.pumpWidget(_asWorkstation(child));
   // 首帧 → 详情 provider 就绪出舞台 → post-frame 预取注册。
   for (final step in [
     const Duration(milliseconds: 16),
@@ -482,12 +490,14 @@ void main() {
             () => _SeededPhotoCenterController(scope),
           ),
         ],
-        child: MaterialApp.router(
-          routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
-          theme: OmniNestTheme.from(AppThemePalette.dark),
+        child: _asWorkstation(
+          MaterialApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('zh'),
+            theme: OmniNestTheme.from(AppThemePalette.dark),
+          ),
         ),
       ),
     );

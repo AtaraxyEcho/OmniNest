@@ -41,11 +41,8 @@ class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
       return;
     }
     _forward = widget.forward;
-    if (WidgetsBinding
-        .instance
-        .platformDispatcher
-        .accessibilityFeatures
-        .disableAnimations) {
+    // 减弱动效：跳过过渡直接落在终态（value=1，全不透明、零位移）。
+    if (MotionToken.prefersReduced(context)) {
       _controller.value = 1;
       return;
     }
@@ -60,7 +57,8 @@ class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    // 减弱动效：直接呈现子树终态，不包 Opaque/Transform，视觉结果不变。
+    if (MotionToken.prefersReduced(context)) {
       return widget.child;
     }
     return AnimatedBuilder(

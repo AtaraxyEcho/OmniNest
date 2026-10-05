@@ -263,9 +263,7 @@ void main() {
     'video': MovieCenterPage(),
   };
   for (final entry in pages.entries) {
-    testWidgets('${entry.key} hosted 页 390 宽 + 1.3 倍字号无溢出', (
-      tester,
-    ) async {
+    testWidgets('${entry.key} hosted 页 390 宽 + 1.3 倍字号无溢出', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
