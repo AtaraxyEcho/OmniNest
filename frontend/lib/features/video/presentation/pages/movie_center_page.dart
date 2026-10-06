@@ -11,6 +11,8 @@ import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
@@ -30,6 +32,7 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_time.dart';
 part 'movie_center_sample_rails.dart';
+part 'movie_center_hosted_series.dart';
 
 class MovieCenterPage extends ConsumerStatefulWidget {
   const MovieCenterPage({this.initialSection, super.key});
@@ -83,6 +86,11 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(movieCenterControllerProvider);
+    // 托管态底由环境层绘制，异常/骨架页不再压一块重设计实底。
+    final pageBackground =
+        MobileShellScope.isHosted(context)
+            ? Colors.transparent
+            : context.movieRedesign.background;
     return state.when(
       data: (data) {
         // 管理分区不再静默回退到电影：无权限时由内容区显示明确提示，
@@ -149,7 +157,7 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
       },
       error:
           (error, stackTrace) => Scaffold(
-            backgroundColor: context.movieRedesign.background,
+            backgroundColor: pageBackground,
             body: AppErrorView(
               message: describeUserFacingError(error).displayMessage,
               onRetry: () => ref.invalidate(movieCenterControllerProvider),
@@ -157,7 +165,7 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
           ),
       loading:
           () => Scaffold(
-            backgroundColor: context.movieRedesign.background,
+            backgroundColor: pageBackground,
             body: AppLoading.grid(gridAspectRatio: 0.62),
           ),
     );
@@ -609,14 +617,25 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
           SliverPadding(
             padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
-              child: MovieRedesignEmptyState(
-                icon: Icons.movie_outlined,
-                title: l10n.videoRedesignNoMatches,
-                subtitle:
-                    state.searchQuery.trim().isNotEmpty
-                        ? l10n.videoSearchNoHitsLoadMore
-                        : l10n.videoRedesignAdjustFilters,
-              ),
+              child:
+                  hosted
+                      // 托管态空态走样例 .empty-action 玻璃族。
+                      ? EnvEmptyState(
+                        icon: OmniIcons.film,
+                        title: l10n.videoRedesignNoMatches,
+                        message:
+                            state.searchQuery.trim().isNotEmpty
+                                ? l10n.videoSearchNoHitsLoadMore
+                                : l10n.videoRedesignAdjustFilters,
+                      )
+                      : MovieRedesignEmptyState(
+                        icon: Icons.movie_outlined,
+                        title: l10n.videoRedesignNoMatches,
+                        subtitle:
+                            state.searchQuery.trim().isNotEmpty
+                                ? l10n.videoSearchNoHitsLoadMore
+                                : l10n.videoRedesignAdjustFilters,
+                      ),
             ),
           )
         else if (hosted)
@@ -665,113 +684,6 @@ class _SearchScopeNotice extends StatelessWidget {
       style: text.mono(
         size: 11,
         color: palette.mutedForeground.withValues(alpha: 0.85),
-      ),
-    );
-  }
-}
-
-/// 剧集/动漫分区的移动形态（样例 Series 段）：chip 行 + 收藏覆盖 +
-/// 网格；收藏为本地展示态，分页触发仅对非收藏列表生效。
-class _HostedSeriesBody extends ConsumerStatefulWidget {
-  const _HostedSeriesBody({
-    required this.title,
-    required this.subtitleEn,
-    required this.subtitle,
-    required this.series,
-    required this.anime,
-  });
-
-  final String title;
-  final String subtitleEn;
-  final String subtitle;
-  final List<MovieSeries> series;
-  final bool anime;
-
-  @override
-  ConsumerState<_HostedSeriesBody> createState() => _HostedSeriesBodyState();
-}
-
-class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
-  bool _favoritesOnly = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final centerState = ref.watch(movieCenterControllerProvider).requireValue;
-    final controller = ref.read(movieCenterControllerProvider.notifier);
-    final effective =
-        _favoritesOnly ? centerState.favoriteSeries : widget.series;
-    final paging =
-        widget.anime
-            ? centerState.animeSeriesPaging
-            : centerState.tvSeriesPaging;
-    return InfiniteScrollTrigger(
-      enabled: !_favoritesOnly && paging.hasMore && !paging.isLoadingMore,
-      onLoadMore: () => controller.loadMoreSeries(anime: widget.anime),
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.only(bottom: 16),
-            sliver: SliverToBoxAdapter(
-              child: MobileEnvSectionHeader(
-                eyebrow: widget.subtitleEn,
-                title: widget.title,
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.only(bottom: 16),
-            sliver: SliverToBoxAdapter(
-              child: MovieRedesignMobileChips(
-                sortBy: centerState.sortBy,
-                onSortBy: controller.setSort,
-                favoritesOnly: _favoritesOnly,
-                onFavoritesOnly:
-                    (value) => setState(() => _favoritesOnly = value),
-                filter: centerState.filter,
-                onFilter: controller.setFilter,
-              ),
-            ),
-          ),
-          if (effective.isEmpty)
-            SliverPadding(
-              padding: EdgeInsets.zero,
-              sliver: SliverToBoxAdapter(
-                child: MovieRedesignEmptyState(
-                  icon: Icons.tv_outlined,
-                  title: l10n.videoNoMediaItems,
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.only(top: 6),
-              sliver: SliverToBoxAdapter(
-                child: SampleRail(
-                  children: [
-                    for (final item in effective.take(12))
-                      SamplePosterCard(
-                        imageUrl: item.posterUrl,
-                        title: item.title,
-                        subtitle: item.firstAirDate?.year.toString() ?? '',
-                        badge: SampleSeriesBadge(
-                          label:
-                              widget.anime
-                                  ? l10n.videoSectionAnime
-                                  : l10n.videoSectionSeries,
-                        ),
-                        onTap:
-                            () => context.push(movieSeriesDetailRoute(item.id)),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          const SliverPadding(padding: EdgeInsets.only(bottom: 48)),
-        ],
       ),
     );
   }
@@ -1022,9 +934,10 @@ class _ContinueSection extends ConsumerWidget {
             SliverPadding(
               padding: EdgeInsets.zero,
               sliver: SliverToBoxAdapter(
-                child: MovieRedesignEmptyState(
-                  icon: Icons.play_circle_outline_rounded,
+                child: EnvEmptyState(
+                  icon: OmniIcons.play,
                   title: l10n.videoNoMediaItems,
+                  message: l10n.videoRedesignNoHistoryHint,
                 ),
               ),
             ),

@@ -9,7 +9,99 @@ const List<MovieSection> _movieMobileBottomSections = [
   MovieSection.favorites,
 ];
 
-class _MovieMobileShell extends StatelessWidget {
+/// 托管态页内搜索条（样例 search-overlay 输入胶囊）：由玻璃横幅的搜索
+/// 钮展开，实时过滤当前分区已加载条目；收起时清空查询，避免离页后
+/// 带着看不见的筛选回到模块。
+class _MovieHostedSearchBar extends StatelessWidget {
+  const _MovieHostedSearchBar({
+    required this.controller,
+    required this.hintText,
+    required this.closeTooltip,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onClose,
+    required this.active,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final String closeTooltip;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback onClose;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!active) {
+      return const SizedBox.shrink();
+    }
+    // 与全局搜索页同源数值：48 高 r16、白 7.5% 底、白 10% 描边。
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              decoration: BoxDecoration(
+                color: const Color(0x13FFFFFF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: MobileEnvColors.line10),
+              ),
+              child: Row(
+                children: [
+                  const OmniIcon(
+                    icon: OmniIcons.search,
+                    size: 19,
+                    color: Color(0x9EF6F6F2),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      keyboardType: TextInputType.webSearch,
+                      textInputAction: TextInputAction.search,
+                      style: const TextStyle(
+                        color: MobileEnvColors.ink,
+                        // ignore: font_size_whitelist
+                        fontSize: 14,
+                      ),
+                      onChanged: onChanged,
+                      onSubmitted: onSubmitted,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isCollapsed: true,
+                        hintText: hintText,
+                        hintStyle: const TextStyle(
+                          color: Color(0x5CFFFFFF),
+                          // ignore: font_size_whitelist
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          MobileGlassIconButton(
+            tooltip: closeTooltip,
+            icon: Icons.close_rounded,
+            onPressed: onClose,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MovieMobileShell extends ConsumerStatefulWidget {
   const _MovieMobileShell({
     required this.section,
     required this.child,
@@ -38,9 +130,34 @@ class _MovieMobileShell extends StatelessWidget {
     MovieSection.anime,
   ];
 
+  @override
+  ConsumerState<_MovieMobileShell> createState() => _MovieMobileShellState();
+}
+
+class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
+  /// 页内搜索条展开态与输入；查询写入中心控制器，收起即清空。
+  final TextEditingController _searchController = TextEditingController();
+  bool _searchActive = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   /// 当前生效分段（不在四段内的管理分区按首段计）。
   MovieSection get effectiveSection =>
-      _hostedSections.contains(section) ? section : _hostedSections.first;
+      _MovieMobileShell._hostedSections.contains(widget.section)
+          ? widget.section
+          : _MovieMobileShell._hostedSections.first;
+
+  void _toggleSearch() => setState(() => _searchActive = !_searchActive);
+
+  void _closeSearch() {
+    setState(() => _searchActive = false);
+    _searchController.clear();
+    ref.read(movieCenterControllerProvider.notifier).setSearchQuery('');
+  }
 
   /// 返回链路：优先走调用方回调；缺省时直弹 Navigator（页面被
   /// PopScope(canPop: false) 拦截，maybePop 会回落到自身形成递归），
@@ -59,7 +176,7 @@ class _MovieMobileShell extends StatelessWidget {
       }
       return;
     }
-    final back = onBack;
+    final back = widget.onBack;
     if (back != null) {
       back();
       return;
@@ -81,16 +198,16 @@ class _MovieMobileShell extends StatelessWidget {
     final pageContent =
         isMore && !hosted
             ? const SizedBox.shrink()
-            : childOwnsScroll
+            : widget.childOwnsScroll
             ? Column(
               children: [
                 if (!hosted)
                   _MovieMobileTopBar(
-                    section: section,
-                    canManage: canManage,
-                    counts: counts,
-                    onRefresh: onRefresh,
-                    onSectionSelected: onSectionSelected,
+                    section: widget.section,
+                    canManage: widget.canManage,
+                    counts: widget.counts,
+                    onRefresh: widget.onRefresh,
+                    onSectionSelected: widget.onSectionSelected,
                   ),
                 Expanded(
                   child: RefreshIndicator(
@@ -98,14 +215,14 @@ class _MovieMobileShell extends StatelessWidget {
                         hosted
                             ? MobileEnvColors.ink
                             : context.movieRedesign.primary,
-                    onRefresh: onRefresh ?? () async {},
+                    onRefresh: widget.onRefresh ?? () async {},
                     child: MovieSectionTransition(
-                      section: section,
+                      section: widget.section,
                       slideDistance: 0.024,
                       // 分区自带 20 样例页边距，托管态不再叠 12 工位内衬。
                       child: Padding(
                         padding: EdgeInsets.all(hosted ? 0 : 12),
-                        child: child,
+                        child: widget.child,
                       ),
                     ),
                   ),
@@ -119,7 +236,7 @@ class _MovieMobileShell extends StatelessWidget {
               color:
                   hosted ? MobileEnvColors.ink : context.movieRedesign.primary,
               onRefresh: () async {
-                await (onRefresh ?? () async {})();
+                await (widget.onRefresh ?? () async {})();
                 await Future<void>.delayed(const Duration(milliseconds: 200));
               },
               child: CustomScrollView(
@@ -137,20 +254,20 @@ class _MovieMobileShell extends StatelessWidget {
                       titleSpacing: 0,
                       automaticallyImplyLeading: false,
                       title: _MovieMobileTopBar(
-                        section: section,
-                        canManage: canManage,
-                        counts: counts,
-                        onRefresh: onRefresh,
-                        onSectionSelected: onSectionSelected,
+                        section: widget.section,
+                        canManage: widget.canManage,
+                        counts: widget.counts,
+                        onRefresh: widget.onRefresh,
+                        onSectionSelected: widget.onSectionSelected,
                       ),
                     ),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                     sliver: SliverToBoxAdapter(
                       child: MovieSectionTransition(
-                        section: section,
+                        section: widget.section,
                         slideDistance: 0.024,
-                        child: child,
+                        child: widget.child,
                       ),
                     ),
                   ),
@@ -171,40 +288,53 @@ class _MovieMobileShell extends StatelessWidget {
         extendBody: !hosted,
         body: Builder(
           builder: (context) {
+            final l10n = AppLocalizations.of(context);
             final content = Column(
               children: [
                 if (hosted) ...[
                   MobileModuleHeader(
-                    title: AppLocalizations.of(context).moduleMoviesTitle,
-                    subtitle: AppLocalizations.of(context).moviesModuleSubtitle(
-                      counts[MovieSection.movies] ?? 0,
-                      counts[MovieSection.continueWatching] ?? 0,
+                    title: l10n.moduleMoviesTitle,
+                    subtitle: l10n.moviesModuleSubtitle(
+                      widget.counts[MovieSection.movies] ?? 0,
+                      widget.counts[MovieSection.continueWatching] ?? 0,
                     ),
                     onBack: () => _handleBack(context),
                     actions: [
                       MobileGlassIconButton(
-                        tooltip: AppLocalizations.of(context).videoSearch,
+                        tooltip: l10n.videoSearch,
                         icon: Icons.search_rounded,
-                        onPressed: () => _showMovieMobileSearchDialog(context),
+                        onPressed: _toggleSearch,
                       ),
                     ],
+                  ),
+                  _MovieHostedSearchBar(
+                    controller: _searchController,
+                    hintText: l10n.videoSearchMovieHint,
+                    closeTooltip: l10n.coreClose,
+                    active: _searchActive,
+                    onChanged:
+                        (value) => ref
+                            .read(movieCenterControllerProvider.notifier)
+                            .setSearchQuery(value),
+                    onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                    onClose: _closeSearch,
                   ),
                 ],
                 if (hosted)
                   _MovieMobileSectionBar(
-                    section: section,
-                    onSectionSelected: onSectionSelected,
+                    section: widget.section,
+                    onSectionSelected: widget.onSectionSelected,
                   ),
                 Expanded(
                   child: MobileSectionSwipe(
                     onSwipe: (toNext) {
                       final target = adjacentSection(
-                        _hostedSections,
+                        _MovieMobileShell._hostedSections,
                         effectiveSection,
                         toNext,
                       );
                       if (target != null) {
-                        onSectionSelected?.call(target);
+                        widget.onSectionSelected?.call(target);
                       }
                     },
                     child: pageContent,
@@ -233,10 +363,10 @@ class _MovieMobileShell extends StatelessWidget {
             hosted
                 ? null
                 : _MovieMobileBottomNav(
-                  section: section,
-                  counts: counts,
-                  canManage: canManage,
-                  onSectionSelected: onSectionSelected,
+                  section: widget.section,
+                  counts: widget.counts,
+                  canManage: widget.canManage,
+                  onSectionSelected: widget.onSectionSelected,
                   onMore: () => _openSectionDrawer(context),
                 ),
       ),
@@ -244,7 +374,7 @@ class _MovieMobileShell extends StatelessWidget {
   }
 
   int get _selectedIndex {
-    final index = _movieMobileBottomSections.indexOf(section);
+    final index = _movieMobileBottomSections.indexOf(widget.section);
     return index >= 0 ? index : _movieMobileBottomSections.length;
   }
 
@@ -260,10 +390,10 @@ class _MovieMobileShell extends StatelessWidget {
         return Align(
           alignment: Alignment.centerLeft,
           child: _MovieMobileDrawer(
-            section: section,
-            canManage: canManage,
-            counts: counts,
-            onSectionSelected: onSectionSelected,
+            section: widget.section,
+            canManage: widget.canManage,
+            counts: widget.counts,
+            onSectionSelected: widget.onSectionSelected,
           ),
         );
       },
@@ -440,7 +570,10 @@ class _MovieMobileTopBar extends StatelessWidget {
   }
 }
 
-/// 移动影视搜索浮层（hosted 横幅与非托管顶栏共用）。
+/// 非托管移动形态（手机浏览器窄窗）的影视搜索浮层。
+///
+/// 托管态不再走本入口：样例 module-overlay 的搜索钮展开页内玻璃搜索条，
+/// 结果就在当前分区里过滤，不另起一层工位弹窗。
 void _showMovieMobileSearchDialog(BuildContext context) {
   final l10n = AppLocalizations.of(context);
   showWorkstationGeneralDialog<void>(
@@ -450,15 +583,9 @@ void _showMovieMobileSearchDialog(BuildContext context) {
     barrierColor: Colors.black54,
     transitionDuration: const Duration(milliseconds: 250),
     pageBuilder:
-        (context, animation, secondaryAnimation) => Dialog(
+        (context, animation, secondaryAnimation) => const Dialog(
           backgroundColor: Colors.transparent,
-          child: _MovieSearchOverlay(
-            onSearch: (query) {
-              if (query.trim().isNotEmpty) {
-                Navigator.of(context).pop();
-              }
-            },
-          ),
+          child: _MovieSearchOverlay(),
         ),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
