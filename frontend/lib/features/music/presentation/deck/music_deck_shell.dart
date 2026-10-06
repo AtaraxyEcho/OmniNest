@@ -352,12 +352,14 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 center?.albums.length ?? 0,
               ),
               onBack: () {
-                // 模块内逐级回退：非首栏先回首页，首栏才离开模块。
-                if (_section != MusicDeckSection.home) {
-                  _selectSection(MusicDeckSection.home);
-                  return;
+                // 头部返回钮 = 直接离开模块回媒体库：分区切换不是导航历史，
+                // 早先「非首栏先回首页」要多按一次才出得去。
+                final navigator = Navigator.of(context);
+                if (navigator.canPop()) {
+                  navigator.pop();
+                } else {
+                  context.go('/library');
                 }
-                context.pop();
               },
               actions: [
                 MobileGlassIconButton(

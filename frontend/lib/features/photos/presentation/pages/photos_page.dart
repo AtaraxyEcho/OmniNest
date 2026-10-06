@@ -340,7 +340,9 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                     data.photos.length,
                     data.albums.length,
                   ),
-                  onBack: () => _handleHostedBack(context),
+                  // 头部返回钮 = 直接离开模块回媒体库；逐级回退（多选→
+                  // 图库→清搜索）只留给系统返回，见 PopScope 分支。
+                  onBack: () => _leavePhotos(context),
                   actions: [
                     MobileGlassIconButton(
                       tooltip: l10n.photosSearchHint,

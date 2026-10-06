@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
@@ -13,6 +14,58 @@ import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
 /// 托管态与 Photos/Music/Reader 同规则一律走触屏布局，
 /// 不复用桌面侧栏与模块顶栏（宽度只决定触屏内容网格的列数）。
 void main() {
+  testWidgets('托管态头部返回一次即离开影视模块', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          theme: OmniNestTheme.dark(),
+          home: Scaffold(
+            body: Builder(
+              builder:
+                  (context) => TextButton(
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder:
+                                (_) => MobileHostedRoute(
+                                  child: MovieShell(
+                                    section: MovieSection.movies,
+                                    child: const SizedBox(height: 240),
+                                  ),
+                                ),
+                          ),
+                        ),
+                    child: const Text('媒体库'),
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('媒体库'));
+    await tester.pumpAndSettle();
+
+    // 非首栏（影片）也只需一次：此前「先回 For you」与调用方的分区历史叠加，
+    // 形成 For you ⇄ 影片 乒乓，按多少次都出不了模块。
+    await tester.tap(find.byType(MobileGlassIconButton).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('媒体库'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('托管平板宽度使用触屏布局：无桌面顶栏与侧栏', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1280, 800);

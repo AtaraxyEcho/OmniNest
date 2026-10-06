@@ -46,11 +46,17 @@ class _MovieMobileShell extends StatelessWidget {
   /// PopScope(canPop: false) 拦截，maybePop 会回落到自身形成递归），
   /// 栈底直达链接回到媒体库空间。
   void _handleBack(BuildContext context) {
-    // 模块内逐级回退：非首栏先回 For you，首栏才离开模块。
-    if (MobileShellScope.isHosted(context) &&
-        effectiveSection != _hostedSections.first &&
-        onSectionSelected != null) {
-      onSectionSelected!(_hostedSections.first);
+    // 托管态左上角返回 = 直接离开模块回媒体库。分区切换不是导航历史：
+    // 早先「非首栏先回 For you」与调用方 `_sectionHistory` 的回退叠在一起
+    // 会形成乒乓（回 For you → 又恢复成影片 → 再回 For you），按多少次都
+    // 出不去本模块。
+    if (MobileShellScope.isHosted(context)) {
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        context.go('/library');
+      }
       return;
     }
     final back = onBack;
@@ -88,13 +94,17 @@ class _MovieMobileShell extends StatelessWidget {
                   ),
                 Expanded(
                   child: RefreshIndicator(
-                    color: context.movieRedesign.primary,
+                    color:
+                        hosted
+                            ? MobileEnvColors.ink
+                            : context.movieRedesign.primary,
                     onRefresh: onRefresh ?? () async {},
                     child: MovieSectionTransition(
                       section: section,
                       slideDistance: 0.024,
+                      // 分区自带 20 样例页边距，托管态不再叠 12 工位内衬。
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: EdgeInsets.all(hosted ? 0 : 12),
                         child: child,
                       ),
                     ),
@@ -106,7 +116,8 @@ class _MovieMobileShell extends StatelessWidget {
               displacement: 40,
               edgeOffset: hosted ? 0 : 44,
               strokeWidth: 2.5,
-              color: context.movieRedesign.primary,
+              color:
+                  hosted ? MobileEnvColors.ink : context.movieRedesign.primary,
               onRefresh: () async {
                 await (onRefresh ?? () async {})();
                 await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -154,7 +165,9 @@ class _MovieMobileShell extends StatelessWidget {
         _handleBack(context);
       },
       child: Scaffold(
-        backgroundColor: context.movieRedesign.background,
+        // 托管态底由环境层绘制（壳层与相册/音乐同规则），工位态保留重设计实底。
+        backgroundColor:
+            hosted ? Colors.transparent : context.movieRedesign.background,
         extendBody: !hosted,
         body: Builder(
           builder: (context) {

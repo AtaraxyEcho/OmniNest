@@ -169,7 +169,8 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
               right: 0,
               top: 0,
               child: Align(
-                alignment: Alignment.topCenter,
+                // 样例 `.segmented` 是 width:max-content 靠左，不居中。
+                alignment: Alignment.topLeft,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
                   child: Padding(
@@ -255,7 +256,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
               eyebrow: l10n.libraryJustInEyebrow,
               title: l10n.videoRedesignSubMovies,
               actionLabel: l10n.portalMobileViewAll,
-              onAction: () => context.push('/video'),
+              onAction: () => context.push('/video?section=continueWatching'),
             ),
             const SizedBox(height: 12),
             LibraryRail(
@@ -484,7 +485,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                   ? l10n.portalDockMovies
                   : l10n.libraryContinueWatchingTitle,
           actionLabel: l10n.portalMobileViewAll,
-          onAction: () => context.push('/video'),
+          onAction: () => context.push('/video?section=continueWatching'),
         ),
         const SizedBox(height: 12),
         movies.when(
