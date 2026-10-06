@@ -13283,6 +13283,12 @@ abstract class AppLocalizations {
   /// **'No movies match the current filters.'**
   String get videoMovieAdminEmpty;
 
+  /// No description provided for @videoAdminLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more ({loaded} / {total})'**
+  String videoAdminLoadMore(Object loaded, Object total);
+
   /// No description provided for @videoLibraryFilterAll.
   ///
   /// In en, this message translates to:
@@ -17861,6 +17867,24 @@ abstract class AppLocalizations {
   /// **'No new scan tasks.'**
   String get musicNoScanTask;
 
+  /// No description provided for @musicScanScannedFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files scanned'**
+  String musicScanScannedFiles(Object count);
+
+  /// No description provided for @musicScanIdleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No scan has run yet.'**
+  String get musicScanIdleHint;
+
+  /// No description provided for @musicScanStartConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Scans the local music directories again and updates the library.'**
+  String get musicScanStartConfirmMessage;
+
   /// No description provided for @musicScanStatus.
   ///
   /// In en, this message translates to:
@@ -21525,6 +21549,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recent plays grouped by day.'**
   String get toolsMusicHistoryDetail;
+
+  /// No description provided for @toolsMusicScanDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources, scans and matches'**
+  String get toolsMusicScanDetail;
+
+  /// No description provided for @toolsScraperDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched, pending and failed'**
+  String get toolsScraperDetail;
 
   /// No description provided for @accountSheetTitle.
   ///

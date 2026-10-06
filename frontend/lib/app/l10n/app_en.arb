@@ -3158,6 +3158,13 @@
   "videoSectionMovieAdmin": "Movie management",
   "videoMovieAdminSubtitle": "Manage metadata, scraping and transcoding for your library.",
   "videoMovieAdminEmpty": "No movies match the current filters.",
+  "videoAdminLoadMore": "Load more ({loaded} / {total})",
+  "@videoAdminLoadMore": {
+    "placeholders": {
+      "loaded": {},
+      "total": {}
+    }
+  },
   "videoLibraryFilterAll": "All",
   "videoPreviousPage": "Previous page",
   "videoNextPage": "Next page",
@@ -4256,6 +4263,15 @@
   },
   "musicScanSubtitle": "Scan audio files in the file library, parse tags, albums, artists and covers.",
   "musicNoScanTask": "No new scan tasks.",
+  "musicScanScannedFiles": "{count} files scanned",
+  "@musicScanScannedFiles": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "musicScanIdleHint": "No scan has run yet.",
+  "musicScanStartConfirmMessage":
+      "Scans the local music directories again and updates the library.",
   "musicScanStatus": "Task {id} · {status} · {progress}% · {files} files scanned",
   "@musicScanStatus": {
     "placeholders": {
@@ -5223,6 +5239,8 @@
   "toolsGroupPhotosReader": "Photos & reader",
   "toolsVideoCollectionsDetail": "Curated sets and seasons",
   "toolsMusicHistoryDetail": "Recent plays grouped by day.",
+  "toolsMusicScanDetail": "Sources, scans and matches",
+  "toolsScraperDetail": "Matched, pending and failed",
   "accountSheetTitle": "Account",
   "accountEntryNotifications": "Notifications",
   "accountEntryDevices": "Devices",

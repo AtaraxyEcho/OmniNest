@@ -7045,6 +7045,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoMovieAdminEmpty => '没有符合条件的影片。';
 
   @override
+  String videoAdminLoadMore(Object loaded, Object total) {
+    return '加载更多（已加载 $loaded / $total）';
+  }
+
+  @override
   String get videoLibraryFilterAll => '全部';
 
   @override
@@ -9474,6 +9479,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicNoScanTask => '当前没有新扫描任务。';
 
   @override
+  String musicScanScannedFiles(Object count) {
+    return '已扫描 $count 个文件';
+  }
+
+  @override
+  String get musicScanIdleHint => '还没有扫描记录。';
+
+  @override
+  String get musicScanStartConfirmMessage => '将重新扫描本地音乐目录并更新曲库。';
+
+  @override
   String musicScanStatus(
     Object id,
     Object status,
@@ -11438,6 +11454,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get toolsMusicHistoryDetail => '按天回看最近播放记录。';
+
+  @override
+  String get toolsMusicScanDetail => '来源、扫描与匹配';
+
+  @override
+  String get toolsScraperDetail => '已匹配、待处理与失败';
 
   @override
   String get accountSheetTitle => '账户';

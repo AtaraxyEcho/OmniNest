@@ -7266,6 +7266,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoMovieAdminEmpty => 'No movies match the current filters.';
 
   @override
+  String videoAdminLoadMore(Object loaded, Object total) {
+    return 'Load more ($loaded / $total)';
+  }
+
+  @override
   String get videoLibraryFilterAll => 'All';
 
   @override
@@ -9758,6 +9763,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicNoScanTask => 'No new scan tasks.';
 
   @override
+  String musicScanScannedFiles(Object count) {
+    return '$count files scanned';
+  }
+
+  @override
+  String get musicScanIdleHint => 'No scan has run yet.';
+
+  @override
+  String get musicScanStartConfirmMessage =>
+      'Scans the local music directories again and updates the library.';
+
+  @override
   String musicScanStatus(
     Object id,
     Object status,
@@ -11821,6 +11838,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get toolsMusicHistoryDetail => 'Recent plays grouped by day.';
+
+  @override
+  String get toolsMusicScanDetail => 'Sources, scans and matches';
+
+  @override
+  String get toolsScraperDetail => 'Matched, pending and failed';
 
   @override
   String get accountSheetTitle => 'Account';

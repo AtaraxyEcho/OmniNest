@@ -40,6 +40,10 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
             )
             .length;
 
+    if (MobileShellScope.isHosted(context)) {
+      return _buildHostedBody(context, l10n, state, entries);
+    }
+
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -107,6 +111,166 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
         ),
       ],
     );
+  }
+
+  /// 托管形态（原型 scraper 工具页）：真实计数四格 + 过滤分段 + 发丝线状态行。
+  ///
+  /// 稿子只有 Matched/Pending/Failed 三档，本应用默认过滤档是「全部」，
+  /// 保留第四档当前过滤态才有落点。行只读：单条刮削与 NFO 预览仍属工位
+  /// 分区动作，托管这页的承诺是「已匹配/待处理/失败」的概览。
+  Widget _buildHostedBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    MovieCenterState state,
+    List<_AdminRowEntry> entries,
+  ) {
+    final pageCount = (entries.length / _pageSize).ceil().clamp(1, 1 << 30);
+    final safePage = _page.clamp(0, pageCount - 1);
+    final pageEntries = entries
+        .skip(safePage * _pageSize)
+        .take(_pageSize)
+        .toList(growable: false);
+    int countWhere(bool Function(_AdminRowEntry) test) =>
+        entries.where(test).length;
+    bool statusIs(_AdminRowEntry entry, String status) =>
+        entry.item.metadataStatus.toUpperCase() == status;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MobileEnvSectionHeader(
+          title: l10n.videoSectionMovieAdmin,
+          eyebrow: l10n.videoMovieAdminSubtitle,
+        ),
+        const SizedBox(height: 10),
+        MobileTransferSummary(
+          entries: [
+            MobileTransferSummaryEntry(
+              value: '${entries.length}',
+              label: l10n.videoRedesignFilterAll,
+            ),
+            MobileTransferSummaryEntry(
+              value: '${countWhere((e) => statusIs(e, 'MATCHED'))}',
+              label: l10n.videoRedesignFilterMatched,
+            ),
+            MobileTransferSummaryEntry(
+              value: '${countWhere((e) => statusIs(e, 'PENDING'))}',
+              label: l10n.videoRedesignFilterPending,
+            ),
+            MobileTransferSummaryEntry(
+              value: '${countWhere((e) => statusIs(e, 'FAILED'))}',
+              label: l10n.videoRedesignFilterFailed,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: MobileSegmentedControl<MovieLibraryFilter>(
+            values: const [
+              MovieLibraryFilter.all,
+              MovieLibraryFilter.matched,
+              MovieLibraryFilter.pending,
+              MovieLibraryFilter.failed,
+            ],
+            selected: state.filter,
+            labelBuilder:
+                (filter) => switch (filter) {
+                  MovieLibraryFilter.all => l10n.videoRedesignFilterAll,
+                  MovieLibraryFilter.matched => l10n.videoRedesignFilterMatched,
+                  MovieLibraryFilter.pending => l10n.videoRedesignFilterPending,
+                  MovieLibraryFilter.failed => l10n.videoRedesignFilterFailed,
+                  MovieLibraryFilter.recent => l10n.videoRedesignFilterAll,
+                },
+            onSelected: (filter) {
+              setState(() => _page = 0);
+              _controller.setFilter(filter);
+            },
+          ),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              if (pageEntries.isEmpty)
+                EnvEmptyState(
+                  icon: OmniIcons.sparkle,
+                  title: l10n.videoMovieAdminEmpty,
+                ),
+              for (final entry in pageEntries)
+                MobileFeatureListRow(
+                  icon: OmniIcons.film,
+                  neutralIcon: true,
+                  title:
+                      entry.seriesTitle?.trim().isNotEmpty == true
+                          ? entry.seriesTitle!.trim()
+                          : entry.item.title,
+                  detail: _hostedRowMeta(context, l10n, entry),
+                  trailing: MobileStatusPill(
+                    label: _hostedStatusLabel(l10n, entry.item.metadataStatus),
+                    tone: _hostedStatusTone(entry.item.metadataStatus),
+                  ),
+                ),
+              if (safePage < pageCount - 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Center(
+                    child: TextButton(
+                      onPressed: () => setState(() => _page = safePage + 1),
+                      style: TextButton.styleFrom(
+                        foregroundColor: MobileEnvColors.inkMuted,
+                        minimumSize: const Size(0, 38),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        l10n.videoAdminLoadMore(
+                          safePage * _pageSize + pageEntries.length,
+                          entries.length,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _hostedRowMeta(
+    BuildContext context,
+    AppLocalizations l10n,
+    _AdminRowEntry entry,
+  ) {
+    final item = entry.item;
+    if (entry.episodeCount != null) {
+      final category =
+          entry.isAnime ? l10n.videoSectionAnime : l10n.videoSectionTvShows;
+      return '$category · ${l10n.videoSeriesEpisodeCount(entry.episodeCount!)}';
+    }
+    final category =
+        item.mediaType == 'MOVIE' ? l10n.videoSectionMovies : item.mediaType;
+    return '$category · ${item.year}';
+  }
+
+  String _hostedStatusLabel(AppLocalizations l10n, String status) {
+    return switch (status.toUpperCase()) {
+      'MATCHED' => l10n.videoMatched,
+      'PENDING' => l10n.videoPendingScrape,
+      'FAILED' => l10n.videoMatchFailed,
+      'MANUAL' => l10n.videoManualEdit,
+      _ => status,
+    };
+  }
+
+  MobileStatusTone _hostedStatusTone(String status) {
+    return switch (status.toUpperCase()) {
+      'FAILED' => MobileStatusTone.danger,
+      'PENDING' => MobileStatusTone.warning,
+      _ => MobileStatusTone.calm,
+    };
   }
 
   /// 四张统计卡：总条目 / 已匹配 / 待刮削 / 失败。

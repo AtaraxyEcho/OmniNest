@@ -11,10 +11,61 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_status_kit.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_filter_sort_bar.dart';
 
 void main() {
+  testWidgets('托管态影片管理用计数格与状态行，不落工位表', (tester) async {
+    final container = _container();
+    await _pumpSection(tester, container, hosted: true);
+
+    expect(find.byType(MobileEnvSectionHeader), findsOneWidget);
+    expect(find.byType(MobileTransferSummary), findsOneWidget);
+    expect(find.byType(MobileFeatureListRow), findsWidgets);
+    expect(find.byType(MobileStatusPill), findsWidgets);
+    expect(
+      find.byType(MovieRedesignFilterSortBar),
+      findsNothing,
+      reason: '托管态过滤走分段控件，不用工位筛选条',
+    );
+    expect(
+      find.byKey(const ValueKey('admin-row-number-1')),
+      findsNothing,
+      reason: '托管态行内没有工位序号列',
+    );
+    expect(find.text('影片管理'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('托管态过滤分段覆盖四档并反映当前过滤', (tester) async {
+    final container = _container();
+    await _pumpSection(tester, container, hosted: true);
+
+    // 泛型控件不能用 find.byType（比的是精确 Type），用类型谓词。
+    final control = find.byWidgetPredicate(
+      (widget) => widget is MobileSegmentedControl,
+    );
+    expect(control, findsOneWidget);
+    final segment = tester.widget<MobileSegmentedControl<MovieLibraryFilter>>(
+      control,
+    );
+    expect(segment.values, [
+      MovieLibraryFilter.all,
+      MovieLibraryFilter.matched,
+      MovieLibraryFilter.pending,
+      MovieLibraryFilter.failed,
+    ]);
+    expect(
+      segment.selected,
+      container.read(movieCenterControllerProvider).asData!.value.filter,
+      reason: '分段选中态与中心过滤同源',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('影片管理列表按剧聚合并显示连续序号', (tester) async {
     final container = _container();
     await _pumpSection(tester, container);
@@ -97,8 +148,9 @@ ProviderContainer _container() {
 
 Future<void> _pumpSection(
   WidgetTester tester,
-  ProviderContainer container,
-) async {
+  ProviderContainer container, {
+  bool hosted = false,
+}) async {
   // testWidgets 运行在 FakeAsync 区：dio 异步链需在 runAsync 中真实推进。
   await tester.runAsync(() async {
     await container.read(movieCenterControllerProvider.future);
@@ -107,6 +159,7 @@ Future<void> _pumpSection(
         .selectSection(MovieSection.management);
     await Future<void>.delayed(const Duration(milliseconds: 50));
   });
+  final section = Scaffold(body: const MovieAdminSection());
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -115,7 +168,7 @@ Future<void> _pumpSection(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
-        home: const Scaffold(body: MovieAdminSection()),
+        home: hosted ? MobileShellScope(hosted: true, child: section) : section,
       ),
     ),
   );

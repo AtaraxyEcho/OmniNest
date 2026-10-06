@@ -48,6 +48,18 @@ class WorkspaceToolsPage extends StatelessWidget {
             detail: l10n.toolsMusicHistoryDetail,
             onTap: () => context.push('/music/history'),
           ),
+          _WorkspaceToolRow(
+            icon: OmniIcons.queue,
+            title: l10n.musicDeckLocalManagement,
+            detail: l10n.toolsMusicScanDetail,
+            onTap: () => context.push('/music/scan'),
+          ),
+          _WorkspaceToolRow(
+            icon: OmniIcons.sparkle,
+            title: l10n.videoSectionMovieAdmin,
+            detail: l10n.toolsScraperDetail,
+            onTap: () => context.go('/video?section=management'),
+          ),
         ],
       ),
       _WorkspaceToolGroup(

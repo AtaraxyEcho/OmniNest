@@ -63,6 +63,12 @@ void main() {
               (context, state) =>
                   const Scaffold(body: Center(child: Text('photo-groups'))),
         ),
+        GoRoute(
+          path: '/music/scan',
+          builder:
+              (context, state) =>
+                  const Scaffold(body: Center(child: Text('music-scan'))),
+        ),
       ],
     );
     addTearDown(router.dispose);
@@ -118,10 +124,21 @@ void main() {
     expect(find.text('观看历史'), findsOneWidget);
     await reveal(tester, '播放历史');
     expect(find.text('播放历史'), findsOneWidget);
+    await reveal(tester, '本地资源');
+    expect(find.text('本地资源'), findsOneWidget);
     expect(find.text('相册与阅读'), findsOneWidget);
     await reveal(tester, '年·月');
     expect(find.text('年·月'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('本地资源行进入扫描页', (tester) async {
+    await pumpTools(tester);
+
+    await reveal(tester, '本地资源');
+    await tester.tap(find.text('本地资源'));
+    await tester.pumpAndSettle();
+    expect(find.text('music-scan'), findsOneWidget);
   });
 
   testWidgets('年·月行进入分组页', (tester) async {
@@ -140,6 +157,15 @@ void main() {
     await tester.tap(find.text('合集'));
     await tester.pumpAndSettle();
     expect(find.text('video-section:collections'), findsOneWidget);
+  });
+
+  testWidgets('影片管理行直达 /video?section=management', (tester) async {
+    await pumpTools(tester);
+
+    await reveal(tester, '影片管理');
+    await tester.tap(find.text('影片管理'));
+    await tester.pumpAndSettle();
+    expect(find.text('video-section:management'), findsOneWidget);
   });
 
   testWidgets('Files 行按分区直达 /files?section=', (tester) async {

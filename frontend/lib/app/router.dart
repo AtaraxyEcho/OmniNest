@@ -23,6 +23,7 @@ import 'package:omninest/features/files/presentation/pages/file_share_preview_pa
 import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_center_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_history_page.dart';
+import 'package:omninest/features/music/presentation/pages/music_scan_page.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_page.dart';
 import 'package:omninest/features/profile/presentation/pages/profile_page.dart';
@@ -240,6 +241,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       _animatedRoute(
         '/music/history',
         (_) => const MobileHostedRoute(child: MusicHistoryPage()),
+      ),
+      _animatedRoute(
+        '/music/scan',
+        (_) => const MobileHostedRoute(child: MusicScanPage()),
       ),
       _animatedRoute(
         '/photos/albums/:albumId',
