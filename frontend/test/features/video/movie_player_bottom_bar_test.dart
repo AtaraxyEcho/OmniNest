@@ -231,6 +231,19 @@ void main() {
     expect(3840 - fullscreenButtonRect.right, lessThan(80));
   });
 
+  testWidgets('移动紧凑行的每个控件保留 48 触控下限', (tester) async {
+    await _pumpBottomBar(tester, size: const Size(390, 844), isMobile: true);
+
+    final buttons = find.byType(MoviePlayerIconButton);
+    final count = buttons.evaluate().length;
+    expect(count, greaterThan(0));
+    for (var index = 0; index < count; index++) {
+      final size = tester.getSize(buttons.at(index));
+      expect(size, const Size(48, 48), reason: '触屏播放器控件不得沿用桌面 44 档');
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('desktop window resizing crosses responsive control densities', (
     tester,
   ) async {
