@@ -131,7 +131,7 @@ class _HostedCreateSection extends StatelessWidget {
         if (errorMessage != null) ...[
           const SizedBox(height: 8),
           Text(
-            '$l10n.filesCreateFailed：$errorMessage',
+            '${l10n.filesCreateFailed}：$errorMessage',
             style: const TextStyle(
               fontSize: 9, // ignore: font_size_whitelist
               height: 1.5,

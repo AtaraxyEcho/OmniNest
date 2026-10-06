@@ -17,8 +17,11 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
   @override
   FileShareLink? build() => null;
 
-  /// 创建分享链接并存储到 state。
-  Future<FileShareLink> createShareLink({
+  /// 创建分享链接并存储到状态。
+  ///
+  /// 失败不向调用方抛出：摘要落到 `AsyncError` 由分享面板内联展示，
+  /// 同时结束忙碌态，保证用户可改参数后重试。返回 null 表示未创建成功。
+  Future<FileShareLink?> createShareLink({
     required String resourceId,
     required String resourceType,
     String? password,
@@ -28,17 +31,22 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
   }) async {
     state = const AsyncLoading();
     final repository = ref.read(fileRepositoryProvider);
-    final link = await repository.createShareLink(
-      resourceId: resourceId,
-      resourceType: resourceType,
-      password: password,
-      generatePassword: generatePassword,
-      expiresAt: expiresAt,
-      maxAccessCount: maxAccessCount,
-    );
-    state = AsyncData(link);
-    await _refreshShareLists();
-    return link;
+    try {
+      final link = await repository.createShareLink(
+        resourceId: resourceId,
+        resourceType: resourceType,
+        password: password,
+        generatePassword: generatePassword,
+        expiresAt: expiresAt,
+        maxAccessCount: maxAccessCount,
+      );
+      state = AsyncData(link);
+      await _refreshShareLists();
+      return link;
+    } on Object catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      return null;
+    }
   }
 
   /// 撤销分享链接。
