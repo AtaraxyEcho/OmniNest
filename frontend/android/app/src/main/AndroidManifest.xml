@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- geolocator 合并进清单的 GeolocatorLocationService 声明为 location 型前台服务，
+         Android 14+ 缺此权限会在 startForeground 时抛 SecurityException。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:label="OmniNest"
