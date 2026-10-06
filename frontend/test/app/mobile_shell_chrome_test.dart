@@ -103,7 +103,12 @@ void main() {
     Brightness brightness = Brightness.light,
     bool backdropActive = false,
     Size surface = const Size(360, 860),
+    double textScale = 1.0,
   }) async {
+    if (textScale != 1.0) {
+      tester.platformDispatcher.textScaleFactorTestValue = textScale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    }
     await tester.binding.setSurfaceSize(surface);
     addTearDown(() async {
       await tester.binding.setSurfaceSize(null);
@@ -135,6 +140,35 @@ void main() {
             .toList();
     expect(matches, isNotEmpty);
     return matches.first;
+  }
+
+  /// 顶栏内容带（keyed 顶栏直上、唯一带定高的 SizedBox）。
+  SizedBox topBarBandOf(WidgetTester tester) {
+    final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));
+    expect(topBar, findsOneWidget);
+    final bands =
+        tester
+            .widgetList<SizedBox>(
+              find.ancestor(of: topBar, matching: find.byType(SizedBox)),
+            )
+            .where((widget) => widget.height != null)
+            .toList();
+    expect(bands, hasLength(1), reason: '顶栏只有一个定高内容带');
+    return bands.single;
+  }
+
+  /// 底栏四枚空间舱体（约束高 30 的 AnimatedContainer）。
+  Finder bottomCapsules({Color? background}) {
+    return find.descendant(
+      of: find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is AnimatedContainer &&
+            widget.constraints?.maxHeight == 30 &&
+            (background == null ||
+                (widget.decoration as BoxDecoration?)?.color == background),
+      ),
+    );
   }
 
   Future<void> tapNav(WidgetTester tester, String label) async {
@@ -179,13 +213,12 @@ void main() {
     );
     expect(searchIcon.color, MobileEnvColors.ink);
     // 顶栏内容行之上没有带颜色背景的装饰盒（透明呈现在环境上）。
-    final topRow = find.byWidgetPredicate(
-      (widget) => widget is SizedBox && widget.height == 64,
-    );
-    expect(topRow, findsOneWidget);
+    // 基准内容带 64，无障碍字号下由 scaleHeight 自撑，因此只断言下限。
+    final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));
+    expect(topBarBandOf(tester).height, greaterThanOrEqualTo(64));
     final paintedAncestor =
         find
-            .ancestor(of: topRow, matching: find.byType(DecoratedBox))
+            .ancestor(of: topBar, matching: find.byType(DecoratedBox))
             .evaluate()
             .where((element) => element.widget is DecoratedBox)
             .where(
@@ -194,6 +227,13 @@ void main() {
             )
             .toList();
     expect(paintedAncestor, isEmpty, reason: '顶栏不应绘制背景装饰');
+  });
+
+  testWidgets('1.6x 无障碍字号下顶栏自撑高度且无溢出', (tester) async {
+    // 微型字号是签名密度不放大，标题/副题靠内容带自撑吸收。
+    await pumpShell(tester, initialLocation: '/library', textScale: 1.6);
+    expect(topBarBandOf(tester).height, greaterThan(64));
+    expect(tester.takeException(), isNull, reason: '大字号下顶栏不得溢出');
   });
 
   testWidgets('手机宽度浮动胶囊底栏：几何与原型一致', (tester) async {
@@ -219,40 +259,47 @@ void main() {
 
   testWidgets('选中胶囊为原型 lime，未选中为弱化前景', (tester) async {
     await pumpShell(tester, initialLocation: '/portal');
-    final pills =
-        tester
-            .widgetList<AnimatedContainer>(
-              find.descendant(
-                of: find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
-                matching: find.byType(AnimatedContainer),
-              ),
-            )
-            .toList();
-    expect(pills, isNotEmpty);
-    final selected =
-        pills
-            .where(
-              (container) =>
-                  (container.decoration as BoxDecoration?)?.color ==
-                  MobileEnvColors.accent,
-            )
-            .toList();
-    expect(selected, hasLength(1), reason: '仅当前空间胶囊高亮');
+    // 原型 `.bottom-nav button > span` 为 min-width:48 + height:30：切换空间时
+    // 只有配色与投影变化，舱体宽度不得参与补间（34→48 会让整排图标抖动）。
+    expect(bottomCapsules(), findsNWidgets(4), reason: '四个空间各一枚舱体');
+    for (var index = 0; index < 4; index++) {
+      expect(
+        tester.getSize(bottomCapsules().at(index)),
+        const Size(48, 30),
+        reason: '选中与未选中同宽',
+      );
+    }
+    expect(
+      bottomCapsules(background: MobileEnvColors.accent),
+      findsOneWidget,
+      reason: '仅当前空间胶囊高亮',
+    );
     // 选中图标为强调色上的深前景。
     final homeIcon = tester.widget<OmniIcon>(
       find.descendant(
-        of: find.byWidgetPredicate(
-          (widget) =>
-              widget is AnimatedContainer &&
-              (widget.decoration as BoxDecoration?)?.color ==
-                  MobileEnvColors.accent,
-        ),
+        of: bottomCapsules(background: MobileEnvColors.accent),
         matching: find.byWidgetPredicate(
           (widget) => widget is OmniIcon && widget.icon == OmniIcons.home,
         ),
       ),
     );
     expect(homeIcon.color, MobileEnvColors.onAccent);
+
+    // 切换空间后仍是四枚等宽舱体，高亮唯一地移到新空间。
+    await tapNav(tester, '媒体库');
+    expect(bottomCapsules(), findsNWidgets(4));
+    for (var index = 0; index < 4; index++) {
+      expect(
+        tester.getSize(bottomCapsules().at(index)),
+        const Size(48, 30),
+        reason: '切换过程不改变舱体宽度',
+      );
+    }
+    expect(
+      bottomCapsules(background: MobileEnvColors.accent),
+      findsOneWidget,
+      reason: '高亮舱体唯一',
+    );
   });
 
   testWidgets('浅色根主题下壳层强制暗色基底，无壁纸时壳底为舞台色', (tester) async {
@@ -358,21 +405,47 @@ void main() {
   });
 
   testWidgets('600-979 档：tab 组收成 460 胶囊，顶栏保持 720 限宽', (tester) async {
+    // 原型 600-979 档 `.bottom-nav` 为 min(460, 100%-24) 居中，三档边界同式。
+    for (final width in <double>[600, 720, 979]) {
+      await pumpShell(
+        tester,
+        initialLocation: '/portal',
+        surface: Size(width, 900),
+      );
+      final nav = find.byKey(const ValueKey('omninest.mobile.bottom-nav'));
+      expect(
+        tester.getSize(nav),
+        const Size(460, 70),
+        reason: '$width 视口下 tab 组收成 460',
+      );
+      expect(
+        tester.getRect(nav).left,
+        closeTo((width - 460) / 2, 0.5),
+        reason: '$width 视口下 tab 组居中',
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('omninest.mobile.top-bar')))
+            .width,
+        width < 720 ? width : 720,
+        reason: '$width 视口下顶栏按壳层上限 720 收拢，窄于此档时铺满视口',
+      );
+    }
+  });
+
+  testWidgets('980 起 tab 组回到壳层 720 上限并与顶栏同边', (tester) async {
     await pumpShell(
       tester,
       initialLocation: '/portal',
-      surface: const Size(720, 900),
+      surface: const Size(980, 900),
     );
-    expect(
-      tester.getSize(find.byKey(const ValueKey('omninest.mobile.bottom-nav'))),
-      const Size(460, 70),
-    );
-    expect(
-      tester
-          .getSize(find.byKey(const ValueKey('omninest.mobile.top-bar')))
-          .width,
-      720,
-    );
+    final nav = find.byKey(const ValueKey('omninest.mobile.bottom-nav'));
+    expect(tester.getSize(nav), const Size(720, 70));
+    final navRect = tester.getRect(nav);
+    expect(navRect.left, closeTo((980 - 720) / 2, 0.5));
+    final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));
+    expect(tester.getSize(topBar).width, 720);
+    expect(tester.getRect(topBar).left, closeTo(navRect.left, 0.5));
   });
 }
 

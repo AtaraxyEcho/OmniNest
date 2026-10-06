@@ -422,13 +422,15 @@ class _MobileBottomDestination extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
-                // 减弱动效：选中舱直接落到终态形状与配色，跳过补间。
+                // 原型 `.bottom-nav button > span` 是 min-width:48 + height:30，
+                // 选中只换底色与投影，舱体宽度不随状态跳变；减弱动效时
+                // 连配色补间一起跳过，直接落终态。
                 duration: MotionToken.reduced(
                   context,
                   MobileLayoutTokens.stateDuration,
                 ),
                 curve: MobileLayoutTokens.motionCurve,
-                width: selected ? 48 : 34,
+                width: 48,
                 height: 30,
                 decoration: BoxDecoration(
                   color: selected ? MobileEnvColors.accent : Colors.transparent,
