@@ -255,9 +255,7 @@ void main() {
       expect(desktop.lengthInBytes, greaterThan(100 * 1024));
       expect(mobile.lengthInBytes, greaterThan(50 * 1024));
       // WebP 必须能被引擎解码，否则移动端默认底图整块落空。
-      final codec = await ui.instantiateImageCodec(
-        mobile.buffer.asUint8List(),
-      );
+      final codec = await ui.instantiateImageCodec(mobile.buffer.asUint8List());
       final frame = (await codec.getNextFrame()).image;
       expect(frame.width, greaterThan(0));
       expect(frame.height, greaterThan(frame.width), reason: '移动端底图是竖幅');

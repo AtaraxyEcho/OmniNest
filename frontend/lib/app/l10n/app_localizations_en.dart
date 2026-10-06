@@ -7362,6 +7362,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Supports user-defined or auto-generated collections, such as movie universes, director filmographies and family collections.';
 
   @override
+  String videoCollectionItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
   String get videoNewCollection => 'New Collection';
 
   @override
@@ -10562,6 +10567,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosViewTimeline => 'Timeline';
 
   @override
+  String get photosGroupsTitle => 'Years & months';
+
+  @override
+  String get photosGroupsSubtitle => 'Browse your photo timeline';
+
+  @override
+  String get photosGroupsEmptyHint =>
+      'Months and photo counts appear here once you have photos.';
+
+  @override
   String get photosViewGroups => 'Groups';
 
   @override
@@ -11797,6 +11812,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get toolsGroupMedia => 'Movies & music';
+
+  @override
+  String get toolsGroupPhotosReader => 'Photos & reader';
+
+  @override
+  String get toolsVideoCollectionsDetail => 'Curated sets and seasons';
 
   @override
   String get toolsMusicHistoryDetail => 'Recent plays grouped by day.';

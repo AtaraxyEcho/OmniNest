@@ -29,6 +29,20 @@ enum MovieSection {
   management,
 }
 
+/// 分区的路由名解析：只接受 `MovieSection` 的枚举名（`/video?section=`），
+/// 其他值回 null 由页面按默认分区渲染，避免把任意字符串当分区。
+MovieSection? movieSectionFromRouteName(String? name) {
+  if (name == null || name.isEmpty) {
+    return null;
+  }
+  for (final section in MovieSection.values) {
+    if (section.name == name) {
+      return section;
+    }
+  }
+  return null;
+}
+
 enum MovieLibraryFilter { all, matched, pending, failed, recent }
 
 enum MovieSortBy { dateAdded, releaseDate, rating, title }

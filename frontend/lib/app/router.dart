@@ -32,6 +32,7 @@ import 'package:omninest/features/photos/presentation/pages/photo_album_detail_p
 import 'package:omninest/features/photos/presentation/pages/photo_album_photo_picker_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_editor_page.dart';
+import 'package:omninest/features/photos/presentation/pages/photo_groups_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_shared_album_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_shared_item_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_period_page.dart';
@@ -52,6 +53,7 @@ import 'package:omninest/features/reader/presentation/pages/comic_import_confirm
 import 'package:omninest/features/search/presentation/pages/mobile_search_page.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:omninest/features/setup/presentation/pages/initial_setup_page.dart';
+import 'package:omninest/features/video/application/movie_center_state.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_detail_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_player_page.dart';
@@ -191,7 +193,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       _animatedRoute(
         '/video',
-        (state) => const MobileHostedRoute(child: MovieCenterPage()),
+        (state) => MobileHostedRoute(
+          child: MovieCenterPage(
+            initialSection: movieSectionFromRouteName(
+              state.uri.queryParameters['section'],
+            ),
+          ),
+        ),
       ),
       _animatedRoute(
         '/video/:videoId',
@@ -270,6 +278,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           );
         },
+      ),
+      _animatedRoute(
+        '/photos/groups',
+        (_) => const MobileHostedRoute(child: PhotoGroupsPage()),
       ),
       _animatedRoute(
         '/photos/period/:year/:month',

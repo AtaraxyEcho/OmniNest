@@ -32,7 +32,10 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 part 'movie_center_sample_rails.dart';
 
 class MovieCenterPage extends ConsumerStatefulWidget {
-  const MovieCenterPage({super.key});
+  const MovieCenterPage({this.initialSection, super.key});
+
+  /// 深链直达的分区（工具总入口按分区进入）；为空时托管态落 For you。
+  final MovieSection? initialSection;
 
   @override
   ConsumerState<MovieCenterPage> createState() => _MovieCenterPageState();
@@ -58,10 +61,13 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
         return;
       }
       final controller = ref.read(movieCenterControllerProvider.notifier);
-      // 进入即定位第一栏 For you（托管态）：先同步切分区再刷新，
-      // 单一写入顺序——此前一次性切栏与 refresh 并发，refresh 以
-      // 旧分区（电影）回写，造成落地电影档/返回观感来回切换。
-      if (_hostedScope) {
+      // 进入即定位第一栏 For you（托管态），深链带分区时以深链为准：
+      // 先同步切分区再刷新，单一写入顺序——此前一次性切栏与 refresh 并发，
+      // refresh 以旧分区（电影）回写，造成落地电影档/返回观感来回切换。
+      final entrySection = widget.initialSection;
+      if (entrySection != null) {
+        controller.selectSection(entrySection);
+      } else if (_hostedScope) {
         controller.selectSection(MovieSection.continueWatching);
       }
       final now = DateTime.now();
@@ -238,6 +244,17 @@ class _MovieContent extends ConsumerWidget {
         child: AppLoading.grid(gridAspectRatio: 0.62),
       );
     }
+    // 无 activity:write 的角色隐藏删历史入口，只保留浏览；托管与工位共用
+    // 同一组回调，避免两处能力判断漂移。
+    final canManageActivity =
+        ref.watch(userCapabilitiesProvider).canManageOwnActivity;
+    final historyController = ref.read(movieCenterControllerProvider.notifier);
+    final ValueChanged<MovieWatchHistory>? onHistoryDelete =
+        canManageActivity
+            ? (entry) => historyController.deleteHistoryItem(entry)
+            : null;
+    final VoidCallback? onHistoryClear =
+        canManageActivity ? () => historyController.clearHistory() : null;
     return switch (state.section) {
       MovieSection.movies => _MovieLibrarySection(state: state),
       MovieSection.tvShows => _SeriesGridSection(
@@ -254,37 +271,38 @@ class _MovieContent extends ConsumerWidget {
         series: state.filteredAnimeSeries,
         anime: true,
       ),
-      MovieSection.collections => CollectionsSection(
-        totalCount: state.movies.length,
-        collections: state.collections,
-      ),
+      MovieSection.collections =>
+        MobileShellScope.isHosted(context)
+            ? Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: HostedCollectionsSection(collections: state.collections),
+            )
+            : CollectionsSection(
+              totalCount: state.movies.length,
+              collections: state.collections,
+            ),
       MovieSection.recent => _RecentSection(state: state),
       MovieSection.continueWatching => _ContinueSection(state: state),
       MovieSection.favorites => _FavoritesSection(state: state),
-      MovieSection.history => HistorySection(
-        items: state.watchHistory,
-        hasMore: state.historyPaging.hasMore,
-        isLoadingMore: state.historyPaging.isLoadingMore,
-        onLoadMore:
-            () =>
-                ref
-                    .read(movieCenterControllerProvider.notifier)
-                    .loadMoreHistory(),
-        // 无 activity:write 的角色隐藏删历史入口，只保留浏览。
-        onDelete:
-            ref.watch(userCapabilitiesProvider).canManageOwnActivity
-                ? (entry) => ref
-                    .read(movieCenterControllerProvider.notifier)
-                    .deleteHistoryItem(entry)
-                : null,
-        onClearAll:
-            ref.watch(userCapabilitiesProvider).canManageOwnActivity
-                ? () =>
-                    ref
-                        .read(movieCenterControllerProvider.notifier)
-                        .clearHistory()
-                : null,
-      ),
+      MovieSection.history =>
+        MobileShellScope.isHosted(context)
+            ? Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: HostedHistorySection(
+                items: state.watchHistory,
+                isLoadingMore: state.historyPaging.isLoadingMore,
+                onDelete: onHistoryDelete,
+                onClearAll: onHistoryClear,
+              ),
+            )
+            : HistorySection(
+              items: state.watchHistory,
+              hasMore: state.historyPaging.hasMore,
+              isLoadingMore: state.historyPaging.isLoadingMore,
+              onLoadMore: () => historyController.loadMoreHistory(),
+              onDelete: onHistoryDelete,
+              onClearAll: onHistoryClear,
+            ),
       MovieSection.management => const MovieAdminSection(),
     };
   }

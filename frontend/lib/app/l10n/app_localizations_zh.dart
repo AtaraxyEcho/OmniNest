@@ -7139,6 +7139,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoCollectionsSubtitle => '支持用户自定义或自动生成合集，例如电影宇宙、导演作品集和家庭收藏。';
 
   @override
+  String videoCollectionItemCount(Object count) {
+    return '$count 项';
+  }
+
+  @override
   String get videoNewCollection => '新建合集';
 
   @override
@@ -10242,6 +10247,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosViewTimeline => '时间线';
 
   @override
+  String get photosGroupsTitle => '年·月';
+
+  @override
+  String get photosGroupsSubtitle => '按年月浏览照片时间线';
+
+  @override
+  String get photosGroupsEmptyHint => '有照片后这里会按年份列出月份与张数。';
+
+  @override
   String get photosViewGroups => '分组';
 
   @override
@@ -11415,6 +11429,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get toolsGroupMedia => '影视与音乐';
+
+  @override
+  String get toolsGroupPhotosReader => '相册与阅读';
+
+  @override
+  String get toolsVideoCollectionsDetail => '自定义与自动生成的合集';
 
   @override
   String get toolsMusicHistoryDetail => '按天回看最近播放记录。';

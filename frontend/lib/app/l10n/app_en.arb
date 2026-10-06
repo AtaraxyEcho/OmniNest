@@ -3211,6 +3211,12 @@
   "videoContinueSubtitle": "Shows unfinished movies and TV shows, click card to resume playback.",
   "videoNoContinueRecord": "No continue watching records.",
   "videoCollectionsSubtitle": "Supports user-defined or auto-generated collections, such as movie universes, director filmographies and family collections.",
+  "videoCollectionItemCount": "{count} items",
+  "@videoCollectionItemCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "videoNewCollection": "New Collection",
   "videoAllMedia": "All Media",
   "videoCustomCollection": "Custom Collection",
@@ -4692,6 +4698,9 @@
   "photosViewGridDay": "Grid · By day",
   "photosViewGridMonth": "Grid · By month",
   "photosViewTimeline": "Timeline",
+  "photosGroupsTitle": "Years & months",
+  "photosGroupsSubtitle": "Browse your photo timeline",
+  "photosGroupsEmptyHint": "Months and photo counts appear here once you have photos.",
   "photosViewGroups": "Groups",
   "photosToggleSelection": "Toggle selection",
   "photosTrashSubtitle": "{count} items · automatically deleted after 30 days",
@@ -5211,6 +5220,8 @@
       "Manage files, films, music and this server without leaving the interface you already know.",
   "toolsGroupFiles": "Files",
   "toolsGroupMedia": "Movies & music",
+  "toolsGroupPhotosReader": "Photos & reader",
+  "toolsVideoCollectionsDetail": "Curated sets and seasons",
   "toolsMusicHistoryDetail": "Recent plays grouped by day.",
   "accountSheetTitle": "Account",
   "accountEntryNotifications": "Notifications",

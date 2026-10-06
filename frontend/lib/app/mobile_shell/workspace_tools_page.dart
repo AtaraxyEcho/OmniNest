@@ -31,10 +31,33 @@ class WorkspaceToolsPage extends StatelessWidget {
         label: l10n.toolsGroupMedia,
         rows: <_WorkspaceToolRow>[
           _WorkspaceToolRow(
+            icon: OmniIcons.film,
+            title: l10n.videoSectionCollections,
+            detail: l10n.toolsVideoCollectionsDetail,
+            onTap: () => context.go('/video?section=collections'),
+          ),
+          _WorkspaceToolRow(
+            icon: OmniIcons.list,
+            title: l10n.videoSectionHistory,
+            detail: l10n.videoHistorySubtitle,
+            onTap: () => context.go('/video?section=history'),
+          ),
+          _WorkspaceToolRow(
             icon: OmniIcons.music,
             title: l10n.musicHistoryTitle,
             detail: l10n.toolsMusicHistoryDetail,
             onTap: () => context.push('/music/history'),
+          ),
+        ],
+      ),
+      _WorkspaceToolGroup(
+        label: l10n.toolsGroupPhotosReader,
+        rows: <_WorkspaceToolRow>[
+          _WorkspaceToolRow(
+            icon: OmniIcons.image,
+            title: l10n.photosGroupsTitle,
+            detail: l10n.photosGroupsSubtitle,
+            onTap: () => context.push('/photos/groups'),
           ),
         ],
       ),

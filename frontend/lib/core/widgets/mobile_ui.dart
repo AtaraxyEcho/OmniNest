@@ -585,6 +585,38 @@ class MobileGlassIconButton extends StatelessWidget {
   }
 }
 
+/// 原型 `.recycle-actions button` / 眉标动作位的行内图标钮：38 见方、
+/// 透明底、弱化前景；用于删除、新建这类挂在行内或眉标右侧的轻动作。
+class MobileEnvInlineIconButton extends StatelessWidget {
+  const MobileEnvInlineIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.iconSize = 18,
+    super.key,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox.square(
+          dimension: 38,
+          child: Icon(icon, size: iconSize, color: MobileEnvColors.inkMuted),
+        ),
+      ),
+    );
+  }
+}
+
 /// 模块全屏页玻璃横幅（样例 module-overlay > header）：返回圆钮 +
 /// 居中标题/副题 + 右侧动作钮位；hosted 模块页（音乐/照片/影视/通知）
 /// 由根级路由承载时统一使用。

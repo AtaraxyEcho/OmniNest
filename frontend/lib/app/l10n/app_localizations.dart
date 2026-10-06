@@ -13451,6 +13451,12 @@ abstract class AppLocalizations {
   /// **'Supports user-defined or auto-generated collections, such as movie universes, director filmographies and family collections.'**
   String get videoCollectionsSubtitle;
 
+  /// No description provided for @videoCollectionItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String videoCollectionItemCount(Object count);
+
   /// No description provided for @videoNewCollection.
   ///
   /// In en, this message translates to:
@@ -19264,6 +19270,24 @@ abstract class AppLocalizations {
   /// **'Timeline'**
   String get photosViewTimeline;
 
+  /// No description provided for @photosGroupsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Years & months'**
+  String get photosGroupsTitle;
+
+  /// No description provided for @photosGroupsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse your photo timeline'**
+  String get photosGroupsSubtitle;
+
+  /// No description provided for @photosGroupsEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Months and photo counts appear here once you have photos.'**
+  String get photosGroupsEmptyHint;
+
   /// No description provided for @photosViewGroups.
   ///
   /// In en, this message translates to:
@@ -21483,6 +21507,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Movies & music'**
   String get toolsGroupMedia;
+
+  /// No description provided for @toolsGroupPhotosReader.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos & reader'**
+  String get toolsGroupPhotosReader;
+
+  /// No description provided for @toolsVideoCollectionsDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Curated sets and seasons'**
+  String get toolsVideoCollectionsDetail;
 
   /// No description provided for @toolsMusicHistoryDetail.
   ///

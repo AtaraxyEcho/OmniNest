@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -95,9 +99,9 @@ class HistorySection extends StatelessWidget {
                   MovieRedesignHistoryEntry(
                     videoItemId: item.videoItemId,
                     title: item.title,
-                    subtitle: _subtitleOf(context, item),
+                    subtitle: movieHistoryDurationLabel(item),
                     timeText: movieRedesignRelativeTime(context, item.playedAt),
-                    progressText: _progressText(item),
+                    progressText: movieHistoryProgressLabel(item),
                     thumbUrl: item.posterUrl,
                     onTap:
                         item.videoItemId.isEmpty
@@ -116,19 +120,114 @@ class HistorySection extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _subtitleOf(BuildContext context, MovieWatchHistory item) {
-    final duration = movieRedesignFormatDuration(item.durationSeconds);
-    if (duration.isEmpty) {
-      return item.completed ? '100%' : '';
-    }
-    return duration;
+String movieHistoryDurationLabel(MovieWatchHistory item) {
+  final duration = movieRedesignFormatDuration(item.durationSeconds);
+  if (duration.isEmpty) {
+    return item.completed ? '100%' : '';
+  }
+  return duration;
+}
+
+String movieHistoryProgressLabel(MovieWatchHistory item) {
+  if (item.completed) {
+    return '100%';
+  }
+  return '${item.progressPercent.round()}%';
+}
+
+/// 观看历史的托管形态（原型工具页 `.feature-list` 行族）：环境眉标 +
+/// 发丝线行（42 图标舱 + 名称/明细 + 行内动作），删除走 `.recycle-actions`
+/// 同式的 38 行内钮，不额外开编辑态。
+class HostedHistorySection extends StatelessWidget {
+  const HostedHistorySection({
+    required this.items,
+    this.onDelete,
+    this.onClearAll,
+    this.isLoadingMore = false,
+    super.key,
+  });
+
+  final List<MovieWatchHistory> items;
+  final ValueChanged<MovieWatchHistory>? onDelete;
+  final VoidCallback? onClearAll;
+  final bool isLoadingMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MobileEnvSectionHeader(
+          title: l10n.videoSectionHistory,
+          eyebrow: l10n.videoHistorySubtitle,
+          action:
+              onClearAll == null || items.isEmpty
+                  ? null
+                  : MobileEnvInlineIconButton(
+                    tooltip: l10n.videoClearHistory,
+                    icon: Icons.delete_sweep_outlined,
+                    onTap: onClearAll!,
+                  ),
+        ),
+        if (items.isEmpty)
+          EnvEmptyState(
+            icon: OmniIcons.film,
+            title: l10n.videoNoWatchHistory,
+            message: l10n.videoRedesignNoHistoryHint,
+          )
+        else
+          for (final item in items)
+            MobileFeatureListRow(
+              icon: OmniIcons.film,
+              neutralIcon: true,
+              title: item.title,
+              detail: _detailOf(context, item),
+              onTap:
+                  item.videoItemId.isEmpty
+                      ? null
+                      : () => context.push(
+                        movieDetailRouteFromIds(
+                          videoItemId: item.videoItemId,
+                          seriesId: item.seriesId,
+                        ),
+                      ),
+              trailing:
+                  onDelete == null
+                      ? null
+                      : MobileEnvInlineIconButton(
+                        tooltip: l10n.coreDelete,
+                        icon: Icons.close,
+                        onTap: () => onDelete!(item),
+                      ),
+            ),
+        if (isLoadingMore)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: MobileEnvColors.inkMuted,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
-  String _progressText(MovieWatchHistory item) {
-    if (item.completed) {
-      return '100%';
-    }
-    return '${item.progressPercent.round()}%';
+  String _detailOf(BuildContext context, MovieWatchHistory item) {
+    final time = movieRedesignRelativeTime(context, item.playedAt);
+    final progress = movieHistoryProgressLabel(item);
+    final duration = movieHistoryDurationLabel(item);
+    return [
+      time,
+      if (duration.isNotEmpty) duration,
+      if (progress.isNotEmpty && progress != duration) progress,
+    ].join(' · ');
   }
 }

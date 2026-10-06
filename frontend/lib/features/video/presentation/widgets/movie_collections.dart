@@ -15,6 +15,9 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 
 import 'movie_feedback.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 class CollectionsSection extends ConsumerWidget {
@@ -108,6 +111,51 @@ class CollectionsSection extends ConsumerWidget {
               );
             },
           ),
+      ],
+    );
+  }
+}
+
+/// 合集的托管形态（原型工具页 `.feature-list` 行族）：环境眉标 + 新建动作 +
+/// 发丝线行（名称 / 项数 / 箭头）。点行与新建仍走工位同一套面板，
+/// `showWorkstationDialog` 在托管态自动分流为玻璃贴底面板。
+class HostedCollectionsSection extends ConsumerWidget {
+  const HostedCollectionsSection({required this.collections, super.key});
+
+  final List<MovieCollection> collections;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MobileEnvSectionHeader(
+          title: l10n.videoSectionCollections,
+          action: MobileEnvInlineIconButton(
+            tooltip: l10n.videoNewCollection,
+            icon: Icons.add_rounded,
+            onTap: () => unawaited(_showCreateCollectionDialog(context, ref)),
+          ),
+        ),
+        if (collections.isEmpty)
+          EnvEmptyState(
+            icon: OmniIcons.film,
+            title: l10n.videoNoMediaItems,
+            actionLabel: l10n.videoNewCollection,
+            onAction:
+                () => unawaited(_showCreateCollectionDialog(context, ref)),
+          )
+        else
+          for (final item in collections)
+            MobileFeatureListRow(
+              icon: OmniIcons.film,
+              neutralIcon: true,
+              title: item.name,
+              detail: l10n.videoCollectionItemCount(item.itemCount),
+              showChevron: true,
+              onTap: () => unawaited(_showCollectionItems(context, ref, item)),
+            ),
       ],
     );
   }
