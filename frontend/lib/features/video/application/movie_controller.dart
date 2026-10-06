@@ -557,6 +557,11 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   }
 
   void _applyRefreshedState(MovieCenterState? current, MovieCenterState next) {
+    // 分区以回写时刻的实况为准：冷启动时页面在同一帧内先切栏再刷新，
+    // 此处 current 是 build 完成前的空快照，沿用会把刚选定的深链分区
+    // （或托管首栏 For you）静默退回电影。
+    final liveSection =
+        state.asData?.value.section ?? current?.section ?? next.section;
     state = AsyncData(
       (current ??
               MovieCenterState(
@@ -570,6 +575,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
                 tasks: const [],
               ))
           .copyWith(
+            section: liveSection,
             dashboard: next.dashboard,
             movies: next.movies,
             // 实时刷新时 seriesByType 失败会得到空列表；已有数据时保留旧值，

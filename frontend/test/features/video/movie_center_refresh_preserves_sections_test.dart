@@ -56,6 +56,41 @@ void main() {
     await _waitSectionLoaded(container, MovieSection.favorites);
     expect(adapter.favoritesRequests, 2);
   });
+
+  test('冷启动同帧切栏加刷新不丢深链分区', () async {
+    final adapter = _RefreshApiAdapter();
+    final container = ProviderContainer.test(
+      overrides: [
+        movieApiProvider.overrideWithValue(
+          MovieApi(
+            ApiClient(
+              const AppEnvironment(
+                apiBaseUrl: 'http://localhost:8080/api/v1',
+                wsBaseUrl: 'ws://localhost:8080/ws',
+              ),
+              httpClientAdapter: adapter,
+            ),
+          ),
+        ),
+      ],
+    );
+    // 不等待首次 build：模拟页面 initState 在 provider 仍在建制的同一帧内
+    // 先 selectSection 再 refresh。
+    final building = container.read(movieCenterControllerProvider.future);
+    container
+        .read(movieCenterControllerProvider.notifier)
+        .selectSection(MovieSection.continueWatching);
+    await container.read(movieCenterControllerProvider.notifier).refresh();
+    await building;
+    await pumpEventQueue();
+
+    expect(
+      container.read(movieCenterControllerProvider).requireValue.section,
+      MovieSection.continueWatching,
+      reason: 'refresh 的回写不得用建制造前的空快照覆盖刚选定的分区',
+    );
+    expect(adapter.continueRequests, greaterThan(0));
+  });
 }
 
 Future<MovieCenterState> _waitSectionLoaded(
@@ -76,6 +111,7 @@ Future<MovieCenterState> _waitSectionLoaded(
 
 class _RefreshApiAdapter implements HttpClientAdapter {
   int favoritesRequests = 0;
+  int continueRequests = 0;
 
   @override
   Future<ResponseBody> fetch(
@@ -101,6 +137,7 @@ class _RefreshApiAdapter implements HttpClientAdapter {
       },
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
+      '/video/continue' => _continue(),
       '/video/series/by-type/page' => {
         'items': <Object>[],
         'page': 0,
@@ -128,6 +165,11 @@ class _RefreshApiAdapter implements HttpClientAdapter {
       'totalElements': 1,
       'totalPages': 1,
     };
+  }
+
+  List<Object> _continue() {
+    continueRequests++;
+    return <Object>[];
   }
 
   Map<String, Object> _series(String id) {
