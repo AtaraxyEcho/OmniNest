@@ -384,6 +384,12 @@ class _AccountNavRows extends ConsumerWidget {
             onTap: () => _openBackdrop(context),
           ),
           _AccountSheetRow(
+            icon: OmniIcons.grid,
+            label: l10n.toolsEntryLabel,
+            subtitle: l10n.toolsEntrySub,
+            onTap: () => _closeAnd(context, () => context.push('/tools')),
+          ),
+          _AccountSheetRow(
             icon: OmniIcons.settings,
             label: l10n.accountEntrySettings,
             subtitle: l10n.accountEntrySettingsSub,

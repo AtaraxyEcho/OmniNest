@@ -71,6 +71,20 @@ enum FileManagerSection {
   importTasks,
 }
 
+/// 分区的路由名解析：只接受 `FileManagerSection` 的枚举名（`?section=`
+/// 查询参数），其他值回 null 由页面按默认分区渲染，避免把任意字符串当分区。
+FileManagerSection? fileManagerSectionFromRouteName(String? name) {
+  if (name == null || name.isEmpty) {
+    return null;
+  }
+  for (final section in FileManagerSection.values) {
+    if (section.name == name) {
+      return section;
+    }
+  }
+  return null;
+}
+
 const _copyWithUnset = Object();
 
 /// 当前文件集合的统计摘要。

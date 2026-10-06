@@ -3501,6 +3501,12 @@
     }
   },
   "photosViewAll": "View All",
+  "photosViewAllMonth": "View all {count}",
+  "@photosViewAllMonth": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosLoadMore": "Load more ({loaded} / {total} loaded)",
   "@photosLoadMore": {
     "placeholders": {
@@ -5195,6 +5201,17 @@
   "mobileSpaceLibrarySubtitle": "Your media, together",
   "mobileSpaceReaderSubtitle": "A quieter space",
   "mobileSpaceFilesSubtitle": "Your digital workspace",
+  "toolsEntryLabel": "Workspace tools",
+  "toolsEntrySub": "All routes and tool pages",
+  "toolsTitle": "Workspace tools",
+  "toolsSubtitle": "Every route, in one calm place",
+  "toolsIntroEyebrow": "Complete list",
+  "toolsIntroTitle": "Everything has a home.",
+  "toolsIntroBody":
+      "Manage files, films, music and this server without leaving the interface you already know.",
+  "toolsGroupFiles": "Files",
+  "toolsGroupMedia": "Movies & music",
+  "toolsMusicHistoryDetail": "Recent plays grouped by day.",
   "accountSheetTitle": "Account",
   "accountEntryNotifications": "Notifications",
   "accountEntryDevices": "Devices",

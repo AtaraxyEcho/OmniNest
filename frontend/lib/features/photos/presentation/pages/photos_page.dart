@@ -37,6 +37,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart
 import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_top_bar.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_timeline_view.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 

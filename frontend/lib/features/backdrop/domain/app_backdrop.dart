@@ -49,9 +49,10 @@ const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v2';
 const String bundledDesktopWallpaperAssetPath =
     'assets/backdrops/default_desktop.jpg';
 
-/// 移动端内置默认壁纸的打包资产地址。
+/// 移动端内置默认壁纸的打包资产地址（WebP q80，与桌面 jpg 同为有损编码；
+/// 原 PNG 1.88MB，此编码 86KB，暗部无带状噪声）。
 const String bundledMobileWallpaperAssetPath =
-    'assets/backdrops/default_mobile.png';
+    'assets/backdrops/default_mobile.webp';
 
 /// 按设备类别返回内置默认壁纸的打包资产地址;渲染层直接经 [Image.asset] 使用。
 String bundledWallpaperAssetPathFor(AppBackdropSelectionTarget target) {

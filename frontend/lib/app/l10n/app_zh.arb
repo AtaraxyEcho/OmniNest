@@ -3375,6 +3375,12 @@
     }
   },
   "photosViewAll": "查看全部",
+  "photosViewAllMonth": "查看全部 {count} 张",
+  "@photosViewAllMonth": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosLoadMore": "加载更多（已加载 {loaded} / {total}）",
   "@photosLoadMore": {
     "placeholders": {
@@ -5069,6 +5075,16 @@
   "mobileSpaceLibrarySubtitle": "你的媒体，都在这里",
   "mobileSpaceReaderSubtitle": "更安静的空间",
   "mobileSpaceFilesSubtitle": "你的数字工作区",
+  "toolsEntryLabel": "工作区工具",
+  "toolsEntrySub": "全部路由与工具页",
+  "toolsTitle": "工作区工具",
+  "toolsSubtitle": "每条路由都在熟悉的地方",
+  "toolsIntroEyebrow": "完整清单",
+  "toolsIntroTitle": "每样东西都有一个家。",
+  "toolsIntroBody": "在不离开这套界面语言的前提下，管理文件、影视、音乐与这台服务器。",
+  "toolsGroupFiles": "文件",
+  "toolsGroupMedia": "影视与音乐",
+  "toolsMusicHistoryDetail": "按天回看最近播放记录。",
   "accountSheetTitle": "账户",
   "accountEntryNotifications": "通知中心",
   "accountEntryDevices": "设备与会话",

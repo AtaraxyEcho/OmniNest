@@ -16,6 +16,8 @@ import 'package:omninest/features/admin/application/admin_console_access_provide
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
+import 'package:omninest/app/mobile_shell/workspace_tools_page.dart';
+import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
 import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
@@ -118,6 +120,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         redirect: (context, state) => '/profile?section=appearance',
       ),
       _animatedRoute(
+        '/tools',
+        (_) => const MobileHostedRoute(child: WorkspaceToolsPage()),
+      ),
+      _animatedRoute(
         '/profile',
         (state) => MobileHostedRoute(
           child: ProfilePage(
@@ -157,7 +163,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
-              _animatedRoute('/files', (state) => const FileBrowserPage()),
+              _animatedRoute(
+                '/files',
+                (state) => FileBrowserPage(
+                  // 工具总入口按分区直达；非枚举名一律回默认分区。
+                  initialSection: fileManagerSectionFromRouteName(
+                    state.uri.queryParameters['section'],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
@@ -215,7 +229,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
         ),
       ),
-      _animatedRoute('/music/history', (_) => const MusicHistoryPage()),
+      _animatedRoute(
+        '/music/history',
+        (_) => const MobileHostedRoute(child: MusicHistoryPage()),
+      ),
       _animatedRoute(
         '/photos/albums/:albumId',
         (state) =>

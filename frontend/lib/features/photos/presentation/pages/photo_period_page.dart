@@ -3,12 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
+
+part 'photo_period_page_hosted.dart';
 
 /// 指定年月的照片浏览页 — 从时间线月份进入。
 class PhotoPeriodPage extends ConsumerStatefulWidget {
@@ -34,6 +42,14 @@ class _PhotoPeriodPageState extends ConsumerState<PhotoPeriodPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 本路由未经 MobileHostedRoute 包裹，按相册详情同一规则自补托管 scope。
+    if (photosHostedForm(context)) {
+      return PhotoHostedScope(child: buildHostedPeriod(context));
+    }
+    return _buildWorkstationPeriod(context);
+  }
+
+  Widget _buildWorkstationPeriod(BuildContext context) {
     final state = ref.watch(photoPeriodProvider);
     final photos = state.photos;
     final title = MaterialLocalizations.of(

@@ -173,6 +173,7 @@ class _HomeContent extends ConsumerWidget {
         covers: covers,
         recent: recent,
         dailyVisible: dailySectionVisible,
+        onSectionChanged: onSectionChanged,
       );
     }
     // 桌面态卡片已带播放条避让，仅留小余量；紧凑态播放条在布局流内，保留完整避让。
@@ -1032,6 +1033,7 @@ Widget _hostedHomeBody(
   required List<MusicDeckCoverItem> covers,
   required List<MusicPlayableItem> recent,
   required bool dailyVisible,
+  required ValueChanged<MusicDeckSection> onSectionChanged,
 }) {
   final track = center.activeTrack;
   // 播放会话在测试环境无服务器配置：NOW PLAYING 卡不读会话位置，
@@ -1085,6 +1087,7 @@ Widget _hostedHomeBody(
         _SectionTitle(
           title: l10n.musicDeckYourCollections,
           actionLabel: l10n.musicViewAllSimple,
+          onAction: () => onSectionChanged(MusicDeckSection.playlists),
         ),
         const SizedBox(height: 12),
         if (covers.isEmpty)
@@ -1105,6 +1108,8 @@ Widget _hostedHomeBody(
         _SectionTitle(
           title: l10n.musicDeckContinueListening,
           actionLabel: l10n.musicViewAllSimple,
+          // 样例 Up next 行动即 History：托管态没有 recent 分段，落历史页。
+          onAction: () => unawaited(context.push('/music/history')),
         ),
         const SizedBox(height: 4),
         for (final (index, item) in recent.take(6).indexed)

@@ -6,7 +6,13 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_history_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -37,6 +43,51 @@ class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
   Widget build(BuildContext context) {
     final history = ref.watch(musicHistoryControllerProvider);
     final l10n = AppLocalizations.of(context);
+    if (MobileShellScope.isHosted(context)) {
+      return MobilePageSurface(
+        backdropOpacity: 0.92,
+        child: history.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error:
+              (error, stackTrace) =>
+                  _hostedHistoryFailure(context, '$error', l10n),
+          data: (state) {
+            if (state.errorMessage != null) {
+              return _hostedHistoryFailure(
+                context,
+                l10n.localizeStoredError(state.errorMessage!),
+                l10n,
+              );
+            }
+            return Column(
+              children: [
+                MobileModuleHeader(
+                  title: l10n.musicHistoryTitle,
+                  subtitle: l10n.musicDeckTrackCount(_historyEntryCount(state)),
+                  backTooltip:
+                      MaterialLocalizations.of(context).backButtonTooltip,
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+                Expanded(
+                  child:
+                      state.groups.isEmpty
+                          ? ListView(
+                            padding: EdgeInsets.zero,
+                            children: [
+                              EnvEmptyState(
+                                icon: OmniIcons.clock,
+                                title: l10n.musicHistoryEmpty,
+                              ),
+                            ],
+                          )
+                          : _HistoryList(state: state),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
     return Theme(
       data: MusicBackdropTheme.withNeutralTextButtons(Theme.of(context)),
       child: Scaffold(
@@ -74,6 +125,36 @@ class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
           },
         ),
       ),
+    );
+  }
+
+  int _historyEntryCount(MusicHistoryState state) {
+    return state.groups.fold<int>(
+      0,
+      (total, group) => total + group.entries.length,
+    );
+  }
+
+  /// 托管态失败面：与空态同族的环境空态 + 重试行动（样例 .empty-action）。
+  Widget _hostedHistoryFailure(
+    BuildContext context,
+    String message,
+    AppLocalizations l10n,
+  ) {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        EnvEmptyState(
+          icon: OmniIcons.clock,
+          title: l10n.musicHistoryTitle,
+          message: message,
+          actionLabel: l10n.coreRetry,
+          onAction:
+              () => unawaited(
+                ref.read(musicHistoryControllerProvider.notifier).refresh(),
+              ),
+        ),
+      ],
     );
   }
 }
@@ -133,38 +214,56 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
   Widget build(BuildContext context) {
     final state = widget.state;
     final l10n = AppLocalizations.of(context);
+    final hosted = MobileShellScope.isHosted(context);
     if (state.hasMore && !state.loadingMore) {
       _maybeFillViewport();
     }
 
     final rows = <Widget>[
       for (final group in state.groups) ...[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 6),
-          child: Text(
-            _dayLabel(context, group),
-            style: TextStyle(
-              color: context.musicColors.onSurface,
-              fontSize: AppTypography.titleMedium,
-              fontWeight: FontWeight.w700,
+        if (hosted)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 2),
+            child: MobileEnvSectionHeader(title: _dayLabel(context, group)),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 6),
+            child: Text(
+              _dayLabel(context, group),
+              style: TextStyle(
+                color: context.musicColors.onSurface,
+                fontSize: AppTypography.titleMedium,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ),
         for (final entry in group.entries)
-          _HistoryRow(
-            entry: entry,
-            onPlay: () => _playEntry(context, ref, entry),
-          ),
+          if (hosted)
+            SampleSerifRow(
+              number: _historyEntryTime(entry),
+              title: entry.title,
+              subtitle: entry.artistName,
+              onTap: () => _playEntry(context, ref, entry),
+            )
+          else
+            _HistoryRow(
+              entry: entry,
+              onPlay: () => _playEntry(context, ref, entry),
+            ),
       ],
     ];
     if (state.loadingMore) {
       rows.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: hosted ? 20 : 16),
           child: Center(
             child: SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              dimension: hosted ? 22 : 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: hosted ? MobileEnvColors.inkMuted : null,
+              ),
             ),
           ),
         ),
@@ -172,7 +271,7 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
     } else if (state.hasMore) {
       rows.add(
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: hosted ? 16 : 8),
           child: Center(
             child: TextButton(
               onPressed:
@@ -180,6 +279,14 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
                       ref
                           .read(musicHistoryControllerProvider.notifier)
                           .loadMore(),
+              style:
+                  hosted
+                      ? TextButton.styleFrom(
+                        foregroundColor: MobileEnvColors.inkMuted,
+                        minimumSize: const Size(0, 38),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      )
+                      : null,
               child: Text(l10n.musicHistoryLoadMore),
             ),
           ),
@@ -188,7 +295,7 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
     }
     return ListView(
       controller: _scrollController,
-      padding: const EdgeInsets.only(bottom: 48),
+      padding: EdgeInsets.only(bottom: hosted ? 96 : 48),
       children: rows,
     );
   }
@@ -254,8 +361,7 @@ class _HistoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.musicColors;
-    final time =
-        '${entry.playedAt.hour.toString().padLeft(2, '0')}:${entry.playedAt.minute.toString().padLeft(2, '0')}';
+    final time = _historyEntryTime(entry);
     final isLocal = entry.playableKey.startsWith('local:');
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
@@ -363,4 +469,11 @@ class _HistoryFailure extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 播放时刻的 24 小时短标签（托管行与工位行同源）。
+String _historyEntryTime(MusicPlayHistoryEntry entry) {
+  final hour = entry.playedAt.hour.toString().padLeft(2, '0');
+  final minute = entry.playedAt.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }

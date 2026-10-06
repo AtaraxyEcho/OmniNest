@@ -7768,6 +7768,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosViewAll => '查看全部';
 
   @override
+  String photosViewAllMonth(Object count) {
+    return '查看全部 $count 张';
+  }
+
+  @override
   String photosLoadMore(Object loaded, Object total) {
     return '加载更多（已加载 $loaded / $total）';
   }
@@ -11383,6 +11388,36 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mobileSpaceFilesSubtitle => '你的数字工作区';
+
+  @override
+  String get toolsEntryLabel => '工作区工具';
+
+  @override
+  String get toolsEntrySub => '全部路由与工具页';
+
+  @override
+  String get toolsTitle => '工作区工具';
+
+  @override
+  String get toolsSubtitle => '每条路由都在熟悉的地方';
+
+  @override
+  String get toolsIntroEyebrow => '完整清单';
+
+  @override
+  String get toolsIntroTitle => '每样东西都有一个家。';
+
+  @override
+  String get toolsIntroBody => '在不离开这套界面语言的前提下，管理文件、影视、音乐与这台服务器。';
+
+  @override
+  String get toolsGroupFiles => '文件';
+
+  @override
+  String get toolsGroupMedia => '影视与音乐';
+
+  @override
+  String get toolsMusicHistoryDetail => '按天回看最近播放记录。';
 
   @override
   String get accountSheetTitle => '账户';

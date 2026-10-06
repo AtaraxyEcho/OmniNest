@@ -14633,6 +14633,12 @@ abstract class AppLocalizations {
   /// **'View All'**
   String get photosViewAll;
 
+  /// No description provided for @photosViewAllMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'View all {count}'**
+  String photosViewAllMonth(Object count);
+
   /// No description provided for @photosLoadMore.
   ///
   /// In en, this message translates to:
@@ -21423,6 +21429,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your digital workspace'**
   String get mobileSpaceFilesSubtitle;
+
+  /// No description provided for @toolsEntryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace tools'**
+  String get toolsEntryLabel;
+
+  /// No description provided for @toolsEntrySub.
+  ///
+  /// In en, this message translates to:
+  /// **'All routes and tool pages'**
+  String get toolsEntrySub;
+
+  /// No description provided for @toolsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace tools'**
+  String get toolsTitle;
+
+  /// No description provided for @toolsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Every route, in one calm place'**
+  String get toolsSubtitle;
+
+  /// No description provided for @toolsIntroEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete list'**
+  String get toolsIntroEyebrow;
+
+  /// No description provided for @toolsIntroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything has a home.'**
+  String get toolsIntroTitle;
+
+  /// No description provided for @toolsIntroBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage files, films, music and this server without leaving the interface you already know.'**
+  String get toolsIntroBody;
+
+  /// No description provided for @toolsGroupFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get toolsGroupFiles;
+
+  /// No description provided for @toolsGroupMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Movies & music'**
+  String get toolsGroupMedia;
+
+  /// No description provided for @toolsMusicHistoryDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent plays grouped by day.'**
+  String get toolsMusicHistoryDetail;
 
   /// No description provided for @accountSheetTitle.
   ///

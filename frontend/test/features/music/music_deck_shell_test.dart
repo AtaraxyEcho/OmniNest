@@ -71,7 +71,16 @@ void main() {
     await tester.tap(homeSegment);
     await tester.pump();
 
-    expect(find.text('View All'), findsNWidgets(2));
+    final railActions = find.widgetWithText(TextButton, 'View All');
+    expect(railActions, findsNWidgets(2));
+    // 托管首页两条行动必须可点：曾因只传 actionLabel 未传 onAction 做成死钮。
+    for (var index = 0; index < railActions.evaluate().length; index++) {
+      expect(
+        tester.widget<TextButton>(railActions.at(index)).onPressed,
+        isNotNull,
+        reason: '眉标行动不得留空回调',
+      );
+    }
   });
 
   testWidgets('桌面壳层语义不因禁用态播放按钮整页合并失效', (tester) async {

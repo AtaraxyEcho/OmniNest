@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_history_controller.dart';
 import 'package:omninest/features/music/data/music_api.dart';
@@ -44,6 +49,56 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('History Page2'), findsOneWidget);
+  });
+
+  testWidgets('托管态播放历史页落壳层玻璃皮肤', (tester) async {
+    final api = _HistoryApiStub();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(_MemoryStore()),
+      ],
+    );
+    addTearDown(container.dispose);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          home: const MobileShellScope(
+            hosted: true,
+            child: Scaffold(body: MusicHistoryPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MobilePageSurface), findsOneWidget);
+    // 日分组用环境眉标，曲目行用样例衬线行，不再落工位 ListTile。
+    // 内容不足一屏时页面会主动补齐下一页，因此分组与行数只断下限。
+    expect(find.byType(MobileEnvSectionHeader), findsAtLeastNWidgets(2));
+    expect(find.byType(SampleSerifRow), findsAtLeastNWidgets(2));
+    expect(find.byType(ListTile), findsNothing);
+    expect(find.text('播放历史'), findsOneWidget);
+    expect(find.textContaining('首歌曲'), findsOneWidget);
+    // 三页数据都是正午播放，时刻列只断在位。
+    expect(find.text('12:00'), findsAtLeastNWidgets(2));
+    expect(tester.takeException(), isNull);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(find.text('History Page2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   test('loadMore 跨页去重后停止', () async {

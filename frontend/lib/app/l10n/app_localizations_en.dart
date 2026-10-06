@@ -8007,6 +8007,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosViewAll => 'View All';
 
   @override
+  String photosViewAllMonth(Object count) {
+    return 'View all $count';
+  }
+
+  @override
   String photosLoadMore(Object loaded, Object total) {
     return 'Load more ($loaded / $total loaded)';
   }
@@ -11764,6 +11769,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mobileSpaceFilesSubtitle => 'Your digital workspace';
+
+  @override
+  String get toolsEntryLabel => 'Workspace tools';
+
+  @override
+  String get toolsEntrySub => 'All routes and tool pages';
+
+  @override
+  String get toolsTitle => 'Workspace tools';
+
+  @override
+  String get toolsSubtitle => 'Every route, in one calm place';
+
+  @override
+  String get toolsIntroEyebrow => 'Complete list';
+
+  @override
+  String get toolsIntroTitle => 'Everything has a home.';
+
+  @override
+  String get toolsIntroBody =>
+      'Manage files, films, music and this server without leaving the interface you already know.';
+
+  @override
+  String get toolsGroupFiles => 'Files';
+
+  @override
+  String get toolsGroupMedia => 'Movies & music';
+
+  @override
+  String get toolsMusicHistoryDetail => 'Recent plays grouped by day.';
 
   @override
   String get accountSheetTitle => 'Account';

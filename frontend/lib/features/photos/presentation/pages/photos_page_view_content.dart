@@ -391,6 +391,26 @@ class _HostedTimelineBody extends ConsumerWidget {
                   ),
               ],
             ),
+            // 月份只下发预览，整月内容走 period 页；仅在确有剩余时给跳转。
+            if (month.photoCount > month.previewPhotos.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: PhotoHostedPillButton(
+                    icon: Icons.expand_more_rounded,
+                    label: AppLocalizations.of(
+                      context,
+                    ).photosViewAllMonth(month.photoCount),
+                    onTap:
+                        () => unawaited(
+                          context.push(
+                            '/photos/period/${year.year}/${month.month}',
+                          ),
+                        ),
+                  ),
+                ),
+              ),
           ],
       ],
     );

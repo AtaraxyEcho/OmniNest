@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -248,8 +250,18 @@ void main() {
       final desktop = await rootBundle.load(bundledDesktopWallpaperAssetPath);
       final mobile = await rootBundle.load(bundledMobileWallpaperAssetPath);
 
+      // 断言只服务「资源确实打进包」这一个意图，不锁体积档位：
+      // 移动端已从 PNG 换成 WebP q80（约 86KB）。
       expect(desktop.lengthInBytes, greaterThan(100 * 1024));
-      expect(mobile.lengthInBytes, greaterThan(100 * 1024));
+      expect(mobile.lengthInBytes, greaterThan(50 * 1024));
+      // WebP 必须能被引擎解码，否则移动端默认底图整块落空。
+      final codec = await ui.instantiateImageCodec(
+        mobile.buffer.asUint8List(),
+      );
+      final frame = (await codec.getNextFrame()).image;
+      expect(frame.width, greaterThan(0));
+      expect(frame.height, greaterThan(frame.width), reason: '移动端底图是竖幅');
+      frame.dispose();
     });
 
     test('首次安装内置壁纸时默认启用且后续安装不覆盖用户设置', () async {
