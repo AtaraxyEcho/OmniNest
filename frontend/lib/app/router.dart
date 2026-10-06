@@ -305,11 +305,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       _animatedRoute(
         '/shared/photos/:token',
-        (state) => PhotoSharedAlbumPage(token: state.pathParameters['token']!),
+        (state) => MobileHostedRoute(
+          child: PhotoSharedAlbumPage(token: state.pathParameters['token']!),
+        ),
       ),
       _animatedRoute(
         '/shared/photos/item/:token',
-        (state) => PhotoSharedItemPage(token: state.pathParameters['token']!),
+        (state) => MobileHostedRoute(
+          child: PhotoSharedItemPage(token: state.pathParameters['token']!),
+        ),
       ),
       GoRoute(
         path: '/s/:token',

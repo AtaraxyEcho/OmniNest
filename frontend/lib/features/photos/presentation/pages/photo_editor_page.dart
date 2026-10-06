@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -57,7 +58,12 @@ class PhotoEditorPage extends ConsumerWidget {
                   ),
       error:
           (error, _) => Scaffold(
+            // 本路由未经 MobileHostedRoute 包裹，浅色根主题下要把底色与
+            // 返回钮显式压回环境暗底，否则错误面闪白。
+            backgroundColor: MobileEnvColors.stage,
             appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              foregroundColor: MobileEnvColors.ink,
               leading: IconButton(
                 tooltip: AppLocalizations.of(context).photosBackToPhotos,
                 onPressed: () => context.popOrGo('/photos/$photoId'),
@@ -69,7 +75,11 @@ class PhotoEditorPage extends ConsumerWidget {
               onRetry: () => ref.invalidate(photoDetailProvider(photoId)),
             ),
           ),
-      loading: () => const Scaffold(body: Center(child: AppLoading.detail())),
+      loading:
+          () => const Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(child: AppLoading.detail()),
+          ),
     );
   }
 
