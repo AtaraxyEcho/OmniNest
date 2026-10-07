@@ -18,7 +18,7 @@ void main() {
     }
   });
 
-  test('从文件流解析元数据和章节并释放底层句柄', () async {
+  test('解析章节后释放归档可关闭文件句柄', () async {
     final file = File('${directory.path}/valid.epub');
     await _writeEpub(
       file,
@@ -26,18 +26,13 @@ void main() {
     );
     final service = EpubParserService();
 
-    expect(service.isFixedLayoutFile(file.path), isFalse);
-    final book = await service.parseMetadataFile(file.path);
     final lease = await service.acquireLease();
     final chapter = await service.parseChapterFile(
       file.path,
-      book.chapters.single.contentPath!,
+      'OEBPS/chapter1.xhtml',
     );
     lease.release();
 
-    expect(book.title, '流式测试');
-    expect(book.author, '测试作者');
-    expect(book.chapters.single.title, '第一章');
     expect(chapter, contains('流式章节正文'));
 
     service.releaseArchive();
@@ -51,10 +46,12 @@ void main() {
     await _writeEpub(file, oversized);
     final service = EpubParserService();
 
+    final lease = await service.acquireLease();
     await expectLater(
-      service.parseMetadataFile(file.path),
+      service.parseChapterFile(file.path, 'OEBPS/chapter1.xhtml'),
       throwsA(isA<EpubParseLimitException>()),
     );
+    lease.release();
     service.releaseArchive();
   });
 

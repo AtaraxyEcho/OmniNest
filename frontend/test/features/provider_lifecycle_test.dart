@@ -103,8 +103,15 @@ void main() {
         );
     final encoded = ZipEncoder().encode(archive);
 
-    service.isFixedLayout(Uint8List.fromList(encoded));
-    expect(service.cachedArchive, isNotNull);
+    // 持有租约期间释放请求必须延后，归还后 Provider 销毁才会真正释放。
+    final lease = await service.acquireLease();
+    await service.parseChapter(
+      Uint8List.fromList(encoded),
+      'OEBPS/chapter1.xhtml',
+    );
+    service.releaseArchive();
+    expect(service.cachedArchive, isNotNull, reason: '租约持有期间不得抽走归档');
+    lease.release();
 
     subscription.close();
     await container.pump();
