@@ -131,6 +131,62 @@ void main() {
     lease.release();
     service.releaseArchive();
   });
+
+  test('GBK 字节命名的条目能匹配到 UTF-8 解码的章节路径', () async {
+    // 旧中文打包工具的 ZIP 条目名是 GBK 字节；archive 对非 UTF-8 名逐字节回退成
+    // Latin-1，字形错乱，与按 GBK 正确解码的 href 对不上，章节因此静默变 null。
+    final file = File('${directory.path}/gbk-name.epub');
+    final gbkChapterName = latin1.decode(const [
+      0xB5, 0xDA, 0xD2, 0xBB, 0xD5, 0xC2, // 「第一章」的 GBK 字节
+    ]);
+    final archive = Archive();
+    _addText(archive, 'mimetype', 'application/epub+zip');
+    _addText(
+      archive,
+      'META-INF/container.xml',
+      '<?xml version="1.0"?>'
+          '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+          '<rootfiles><rootfile full-path="content.opf"/></rootfiles>'
+          '</container>',
+    );
+    _addText(
+      archive,
+      '$gbkChapterName.xhtml',
+      '<html><body><p>GBK 条目名正文</p></body></html>',
+    );
+    await file.writeAsBytes(ZipEncoder().encode(archive));
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    final chapter = await service.parseChapterFile(file.path, '第一章.xhtml');
+    lease.release();
+    service.releaseArchive();
+
+    expect(chapter, contains('GBK 条目名正文'));
+  });
+
+  test('百分号编码的中文章节路径可以解析', () async {
+    final file = File('${directory.path}/pct-name.epub');
+    await _writeEpub(file, '<html><body><p>百分号编码正文</p></body></html>');
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    // Uri.decodeComponent 对含裸非 ASCII 的路径会抛 ArgumentError，
+    // 服务端下发的 contentPath 正是这种形态；此处同时覆盖编码与未编码两种输入。
+    final encoded = await service.parseChapterFile(
+      file.path,
+      Uri.encodeComponent('OEBPS/chapter1.xhtml'),
+    );
+    final plain = await service.parseChapterFile(
+      file.path,
+      'OEBPS/chapter1.xhtml',
+    );
+    lease.release();
+    service.releaseArchive();
+
+    expect(encoded, contains('百分号编码正文'));
+    expect(plain, contains('百分号编码正文'));
+  });
 }
 
 Future<void> _writeEpub(File file, String chapterContent) async {

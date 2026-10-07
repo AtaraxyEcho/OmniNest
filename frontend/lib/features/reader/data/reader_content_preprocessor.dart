@@ -6,6 +6,7 @@ import 'package:omninest/core/utils/yield_to_event_loop.dart';
 import 'package:omninest/features/reader/data/reader_image_cache.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/utils/lenient_uri_decode.dart';
 
 /// XHTML 内容预处理器。
 ///
@@ -330,14 +331,7 @@ class ReaderContentPreprocessor {
   /// 条目名通常为解码形式；先解码再拼接，否则归档内定位失败导致图片
   /// 破图并被写入章节缓存。
   static String _resolvePath(String base, String relative) {
-    var decoded = relative;
-    if (decoded.contains('%')) {
-      try {
-        decoded = Uri.decodeComponent(decoded);
-      } on FormatException {
-        // 非法百分号序列保持原文
-      }
-    }
+    final decoded = lenientDecodeComponent(relative);
     if (decoded.startsWith('/')) return decoded.substring(1);
     final parts = (base + decoded).split('/');
     final resolved = <String>[];

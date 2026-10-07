@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gbk_codec/gbk_codec.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/utils/lenient_uri_decode.dart';
 import 'package:omninest/features/reader/data/epub_archive_loader.dart';
 import 'package:omninest/features/reader/data/epub_archive_source.dart';
 import 'package:omninest/features/reader/domain/parsed_book.dart';
@@ -419,7 +420,7 @@ class EpubParserService {
       if (opfPath == null) return null;
 
       final directPath = _normalizeArchivePath(
-        Uri.decodeComponent(contentPath),
+        lenientDecodeComponent(contentPath),
       );
       final fullPath = _resolvePath(opfPath, contentPath);
       final fileEntry =
@@ -479,7 +480,52 @@ class EpubParserService {
         return file;
       }
     }
+    return _findExactEntryByRecoveredName(archive, normalizedPath);
+  }
+
+  /// 旧中文工具打包的 ZIP 条目名常用 GBK 字节，而 archive 4.x 对非 UTF-8 条目名
+  /// 逐字节回退成 Latin-1（字节保留、字形错乱），与已按 GBK 正确解码的 OPF href
+  /// 对不上，章节因此静默变 null。把乱码名还原成字节再按 GBK 重解一次参与比较。
+  ArchiveFile? _findExactEntryByRecoveredName(
+    Archive archive,
+    String normalizedPath,
+  ) {
+    for (final file in archive.files) {
+      final recovered = _recoverGbkName(file.name);
+      if (recovered == null) {
+        continue;
+      }
+      try {
+        if (_normalizeArchivePath(recovered).toLowerCase() == normalizedPath) {
+          return file;
+        }
+      } on FormatException {
+        continue;
+      }
+    }
     return null;
+  }
+
+  /// 名字全在 Latin-1 范围内时才值得尝试重解（archive 的逐字节回退即此形态）。
+  String? _recoverGbkName(String name) {
+    var hasNonAscii = false;
+    for (final unit in name.codeUnits) {
+      if (unit > 0xFF) {
+        return null;
+      }
+      if (unit > 0x7F) {
+        hasNonAscii = true;
+      }
+    }
+    if (!hasNonAscii) {
+      return null;
+    }
+    try {
+      final recovered = gbk_bytes.decode(latin1.encode(name));
+      return recovered == name ? null : recovered;
+    } on FormatException {
+      return null;
+    }
   }
 
   /// 校验归档目录和展开容量边界。
@@ -617,7 +663,10 @@ class EpubParserService {
           }
 
           // 尝试 URL 解码
-          final decodedPath = _resolvePath(opfPath, Uri.decodeComponent(href));
+          final decodedPath = _resolvePath(
+            opfPath,
+            lenientDecodeComponent(href),
+          );
           final decodedEntry = _findEntry(archive, decodedPath);
           if (decodedEntry != null) {
             if (kDebugMode) {
@@ -913,7 +962,7 @@ class EpubParserService {
 
   /// 解析相对路径
   String _resolvePath(String basePath, String relativePath) {
-    final decoded = Uri.decodeComponent(relativePath);
+    final decoded = lenientDecodeComponent(relativePath);
     if (decoded.startsWith('/')) {
       return _normalizeArchivePath(decoded);
     }

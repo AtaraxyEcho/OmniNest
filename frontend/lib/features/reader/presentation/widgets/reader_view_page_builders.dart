@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/utils/lenient_uri_decode.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';

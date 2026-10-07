@@ -62,7 +62,7 @@ extension ReaderViewPageBuildersLinks on ReaderViewPageBuilders {
   }
 
   String _normalizeReaderHref(String href) {
-    var value = Uri.decodeComponent(href.trim());
+    var value = lenientDecodeComponent(href.trim());
     final hashIndex = value.indexOf('#');
     if (hashIndex >= 0) {
       value = value.substring(0, hashIndex);
@@ -91,7 +91,7 @@ extension ReaderViewPageBuildersLinks on ReaderViewPageBuilders {
     if (hashIndex < 0 || hashIndex == href.length - 1) {
       return null;
     }
-    return Uri.decodeComponent(href.substring(hashIndex + 1));
+    return lenientDecodeComponent(href.substring(hashIndex + 1));
   }
 
   void _restoreAnchorInCurrentChapter(String? anchor) {
