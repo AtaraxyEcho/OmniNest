@@ -112,12 +112,33 @@ public class ReaderTxtChapterTextService {
             if (content.sizeBytes() > maxBytes) {
                 throw new BusinessException(ErrorCode.CHAPTER_TEXT_UNAVAILABLE, "本章正文超过单章返回上限");
             }
-            String text = new String(content.inputStream().readNBytes((int) content.sizeBytes()),
+            String slice = new String(content.inputStream().readNBytes((int) content.sizeBytes()),
                     StandardCharsets.UTF_8);
-            return new ChapterTextDto(chapter.getChapterIndex(), text, text.length());
+            // 派生文件从标题行开始，返回时剥掉标题行及其终止符：客户端顶栏已显示章节名，
+            // 正文再含一行就是重复标题（D-12）。偏移域仍以派生文件为准。
+            int bodyStart = bodyStartOf(chapter, slice.length());
+            String text = slice.substring(bodyStart);
+            return new ChapterTextDto(chapter.getChapterIndex(), text, text.length(), bodyStart);
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "读取本章正文失败");
         }
+    }
+
+    /**
+     * 计算并夹紧本章正文起点。
+     *
+     * <p>清单可能比派生文件更新（重解析中途失败等），因此起点不得超过文件实际长度。
+     *
+     * @param chapter 章节清单
+     * @param sliceChars 派生文件字符数
+     * @return 正文起点
+     */
+    private int bodyStartOf(ReaderTextChapter chapter, int sliceChars) {
+        Integer stored = chapter.getBodyStartOffset();
+        if (stored == null || stored <= 0) {
+            return 0;
+        }
+        return Math.min(stored, sliceChars);
     }
 
     /**
@@ -303,9 +324,10 @@ public class ReaderTxtChapterTextService {
      * 单章正文响应。
      *
      * @param chapterIndex 章节顺序
-     * @param text 本章 UTF-8 正文，含标题行；正文起点由清单的 bodyStartOffset 给出
-     * @param charCount 返回正文的字符数，客户端用它校验与本地清单是否同源
+     * @param text 本章正文，已按 bodyStartOffset 去掉标题行
+     * @param charCount 返回正文的字符数
+     * @param bodyStartOffset 正文在派生文件中的起点，客户端用它还原完整偏移域
      */
-    public record ChapterTextDto(int chapterIndex, String text, int charCount) {
+    public record ChapterTextDto(int chapterIndex, String text, int charCount, int bodyStartOffset) {
     }
 }

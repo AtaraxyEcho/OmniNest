@@ -123,4 +123,22 @@ void main() {
 
     expect(readerChapterCacheKey(chapter), 'txt/8-20.xhtml');
   });
+
+  test('服务端 TXT 单章正文只在长度与正文区间一致时可用', () {
+    // 清单区间 12 字符，其中标题行占 6 字符，正文期望长度为 6
+    expect(txtChapterTextMatchesManifestRange('正文内容正文', 6, 12 - 6), isTrue);
+    // 清单来自另一个 manifest 版本时区间不等，必须回退而不是渲染别章
+    expect(txtChapterTextMatchesManifestRange('正文内容正文', 6, 8), isFalse);
+    expect(txtChapterTextMatchesManifestRange('正文内容正文', 4, 6), isFalse);
+    expect(txtChapterTextMatchesManifestRange('', 0, 0), isFalse);
+  });
+
+  test('本地兜底切片按正文起点剥掉标题行', () {
+    const rawSlice = '第一章 甲\n正文内容';
+
+    expect(txtChapterBody(rawSlice, 6), '正文内容');
+    expect(txtChapterBody(rawSlice, 0), rawSlice);
+    // 清单超前于切片时退到空正文，不越界抛错
+    expect(txtChapterBody(rawSlice, rawSlice.length + 4), '');
+  });
 }

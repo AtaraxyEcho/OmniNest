@@ -136,6 +136,7 @@ class ReaderApi {
             level: (chapter['level'] as num?)?.toInt() ?? 0,
             sourceStartOffset: (chapter['sourceStartOffset'] as num?)?.toInt(),
             sourceEndOffset: (chapter['sourceEndOffset'] as num?)?.toInt(),
+            bodyStartOffset: (chapter['bodyStartOffset'] as num?)?.toInt() ?? 0,
           ),
         );
       }
@@ -157,6 +158,31 @@ class ReaderApi {
           parseTaskData is Map
               ? TextParseTask.fromJson(Map<String, dynamic>.from(parseTaskData))
               : null,
+    );
+  }
+
+  /// 获取 TXT 单章的服务端解码正文（UTF-8）。
+  ///
+  /// 服务端在解析任务里把每章派生成独立文件；未派生（旧数据尚未重解析，或本章
+  /// 超过单章返回上限）时返回业务码 6003，调用方据此回退本地解析链。
+  Future<({int chapterIndex, String text, int charCount, int bodyStartOffset})>
+  getChapterText(String itemId, int chapterIndex) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/reader/items/$itemId/text/chapters/$chapterIndex',
+    );
+    final data = parseData(response.data);
+    final text = data['text'];
+    if (text is! String) {
+      throw const AppException(
+        code: 'INVALID_RESPONSE',
+        message: '章节正文响应格式不正确',
+      );
+    }
+    return (
+      chapterIndex: (data['chapterIndex'] as num?)?.toInt() ?? chapterIndex,
+      text: text,
+      charCount: (data['charCount'] as num?)?.toInt() ?? 0,
+      bodyStartOffset: (data['bodyStartOffset'] as num?)?.toInt() ?? 0,
     );
   }
 

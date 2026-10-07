@@ -197,11 +197,12 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
-    void returnsDerivedChapterTextWithItsCharCount() {
+    void returnsChapterBodyWithoutTheTitleLine() {
         byte[] body = "第一章 甲\n正文".getBytes(StandardCharsets.UTF_8);
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
         ReaderTextChapter chapter = chapter(0, 0L, 8L);
+        chapter.setBodyStartOffset(6);
         chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
         when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, 0)).thenReturn(Optional.of(chapter));
         when(fileQueryService.openOwnedFileContent(OWNER_ID, OLD_CHAPTER_NODE_ID))
@@ -210,9 +211,24 @@ class ReaderTxtChapterTextServiceTest {
 
         ReaderTxtChapterTextService.ChapterTextDto dto = service.readChapterText(OWNER_ID, ITEM_ID, 0);
 
-        assertThat(dto.text()).isEqualTo("第一章 甲\n正文");
-        assertThat(dto.charCount()).isEqualTo(8);
+        assertThat(dto.text()).isEqualTo("正文");
+        assertThat(dto.charCount()).isEqualTo(2);
+        assertThat(dto.bodyStartOffset()).isEqualTo(6);
         assertThat(dto.chapterIndex()).isZero();
+    }
+
+    @Test
+    void clampsBodyStartWhenManifestIsAheadOfTheAsset() {
+        byte[] body = "第一章 甲".getBytes(StandardCharsets.UTF_8);
+        ReaderTextChapter chapter = chapter(0, 0L, 5L);
+        chapter.setBodyStartOffset(6);
+        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
+        stubChapterAssetRead(chapter, body);
+
+        ReaderTxtChapterTextService.ChapterTextDto dto = service.readChapterText(OWNER_ID, ITEM_ID, 0);
+
+        assertThat(dto.text()).isEmpty();
+        assertThat(dto.bodyStartOffset()).isEqualTo(5);
     }
 
     @Test

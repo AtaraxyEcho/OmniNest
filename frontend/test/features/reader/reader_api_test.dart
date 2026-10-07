@@ -163,6 +163,51 @@ void main() {
       expect(result.item.manifestVersion, 0);
     });
 
+    test('getChapterText reads one server-decoded TXT chapter', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {
+            'chapterIndex': 3,
+            'text': '正文内容',
+            'charCount': 4,
+            'bodyStartOffset': 6,
+          },
+        },
+      );
+      final api = ReaderApi(_apiClient(adapter));
+
+      final result = await api.getChapterText('item-10', 3);
+
+      expect(adapter.lastMethod, 'GET');
+      expect(adapter.lastPath, '/reader/items/item-10/text/chapters/3');
+      expect(result.chapterIndex, 3);
+      expect(result.text, '正文内容');
+      expect(result.charCount, 4);
+      expect(result.bodyStartOffset, 6);
+    });
+
+    test(
+      'getChapterText maps the 6003 unavailable code for client fallback',
+      () async {
+        final adapter = _CapturingHttpClientAdapter(
+          statusCode: 404,
+          body: {'code': 6003, 'message': '本章正文尚未就绪', 'data': null},
+        );
+        final api = ReaderApi(_apiClient(adapter));
+
+        await expectLater(
+          api.getChapterText('item-10', 4),
+          throwsA(
+            isA<AppException>()
+                .having((e) => e.code, 'code', '6003')
+                .having((e) => e.message, 'message', '本章正文尚未就绪'),
+          ),
+        );
+      },
+    );
+
     test('getTextManifest parses persistent chapter offsets', () async {
       final adapter = _CapturingHttpClientAdapter(
         body: {
@@ -180,6 +225,7 @@ void main() {
                 'charCount': 120,
                 'sourceStartOffset': 0,
                 'sourceEndOffset': 120,
+                'bodyStartOffset': 4,
                 'level': 0,
               },
             ],
@@ -194,6 +240,8 @@ void main() {
       expect(result.importStatus, 'READY');
       expect(result.book.chapters, hasLength(1));
       expect(result.book.chapters.first.sourceEndOffset, 120);
+      // 标题行不算正文，正文起点由服务端清单给出（D-12）
+      expect(result.book.chapters.first.bodyStartOffset, 4);
     });
 
     test('toggleBookshelf sends POST to /reader/items/:id/bookshelf', () async {
@@ -434,9 +482,11 @@ ApiClient _apiClient(HttpClientAdapter adapter) {
 class _CapturingHttpClientAdapter implements HttpClientAdapter {
   _CapturingHttpClientAdapter({
     this.body = const {'code': 200, 'message': 'success', 'data': {}},
-  });
+    int? statusCode,
+  }) : statusCode = statusCode ?? (body['code'] as num?)?.toInt() ?? 200;
 
   final Map<String, dynamic> body;
+  final int statusCode;
   String? lastMethod;
   String? lastPath;
   Object? lastData;
@@ -457,7 +507,7 @@ class _CapturingHttpClientAdapter implements HttpClientAdapter {
             : Map<String, dynamic>.from(options.queryParameters);
     return ResponseBody.fromString(
       jsonEncode(body),
-      (body['code'] as num?)?.toInt() ?? 200,
+      statusCode,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },

@@ -52,6 +52,7 @@ class ParsedChapter {
     this.level = 0,
     this.sourceStartOffset,
     this.sourceEndOffset,
+    this.bodyStartOffset = 0,
   });
 
   final int number;
@@ -74,4 +75,8 @@ class ParsedChapter {
 
   /// TXT 规范化文本中的章节结束字符偏移。
   final int? sourceEndOffset;
+
+  /// TXT 正文起点相对 [sourceStartOffset] 的字符偏移：标题行及其终止符不计入正文。
+  /// 服务端正文与本地兜底切片都按它剥标题，两条路径渲染结果一致（D-12）。
+  final int bodyStartOffset;
 }

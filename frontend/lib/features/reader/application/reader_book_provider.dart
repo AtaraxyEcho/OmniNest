@@ -212,8 +212,11 @@ final epubParserServiceProvider = Provider.autoDispose
       return service;
     });
 
-/// TXT 解析服务实例
-final txtParserServiceProvider = Provider<TxtParserService>((ref) {
+/// TXT 解析服务实例。
+///
+/// 只在服务端派生正文不可用时用到，其整本解码缓存会长期占住一本书的文本，
+/// 因此改为 autoDispose：随阅读页所在的 autoDispose 作用域释放（D-39）。
+final txtParserServiceProvider = Provider.autoDispose<TxtParserService>((ref) {
   return TxtParserService();
 });
 
@@ -340,20 +343,31 @@ void startBackgroundBookPreparation(WidgetRef ref, ReaderItem item) {
 
 /// 按需加载单个章节的 XHTML 内容
 ///
-/// 原生平台从会话明文文件按需读取，Web 使用有界内存字节。
+/// TXT 优先取服务端解析时派生的单章 UTF-8 正文；派生缺失、请求失败或长度与清单
+/// 区间不符时回退本地整本解码链。EPUB 由客户端解压，原生平台从会话明文文件按需读取，
+/// Web 使用有界内存字节。
 Future<String?> loadChapterContent(
   WidgetRef ref,
   String itemId,
-  ParsedChapter chapter,
-) async {
+  ParsedChapter chapter, {
+  required int chapterIndex,
+}) async {
   if (chapter.xhtmlContent.isNotEmpty) return chapter.xhtmlContent;
   final detail = await ref.read(readerItemDetailProvider(itemId).future);
   if (detail.item.itemType == 'TXT') {
     final start = chapter.sourceStartOffset;
     final end = chapter.sourceEndOffset;
     if (start == null || end == null || end < start) return null;
-    final source = await ref.read(cachedBookHandleProvider(itemId).future);
     final parser = ref.read(txtParserServiceProvider);
+    final bodyChars = end - start - chapter.bodyStartOffset;
+    final serverText = await _readTxtChapterFromServer(
+      ref,
+      itemId,
+      chapterIndex,
+      bodyChars,
+    );
+    if (serverText != null) return parser.textToXhtml(serverText);
+    final source = await ref.read(cachedBookHandleProvider(itemId).future);
     // Web 受整包内存上限约束；原生放宽到会话级解码上限，超限给出
     // 明确错误而非静默失败。整本解码按条目缓存，切章不再重复解码。
     final bytes = await source.readBytes(
@@ -374,7 +388,9 @@ Future<String?> loadChapterContent(
       );
       return null;
     }
-    return parser.textToXhtml(rawSlice);
+    return parser.textToXhtml(
+      txtChapterBody(rawSlice, chapter.bodyStartOffset),
+    );
   }
   if (detail.item.itemType != 'EPUB') return chapter.xhtmlContent;
 
@@ -390,6 +406,57 @@ Future<String?> loadChapterContent(
   }
   final path = await source.openFilePath();
   return path == null ? null : epubService.parseChapterFile(path, contentPath);
+}
+
+/// 读取服务端已解码的 TXT 单章正文；不可用时返回 null 交由本地链兜底。
+Future<String?> _readTxtChapterFromServer(
+  WidgetRef ref,
+  String itemId,
+  int chapterIndex,
+  int expectedChars,
+) async {
+  try {
+    final result = await ref
+        .read(readerApiProvider)
+        .getChapterText(itemId, chapterIndex);
+    if (!txtChapterTextMatchesManifestRange(
+      result.text,
+      result.charCount,
+      expectedChars,
+    )) {
+      readerDebugLog(
+        'TxtServerText SKIP: itemId=$itemId chapterIndex=$chapterIndex '
+        'chars=${result.charCount} expected=$expectedChars',
+      );
+      return null;
+    }
+    return result.text;
+  } on Exception catch (error) {
+    readerDebugLog(
+      'TxtServerText FALLBACK: itemId=$itemId chapterIndex=$chapterIndex error=$error',
+    );
+    return null;
+  }
+}
+
+/// 判断服务端返回的 TXT 单章正文可否直接渲染。
+///
+/// 长度必须等于清单区间去掉标题行后的长度：不一致说明本地清单属于另一个
+/// manifest 版本，继续渲染会把别章正文贴进来；空正文按业务错误处理，不做渲染依据。
+bool txtChapterTextMatchesManifestRange(
+  String text,
+  int charCount,
+  int expectedChars,
+) {
+  return text.isNotEmpty &&
+      charCount == expectedChars &&
+      text.length == charCount;
+}
+
+/// 从整章切片（含标题行）取出正文，起点由清单的 bodyStartOffset 给出（D-12）。
+String txtChapterBody(String rawSlice, int bodyStartOffset) {
+  if (bodyStartOffset <= 0) return rawSlice;
+  return rawSlice.substring(bodyStartOffset.clamp(0, rawSlice.length));
 }
 
 /// 判断持久化的书籍元数据是否足以重新按需加载章节正文。
@@ -540,6 +607,7 @@ Future<ReaderChapterContent?> getChapterContent(
     ref,
     itemId: itemId,
     matched: matched,
+    chapterIndex: matchedIndex,
     cacheKey: cacheKey,
     memoryKey: memoryKey,
   );
@@ -555,6 +623,7 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
   WidgetRef ref, {
   required String itemId,
   required ParsedChapter matched,
+  required int chapterIndex,
   required String cacheKey,
   required String memoryKey,
 }) async {
@@ -618,7 +687,12 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
       useArchive ? ref.read(epubParserServiceProvider(itemId)) : null;
   final lease = epubService == null ? null : await epubService.acquireLease();
   try {
-    final xhtml = await loadChapterContent(ref, itemId, matched);
+    final xhtml = await loadChapterContent(
+      ref,
+      itemId,
+      matched,
+      chapterIndex: chapterIndex,
+    );
     if (xhtml == null) return null;
 
     final String storageHtml;
@@ -732,6 +806,7 @@ Future<void> _saveBookMetaToSqlite(
               'level': c.level,
               'sourceStartOffset': c.sourceStartOffset,
               'sourceEndOffset': c.sourceEndOffset,
+              'bodyStartOffset': c.bodyStartOffset,
             },
           )
           .toList(),
@@ -775,6 +850,7 @@ ParsedBook? _deserializeBookMeta(Map<String, dynamic> meta) {
                 level: c['level'] as int? ?? 0,
                 sourceStartOffset: c['sourceStartOffset'] as int?,
                 sourceEndOffset: c['sourceEndOffset'] as int?,
+                bodyStartOffset: c['bodyStartOffset'] as int? ?? 0,
               ),
             )
             .toList();
