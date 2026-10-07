@@ -99,6 +99,8 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
      *
      * <p>库内搜索必须覆盖全库而不是已加载分页，故关键词在 SQL 侧过滤：
      * {@code titlePattern} 由调用方归一化为小写 {@code %关键词%}，为空时不参与过滤。
+     * 标题取元数据标题（影片 → 分集 → 文件名），与 {@code VideoItemDtoConverter}
+     * 及不可用媒体投影的 {@code coalesce} 口径一致，未识别元数据的条目仍可按文件名搜到。
      *
      * @param requesterUserId 请求用户 ID
      * @param librarySourceIds 用户可读的服务器媒体库 ID
@@ -111,11 +113,14 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
     @Query("""
             select i from MediaVideoItem i
             join FileNode file on i.fileNodeId = file.id
+            left join MediaMovie movie on i.movieId = movie.id
+            left join MediaTvEpisode episode on i.episodeId = episode.id
             where i.mediaType = :mediaType
               and i.sourceVideoItemId is null
               and file.deleted = false
               and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
-              and (:titlePattern is null or lower(i.title) like :titlePattern)
+              and (:titlePattern is null
+                   or lower(coalesce(movie.title, episode.title, file.name)) like :titlePattern)
               and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
                    or i.librarySourceId in :librarySourceIds)
             """)
