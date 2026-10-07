@@ -4,6 +4,7 @@ part of 'movie_controller.dart';
 extension MovieCenterCommands on MovieCenterController {
   void selectSection(MovieSection section) {
     _searchDebounce?.cancel();
+    _searchKeyword = '';
     centerRef.read(movieCenterSectionProvider.notifier).select(section);
     final current = centerState.asData?.value;
     if (current == null) {
@@ -28,14 +29,17 @@ extension MovieCenterCommands on MovieCenterController {
   }
 
   void setSearchQuery(String query) {
-    // 防抖：避免每键一次触发全库 filter/sort 与整页重建。
+    // 防抖：避免每键一次触发全库检索与整页重建。
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       final current = centerState.asData?.value;
       if (current == null || current.searchQuery == query) {
         return;
       }
+      // 关键词先落到数据侧：结果覆盖全库，不再受客户端已加载分页限制。
+      _searchKeyword = query;
       centerState = AsyncData(current.copyWith(searchQuery: query));
+      unawaited(refresh());
     });
   }
 

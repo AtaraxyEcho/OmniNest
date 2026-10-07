@@ -93,12 +93,13 @@ public class VideoLibraryController {
         return ApiResponse.success(movieLibraryService.movies(ownerUserId));
     }
 
-    @Operation(summary = "分页获取视频库", description = "按媒体类型分页返回影视库卡片所需的轻量数据")
+    @Operation(summary = "分页获取视频库", description = "按媒体类型分页返回影视库卡片所需的轻量数据，支持标题关键词检索（覆盖全库）")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/library/page")
     ApiResponse<PageResponse<MovieLibraryItemDto>> libraryPage(
             @RequestParam(defaultValue = "MOVIE") String mediaType,
             @RequestParam(required = false) String metadataStatus,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "36") int size,
             @RequestParam(defaultValue = "updatedAt,desc") String sort
@@ -109,7 +110,8 @@ public class VideoLibraryController {
                 metadataStatus,
                 page,
                 size,
-                sort
+                sort,
+                q
         ));
     }
 

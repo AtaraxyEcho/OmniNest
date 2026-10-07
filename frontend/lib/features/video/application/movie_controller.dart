@@ -500,6 +500,10 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   /// controller 重建期间（实时刷新触发 invalidate）被点击但未生效的分区。
   MovieSection? _pendingSection;
 
+  /// 已提交到数据侧的检索关键词：库内搜索覆盖全库，翻页与刷新都必须带同一
+  /// 关键词，否则翻页会带回未过滤条目。
+  String _searchKeyword = '';
+
   MovieApi get _api => ref.read(movieApiProvider);
 
   @override
@@ -668,6 +672,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       final result = await _api.libraryPage(
         page: nextPage,
         mediaType: movies ? 'MOVIE' : 'EPISODE',
+        keyword: _searchKeyword,
       );
       if (!ref.mounted ||
           generation !=
@@ -918,9 +923,15 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     );
     final results = await Future.wait([
       _safe(_api.dashboard, MovieDashboard.empty()),
-      _safe(() => _api.libraryPage(mediaType: 'MOVIE'), emptyPage),
+      _safe(
+        () => _api.libraryPage(mediaType: 'MOVIE', keyword: _searchKeyword),
+        emptyPage,
+      ),
       // 分集一并拉取：影片管理需要电影+剧集/动漫全集；电影分区仍按 mediaType 过滤。
-      _safe(() => _api.libraryPage(mediaType: 'EPISODE'), emptyPage),
+      _safe(
+        () => _api.libraryPage(mediaType: 'EPISODE', keyword: _searchKeyword),
+        emptyPage,
+      ),
       // 预取两类系列列表：侧边栏计数与剧集/动漫分区首屏即有稳定数据
       // （后端 dashboard 的 series 字段恒为空，不能作为计数来源）。
       _safe(

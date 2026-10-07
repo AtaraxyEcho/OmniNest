@@ -26,18 +26,25 @@ class MovieApi {
     );
   }
 
+  /// 分页获取视频库。
+  ///
+  /// [keyword] 为标题关键词，检索在数据侧覆盖全库；空白等同不传。
   Future<MediaPage<MovieVideoItem>> libraryPage({
     String mediaType = 'MOVIE',
     String? metadataStatus,
+    String? keyword,
     int page = 0,
     int size = 36,
     String sort = 'updatedAt,desc',
   }) async {
+    final trimmedKeyword = keyword?.trim();
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/video/library/page',
       queryParameters: {
         'mediaType': mediaType,
         if (metadataStatus != null) 'metadataStatus': metadataStatus,
+        if (trimmedKeyword != null && trimmedKeyword.isNotEmpty)
+          'q': trimmedKeyword,
         'page': page,
         'size': size,
         'sort': sort,

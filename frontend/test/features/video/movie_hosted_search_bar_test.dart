@@ -20,12 +20,18 @@ import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 
 class _LibraryAdapter implements HttpClientAdapter {
+  /// 最近一次 `/video/library/page` 收到的 `q`，用于证明检索已提交到数据侧。
+  String? lastLibraryKeyword;
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    if (options.path == '/video/library/page') {
+      lastLibraryKeyword = options.queryParameters['q'] as String?;
+    }
     final data = switch (options.path) {
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _page(),
@@ -78,11 +84,13 @@ class _LibraryAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-Future<ProviderContainer> _pumpHostedShell(WidgetTester tester) async {
+Future<({ProviderContainer container, _LibraryAdapter adapter})>
+_pumpHostedShell(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  final adapter = _LibraryAdapter();
   final container = ProviderContainer.test(
     overrides: [
       authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
@@ -93,7 +101,7 @@ Future<ProviderContainer> _pumpHostedShell(WidgetTester tester) async {
               apiBaseUrl: 'http://localhost:8080/api/v1',
               wsBaseUrl: 'ws://localhost:8080/ws',
             ),
-            httpClientAdapter: _LibraryAdapter(),
+            httpClientAdapter: adapter,
           ),
         ),
       ),
@@ -120,7 +128,7 @@ Future<ProviderContainer> _pumpHostedShell(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
-  return container;
+  return (container: container, adapter: adapter);
 }
 
 void main() {
@@ -138,17 +146,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('输入经防抖写入分区查询，收起即清空', (tester) async {
-    final container = await _pumpHostedShell(tester);
+  testWidgets('输入经防抖写入查询并提交到数据侧，收起即清空', (tester) async {
+    final shell = await _pumpHostedShell(tester);
 
     await tester.tap(find.byTooltip('搜索'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'mirage');
     await tester.pump(queryDebounce);
+    await tester.pumpAndSettle();
     expect(
-      container.read(movieCenterControllerProvider).requireValue.searchQuery,
+      shell.container
+          .read(movieCenterControllerProvider)
+          .requireValue
+          .searchQuery,
       'mirage',
     );
+    // 关键词必须进请求：结果由数据侧覆盖全库，而不是本地过滤已加载分页。
+    expect(shell.adapter.lastLibraryKeyword, 'mirage');
 
     await tester.tap(find.byTooltip('关闭'));
     // 清空与输入同走防抖通道：条收起后 300ms 内列表回全量。
@@ -156,9 +170,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
     expect(
-      container.read(movieCenterControllerProvider).requireValue.searchQuery,
+      shell.container
+          .read(movieCenterControllerProvider)
+          .requireValue
+          .searchQuery,
       '',
     );
+    expect(shell.adapter.lastLibraryKeyword, isNull);
     expect(tester.takeException(), isNull);
   });
 }

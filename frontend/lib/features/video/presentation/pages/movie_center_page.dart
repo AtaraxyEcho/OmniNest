@@ -603,10 +603,6 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
                             );
                           },
                         ),
-                        if (state.searchQuery.trim().isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _SearchScopeNotice(loadedCount: state.movies.length),
-                        ],
                       ],
                     ),
           ),
@@ -623,18 +619,12 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
                       ? EnvEmptyState(
                         icon: OmniIcons.film,
                         title: l10n.videoRedesignNoMatches,
-                        message:
-                            state.searchQuery.trim().isNotEmpty
-                                ? l10n.videoSearchNoHitsLoadMore
-                                : l10n.videoRedesignAdjustFilters,
+                        message: l10n.videoRedesignAdjustFilters,
                       )
                       : MovieRedesignEmptyState(
                         icon: Icons.movie_outlined,
                         title: l10n.videoRedesignNoMatches,
-                        subtitle:
-                            state.searchQuery.trim().isNotEmpty
-                                ? l10n.videoSearchNoHitsLoadMore
-                                : l10n.videoRedesignAdjustFilters,
+                        subtitle: l10n.videoRedesignAdjustFilters,
                       ),
             ),
           )
@@ -665,26 +655,6 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// 搜索范围提示：本地过滤仅覆盖已加载分页，避免“库里有却搜不到”的误解。
-class _SearchScopeNotice extends StatelessWidget {
-  const _SearchScopeNotice({required this.loadedCount});
-
-  final int loadedCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.movieRedesign;
-    final text = context.movieRedesignText;
-    return Text(
-      AppLocalizations.of(context).videoSearchScopeLoadedOnly(loadedCount),
-      style: text.mono(
-        size: 11,
-        color: palette.mutedForeground.withValues(alpha: 0.85),
-      ),
     );
   }
 }

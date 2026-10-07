@@ -94,6 +94,40 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             Pageable pageable
     );
 
+    /**
+     * 分页检索可读的原始视频条目，按标题模糊匹配。
+     *
+     * <p>库内搜索必须覆盖全库而不是已加载分页，故关键词在 SQL 侧过滤：
+     * {@code titlePattern} 由调用方归一化为小写 {@code %关键词%}，为空时不参与过滤。
+     *
+     * @param requesterUserId 请求用户 ID
+     * @param librarySourceIds 用户可读的服务器媒体库 ID
+     * @param mediaType 媒体类型
+     * @param metadataStatus 元数据状态过滤，可为空
+     * @param titlePattern 标题模糊匹配串，可为空
+     * @param pageable 分页参数
+     * @return 匹配的视频条目分页
+     */
+    @Query("""
+            select i from MediaVideoItem i
+            join FileNode file on i.fileNodeId = file.id
+            where i.mediaType = :mediaType
+              and i.sourceVideoItemId is null
+              and file.deleted = false
+              and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
+              and (:titlePattern is null or lower(i.title) like :titlePattern)
+              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+                   or i.librarySourceId in :librarySourceIds)
+            """)
+    Page<MediaVideoItem> searchReadableOriginalsByMediaType(
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds,
+            @Param("mediaType") String mediaType,
+            @Param("metadataStatus") String metadataStatus,
+            @Param("titlePattern") String titlePattern,
+            Pageable pageable
+    );
+
     @Query("""
             select i from MediaVideoItem i
             join FileNode file on i.fileNodeId = file.id

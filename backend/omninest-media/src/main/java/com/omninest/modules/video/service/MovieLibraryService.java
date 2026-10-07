@@ -173,15 +173,52 @@ public class MovieLibraryService {
             int size,
             String sort
     ) {
+        return libraryPage(ownerUserId, mediaType, metadataStatus, page, size, sort, null);
+    }
+
+    /**
+     * 分页获取视频库，支持标题关键词检索。
+     *
+     * <p>检索在数据侧完成，覆盖全库而不受客户端已加载分页限制；无关键词时走原分页查询。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param mediaType 媒体类型
+     * @param metadataStatus 可选元数据状态
+     * @param page 页码
+     * @param size 每页大小
+     * @param sort 排序表达式
+     * @param keyword 标题关键词，空白视为未填写
+     * @return 有界的轻量影视条目页
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<MovieLibraryItemDto> libraryPage(
+            UUID ownerUserId,
+            String mediaType,
+            String metadataStatus,
+            int page,
+            int size,
+            String sort,
+            String keyword
+    ) {
         String normalizedMediaType = normalizeLibraryMediaType(mediaType);
         String normalizedStatus = normalizeLibraryMetadataStatus(metadataStatus);
+        String titlePattern = buildLibraryTitlePattern(keyword);
         PageRequest pageable = createLibraryPageRequest(page, size, sort);
         Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
-        Page<MediaVideoItem> result = videoItemRepository.findReadableOriginalsByMediaType(
+        Page<MediaVideoItem> result = titlePattern == null
+                ? videoItemRepository.findReadableOriginalsByMediaType(
                 ownerUserId,
                 readableLibraryIds,
                 normalizedMediaType,
                 normalizedStatus,
+                pageable
+        )
+                : videoItemRepository.searchReadableOriginalsByMediaType(
+                ownerUserId,
+                readableLibraryIds,
+                normalizedMediaType,
+                normalizedStatus,
+                titlePattern,
                 pageable
         );
         return PageResponse.of(
@@ -190,6 +227,23 @@ public class MovieLibraryService {
                 result.getSize(),
                 result.getTotalElements()
         );
+    }
+
+    /**
+     * 归一化标题检索串：小写、去首尾空白，并把 LIKE 通配符按字面量转义。
+     *
+     * @param keyword 原始关键词
+     * @return 可用于 LIKE 的模式串；关键词空白时返回 null 表示不过滤
+     */
+    private String buildLibraryTitlePattern(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        String normalized = keyword.trim().toLowerCase()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + normalized + "%";
     }
 
     @Transactional(readOnly = true)
