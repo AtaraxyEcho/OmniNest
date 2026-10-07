@@ -1,14 +1,17 @@
 package com.omninest.modules.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.media.domain.AssetType;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.common.cache.ReadThroughCache;
@@ -288,6 +291,19 @@ class MovieLibraryServiceTest {
                 isNull(),
                 any(Pageable.class)
         );
+    }
+
+    @Test
+    void seriesByTypePageRejectsOverlongKeyword() {
+        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+
+        // 前后通配的 LIKE 不走索引，代价随行数与关键词长度相乘；超长输入必须拒绝而不是照查。
+        String overlong = "a".repeat(201);
+        assertThatThrownBy(() -> movieLibraryService.seriesByTypePage(OWNER_ID, "TV", 0, 50, overlong))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("200");
+
+        verifyNoInteractions(tvSeriesRepository);
     }
 
     @Test

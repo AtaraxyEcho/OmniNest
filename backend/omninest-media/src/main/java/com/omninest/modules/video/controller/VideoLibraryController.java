@@ -234,7 +234,8 @@ public class VideoLibraryController {
         return ApiResponse.success(movieLibraryService.seriesByType(currentUserContext.requireCurrentUserId(), seriesType));
     }
 
-    @Operation(summary = "按类型分页获取剧集", description = "按更新时间倒序分页返回指定类型剧集，供滚动加载；q 为标题关键词，在 SQL 侧覆盖全库")
+    @Operation(summary = "按类型分页获取剧集", description = "按更新时间倒序分页返回指定类型剧集，供滚动加载；"
+            + "q 为标题关键词，在 SQL 侧覆盖全库，超过 200 字符返回参数错误")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/series/by-type/page")
     ApiResponse<PageResponse<MovieSeriesDto>> seriesByTypePage(

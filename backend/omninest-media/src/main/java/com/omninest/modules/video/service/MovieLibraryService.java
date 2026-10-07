@@ -78,6 +78,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MovieLibraryService {
+    /**
+     * 标题关键词长度上限，与管理端搜索同口径。
+     */
+    private static final int LIBRARY_KEYWORD_MAX_LENGTH = 200;
+
     private final MediaVideoItemRepository videoItemRepository;
     private final MediaTvSeriesRepository tvSeriesRepository;
     private final MediaTvSeasonRepository tvSeasonRepository;
@@ -235,14 +240,25 @@ public class MovieLibraryService {
      * <p>转义符是反斜杠，因此消费方必须写 {@code like :titlePattern escape '\'}：
      * PostgreSQL 的 {@code LIKE} 没有默认转义符，缺 {@code escape} 子句时反斜杠按普通字符匹配。
      *
+     * <p>关键词长度设上限：前后都带通配的 {@code LIKE} 无法走索引，代价随行数与关键词长度相乘，
+     * 上限口径与管理端搜索一致。
+     *
      * @param keyword 原始关键词
      * @return 可用于 LIKE 的模式串；关键词空白时返回 null 表示不过滤
+     * @throws BusinessException 关键词超过 {@value #LIBRARY_KEYWORD_MAX_LENGTH} 字符
      */
     private String buildLibraryTitlePattern(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return null;
         }
-        String normalized = keyword.trim().toLowerCase()
+        String trimmed = keyword.trim();
+        if (trimmed.length() > LIBRARY_KEYWORD_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "搜索关键词长度不能超过 " + LIBRARY_KEYWORD_MAX_LENGTH + " 个字符"
+            );
+        }
+        String normalized = trimmed.toLowerCase(Locale.ROOT)
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_");

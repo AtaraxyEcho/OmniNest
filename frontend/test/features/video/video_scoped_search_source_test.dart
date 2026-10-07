@@ -86,7 +86,8 @@ class _LibraryAdapter implements HttpClientAdapter {
         ),
       );
     } else {
-      data = _empty();
+      // 来源只该发这两条路径；出现第三条说明多打了接口，让它失败而不是回一份假数据。
+      throw StateError('未预期的请求路径: ${options.path}');
     }
     return ResponseBody.fromString(
       jsonEncode({'code': 200, 'message': 'success', 'data': data}),
@@ -104,15 +105,6 @@ class _LibraryAdapter implements HttpClientAdapter {
       'size': ScopedSearchLimits.perSource,
       'totalElements': items.length,
       'totalPages': 1,
-    };
-  }
-
-  Map<String, Object> _empty() {
-    return <String, Object>{
-      'stats': <String, Object>{},
-      'recentlyAdded': <Object>[],
-      'continueWatching': <Object>[],
-      'series': <Object>[],
     };
   }
 
