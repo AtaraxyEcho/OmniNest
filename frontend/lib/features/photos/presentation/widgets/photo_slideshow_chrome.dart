@@ -3,6 +3,7 @@ import 'dart:ui' as ui show Image;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
 
@@ -13,6 +14,7 @@ class SlideshowIconButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.color,
+    this.minTarget,
     super.key,
   });
 
@@ -21,10 +23,15 @@ class SlideshowIconButton extends StatelessWidget {
   final Color? color;
   final VoidCallback onTap;
 
+  /// 显式命中边长。IconButton 的 constraints 会被 visualDensity 抵消，
+  /// 因此这里用尺寸盒强制；为空表示沿用按钮自定尺寸（桌面紧凑密度不变）。
+  final double? minTarget;
+
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    final button = IconButton(
       tooltip: tooltip,
+
       onPressed: onTap,
       visualDensity: VisualDensity.compact,
       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -34,6 +41,10 @@ class SlideshowIconButton extends StatelessWidget {
         color: color ?? Colors.white.withValues(alpha: 0.70),
       ),
     );
+    if (minTarget case final target?) {
+      return SizedBox.square(dimension: target, child: button);
+    }
+    return button;
   }
 }
 
@@ -79,6 +90,9 @@ class PhotoSlideshowTopBar extends StatelessWidget {
     final showCenterCounter = width >= 720;
     final horizontalPadding = width >= 600 ? 24.0 : 16.0;
     final actionGap = width >= 600 ? 16.0 : 8.0;
+    // 关闭键是离开查看器的逃生控件：窄屏下整条高度随之下限，避免 48 命中
+    // 区被 36 的容器裁掉；桌面维持紧凑密度不变。
+    final barHeight = width >= 600 ? 36.0 : MobileLayoutTokens.minimumTarget;
     final counterText =
         '${(current + 1).toString().padLeft(2, '0')} / '
         '${total.toString().padLeft(2, '0')}';
@@ -151,7 +165,7 @@ class PhotoSlideshowTopBar extends StatelessWidget {
                 32,
               ),
               child: SizedBox(
-                height: 36,
+                height: barHeight,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
@@ -163,6 +177,10 @@ class PhotoSlideshowTopBar extends StatelessWidget {
                           SlideshowIconButton(
                             tooltip: l10n.photosBackToPhotos,
                             icon: Icons.close_rounded,
+                            minTarget:
+                                width >= 600
+                                    ? null
+                                    : MobileLayoutTokens.minimumTarget,
                             onTap: onClose,
                           ),
                           if (showModuleTitle) ...[
