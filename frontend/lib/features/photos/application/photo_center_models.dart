@@ -151,22 +151,15 @@ class PhotoCenterState {
     PhotoTab.favorites => favoriteTotalElements,
   };
 
-  /// 当前数据源下可见的照片
-  List<PhotoItem> get visiblePhotos {
-    final source = switch (tab) {
-      PhotoTab.all => photos,
-      PhotoTab.favorites => favorites,
-    };
-    final query = searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return source;
-    return source
-        .where(
-          (photo) =>
-              photo.title.toLowerCase().contains(query) ||
-              (photo.description ?? '').toLowerCase().contains(query),
-        )
-        .toList();
-  }
+  /// 当前数据源下可见的照片。
+  ///
+  /// 查询词只由服务端处理（`/photos/page?query=`、`/photos/favorites/page?query=`），
+  /// 这里不再按标题复筛：服务端还按 EXIF、标签与地名命中，本地复筛会把
+  /// 这些结果整批删掉。
+  List<PhotoItem> get visiblePhotos => switch (tab) {
+    PhotoTab.all => photos,
+    PhotoTab.favorites => favorites,
+  };
 
   PhotoCenterState copyWith({
     PhotoDashboard? dashboard,
