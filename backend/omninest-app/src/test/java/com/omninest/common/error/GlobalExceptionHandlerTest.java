@@ -45,6 +45,34 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("章节正文未派生返回 404，客户端据此回退本地解析")
+    void handleChapterTextUnavailable_returns404() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.CHAPTER_TEXT_UNAVAILABLE,
+                "本章正文尚未就绪"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.CHAPTER_TEXT_UNAVAILABLE.getCode());
+    }
+
+    @Test
+    @DisplayName("未映射的业务码返回 400，不借用 404 语义")
+    void handleUnmappedBusinessCode_returns400() {
+        BusinessException exception = new BusinessException(
+                ErrorCode.READING_PROGRESS_INVALID,
+                "阅读进度不合法"
+        );
+
+        var response = handler.handleBusiness(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
     @DisplayName("HttpRequestMethodNotSupportedException 返回 405")
     void handleMethodNotSupported_returns405() throws HttpRequestMethodNotSupportedException {
         var exception = new HttpRequestMethodNotSupportedException("PATCH");

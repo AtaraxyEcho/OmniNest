@@ -25,6 +25,7 @@ import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.reader.domain.ReaderPageAsset;
 import com.omninest.modules.reader.domain.ReaderProgress;
+import com.omninest.modules.reader.domain.ReaderTextChapter;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDetailDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderProgressDto;
@@ -291,6 +292,10 @@ public class ReaderItemService {
         List<ReaderPageAsset> pageAssets = List.copyOf(
                 pageAssetRepository.findByReaderItemIdIn(itemIds)
         );
+        List<UUID> chapterAssetIds = textChapterRepository.findByReaderItemIdIn(itemIds).stream()
+                .map(ReaderTextChapter::getContentFileNodeId)
+                .filter(Objects::nonNull)
+                .toList();
         progressRepository.deleteByReaderItemIdIn(itemIds);
         bookshelfRepository.deleteByReaderItemIdIn(itemIds);
         bookmarkRepository.deleteByReaderItemIdIn(itemIds);
@@ -316,6 +321,7 @@ public class ReaderItemService {
         taskRecordService.markCompleted(taskId, Map.of("sourceFilesRetained", true));
         syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
         registerPageAssetCleanupAfterCommit(pageAssets);
+        registerChapterAssetCleanupAfterCommit(chapterAssetIds);
         log.info("阅读条目已删除并保留源文件: userId={}, itemId={}", ownerUserId, itemId);
         return taskId;
     }
@@ -343,6 +349,40 @@ public class ReaderItemService {
             } catch (RuntimeException exception) {
                 log.warn("阅读页面资产元数据清理失败: assetCount={}, errorType={}",
                         assets.size(), exception.getClass().getSimpleName());
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            cleanup.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                cleanup.run();
+            }
+        });
+    }
+
+    /**
+     * 事务提交后删除 TXT 每章正文派生节点。
+     *
+     * <p>章节行随条目一起删除，节点引用只有在这里还能拿到；单个对象删除失败只记录，
+     * 不能把已经成功的条目删除回报为失败。
+     *
+     * @param fileNodeIds 待删除的派生节点 ID
+     */
+    private void registerChapterAssetCleanupAfterCommit(List<UUID> fileNodeIds) {
+        if (fileNodeIds.isEmpty()) {
+            return;
+        }
+        Runnable cleanup = () -> {
+            for (UUID fileNodeId : fileNodeIds) {
+                try {
+                    derivedAssetStorageService.deleteDerivedFileNode(fileNodeId);
+                } catch (RuntimeException exception) {
+                    log.warn("TXT 章节正文对象清理失败: errorType={}",
+                            exception.getClass().getSimpleName());
+                }
             }
         };
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {

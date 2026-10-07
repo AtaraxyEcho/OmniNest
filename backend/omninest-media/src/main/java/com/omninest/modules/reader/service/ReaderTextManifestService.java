@@ -16,6 +16,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,14 +46,20 @@ public class ReaderTextManifestService {
      *
      * @param itemId 阅读条目 ID
      * @param parsedBook 解析草稿
+     * @return 被替换掉的每章正文派生节点 ID，调用方在新版本落盘后负责清理
      */
     @Transactional(rollbackFor = Exception.class)
-    public void replaceManifest(UUID itemId, ParsedTextBook parsedBook) {
+    public List<UUID> replaceManifest(UUID itemId, ParsedTextBook parsedBook) {
         ReaderItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
         if (!"TEXT".equalsIgnoreCase(item.getContentKind())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "漫画条目不能写入文本章节清单");
         }
+        // 章节行即将重建，派生节点引用只能在此处收集，否则旧版本文件永久泄漏
+        List<UUID> obsoleteChapterAssetIds = chapterRepository.findByReaderItemIdOrderByChapterIndex(itemId).stream()
+                .map(ReaderTextChapter::getContentFileNodeId)
+                .filter(Objects::nonNull)
+                .toList();
         chapterRepository.deleteByReaderItemId(itemId);
         chapterRepository.saveAll(parsedBook.chapters().stream()
                 .map(draft -> toEntity(itemId, draft))
@@ -68,6 +75,7 @@ public class ReaderTextManifestService {
         itemRepository.save(item);
         syncEventService.invalidate(item.getOwnerUserId(), SyncScope.READER, "READER_LIBRARY", Map.of());
         persistCoverAfterCommit(itemId, parsedBook.cover());
+        return obsoleteChapterAssetIds;
     }
 
     /**

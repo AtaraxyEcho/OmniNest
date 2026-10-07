@@ -3,7 +3,6 @@ package com.omninest.modules.reader.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
-import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
@@ -22,7 +21,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.IntConsumer;
@@ -63,11 +61,6 @@ public class ReaderTxtChapterTextService {
     private static final int PROGRESS_BODY_END = 95;
     private static final int PROGRESS_BODY_STEP = 5;
 
-    /** 单章正文请求限流键前缀，按用户与条目合并计数 */
-    private static final String RATE_LIMIT_KEY_PREFIX = "reader-chapter-text:";
-    private static final int RATE_LIMIT_PER_WINDOW = 120;
-    private static final Duration RATE_LIMIT_WINDOW = Duration.ofMinutes(1);
-
     private final ReaderItemRepository itemRepository;
     private final ReaderTextChapterRepository chapterRepository;
     private final FileMetadataQueryService fileMetadataQueryService;
@@ -76,13 +69,13 @@ public class ReaderTxtChapterTextService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final TempStagingPort tempStagingPort;
     private final MediaProcessingLimitsProperties processingLimits;
-    private final RateLimitService rateLimitService;
 
     /**
      * 读取一章服务端解码后的 UTF-8 正文。
      *
-     * <p>派生文件尚未生成（旧数据未重解析、或本章超过单章返回上限）时返回
-     * {@link ErrorCode#CHAPTER_TEXT_UNAVAILABLE}，客户端据此回退本地解析链。
+     * <p>派生文件尚未生成（旧数据未重解析、空章或本章超过单章返回上限），
+     * 或节点已先于清单被清理时，一律返回 {@link ErrorCode#CHAPTER_TEXT_UNAVAILABLE}，
+     * 客户端据此回退本地解析链；权限类错误保持原样，不得伪装成可回退。
      *
      * @param ownerUserId 当前用户 ID
      * @param itemId 阅读条目 ID
@@ -90,12 +83,6 @@ public class ReaderTxtChapterTextService {
      * @return 单章正文
      */
     public ChapterTextDto readChapterText(UUID ownerUserId, UUID itemId, int chapterIndex) {
-        if (!rateLimitService.tryAcquire(
-                RATE_LIMIT_KEY_PREFIX + ownerUserId + ":" + itemId,
-                RATE_LIMIT_PER_WINDOW,
-                RATE_LIMIT_WINDOW)) {
-            throw new BusinessException(ErrorCode.RATE_LIMITED, "正文请求过于频繁");
-        }
         ReaderItem item = itemRepository.findByIdAndOwnerUserId(itemId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在或无权访问"));
         if (!"TXT".equalsIgnoreCase(item.getItemType())) {
@@ -115,15 +102,18 @@ public class ReaderTxtChapterTextService {
             String slice = new String(content.inputStream().readNBytes((int) content.sizeBytes()),
                     StandardCharsets.UTF_8);
             // 派生文件从标题行开始，返回时剥掉标题行及其终止符：客户端顶栏已显示章节名，
-            // 正文再含一行就是重复标题（D-12）。偏移域仍以派生文件为准。
+            // 正文再含一行就是重复标题（D-12）。起点如实回报，整章只有标题行时正文为空，
+            // 由渲染端决定补什么，不在此改写偏移（否则客户端会把它认成陈旧清单）。
             int bodyStart = bodyStartOf(chapter, slice.length());
             String text = slice.substring(bodyStart);
-            if (text.isEmpty()) {
-                // 整章只有标题行：保留标题作为正文，避免返回空章
-                text = slice;
-                bodyStart = 0;
+            return new ChapterTextDto(text, text.length(), bodyStart);
+        } catch (BusinessException exception) {
+            if (exception.errorCode() == ErrorCode.FILE_NOT_FOUND
+                    || exception.errorCode() == ErrorCode.FILE_OBJECT_MISSING) {
+                // 节点先于清单被清理：与"尚未派生"同类，客户端应回退而不是报错
+                throw new BusinessException(ErrorCode.CHAPTER_TEXT_UNAVAILABLE, "本章正文文件已失效");
             }
-            return new ChapterTextDto(chapter.getChapterIndex(), text, text.length(), bodyStart);
+            throw exception;
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "读取本章正文失败");
         }
@@ -150,13 +140,16 @@ public class ReaderTxtChapterTextService {
      * 为 TXT 条目的每一章生成 UTF-8 正文派生资产。
      *
      * <p>非 TXT 条目直接返回。正文文件按 {@code (itemId, manifestVersion)} 命名，
-     * 重解析产生新版本后写入新对象，并在写入成功后删除上一章版本的节点。
+     * 全部章节写入成功后再清理 {@code obsoleteFileNodeIds}（上一版本留下的派生节点）；
+     * 中途失败时旧版本仍在，客户端可以继续读到内容而不是两头落空。
      *
      * @param itemId 阅读条目 ID
      * @param fileNodeId TXT 源文件节点 ID
+     * @param obsoleteFileNodeIds 待清理的旧版本派生节点 ID
      * @param progressReporter 进度回调，同时作为取消检查点
      */
-    public void materialize(UUID itemId, UUID fileNodeId, IntConsumer progressReporter) {
+    public void materialize(
+            UUID itemId, UUID fileNodeId, List<UUID> obsoleteFileNodeIds, IntConsumer progressReporter) {
         ReaderItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
         if (!"TXT".equalsIgnoreCase(item.getItemType())) {
@@ -184,8 +177,30 @@ public class ReaderTxtChapterTextService {
         if (lookahead != null) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "TXT 章节清单未覆盖源文件末尾内容");
         }
-        log.info("TXT 每章正文派生完成: itemId={}, chapterCount={}, manifestVersion={}",
-                itemId, chapters.size(), item.getManifestVersion());
+        sweepObsoleteFileNodes(itemId, obsoleteFileNodeIds);
+        log.info("TXT 每章正文派生完成: itemId={}, chapterCount={}, manifestVersion={}, sweptAssets={}",
+                itemId, chapters.size(), item.getManifestVersion(),
+                obsoleteFileNodeIds == null ? 0 : obsoleteFileNodeIds.size());
+    }
+
+    /**
+     * 清理旧版本每章正文派生节点。
+     *
+     * <p>清单行已被重建，这些节点不再有任何数据库引用；逐个删除，失败只记录，
+     * 不能因为残留对象把已完成的解析任务判成失败。
+     */
+    private void sweepObsoleteFileNodes(UUID itemId, List<UUID> obsoleteFileNodeIds) {
+        if (obsoleteFileNodeIds == null || obsoleteFileNodeIds.isEmpty()) {
+            return;
+        }
+        for (UUID fileNodeId : obsoleteFileNodeIds) {
+            try {
+                derivedAssetStorageService.deleteDerivedFileNode(fileNodeId);
+            } catch (RuntimeException exception) {
+                log.warn("TXT 旧章节正文清理失败: itemId={}, errorType={}",
+                        itemId, exception.getClass().getSimpleName());
+            }
+        }
     }
 
     /**
@@ -202,19 +217,19 @@ public class ReaderTxtChapterTextService {
             ChapterWriteResult result = writeLines(tempFile, cursor, lookahead, end, expectedChars);
             long maxBytes = processingLimits.getMaxReaderChapterTextBytes();
             long assetBytes = sizeOf(tempFile);
-            String fileName = "v" + item.getManifestVersion() + "_chapter_" + chapter.getChapterIndex() + ".txt";
-            UUID previousFileNodeId = chapter.getContentFileNodeId();
+            if (assetBytes == 0L) {
+                // 空正文没有可派生的对象（文件模块拒绝 0 字节），保持未派生由兜底链覆盖
+                log.debug("TXT 章节正文为空，跳过派生: itemId={}, chapterIndex={}",
+                        item.getId(), chapter.getChapterIndex());
+                return result.lookahead();
+            }
             if (assetBytes > maxBytes) {
                 // 超过单章返回上限：不派生本章，读取端回退本地解析链
-                chapter.setContentFileNodeId(null);
-                chapterRepository.save(chapter);
-                if (previousFileNodeId != null) {
-                    derivedAssetStorageService.deleteDerivedFileNode(previousFileNodeId);
-                }
                 log.warn("TXT 章节正文超过单章上限，跳过派生: itemId={}, chapterIndex={}, bytes={}, limit={}",
                         item.getId(), chapter.getChapterIndex(), assetBytes, maxBytes);
                 return result.lookahead();
             }
+            String fileName = "v" + item.getManifestVersion() + "_chapter_" + chapter.getChapterIndex() + ".txt";
             UUID fileNodeId = derivedAssetStorageService.store(
                     item.getOwnerUserId(),
                     RESOURCE_TYPE,
@@ -225,9 +240,12 @@ public class ReaderTxtChapterTextService {
                     tempFile
             );
             chapter.setContentFileNodeId(fileNodeId);
-            chapterRepository.save(chapter);
-            if (previousFileNodeId != null && !previousFileNodeId.equals(fileNodeId)) {
-                derivedAssetStorageService.deleteDerivedFileNode(previousFileNodeId);
+            if (chapterRepository.updateContentFileNode(
+                    chapter.getId(), fileNodeId, chapter.getVersion()) == 0) {
+                // 清单已被并发重建：丢弃刚写入的对象并让任务失败，
+                // 不能让新版本的行指向另一版本的正文文件
+                derivedAssetStorageService.deleteDerivedFileNode(fileNodeId);
+                throw new BusinessException(ErrorCode.CONFLICT, "TXT 章节清单已被并发重建");
             }
             log.debug("TXT 章节正文已派生: itemId={}, chapterIndex={}, chars={}",
                     item.getId(), chapter.getChapterIndex(), result.writtenChars());
@@ -258,7 +276,9 @@ public class ReaderTxtChapterTextService {
                 if (line == null || line.offset() >= end) {
                     break;
                 }
-                if (!firstInChapter) {
+                // 行终止符由读到它的行携带：本章首行的终止符属于上一章，
+                // 由下方"末尾补足"写进上一章文件，故此处跳过。
+                if (!firstInChapter && line.precededBySeparator()) {
                     out.write('\n');
                     written++;
                 }
@@ -333,6 +353,6 @@ public class ReaderTxtChapterTextService {
      * @param charCount 返回正文的字符数
      * @param bodyStartOffset 正文在派生文件中的起点，客户端用它还原完整偏移域
      */
-    public record ChapterTextDto(int chapterIndex, String text, int charCount, int bodyStartOffset) {
+    public record ChapterTextDto(String text, int charCount, int bodyStartOffset) {
     }
 }

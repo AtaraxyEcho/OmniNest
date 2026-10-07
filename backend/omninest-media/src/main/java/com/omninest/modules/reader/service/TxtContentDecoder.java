@@ -10,11 +10,16 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CoderResult;
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,22 +41,43 @@ public class TxtContentDecoder {
 
     private static final int CHARSET_SAMPLE_BYTES = 64 * 1024;
 
+    /** 全文校验用的字符缓冲大小：固定值，与文件大小无关 */
+    private static final int VALIDATION_CHAR_BUFFER = 8 * 1024;
+
+    /** JDK 内置的简体中文超集码表；Dart 侧没有等价实现 */
+    private static final Charset GB18030 = Charset.forName("GB18030");
+
     private final FileQueryService fileQueryService;
 
     /**
      * 嗅探 TXT 字符集。
      *
-     * <p>先认 UTF-8 BOM，再按严格 UTF-8 解码样本，失败即判定 GB18030。
-     * 样本只读前 64 KiB，因此超长文件的中段异常字符不会改变判定结果。
+     * <p>先认 UTF-8 BOM，再按严格 UTF-8 解码 64 KiB 样本。样本合法不代表整本合法：
+     * GB 书的前几十 KB 常有碰巧合法的字节序列，而解码用 REPLACE 策略，误判会把坏序列
+     * 变成 {@code U+FFFD} 并永久写进派生文件。因此样本判定为 UTF-8 且文件比样本更长时，
+     * 再对全文做一次流式严格校验；校验只增加一次顺序读，不随文件大小申请内存。
      *
      * @param fileNode 源文件描述
      * @return 用于整本解码的字符集
      */
     public Charset detectCharset(FileDescriptor fileNode) {
+        byte[] sample = readSample(fileNode);
+        if (startsWithUtf8Bom(sample)) {
+            return StandardCharsets.UTF_8;
+        }
+        if (!decodesAsUtf8(sample)) {
+            return GB18030;
+        }
+        if (fileNode.sizeBytes() <= sample.length) {
+            return StandardCharsets.UTF_8;
+        }
+        return validatesAsUtf8(fileNode) ? StandardCharsets.UTF_8 : GB18030;
+    }
+
+    private byte[] readSample(FileDescriptor fileNode) {
         byte[] sample = new byte[CHARSET_SAMPLE_BYTES];
         int size = 0;
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                fileNode.ownerUserId(), fileNode.id())) {
+        try (FileContentStream content = openContent(fileNode)) {
             InputStream input = content.inputStream();
             while (size < sample.length) {
                 int read = input.read(sample, size, sample.length - size);
@@ -63,18 +89,66 @@ public class TxtContentDecoder {
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "TXT 读取失败");
         }
-        if (size >= 3 && sample[0] == (byte) 0xEF && sample[1] == (byte) 0xBB && sample[2] == (byte) 0xBF) {
-            return StandardCharsets.UTF_8;
+        return Arrays.copyOf(sample, size);
+    }
+
+    private boolean startsWithUtf8Bom(byte[] sample) {
+        return sample.length >= 3
+                && sample[0] == (byte) 0xEF
+                && sample[1] == (byte) 0xBB
+                && sample[2] == (byte) 0xBF;
+    }
+
+    private boolean decodesAsUtf8(byte[] bytes) {
+        CharsetDecoder decoder = strictUtf8Decoder();
+        // endOfInput=false：样本按 64 KiB 硬切，末尾常留下半个多字节字符。
+        // 直接 decode() 会把它当畸形输入，整本 UTF-8 中文书因此被误判成 GB18030。
+        CoderResult result = decoder.decode(
+                ByteBuffer.wrap(bytes), CharBuffer.allocate(Math.max(1, bytes.length)), false);
+        return !result.isMalformed();
+    }
+
+    /**
+     * 整本严格解码校验：任何坏序列即判非 UTF-8。
+     *
+     * <p>坏序列既可能以 {@link CharacterCodingException} 本身抛出，也可能被包装成普通
+     * {@code IOException}，两种都要认出；真正的读失败必须让任务失败，
+     * 不能悄悄换字符集把内容读成乱码。
+     */
+    private boolean validatesAsUtf8(FileDescriptor fileNode) {
+        char[] buffer = new char[VALIDATION_CHAR_BUFFER];
+        long decodedChars = 0L;
+        try (FileContentStream content = openContent(fileNode);
+             Reader reader = new InputStreamReader(content.inputStream(), strictUtf8Decoder())) {
+            int read;
+            while ((read = reader.read(buffer)) >= 0) {
+                decodedChars += read;
+            }
+            log.debug("TXT 全文按 UTF-8 校验通过: chars={}", decodedChars);
+            return true;
+        } catch (IOException exception) {
+            if (isCharsetFailure(exception)) {
+                log.debug("TXT 全文不是合法 UTF-8，改用 GB18030: failureType={}",
+                        exception.getClass().getSimpleName());
+                return false;
+            }
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "TXT 读取失败");
         }
-        try {
-            StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(sample, 0, size));
-            return StandardCharsets.UTF_8;
-        } catch (CharacterCodingException exception) {
-            return Charset.forName("GB18030");
-        }
+    }
+
+    private boolean isCharsetFailure(IOException exception) {
+        return exception instanceof CharacterCodingException
+                || exception.getCause() instanceof CharacterCodingException;
+    }
+
+    private CharsetDecoder strictUtf8Decoder() {
+        return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+    }
+
+    private FileContentStream openContent(FileDescriptor fileNode) {
+        return fileQueryService.openOwnedFileContent(fileNode.ownerUserId(), fileNode.id());
     }
 
     /**

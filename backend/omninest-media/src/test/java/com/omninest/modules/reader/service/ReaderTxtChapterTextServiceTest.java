@@ -3,9 +3,10 @@ package com.omninest.modules.reader.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,7 +15,6 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
-import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -31,7 +31,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +59,7 @@ class ReaderTxtChapterTextServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("60000000-0000-0000-0000-000000000002");
     private static final UUID FILE_NODE_ID = UUID.fromString("60000000-0000-0000-0000-000000000003");
     private static final UUID OLD_CHAPTER_NODE_ID = UUID.fromString("60000000-0000-0000-0000-000000000004");
+    private static final UUID OTHER_OLD_CHAPTER_NODE_ID = UUID.fromString("60000000-0000-0000-0000-000000000005");
 
     @Mock
     private ReaderItemRepository itemRepository;
@@ -79,9 +79,6 @@ class ReaderTxtChapterTextServiceTest {
     @Mock
     private TempStagingPort tempStagingPort;
 
-    @Mock
-    private RateLimitService rateLimitService;
-
     @TempDir
     Path tempDir;
 
@@ -99,18 +96,17 @@ class ReaderTxtChapterTextServiceTest {
                 new TxtContentDecoder(fileQueryService),
                 derivedAssetStorageService,
                 tempStagingPort,
-                processingLimits,
-                rateLimitService
+                processingLimits
         );
     }
 
     @Test
-    void writesEachChapterWithTheLineTerminatorOwnedByTheEarlierChapter() throws IOException {
+    void writesEachChapterWithTheLineTerminatorOwnedByTheEarlierChapter() {
         String text = "第一章 甲\n正文\n第二章 乙\n正文";
         List<String> stored = new ArrayList<>();
         prepare(text, List.of(chapter(0, 0L, 9L), chapter(1, 9L, 17L)), 3, stored);
 
-        service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         });
 
         // 上一章末尾带上属于它的终止符，末章没有终止符
@@ -119,11 +115,11 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
-    void namesDerivedAssetByManifestVersion() throws IOException {
+    void namesDerivedAssetByManifestVersion() {
         List<String> stored = new ArrayList<>();
         prepare("第一章 甲\n正文", List.of(chapter(0, 0L, 8L)), 7, stored);
 
-        service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         });
 
         verify(derivedAssetStorageService).store(
@@ -132,19 +128,45 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
-    void replacesPreviousVersionAssetAfterStoringTheNewOne() throws IOException {
+    void sweepsObsoleteAssetsOnlyAfterEveryChapterIsStored() {
         List<String> stored = new ArrayList<>();
-        ReaderTextChapter existing = chapter(0, 0L, 8L);
-        existing.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
-        prepare("第一章 甲\n正文", List.of(existing), 8, stored);
-        when(derivedAssetStorageService.deleteDerivedFileNode(OLD_CHAPTER_NODE_ID)).thenReturn(true);
+        prepare("第一章 甲\n正文\n第二章 乙\n正文",
+                List.of(chapter(0, 0L, 9L), chapter(1, 9L, 17L)), 8, stored);
 
-        service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        service.materialize(ITEM_ID, FILE_NODE_ID,
+                List.of(OLD_CHAPTER_NODE_ID, OTHER_OLD_CHAPTER_NODE_ID), progress -> {
+                });
+
+        assertThat(stored).hasSize(2);
+        verify(derivedAssetStorageService).deleteDerivedFileNode(OLD_CHAPTER_NODE_ID);
+        verify(derivedAssetStorageService).deleteDerivedFileNode(OTHER_OLD_CHAPTER_NODE_ID);
+    }
+
+    @Test
+    void keepsOldAssetsWhenMaterializationFails() {
+        ReaderTextChapter broken = chapter(0, 0L, 7L);
+        prepareWithoutStore("第一章 甲\n正文", List.of(broken), 8);
+
+        assertThatThrownBy(() -> service.materialize(ITEM_ID, FILE_NODE_ID,
+                List.of(OLD_CHAPTER_NODE_ID), progress -> {
+                }))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("TXT 章节正文与清单偏移不一致");
+
+        verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
+    }
+
+    @Test
+    void skipsZeroByteChaptersWithoutFailingTheTask() {
+        ReaderTextChapter empty = chapter(0, 0L, 0L);
+        prepareWithoutStore("", List.of(empty), 1);
+
+        service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         });
 
-        verify(derivedAssetStorageService).deleteDerivedFileNode(OLD_CHAPTER_NODE_ID);
-        verify(chapterRepository).save(existing);
-        assertThat(existing.getContentFileNodeId()).isNotNull();
+        verify(derivedAssetStorageService, never()).store(
+                any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
+        assertThat(empty.getContentFileNodeId()).isNull();
     }
 
     @Test
@@ -152,7 +174,7 @@ class ReaderTxtChapterTextServiceTest {
         ReaderTextChapter tooShort = chapter(0, 0L, 7L);
         prepareWithoutStore("第一章 甲\n正文", List.of(tooShort), 1);
 
-        assertThatThrownBy(() -> service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        assertThatThrownBy(() -> service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         }))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("TXT 章节正文与清单偏移不一致");
@@ -161,9 +183,9 @@ class ReaderTxtChapterTextServiceTest {
     @Test
     void failsLoudlyWhenManifestDoesNotCoverSourceTail() {
         ReaderTextChapter missingTail = chapter(0, 0L, 5L);
-        prepareWithoutStore("第一章 甲\n正文", List.of(missingTail), 1);
+        prepare("第一章 甲\n正文", List.of(missingTail), 1, new ArrayList<>());
 
-        assertThatThrownBy(() -> service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        assertThatThrownBy(() -> service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         }))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("TXT 章节清单未覆盖源文件末尾内容");
@@ -174,7 +196,7 @@ class ReaderTxtChapterTextServiceTest {
         ReaderItem item = textItem("EPUB", 4);
         when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
 
-        service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         });
 
         verify(chapterRepository, never()).findByReaderItemIdOrderByChapterIndex(any());
@@ -183,13 +205,13 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
-    void reportsBodyProgressWithinScanRange() throws IOException {
+    void reportsBodyProgressWithinScanRange() {
         List<String> stored = new ArrayList<>();
         List<Integer> progressValues = new ArrayList<>();
         prepare("第一章 甲\n正文\n第二章 乙\n正文\n第三章 丙\n正文", List.of(
                 chapter(0, 0L, 9L), chapter(1, 9L, 18L), chapter(2, 18L, 26L)), 2, stored);
 
-        service.materialize(ITEM_ID, FILE_NODE_ID, progressValues::add);
+        service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progressValues::add);
 
         assertThat(progressValues).isNotEmpty();
         assertThat(progressValues).allSatisfy(value -> assertThat(value).isBetween(80, 95));
@@ -199,43 +221,35 @@ class ReaderTxtChapterTextServiceTest {
     @Test
     void returnsChapterBodyWithoutTheTitleLine() {
         byte[] body = "第一章 甲\n正文".getBytes(StandardCharsets.UTF_8);
-        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
-        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
         ReaderTextChapter chapter = chapter(0, 0L, 8L);
         chapter.setBodyStartOffset(6);
-        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
-        when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, 0)).thenReturn(Optional.of(chapter));
-        when(fileQueryService.openOwnedFileContent(OWNER_ID, OLD_CHAPTER_NODE_ID))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(body), "v3_chapter_0.txt", body.length, "text/plain"));
+        stubChapterAssetRead(chapter, body);
 
         ReaderTxtChapterTextService.ChapterTextDto dto = service.readChapterText(OWNER_ID, ITEM_ID, 0);
 
         assertThat(dto.text()).isEqualTo("正文");
         assertThat(dto.charCount()).isEqualTo(2);
         assertThat(dto.bodyStartOffset()).isEqualTo(6);
-        assertThat(dto.chapterIndex()).isZero();
     }
 
     @Test
-    void keepsTheTitleLineWhenTheChapterHasNoBody() {
+    void reportsEmptyBodyWithoutRewritingTheOffset() {
         byte[] body = "第一章 甲".getBytes(StandardCharsets.UTF_8);
         ReaderTextChapter chapter = chapter(0, 0L, 5L);
-        // 清单超前于派生文件：起点先夹紧到文件末尾，正文为空则保留标题行
+        // 清单超前于派生文件：起点夹紧到文件末尾，正文为空但不改写偏移，
+        // 否则客户端会把一致的状态误判成陈旧清单
         chapter.setBodyStartOffset(6);
-        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
         stubChapterAssetRead(chapter, body);
 
         ReaderTxtChapterTextService.ChapterTextDto dto = service.readChapterText(OWNER_ID, ITEM_ID, 0);
 
-        assertThat(dto.text()).isEqualTo("第一章 甲");
-        assertThat(dto.charCount()).isEqualTo(5);
-        assertThat(dto.bodyStartOffset()).isZero();
+        assertThat(dto.text()).isEmpty();
+        assertThat(dto.charCount()).isZero();
+        assertThat(dto.bodyStartOffset()).isEqualTo(5);
     }
 
     @Test
     void reportsUnavailableWhenChapterAssetWasNeverDerived() {
-        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
         when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, 1))
                 .thenReturn(Optional.of(chapter(1, 9L, 17L)));
@@ -246,8 +260,21 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
+    void reportsUnavailableWhenDerivedNodeWasPurgedBeforeTheManifest() {
+        ReaderTextChapter chapter = chapter(0, 0L, 8L);
+        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
+        when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, 0)).thenReturn(Optional.of(chapter));
+        when(fileQueryService.openOwnedFileContent(OWNER_ID, OLD_CHAPTER_NODE_ID))
+                .thenThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+
+        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.CHAPTER_TEXT_UNAVAILABLE));
+    }
+
+    @Test
     void rejectsNonTxtItemsAndForeignItemsOnRead() {
-        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("EPUB", 3)));
 
         assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
@@ -261,21 +288,10 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
-    void refusesReadWhenRateLimitIsExhausted() {
-        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(false);
-
-        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("正文请求过于频繁");
-        verify(itemRepository, never()).findByIdAndOwnerUserId(any(), any());
-    }
-
-    @Test
     void refusesOversizedChapterAssetBeforeBufferingIt() {
         byte[] body = "第一章 甲\n正文".getBytes(StandardCharsets.UTF_8);
         processingLimits.setMaxReaderChapterTextBytes(8L);
         ReaderTextChapter chapter = chapter(0, 0L, 8L);
-        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
         stubChapterAssetRead(chapter, body);
 
         assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
@@ -289,18 +305,34 @@ class ReaderTxtChapterTextServiceTest {
         prepareWithoutStore("第一章 甲\n正文", List.of(chapter), 1);
         processingLimits.setMaxReaderChapterTextBytes(8L);
 
-        service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        service.materialize(ITEM_ID, FILE_NODE_ID, List.of(), progress -> {
         });
 
         verify(derivedAssetStorageService, never()).store(
                 any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
         assertThat(chapter.getContentFileNodeId()).isNull();
-        verify(chapterRepository).save(chapter);
         verify(tempStagingPort).deleteQuietly(any(Path.class));
     }
 
+    @Test
+    void dropsTheAssetButKeepsOldOnesWhenTheManifestWasRebuilt() {
+        ReaderTextChapter chapter = chapter(0, 0L, 8L);
+        prepare("第一章 甲\n正文", List.of(chapter), 1, new ArrayList<>());
+        when(chapterRepository.updateContentFileNode(any(), any(), anyLong())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.materialize(ITEM_ID, FILE_NODE_ID,
+                List.of(OLD_CHAPTER_NODE_ID), progress -> {
+                }))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("TXT 章节清单已被并发重建");
+
+        // 只回收刚写出的孤儿对象；旧版本正文留给重试，不能顺手删掉
+        verify(derivedAssetStorageService).deleteDerivedFileNode(any());
+        verify(derivedAssetStorageService, never()).deleteDerivedFileNode(OLD_CHAPTER_NODE_ID);
+    }
+
     private void stubChapterAssetRead(ReaderTextChapter chapter, byte[] body) {
-        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
         when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, chapter.getChapterIndex()))
                 .thenReturn(Optional.of(chapter));
@@ -313,6 +345,7 @@ class ReaderTxtChapterTextServiceTest {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
         stubSource(bytes, chapters);
         when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(textItem("TXT", manifestVersion)));
+        when(chapterRepository.updateContentFileNode(any(), any(), anyLong())).thenReturn(1);
         when(derivedAssetStorageService.store(
                 eq(OWNER_ID), eq("READER_ITEM"), eq(ITEM_ID), eq("TEXT_CHAPTER"),
                 anyString(), eq("text/plain"), any(Path.class)))
@@ -333,6 +366,9 @@ class ReaderTxtChapterTextServiceTest {
         when(chapterRepository.findByReaderItemIdOrderByChapterIndex(ITEM_ID)).thenReturn(chapters);
         when(tempStagingPort.createTempFile(anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> Files.createTempFile(tempDir, "chapter-", ".txt"));
+        // 与生产一致地真正删除，避免测试目录里留下未回收的临时文件
+        doAnswer(invocation -> Files.deleteIfExists(invocation.getArgument(0)))
+                .when(tempStagingPort).deleteQuietly(any(Path.class));
     }
 
     private Answer<UUID> captureContent(List<String> captured) {

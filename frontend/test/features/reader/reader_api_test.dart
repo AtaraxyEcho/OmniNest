@@ -168,12 +168,7 @@ void main() {
         body: {
           'code': 200,
           'message': 'success',
-          'data': {
-            'chapterIndex': 3,
-            'text': '正文内容',
-            'charCount': 4,
-            'bodyStartOffset': 6,
-          },
+          'data': {'text': '正文内容', 'charCount': 4, 'bodyStartOffset': 6},
         },
       );
       final api = ReaderApi(_apiClient(adapter));
@@ -182,7 +177,6 @@ void main() {
 
       expect(adapter.lastMethod, 'GET');
       expect(adapter.lastPath, '/reader/items/item-10/text/chapters/3');
-      expect(result.chapterIndex, 3);
       expect(result.text, '正文内容');
       expect(result.charCount, 4);
       expect(result.bodyStartOffset, 6);

@@ -20,6 +20,8 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
+part 'reader_txt_chapter_fetch.dart';
+
 /// 阅读页面持有的源文件句柄。
 ///
 /// Web 使用受限内存字节，原生平台按需解密到会话临时文件。
@@ -278,6 +280,10 @@ final parsedBookProvider = FutureProvider.autoDispose.family<
       }
       await localStorage.deleteBookMeta(itemId);
       await localStorage.deleteChaptersForItem(itemId);
+      // 进程内 LRU 与 SQLite 同源，不清会让本会话继续读到旧版本的章节正文
+      _chapterContentMemoryCache.removeWhere(
+        (key, _) => key.startsWith('$itemId|'),
+      );
       cachedMeta = null;
     }
     if (cachedMeta != null && (itemType == 'EPUB' || itemType == 'TXT')) {
@@ -340,140 +346,6 @@ void startBackgroundBookPreparation(WidgetRef ref, ReaderItem item) {
       return const ParsedBook(chapters: []);
     }),
   );
-}
-
-/// 按需加载单个章节的 XHTML 内容
-///
-/// TXT 优先取服务端解析时派生的单章 UTF-8 正文；派生缺失、请求失败或长度与清单
-/// 区间不符时回退本地整本解码链。EPUB 由客户端解压，原生平台从会话明文文件按需读取，
-/// Web 使用有界内存字节。
-Future<String?> loadChapterContent(
-  WidgetRef ref,
-  String itemId,
-  ParsedChapter chapter, {
-  required int chapterIndex,
-}) async {
-  if (chapter.xhtmlContent.isNotEmpty) return chapter.xhtmlContent;
-  final detail = await ref.read(readerItemDetailProvider(itemId).future);
-  if (detail.item.itemType == 'TXT') {
-    final start = chapter.sourceStartOffset;
-    final end = chapter.sourceEndOffset;
-    if (start == null || end == null || end < start) return null;
-    final parser = ref.read(txtParserServiceProvider);
-    final spanChars = end - start;
-    // 正文起点越界（清单超前于派生文件）时按整段区间校验，与服务端的夹紧规则保持一致
-    final bodyChars =
-        chapter.bodyStartOffset > 0 && chapter.bodyStartOffset < spanChars
-            ? spanChars - chapter.bodyStartOffset
-            : spanChars;
-    final serverText = await _readTxtChapterFromServer(
-      ref,
-      itemId,
-      chapterIndex,
-      bodyChars,
-    );
-    if (serverText != null) return parser.textToXhtml(serverText);
-    // 服务端取不到正文时的本地兜底：整本下载＋本地解码，只在离线或旧数据未重解析时走到。
-    final Uint8List bytes;
-    try {
-      final source = await ref.read(cachedBookHandleProvider(itemId).future);
-      // Web 受整包内存上限约束；原生放宽到会话级解码上限，超限给出
-      // 明确错误而非静默失败。整本解码按条目缓存，切章不再重复解码。
-      bytes = await source.readBytes(
-        maxBytes:
-            source.isMemory
-                ? LocalBookCache.maxInMemoryParseBytes
-                : LocalBookCache.maxNativeParseBytes,
-      );
-    } on Exception catch (error) {
-      throw TxtChapterTextException(
-        ReaderChapterFailure.needsNetwork,
-        '本地整本文件不可用（itemId=$itemId chapter=$chapterIndex）：$error',
-      );
-    }
-    final text = await parser.ensureDecodedText(itemId: itemId, bytes: bytes);
-    final rawSlice = parser.rawChapterSlice(text, start, end);
-    // 前后端各自解码同一份字节流，编码判定或坏序列策略一有分歧，服务端偏移就会
-    // 整体错位，切出来的其实是别章正文。此时宁可显式失败，也不静默渲染错章内容。
-    if (!TxtParserService.sliceStartsWithTitle(rawSlice, chapter.title)) {
-      readerDebugLog(
-        'TxtOffsetDrift: itemId=$itemId chapterNumber=${chapter.number} '
-        'offsets=$start-$end sliceChars=${rawSlice.length} '
-        'titleChars=${chapter.title.length}',
-      );
-      throw TxtChapterTextException(
-        ReaderChapterFailure.needsReparse,
-        '章节偏移与正文不匹配（chapter=$chapterIndex, span=$start-$end）',
-      );
-    }
-    final body = txtChapterBody(rawSlice, chapter.bodyStartOffset);
-    // 整章只有标题行时剥完标题会剩空串：保留完整切片，与服务端返回保持一致
-    return parser.textToXhtml(body.isEmpty ? rawSlice : body);
-  }
-  if (detail.item.itemType != 'EPUB') return chapter.xhtmlContent;
-
-  final contentPath = chapter.contentPath;
-  if (contentPath == null) return null;
-
-  final source = await ref.read(cachedBookHandleProvider(itemId).future);
-  final epubService = ref.read(epubParserServiceProvider(itemId));
-  final bytes = source.memoryBytes;
-  if (bytes != null) {
-    if (bytes.isEmpty) return null;
-    return epubService.parseChapter(bytes, contentPath);
-  }
-  final path = await source.openFilePath();
-  return path == null ? null : epubService.parseChapterFile(path, contentPath);
-}
-
-/// 读取服务端已解码的 TXT 单章正文；不可用时返回 null 交由本地链兜底。
-Future<String?> _readTxtChapterFromServer(
-  WidgetRef ref,
-  String itemId,
-  int chapterIndex,
-  int expectedChars,
-) async {
-  try {
-    final result = await ref
-        .read(readerApiProvider)
-        .getChapterText(itemId, chapterIndex);
-    if (!txtChapterTextMatchesManifestRange(
-      result.text,
-      result.charCount,
-      expectedChars,
-    )) {
-      readerDebugLog(
-        'TxtServerText SKIP: itemId=$itemId chapterIndex=$chapterIndex '
-        'chars=${result.charCount} expected=$expectedChars',
-      );
-      return null;
-    }
-    return result.text;
-  } on Exception catch (error) {
-    readerDebugLog(
-      'TxtServerText FALLBACK: itemId=$itemId chapterIndex=$chapterIndex error=$error',
-    );
-    return null;
-  }
-}
-
-/// 判断服务端返回的 TXT 单章正文与本地清单是否同源。
-///
-/// 长度必须等于清单区间去掉标题行后的长度；不一致说明本地清单属于另一个
-/// manifest 版本，交由本地链兜底而不是直接渲染。正文为空是合法状态
-/// （整章只有标题行），因此不作为异常。
-bool txtChapterTextMatchesManifestRange(
-  String text,
-  int charCount,
-  int expectedChars,
-) {
-  return charCount == expectedChars && text.length == charCount;
-}
-
-/// 从整章切片（含标题行）取出正文，起点由清单的 bodyStartOffset 给出（D-12）。
-String txtChapterBody(String rawSlice, int bodyStartOffset) {
-  if (bodyStartOffset <= 0) return rawSlice;
-  return rawSlice.substring(bodyStartOffset.clamp(0, rawSlice.length));
 }
 
 /// 判断持久化的书籍元数据是否足以重新按需加载章节正文。
@@ -573,7 +445,8 @@ String? readerChapterCacheKey(ParsedChapter chapter) {
   if (start == null || end == null || start < 0 || end < start) {
     return null;
   }
-  return 'txt/$start-$end.xhtml';
+  // 正文起点参与键值：同一区间在剥掉标题行前后是不同的正文内容
+  return 'txt/$start-$end@${chapter.bodyStartOffset}.xhtml';
 }
 
 /// 进程内章节正文 LRU：避免每次 build/预取都打 SQLite。

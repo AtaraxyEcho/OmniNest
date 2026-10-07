@@ -1,10 +1,12 @@
 package com.omninest.modules.reader.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -17,6 +19,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +41,9 @@ class TxtContentDecoderTest {
 
     private static final UUID FILE_NODE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID FILE_OBJECT_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
+
+    /** 镜像 TxtContentDecoder 的私有样本大小：全文校验分支只在文件超过它时触发 */
+    private static final int SAMPLE_BYTES = 64 * 1024;
     private static final UUID OWNER_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
 
     @Mock
@@ -128,6 +134,87 @@ class TxtContentDecoderTest {
         String emoji = "甲😀乙";
 
         assertThat(totalOffset(emoji, StandardCharsets.UTF_8)).isEqualTo((long) emoji.length());
+    }
+
+    @Test
+    void fallsBackToGb18030WhenTheTailIsNotUtf8AlthoughTheSampleLooksClean() {
+        byte[] bytes = concat(asciiHead(), "中文字符测试".getBytes(Charset.forName("GB18030")));
+        stubBytes(bytes);
+
+        assertThat(decoder.detectCharset(fileNode(bytes.length))).isEqualTo(Charset.forName("GB18030"));
+    }
+
+    @Test
+    void keepsUtf8WhenTheWholeFileIsValidUtf8() {
+        String text = "中".repeat(SAMPLE_BYTES);
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        stubBytes(bytes);
+
+        assertThat(decoder.detectCharset(fileNode(bytes.length))).isEqualTo(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 校验中途读不出来时必须让任务失败：悄悄换成 GB18030 会把内容读成乱码并永久写进派生文件。
+     */
+    @Test
+    void failsInsteadOfSwitchingCharsetWhenTheValidationReadBreaks() {
+        byte[] bytes = asciiHead();
+        when(fileQueryService.openOwnedFileContent(any(), eq(FILE_NODE_ID)))
+                .thenAnswer(invocation -> new FileContentStream(
+                        new ByteArrayInputStream(bytes), "book.txt", bytes.length, "text/plain"))
+                .thenAnswer(invocation -> new FileContentStream(
+                        new BrokenAfterFirstChunkInputStream(), "book.txt", bytes.length, "text/plain"));
+
+        assertThatThrownBy(() -> decoder.detectCharset(fileNode(bytes.length)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("TXT 读取失败");
+    }
+
+    private byte[] asciiHead() {
+        byte[] head = new byte[SAMPLE_BYTES + 16];
+        Arrays.fill(head, (byte) 'a');
+        return head;
+    }
+
+    private byte[] concat(byte[] first, byte[] second) {
+        byte[] merged = new byte[first.length + second.length];
+        System.arraycopy(first, 0, merged, 0, first.length);
+        System.arraycopy(second, 0, merged, first.length, second.length);
+        return merged;
+    }
+
+    private void stubBytes(byte[] bytes) {
+        when(fileQueryService.openOwnedFileContent(any(), eq(FILE_NODE_ID)))
+                .thenAnswer(invocation -> new FileContentStream(
+                        new ByteArrayInputStream(bytes), "book.txt", bytes.length, "text/plain"));
+    }
+
+    /**
+     * 先放出一段合法 UTF-8、随后抛 IO 错误的流，用于区分"编码不符"与"读不出来"。
+     */
+    private static final class BrokenAfterFirstChunkInputStream extends InputStream {
+
+        private int emitted;
+
+        @Override
+        public int read() throws IOException {
+            if (emitted >= SAMPLE_BYTES) {
+                throw new IOException("连接中断");
+            }
+            emitted++;
+            return 'a';
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (emitted >= SAMPLE_BYTES) {
+                throw new IOException("连接中断");
+            }
+            int count = Math.min(length, SAMPLE_BYTES - emitted);
+            Arrays.fill(buffer, offset, offset + count, (byte) 'a');
+            emitted += count;
+            return count;
+        }
     }
 
     private List<TxtContentDecoder.TxtLine> readLines(String text, Charset charset) {

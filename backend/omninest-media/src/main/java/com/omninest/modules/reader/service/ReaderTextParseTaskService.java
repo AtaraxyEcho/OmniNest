@@ -7,7 +7,9 @@ import com.omninest.modules.reader.event.ReaderParseTaskEvent;
 import com.omninest.modules.reader.service.ReaderTextParser.ParsedTextBook;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.common.util.ThrowableDescriber;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,11 +54,13 @@ public class ReaderTextParseTaskService {
                 throw new ReaderImportCancelledException();
             }
             fileLifecycleGuard.requireOwnedWritable(event.ownerUserId(), event.fileNodeId());
-            manifestService.replaceManifest(event.itemId(), parsedBook);
-            // TXT 在此把每章正文解码成 UTF-8 派生文件，读取端之后不再需要整本解码
+            List<UUID> obsoleteChapterAssetIds = manifestService.replaceManifest(event.itemId(), parsedBook);
+            // TXT 在此把每章正文解码成 UTF-8 派生文件，读取端之后不再需要整本解码；
+            // 旧版本节点在新版本全部落盘后才清理，中途失败不会既丢新版又删旧版。
             chapterTextService.materialize(
                     event.itemId(),
                     event.fileNodeId(),
+                    obsoleteChapterAssetIds,
                     progress -> updateProgress(event, progress)
             );
             taskRecordService.markCompleted(event.taskId(), Map.of(

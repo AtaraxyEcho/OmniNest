@@ -5,6 +5,7 @@ import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.FileBusinessReference;
 import com.omninest.modules.file.service.FilePurgeParticipant;
 import com.omninest.modules.reader.domain.ReaderPageAsset;
+import com.omninest.modules.reader.domain.ReaderTextChapter;
 import com.omninest.modules.file.service.PurgeContext;
 import com.omninest.modules.file.service.PurgeContributionWriter;
 import com.omninest.modules.media.service.MediaFileVisibilitySyncParticipant;
@@ -89,7 +90,7 @@ public class ReaderFileCleanupService implements
     }
 
     /**
-     * 贡献阅读条目的多来源文件、封面和漫画页面对象。
+     * 贡献阅读条目的多来源文件、封面、漫画页面与每章正文派生对象。
      *
      * @param context 删除上下文
      * @param writer 资源写入器
@@ -109,6 +110,10 @@ public class ReaderFileCleanupService implements
                 .toList());
         writer.addFileNodeIds(pageAssetRepository.findByReaderItemIdIn(itemIds).stream()
                 .map(ReaderPageAsset::getFileNodeId)
+                .toList());
+        writer.addFileNodeIds(textChapterRepository.findByReaderItemIdIn(itemIds).stream()
+                .map(ReaderTextChapter::getContentFileNodeId)
+                .filter(Objects::nonNull)
                 .toList());
     }
 

@@ -92,13 +92,16 @@ enum ReaderChapterFailure {
 
 /// TXT 单章正文不可用，携带可提示给用户的原因。
 class TxtChapterTextException implements Exception {
-  const TxtChapterTextException(this.reason, this.detail);
+  /// 构造失败；[reason] 为 null 时使用通用加载失败文案，
+  /// 不猜测原因（例如本地文件超限与联网与否无关）。
+  const TxtChapterTextException(this.detail, {this.reason});
 
-  final ReaderChapterFailure reason;
+  final ReaderChapterFailure? reason;
 
   /// 诊断信息（不含书名、路径或正文内容）。
   final String detail;
 
   @override
-  String toString() => 'TxtChapterTextException(${reason.name}): $detail';
+  String toString() =>
+      'TxtChapterTextException(${reason?.name ?? 'unspecified'}): $detail';
 }

@@ -121,7 +121,28 @@ void main() {
       sourceEndOffset: 20,
     );
 
-    expect(readerChapterCacheKey(chapter), 'txt/8-20.xhtml');
+    expect(readerChapterCacheKey(chapter), 'txt/8-20@0.xhtml');
+
+    // 剥掉标题行后同一区间的正文内容不同，键必须区分（D-12）
+    const stripped = ParsedChapter(
+      number: 1,
+      title: '第一章',
+      xhtmlContent: '',
+      charCount: 12,
+      sourceStartOffset: 8,
+      sourceEndOffset: 20,
+      bodyStartOffset: 5,
+    );
+
+    expect(readerChapterCacheKey(stripped), 'txt/8-20@5.xhtml');
+  });
+
+  test('正文长度按标题行起点折算，与服务端 substring 口径一致', () {
+    expect(txtChapterBodyChars(12, 0), 12);
+    expect(txtChapterBodyChars(12, 5), 7);
+    // 整章只有标题行：正文为空
+    expect(txtChapterBodyChars(12, 12), 0);
+    expect(txtChapterBodyChars(12, 30), 0);
   });
 
   test('服务端 TXT 单章正文只在长度与正文区间一致时可用', () {

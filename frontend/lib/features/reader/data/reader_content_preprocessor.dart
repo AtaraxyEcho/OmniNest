@@ -311,12 +311,25 @@ class ReaderContentPreprocessor {
   }
 
   /// 提取 `<body>` 内容。
+  ///
+  /// 用两次定界扫描代替 `<body[^>]*>([\s\S]*?)</body>`：惰性量符要在主 isolate 上
+  /// 模拟逐字符扩展，8 MiB 的单章 HTML 会白付一次回溯；找不到开/闭标签时与旧写法
+  /// 一致地退回整串。
   static String _extractBody(String xhtml) {
-    final bodyMatch = RegExp(
-      r'<body[^>]*>([\s\S]*?)</body>',
+    final openMatch = RegExp(
+      r'<body[^>]*>',
       caseSensitive: false,
     ).firstMatch(xhtml);
-    return bodyMatch?.group(1) ?? xhtml;
+    if (openMatch == null) {
+      return xhtml;
+    }
+    for (final closeMatch in RegExp(
+      r'</body\s*>',
+      caseSensitive: false,
+    ).allMatches(xhtml, openMatch.end)) {
+      return xhtml.substring(openMatch.end, closeMatch.start);
+    }
+    return xhtml;
   }
 
   /// 获取路径的父目录。

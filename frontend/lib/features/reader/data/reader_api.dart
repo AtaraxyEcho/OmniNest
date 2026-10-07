@@ -163,10 +163,14 @@ class ReaderApi {
 
   /// 获取 TXT 单章的服务端解码正文（UTF-8）。
   ///
-  /// 服务端在解析任务里把每章派生成独立文件；未派生（旧数据尚未重解析，或本章
-  /// 超过单章返回上限）时返回业务码 6003，调用方据此回退本地解析链。
-  Future<({int chapterIndex, String text, int charCount, int bodyStartOffset})>
-  getChapterText(String itemId, int chapterIndex) async {
+  /// 服务端在解析任务里把每章派生成独立文件；未派生（旧数据尚未重解析、空正文、
+  /// 超过单章返回上限，或节点已被清理）时返回业务码 6003，调用方据此回退本地解析链。
+  /// 返回的 `text` 已去掉标题行，`bodyStartOffset` 为标题行在整章区间中的长度，
+  /// 客户端用它还原完整偏移域。
+  Future<({String text, int charCount, int bodyStartOffset})> getChapterText(
+    String itemId,
+    int chapterIndex,
+  ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/reader/items/$itemId/text/chapters/$chapterIndex',
     );
@@ -179,7 +183,6 @@ class ReaderApi {
       );
     }
     return (
-      chapterIndex: (data['chapterIndex'] as num?)?.toInt() ?? chapterIndex,
       text: text,
       charCount: (data['charCount'] as num?)?.toInt() ?? 0,
       bodyStartOffset: (data['bodyStartOffset'] as num?)?.toInt() ?? 0,

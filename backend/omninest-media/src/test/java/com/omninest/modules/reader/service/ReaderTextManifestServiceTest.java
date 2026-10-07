@@ -33,6 +33,7 @@ class ReaderTextManifestServiceTest {
 
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID ITEM_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID OLD_ASSET_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
     @Mock
     private ReaderItemRepository itemRepository;
@@ -102,6 +103,35 @@ class ReaderTextManifestServiceTest {
         service.replaceManifest(ITEM_ID, parsed);
 
         assertThat(item.getManifestVersion()).isEqualTo(8);
+    }
+
+    /**
+     * 章节行即将重建，旧每章正文派生节点的引用只有在这里还能拿到；
+     * 不返回给调用方就会永久泄漏对象。
+     */
+    @Test
+    void returnsPreviousChapterAssetIdsForCleanup() {
+        ReaderItem item = textItem();
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        ReaderTextChapter previous = new ReaderTextChapter();
+        previous.setReaderItemId(ITEM_ID);
+        previous.setChapterIndex(0);
+        previous.setChapterKey("chapter_0");
+        previous.setTitle("正文");
+        previous.setCharCount(18);
+        previous.setContentFileNodeId(OLD_ASSET_ID);
+        when(chapterRepository.findByReaderItemIdOrderByChapterIndex(ITEM_ID)).thenReturn(List.of(previous));
+        ParsedTextBook parsed = new ParsedTextBook(
+                null,
+                null,
+                "UTF-8",
+                List.of(new TextChapterDraft(0, "chapter_0", "正文", null, 0L, 18L, 18, 0, 0)),
+                null
+        );
+
+        List<UUID> obsolete = service.replaceManifest(ITEM_ID, parsed);
+
+        assertThat(obsolete).containsExactly(OLD_ASSET_ID);
     }
 
     @Test

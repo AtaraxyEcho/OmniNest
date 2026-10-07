@@ -22,6 +22,9 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
     if (detailAsync.asData?.value.item.isComic == false) {
       ref.watch(cachedBookHandleProvider(widget.itemId));
       ref.watch(epubParserServiceProvider(widget.itemId));
+      // TXT 兜底链的整本解码缓存必须随阅读页保活：该服务只被 ref.read 取用，
+      // 没有监听就会在每次读取后被回收，导致离线切章反复解码整本书。
+      ref.watch(txtParserServiceProvider);
     }
 
     // 从已解析的书籍中按需加载当前章节内容
