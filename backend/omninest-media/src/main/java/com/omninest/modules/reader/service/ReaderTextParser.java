@@ -13,6 +13,7 @@ import com.omninest.modules.reader.service.ComicEpubParser.EpubTocEntry;
 import com.omninest.modules.reader.service.ReaderEpubArchiveStager.StagedArchive;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import java.io.BufferedReader;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -44,10 +45,29 @@ import org.springframework.stereotype.Service;
 public class ReaderTextParser {
 
     private static final int CHARSET_SAMPLE_BYTES = 64 * 1024;
+    /**
+     * 章节标题入库长度上限。数据库列为 varchar(500)，此处留出前缀与截断标记余量，
+     * 避免畸形 TXT 的超长"标题行"直接触发数据完整性异常。
+     */
+    private static final int MAX_CHAPTER_TITLE_CHARS = 200;
+
     private static final Pattern TXT_CHAPTER_PATTERN = Pattern.compile(
             "^(第.{1,24}[章回节卷篇]|(?i:chapter)\\s+[0-9ivxlcdm]+|"
-                    + "(?i:part)\\s+[0-9ivxlcdm]+|[0-9]{1,4}[.、]\\s*\\S+)[\\s　:：.-]?.*$"
+                    + "(?i:part)\\s+[0-9ivxlcdm]+)[\\s　:：.-]?.*$"
     );
+
+    /**
+     * 数字序号章节标题。要求序号后紧跟非数字非 punctuation 的正文首字符且整体不长，
+     * 以免"3.5 亿元的采购"这类行被误判为章节。
+     */
+    private static final Pattern TXT_NUMERIC_CHAPTER_PATTERN = Pattern.compile(
+            "^[0-9]{1,3}[.、][ \\t]*[^0-9.、\\s].{0,28}$"
+    );
+
+    /** 扫描进度上报区间，25 为载入后基线，80 为扫描完成。 */
+    private static final int PROGRESS_SCAN_START = 25;
+    private static final int PROGRESS_SCAN_END = 80;
+    private static final int PROGRESS_SCAN_STEP = 5;
 
     private final FileMetadataQueryService fileMetadataQueryService;
     private final FileQueryService fileQueryService;
@@ -96,7 +116,7 @@ public class ReaderTextParser {
                 TocMetadata toc = tocByPath.get(contentPath);
                 String title = toc == null || toc.title().isBlank()
                         ? "第 " + (chapters.size() + 1) + " 章"
-                        : toc.title();
+                        : clampTitle(toc.title());
                 String xhtml = archive.readSmallText(contentPath);
                 int charCount = xhtml == null ? 0 : countXhtmlCharacters(xhtml, contentPath);
                 chapters.add(new TextChapterDraft(
@@ -127,19 +147,28 @@ public class ReaderTextParser {
         long currentOffset = 0L;
         long chapterStart = 0L;
         String chapterTitle = "正文";
+        int lastReportedProgress = PROGRESS_SCAN_START;
+        long totalBytes = Math.max(1L, fileNode.sizeBytes());
         try (FileContentStream content = fileQueryService.openOwnedFileContent(
                 fileNode.ownerUserId(),
                 fileNode.id())) {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(content.inputStream(), charset));
+            CountingInputStream counting = new CountingInputStream(content.inputStream());
+            BufferedReader reader = new BufferedReader(new InputStreamReader(counting, charset));
             String line;
             boolean firstLine = true;
             while ((line = reader.readLine()) != null) {
+                if (!firstLine) {
+                    // 行终止符按 1 个字符计入偏移域，且只在确实读到下一行时累加，
+                    // 避免为无终止符的末行多加 1。
+                    currentOffset += 1L;
+                }
                 if (firstLine && !line.isEmpty() && line.charAt(0) == '\uFEFF') {
                     line = line.substring(1);
                 }
                 firstLine = false;
-                String normalized = line.trim();
-                if (TXT_CHAPTER_PATTERN.matcher(normalized).matches()) {
+                // strip() 按 Unicode 空白判定，可去除全角空格缩进；trim() 只去除 <= U+0020。
+                String normalized = line.strip();
+                if (isChapterTitle(normalized)) {
                     if (currentOffset == 0L) {
                         chapterTitle = normalized;
                     } else if (currentOffset > chapterStart) {
@@ -148,7 +177,9 @@ public class ReaderTextParser {
                         chapterTitle = normalized;
                     }
                 }
-                currentOffset += line.length() + 1L;
+                currentOffset += line.length();
+                lastReportedProgress = reportScanProgress(
+                        progressReporter, counting.consumed(), totalBytes, lastReportedProgress);
             }
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "TXT 解析失败");
@@ -156,8 +187,77 @@ public class ReaderTextParser {
         if (currentOffset > chapterStart || chapters.isEmpty()) {
             chapters.add(txtDraft(chapters.size(), chapterTitle, chapterStart, currentOffset));
         }
-        progressReporter.accept(80);
+        progressReporter.accept(PROGRESS_SCAN_END);
         return new ParsedTextBook(null, null, charset.name(), chapters, null);
+    }
+
+    /**
+     * 判断归一化后的行是否为章节标题行。
+     *
+     * @param normalized 已去除首尾空白的行
+     * @return 命中标题模式时返回 true
+     */
+    private boolean isChapterTitle(String normalized) {
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        return TXT_CHAPTER_PATTERN.matcher(normalized).matches()
+                || TXT_NUMERIC_CHAPTER_PATTERN.matcher(normalized).matches();
+    }
+
+    /**
+     * 按已读字节比例上报扫描进度。进度回调同时是取消检查点，回调可抛出取消异常中断扫描。
+     *
+     * @param progressReporter 进度回调
+     * @param consumedBytes 已消耗字节数
+     * @param totalBytes 文件总字节数
+     * @param lastReported 最近一次已上报值
+     * @return 最近一次已上报的进度值
+     */
+    private int reportScanProgress(
+            IntConsumer progressReporter, long consumedBytes, long totalBytes, int lastReported) {
+        long span = PROGRESS_SCAN_END - PROGRESS_SCAN_START;
+        int progress = (int) (PROGRESS_SCAN_START
+                + Math.min(span, consumedBytes * span / Math.max(1L, totalBytes)));
+        if (progress < lastReported + PROGRESS_SCAN_STEP) {
+            return lastReported;
+        }
+        progressReporter.accept(progress);
+        return progress;
+    }
+
+    /**
+     * 统计已消耗字节数的输入流包装，仅用于扫描进度上报。
+     */
+    private static final class CountingInputStream extends FilterInputStream {
+
+        private long consumed;
+
+        CountingInputStream(InputStream input) {
+            super(input);
+        }
+
+        long consumed() {
+            return consumed;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = super.read();
+            if (value >= 0) {
+                consumed++;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            int read = super.read(buffer, offset, length);
+            if (read > 0) {
+                consumed += read;
+            }
+            return read;
+        }
     }
 
     private Charset detectCharset(FileDescriptor fileNode) {
@@ -241,13 +341,29 @@ public class ReaderTextParser {
         return new TextChapterDraft(
                 index,
                 "chapter_" + index,
-                title,
+                clampTitle(title),
                 null,
                 start,
                 end,
                 (int) Math.min(Integer.MAX_VALUE, charCount),
                 0
         );
+    }
+
+    /**
+     * 截断过长标题。TXT 标题取整行匹配内容，畸形文件可能产生远超列宽的超长行。
+     *
+     * @param title 原始标题
+     * @return 不超过入库上限的标题
+     */
+    private String clampTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return "正文";
+        }
+        if (title.length() <= MAX_CHAPTER_TITLE_CHARS) {
+            return title;
+        }
+        return title.substring(0, MAX_CHAPTER_TITLE_CHARS);
     }
 
     private String stripFragment(String path) {

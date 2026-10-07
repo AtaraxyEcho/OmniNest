@@ -109,17 +109,30 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
         _buildTopBar(detail, content, sampleChrome: sampleChrome),
         // 底部栏（在遮罩之上，可接收点击）
         _buildBottomBar(detail, content, sampleChrome: sampleChrome),
-        if (chromeLayout.showPersistentProgress && !_showControls)
+        if (chromeLayout.showPersistentProgress)
           ValueListenableBuilder<double>(
             valueListenable: _bookProgressNotifier,
             builder:
-                (context, bookProgress, _) => ReaderProgressIndicator(
-                  key: const Key('readerPersistentProgress'),
-                  settings: _settings,
-                  progress: bookProgress,
-                  currentPage: _isPageMode ? _pageModePage : null,
-                  totalPages: null, // 懒分页不预知总页数
-                  sampleChrome: sampleChrome,
+                (context, bookProgress, _) => IgnorePointer(
+                  ignoring: _showControls,
+                  child: AnimatedOpacity(
+                    // 常驻进度胶囊与控制栏里的进度是同一条信息的两种密度。
+                    // 条件挂载会让两个几何不同的控件在切换瞬间互换，观感上是"进度原地跳走"；
+                    // 改为常驻并与控制栏同速交叉淡入淡出。
+                    opacity: _showControls ? 0 : 1,
+                    duration:
+                        animationsDisabled
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
+                    child: ReaderProgressIndicator(
+                      key: const Key('readerPersistentProgress'),
+                      settings: _settings,
+                      progress: bookProgress,
+                      currentPage: _isPageMode ? _pageModePage : null,
+                      totalPages: null, // 懒分页不预知总页数
+                      sampleChrome: sampleChrome,
+                    ),
+                  ),
                 ),
           ),
         ..._buildOverlays(content),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:archive/archive.dart';
@@ -18,7 +19,9 @@ import 'package:xml/xml.dart';
 String decodeEpubText(List<int> bytes) {
   final declared = _declaredEncoding(bytes);
   if (declared != null && _isGbkFamily(declared)) {
-    return gbk.decode(bytes);
+    // `gbk` 的映射表以双字节 GBK 码元为键，逐字节查表永不命中（等价 Latin-1）；
+    // 必须使用按双字节组合查表的 `gbk_bytes`。
+    return gbk_bytes.decode(bytes);
   }
   return utf8.decode(bytes, allowMalformed: true);
 }
@@ -69,9 +72,23 @@ class EpubParserService {
   String? _cachedArchivePath;
   EpubArchiveSource? _fileSource;
 
+  /// 当前归档实例已保留的解压字节数，超过阈值即释放整个归档。
+  int _retainedEntryBytes = 0;
+
+  /// 当前持有租约的数量。归档被持有时不得释放或重开。
+  int _leaseHolders = 0;
+
+  /// 等待中的租约请求（FIFO）。
+  final List<void Function()> _leaseWaiters = [];
+
+  /// 持有期间收到释放请求时记下来，等最后一个租约归还后再执行。
+  bool _releaseRequested = false;
+
   /// 获取缓存的 Archive，未命中时解压并缓存。
   ///
   /// 使用长度 + 内容哈希判断缓存命中，避免 Uint8List 引用比较问题。
+  /// 旧实现在每个公共入口先 `releaseArchive()`，使这里的命中分支永远走不到，
+  /// 每次切章都重新解析 central directory 与全部本地头；现在缓存真的会被复用。
   Archive? _getCachedArchive(Uint8List archiveBytes) {
     final hash = _computeHash(archiveBytes);
     if (_cachedArchive != null &&
@@ -88,6 +105,10 @@ class EpubParserService {
     return _cachedArchive;
   }
 
+  /// 获取文件流归档缓存，未命中时打开并缓存。
+  ///
+  /// 调用方必须持有租约：换路径意味着关闭上一个 `InputFileStream`，
+  /// 而它可能正被另一个章节的预处理读取。
   Archive? _getCachedFileArchive(String path) {
     if (_cachedArchive != null && _cachedArchivePath == path) {
       return _cachedArchive;
@@ -95,11 +116,7 @@ class EpubParserService {
     releaseArchive();
     final source = openEpubArchiveFile(path);
     try {
-      final compressedBytes = source.archive.files.fold<int>(
-        0,
-        (sum, file) => sum + (file.rawContent?.length ?? 0),
-      );
-      _validateArchive(source.archive, compressedBytes);
+      _validateArchive(source.archive, source.compressedBytes);
       _fileSource = source;
       _cachedArchive = source.archive;
       _cachedArchivePath = path;
@@ -110,20 +127,61 @@ class EpubParserService {
     }
   }
 
-  /// 释放解压缓存的 Archive 对象，回收内存。
+  /// 取得一次归档使用租约。
   ///
-  /// 在章节加载完成后调用，避免 Archive 常驻内存。
-  /// 下次需要时会自动重新解压。
+  /// 归档内部是同一个文件句柄上的 `FileBuffer`，两个章节并发读取会互相打乱读取位置；
+  /// 而"解析＋图片预处理"整段跨多次 await，只有在整段期间持有租约，
+  /// 邻章预取才不能中途关闭当前章正在使用的流。
+  /// 租约互斥：同一时刻只有一个持有者，预取因此排在当前章之后。
+  Future<EpubArchiveLease> acquireLease() {
+    if (_leaseHolders == 0) {
+      _leaseHolders = 1;
+      return Future<EpubArchiveLease>.value(EpubArchiveLease(this));
+    }
+    final completer = Completer<EpubArchiveLease>();
+    _leaseWaiters.add(() {
+      _leaseHolders += 1;
+      completer.complete(EpubArchiveLease(this));
+    });
+    return completer.future;
+  }
+
+  void _releaseLease() {
+    if (_leaseHolders == 0) {
+      return;
+    }
+    _leaseHolders -= 1;
+    if (_leaseWaiters.isNotEmpty) {
+      _leaseWaiters.removeAt(0)();
+      return;
+    }
+    if (_releaseRequested) {
+      _releaseRequested = false;
+      _doReleaseArchive();
+    }
+  }
+
+  /// 释放正在使用的 Archive：调用方必须已归还全部租约，
+  /// 否则本次释放被推迟到最后一个租约归还时执行。
   void releaseArchive() {
+    if (_leaseHolders > 0 || _leaseWaiters.isNotEmpty) {
+      _releaseRequested = true;
+      return;
+    }
+    _doReleaseArchive();
+  }
+
+  void _doReleaseArchive() {
     _fileSource?.close();
     _fileSource = null;
     _cachedArchive = null;
     _cachedArchiveHash = null;
     _cachedArchiveLength = null;
     _cachedArchivePath = null;
+    _retainedEntryBytes = 0;
   }
 
-  /// 获取当前缓存的 Archive（供外部共享使用，避免重复解压）。
+  /// 获取当前缓存的 Archive（仅供持有租约期间读取）。
   Archive? get cachedArchive => _cachedArchive;
 
   /// 计算字节数组的快速哈希（采样 + 长度）。
@@ -328,18 +386,22 @@ class EpubParserService {
     }
   }
 
-  /// 按需解析单个章节的 XHTML 内容
+  /// 按需解析单个章节的 XHTML 内容。
+  ///
+  /// 调用方必须持有 [acquireLease] 取得的租约，直到本章的图片预处理完成：
+  /// 本方法只在归档上读取，不再自行释放归档——旧实现在入口 `releaseArchive()`
+  /// 会让邻章预取关掉当前章仍在使用的文件流，并把解压缓存彻底作废。
   Future<String?> parseChapter(Uint8List archiveBytes, String contentPath) {
-    releaseArchive();
+    assert(_leaseHolders > 0, 'parseChapter 必须在持有归档租约时调用');
     return _parseChapterArchive(
       () => _getCachedArchive(archiveBytes),
       contentPath,
     );
   }
 
-  /// 从原生文件流按需解析单个章节。
+  /// 从原生文件流按需解析单个章节。同样要求调用方持有租约。
   Future<String?> parseChapterFile(String path, String contentPath) {
-    releaseArchive();
+    assert(_leaseHolders > 0, 'parseChapterFile 必须在持有归档租约时调用');
     return _parseChapterArchive(() => _getCachedFileArchive(path), contentPath);
   }
 
@@ -448,6 +510,10 @@ class EpubParserService {
   }
 
   /// 安全读取归档条目字节。
+  ///
+  /// 不 `clear()` 条目：archive 4.x 的 `ArchiveFile.clear()` 会把内容来源一并丢弃，
+  /// 之后同一条目再读只得到 0 字节，而 `size` 仍报原值绕过大小校验（D-35）。
+  /// 解压结果随归档实例保留，累计超过阈值时释放整个归档（有租约则延后到归还）。
   Uint8List _entryBytes(
     ArchiveFile entry, {
     int maxBytes = _maxTextEntryBytes,
@@ -455,15 +521,15 @@ class EpubParserService {
     if (entry.size < 0 || entry.size > maxBytes) {
       throw EpubParseLimitException('归档条目超过解析上限: ${entry.name}');
     }
-    try {
-      final content = entry.content;
-      if (content.length > maxBytes) {
-        throw EpubParseLimitException('归档条目解压后超过解析上限: ${entry.name}');
-      }
-      return content;
-    } finally {
-      entry.clear();
+    final content = entry.content;
+    if (content.length > maxBytes) {
+      throw EpubParseLimitException('归档条目解压后超过解析上限: ${entry.name}');
     }
+    _retainedEntryBytes += content.length;
+    if (_retainedEntryBytes > FileSizeThresholds.epubRetainedEntryBytes) {
+      releaseArchive();
+    }
+    return content;
   }
 
   /// 解析 container.xml 获取 OPF 路径
@@ -895,5 +961,26 @@ class EpubParserService {
         .replaceAll(RegExp(r'&[a-zA-Z]+;'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+}
+
+/// 归档使用租约。归还前，归档不会被释放、重开或换路径。
+///
+/// 由 [EpubParserService.acquireLease] 取得，必须在 `finally` 中 [release]；
+/// 重复归还是无害的。
+class EpubArchiveLease {
+  EpubArchiveLease(this._service);
+
+  final EpubParserService _service;
+
+  bool _released = false;
+
+  /// 归还租约。
+  void release() {
+    if (_released) {
+      return;
+    }
+    _released = true;
+    _service._releaseLease();
   }
 }

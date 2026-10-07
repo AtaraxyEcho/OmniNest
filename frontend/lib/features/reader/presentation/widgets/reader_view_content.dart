@@ -387,14 +387,15 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   void _handleSelectionChanged(SelectedContent? selection) {
     _lastSelectionRawText = selection?.plainText ?? '';
     final selectedText = _lastSelectionRawText.trim();
-    if (selectedText.isNotEmpty) {
-      if (mounted) {
-        setState(() => _selectedText = selectedText);
-      } else {
-        _selectedText = selectedText;
-      }
+    // 桌面端第一次点击会由 SelectableRegion 自己发出"选中已清空"的空事件。
+    // 只接受非空事件会让 _selectedText 长期停在旧值，之后每一次单击都被
+    // 当成"仅清除选中"消费掉，控制栏再也弹不出来。
+    if (mounted) {
+      setState(() => _selectedText = selectedText);
+    } else {
+      _selectedText = selectedText;
     }
-    widget.onSelectionActive?.call(_selectedText.isNotEmpty);
+    widget.onSelectionActive?.call(selectedText.isNotEmpty);
   }
 
   Widget _buildSelectionMenu(
@@ -625,17 +626,13 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
         pointerDownAt != null &&
         !_pointerMoved &&
         (event.position - pointerDownPosition).distance <= 12 &&
+        // 上限只用于区分"长按选词"（触摸长按约 600ms 后触发选择），
+        // 不再要求短于 450ms，否则读到段落末尾的慢点会静默失去切换控制栏的能力。
         DateTime.now().difference(pointerDownAt) <=
-            const Duration(milliseconds: 450);
+            const Duration(milliseconds: 800);
     final hadSelection = _selectionWasActiveOnPointerDown;
     _resetPointerTracking();
     if (!isTapLike) {
-      return;
-    }
-
-    // 选中态下的首次点击仅清除选中，不切换控制栏；选中清除后再次点击恢复切换。
-    if (hadSelection) {
-      clearSelection();
       return;
     }
 
@@ -644,10 +641,14 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
         _suppressNextContentTap = false;
         return;
       }
-      // 本次按下-抬起产生了文本选区（小距离拖选）：是选择手势而非点击，
+      // 本次按下-抬起新产生了选区（小距离拖选或双击选词）：是选择手势而非点击，
       // 不得切换顶栏/底栏，否则选词过程中控制栏反复弹出遮挡内容。
-      if (_selectedText.isNotEmpty) {
+      if (!hadSelection && _selectedText.isNotEmpty) {
         return;
+      }
+      // 残留选区下的单击：清除选中的同时继续切换控制栏，一次点击一个动作。
+      if (hadSelection) {
+        clearSelection();
       }
       widget.onTap?.call();
     });

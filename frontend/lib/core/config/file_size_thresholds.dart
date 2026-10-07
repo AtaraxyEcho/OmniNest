@@ -50,6 +50,13 @@ abstract final class FileSizeThresholds {
   /// EPUB 文本条目上限（8 MiB）。
   static const int epubMaxTextEntryBytes = 8 * 1024 * 1024;
 
+  /// EPUB 归档实例内保留的已解压条目字节上限（32 MiB）。
+  ///
+  /// 条目解压后不能就地清空：archive 4.x 的 `ArchiveFile.clear()` 会连同内容来源一起丢弃，
+  /// 之后再读同一条目只会得到 0 字节。因此解压结果随归档实例保留，累计到本上限时
+  /// 释放整个归档（含文件句柄），下次使用时重新解压目录。
+  static const int epubRetainedEntryBytes = 32 * 1024 * 1024;
+
   /// EPUB 解压比率检查启用阈值（64 MiB）。
   static const int epubRatioCheckThresholdBytes = 64 * 1024 * 1024;
 

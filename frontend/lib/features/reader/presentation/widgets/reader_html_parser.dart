@@ -61,57 +61,83 @@ bool _isBlankLine(LineData line) {
   return text.trim().isEmpty;
 }
 
+/// 合并段落块的分块上限：行数与字符数双阈值，先到先切。
+///
+/// 段落合并会把连续段落压进单个 TextPainter 才能消除 Column 的行间空隙；
+/// 不设上限时整章会退化为一个块，测高与分页的所有分批防线同时失效。
+const _maxMergedParagraphLines = 48;
+const _maxMergedParagraphChars = 4000;
+
+/// 硬上限：只允许在自然段落边界切块，但一段连排到底也不能无限增长。
+///
+/// 软换行续行之间切块会产生一次真实的控件边界（表现为短行），
+/// 所以优先在段首切；超过硬上限时才不顾段落边界强行切块。
+const _hardMergedParagraphLines = 120;
+const _hardMergedParagraphChars = 10000;
+
 List<ContentBlock> _mergeConsecutiveParagraphs(List<ContentBlock> blocks) {
   final result = <ContentBlock>[];
-  ParagraphBlock? pending;
+  final pendingLines = <LineData>[];
+  var pendingTrailingSpacing = false;
+  var pendingChars = 0;
+
+  void flushPending() {
+    if (pendingLines.isEmpty) {
+      return;
+    }
+    result.add(
+      ParagraphBlock(
+        lines: List<LineData>.of(pendingLines),
+        hasTrailingSpacing: pendingTrailingSpacing,
+      ),
+    );
+    pendingLines.clear();
+    pendingTrailingSpacing = false;
+    pendingChars = 0;
+  }
 
   for (final block in blocks) {
-    if (block is ParagraphBlock) {
-      if (pending != null) {
-        // 合并到前一个段落
-        final mergedLines = [...pending.lines];
-        // 移除前一段落的尾部空白行
-        while (mergedLines.isNotEmpty && _isBlankLine(mergedLines.last)) {
-          mergedLines.removeLast();
-        }
-        for (final line in block.lines) {
-          // 跳过空白行
-          if (_isBlankLine(line)) continue;
-          mergedLines.add(LineData(spans: line.spans, isNewParagraph: true));
-        }
-        pending = ParagraphBlock(
-          lines: mergedLines,
-          // 任一被合并块带段距即保留，避免 <br><br> 产生的段距被吞
-          hasTrailingSpacing:
-              pending.hasTrailingSpacing || block.hasTrailingSpacing,
-        );
-      } else {
-        // 单个段落块：过滤内部空白行，标记新段落
-        final cleanedLines = <LineData>[];
-        for (final line in block.lines) {
-          // 跳过空白行
-          if (_isBlankLine(line)) continue;
-          cleanedLines.add(
-            LineData(
-              spans: line.spans,
-              isNewParagraph: cleanedLines.isNotEmpty,
-            ),
-          );
-        }
-        pending = ParagraphBlock(
-          lines: cleanedLines,
-          hasTrailingSpacing: block.hasTrailingSpacing,
-        );
-      }
-    } else {
-      if (pending != null) {
-        result.add(pending);
-        pending = null;
-      }
+    if (block is! ParagraphBlock) {
+      flushPending();
       result.add(block);
+      continue;
+    }
+    // 任一被合并块带段距即保留，避免 <br><br> 产生的段距被吞。
+    pendingTrailingSpacing = pendingTrailingSpacing || block.hasTrailingSpacing;
+    var carriedCollapsed = 0;
+    for (final line in block.lines) {
+      if (_isBlankLine(line)) {
+        // 空白行不产出，但其源字符必须结转给下一个有效行，
+        // 否则块的字符总数小于源文本长度，charOffset 与页裁剪会落到不同空间。
+        carriedCollapsed += line.sourceChars;
+        continue;
+      }
+      final lineChars = line.sourceChars;
+      final overSoftLimit =
+          pendingLines.length >= _maxMergedParagraphLines ||
+          pendingChars + lineChars > _maxMergedParagraphChars;
+      final overHardLimit =
+          pendingLines.length >= _hardMergedParagraphLines ||
+          pendingChars + lineChars > _hardMergedParagraphChars;
+      if (pendingLines.isNotEmpty &&
+          (overHardLimit || (overSoftLimit && !line.softWrap))) {
+        flushPending();
+      }
+      // 新块首行不再标记新段落，由渲染端按首行缩进处理；
+      // 软换行续行带着 softWrap 进新块也不会被补出缩进。
+      pendingLines.add(
+        LineData(
+          spans: line.spans,
+          isNewParagraph: pendingLines.isNotEmpty,
+          collapsedChars: line.collapsedChars + carriedCollapsed,
+          softWrap: line.softWrap,
+        ),
+      );
+      carriedCollapsed = 0;
+      pendingChars += lineChars;
     }
   }
-  if (pending != null) result.add(pending);
+  flushPending();
   return result;
 }
 
@@ -296,6 +322,152 @@ void _processBlock(
   }
 }
 
+// ── 段内换行折叠 ──
+
+/// 含换行的空白串：段内硬换行（如 Project Gutenberg 老书每约 35 字断行）。
+final _wrapRunPattern = RegExp(r'[ \t　 ]*\n[ \t\n　 ]*');
+
+/// 行首空白，缩进统一由渲染端注入，源字符数转入 `collapsedChars`。
+final _lineLeadingPattern = RegExp(r'^[ \t　 ]+');
+
+bool _isAsciiWordUnit(int unit) =>
+    (unit >= 0x30 && unit <= 0x39) ||
+    (unit >= 0x41 && unit <= 0x5A) ||
+    (unit >= 0x61 && unit <= 0x7A);
+
+/// 用新的可绘制文本复制 span，样式与起始偏移保持不变。
+ReaderInlineSpan _respan(ReaderInlineSpan source, String text) =>
+    ReaderInlineSpan(
+      text: text,
+      isBold: source.isBold,
+      isItalic: source.isItalic,
+      isHeading: source.isHeading,
+      href: source.href,
+      isCode: source.isCode,
+      startOffset: source.startOffset,
+      isSuperscript: source.isSuperscript,
+      isSubscript: source.isSubscript,
+      isMarked: source.isMarked,
+      isDeleted: source.isDeleted,
+      isUnderlined: source.isUnderlined,
+    );
+
+/// 把一段内联 spans 折成逻辑行。
+///
+/// 折叠规则：
+/// - 行首空白剥除，长度记入本行 `collapsedChars`；
+/// - 含换行的空白串视为软换行边界：结束当前行，续行标记 `softWrap`，
+///   空白串长度记入续行 `collapsedChars`；两侧都是 ASCII 词字符时保留一个空格
+///   作为可绘制文本（对应空白串中的一个源字符），避免英文被粘连；
+/// - 全空白行不产出，其字符数并入后续行的折叠量。
+///
+/// 折叠量一律只落在行首，所以同一行内 `源索引 = 可绘制索引 + collapsedChars`
+/// 恒成立，块级字符记账与页内裁剪可以共用这一不变式。
+List<LineData> _foldIntoLines(
+  List<ReaderInlineSpan> spans, {
+  required bool firstLineIsNewParagraph,
+  int carriedCollapsed = 0,
+}) {
+  final out = <LineData>[];
+  var buffer = <ReaderInlineSpan>[];
+  var painted = 0;
+  var collapsed = carriedCollapsed;
+  var isNewParagraph = firstLineIsNewParagraph;
+  var isSoftWrap = false;
+  var lastPaintedUnit = 0;
+
+  void closeLine() {
+    if (painted == 0) {
+      buffer = <ReaderInlineSpan>[];
+      return;
+    }
+    out.add(
+      LineData(
+        spans: List<ReaderInlineSpan>.unmodifiable(buffer),
+        isNewParagraph: isNewParagraph,
+        collapsedChars: collapsed,
+        softWrap: isSoftWrap,
+      ),
+    );
+    buffer = <ReaderInlineSpan>[];
+    painted = 0;
+    collapsed = 0;
+    isNewParagraph = false;
+    isSoftWrap = true;
+  }
+
+  void append(String text, ReaderInlineSpan source) {
+    if (text.isEmpty) {
+      return;
+    }
+    buffer.add(_respan(source, text));
+    painted += text.length;
+    lastPaintedUnit = text.codeUnitAt(text.length - 1);
+  }
+
+  for (final span in spans) {
+    final text = span.text;
+    var cursor = 0;
+    for (final match in _wrapRunPattern.allMatches(text)) {
+      var piece = text.substring(cursor, match.start);
+      if (painted == 0) {
+        final leading = _lineLeadingPattern.firstMatch(piece);
+        if (leading != null) {
+          collapsed += leading.end;
+          piece = piece.substring(leading.end);
+        }
+      }
+      append(piece, span);
+
+      final gap = match[0]!;
+      final nextUnit = match.end < text.length ? text.codeUnitAt(match.end) : 0;
+      final joinSpace =
+          _isAsciiWordUnit(lastPaintedUnit) && _isAsciiWordUnit(nextUnit)
+              ? ' '
+              : '';
+      closeLine();
+      collapsed = gap.length - joinSpace.length;
+      if (joinSpace.isNotEmpty) {
+        append(joinSpace, span);
+      }
+      cursor = match.end;
+      if (cursor >= text.length) {
+        break;
+      }
+      // 续行行首不再含空白：它已被上面的空白串整体吞掉。
+    }
+    if (cursor < text.length) {
+      var rest = text.substring(cursor);
+      if (painted == 0) {
+        final leading = _lineLeadingPattern.firstMatch(rest);
+        if (leading != null) {
+          collapsed += leading.end;
+          rest = rest.substring(leading.end);
+        }
+      }
+      append(rest, span);
+    }
+  }
+
+  if (painted == 0) {
+    // 段尾只剩空白：折叠量挂到上一行，保证块字符总数仍等于源文本长度。
+    if (collapsed > 0 && out.isNotEmpty) {
+      final tail = out.removeLast();
+      out.add(
+        LineData(
+          spans: tail.spans,
+          isNewParagraph: tail.isNewParagraph,
+          collapsedChars: tail.collapsedChars + collapsed,
+          softWrap: tail.softWrap,
+        ),
+      );
+    }
+    return out;
+  }
+  closeLine();
+  return out;
+}
+
 // ── 段落处理 ──
 
 /// 处理 `<p>` / `<div>` 元素，遍历子节点处理 `<br>` 分行。
@@ -307,25 +479,47 @@ void _processParagraph(
 ) {
   final lines = <LineData>[];
   final currentSpans = <ReaderInlineSpan>[];
-  var consecutiveBreaks = 0;
   var prevWasBr = false;
+
+  /// 段内是否出现过相邻的两个 `<br>`，即作者真正留出的空行。
+  ///
+  /// 旧实现累计段内所有 `<br>`（被文本隔开也算），导致 `A<br>B<br>C`
+  /// 这种诗节行拿到段前间距，而 `A<br><br>B` 的空行反而在合并阶段被丢弃。
+  var sawAdjacentBreaks = false;
+
+  /// 硬换行边界（`<br>`）造成的、要计入下一行折叠量的源字符数。
+  var pendingCollapsed = 0;
+
+  /// 把已累积的 spans 折成逻辑行追加到 lines。
+  void pushSpansAsLines() {
+    if (currentSpans.isEmpty) {
+      return;
+    }
+    final spans = List<ReaderInlineSpan>.of(currentSpans);
+    currentSpans.clear();
+    lines.addAll(
+      _foldIntoLines(
+        spans,
+        firstLineIsNewParagraph: lines.isEmpty,
+        carriedCollapsed: pendingCollapsed,
+      ),
+    );
+    pendingCollapsed = 0;
+  }
 
   /// 将当前累积的 spans 和 lines 刷新为一个 ParagraphBlock。
   void flushParagraph() {
-    if (currentSpans.isNotEmpty) {
-      lines.add(LineData(spans: List.of(currentSpans)));
-      currentSpans.clear();
-    }
+    pushSpansAsLines();
     if (lines.isNotEmpty) {
       blocks.add(
         ParagraphBlock(
           lines: List.of(lines),
-          hasTrailingSpacing: consecutiveBreaks >= 2,
+          hasTrailingSpacing: sawAdjacentBreaks,
         ),
       );
       lines.clear();
-      if (consecutiveBreaks > 0) ctx.offset += 1;
-      consecutiveBreaks = 0;
+      if (sawAdjacentBreaks) ctx.offset += 1;
+      sawAdjacentBreaks = false;
     }
     prevWasBr = false;
   }
@@ -356,18 +550,18 @@ void _processParagraph(
     ctx,
     onBr: () {
       if (currentSpans.isNotEmpty) {
-        lines.add(LineData(spans: List.of(currentSpans)));
-        currentSpans.clear();
+        pushSpansAsLines();
         prevWasBr = false;
       }
       if (prevWasBr) {
-        // 连续空 <br>，跳过（A<br><br>B 中第二个 <br>）
+        // 相邻的第二个 <br>：只登记空行信号，空白行字符计入下一行折叠量。
+        sawAdjacentBreaks = true;
+        pendingCollapsed += 1;
         ctx.offset += 1;
         return;
       }
-      lines.add(const LineData(spans: []));
       prevWasBr = true;
-      consecutiveBreaks++;
+      pendingCollapsed += 1;
       ctx.offset += 1;
     },
     onText: () {
@@ -375,22 +569,8 @@ void _processParagraph(
     },
   );
 
-  // 最后的残余 spans
-  if (currentSpans.isNotEmpty) {
-    lines.add(LineData(spans: List.of(currentSpans)));
-  }
-
-  if (lines.isNotEmpty) {
-    blocks.add(
-      ParagraphBlock(
-        lines: List.of(lines),
-        hasTrailingSpacing: consecutiveBreaks >= 2,
-      ),
-    );
-    if (consecutiveBreaks > 0) {
-      ctx.offset += 1;
-    }
-  }
+  // 收尾：残余 spans 成为最后一行，并 flush 本段。
+  flushParagraph();
 }
 
 // ── Blockquote 处理 ──

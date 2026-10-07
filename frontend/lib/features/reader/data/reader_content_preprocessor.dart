@@ -15,6 +15,21 @@ class ReaderContentPreprocessor {
   static const _imgPlaceholderPrefix = '__IMG_';
   static const _imgPlaceholderSuffix = '__';
   static const _maxChapterImages = 100;
+
+  /// `<img>` 的 src 属性。
+  ///
+  /// 前视排除 `data-src=` 这类懒加载占位属性：`[^>]*src=` 会匹配到它们的 `src=`，
+  /// 于是占位符被写进 data-src 而真正的 src 未替换（或 src-less 图片彻底丢掉 src）。
+  static final _imgSrcPattern = RegExp(
+    r'''<img\s[^>]*?(?<![\w-])src=["']([^"']+)["']''',
+    caseSensitive: false,
+  );
+
+  /// 单个 src 属性赋值，替换时可作用于任意 `<img>` 标签文本。
+  static final _srcAttributePattern = RegExp(
+    r'''(?<![\w-])src=["'][^"']*["']''',
+    caseSensitive: false,
+  );
   static const _maxImageBytes = FileSizeThresholds.readerInlineImageMaxBytes;
   static const _maxChapterImageBytes =
       FileSizeThresholds.readerChapterImageMaxBytes;
@@ -35,7 +50,12 @@ class ReaderContentPreprocessor {
 
     if (contentPath != null) {
       if (archive != null) {
-        body = await _extractImagesToDisk(body, itemId, archive, contentPath);
+        // 图片提取失败不得让整章不可读：保留原始 src，渲染端会对无法加载的图片
+        // 单独显示错误与重试，而不是把章节判死。
+        body = await _guardedExtract(
+          body,
+          () => _extractImagesToDisk(body, itemId, archive, contentPath),
+        );
       } else if (archiveBytes != null) {
         try {
           // 整包解压可能处理数十 MB 归档，原生平台放到 isolate 执行；
@@ -68,9 +88,26 @@ class ReaderContentPreprocessor {
     return body;
   }
 
+  /// 图片提取的兜底：任何意外都退化为"不替换占位符"，章节正文仍然可读。
+  static Future<String> _guardedExtract(
+    String body,
+    Future<String> Function() extract,
+  ) async {
+    try {
+      return await extract();
+    } catch (e) {
+      if (kDebugMode) {
+        readerDebugLog('Preprocessor: image extraction degraded: $e');
+      }
+      return body;
+    }
+  }
+
   /// 提取图片到磁盘，HTML 中用占位符替代。
   ///
   /// 图片按顺序解压并写入磁盘，避免同一章节的图片同时驻留内存。
+  /// 超出数量或容量上限的图片**降级**为"不加载"（HTML 保留占位符但不落盘），
+  /// 渲染端会对该图单独显示错误与重试；旧实现直接抛异常让整章不可读且重试必败。
   static Future<String> _extractImagesToDisk(
     String html,
     String itemId,
@@ -79,116 +116,145 @@ class ReaderContentPreprocessor {
   ) async {
     final chapterDir = _parentDir(contentPath);
     final storedPaths = <String>{};
+    final handledEntries = <ArchiveFile>{};
     var resolvedCount = 0;
+    var droppedCount = 0;
     var expandedBytes = 0;
 
-    final result = await _replaceAsync(
-      html,
-      RegExp(r'<img\s[^>]*src=["\x27]([^"\x27]+)["\x27]', caseSensitive: false),
-      (match) async {
-        final originalSrc = match.group(1) ?? '';
-        if (originalSrc.startsWith('data:')) {
-          final inlineImage = await _decodeInlineImage(originalSrc);
-          if (inlineImage == null) {
-            return match.group(0)!;
-          }
-          final placeholder =
-              '$_imgPlaceholderPrefix${inlineImage.path}$_imgPlaceholderSuffix';
-          if (storedPaths.contains(inlineImage.path)) {
-            return _replaceImageSource(match, placeholder);
-          }
-          _validateImageLimit(
-            storedCount: storedPaths.length,
-            expandedBytes: expandedBytes,
-            imageBytes: inlineImage.bytes.length,
-            imagePath: inlineImage.path,
-          );
-          await ReaderImageCache.saveImage(
-            itemId: itemId,
-            imagePath: inlineImage.path,
-            bytes: inlineImage.bytes,
-          );
-          expandedBytes += inlineImage.bytes.length;
-          storedPaths.add(inlineImage.path);
-          resolvedCount++;
-          return _replaceImageSource(match, placeholder);
-        }
-        if (originalSrc.startsWith('http://') ||
-            originalSrc.startsWith('https://')) {
+    final result = await _replaceAsync(html, _imgSrcPattern, (match) async {
+      final originalSrc = match.group(1) ?? '';
+
+      String placeholderOf(String path) =>
+          '$_imgPlaceholderPrefix$path$_imgPlaceholderSuffix';
+
+      String drop(String path) {
+        droppedCount++;
+        storedPaths.add(path);
+        return _replaceImageSource(match, placeholderOf(path));
+      }
+
+      if (originalSrc.startsWith('data:')) {
+        final inlineImage = await _decodeInlineImage(originalSrc);
+        if (inlineImage == null) {
           return match.group(0)!;
         }
-
-        final resolvedPath = _resolvePath(chapterDir, originalSrc);
-        final placeholder =
-            '$_imgPlaceholderPrefix$resolvedPath$_imgPlaceholderSuffix';
-        if (storedPaths.contains(resolvedPath)) {
-          return _replaceImageSource(match, placeholder);
+        if (storedPaths.contains(inlineImage.path)) {
+          return _replaceImageSource(match, placeholderOf(inlineImage.path));
         }
-
-        final imageEntry = _findFileInArchive(archive, resolvedPath);
-        if (imageEntry == null) {
-          if (kDebugMode) {
-            readerDebugLog('Preprocessor: image not found: $resolvedPath');
-          }
-          return match.group(0)!;
+        if (inlineImage.tooLarge ||
+            !_isImageWithinLimits(
+              storedCount: storedPaths.length,
+              expandedBytes: expandedBytes,
+              imageBytes: inlineImage.bytes.length,
+              imagePath: inlineImage.path,
+            )) {
+          return drop(inlineImage.path);
         }
-        _validateImageLimit(
-          storedCount: storedPaths.length,
-          expandedBytes: expandedBytes,
-          imageBytes: imageEntry.size,
-          imagePath: resolvedPath,
-        );
-
-        final imageBytes = _entryBytes(imageEntry, maxBytes: _maxImageBytes);
-        _validateImageLimit(
-          storedCount: storedPaths.length,
-          expandedBytes: expandedBytes,
-          imageBytes: imageBytes.length,
-          imagePath: resolvedPath,
-        );
-        expandedBytes += imageBytes.length;
         await ReaderImageCache.saveImage(
           itemId: itemId,
-          imagePath: resolvedPath,
-          bytes: imageBytes,
+          imagePath: inlineImage.path,
+          bytes: inlineImage.bytes,
         );
-        storedPaths.add(resolvedPath);
+        expandedBytes += inlineImage.bytes.length;
+        storedPaths.add(inlineImage.path);
         resolvedCount++;
+        return _replaceImageSource(match, placeholderOf(inlineImage.path));
+      }
+      if (originalSrc.startsWith('http://') ||
+          originalSrc.startsWith('https://')) {
+        return match.group(0)!;
+      }
 
-        return _replaceImageSource(match, placeholder);
-      },
-    );
+      final resolvedPath = _resolvePath(chapterDir, originalSrc);
+      if (storedPaths.contains(resolvedPath)) {
+        return _replaceImageSource(match, placeholderOf(resolvedPath));
+      }
+
+      final imageEntry = _findFileInArchive(archive, resolvedPath);
+      if (imageEntry == null) {
+        if (kDebugMode) {
+          readerDebugLog('Preprocessor: image not found: $resolvedPath');
+        }
+        return match.group(0)!;
+      }
+      // 同一归档条目可能被不同写法的 src 命中；按条目身份去重，
+      // 避免对同一条目重复解压与重复计入容量。
+      if (!handledEntries.add(imageEntry)) {
+        storedPaths.add(resolvedPath);
+        return _replaceImageSource(match, placeholderOf(resolvedPath));
+      }
+      if (!_isImageWithinLimits(
+        storedCount: storedPaths.length,
+        expandedBytes: expandedBytes,
+        imageBytes: imageEntry.size,
+        imagePath: resolvedPath,
+      )) {
+        return drop(resolvedPath);
+      }
+
+      final imageBytes = _entryBytes(imageEntry, maxBytes: _maxImageBytes);
+      if (!_isImageWithinLimits(
+        storedCount: storedPaths.length,
+        expandedBytes: expandedBytes,
+        imageBytes: imageBytes.length,
+        imagePath: resolvedPath,
+      )) {
+        return drop(resolvedPath);
+      }
+      if (imageBytes.isEmpty) {
+        // 0 字节不是"没有图片"就是条目已被丢弃，两者都不该静默入库。
+        return drop(resolvedPath);
+      }
+      expandedBytes += imageBytes.length;
+      await ReaderImageCache.saveImage(
+        itemId: itemId,
+        imagePath: resolvedPath,
+        bytes: imageBytes,
+      );
+      storedPaths.add(resolvedPath);
+      resolvedCount++;
+
+      return _replaceImageSource(match, placeholderOf(resolvedPath));
+    });
 
     if (kDebugMode) {
-      readerDebugLog('Preprocessor: extracted $resolvedCount images to disk');
+      readerDebugLog(
+        'Preprocessor: extracted $resolvedCount images to disk'
+        '${droppedCount > 0 ? ', dropped $droppedCount over limits' : ''}',
+      );
     }
     return result;
   }
 
-  static void _validateImageLimit({
+  /// 图片是否仍在单章数量、单图与单章总容量限制内。
+  static bool _isImageWithinLimits({
     required int storedCount,
     required int expandedBytes,
     required int imageBytes,
     required String imagePath,
   }) {
+    String? reason;
     if (storedCount >= _maxChapterImages) {
-      throw const FormatException('章节图片数量超过 100 张');
+      reason = '单章图片数量超过 $_maxChapterImages 张';
+    } else if (imageBytes < 0 || imageBytes > _maxImageBytes) {
+      reason = '单图超过 $_maxImageBytes 字节';
+    } else if (expandedBytes > _maxChapterImageBytes - imageBytes) {
+      reason = '单章图片总容量超过 $_maxChapterImageBytes 字节';
     }
-    if (imageBytes < 0 || imageBytes > _maxImageBytes) {
-      throw FormatException('章节图片超过 20 MiB: $imagePath');
+    if (reason == null) {
+      return true;
     }
-    if (expandedBytes > _maxChapterImageBytes - imageBytes) {
-      throw const FormatException('章节图片总容量超过 64 MiB');
+    if (kDebugMode) {
+      // 降级必须可查：哪张图因何原因未被加载。
+      readerDebugLog('Preprocessor: image skipped ($reason): $imagePath');
     }
+    return false;
   }
 
   static String _replaceImageSource(Match match, String replacement) {
     return match
         .group(0)!
-        .replaceFirst(
-          RegExp(r'src=["\x27][^"\x27]*["\x27]'),
-          'src="$replacement"',
-        );
+        .replaceFirst(_srcAttributePattern, 'src="$replacement"');
   }
 
   static Future<_InlineImage?> _decodeInlineImage(String source) async {
@@ -197,9 +263,20 @@ class ReaderContentPreprocessor {
         !source.substring(0, commaIndex).contains(';base64')) {
       return null;
     }
+    final mimeType = source.substring(5, source.indexOf(';', 5)).toLowerCase();
+    final extension = switch (mimeType) {
+      'image/png' => 'png',
+      'image/gif' => 'gif',
+      'image/webp' => 'webp',
+      'image/svg+xml' => 'svg',
+      _ => 'jpg',
+    };
+    final path = 'inline/${source.hashCode.toUnsigned(32)}.$extension';
     final encoded = source.substring(commaIndex + 1);
     if (encoded.length > ((_maxImageBytes + 2) ~/ 3) * 4) {
-      throw const FormatException('章节内嵌图片超过 20 MiB');
+      // 超大内嵌图不抛异常：调用方把它降级为"不加载"，正文仍然可读，
+      // 且原始 data URI 不会留在待入库的 HTML 里。
+      return _InlineImage(path: path, bytes: Uint8List(0), tooLarge: true);
     }
     // 最大 20 MiB 的 base64 解码在原生平台移入 isolate；Web 前后让出事件循环。
     final Uint8List bytes;
@@ -212,15 +289,6 @@ class ReaderContentPreprocessor {
     } else {
       bytes = await compute(_base64DecodeJob, encoded);
     }
-    final mimeType = source.substring(5, source.indexOf(';', 5)).toLowerCase();
-    final extension = switch (mimeType) {
-      'image/png' => 'png',
-      'image/gif' => 'gif',
-      'image/webp' => 'webp',
-      'image/svg+xml' => 'svg',
-      _ => 'jpg',
-    };
-    final path = 'inline/${source.hashCode.toUnsigned(32)}.$extension';
     return _InlineImage(path: path, bytes: bytes);
   }
 
@@ -304,27 +372,34 @@ class ReaderContentPreprocessor {
   }
 
   /// 安全读取归档条目字节。
+  ///
+  /// 不 `clear()` 条目：archive 4.x 的 `clear()` 会丢弃内容来源，之后同一条目
+  /// 再读只得到 0 字节而 `size` 仍是原值，会让大小校验放行一张破图（D-35）。
+  /// 解压字节随归档实例保留，由 `EpubParserService` 的保留量上限统一回收。
   static Uint8List _entryBytes(ArchiveFile entry, {required int maxBytes}) {
     if (entry.size < 0 || entry.size > maxBytes) {
       throw FormatException('归档图片超过容量上限: ${entry.name}');
     }
-    try {
-      final content = entry.content;
-      if (content.length > maxBytes) {
-        throw FormatException('归档图片解压后超过容量上限: ${entry.name}');
-      }
-      return content;
-    } finally {
-      entry.clear();
+    final content = entry.content;
+    if (content.length > maxBytes) {
+      throw FormatException('归档图片解压后超过容量上限: ${entry.name}');
     }
+    return content;
   }
 }
 
 class _InlineImage {
-  const _InlineImage({required this.path, required this.bytes});
+  const _InlineImage({
+    required this.path,
+    required this.bytes,
+    this.tooLarge = false,
+  });
 
   final String path;
   final Uint8List bytes;
+
+  /// 超过单图容量上限：不解码、不落盘，由调用方降级为不加载。
+  final bool tooLarge;
 }
 
 /// isolate 中解压归档的纯函数入口。

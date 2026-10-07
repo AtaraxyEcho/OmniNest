@@ -22,6 +22,9 @@ class _IoEpubArchiveSource implements EpubArchiveSource {
   final Archive archive;
 
   @override
+  int get compressedBytes => input.length;
+
+  @override
   void close() {
     input.closeSync();
   }

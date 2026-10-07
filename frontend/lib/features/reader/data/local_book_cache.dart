@@ -31,7 +31,10 @@ class LocalBookCache {
   final Future<Directory> Function(String userId)? _cacheDirectoryResolver;
 
   static Future<void>? _legacyCleanup;
-  static final Map<String, Future<void>> _sessionCleanupByDirectory = {};
+
+  /// 每个缓存目录的残留明文扫描结果；值为 `true` 表示仍有文件删不掉。
+  /// 只有干净完成的扫描才会长期记忆，否则下次进入该目录会重扫。
+  static final Map<String, Future<bool>> _sessionCleanupByDirectory = {};
   static final Random _secureRandom = Random.secure();
 
   /// 本地平台缓存大小上限（500MB）
@@ -376,12 +379,26 @@ class LocalBookCache {
     }
     await directory.create(recursive: true);
     final cleanupKey = p.normalize(directory.absolute.path);
-    await (_sessionCleanupByDirectory[cleanupKey] ??=
-        _deleteAbandonedSessionFiles(directory));
+    final scheduled = _sessionCleanupByDirectory[cleanupKey];
+    if (scheduled != null) {
+      await scheduled;
+      return directory;
+    }
+    final sweep = _deleteAbandonedSessionFiles(directory);
+    _sessionCleanupByDirectory[cleanupKey] = sweep;
+    if (await sweep) {
+      // 仍有明文因句柄占用删不掉：解除记忆，下次进入缓存目录再扫一遍，
+      // 不把它留到进程重启。
+      _sessionCleanupByDirectory.remove(cleanupKey);
+    }
     return directory;
   }
 
-  Future<void> _deleteAbandonedSessionFiles(Directory directory) async {
+  /// 扫描并删除无人持有的会话明文文件。
+  ///
+  /// 返回是否存在删除失败的条目。
+  Future<bool> _deleteAbandonedSessionFiles(Directory directory) async {
+    var hasLeftover = false;
     await for (final entity in directory.list()) {
       if (entity is! File) continue;
       final name = p.basename(entity.path);
@@ -389,6 +406,7 @@ class LocalBookCache {
       try {
         await entity.delete();
       } on FileSystemException catch (error) {
+        hasLeftover = true;
         if (kDebugMode) {
           readerDebugLog(
             'LocalBookCache: abandoned session cleanup failed: $error',
@@ -396,6 +414,7 @@ class LocalBookCache {
         }
       }
     }
+    return hasLeftover;
   }
 
   Future<void> _deleteSessionFilesForCache(File cacheFile) async {
@@ -467,6 +486,9 @@ class LocalBookCache {
         return;
       } on FileSystemException {
         if (attempt == 3) {
+          // 删除失败说明归档句柄仍占用该明文文件：解除所在目录的一次性清理记忆，
+          // 让下次进入缓存目录时重扫残留，而不是等进程重启。
+          _sessionCleanupByDirectory.remove(p.dirname(sessionFile.path));
           if (kDebugMode) {
             readerDebugLog(
               'LocalBookCache: session cleanup deferred for ${sessionFile.path}',

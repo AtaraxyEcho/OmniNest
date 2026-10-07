@@ -150,10 +150,18 @@ void main() {
 
   test('超长文本块不会在两千条视觉行处截断', () {
     final settings = ReaderViewSettings();
-    final blocks = parseBlocks(List<String>.filled(2105, '<p>测</p>').join());
+    final block = ParagraphBlock(
+      lines: List<LineData>.generate(
+        2105,
+        (index) => LineData(
+          spans: [ReaderInlineSpan(text: '测')],
+          isNewParagraph: index > 0,
+        ),
+      ),
+    );
 
     final lines = ReaderPaginationEngine.measureVisualLines(
-      blocks.single,
+      block,
       320,
       settings,
       1,

@@ -178,6 +178,47 @@ void main() {
       expect(highlightedEnd! > highlightedStart!, true);
     });
 
+    testWidgets('残留选区下的单击不再被吞：清选中的同时切换工具栏', (tester) async {
+      var tapCount = 0;
+      await tester.pumpWidget(
+        buildTestWidget(
+          html: '<p>Selection then tap text</p>',
+          onTap: () => tapCount++,
+        ),
+      );
+      await waitForParse(tester);
+
+      await tester.longPress(find.textContaining('Selection then tap text'));
+      await tester.pumpAndSettle();
+
+      // 连点两次正文：其中一次可能被选区上下文菜单吃掉，但修复后至少有一次必须完成切换。
+      // 旧实现"仅清除选中即 return"会把选区存在期间的单击全部吞掉，得到 0。
+      final content = find.textContaining('Selection then tap text');
+      await tester.tapAt(tester.getCenter(content));
+      await tester.pump();
+      await tester.tapAt(tester.getCenter(content));
+      await tester.pump();
+
+      expect(tapCount, greaterThanOrEqualTo(1), reason: '选区存在期间的单击不得被静默吞掉');
+    });
+
+    testWidgets('拖拽滚动不切换工具栏', (tester) async {
+      var tapCount = 0;
+      await tester.pumpWidget(
+        buildTestWidget(html: '<p>拖拽滚动测试内容</p>', onTap: () => tapCount++),
+      );
+      await waitForParse(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.textContaining('拖拽滚动测试内容')),
+      );
+      await gesture.moveBy(const Offset(0, 60));
+      await gesture.up();
+      await tester.pump();
+
+      expect(tapCount, 0);
+    });
+
     testWidgets('清除选择焦点后替换章节不会访问失活元素', (tester) async {
       VoidCallback? clearSelection;
       await tester.pumpWidget(

@@ -12,7 +12,8 @@ void main() {
     ReaderImageCache.init(const DisabledReaderImageRepository());
   });
 
-  test('章节图片超过 100 张时停止归档展开', () async {
+  test('超过单章数量上限的图片降级为不加载，章节仍可读出', () async {
+    ReaderImageCache.init(_MemoryReaderImageRepository());
     final archive = Archive();
     final html = StringBuffer('<body>');
     for (var index = 0; index <= 100; index++) {
@@ -23,15 +24,71 @@ void main() {
     }
     html.write('</body>');
 
-    await expectLater(
-      ReaderContentPreprocessor.preprocessForStorage(
-        itemId: 'item-1',
-        xhtml: html.toString(),
-        archive: archive,
-        contentPath: 'text/chapter.xhtml',
-      ),
-      throwsA(isA<FormatException>()),
+    final result = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item-1',
+      xhtml: html.toString(),
+      archive: archive,
+      contentPath: 'text/chapter.xhtml',
     );
+
+    expect(result, isNotEmpty);
+    expect('<img'.allMatches(result).length, 101, reason: '图片标签不得被吞掉');
+    expect('src="__IMG_'.allMatches(result).length, 101);
+  });
+
+  test('data-src 懒加载属性不被改写', () async {
+    ReaderImageCache.init(_MemoryReaderImageRepository());
+    final archive = Archive();
+    final bytes = utf8.encode('real-image');
+    archive.addFile(ArchiveFile('images/real.png', bytes.length, bytes));
+    archive.addFile(ArchiveFile('images/ph.png', bytes.length, bytes));
+
+    final result = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item-lazy',
+      xhtml:
+          '<body><img data-src="images/real.png" src="images/ph.png"></body>',
+      archive: archive,
+      contentPath: 'text/chapter.xhtml',
+    );
+
+    // 旧写法 `[^>]*src=` 会吃到 data-src 的 "src="，把占位符写进 data-src，
+    // 真正的 src 保持相对路径而加载不到图片。
+    expect(result, contains('data-src="images/real.png"'));
+    expect(result, contains('src="__IMG_'));
+  });
+
+  test('没有 src 属性的懒加载 img 不被破坏', () async {
+    ReaderImageCache.init(_MemoryReaderImageRepository());
+
+    const input = '<body><img data-src="images/x.png"></body>';
+    final result = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item-no-src',
+      xhtml: input,
+      archive: Archive(),
+      contentPath: 'text/chapter.xhtml',
+    );
+
+    expect(result, contains('<img data-src="images/x.png">'));
+    expect(result, isNot(contains('__IMG_')));
+  });
+
+  test('不同写法指向同一归档条目时只落盘一次', () async {
+    final repository = _MemoryReaderImageRepository();
+    ReaderImageCache.init(repository);
+    final archive = Archive();
+    final bytes = utf8.encode('shared-image');
+    archive.addFile(ArchiveFile('images/Art.PNG', bytes.length, bytes));
+
+    final result = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item-dedupe',
+      xhtml:
+          '<body><img src="images/Art.PNG"><img src="images/art.png"></body>',
+      archive: archive,
+      contentPath: 'text/chapter.xhtml',
+    );
+
+    expect(result.contains('__IMG_'), isTrue);
+    expect(repository.images.length, 1, reason: '同一条目重复解压会重复计入容量');
   });
 
   test('内嵌 Base64 图片写入缓存并保留轻量占位符', () async {

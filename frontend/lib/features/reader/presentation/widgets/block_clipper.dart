@@ -198,6 +198,11 @@ class BlockClipper {
   }
 
   /// 按字符范围裁剪文本行列表。
+  ///
+  /// 入参与返回块的字符数都在**源文本空间**：行首折叠字符（缩进、被连排吞掉的
+  /// 换行空白）没有可绘制文本，但必须计入长度，否则页与页之间会丢字或重字。
+  /// 落在裁剪窗口内、却没有可绘制行来承载的折叠字符挂到前一个已输出行上：
+  /// 它们不可见，只影响总数，而总数必须始终等于请求长度。
   static List<LineData>? trimTextBlockByCharRange(
     List<LineData> lines,
     int localStart,
@@ -205,9 +210,26 @@ class BlockClipper {
   ) {
     var offset = 0;
     final result = <LineData>[];
+    var orphanSource = 0;
+
+    void attachOrphans() {
+      if (orphanSource == 0 || result.isEmpty) {
+        return;
+      }
+      final last = result.removeLast();
+      result.add(
+        LineData(
+          spans: last.spans,
+          isNewParagraph: last.isNewParagraph,
+          collapsedChars: last.collapsedChars + orphanSource,
+          softWrap: last.softWrap,
+        ),
+      );
+      orphanSource = 0;
+    }
 
     for (final line in lines) {
-      final lineLen = line.spans.fold<int>(0, (s, sp) => s + sp.text.length);
+      final lineLen = line.sourceChars;
       final lineEnd = offset + lineLen;
 
       if (lineEnd <= localStart || offset >= localEnd) {
@@ -216,22 +238,54 @@ class BlockClipper {
       }
 
       if (offset >= localStart && lineEnd <= localEnd) {
+        attachOrphans();
         result.add(line);
         offset = lineEnd;
         continue;
       }
 
-      final clipStart = (localStart - offset).clamp(0, lineLen);
-      final clipEnd = (localEnd - offset).clamp(0, lineLen);
-      final trimmedSpans = trimSpansByCharRange(line.spans, clipStart, clipEnd);
-      if (trimmedSpans.isNotEmpty) {
-        result.add(
-          LineData(spans: trimmedSpans, isNewParagraph: line.isNewParagraph),
+      // 可绘制区间在源空间中整体后移 collapsedChars 个字符。
+      final paintedStart = offset + line.collapsedChars;
+      final paintedEnd = paintedStart + line.paintedChars;
+      final clipStart =
+          (localStart > paintedStart ? localStart : paintedStart) -
+          paintedStart;
+      final clipEnd =
+          (localEnd < paintedEnd ? localEnd : paintedEnd) - paintedStart;
+      final keptSource =
+          (localEnd < lineEnd ? localEnd : lineEnd) -
+          (localStart > offset ? localStart : offset);
+      if (clipEnd > clipStart) {
+        final trimmedSpans = trimSpansByCharRange(
+          line.spans,
+          clipStart,
+          clipEnd,
         );
+        var trimmedPainted = 0;
+        for (final span in trimmedSpans) {
+          trimmedPainted += span.text.length;
+        }
+        if (trimmedSpans.isNotEmpty) {
+          attachOrphans();
+          result.add(
+            LineData(
+              spans: trimmedSpans,
+              isNewParagraph: line.isNewParagraph,
+              // 落在裁剪窗口内的折叠字符继续计入，跨页字符总数才守恒。
+              collapsedChars: keptSource - trimmedPainted,
+              softWrap: line.softWrap,
+            ),
+          );
+          offset = lineEnd;
+          continue;
+        }
       }
+      orphanSource += keptSource;
 
       offset = lineEnd;
     }
+
+    attachOrphans();
 
     return result.isEmpty ? null : result;
   }
@@ -331,13 +385,13 @@ class BlockClipper {
       HeadingBlock(:final text) => text.length,
       ParagraphBlock(:final lines) => lines.fold(
         0,
-        (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+        (s, l) => s + l.sourceChars,
       ),
       ImageBlock() => 0,
       DividerBlock() => 0,
       BlockquoteBlock(:final lines) => lines.fold(
         0,
-        (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+        (s, l) => s + l.sourceChars,
       ),
       ListBlock(:final items) => items.fold(
         0,

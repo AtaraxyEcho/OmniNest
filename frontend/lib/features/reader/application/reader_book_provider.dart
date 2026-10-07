@@ -362,7 +362,18 @@ Future<String?> loadChapterContent(
               : LocalBookCache.maxNativeParseBytes,
     );
     final text = await parser.ensureDecodedText(itemId: itemId, bytes: bytes);
-    return parser.chapterFromText(text, start, end);
+    final rawSlice = parser.rawChapterSlice(text, start, end);
+    // 前后端各自解码同一份字节流，编码判定或坏序列策略一有分歧，服务端偏移就会
+    // 整体错位，切出来的其实是别章正文。此时宁可显式失败，也不静默渲染错章内容。
+    if (!TxtParserService.sliceStartsWithTitle(rawSlice, chapter.title)) {
+      readerDebugLog(
+        'TxtOffsetDrift: itemId=$itemId chapterNumber=${chapter.number} '
+        'offsets=$start-$end sliceChars=${rawSlice.length} '
+        'titleChars=${chapter.title.length}',
+      );
+      return null;
+    }
+    return parser.textToXhtml(rawSlice);
   }
   if (detail.item.itemType != 'EPUB') return chapter.xhtmlContent;
 
@@ -596,77 +607,86 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
     );
   }
 
-  final xhtml = await loadChapterContent(ref, itemId, matched);
-  if (xhtml == null) return null;
+  // 归档-backed 章节（EPUB）必须在一次租约内完成"解析＋图片预处理"：预处理逐张
+  // 图片 await 落盘，期间归档不能被邻章预取关掉文件流或换路径（D-29）。
+  // 释放放在 finally：提前返回或预处理抛异常都会漏掉释放，Windows 上连带
+  // 会话明文文件删不掉（D-30）。
+  final contentPath = matched.contentPath?.trim() ?? '';
+  final useArchive = contentPath.isNotEmpty;
+  final epubService =
+      useArchive ? ref.read(epubParserServiceProvider(itemId)) : null;
+  final lease = epubService == null ? null : await epubService.acquireLease();
+  try {
+    final xhtml = await loadChapterContent(ref, itemId, matched);
+    if (xhtml == null) return null;
 
-  final contentPath = matched.contentPath?.trim();
-  if (contentPath == null || contentPath.isEmpty) {
-    final storageHtml = await ReaderContentPreprocessor.preprocessForStorage(
-      itemId: itemId,
-      xhtml: xhtml,
-    );
-    await localStorage.saveChapterContent(
-      itemId: itemId,
-      contentPath: cacheKey,
-      title: matched.title,
-      chapterNumber: matched.number,
-      charCount: matched.charCount,
-      processedHtml: storageHtml,
-    );
-    final content = ReaderChapterContent(
+    final String storageHtml;
+    if (!useArchive) {
+      storageHtml = await ReaderContentPreprocessor.preprocessForStorage(
+        itemId: itemId,
+        xhtml: xhtml,
+      );
+    } else {
+      // 优先使用 EpubParserService 已解压的 Archive（避免重复解压）；
+      // Web 没有共享归档时退回整包字节解析。
+      final sharedArchive = epubService!.cachedArchive;
+      final source = await ref.read(cachedBookHandleProvider(itemId).future);
+      storageHtml = await ReaderContentPreprocessor.preprocessForStorage(
+        itemId: itemId,
+        xhtml: xhtml,
+        archive: sharedArchive,
+        archiveBytes: sharedArchive == null ? source.memoryBytes : null,
+        contentPath: contentPath,
+      );
+    }
+
+    // SQLite 只存"体积小"的占位符 HTML。图片提取失败时正文可能仍带着
+    // base64 内嵌图（单章可达数 MB），落库会长期占住缓存且不自愈；
+    // 这种情况只保留本次会话的内存结果，下次打开重新提取。
+    final expectedStoredChars = matched.charCount * 6 + 64 * 1024;
+    final tooLargeToStore = storageHtml.length > expectedStoredChars;
+    if (tooLargeToStore) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'BookProvider: 章节正文体积异常，跳过持久化 — '
+          '"${matched.title}" chars=${matched.charCount} '
+          'html=${storageHtml.length} limit=$expectedStoredChars',
+        );
+      }
+    } else {
+      if (kDebugMode) {
+        readerDebugLog(
+          'BookProvider: saving chapter cache — '
+          '"${matched.title}" ${storageHtml.length} chars, '
+          'contentPath=$cacheKey',
+        );
+      }
+      await localStorage.saveChapterContent(
+        itemId: itemId,
+        contentPath: cacheKey,
+        title: matched.title,
+        chapterNumber: matched.number,
+        charCount: matched.charCount,
+        processedHtml: storageHtml,
+      );
+    }
+
+    if (kDebugMode) {
+      readerDebugLog(
+        'BookProvider: ready — storage=${storageHtml.length} chars',
+      );
+    }
+
+    final ready = ReaderChapterContent(
       title: matched.title,
       content: storageHtml,
       wordCount: matched.charCount > 0 ? matched.charCount : storageHtml.length,
     );
-    _rememberChapterContent(memoryKey, content);
-    return content;
+    _rememberChapterContent(memoryKey, ready);
+    return ready;
+  } finally {
+    lease?.release();
   }
-
-  // 优先使用 EpubParserService 已解压的 Archive（避免重复解压）
-  final epubService = ref.read(epubParserServiceProvider(itemId));
-  final sharedArchive = epubService.cachedArchive;
-  final source = await ref.read(cachedBookHandleProvider(itemId).future);
-
-  // Phase 1：提取 body + 图片存磁盘 + HTML 用占位符
-  final storageHtml = await ReaderContentPreprocessor.preprocessForStorage(
-    itemId: itemId,
-    xhtml: xhtml,
-    archive: sharedArchive,
-    archiveBytes: sharedArchive == null ? source.memoryBytes : null,
-    contentPath: contentPath,
-  );
-
-  // 章节处理完成后释放 Archive 缓存，回收内存
-  epubService.releaseArchive();
-
-  // 写入 SQLite 缓存（HTML 含占位符，体积小）
-  if (kDebugMode) {
-    readerDebugLog(
-      'BookProvider: saving chapter cache — '
-      '"${matched.title}" ${storageHtml.length} chars, '
-      'contentPath=$contentPath',
-    );
-  }
-  await localStorage.saveChapterContent(
-    itemId: itemId,
-    contentPath: cacheKey,
-    title: matched.title,
-    chapterNumber: matched.number,
-    charCount: matched.charCount,
-    processedHtml: storageHtml,
-  );
-
-  if (kDebugMode) {
-    readerDebugLog('BookProvider: ready — storage=${storageHtml.length} chars');
-  }
-
-  final ready = ReaderChapterContent(
-    title: matched.title,
-    content: storageHtml,
-    wordCount: matched.charCount > 0 ? matched.charCount : storageHtml.length,
-  );
-  _rememberChapterContent(memoryKey, ready);
-  return ready;
 }
 
 /// 清除指定书籍的解析缓存（内存 + SQLite + 图片磁盘缓存）

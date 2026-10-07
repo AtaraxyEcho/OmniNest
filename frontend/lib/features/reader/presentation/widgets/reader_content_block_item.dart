@@ -105,18 +105,20 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
     final allSpans = <InlineSpan>[];
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
-      final lineText = line.spans.map((s) => s.text).join();
-      final hasIndent = lineText.startsWith('　　');
-      if (i > 0) {
-        final prevIsEmpty = lines[i - 1].spans.isEmpty;
-        if (line.isNewParagraph && !prevIsEmpty) {
-          allSpans.add(TextSpan(text: hasIndent ? '\n' : '\n　　'));
-        } else {
-          allSpans.add(const TextSpan(text: '\n'));
-        }
-      } else if (!hasIndent && !widget.isFirstBlockContinuation) {
-        allSpans.add(const TextSpan(text: '　　'));
-      }
+      allSpans.add(
+        TextSpan(
+          text: paragraphLineSeparator(
+            isFirstLine: i == 0,
+            isNewParagraph: line.isNewParagraph,
+            previousLineIsEmpty: i > 0 && lines[i - 1].spans.isEmpty,
+            isBlockContinuation: widget.isFirstBlockContinuation,
+            startsWithFullWidthIndent: lineStartsWithFullWidthIndent(
+              line.spans,
+            ),
+            isSoftWrap: line.softWrap,
+          ),
+        ),
+      );
       _collectSpans(allSpans, line.spans);
       _trimTrailingSpaces(allSpans);
     }

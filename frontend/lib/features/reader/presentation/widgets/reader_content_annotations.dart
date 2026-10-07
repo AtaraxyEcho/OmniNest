@@ -62,9 +62,13 @@ abstract final class ReaderContentAnnotationProjector {
     return lines.map((line) {
       // isNewParagraph 是首行缩进标记，必须随行保留：投影重建时丢弃
       // 会让加过批注的段落失去首行缩进（布局视为非段首行）。
+      // collapsedChars 与 softWrap 同样是字符记账与折行语义的一部分，
+      // 丢任何一个都会让批注偏移与页裁剪落到不同字符空间。
       return LineData(
         spans: _applyToSpans(line.spans, annotations),
         isNewParagraph: line.isNewParagraph,
+        collapsedChars: line.collapsedChars,
+        softWrap: line.softWrap,
       );
     }).toList();
   }

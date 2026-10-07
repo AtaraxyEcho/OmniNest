@@ -150,22 +150,20 @@ abstract final class _ReaderPaginationTextLayout {
         lineSpans = [];
       }
 
-      if (i > 0) {
-        final previousLine = lines[i - 1];
-        final previousIsEmpty =
-            previousLine is LineData && previousLine.spans.isEmpty;
-        final isNewParagraph =
-            line is LineData && line.isNewParagraph && !previousIsEmpty;
-        if (isNewParagraph) {
-          allSpans.add(const TextSpan(text: '\n　　'));
-          painterOffset += 3;
-        } else {
-          allSpans.add(const TextSpan(text: '\n'));
-          painterOffset += 1;
-        }
-      } else if (!isContinuation) {
-        allSpans.add(const TextSpan(text: '　　'));
-        painterOffset += 2;
+      final separator = paragraphLineSeparator(
+        isFirstLine: i == 0,
+        isNewParagraph: line is LineData && line.isNewParagraph,
+        previousLineIsEmpty:
+            i > 0 &&
+            lines[i - 1] is LineData &&
+            (lines[i - 1] as LineData).spans.isEmpty,
+        isBlockContinuation: isContinuation,
+        startsWithFullWidthIndent: lineStartsWithFullWidthIndent(lineSpans),
+        isSoftWrap: line is LineData && line.softWrap,
+      );
+      if (separator.isNotEmpty) {
+        allSpans.add(TextSpan(text: separator));
+        painterOffset += separator.length;
       }
 
       final renderedSpans = _ReaderPaginationMetrics.lineTextSpans(
@@ -175,7 +173,10 @@ abstract final class _ReaderPaginationTextLayout {
       );
       allSpans.addAll(renderedSpans);
 
-      final lineStart = charAccum;
+      // 折叠字符只出现在行首：可绘制文本的源起点整体后移 collapsedChars，
+      // 行内 painter 索引与源索引仍保持等距。
+      final collapsedChars = line is LineData ? line.collapsedChars : 0;
+      final lineStart = charAccum + collapsedChars;
       var lineLength = 0;
       for (final span in lineSpans) {
         lineLength += span.text.length;
@@ -190,7 +191,7 @@ abstract final class _ReaderPaginationTextLayout {
         );
       }
       painterOffset += lineLength;
-      charAccum += lineLength;
+      charAccum += lineLength + collapsedChars;
     }
 
     if (allSpans.isEmpty) return [];

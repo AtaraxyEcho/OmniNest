@@ -956,21 +956,18 @@ class ReaderContentLoader {
   }
 }
 
-/// 单块字符数：与 `_ReaderPaginationTextLayout.blockCharCount` 同一口径
+/// 单块字符数：与 `BlockClipper.blockCharCount` 同一口径
 /// 的顶层实现，供 ChapterData 前缀表与 ReaderContentLoader 共用。
+///
+/// 段落与引用块按**源文本空间**计数（`LineData.sourceChars` 含行首折叠字符）；
+/// 两处口径不一致会让前缀表与页裁剪落到不同字符空间。
 int _blockCharCount(ContentBlock block) {
   return switch (block) {
     HeadingBlock(:final text) => text.length,
-    ParagraphBlock(:final lines) => lines.fold(
-      0,
-      (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
-    ),
+    ParagraphBlock(:final lines) => lines.fold(0, (s, l) => s + l.sourceChars),
     ImageBlock() => 0,
     DividerBlock() => 0,
-    BlockquoteBlock(:final lines) => lines.fold(
-      0,
-      (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
-    ),
+    BlockquoteBlock(:final lines) => lines.fold(0, (s, l) => s + l.sourceChars),
     ListBlock(:final items) => items.fold(
       0,
       (s, i) => s + i.spans.fold(0, (s2, sp) => s2 + sp.text.length),

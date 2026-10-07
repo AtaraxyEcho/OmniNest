@@ -28,10 +28,12 @@ void main() {
 
     expect(service.isFixedLayoutFile(file.path), isFalse);
     final book = await service.parseMetadataFile(file.path);
+    final lease = await service.acquireLease();
     final chapter = await service.parseChapterFile(
       file.path,
       book.chapters.single.contentPath!,
     );
+    lease.release();
 
     expect(book.title, '流式测试');
     expect(book.author, '测试作者');
@@ -64,12 +66,69 @@ void main() {
     );
     final service = EpubParserService();
 
+    final lease = await service.acquireLease();
     final chapter = await service.parseChapterFile(
       file.path,
       'OEBPS/chapter1.xhtml',
     );
+    lease.release();
 
     expect(chapter, contains('服务端路径正文'));
+    service.releaseArchive();
+  });
+
+  test('租约互斥：预取必须等当前章归还后才能使用归档', () async {
+    final file = File('${directory.path}/lease.epub');
+    await _writeEpub(file, '<html><body><p>租约正文</p></body></html>');
+    final service = EpubParserService();
+
+    final first = await service.acquireLease();
+    var secondGranted = false;
+    final pending = service.acquireLease().then((lease) {
+      secondGranted = true;
+      return lease;
+    });
+
+    await Future<void>.delayed(Duration.zero);
+    expect(secondGranted, isFalse, reason: '同一文件句柄不允许并发读取');
+
+    first.release();
+    final second = await pending;
+    expect(secondGranted, isTrue);
+    second.release();
+    service.releaseArchive();
+  });
+
+  test('持有租约期间的释放请求延后到归还之后', () async {
+    final file = File('${directory.path}/deferred.epub');
+    await _writeEpub(file, '<html><body><p>延后释放正文</p></body></html>');
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    await service.parseChapterFile(file.path, 'OEBPS/chapter1.xhtml');
+    expect(service.cachedArchive, isNotNull);
+
+    // 模拟 invalidateBookCache 在当前章使用归档期间发起释放。
+    service.releaseArchive();
+    expect(service.cachedArchive, isNotNull, reason: '不能中途抽走正在使用的归档');
+
+    lease.release();
+    expect(service.cachedArchive, isNull, reason: '归还后才真正释放');
+  });
+
+  test('同一本书的连续章节复用同一个归档实例', () async {
+    final file = File('${directory.path}/reuse.epub');
+    await _writeEpub(file, '<html><body><p>复用正文</p></body></html>');
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    await service.parseChapterFile(file.path, 'OEBPS/chapter1.xhtml');
+    final firstArchive = service.cachedArchive;
+    await service.parseChapterFile(file.path, 'OEBPS/chapter1.xhtml');
+
+    expect(firstArchive, isNotNull);
+    expect(service.cachedArchive, same(firstArchive), reason: '不应重解压整本 ZIP');
+    lease.release();
     service.releaseArchive();
   });
 }

@@ -39,6 +39,33 @@ void main() {
     expect(find.textContaining('　　正文内容'), findsOneWidget);
   });
 
+  testWidgets('已带全角缩进的续行不再重复注入缩进', (tester) async {
+    final settings = ReaderViewSettings();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReaderContentBlockItem(
+            block: ParagraphBlock(
+              lines: [
+                LineData(spans: [ReaderInlineSpan(text: '第一段')]),
+                LineData(
+                  spans: [ReaderInlineSpan(text: '　　已缩进段落')],
+                  isNewParagraph: true,
+                ),
+              ],
+            ),
+            settings: settings,
+            itemId: 'b',
+            chapterId: 'c0',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('　　第一段\n　　已缩进段落'), findsOneWidget);
+    expect(find.textContaining('第一段\n　　　已缩进段落'), findsNothing);
+  });
+
   testWidgets('continuation paragraph skips indent', (tester) async {
     final settings = ReaderViewSettings();
     await tester.pumpWidget(
