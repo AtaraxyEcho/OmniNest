@@ -713,15 +713,23 @@ class MovieApi {
     return parseList(response.data).map(_seriesFromJson).toList();
   }
 
-  /// 按类型分页获取系列：滚动加载消费，按更新时间倒序。
+  /// 按类型分页获取系列：滚动加载与全库关键词检索共用，按更新时间倒序。
   Future<MediaPage<MovieSeries>> seriesByTypePage({
     String seriesType = 'TV',
+    String? keyword,
     int page = 0,
     int size = 50,
   }) async {
+    final trimmedKeyword = keyword?.trim();
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/video/series/by-type/page',
-      queryParameters: {'seriesType': seriesType, 'page': page, 'size': size},
+      queryParameters: {
+        'seriesType': seriesType,
+        if (trimmedKeyword != null && trimmedKeyword.isNotEmpty)
+          'q': trimmedKeyword,
+        'page': page,
+        'size': size,
+      },
     );
     return MediaPage.fromJson(parseData(response.data), _seriesFromJson);
   }

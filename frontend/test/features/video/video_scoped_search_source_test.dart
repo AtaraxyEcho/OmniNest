@@ -1,5 +1,5 @@
-// 影视档来源回归：关键词必须进请求（覆盖全库，而不是本地过滤已加载分页），
-// 结果映射到影视详情路由。原页内搜索条用例撤除后，这条覆盖由本文件承接。
+// 影视档来源回归：关键词要同时进影片页与两种类型的系列页（覆盖全库，而不是本地
+// 过滤已加载分页），档内份额 10/5/5 让系列不会被影片挤光，结果按粒度映射详情路由。
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -13,11 +13,31 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/video_scoped_search_source.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 
+class _CapturedRequest {
+  _CapturedRequest(this.path, this.params);
+
+  final String path;
+  final Map<String, dynamic> params;
+
+  String? get keyword => params['q'] as String?;
+
+  String? get seriesType => params['seriesType'] as String?;
+
+  int? get page => params['page'] as int?;
+
+  int? get size => params['size'] as int?;
+}
+
 class _LibraryAdapter implements HttpClientAdapter {
-  /// 最近一次 `/video/library/page` 收到的 `q`。
-  String? lastLibraryKeyword;
-  int? lastPage;
-  int requestCount = 0;
+  final List<_CapturedRequest> requests = <_CapturedRequest>[];
+
+  /// 每个粒度返回的条数，用来验证档内份额。
+  int movieItemCount = 1;
+  int seriesItemCount = 1;
+
+  List<_CapturedRequest> get seriesRequests => requests
+      .where((request) => request.path == '/video/series/by-type/page')
+      .toList(growable: false);
 
   @override
   Future<ResponseBody> fetch(
@@ -25,12 +45,49 @@ class _LibraryAdapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
-    if (options.path == '/video/library/page') {
-      requestCount++;
-      lastLibraryKeyword = options.queryParameters['q'] as String?;
-      lastPage = options.queryParameters['page'] as int?;
+    final params = options.queryParameters;
+    if (options.path == '/video/library/page' ||
+        options.path == '/video/series/by-type/page') {
+      requests.add(_CapturedRequest(options.path, params));
     }
-    final data = options.path == '/video/library/page' ? _page() : _empty();
+    final Object data;
+    if (options.path == '/video/library/page') {
+      final movie = <String, Object>{
+        'id': 'v-1',
+        'fileNodeId': 'n-1',
+        'mediaType': 'MOVIE',
+        'title': 'Mirage',
+        'metadataStatus': 'READY',
+        'nfoStatus': 'NONE',
+        'updatedAt': '2026-10-01T00:00:00Z',
+        'releaseDate': '2024-04-01',
+        'rating': 8.1,
+        'runtimeSeconds': 7320,
+      };
+      data = _page(
+        List<Map<String, Object>>.generate(
+          movieItemCount,
+          (index) => <String, Object>{...movie, 'id': 'v-$index'},
+        ),
+      );
+    } else if (options.path == '/video/series/by-type/page') {
+      final seriesType = params['seriesType'] == 'ANIME' ? 'anime' : 'tv';
+      data = _page(
+        List<Map<String, Object>>.generate(
+          seriesItemCount,
+          (index) => <String, Object>{
+            'id': 's-$seriesType-$index',
+            'title': 'Northern Drift $seriesType $index',
+            'seriesType': params['seriesType'],
+            'metadataStatus': 'READY',
+            'firstAirDate': '2019-06-01',
+            'rating': 8.6,
+          },
+        ),
+      );
+    } else {
+      data = _empty();
+    }
     return ResponseBody.fromString(
       jsonEncode({'code': 200, 'message': 'success', 'data': data}),
       200,
@@ -40,38 +97,19 @@ class _LibraryAdapter implements HttpClientAdapter {
     );
   }
 
-  Map<String, Object> _page() {
+  Map<String, Object> _page(List<Map<String, Object>> items) {
     return <String, Object>{
-      'items': <Map<String, Object>>[
-        <String, Object>{
-          'id': 'v-1',
-          'fileNodeId': 'n-1',
-          'mediaType': 'MOVIE',
-          'title': 'Mirage',
-          'metadataStatus': 'READY',
-          'nfoStatus': 'NONE',
-          'updatedAt': '2026-10-01T00:00:00Z',
-          'releaseDate': '2024-04-01',
-          'rating': 8.1,
-          'runtimeSeconds': 7320,
-          'posterUrl': 'https://cdn.example.test/v-1.jpg',
-        },
-      ],
+      'items': items,
       'page': 0,
       'size': ScopedSearchLimits.perSource,
-      'totalElements': 1,
+      'totalElements': items.length,
       'totalPages': 1,
     };
   }
 
   Map<String, Object> _empty() {
     return <String, Object>{
-      'stats': <String, Object>{
-        'movieCount': 0,
-        'episodeCount': 0,
-        'seriesCount': 0,
-        'scrapeFailedCount': 0,
-      },
+      'stats': <String, Object>{},
       'recentlyAdded': <Object>[],
       'continueWatching': <Object>[],
       'series': <Object>[],
@@ -111,7 +149,7 @@ Ref _captureRef(ProviderContainer container) {
 }
 
 void main() {
-  test('关键词进请求并映射到影视详情路由', () async {
+  test('关键词进影片页与两种类型系列页，并按粒度映射详情路由', () async {
     final (adapter, container) = _openContainer();
 
     final results = await const VideoScopedSearchSource().search(
@@ -119,15 +157,44 @@ void main() {
       'mirage',
     );
 
-    expect(adapter.lastLibraryKeyword, 'mirage');
-    expect(results, hasLength(1));
-    expect(results.single.title, 'Mirage');
-    expect(results.single.scope, ScopedSearchId.video);
-    expect(results.single.detailRoute, '/video/v-1');
-    expect(results.single.subtitle, '2024 · 122 min · ★ 8.1');
+    expect(adapter.requests.map((request) => request.keyword), <String>[
+      'mirage',
+      'mirage',
+      'mirage',
+    ]);
+    expect(
+      adapter.seriesRequests.map((request) => request.seriesType),
+      <String>['TV', 'ANIME'],
+    );
+    expect(results.map((item) => item.detailRoute), <String>[
+      '/video/v-0',
+      '/video/series/s-tv-0',
+      '/video/series/s-anime-0',
+    ]);
+    expect(results.every((item) => item.scope == ScopedSearchId.video), isTrue);
+    expect(results[0].subtitle, '2024 · 122 min · ★ 8.1');
+    expect(results[1].subtitle, '2019 · ★ 8.6');
   });
 
-  test('分页号透传给数据侧，加载更多换页而不是本地翻页', () async {
+  test('档内份额 10/5/5：影片占满时系列仍有位置', () async {
+    final (adapter, container) = _openContainer();
+    adapter.movieItemCount = 10;
+    adapter.seriesItemCount = 5;
+
+    final results = await const VideoScopedSearchSource().search(
+      _captureRef(container),
+      'mirage',
+    );
+
+    expect(adapter.requests.map((request) => request.size), <int>[10, 5, 5]);
+    expect(results, hasLength(ScopedSearchLimits.perSource));
+    expect(
+      results.where((item) => item.detailRoute.startsWith('/video/series/')),
+      hasLength(10),
+    );
+  });
+
+  test('分页号透传给三个请求，加载更多换页而不是本地翻页', () async {
     final (adapter, container) = _openContainer();
 
     await const VideoScopedSearchSource().search(
@@ -136,8 +203,7 @@ void main() {
       page: 2,
     );
 
-    expect(adapter.lastPage, 2);
-    expect(adapter.requestCount, 1);
+    expect(adapter.requests.map((request) => request.page), <int>[2, 2, 2]);
   });
 
   test('空白查询不发请求', () async {
@@ -149,6 +215,6 @@ void main() {
     );
 
     expect(results, isEmpty);
-    expect(adapter.requestCount, 0);
+    expect(adapter.requests, isEmpty);
   });
 }
