@@ -122,6 +122,7 @@ void main() {
               'itemType': 'TECHNICAL',
               'progressPercent': 80,
               'addedToBookshelf': true,
+              'manifestVersion': 4,
             },
             'chapters': [
               {'id': 'ch-1', 'chapterNumber': 1, 'title': 'Getting Started'},
@@ -138,9 +139,28 @@ void main() {
       expect(adapter.lastPath, '/reader/items/item-10');
       expect(result.item.id, 'item-10');
       expect(result.item.title, 'Flutter Cookbook');
+      // 清单版本是章节缓存的失效依据，缺失时按 0 处理
+      expect(result.item.manifestVersion, 4);
       expect(result.chapters, hasLength(1));
       expect(result.progress, isNotNull);
       expect(result.progress!.progressPercent, 80);
+    });
+
+    test('detail defaults manifestVersion to zero when absent', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {
+            'item': {'id': 'item-11', 'title': 'Legacy', 'itemType': 'TXT'},
+          },
+        },
+      );
+      final api = ReaderApi(_apiClient(adapter));
+
+      final result = await api.detail('item-11');
+
+      expect(result.item.manifestVersion, 0);
     });
 
     test('getTextManifest parses persistent chapter offsets', () async {

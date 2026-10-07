@@ -81,7 +81,27 @@ class ReaderTextManifestServiceTest {
         assertThat(item.getImportStatus()).isEqualTo("READY");
         assertThat(item.getTitle()).isEqualTo("解析标题");
         assertThat(item.getParsedAt()).isNotNull();
+        // 文本清单版本是每章正文派生资产的缓存键，reparse 必须推进它
+        assertThat(item.getManifestVersion()).isEqualTo(1);
         verify(itemRepository).save(item);
+    }
+
+    @Test
+    void reparseAdvancesManifestVersionFromCurrentValue() {
+        ReaderItem item = textItem();
+        item.setManifestVersion(7);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        ParsedTextBook parsed = new ParsedTextBook(
+                null,
+                null,
+                "UTF-8",
+                List.of(new TextChapterDraft(0, "chapter_0", "正文", null, 0L, 18L, 18, 0)),
+                null
+        );
+
+        service.replaceManifest(ITEM_ID, parsed);
+
+        assertThat(item.getManifestVersion()).isEqualTo(8);
     }
 
     @Test

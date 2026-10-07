@@ -70,6 +70,7 @@ class ReaderItem {
     this.importStatus,
     this.parseErrorCode,
     this.parseErrorMessage,
+    this.manifestVersion = 0,
   });
 
   factory ReaderItem.fromJson(Map<String, dynamic> json) {
@@ -98,6 +99,7 @@ class ReaderItem {
       importStatus: json['importStatus']?.toString(),
       parseErrorCode: json['parseErrorCode']?.toString(),
       parseErrorMessage: json['parseErrorMessage']?.toString(),
+      manifestVersion: (json['manifestVersion'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -147,6 +149,10 @@ class ReaderItem {
 
   /// 最近一次解析错误信息
   final String? parseErrorMessage;
+
+  /// 服务端清单版本号：章节偏移与目录的唯一版本标识，每次重解析递增。
+  /// 本地元数据与章节切片缓存用它判失效，避免改标题等元数据操作误清缓存。
+  final int manifestVersion;
 
   /// 是否有封面图
   bool get hasCover => coverUrl != null && coverUrl!.isNotEmpty;

@@ -99,7 +99,7 @@ public class ReaderItem {
     @Column(name = "parsed_at")
     private Instant parsedAt;
 
-    /** 漫画清单版本号：每次重建目录或追加分包时递增 */
+    /** 清单版本号：漫画在重建目录或追加分包时递增，文本在替换章节清单时递增，同时作为派生资产的版本键 */
     @Column(name = "manifest_version", nullable = false)
     private int manifestVersion = 0;
 

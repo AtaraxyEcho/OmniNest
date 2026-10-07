@@ -261,9 +261,10 @@ final parsedBookProvider = FutureProvider.autoDispose.family<
     // ── Layer 2: SQLite 持久化缓存命中 ──
     final localStorage = ref.read(readerLocalStorageProvider);
     var cachedMeta = await localStorage.loadBookMeta(itemId);
-    // 服务端重解析会更新条目 updatedAt；版本不符说明章节偏移/目录可能
-    // 已变化，元数据与章节切片缓存一并失效，避免继续命中错位内容。
-    final cacheVersion = detail.item.updatedAt?.toIso8601String() ?? '';
+    // 章节偏移与目录只在服务端重解析时变化，manifestVersion 是这件事的唯一信号；
+    // 版本不符则元数据与章节切片缓存一并失效，避免继续命中错位内容。
+    // 用 updatedAt 会让改标题/封面等元数据操作误清整本书的章节缓存。
+    final cacheVersion = 'v${detail.item.manifestVersion}';
     if (cachedMeta != null &&
         (cachedMeta['cacheVersion']?.toString() ?? '') != cacheVersion) {
       if (kDebugMode) {

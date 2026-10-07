@@ -62,6 +62,9 @@ public class ReaderTextManifestService {
         item.setParseErrorCode(null);
         item.setParseErrorMessage(null);
         item.setParsedAt(Instant.now());
+        // 每章正文派生资产按 (itemId, manifestVersion) 定位，清单替换必须推进版本号，
+        // 否则重解析后旧版本正文仍会被继续命中。
+        item.setManifestVersion(item.getManifestVersion() + 1);
         itemRepository.save(item);
         syncEventService.invalidate(item.getOwnerUserId(), SyncScope.READER, "READER_LIBRARY", Map.of());
         persistCoverAfterCommit(itemId, parsedBook.cover());
@@ -205,6 +208,7 @@ public class ReaderTextManifestService {
      * @param errorCode 错误码
      * @param errorMessage 错误摘要
      * @param chapters 章节清单
+     * @param parseTask 最近一次解析任务状态
      */
     public record TextManifestDto(
             UUID itemId,
