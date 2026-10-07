@@ -347,21 +347,12 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                     MobileGlassIconButton(
                       tooltip: l10n.photosSearchHint,
                       icon: Icons.search_rounded,
-                      onPressed: () {
-                        ref
-                            .read(
-                              mobileModuleSearchActiveProvider(
-                                MobileModuleSearchHosts.photos,
-                              ).notifier,
-                            )
-                            .toggle();
-                      },
+                      // 搜索统一进全局覆盖层并预选相册档：相册档走服务端
+                      // 关键词，覆盖面比页内条更广。
+                      onPressed:
+                          () => unawaited(context.push('/search?scope=photo')),
                     ),
                   ],
-                ),
-                _PhotosHostedSearchBar(
-                  searchController: _searchController,
-                  onSearchChanged: notifier.setSearchQuery,
                 ),
                 if (!data.isSelectionMode)
                   _PhotosViewTabBar(
@@ -606,93 +597,6 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
         );
       }
     }
-  }
-}
-
-/// 托管态页内搜索条：壳层顶栏搜索钮展开，承载模块内照片搜索。
-class _PhotosHostedSearchBar extends ConsumerStatefulWidget {
-  const _PhotosHostedSearchBar({
-    required this.searchController,
-    required this.onSearchChanged,
-  });
-
-  final TextEditingController searchController;
-  final ValueChanged<String> onSearchChanged;
-
-  @override
-  ConsumerState<_PhotosHostedSearchBar> createState() =>
-      _PhotosHostedSearchBarState();
-}
-
-class _PhotosHostedSearchBarState
-    extends ConsumerState<_PhotosHostedSearchBar> {
-  @override
-  Widget build(BuildContext context) {
-    final active = ref.watch(
-      mobileModuleSearchActiveProvider(MobileModuleSearchHosts.photos),
-    );
-    if (!active) {
-      return const SizedBox.shrink();
-    }
-    final l10n = AppLocalizations.of(context);
-    final colors = context.frameColors;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.navBg,
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: widget.searchController,
-              onChanged: widget.onSearchChanged,
-              autofocus: true,
-              style: TextStyle(
-                fontSize: AppTypography.bodyLarge,
-                color: colors.ink,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                filled: true,
-                fillColor: colors.card,
-                hintText: l10n.photosSearchHint,
-                hintStyle: TextStyle(color: colors.muted),
-                prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 36,
-                  minHeight: 36,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 9,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: AppLocalizations.of(context).coreClose,
-            onPressed: () {
-              ref
-                  .read(
-                    mobileModuleSearchActiveProvider(
-                      MobileModuleSearchHosts.photos,
-                    ).notifier,
-                  )
-                  .set(false);
-              widget.searchController.clear();
-              widget.onSearchChanged('');
-            },
-            icon: Icon(Icons.close_rounded, color: colors.muted),
-          ),
-        ],
-      ),
-    );
   }
 }
 
