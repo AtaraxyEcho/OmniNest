@@ -4,7 +4,6 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
-import 'package:omninest/features/video/domain/movie_library_models.dart';
 
 /// 托管 Films/Series 段的排序 chip 行（样例 `.chip-row` 胶囊）：
 /// 最新 / 评分 / 年份 + 收藏过滤 + 尾部状态筛选溢出入口
@@ -48,19 +47,19 @@ class MovieRedesignMobileChips extends StatelessWidget {
                   selected: sortBy == MovieSortBy.dateAdded,
                   onTap: () => onSortBy(MovieSortBy.dateAdded),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 7),
                 _chip(
                   label: l10n.videoRating,
                   selected: sortBy == MovieSortBy.rating,
                   onTap: () => onSortBy(MovieSortBy.rating),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 7),
                 _chip(
                   label: l10n.videoYear,
                   selected: sortBy == MovieSortBy.releaseDate,
                   onTap: () => onSortBy(MovieSortBy.releaseDate),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 7),
                 _chip(
                   label: l10n.videoSectionFavorites,
                   selected: favoritesOnly,
@@ -81,14 +80,16 @@ class MovieRedesignMobileChips extends StatelessWidget {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    // 样例胶囊：r12、白 7% 底 + 白 9% 描边、inkMuted 前景；
+    // 样例 `.chip`：r11、9px 字、白 5% 底 + 白 9% 描边、inkMuted 前景；
     // 选中态换成酸绿 10% 底 + 38% 描边 + ink 前景。
+    // 行高取 38 与同排的筛选钮对齐：样例 32 的命中区落在次级控件
+    // 35-45 档之下，扩命中必然撑行，故按行高档落地。
     final accent = MobileEnvColors.accent;
     return Material(
       color:
-          selected ? accent.withValues(alpha: 0.10) : const Color(0x12FFFFFF),
+          selected ? accent.withValues(alpha: 0.10) : const Color(0x0DFFFFFF),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(11),
         side: BorderSide(
           color:
               selected
@@ -97,14 +98,18 @@ class MovieRedesignMobileChips extends StatelessWidget {
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(11),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Container(
+          // 定高而非 minHeight：只给下限时容器会跟随父级有界高度拉伸，
+          // 胶囊底色与描边会整块变形。
+          height: 38,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 12, // ignore: font_size_whitelist
+              fontSize: 9, // ignore: font_size_whitelist
               height: 1.2,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: selected ? MobileEnvColors.ink : MobileEnvColors.inkMuted,
@@ -292,40 +297,47 @@ class _StatusFilterOptionRow extends StatelessWidget {
   }
 }
 
-/// 移动端 For you 段的影院 hero 卡（样例 cinema-hero）：续播首项满宽
-/// 压题图 + 渐变 + 进度眉标 + 衬线标题 + 续播/详情双钮。
+/// 移动端 For you 段的影院 hero 卡（样例 cinema-hero）：精选项满宽
+/// 压题图 + 渐变 + 等宽眉标 + 衬线标题 + 动作双钮。
+///
+/// 入参保持中性：续播项与非续播项（最近添加首项）都由调用方折算后传入，
+/// 本件不感知进度与分集来源，避免兜底源一换就取到别条目的元数据。
 class MovieMobileCinemaHero extends StatelessWidget {
   const MovieMobileCinemaHero({
-    required this.item,
+    required this.title,
+    required this.eyebrow,
+    required this.primaryLabel,
     required this.onPlay,
     required this.onInfo,
+    this.posterUrl,
     this.metaLine,
     this.badgeText,
     super.key,
   });
 
-  final MovieContinueWatching item;
-  final VoidCallback onPlay;
-  final VoidCallback onInfo;
+  final String title;
+  final String? posterUrl;
 
-  /// 元数据行（★ 评分 · 年份 · 时长 · 类型），由调用方从匹配的影片
-  /// 元数据拼装；样例 cinema-hero 的 p 行。
+  /// 标题上方的等宽眉标：续播项是「继续观看 · 进度 · 剩余分钟」，
+  /// 非续播项是样例的精选标注（`videoHeroFeatured · videoHeroMovie`）。
+  final String eyebrow;
+
+  /// 主按钮文案：有进度为「继续播放」，无进度为「立即播放」。
+  final String primaryLabel;
+
+  /// 元数据行（★ 评分 · 年份 · 时长 · 类型），由调用方从 hero 项自身的
+  /// 影片元数据拼装；取不到时退化为分集标注，再取不到就不渲染该行。
   final String? metaLine;
 
   /// 右上角规格徽标（样例 cinema-badge：4K · HDR）。
   final String? badgeText;
 
+  final VoidCallback onPlay;
+  final VoidCallback onInfo;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final progress = item.progressPercent.clamp(0.0, 100.0).round();
-    final episode = _episodeLabel(context);
-    final remainingMinutes =
-        (item.durationSeconds - item.positionSeconds).clamp(
-          0,
-          item.durationSeconds,
-        ) ~/
-        60;
     // 样例 .cinema-hero：固定 348 高、r26；占位底用环境舞台色，
     // 文本层走环境墨阶（题图上永远是浅字）。
     return SizedBox(
@@ -336,9 +348,9 @@ class MovieMobileCinemaHero extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (item.posterUrl != null)
+            if (posterUrl != null)
               Image.network(
-                item.posterUrl!,
+                posterUrl!,
                 fit: BoxFit.cover,
                 errorBuilder:
                     (_, _, _) => const ColoredBox(color: MobileEnvColors.stage),
@@ -382,7 +394,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${l10n.videoSectionContinueWatching.toUpperCase()} · $progress% · ${l10n.videoHeroMinutesLeft(remainingMinutes)}',
+                    eyebrow,
                     style: _heroMonoStyle(
                       size: 9,
                       color: const Color(0xA1FFFFFF),
@@ -390,7 +402,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                   ),
                   const SizedBox(height: 9),
                   Text(
-                    item.title,
+                    title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: _heroTitleStyle(),
@@ -402,19 +414,12 @@ class MovieMobileCinemaHero extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: _heroMetaStyle,
-                    )
-                  else if (episode != null)
-                    Text(
-                      episode,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _heroMetaStyle,
                     ),
                   const SizedBox(height: 15),
                   Row(
                     children: [
                       _HeroButton(
-                        label: l10n.videoHeroResume,
+                        label: primaryLabel,
                         icon: Icons.play_arrow_rounded,
                         filled: true,
                         onTap: onPlay,
@@ -434,19 +439,6 @@ class MovieMobileCinemaHero extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String? _episodeLabel(BuildContext context) {
-    final seriesId = item.seriesId;
-    if (seriesId == null || seriesId.isEmpty) {
-      return null;
-    }
-    final season = item.seasonNumber;
-    final episode = item.episodeNumber;
-    if (season == null || episode == null) {
-      return null;
-    }
-    return 'S$season E$episode';
   }
 }
 

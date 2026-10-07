@@ -19,7 +19,6 @@ import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_mobile_chips.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_collections.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_history.dart';
@@ -541,24 +540,20 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
         parent: BouncingScrollPhysics(),
       ),
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.only(top: 4),
-          sliver: SliverToBoxAdapter(
-            child:
-                hosted
-                    ? MobileEnvSectionHeader(
-                      eyebrow: l10n.videoHostedFilmsEyebrow,
-                      title: l10n.videoMovieLibrary,
-                    )
-                    : MovieRedesignSectionHeader(
-                      title: l10n.videoMovieLibrary,
-                      subtitleEn: l10n.videoRedesignSubMovies,
-                      count:
-                          filteredItems.isEmpty ? null : filteredItems.length,
-                      subtitle: l10n.videoMovieLibrarySubtitle,
-                    ),
+        // 托管态不渲染档内标题栏：样例影视视图把计数放在模块头副题，
+        // 分段条已在壳层与内容之间，段内再出一条同名标题即重复。
+        if (!hosted)
+          SliverPadding(
+            padding: const EdgeInsets.only(top: 4),
+            sliver: SliverToBoxAdapter(
+              child: MovieRedesignSectionHeader(
+                title: l10n.videoMovieLibrary,
+                subtitleEn: l10n.videoRedesignSubMovies,
+                count: filteredItems.isEmpty ? null : filteredItems.length,
+                subtitle: l10n.videoMovieLibrarySubtitle,
+              ),
+            ),
           ),
-        ),
         if (!hosted && state.continueWatching.isNotEmpty)
           SliverPadding(
             padding: EdgeInsets.zero,
@@ -567,7 +562,11 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
             ),
           ),
         SliverPadding(
-          padding: const EdgeInsets.only(bottom: 16),
+          // 样例 `.chip-row` 外边距 2px 0 14px；工位排序条保持原内衬。
+          padding:
+              hosted
+                  ? const EdgeInsets.fromLTRB(0, 2, 0, 14)
+                  : const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child:
                 hosted
@@ -681,13 +680,7 @@ class _SeriesGridSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 托管态走移动形态（chip 行 + 收藏本地覆盖），桌面路径零变化。
     if (MobileShellScope.isHosted(context)) {
-      return _HostedSeriesBody(
-        title: title,
-        subtitleEn: subtitleEn,
-        subtitle: subtitle,
-        series: series,
-        anime: anime,
-      );
+      return _HostedSeriesBody(series: series, anime: anime);
     }
     final l10n = AppLocalizations.of(context);
     final centerState = ref.watch(movieCenterControllerProvider).requireValue;
@@ -840,6 +833,52 @@ class _RecentSection extends ConsumerWidget {
   }
 }
 
+/// 取 hero 项自身的影片条目：For-you 不保证已加载影片分页，因此在已加载的
+/// 影片列表与最近添加中按 id 查；两处都没有时返回 null，元数据行不渲染。
+MovieVideoItem? _heroSourceMovie(MovieCenterState state, String id) {
+  for (final source in <List<MovieVideoItem>>[
+    state.movies,
+    state.recentItems,
+  ]) {
+    final match = source.where((item) => item.id == id).firstOrNull;
+    if (match != null) {
+      return match;
+    }
+  }
+  return null;
+}
+
+/// hero 眉标：有续播进度时显示进度与剩余时长，无进度时显示样例的精选标注。
+String _heroEyebrowLabel(AppLocalizations l10n, MovieContinueWatching? item) {
+  if (item == null) {
+    return '${l10n.videoHeroFeatured.toUpperCase()} · '
+        '${l10n.videoHeroMovie.toUpperCase()}';
+  }
+  final progress = item.progressPercent.clamp(0.0, 100.0).round();
+  final remainingMinutes =
+      (item.durationSeconds - item.positionSeconds).clamp(
+        0,
+        item.durationSeconds,
+      ) ~/
+      60;
+  return '${l10n.videoSectionContinueWatching.toUpperCase()} · $progress% · '
+      '${l10n.videoHeroMinutesLeft(remainingMinutes)}';
+}
+
+/// 续播项的分集标注；元数据未入库时用它代替影片摘要行。
+String? _heroEpisodeLabel(MovieContinueWatching? item) {
+  final seriesId = item?.seriesId;
+  if (item == null || seriesId == null || seriesId.isEmpty) {
+    return null;
+  }
+  final season = item.seasonNumber;
+  final episode = item.episodeNumber;
+  if (season == null || episode == null) {
+    return null;
+  }
+  return 'S$season E$episode';
+}
+
 /// 继续观看分区：2/4 列进度卡片。
 class _ContinueSection extends ConsumerWidget {
   const _ContinueSection({required this.state});
@@ -849,51 +888,53 @@ class _ContinueSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    // 托管态即移动四段中的 For you：影院 hero（续播首项）+ 续播横条。
+    // 托管态即移动四段中的 For you：影院 hero（精选位）+ 续播横条。
     if (MobileShellScope.isHosted(context)) {
-      final first = state.continueWatching.firstOrNull;
-      // 样例 For you：cinema-hero（348 高）元数据行与规格徽标取自匹配
-      // 影片条目；无匹配时退化为分集信息。
-      final matchedMovie = state.movies.firstOrNull;
+      final continueItem = state.continueWatching.firstOrNull;
+      // 样例 cinema-hero 是精选位，不因无续播记录而整块消失：无续播时退到
+      // 最近添加首项。元数据与徽标一律绑 hero 项自身，否则会出现
+      // 「A 的标题配 B 的评分」。
+      final heroMovie =
+          continueItem == null
+              ? state.recentItems.firstOrNull
+              : _heroSourceMovie(state, continueItem.id);
+      final heroId = continueItem?.id ?? heroMovie?.id;
       return CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(
           parent: BouncingScrollPhysics(),
         ),
         slivers: [
-          if (first != null)
+          if (heroId != null)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 26),
               sliver: SliverToBoxAdapter(
                 child: MovieMobileCinemaHero(
-                  item: first,
+                  title: continueItem?.title ?? heroMovie!.title,
+                  posterUrl: continueItem?.posterUrl ?? heroMovie?.posterUrl,
+                  eyebrow: _heroEyebrowLabel(l10n, continueItem),
+                  primaryLabel:
+                      continueItem == null
+                          ? l10n.videoHeroWatchNow
+                          : l10n.videoHeroResume,
                   metaLine:
-                      matchedMovie == null
-                          ? null
-                          : _movieCardSubtitle(matchedMovie),
-                  badgeText: _movieBadgeText(matchedMovie),
-                  onPlay:
-                      () => unawaited(context.push(moviePlayRoute(first.id))),
+                      heroMovie == null
+                          ? _heroEpisodeLabel(continueItem)
+                          : _movieCardSubtitle(heroMovie),
+                  badgeText: _movieBadgeText(heroMovie),
+                  onPlay: () => unawaited(context.push(moviePlayRoute(heroId))),
                   onInfo:
                       () => unawaited(
                         context.push(
                           movieDetailRouteFromIds(
-                            videoItemId: first.id,
-                            seriesId: first.seriesId,
+                            videoItemId: heroId,
+                            seriesId:
+                                continueItem?.seriesId ?? heroMovie?.seriesId,
                           ),
                         ),
                       ),
                 ),
               ),
             ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            sliver: SliverToBoxAdapter(
-              child: MobileEnvSectionHeader(
-                eyebrow: l10n.videoHostedContinueEyebrow,
-                title: l10n.videoSectionContinueWatching,
-              ),
-            ),
-          ),
           SliverPadding(
             padding: const EdgeInsets.only(left: 20),
             sliver: SliverToBoxAdapter(

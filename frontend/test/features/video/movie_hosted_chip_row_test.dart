@@ -1,5 +1,6 @@
-// 托管影视胶囊行与状态筛选面板回归：排序/收藏胶囊走样例玻璃族（r12 胶囊、
-// 酸绿选中态），状态筛选落 `.glass-sheet` 实底面板并以行族呈现选项。
+// 托管影视胶囊行与状态筛选面板回归：排序/收藏胶囊按样例 `.chip`（r11、9px、
+// 白 5% 底、gap 7、行高 38），酸绿选中态，状态筛选落 `.glass-sheet` 实底面板
+// 并以行族呈现选项。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -52,6 +53,16 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+/// 单个胶囊的按压层：按标签定位，避免用遍历顺序猜是哪一颗。
+Finder _chipInkWell(String label) {
+  final finder = find.ancestor(
+    of: find.text(label),
+    matching: find.byType(InkWell),
+  );
+  expect(finder.evaluate(), hasLength(1), reason: '$label 只应有一个按压层');
+  return finder;
+}
+
 Material _chipMaterial(WidgetTester tester, String label) {
   final candidates =
       find
@@ -78,13 +89,32 @@ void main() {
       selectedShape.side.color,
       MobileEnvColors.accent.withValues(alpha: 0.38),
     );
-    expect(plain.color, const Color(0x12FFFFFF));
+    expect(plain.color, const Color(0x0DFFFFFF));
     expect(plainShape.side.color, MobileEnvColors.line09);
     // 工位件是 2px 直角；托管胶囊按样例圆角。
     expect(
       selectedShape.borderRadius,
-      const BorderRadius.all(Radius.circular(12)),
+      const BorderRadius.all(Radius.circular(11)),
     );
+    expect(
+      plainShape.borderRadius,
+      const BorderRadius.all(Radius.circular(11)),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('胶囊字号与间距按样例，行高取次级档', (tester) async {
+    await _pump(tester);
+
+    expect(tester.widget<Text>(find.text('评分')).style?.fontSize, 9);
+
+    final first = tester.getRect(_chipInkWell('最新'));
+    final second = tester.getRect(_chipInkWell('评分'));
+    expect(second.left - first.right, 7);
+    // 样例视觉高 32 低于次级控件 35-45 档，且横向行旁就是 38 的筛选钮，
+    // 扩命中必然撑行：胶囊按行高档落地。
+    expect(first.height, 38);
+    expect(second.height, 38);
     expect(tester.takeException(), isNull);
   });
 

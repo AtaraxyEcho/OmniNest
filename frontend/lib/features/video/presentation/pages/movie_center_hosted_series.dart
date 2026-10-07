@@ -2,18 +2,10 @@ part of 'movie_center_page.dart';
 
 /// 剧集/动漫分区的托管形态（样例 Series 段）：chip 行 + 收藏覆盖 +
 /// 海报轨；收藏为本地展示态，分页触发仅对非收藏列表生效。
+/// 段内不渲染标题栏，计数与分区名由壳层模块头与上方分段条承担。
 class _HostedSeriesBody extends ConsumerStatefulWidget {
-  const _HostedSeriesBody({
-    required this.title,
-    required this.subtitleEn,
-    required this.subtitle,
-    required this.series,
-    required this.anime,
-  });
+  const _HostedSeriesBody({required this.series, required this.anime});
 
-  final String title;
-  final String subtitleEn;
-  final String subtitle;
   final List<MovieSeries> series;
   final bool anime;
 
@@ -43,17 +35,9 @@ class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
           parent: BouncingScrollPhysics(),
         ),
         slivers: [
+          // 样例 `.chip-row` 外边距 2px 0 14px。
           SliverPadding(
-            padding: const EdgeInsets.only(bottom: 16),
-            sliver: SliverToBoxAdapter(
-              child: MobileEnvSectionHeader(
-                eyebrow: widget.subtitleEn,
-                title: widget.title,
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.fromLTRB(0, 2, 0, 14),
             sliver: SliverToBoxAdapter(
               child: MovieRedesignMobileChips(
                 sortBy: centerState.sortBy,
