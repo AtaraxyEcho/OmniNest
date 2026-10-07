@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/features/music/application/music_track_filter.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -119,10 +118,17 @@ class MusicDeckSearchController extends Notifier<MusicDeckSearchState> {
     final results = <MusicPlatform, List<MusicPlayableItem>>{};
     final failures = <MusicPlatform, String>{};
     if (sources.contains(MusicPlatform.local)) {
-      results[MusicPlatform.local] = filterLoadedTracks(
-        center.tracks,
-        query,
-      ).take(40).map(MusicPlayableItem.local).toList(growable: false);
+      final normalized = query.trim().toLowerCase();
+      results[MusicPlatform.local] = center.tracks
+          .where(
+            (track) =>
+                track.title.toLowerCase().contains(normalized) ||
+                track.artistName.toLowerCase().contains(normalized) ||
+                track.albumTitle.toLowerCase().contains(normalized),
+          )
+          .take(40)
+          .map(MusicPlayableItem.local)
+          .toList(growable: false);
     }
 
     await Future.wait(
