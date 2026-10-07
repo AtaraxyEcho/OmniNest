@@ -173,6 +173,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   double get bookProgress;
 
+  /// 最近一次已算出的全书进度，读取不依赖 ref。
+  ///
+  /// dispose 之后仍需要构造进度快照时使用：`bookProgress` 需要读
+  /// parsedBookProvider，Element 已卸载时不可用。
+  double get lastKnownBookProgress;
+
   Size? get pageViewportSize;
   set pageViewportSize(Size? value);
 
@@ -479,10 +485,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
             ) ??
             0;
         positionTracker.updateFromPage(
-          localPageIndex: pageModePage,
-          totalPages: 10000,
+          // 懒分页不预知总页数：字符偏移口径与滚动模式一致
+          //（此前调用方被要求传占位值 10000，进度恒等于 0）。
           charOffset: charOffset,
           chapterId: currentChapterId,
+          totalChars: data.totalChars,
           totalChapters: contentLoader?.allChapters.length ?? 0,
           currentChapterIndex: chapterIdx,
         );

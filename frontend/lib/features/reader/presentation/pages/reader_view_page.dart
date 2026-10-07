@@ -456,6 +456,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   double get bookProgress => _bookProgress;
 
+  /// 通知器保存的是最近一次算出的值，读取不触碰 Provider，
+  /// 因此 dispose 之后仍然可用。
+  @override
+  double get lastKnownBookProgress => _bookProgressNotifier.value;
+
   @override
   String get itemId => widget.itemId;
   @override
@@ -582,65 +587,35 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     );
     // dispose 时用 localStorage 同步备份（不依赖 ref，不读 scroll controller 位置）。
     // _syncProgressSync 不能在此调用 — ref 已卸载，_bookProgress 会崩溃。
-    if (!_restore.shouldSuppressWrites && _scrollController.hasClients) {
-      final max = _scrollController.position.maxScrollExtent;
-      if (max > 0) {
-        // 元素已 defunct：viewportAnchorY/computePageWidth 内含
-        // MediaQuery 查找会触发断言，改用 didChangeDependencies 捕获的
-        // 视口与插边缓存做近似的退出备份（服务端 sync 同为兜底）。
-        final size = _lastViewportSize ?? _pageViewportSize;
-        if (size != null && size.width > 0) {
-          final chromeLayout = ReaderChromeLayout.resolve(
-            immersiveMode: _settings.immersiveMode,
-            isPageMode: _isPageMode,
-          );
-          final topInset = _settings.immersiveMode ? 0.0 : _lastViewPaddingTop;
-          final anchorY =
-              (size.height - topInset - chromeLayout.viewportVerticalReserve) *
-              0.25;
-          final controlLayout = ReaderControlLayout.resolve(
-            viewport: size,
-            fontSize: _settings.fontSize,
-            textScale: _lastTextScale,
-          );
-          final contentY = _scrollController.offset + anchorY;
-          final charOffset =
-              _contentLoader?.contentYToCharOffset(
-                _currentChapterId,
-                contentY,
-                pageWidth: controlLayout.textColumnWidth,
-                settings: _settings,
-                textScale: _lastTextScale,
-              ) ??
-              0;
-          // chapterProgress 从 charOffset 推导
-          final totalChars =
-              _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ??
-              0;
-          // 上报口径必须是全书进度：章节内比例会在读到任意章尾时被
-          // 误判为整本完成。复用会话期间维护的防抖全书进度通知器。
-          final chapterProgress =
-              totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
-          final notifierProgress = _bookProgressNotifier.value.clamp(0.0, 1.0);
-          final progress =
-              notifierProgress > 0 ? notifierProgress : chapterProgress;
-          ReaderProgressBackupWeb.save(
+    if (!_restore.shouldSuppressWrites) {
+      final charOffset = _exitBackupCharOffset();
+      if (charOffset != null) {
+        final totalChars =
+            _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ?? 0;
+        // chapterProgress 从 charOffset 推导
+        final chapterProgress =
+            totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
+        // 上报口径必须是全书进度：章节内比例会在读到任意章尾时被
+        // 误判为整本完成。复用会话期间维护的防抖全书进度通知器。
+        final notifierProgress = _bookProgressNotifier.value.clamp(0.0, 1.0);
+        final progress =
+            notifierProgress > 0 ? notifierProgress : chapterProgress;
+        ReaderProgressBackupWeb.save(
+          itemId: widget.itemId,
+          chapterId: _currentChapterId,
+          charOffset: charOffset,
+          chapterProgress: chapterProgress,
+        );
+        // 退出时向服务端强制补报最终位置（节流不适用于离场）
+        unawaited(
+          _progressSync.sync(
             itemId: widget.itemId,
-            chapterId: _currentChapterId,
             charOffset: charOffset,
-            chapterProgress: chapterProgress,
-          );
-          // 退出时向服务端强制补报最终位置（节流不适用于离场）
-          unawaited(
-            _progressSync.sync(
-              itemId: widget.itemId,
-              charOffset: charOffset,
-              progressPercent: progress,
-              readingMode: 'scroll',
-              chapterId: _currentChapterId,
-            ),
-          );
-        }
+            progressPercent: progress,
+            readingMode: _isPageMode ? 'page' : 'scroll',
+            chapterId: _currentChapterId,
+          ),
+        );
       }
     }
     _windowChromeLease?.release();
@@ -674,6 +649,49 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _contentLoader?.invalidateAll();
     _contentLoader = null;
     super.dispose();
+  }
+
+  /// dispose 兜底备份用的本章字符偏移；无法可信地确定时返回 null。
+  ///
+  /// 滚动模式用视口缓存换算（元素已 defunct，viewportAnchorY/computePageWidth
+  /// 内的 MediaQuery 查找会断言，只能用 didChangeDependencies 捕获的视口）。
+  /// 翻页模式按当前页起始字符偏移记入 positionTracker，因此直接取 tracker，
+  /// 不能以 `hasClients` 作门——旧实现整块挂在 hasClients 下，页模式下这条
+  /// 兜底从未执行过；模式切换后残留的 scroll client 也会拿旧章偏移解释新页。
+  int? _exitBackupCharOffset() {
+    if (_isPageMode || !_scrollController.hasClients) {
+      if (positionTracker.chapterId != _currentChapterId) {
+        return null;
+      }
+      return positionTracker.charOffset;
+    }
+    final max = _scrollController.position.maxScrollExtent;
+    if (max <= 0) {
+      return null;
+    }
+    final size = _lastViewportSize ?? _pageViewportSize;
+    if (size == null || size.width <= 0) {
+      return null;
+    }
+    final chromeLayout = ReaderChromeLayout.resolve(
+      immersiveMode: _settings.immersiveMode,
+      isPageMode: _isPageMode,
+    );
+    final topInset = _settings.immersiveMode ? 0.0 : _lastViewPaddingTop;
+    final anchorY =
+        (size.height - topInset - chromeLayout.viewportVerticalReserve) * 0.25;
+    final controlLayout = ReaderControlLayout.resolve(
+      viewport: size,
+      fontSize: _settings.fontSize,
+      textScale: _lastTextScale,
+    );
+    return _contentLoader?.contentYToCharOffset(
+      _currentChapterId,
+      _scrollController.offset + anchorY,
+      pageWidth: controlLayout.textColumnWidth,
+      settings: _settings,
+      textScale: _lastTextScale,
+    );
   }
 
   /// 将音量键拦截开关同步到原生层（仅 Android 实际生效）。

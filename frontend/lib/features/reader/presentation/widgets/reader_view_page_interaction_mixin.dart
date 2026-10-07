@@ -35,9 +35,11 @@ mixin ReaderViewPageInteractionMixin
 
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
 
-    final timeSincePointerDown =
-        DateTime.now().difference(lastPointerDownTime).inMilliseconds;
-    if (timeSincePointerDown > 2000) return;
+    // 指针驱动的滚动才写进度：长按住滚动、惯性滚动与程序滚动不代表用户
+    // 停留在该位置。此判据只限制持久化，不得跳过位置追踪、邻章预取与
+    // 章末自动续读——超过 2 秒的纯惯性滚动曾因此整体失联。
+    final pointerDriven =
+        DateTime.now().difference(lastPointerDownTime).inMilliseconds <= 2000;
 
     if (modeSwitchInProgress) {
       modeSwitchInProgress = false;
@@ -95,22 +97,24 @@ mixin ReaderViewPageInteractionMixin
       );
     }
     if ((newProgress - scrollProgress).abs() > 0.001) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'onScroll SAVE: $scrollProgress -> $newProgress, '
-          'charOffset=$charOffset (totalChars=${chapterData?.totalChars ?? 0})',
-        );
-      }
       // 热路径：只更新通知器（UI 消费者局部重建），不再 setState 整页。
       scrollProgress = newProgress;
-      final saveAt = DateTime.now();
-      if (saveAt.isAfter(_lastScrollSaveAt)) {
-        _lastScrollSaveAt = saveAt.add(const Duration(milliseconds: 200));
-        scheduleLocalProgressSave(
-          chapterProgress: newProgress,
-          mode: 'scroll',
-          charOffset: charOffset,
-        );
+      if (pointerDriven) {
+        if (kDebugMode) {
+          readerDebugLog(
+            'onScroll SAVE: $scrollProgress -> $newProgress, '
+            'charOffset=$charOffset (totalChars=${chapterData?.totalChars ?? 0})',
+          );
+        }
+        final saveAt = DateTime.now();
+        if (saveAt.isAfter(_lastScrollSaveAt)) {
+          _lastScrollSaveAt = saveAt.add(const Duration(milliseconds: 200));
+          scheduleLocalProgressSave(
+            chapterProgress: newProgress,
+            mode: 'scroll',
+            charOffset: charOffset,
+          );
+        }
       }
     }
     // 提前到过半即预取：邻章解析与测高需要数百毫秒，
@@ -218,6 +222,7 @@ mixin ReaderViewPageInteractionMixin
   /// 滚动指定距离。返回 true 表示实际执行了滚动。
   Future<bool> scrollBy(double delta) async {
     if (!scrollController.hasClients) return false;
+    final startedChapterId = currentChapterId;
     final currentOffset = scrollController.offset;
     final max = scrollController.position.maxScrollExtent;
     final target = (currentOffset + delta).clamp(0.0, max);
@@ -231,6 +236,15 @@ mixin ReaderViewPageInteractionMixin
       curve: Curves.easeOutCubic,
     );
     if (!mounted || !scrollController.hasClients) return true;
+    // 动画期间可能已切章或开始恢复：旧章的像素偏移不能拿去解释新章内容，
+    // 否则会用新章 ID 写入一个属于别处的进度值。
+    if (currentChapterId != startedChapterId ||
+        isSwitchingChapter ||
+        isLoadingChapter ||
+        restore.shouldSuppressWrites ||
+        isRestoringProgress) {
+      return true;
+    }
     final latestMax = scrollController.position.maxScrollExtent;
     if (latestMax > 0) {
       final contentY = scrollController.offset + viewportAnchorY;

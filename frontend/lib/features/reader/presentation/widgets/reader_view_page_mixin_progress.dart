@@ -54,13 +54,16 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
   }
 
   /// dispose 后构建简单快照（不依赖 ref）。
+  ///
+  /// 全程不得触碰 Provider：Element 卸载后 `ref.read` 会抛
+  /// "Cannot use ref after disposed"，因此全书进度取通知器里的最近值。
   ReaderProgressSnapshot? buildSimpleSnapshot(double? progressOverride) {
     final chapterProg = (progressOverride ?? scrollProgress).clamp(0.0, 1.0);
     return ReaderProgressSnapshot(
       chapterId: currentChapterId,
-      progress: bookProgress,
+      progress: lastKnownBookProgress.clamp(0.0, 1.0),
       chapterProgress: chapterProg,
-      chapterTitle: cachedContent?.title ?? '',
+      chapterTitle: currentChapterTitle,
       mode: isPageMode ? 'page' : 'scroll',
       updatedAt: DateTime.now(),
     );
@@ -136,19 +139,35 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
             !movedEnough)) {
       return;
     }
+    // 先占位以保持节流对并发调用的去重能力；上报失败时整组回退，
+    // 否则一次失败会静默阻塞后续最小间隔内的同一位置重试。
+    // 远端网络失败已在同步服务内转为离线入队，走到这里的只剩
+    // 入队本身失败或 Error。
+    final previousSyncAt = _lastServerSyncAt;
+    final previousProgress = _lastSyncedProgress;
+    final previousChapterId = _lastSyncedChapterId;
+    final previousCharOffset = _lastSyncedCharOffset;
     _lastServerSyncAt = now;
     _lastSyncedProgress = snapshot.progress;
     _lastSyncedChapterId = snapshot.chapterId;
     _lastSyncedCharOffset = snapshot.charOffset;
-    await ref
-        .read(readerProgressSyncServiceProvider)
-        .sync(
-          itemId: itemId,
-          charOffset: snapshot.charOffset,
-          progressPercent: snapshot.progress,
-          readingMode: snapshot.mode,
-          chapterId: snapshot.chapterId,
-        );
+    try {
+      await ref
+          .read(readerProgressSyncServiceProvider)
+          .sync(
+            itemId: itemId,
+            charOffset: snapshot.charOffset,
+            progressPercent: snapshot.progress,
+            readingMode: snapshot.mode,
+            chapterId: snapshot.chapterId,
+          );
+    } catch (_) {
+      _lastServerSyncAt = previousSyncAt;
+      _lastSyncedProgress = previousProgress;
+      _lastSyncedChapterId = previousChapterId;
+      _lastSyncedCharOffset = previousCharOffset;
+      rethrow;
+    }
   }
 
   /// 同步保存进度到本地（不阻塞、不依赖 mounted 状态）。

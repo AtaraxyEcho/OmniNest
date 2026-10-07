@@ -50,21 +50,25 @@ class ReaderPositionTracker {
     );
   }
 
-  /// 从页码更新（翻页模式）。
+  /// 从当前页起始字符偏移更新（翻页模式）。
   ///
-  /// 单页章节（totalPages <= 1）使用全书进度（章节在全书中的位置），
-  /// 确保保存和显示的 chapterProgress 一致。
+  /// 懒分页不预知总页数，因此进度只能用字符口径，与 [updateFromScroll]
+  /// 保持一致，两种模式的 chapterProgress 才可比。空章节（totalChars<=0）
+  /// 退到全书位置，避免任何章节都报 0。
+  ///
+  /// 旧实现要求调用方传总页数，而唯一调用方传的是占位值 10000，
+  /// 于是 chapterProgress 恒为 pageIndex/9999≈0，与同处写入的
+  /// scrollProgress 口径分裂。
   void updateFromPage({
-    required int localPageIndex,
-    required int totalPages,
     required int charOffset,
     required String chapterId,
+    int totalChars = 0,
     int totalChapters = 0,
     int currentChapterIndex = 0,
   }) {
-    double chapterProgress;
-    if (totalPages > 1) {
-      chapterProgress = (localPageIndex / (totalPages - 1)).clamp(0.0, 1.0);
+    final double chapterProgress;
+    if (totalChars > 0) {
+      chapterProgress = (charOffset / totalChars).clamp(0.0, 1.0);
     } else {
       chapterProgress =
           totalChapters > 1

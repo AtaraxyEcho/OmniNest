@@ -13,8 +13,8 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 /// 由于 ListView 懒加载 + 图片异步加载，[ScrollPosition.maxScrollExtent]
 /// 在布局过程中持续变化。恢复分两个阶段：
 ///
-/// 1. **主动恢复**：检测 max 变化时重新跳转，直到位置稳定
-/// 2. **监控期**：settle 后继续监控 max 变化，如果 max 再次显著变化
+/// 1. **主动恢复**：落点偏离目标超过容差时重新跳转，直到位置稳定
+/// 2. **监控期**：settle 后继续监控，只有 max 变化真正把落点带出容差
 ///   （说明有新内容加载导致布局偏移），重新激活恢复
 ///
 /// 监控期结束后（默认 5 秒），恢复流程彻底结束，`isActive` 变为 false。
@@ -68,8 +68,8 @@ class ScrollRestore {
   /// 目标写入位置追踪，只能结束恢复态。[cancel] 不触发回调，由调用
   /// 方自行清理。
   ///
-  /// 恢复完成后进入监控期（[_monitorDuration]），期间如果 maxScrollExtent
-  /// 再次显著变化会重新激活恢复；maxScrollExtent 因图片渐进加载而持续
+  /// 恢复完成后进入监控期（[_monitorDuration]），期间只有布局偏移把落点
+  /// 带出容差才会重新激活恢复；maxScrollExtent 因图片渐进加载而持续
   /// 变化时，用户活动探针与总超时保证循环必然终止。
   void start({
     required ScrollController scrollController,
@@ -154,11 +154,17 @@ class ScrollRestore {
       final target = builtTarget.clamp(0.0, max);
       final currentOffset = scrollController.offset;
       final drift = (currentOffset - target).abs();
-      final maxChanged = (max - lastMax).abs() > _maxChangeThreshold;
       final overflowed = currentOffset > max + 1.0;
-
-      if (maxChanged || overflowed) {
+      // 只用于过滤亚像素抖动：max 真正变化是否重要由 drift 判定。
+      final maxChanged = (max - lastMax).abs() > _maxChangeThreshold;
+      if (maxChanged) {
         lastMax = max;
+      }
+      // max 变化本身不构成跳转理由：落点仍在容差内说明偏移未受影响
+      // （精测收敛、视口下方加载的图片都会只改 max）。此前按 max 变化
+      // 无条件跳转会把稳定帧清零，收敛期永远无法 settle，监控期还会
+      // 把用户刚滚动的位置拉回旧落点。
+      if (overflowed || (maxChanged && drift > _driftThreshold)) {
         if (settled) {
           settled = false;
           settledAt = null;
@@ -166,7 +172,7 @@ class ScrollRestore {
           stableFrames = 0;
           if (kDebugMode) {
             readerDebugLog(
-              'ScrollRestore: max changed during monitor, re-activating '
+              'ScrollRestore: layout shifted during monitor, re-activating '
               '(drift=${drift.toStringAsFixed(1)}, max=${max.toStringAsFixed(1)})',
             );
           }
