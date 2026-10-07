@@ -5,12 +5,16 @@ class ReaderChapterLoadCoordinator {
   int _generation = 0;
   String? _loadingChapterId;
   String? _failedChapterId;
+  ReaderChapterFailure? _failedReason;
 
   /// 当前是否正在加载章节内容。
   bool get isLoading => _loadingChapterId != null;
 
   /// 当前正在加载的章节 ID。
   String? get loadingChapterId => _loadingChapterId;
+
+  /// 最近一次失败的原因；旧路径未标注原因时为 null。
+  ReaderChapterFailure? get failureReason => _failedReason;
 
   /// 判断指定章节是否处于失败状态。
   bool hasFailed(String chapterId) => _failedChapterId == chapterId;
@@ -20,6 +24,7 @@ class ReaderChapterLoadCoordinator {
     _generation++;
     _loadingChapterId = chapterId;
     _failedChapterId = null;
+    _failedReason = null;
     return _generation;
   }
 
@@ -34,21 +39,24 @@ class ReaderChapterLoadCoordinator {
     }
     _loadingChapterId = null;
     _failedChapterId = null;
+    _failedReason = null;
   }
 
-  /// 标记当前请求失败。
-  void fail(int generation, String chapterId) {
+  /// 标记当前请求失败，并记录可提示给用户的原因。
+  void fail(int generation, String chapterId, {ReaderChapterFailure? reason}) {
     if (!isCurrent(generation, chapterId)) {
       return;
     }
     _loadingChapterId = null;
     _failedChapterId = chapterId;
+    _failedReason = reason;
   }
 
   /// 清除指定章节的失败状态，允许用户重试。
   void clearFailure(String chapterId) {
     if (_failedChapterId == chapterId) {
       _failedChapterId = null;
+      _failedReason = null;
     }
   }
 
@@ -56,6 +64,8 @@ class ReaderChapterLoadCoordinator {
   void cancel() {
     _generation++;
     _loadingChapterId = null;
+    _failedChapterId = null;
+    _failedReason = null;
   }
 
   /// 请求结果不再被消费（章节已被切走或收养改写）时释放占用。
@@ -69,4 +79,26 @@ class ReaderChapterLoadCoordinator {
     }
     cancel();
   }
+}
+
+/// 章节正文不可用的原因，决定向用户显示哪条可执行提示。
+enum ReaderChapterFailure {
+  /// 服务端派生正文取不到，且本地也没有可读的整本文件：需要联网。
+  needsNetwork,
+
+  /// 服务端与本地切片与清单不一致（偏移漂移或清单超前）：需要重新解析本书。
+  needsReparse,
+}
+
+/// TXT 单章正文不可用，携带可提示给用户的原因。
+class TxtChapterTextException implements Exception {
+  const TxtChapterTextException(this.reason, this.detail);
+
+  final ReaderChapterFailure reason;
+
+  /// 诊断信息（不含书名、路径或正文内容）。
+  final String detail;
+
+  @override
+  String toString() => 'TxtChapterTextException(${reason.name}): $detail';
 }

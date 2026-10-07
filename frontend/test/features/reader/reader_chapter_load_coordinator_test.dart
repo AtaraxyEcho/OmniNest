@@ -62,4 +62,47 @@ void main() {
       expect(coordinator.loadingChapterId, 'chapter-2');
     });
   });
+
+  group('failureReason', () {
+    test('records the reason for the failed chapter and clears with it', () {
+      final coordinator = ReaderChapterLoadCoordinator();
+      final generation = coordinator.begin('chapter-1');
+
+      coordinator.fail(
+        generation,
+        'chapter-1',
+        reason: ReaderChapterFailure.needsNetwork,
+      );
+
+      expect(coordinator.failureReason, ReaderChapterFailure.needsNetwork);
+
+      coordinator.clearFailure('chapter-1');
+      expect(coordinator.failureReason, isNull);
+      expect(coordinator.hasFailed('chapter-1'), isFalse);
+    });
+
+    test('unattributed failure keeps a null reason', () {
+      final coordinator = ReaderChapterLoadCoordinator();
+      final generation = coordinator.begin('chapter-1');
+
+      coordinator.fail(generation, 'chapter-1');
+
+      expect(coordinator.hasFailed('chapter-1'), isTrue);
+      expect(coordinator.failureReason, isNull);
+    });
+
+    test('starting a new request drops the previous reason', () {
+      final coordinator = ReaderChapterLoadCoordinator();
+      final generation = coordinator.begin('chapter-1');
+      coordinator.fail(
+        generation,
+        'chapter-1',
+        reason: ReaderChapterFailure.needsReparse,
+      );
+
+      coordinator.begin('chapter-2');
+
+      expect(coordinator.failureReason, isNull);
+    });
+  });
 }

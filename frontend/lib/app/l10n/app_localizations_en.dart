@@ -6248,6 +6248,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'The chapter could not be loaded. Please try again.';
 
   @override
+  String get readerChapterNeedsNetwork =>
+      'This chapter is not cached for offline reading. Connect to the network and try again.';
+
+  @override
+  String get readerChapterNeedsReparse =>
+      'The chapter text no longer matches this book. Reparse it in the book details and try again.';
+
+  @override
   String get readerRemoveFavorite => 'Remove from favorites';
 
   @override

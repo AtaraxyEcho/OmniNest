@@ -2634,6 +2634,14 @@
   "readerOperationFailed": "Operation failed, please try again later",
   "readerOperationSubmitted": "Operation submitted",
   "readerChapterLoadFailed": "The chapter could not be loaded. Please try again.",
+  "readerChapterNeedsNetwork": "This chapter is not cached for offline reading. Connect to the network and try again.",
+  "@readerChapterNeedsNetwork": {
+    "description": "TXT 章节离线不可读时的提示"
+  },
+  "readerChapterNeedsReparse": "The chapter text no longer matches this book. Reparse it in the book details and try again.",
+  "@readerChapterNeedsReparse": {
+    "description": "章节正文与清单偏移不一致时的提示"
+  },
   "readerRemoveFavorite": "Remove from favorites",
   "readerAddFavorite": "Add to favorites",
   "readerReadComic": "Read Comic",

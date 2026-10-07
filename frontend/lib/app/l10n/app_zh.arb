@@ -2508,6 +2508,14 @@
   "readerOperationFailed": "操作失败，请稍后重试",
   "readerOperationSubmitted": "操作已提交",
   "readerChapterLoadFailed": "章节内容加载失败，请重试",
+  "readerChapterNeedsNetwork": "本章未缓存到本地，需要联网后才能阅读",
+  "@readerChapterNeedsNetwork": {
+    "description": "TXT 章节离线不可读时的提示"
+  },
+  "readerChapterNeedsReparse": "本章正文与书籍内容不一致，请在书籍详情中重新解析后重试",
+  "@readerChapterNeedsReparse": {
+    "description": "章节正文与清单偏移不一致时的提示"
+  },
   "readerRemoveFavorite": "取消收藏",
   "readerAddFavorite": "加入收藏",
   "readerReadComic": "阅读漫画",

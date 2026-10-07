@@ -70,8 +70,16 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
             if (content == null || _contentLoader == null) {
               if (parsedBook != null &&
                   _chapterLoadCoordinator.hasFailed(_currentChapterId)) {
+                final l10n = AppLocalizations.of(context);
+                final message = switch (_chapterLoadCoordinator.failureReason) {
+                  ReaderChapterFailure.needsNetwork =>
+                    l10n.readerChapterNeedsNetwork,
+                  ReaderChapterFailure.needsReparse =>
+                    l10n.readerChapterNeedsReparse,
+                  null => l10n.readerChapterLoadFailed,
+                };
                 return AppErrorView(
-                  message: AppLocalizations.of(context).readerChapterLoadFailed,
+                  message: message,
                   onBack: safePop,
                   onRetry: () {
                     _chapterLoadCoordinator.clearFailure(_currentChapterId);

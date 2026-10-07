@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/features/reader/application/reader_cache_providers.dart';
+import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_parsed_book_cache.dart';
 import 'package:omninest/features/reader/data/cached_book_handle.dart';
@@ -359,7 +360,12 @@ Future<String?> loadChapterContent(
     final end = chapter.sourceEndOffset;
     if (start == null || end == null || end < start) return null;
     final parser = ref.read(txtParserServiceProvider);
-    final bodyChars = end - start - chapter.bodyStartOffset;
+    final spanChars = end - start;
+    // 正文起点越界（清单超前于派生文件）时按整段区间校验，与服务端的夹紧规则保持一致
+    final bodyChars =
+        chapter.bodyStartOffset > 0 && chapter.bodyStartOffset < spanChars
+            ? spanChars - chapter.bodyStartOffset
+            : spanChars;
     final serverText = await _readTxtChapterFromServer(
       ref,
       itemId,
@@ -367,15 +373,24 @@ Future<String?> loadChapterContent(
       bodyChars,
     );
     if (serverText != null) return parser.textToXhtml(serverText);
-    final source = await ref.read(cachedBookHandleProvider(itemId).future);
-    // Web 受整包内存上限约束；原生放宽到会话级解码上限，超限给出
-    // 明确错误而非静默失败。整本解码按条目缓存，切章不再重复解码。
-    final bytes = await source.readBytes(
-      maxBytes:
-          source.isMemory
-              ? LocalBookCache.maxInMemoryParseBytes
-              : LocalBookCache.maxNativeParseBytes,
-    );
+    // 服务端取不到正文时的本地兜底：整本下载＋本地解码，只在离线或旧数据未重解析时走到。
+    final Uint8List bytes;
+    try {
+      final source = await ref.read(cachedBookHandleProvider(itemId).future);
+      // Web 受整包内存上限约束；原生放宽到会话级解码上限，超限给出
+      // 明确错误而非静默失败。整本解码按条目缓存，切章不再重复解码。
+      bytes = await source.readBytes(
+        maxBytes:
+            source.isMemory
+                ? LocalBookCache.maxInMemoryParseBytes
+                : LocalBookCache.maxNativeParseBytes,
+      );
+    } on Exception catch (error) {
+      throw TxtChapterTextException(
+        ReaderChapterFailure.needsNetwork,
+        '本地整本文件不可用（itemId=$itemId chapter=$chapterIndex）：$error',
+      );
+    }
     final text = await parser.ensureDecodedText(itemId: itemId, bytes: bytes);
     final rawSlice = parser.rawChapterSlice(text, start, end);
     // 前后端各自解码同一份字节流，编码判定或坏序列策略一有分歧，服务端偏移就会
@@ -386,11 +401,14 @@ Future<String?> loadChapterContent(
         'offsets=$start-$end sliceChars=${rawSlice.length} '
         'titleChars=${chapter.title.length}',
       );
-      return null;
+      throw TxtChapterTextException(
+        ReaderChapterFailure.needsReparse,
+        '章节偏移与正文不匹配（chapter=$chapterIndex, span=$start-$end）',
+      );
     }
-    return parser.textToXhtml(
-      txtChapterBody(rawSlice, chapter.bodyStartOffset),
-    );
+    final body = txtChapterBody(rawSlice, chapter.bodyStartOffset);
+    // 整章只有标题行时剥完标题会剩空串：保留完整切片，与服务端返回保持一致
+    return parser.textToXhtml(body.isEmpty ? rawSlice : body);
   }
   if (detail.item.itemType != 'EPUB') return chapter.xhtmlContent;
 
@@ -439,18 +457,17 @@ Future<String?> _readTxtChapterFromServer(
   }
 }
 
-/// 判断服务端返回的 TXT 单章正文可否直接渲染。
+/// 判断服务端返回的 TXT 单章正文与本地清单是否同源。
 ///
-/// 长度必须等于清单区间去掉标题行后的长度：不一致说明本地清单属于另一个
-/// manifest 版本，继续渲染会把别章正文贴进来；空正文按业务错误处理，不做渲染依据。
+/// 长度必须等于清单区间去掉标题行后的长度；不一致说明本地清单属于另一个
+/// manifest 版本，交由本地链兜底而不是直接渲染。正文为空是合法状态
+/// （整章只有标题行），因此不作为异常。
 bool txtChapterTextMatchesManifestRange(
   String text,
   int charCount,
   int expectedChars,
 ) {
-  return text.isNotEmpty &&
-      charCount == expectedChars &&
-      text.length == charCount;
+  return charCount == expectedChars && text.length == charCount;
 }
 
 /// 从整章切片（含标题行）取出正文，起点由清单的 bodyStartOffset 给出（D-12）。

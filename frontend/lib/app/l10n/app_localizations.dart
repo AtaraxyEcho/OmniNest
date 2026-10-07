@@ -11471,6 +11471,18 @@ abstract class AppLocalizations {
   /// **'The chapter could not be loaded. Please try again.'**
   String get readerChapterLoadFailed;
 
+  /// TXT 章节离线不可读时的提示
+  ///
+  /// In en, this message translates to:
+  /// **'This chapter is not cached for offline reading. Connect to the network and try again.'**
+  String get readerChapterNeedsNetwork;
+
+  /// 章节正文与清单偏移不一致时的提示
+  ///
+  /// In en, this message translates to:
+  /// **'The chapter text no longer matches this book. Reparse it in the book details and try again.'**
+  String get readerChapterNeedsReparse;
+
   /// No description provided for @readerRemoveFavorite.
   ///
   /// In en, this message translates to:

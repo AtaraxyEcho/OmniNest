@@ -6051,6 +6051,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerChapterLoadFailed => '章节内容加载失败，请重试';
 
   @override
+  String get readerChapterNeedsNetwork => '本章未缓存到本地，需要联网后才能阅读';
+
+  @override
+  String get readerChapterNeedsReparse => '本章正文与书籍内容不一致，请在书籍详情中重新解析后重试';
+
+  @override
   String get readerRemoveFavorite => '取消收藏';
 
   @override

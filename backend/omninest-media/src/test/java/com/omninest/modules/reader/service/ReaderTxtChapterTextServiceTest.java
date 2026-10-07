@@ -218,17 +218,19 @@ class ReaderTxtChapterTextServiceTest {
     }
 
     @Test
-    void clampsBodyStartWhenManifestIsAheadOfTheAsset() {
+    void keepsTheTitleLineWhenTheChapterHasNoBody() {
         byte[] body = "第一章 甲".getBytes(StandardCharsets.UTF_8);
         ReaderTextChapter chapter = chapter(0, 0L, 5L);
+        // 清单超前于派生文件：起点先夹紧到文件末尾，正文为空则保留标题行
         chapter.setBodyStartOffset(6);
         chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
         stubChapterAssetRead(chapter, body);
 
         ReaderTxtChapterTextService.ChapterTextDto dto = service.readChapterText(OWNER_ID, ITEM_ID, 0);
 
-        assertThat(dto.text()).isEmpty();
-        assertThat(dto.bodyStartOffset()).isEqualTo(5);
+        assertThat(dto.text()).isEqualTo("第一章 甲");
+        assertThat(dto.charCount()).isEqualTo(5);
+        assertThat(dto.bodyStartOffset()).isZero();
     }
 
     @Test

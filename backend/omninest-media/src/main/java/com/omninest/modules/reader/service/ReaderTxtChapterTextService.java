@@ -118,6 +118,11 @@ public class ReaderTxtChapterTextService {
             // 正文再含一行就是重复标题（D-12）。偏移域仍以派生文件为准。
             int bodyStart = bodyStartOf(chapter, slice.length());
             String text = slice.substring(bodyStart);
+            if (text.isEmpty()) {
+                // 整章只有标题行：保留标题作为正文，避免返回空章
+                text = slice;
+                bodyStart = 0;
+            }
             return new ChapterTextDto(chapter.getChapterIndex(), text, text.length(), bodyStart);
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "读取本章正文失败");

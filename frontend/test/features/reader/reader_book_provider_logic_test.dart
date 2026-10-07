@@ -126,11 +126,12 @@ void main() {
 
   test('服务端 TXT 单章正文只在长度与正文区间一致时可用', () {
     // 清单区间 12 字符，其中标题行占 6 字符，正文期望长度为 6
-    expect(txtChapterTextMatchesManifestRange('正文内容正文', 6, 12 - 6), isTrue);
+    expect(txtChapterTextMatchesManifestRange('正文内容正文', 6, 6), isTrue);
     // 清单来自另一个 manifest 版本时区间不等，必须回退而不是渲染别章
     expect(txtChapterTextMatchesManifestRange('正文内容正文', 6, 8), isFalse);
     expect(txtChapterTextMatchesManifestRange('正文内容正文', 4, 6), isFalse);
-    expect(txtChapterTextMatchesManifestRange('', 0, 0), isFalse);
+    // 整章只有标题行时正文长度为 0，是合法状态而不是异常
+    expect(txtChapterTextMatchesManifestRange('', 0, 0), isTrue);
   });
 
   test('本地兜底切片按正文起点剥掉标题行', () {

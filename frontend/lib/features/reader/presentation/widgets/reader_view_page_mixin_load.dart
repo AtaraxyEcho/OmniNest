@@ -269,7 +269,11 @@ extension ReaderViewPageMixinLoad on ReaderViewPageMixin {
             requestedChapterId,
           ) &&
           requestedChapterId == currentChapterId) {
-        chapterLoadCoordinator.fail(requestGeneration, requestedChapterId);
+        chapterLoadCoordinator.fail(
+          requestGeneration,
+          requestedChapterId,
+          reason: e is TxtChapterTextException ? e.reason : null,
+        );
         isSwitchingChapter = false;
         isRestoringProgress = false;
         _updateState(() {});
