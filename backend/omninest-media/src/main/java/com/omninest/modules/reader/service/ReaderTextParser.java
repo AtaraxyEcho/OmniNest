@@ -2,26 +2,16 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
-import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.reader.service.ComicEpubParser.EpubManifestItem;
 import com.omninest.modules.reader.service.ComicEpubParser.EpubParseResult;
 import com.omninest.modules.reader.service.ComicEpubParser.EpubSpineItem;
 import com.omninest.modules.reader.service.ComicEpubParser.EpubTocEntry;
 import com.omninest.modules.reader.service.ReaderEpubArchiveStager.StagedArchive;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
-import java.io.BufferedReader;
-import java.io.FilterInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +27,9 @@ import org.springframework.stereotype.Service;
 /**
  * EPUB/TXT 文本书籍流式解析器，生成可持久化章节清单。
  *
+ * <p>TXT 的解码与偏移域规则不在本类内实现，统一由 {@link TxtContentDecoder} 提供，
+ * 使章节清单与按章正文出自同一份解码代码。
+ *
  * @author OmniNest
  */
 @Slf4j
@@ -44,7 +37,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ReaderTextParser {
 
-    private static final int CHARSET_SAMPLE_BYTES = 64 * 1024;
     /**
      * 章节标题入库长度上限。数据库列为 varchar(500)，此处留出前缀与截断标记余量，
      * 避免畸形 TXT 的超长"标题行"直接触发数据完整性异常。
@@ -70,7 +62,7 @@ public class ReaderTextParser {
     private static final int PROGRESS_SCAN_STEP = 5;
 
     private final FileMetadataQueryService fileMetadataQueryService;
-    private final FileQueryService fileQueryService;
+    private final TxtContentDecoder txtContentDecoder;
     private final ReaderEpubArchiveStager epubArchiveStager;
     private final ReaderArchiveSafetyPolicy archiveSafetyPolicy;
 
@@ -142,47 +134,31 @@ public class ReaderTextParser {
     }
 
     private ParsedTextBook parseTxt(FileDescriptor fileNode, IntConsumer progressReporter) {
-        Charset charset = detectCharset(fileNode);
+        Charset charset = txtContentDecoder.detectCharset(fileNode);
         List<TextChapterDraft> chapters = new ArrayList<>();
-        long currentOffset = 0L;
         long chapterStart = 0L;
         String chapterTitle = "正文";
         int lastReportedProgress = PROGRESS_SCAN_START;
         long totalBytes = Math.max(1L, fileNode.sizeBytes());
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                fileNode.ownerUserId(),
-                fileNode.id())) {
-            CountingInputStream counting = new CountingInputStream(content.inputStream());
-            BufferedReader reader = new BufferedReader(new InputStreamReader(counting, charset));
-            String line;
-            boolean firstLine = true;
-            while ((line = reader.readLine()) != null) {
-                if (!firstLine) {
-                    // 行终止符按 1 个字符计入偏移域，且只在确实读到下一行时累加，
-                    // 避免为无终止符的末行多加 1。
-                    currentOffset += 1L;
-                }
-                if (firstLine && !line.isEmpty() && line.charAt(0) == '\uFEFF') {
-                    line = line.substring(1);
-                }
-                firstLine = false;
+        long currentOffset;
+        try (TxtContentDecoder.TxtLineCursor cursor = txtContentDecoder.openCursor(fileNode, charset)) {
+            TxtContentDecoder.TxtLine line;
+            while ((line = cursor.next()) != null) {
                 // strip() 按 Unicode 空白判定，可去除全角空格缩进；trim() 只去除 <= U+0020。
-                String normalized = line.strip();
+                String normalized = line.text().strip();
                 if (isChapterTitle(normalized)) {
-                    if (currentOffset == 0L) {
+                    if (line.offset() == 0L) {
                         chapterTitle = normalized;
-                    } else if (currentOffset > chapterStart) {
-                        chapters.add(txtDraft(chapters.size(), chapterTitle, chapterStart, currentOffset));
-                        chapterStart = currentOffset;
+                    } else if (line.offset() > chapterStart) {
+                        chapters.add(txtDraft(chapters.size(), chapterTitle, chapterStart, line.offset()));
+                        chapterStart = line.offset();
                         chapterTitle = normalized;
                     }
                 }
-                currentOffset += line.length();
                 lastReportedProgress = reportScanProgress(
-                        progressReporter, counting.consumed(), totalBytes, lastReportedProgress);
+                        progressReporter, cursor.consumedBytes(), totalBytes, lastReportedProgress);
             }
-        } catch (IOException exception) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "TXT 解析失败");
+            currentOffset = cursor.offset();
         }
         if (currentOffset > chapterStart || chapters.isEmpty()) {
             chapters.add(txtDraft(chapters.size(), chapterTitle, chapterStart, currentOffset));
@@ -224,71 +200,6 @@ public class ReaderTextParser {
         }
         progressReporter.accept(progress);
         return progress;
-    }
-
-    /**
-     * 统计已消耗字节数的输入流包装，仅用于扫描进度上报。
-     */
-    private static final class CountingInputStream extends FilterInputStream {
-
-        private long consumed;
-
-        CountingInputStream(InputStream input) {
-            super(input);
-        }
-
-        long consumed() {
-            return consumed;
-        }
-
-        @Override
-        public int read() throws IOException {
-            int value = super.read();
-            if (value >= 0) {
-                consumed++;
-            }
-            return value;
-        }
-
-        @Override
-        public int read(byte[] buffer, int offset, int length) throws IOException {
-            int read = super.read(buffer, offset, length);
-            if (read > 0) {
-                consumed += read;
-            }
-            return read;
-        }
-    }
-
-    private Charset detectCharset(FileDescriptor fileNode) {
-        byte[] sample = new byte[CHARSET_SAMPLE_BYTES];
-        int size = 0;
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                fileNode.ownerUserId(),
-                fileNode.id())) {
-            InputStream input = content.inputStream();
-            while (size < sample.length) {
-                int read = input.read(sample, size, sample.length - size);
-                if (read < 0) {
-                    break;
-                }
-                size += read;
-            }
-        } catch (IOException exception) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "TXT 读取失败");
-        }
-        if (size >= 3 && sample[0] == (byte) 0xEF && sample[1] == (byte) 0xBB && sample[2] == (byte) 0xBF) {
-            return StandardCharsets.UTF_8;
-        }
-        try {
-            StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(sample, 0, size));
-            return StandardCharsets.UTF_8;
-        } catch (CharacterCodingException exception) {
-            return Charset.forName("GB18030");
-        }
     }
 
     private FileDescriptor loadFileNode(UUID fileNodeId) {

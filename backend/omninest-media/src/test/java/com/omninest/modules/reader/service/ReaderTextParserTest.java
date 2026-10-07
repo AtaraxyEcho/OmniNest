@@ -58,7 +58,7 @@ class ReaderTextParserTest {
     void setUp() {
         parser = new ReaderTextParser(
                 fileMetadataQueryService,
-                fileQueryService,
+                new TxtContentDecoder(fileQueryService),
                 epubArchiveStager,
                 archiveSafetyPolicy
         );
