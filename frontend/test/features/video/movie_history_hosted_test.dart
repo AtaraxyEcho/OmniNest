@@ -74,17 +74,18 @@ void main() {
     );
 
     expect(find.byType(MobileEnvSectionHeader), findsOneWidget);
-    // 眉标取值来自样例 .section-title：白 43% + 字距 1.5，不是墨阶 inkFaint(.58)。
-    final eyebrow = tester.widget<Text>(
-      find
-          .descendant(
-            of: find.byType(MobileEnvSectionHeader),
-            matching: find.byType(Text),
-          )
-          .first,
+    // 眉标取值来自样例 .section-title：白 43% / 9px / 字距 1.5；
+    // 标题 21，不是卡片区头档的 24。
+    final headerTexts = find.descendant(
+      of: find.byType(MobileEnvSectionHeader),
+      matching: find.byType(Text),
     );
+    final eyebrow = tester.widget<Text>(headerTexts.first);
     expect(eyebrow.style?.color, MobileEnvColors.white43);
+    expect(eyebrow.style?.fontSize, 9);
     expect(eyebrow.style?.letterSpacing, 1.5);
+    final sectionTitle = tester.widget<Text>(headerTexts.last);
+    expect(sectionTitle.style?.fontSize, 21);
     expect(find.byType(MobileFeatureListRow), findsNWidgets(2));
     expect(
       find.byType(MovieRedesignHistoryList),

@@ -47,6 +47,12 @@ abstract final class AppTypography {
   /// 卡片区头 / 空态大字。
   static const double headlineSmall = 24;
 
+  /// 托管段头标题档，对齐样例 `.section-title` 的 h2（21）。
+  ///
+  /// 介于 `titleLarge` 与 `headlineSmall` 之间，只服务托管空间内的小节标题，
+  /// 不替换桌面既有标题档。
+  static const double headlineSection = 21;
+
   /// 面板 / 弹窗标题。
   static const double titleLarge = 20;
 
@@ -67,6 +73,9 @@ abstract final class AppTypography {
 
   /// 沉浸舞台徽标等最小档辅助文字。
   static const double labelMicro = 10;
+
+  /// 样例最密档：眉标 `.eyebrow`、`.chip` 标签与 hero 等宽眉（9）。
+  static const double labelNano = 9;
 
   /// eyebrow / 时间戳等辅助文字。
   static const double labelSmall = 11;

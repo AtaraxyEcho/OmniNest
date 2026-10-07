@@ -919,11 +919,11 @@ class MobileEnvSectionHeader extends StatelessWidget {
             eyebrow!.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            // 样例 .section-title 的眉标是白 43%，不是 inkFaint（墨 58%）：
-            // 两者在题图/深色底上肉眼可分，且 white43 已是既有色阶成员。
+            // 样例 .section-title 眉标：白 43% + 9px + 字距 1.5。
+            // inkFaint（墨 58%）与 labelSmall（11）都是工位档，托管态不用。
             style: TextStyle(
               color: MobileEnvColors.white43,
-              fontSize: AppTypography.labelSmall,
+              fontSize: AppTypography.labelNano,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
             ),
@@ -939,7 +939,8 @@ class MobileEnvSectionHeader extends StatelessWidget {
                   fontFamily: AppTypography.serifFamily,
                   fontFamilyFallback: AppTypography.serifFamilyFallback,
                   color: MobileEnvColors.ink,
-                  fontSize: AppTypography.headlineSmall,
+                  // 样例 .section-title 的 h2 是 21，不是卡片区头档（24）。
+                  fontSize: AppTypography.headlineSection,
                   fontWeight: FontWeight.w600,
                   height: 1.15,
                 ),
