@@ -65,7 +65,7 @@ class ReaderTextManifestServiceTest {
                 "解析标题",
                 "解析作者",
                 "zh-CN",
-                List.of(new TextChapterDraft(0, "chapter_0", "第一章", "text/1.xhtml", null, null, 120, 0)),
+                List.of(new TextChapterDraft(0, "chapter_0", "第一章", "text/1.xhtml", null, null, 120, 0, null)),
                 null
         );
 
@@ -95,7 +95,7 @@ class ReaderTextManifestServiceTest {
                 null,
                 null,
                 "UTF-8",
-                List.of(new TextChapterDraft(0, "chapter_0", "正文", null, 0L, 18L, 18, 0)),
+                List.of(new TextChapterDraft(0, "chapter_0", "正文", null, 0L, 18L, 18, 0, 0)),
                 null
         );
 

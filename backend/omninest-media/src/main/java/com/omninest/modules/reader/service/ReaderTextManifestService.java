@@ -111,7 +111,8 @@ public class ReaderTextManifestService {
                         chapter.getSourceStartOffset(),
                         chapter.getSourceEndOffset(),
                         chapter.getCharCount(),
-                        chapter.getLevel()
+                        chapter.getLevel(),
+                        chapter.getBodyStartOffset()
                 ))
                 .toList();
         TextParseTaskDto parseTask = taskRecordService
@@ -154,6 +155,7 @@ public class ReaderTextManifestService {
         chapter.setSourceEndOffset(draft.sourceEndOffset());
         chapter.setCharCount(draft.charCount());
         chapter.setLevel(draft.level());
+        chapter.setBodyStartOffset(draft.bodyStartOffset());
         return chapter;
     }
 
@@ -254,6 +256,7 @@ public class ReaderTextManifestService {
      * @param sourceEndOffset TXT 结束字符偏移
      * @param charCount 字符数
      * @param level 目录层级
+     * @param bodyStartOffset TXT 正文起点相对章节起点的偏移，标题行不计入；EPUB 为 null
      */
     public record TextChapterDto(
             int index,
@@ -263,7 +266,8 @@ public class ReaderTextManifestService {
             Long sourceStartOffset,
             Long sourceEndOffset,
             int charCount,
-            int level
+            int level,
+            Integer bodyStartOffset
     ) {
     }
 }

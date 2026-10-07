@@ -2139,6 +2139,8 @@ CREATE TABLE "omni"."reader_text_chapters" (
   "source_end_offset" int8,
   "char_count" int4 NOT NULL DEFAULT 0,
   "level" int4 NOT NULL DEFAULT 0,
+  "body_start_offset" int4,
+  "content_file_node_id" uuid,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0
 )
@@ -2147,6 +2149,8 @@ COMMENT ON TABLE "omni"."reader_text_chapters" IS '文本书籍服务端解析�
 COMMENT ON COLUMN "omni"."reader_text_chapters"."content_path" IS 'EPUB 归档内正文路径';
 COMMENT ON COLUMN "omni"."reader_text_chapters"."source_start_offset" IS 'TXT 源文本字符起始偏移';
 COMMENT ON COLUMN "omni"."reader_text_chapters"."source_end_offset" IS 'TXT 源文本字符结束偏移';
+COMMENT ON COLUMN "omni"."reader_text_chapters"."body_start_offset" IS 'TXT 正文起点相对章节起点的字符偏移，标题行与其终止符不计入正文';
+COMMENT ON COLUMN "omni"."reader_text_chapters"."content_file_node_id" IS 'TXT 本章 UTF-8 正文派生文件节点ID，关联 file_nodes，未生成时为 NULL';
 
 CREATE TABLE "omni"."reader_notes" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),

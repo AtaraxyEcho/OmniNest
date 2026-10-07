@@ -56,6 +56,14 @@ public class ReaderTextChapter {
     @Column(nullable = false)
     private int level;
 
+    /** TXT 正文起点相对章节起点的偏移，标题行不计入正文；EPUB 为 null */
+    @Column(name = "body_start_offset")
+    private Integer bodyStartOffset;
+
+    /** TXT 本章 UTF-8 正文派生文件节点；尚未生成或非 TXT 时为 null */
+    @Column(name = "content_file_node_id")
+    private UUID contentFileNodeId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

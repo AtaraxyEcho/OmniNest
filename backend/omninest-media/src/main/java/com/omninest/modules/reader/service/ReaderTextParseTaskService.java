@@ -24,6 +24,7 @@ public class ReaderTextParseTaskService {
 
     private final ReaderTextParser textParser;
     private final ReaderTextManifestService manifestService;
+    private final ReaderTxtChapterTextService chapterTextService;
     private final TaskRecordService taskRecordService;
     private final FileLifecycleGuard fileLifecycleGuard;
 
@@ -52,6 +53,12 @@ public class ReaderTextParseTaskService {
             }
             fileLifecycleGuard.requireOwnedWritable(event.ownerUserId(), event.fileNodeId());
             manifestService.replaceManifest(event.itemId(), parsedBook);
+            // TXT 在此把每章正文解码成 UTF-8 派生文件，读取端之后不再需要整本解码
+            chapterTextService.materialize(
+                    event.itemId(),
+                    event.fileNodeId(),
+                    progress -> updateProgress(event, progress)
+            );
             taskRecordService.markCompleted(event.taskId(), Map.of(
                     "itemId", event.itemId().toString(),
                     "chapterCount", parsedBook.chapters().size(),

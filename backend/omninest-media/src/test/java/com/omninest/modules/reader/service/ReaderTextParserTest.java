@@ -131,6 +131,41 @@ class ReaderTextParserTest {
     }
 
     /**
+     * D-12：正文起点跳过标题行本身与其终止符；标题行就是本章唯一内容时退到章节末尾，
+     * 表示本章没有正文。首行不是标题行的章节（无标题书名）正文起点为 0。
+     */
+    @Test
+    void bodyStartSkipsTitleLineAndItsTerminator() {
+        ReaderTextParser.ParsedTextBook withTitles = parseText(
+                "第一章 甲\n正文\n第二章 乙\n正文", StandardCharsets.UTF_8);
+
+        assertThat(withTitles.chapters())
+                .extracting(ReaderTextParser.TextChapterDraft::bodyStartOffset)
+                .containsExactly(6, 6);
+
+        ReaderTextParser.ParsedTextBook untitledHead = parseText(
+                "前言内容\n第一章 甲\n正文", StandardCharsets.UTF_8);
+
+        assertThat(untitledHead.chapters())
+                .extracting(ReaderTextParser.TextChapterDraft::title)
+                .containsExactly("正文", "第一章 甲");
+        assertThat(untitledHead.chapters())
+                .extracting(ReaderTextParser.TextChapterDraft::bodyStartOffset)
+                .containsExactly(0, 6);
+
+        // 标题行就是本章全部内容时，正文起点退到章节末尾（本章正文为空）
+        ReaderTextParser.ParsedTextBook titleOnly = parseText(
+                "第一章 甲\n第二章 乙", StandardCharsets.UTF_8);
+
+        assertThat(titleOnly.chapters())
+                .extracting(ReaderTextParser.TextChapterDraft::bodyStartOffset)
+                .containsExactly(6, 5);
+        assertThat(titleOnly.chapters())
+                .extracting(ReaderTextParser.TextChapterDraft::charCount)
+                .containsExactly(6, 5);
+    }
+
+    /**
      * CRLF 与 CR 混排时，行终止符统一按 1 个字符计入偏移域。
      */
     @Test
