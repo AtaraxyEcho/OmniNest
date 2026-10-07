@@ -234,16 +234,17 @@ public class VideoLibraryController {
         return ApiResponse.success(movieLibraryService.seriesByType(currentUserContext.requireCurrentUserId(), seriesType));
     }
 
-    @Operation(summary = "按类型分页获取剧集", description = "按更新时间倒序分页返回指定类型剧集，供滚动加载")
+    @Operation(summary = "按类型分页获取剧集", description = "按更新时间倒序分页返回指定类型剧集，供滚动加载；q 为标题关键词，在 SQL 侧覆盖全库")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/series/by-type/page")
     ApiResponse<PageResponse<MovieSeriesDto>> seriesByTypePage(
             @RequestParam(defaultValue = "TV") String seriesType,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String q
     ) {
         var result = movieLibraryService.seriesByTypePage(
-                currentUserContext.requireCurrentUserId(), seriesType, page, size);
+                currentUserContext.requireCurrentUserId(), seriesType, page, size, q);
         return ApiResponse.success(PageResponse.of(
                 result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }

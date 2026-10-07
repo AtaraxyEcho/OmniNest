@@ -109,7 +109,9 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
 
     /**
      * 分页查询当前用户可访问且仍有活动剧集文件的指定类型系列，按更新时间倒序，
-     * 供系列网格滚动加载。
+     * 供系列网格滚动加载与全库关键词检索。
+     *
+     * @param titlePattern 标题模糊匹配串（小写 {@code %关键词%}），为空时不参与过滤
      */
     @Query(
             value = """
@@ -118,6 +120,7 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             join FileNode file on item.fileNodeId = file.id
             where series.seriesType = :seriesType
               and file.deleted = false
+              and (:titlePattern is null or lower(series.title) like :titlePattern)
               and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
                    or series.librarySourceId in :librarySourceIds)
             order by series.updatedAt desc
@@ -128,6 +131,7 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             join FileNode file on item.fileNodeId = file.id
             where series.seriesType = :seriesType
               and file.deleted = false
+              and (:titlePattern is null or lower(series.title) like :titlePattern)
               and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
                    or series.librarySourceId in :librarySourceIds)
             """)
@@ -135,6 +139,7 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             @Param("requesterUserId") UUID requesterUserId,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("seriesType") String seriesType,
+            @Param("titlePattern") String titlePattern,
             Pageable pageable
     );
 

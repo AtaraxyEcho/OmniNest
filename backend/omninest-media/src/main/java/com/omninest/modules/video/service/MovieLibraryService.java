@@ -312,10 +312,15 @@ public class MovieLibraryService {
      * @return 系列分页
      */
     @Transactional(readOnly = true)
-    public Page<MovieSeriesDto> seriesByTypePage(UUID ownerUserId, String seriesType, int page, int size) {
+    public Page<MovieSeriesDto> seriesByTypePage(
+            UUID ownerUserId, String seriesType, int page, int size, String keyword) {
         Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
         Page<MediaTvSeries> items = tvSeriesRepository.findPageByActiveReadableAndSeriesType(
-                ownerUserId, readableLibraryIds, seriesType, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                ownerUserId,
+                readableLibraryIds,
+                seriesType,
+                buildLibraryTitlePattern(keyword),
+                PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
         return new PageImpl<>(
                 toSeriesDtos(ownerUserId, items.getContent()),
                 items.getPageable(),
