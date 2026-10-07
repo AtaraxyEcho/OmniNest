@@ -3,6 +3,7 @@
 // `/video?section=` 只认枚举名。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
@@ -73,6 +74,17 @@ void main() {
     );
 
     expect(find.byType(MobileEnvSectionHeader), findsOneWidget);
+    // 眉标取值来自样例 .section-title：白 43% + 字距 1.5，不是墨阶 inkFaint(.58)。
+    final eyebrow = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byType(MobileEnvSectionHeader),
+            matching: find.byType(Text),
+          )
+          .first,
+    );
+    expect(eyebrow.style?.color, MobileEnvColors.white43);
+    expect(eyebrow.style?.letterSpacing, 1.5);
     expect(find.byType(MobileFeatureListRow), findsNWidgets(2));
     expect(
       find.byType(MovieRedesignHistoryList),

@@ -919,8 +919,10 @@ class MobileEnvSectionHeader extends StatelessWidget {
             eyebrow!.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            // 样例 .section-title 的眉标是白 43%，不是 inkFaint（墨 58%）：
+            // 两者在题图/深色底上肉眼可分，且 white43 已是既有色阶成员。
             style: TextStyle(
-              color: MobileEnvColors.inkFaint,
+              color: MobileEnvColors.white43,
               fontSize: AppTypography.labelSmall,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
