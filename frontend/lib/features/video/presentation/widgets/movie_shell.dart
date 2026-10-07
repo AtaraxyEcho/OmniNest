@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
-import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +14,6 @@ import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_section_swipe.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
-import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -29,7 +29,6 @@ import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.
 import 'package:omninest/features/video/presentation/widgets/movie_section_transition.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
-part 'movie_shell_search_overlay.dart';
 part 'movie_shell_mobile.dart';
 
 /// 根据内容宽度计算文字缩放因子。

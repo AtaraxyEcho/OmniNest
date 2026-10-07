@@ -9,98 +9,6 @@ const List<MovieSection> _movieMobileBottomSections = [
   MovieSection.favorites,
 ];
 
-/// 托管态页内搜索条（样例 search-overlay 输入胶囊）：由玻璃横幅的搜索
-/// 钮展开，实时过滤当前分区已加载条目；收起时清空查询，避免离页后
-/// 带着看不见的筛选回到模块。
-class _MovieHostedSearchBar extends StatelessWidget {
-  const _MovieHostedSearchBar({
-    required this.controller,
-    required this.hintText,
-    required this.closeTooltip,
-    required this.onChanged,
-    required this.onSubmitted,
-    required this.onClose,
-    required this.active,
-  });
-
-  final TextEditingController controller;
-  final String hintText;
-  final String closeTooltip;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onClose;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!active) {
-      return const SizedBox.shrink();
-    }
-    // 与全局搜索页同源数值：48 高 r16、白 7.5% 底、白 10% 描边。
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 13),
-              decoration: BoxDecoration(
-                color: const Color(0x13FFFFFF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: MobileEnvColors.line10),
-              ),
-              child: Row(
-                children: [
-                  const OmniIcon(
-                    icon: OmniIcons.search,
-                    size: 19,
-                    color: Color(0x9EF6F6F2),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      autofocus: true,
-                      keyboardType: TextInputType.webSearch,
-                      textInputAction: TextInputAction.search,
-                      style: const TextStyle(
-                        color: MobileEnvColors.ink,
-                        // ignore: font_size_whitelist
-                        fontSize: 14,
-                      ),
-                      onChanged: onChanged,
-                      onSubmitted: onSubmitted,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isCollapsed: true,
-                        hintText: hintText,
-                        hintStyle: const TextStyle(
-                          color: Color(0x5CFFFFFF),
-                          // ignore: font_size_whitelist
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          MobileGlassIconButton(
-            tooltip: closeTooltip,
-            icon: Icons.close_rounded,
-            onPressed: onClose,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MovieMobileShell extends ConsumerStatefulWidget {
   const _MovieMobileShell({
     required this.section,
@@ -135,28 +43,16 @@ class _MovieMobileShell extends ConsumerStatefulWidget {
 }
 
 class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
-  /// 页内搜索条展开态与输入；查询写入中心控制器，收起即清空。
-  final TextEditingController _searchController = TextEditingController();
-  bool _searchActive = false;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   /// 当前生效分段（不在四段内的管理分区按首段计）。
   MovieSection get effectiveSection =>
       _MovieMobileShell._hostedSections.contains(widget.section)
           ? widget.section
           : _MovieMobileShell._hostedSections.first;
 
-  void _toggleSearch() => setState(() => _searchActive = !_searchActive);
-
-  void _closeSearch() {
-    setState(() => _searchActive = false);
-    _searchController.clear();
-    ref.read(movieCenterControllerProvider.notifier).setSearchQuery('');
+  /// 搜索统一进全局覆盖层并预选影视档：页内不再自建过滤条，
+  /// 页内条只能过滤已加载分页，覆盖层走服务端关键词覆盖全库。
+  void _openGlobalSearch() {
+    unawaited(context.push('/search?scope=video'));
   }
 
   /// 返回链路：优先走调用方回调；缺省时直弹 Navigator（页面被
@@ -303,21 +199,9 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
                       MobileGlassIconButton(
                         tooltip: l10n.videoSearch,
                         icon: Icons.search_rounded,
-                        onPressed: _toggleSearch,
+                        onPressed: _openGlobalSearch,
                       ),
                     ],
-                  ),
-                  _MovieHostedSearchBar(
-                    controller: _searchController,
-                    hintText: l10n.videoSearchMovieHint,
-                    closeTooltip: l10n.coreClose,
-                    active: _searchActive,
-                    onChanged:
-                        (value) => ref
-                            .read(movieCenterControllerProvider.notifier)
-                            .setSearchQuery(value),
-                    onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                    onClose: _closeSearch,
                   ),
                 ],
                 if (hosted)
@@ -552,7 +436,7 @@ class _MovieMobileTopBar extends StatelessWidget {
             },
           ),
           IconButton(
-            onPressed: () => _showMovieMobileSearchDialog(context),
+            onPressed: () => unawaited(context.push('/search?scope=video')),
             icon: Icon(
               Icons.search_rounded,
               size: 20,
@@ -568,39 +452,6 @@ class _MovieMobileTopBar extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 非托管移动形态（手机浏览器窄窗）的影视搜索浮层。
-///
-/// 托管态不再走本入口：样例 module-overlay 的搜索钮展开页内玻璃搜索条，
-/// 结果就在当前分区里过滤，不另起一层工位弹窗。
-void _showMovieMobileSearchDialog(BuildContext context) {
-  final l10n = AppLocalizations.of(context);
-  showWorkstationGeneralDialog<void>(
-    context: context,
-    dismissible: true,
-    barrierLabel: l10n.videoSearch,
-    barrierColor: Colors.black54,
-    transitionDuration: const Duration(milliseconds: 250),
-    pageBuilder:
-        (context, animation, secondaryAnimation) => const Dialog(
-          backgroundColor: Colors.transparent,
-          child: _MovieSearchOverlay(),
-        ),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
-          child: child,
-        ),
-      );
-    },
-  );
 }
 
 /// 新版移动端底部导航：5 个主分区 + 更多抽屉入口。
