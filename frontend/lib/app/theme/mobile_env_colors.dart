@@ -54,8 +54,8 @@ abstract final class MobileEnvColors {
   static const Color posterPlayBg = Color(0xE6F9F9F4);
   static const Color posterPlayFg = Color(0xFF101513);
 
-  /// 搜索覆盖层底。
-  static const Color searchOverlayBg = Color(0xE60A0F0E);
+  /// 搜索覆盖层底（样例 rgba(10,15,14,.94)）。
+  static const Color searchOverlayBg = Color(0xF00A0F0E);
 
   /// 玻璃表面族。
   static const Color surfaceGlass = Color(0xB8121918);

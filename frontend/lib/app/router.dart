@@ -51,6 +51,7 @@ import 'package:omninest/features/reader/presentation/pages/reader_metadata_edit
 import 'package:omninest/features/reader/presentation/pages/comic_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/pdf_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_import_confirm_page.dart';
+import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/features/search/presentation/pages/mobile_search_page.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:omninest/features/setup/presentation/pages/initial_setup_page.dart';
@@ -180,7 +181,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       // 全局搜索：跨内容类型的统一查找覆盖层，不属于一级导航。
-      _animatedRoute('/search', (state) => const MobileSearchPage()),
+      // 覆盖层自带近乎实底的深色底，因此包 hosted 作用域并列入壳层自有路径，
+      // 不接路由级环境档；`scope` 查询参数决定预选的内容档。
+      _animatedRoute(
+        '/search',
+        (state) => MobileHostedRoute(
+          child: MobileSearchPage(
+            initialScope: _searchScopeFromQuery(
+              state.uri.queryParameters['scope'],
+            ),
+          ),
+        ),
+      ),
       // 音乐/照片/影视不再占据一级导航，作为全屏模块页从 Library 或
       // 深链进入；移动壳层启用时经 MobileHostedRoute 补挂 scope，模块
       // 页分叉移动形态（样例 module-overlay）且页内弹窗走底部面板。
@@ -473,7 +485,18 @@ const Set<String> _shellOwnedPaths = <String>{
   '/reader/bookshelf',
   '/reader/stats',
   '/reader/admin',
+  '/search',
 };
+
+/// 解析 `/search?scope=` 的内容档；未知取值回落「全部」而不是报错。
+ScopedSearchId? _searchScopeFromQuery(String? raw) {
+  for (final scope in ScopedSearchId.values) {
+    if (scope.name == raw) {
+      return scope;
+    }
+  }
+  return null;
+}
 
 /// Admin 仪表盘两条路由共用的页面键，保证跨路由跳转原地更新。
 const LocalKey _adminPageKey = ValueKey<String>('admin-dashboard');

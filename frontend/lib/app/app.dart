@@ -17,6 +17,7 @@ import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
+import 'package:omninest/app/scoped_search_registration.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/top_bar_search_focus.dart';
@@ -51,6 +52,8 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
   @override
   void initState() {
     super.initState();
+    // 全局搜索的内容档来源在此登记：只有组合根可以同时看到所有业务模块。
+    registerScopedSearchSources();
     HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
   }
 

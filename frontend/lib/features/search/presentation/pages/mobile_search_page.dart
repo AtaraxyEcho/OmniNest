@@ -4,19 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/core/widgets/env_empty_state.dart';
-import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/core/search/scoped_search_registry.dart';
+import 'package:omninest/core/search/scoped_search_source.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/core/widgets/top_bar_search_focus.dart';
+import 'package:omninest/features/search/application/scoped_search_controller.dart';
 import 'package:omninest/features/search/application/search_controller.dart';
-import 'package:omninest/features/search/domain/search_result.dart';
-import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 
 /// 全局搜索的移动端全屏覆盖层（样例 search-overlay 逐值复刻）。
 ///
 /// 头部 48 高 r16 输入胶囊；空态 = SEARCH ACROSS OMNINEST 眉标 + 3 列
 /// 范围格 + 最近搜索行；结果行 42 r13 强调色图标盒。
+///
+/// 有意偏离样例两处：样例是 `position: fixed` 的浮层，这里做成路由页以取得
+/// 干净的返回栈与深链语义；样例底是 blur 34，这里不接 backdrop filter——
+/// 底层已是近乎实底的覆盖色，加模糊只增帧成本不改观感。
 class MobileSearchPage extends ConsumerStatefulWidget {
-  const MobileSearchPage({super.key});
+  const MobileSearchPage({this.initialScope, super.key});
+
+  /// 进入时预选的内容档；为空即「全部」。由路由的 `scope` 查询参数传入。
+  final ScopedSearchId? initialScope;
 
   @override
   ConsumerState<MobileSearchPage> createState() => _MobileSearchPageState();
@@ -45,13 +55,33 @@ final _recentSearchQueriesProvider =
       _RecentSearchQueriesNotifier.new,
     );
 
-class _MobileSearchPageState extends ConsumerState<MobileSearchPage> {
+class _MobileSearchPageState extends ConsumerState<MobileSearchPage>
+    with RouteTopAware {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  TopBarSearchFocusHandle? _searchFocusHandle;
 
   @override
   void initState() {
     super.initState();
+    // 入口预选档在首帧后再写 provider：Riverpod 禁止在 initState 改 provider。
+    // 进入时查询词为空、不会发请求，因此这一次延后不产生多余的整档查询。
+    final initialScope = widget.initialScope;
+    if (initialScope != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(scopedSearchSelectionProvider.notifier).select(initialScope);
+        }
+      });
+    }
+    // 撤销模块页内搜索条后，Ctrl/Cmd+F 必须有新目标，否则键盘路径静默
+    // 回落到浏览器原生查找；栈顶自检避免下层页面抢焦点。
+    _searchFocusHandle = TopBarSearchFocusRegistry.instance.register(
+      TopBarSearchFocusEntry(
+        focus: _focusNode.requestFocus,
+        isActive: () => mounted && isRouteTop,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _focusNode.requestFocus();
@@ -61,6 +91,7 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage> {
 
   @override
   void dispose() {
+    _searchFocusHandle?.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -83,9 +114,9 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final query = ref.watch(searchQueryProvider);
-    final results = ref.watch(searchResultsProvider);
+    final results = ref.watch(scopedSearchProvider);
     return Scaffold(
-      backgroundColor: const Color(0xE60A0F0E),
+      backgroundColor: MobileEnvColors.searchOverlayBg,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         bottom: false,
@@ -125,10 +156,10 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage> {
         _Eyebrow(l10n.searchScopesTitle.toUpperCase()),
         const SizedBox(height: 13),
         _ScopeGrid(
-          onScopeSelected: (label) {
-            // 样例行为：范围格即快捷查询填充，聚焦继续输入。
-            _controller.text = label;
-            ref.read(searchQueryProvider.notifier).updateQuery(label);
+          selected: ref.watch(scopedSearchSelectionProvider)?.scope,
+          onScopeSelected: (scope) {
+            // 范围格是切档，不是把档名当查询词填进输入框：已输入的内容保留。
+            ref.read(scopedSearchSelectionProvider.notifier).select(scope);
             _focusNode.requestFocus();
           },
         ),
@@ -176,7 +207,7 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage> {
 
   Widget _buildResults(
     AppLocalizations l10n,
-    AsyncValue<List<SearchResult>> results,
+    AsyncValue<ScopedSearchBatch> results,
   ) {
     final query = ref.watch(searchQueryProvider);
     final commandRows = _commandsSection(l10n, query);
@@ -199,54 +230,52 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage> {
               title: l10n.searchLoadFailed,
               message: l10n.searchEmptyMessage,
               actionLabel: l10n.coreRetry,
-              onAction: () => ref.invalidate(searchResultsProvider),
+              onAction: () => ref.invalidate(scopedSearchProvider),
             ),
           ),
-      data: (all) {
-        final items = all;
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          children: [
-            _Eyebrow(l10n.searchResultCount(items.length + commandRows.length)),
-            if (commandRows.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              ...commandRows,
-              const SizedBox(height: 8),
-            ] else
-              const SizedBox(height: 13),
-            if (items.isEmpty && commandRows.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 48),
-                child: EnvEmptyState(
-                  icon: OmniIcons.search,
-                  title: l10n.searchEmptyTitle,
-                  message: l10n.searchEmptyMessage,
+      data: (batch) {
+        final items = batch.results;
+        final unavailable = batch.groups.where((group) => group.unavailable);
+        return InfiniteScrollTrigger(
+          enabled: batch.hasMore,
+          onLoadMore: () => ref.read(scopedSearchProvider.notifier).loadMore(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            children: [
+              _Eyebrow(
+                l10n.searchResultCount(items.length + commandRows.length),
+              ),
+              if (commandRows.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...commandRows,
+                const SizedBox(height: 8),
+              ] else
+                const SizedBox(height: 13),
+              if (items.isEmpty && commandRows.isEmpty && unavailable.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 48),
+                  child: EnvEmptyState(
+                    icon: OmniIcons.search,
+                    title: l10n.searchEmptyTitle,
+                    message: l10n.searchEmptyMessage,
+                  ),
                 ),
-              ),
-            for (final item in items)
-              _SearchResultRow(
-                item: item,
-                onTap: () => _openRoute(_routeFor(item)),
-              ),
-          ],
+              for (final item in items)
+                _SearchResultRow(
+                  result: item,
+                  onTap: () => _openRoute(item.detailRoute),
+                ),
+              // 单档失败只降级该档：其它档的结果仍然显示，只补一行提示。
+              for (final group in unavailable)
+                _UnavailableScopeRow(
+                  label: _scopeLabelOf(l10n, group.scope),
+                  message: l10n.searchLoadFailed,
+                ),
+            ],
+          ),
         );
       },
     );
-  }
-
-  String _routeFor(SearchResult item) {
-    return switch (item.type) {
-      'file' => '/files',
-      'book' => '/reader/items/${item.id}',
-      // 分集进剧集详情选集；禁止用分集 id 打开影片详情。
-      'video' => movieDetailRouteFromIds(
-        videoItemId: item.id,
-        seriesId: item.seriesId,
-      ),
-      'photo' => '/photos/${item.id}',
-      'music' => '/music',
-      _ => '/library',
-    };
   }
 }
 
@@ -521,20 +550,19 @@ class _CommandRow extends StatelessWidget {
 
 /// 结果行（69 高 / 42 r13 图标盒 / 发丝线）。
 class _SearchResultRow extends StatelessWidget {
-  const _SearchResultRow({required this.item, required this.onTap});
+  const _SearchResultRow({required this.result, required this.onTap});
 
-  final SearchResult item;
+  final ScopedSearchResult result;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final IconData icon = switch (item.type) {
-      'video' => Icons.movie_outlined,
-      'music' => Icons.music_note_outlined,
-      'book' => Icons.menu_book_outlined,
-      'photo' => Icons.image_outlined,
-      'file' => Icons.folder_outlined,
-      _ => Icons.search_rounded,
+    final IconData icon = switch (result.scope) {
+      ScopedSearchId.video => Icons.movie_outlined,
+      ScopedSearchId.music => Icons.music_note_outlined,
+      ScopedSearchId.book => Icons.menu_book_outlined,
+      ScopedSearchId.photo => Icons.image_outlined,
+      ScopedSearchId.file => Icons.folder_outlined,
     };
     return InkWell(
       onTap: onTap,
@@ -561,7 +589,7 @@ class _SearchResultRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title,
+                    result.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -571,9 +599,9 @@ class _SearchResultRow extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (item.subtitle.isNotEmpty)
+                  if (result.subtitle?.isNotEmpty ?? false)
                     Text(
-                      item.subtitle,
+                      result.subtitle!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       // ignore: font_size_whitelist
@@ -598,27 +626,80 @@ class _SearchResultRow extends StatelessWidget {
   }
 }
 
-/// 范围九宫格（3 列 / 84 高 / 17 圆角）；点击回填查询文本。
-class _ScopeGrid extends StatelessWidget {
-  const _ScopeGrid({required this.onScopeSelected});
+/// 档位标签：与范围格共用同一批既有文案，不新增 ARB 键。
+String _scopeLabelOf(AppLocalizations l10n, ScopedSearchId scope) {
+  return switch (scope) {
+    ScopedSearchId.video => l10n.portalDockMovies,
+    ScopedSearchId.photo => l10n.portalDockPhotos,
+    ScopedSearchId.music => l10n.mobileNavMusic,
+    ScopedSearchId.book => l10n.searchGroupBook,
+    ScopedSearchId.file => l10n.searchGroupFile,
+  };
+}
 
-  final ValueChanged<String> onScopeSelected;
+/// 单档未能返回的行内提示：只降级该档，其它档结果照常显示。
+class _UnavailableScopeRow extends StatelessWidget {
+  const _UnavailableScopeRow({required this.label, required this.message});
+
+  final String label;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          const OmniIcon(
+            icon: OmniIcons.cloud,
+            size: 16,
+            color: Color(0x9EF6F6F2),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              '$label · $message',
+              style: const TextStyle(
+                color: MobileEnvColors.inkMuted,
+                // ignore: font_size_whitelist
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 范围九宫格（3 列 / 84 高 / 17 圆角）；点击切档并保留已输入的查询词。
+class _ScopeGrid extends StatelessWidget {
+  const _ScopeGrid({required this.selected, required this.onScopeSelected});
+
+  final ScopedSearchId? selected;
+  final ValueChanged<ScopedSearchId?> onScopeSelected;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final scopes = <(String, OmniIconsData)>[
-      (l10n.portalDockPhotos, OmniIcons.image),
-      (l10n.portalDockMovies, OmniIcons.film),
-      (l10n.mobileNavMusic, OmniIcons.music),
-      (l10n.searchGroupBook, OmniIcons.book),
-      (l10n.searchGroupFile, OmniIcons.folder),
-      (l10n.searchGroupCommand, OmniIcons.sparkle),
+    // 只列已登记来源的档：未登记的档点了必然空，不摆空位。
+    // 第六格样例是「命令」，它没有取数来源，这里换成「全部」用于复位档位，
+    // 导航命令行仍随「全部」显示。
+    final cells = <(ScopedSearchId?, String, OmniIconsData)>[
+      for (final entry in <(ScopedSearchId, String, OmniIconsData)>[
+        (ScopedSearchId.video, l10n.portalDockMovies, OmniIcons.film),
+        (ScopedSearchId.photo, l10n.portalDockPhotos, OmniIcons.image),
+        (ScopedSearchId.music, l10n.mobileNavMusic, OmniIcons.music),
+        (ScopedSearchId.book, l10n.searchGroupBook, OmniIcons.book),
+        (ScopedSearchId.file, l10n.searchGroupFile, OmniIcons.folder),
+      ])
+        if (ScopedSearchRegistry.lookup(entry.$1) != null) entry,
+      (null, l10n.videoRedesignFilterAll, OmniIcons.sparkle),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 560 ? 6 : 3;
-        final rows = (scopes.length / columns).ceil();
+        final rows = (cells.length / columns).ceil();
         final height = rows * 84.0 + (rows - 1) * 9.0;
         return SizedBox(
           height: height,
@@ -629,15 +710,23 @@ class _ScopeGrid extends StatelessWidget {
             childAspectRatio: 1.55,
             physics: const NeverScrollableScrollPhysics(),
             children: [
-              for (final (label, icon) in scopes)
+              for (final (scope, label, icon) in cells)
                 InkWell(
-                  onTap: () => onScopeSelected(label),
+                  onTap: () => onScopeSelected(scope),
                   borderRadius: BorderRadius.circular(17),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0x0CFFFFFF),
+                      color:
+                          scope == selected
+                              ? MobileEnvColors.accent.withValues(alpha: 0.10)
+                              : const Color(0x0CFFFFFF),
                       borderRadius: BorderRadius.circular(17),
-                      border: Border.all(color: const Color(0x14FFFFFF)),
+                      border: Border.all(
+                        color:
+                            scope == selected
+                                ? MobileEnvColors.accent.withValues(alpha: 0.38)
+                                : const Color(0x14FFFFFF),
+                      ),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
