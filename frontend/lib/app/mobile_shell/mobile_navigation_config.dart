@@ -30,15 +30,6 @@ class MobileNavigationConfig {
     };
   }
 
-  /// 返回当前模块的全局搜索范围。
-  static String searchScopeForBranch(int branch) {
-    return switch (branch) {
-      filesBranch => 'files',
-      readerBranch => 'reader',
-      _ => 'all',
-    };
-  }
-
   /// 返回当前分支默认使用的全局环境策略。
   ///
   /// 四个空间共享同一壁纸身份，按任务选择环境档位：Home 沉浸、

@@ -1,5 +1,7 @@
 import 'dart:ui' show ImageFilter;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -164,18 +166,6 @@ class _MobileTopBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final isHome = branch == MobileNavigationConfig.portalBranch;
-    // Files 空间搜索为模块页内搜索条（按宿主隔离）；其余空间进入全局
-    // 搜索覆盖层；搜索框与图标共用同一目标。
-    final VoidCallback onSearch;
-    if (_searchHostForBranch(branch) case final searchHost?) {
-      onSearch =
-          () =>
-              ref
-                  .read(mobileModuleSearchActiveProvider(searchHost).notifier)
-                  .toggle();
-    } else {
-      onSearch = () => context.push('/search');
-    }
     final title = _title(l10n);
     final subtitle = _subtitle(l10n);
     return SafeArea(
@@ -240,7 +230,10 @@ class _MobileTopBar extends ConsumerWidget {
                     tooltip: l10n.searchTitle,
                     icon: OmniIcons.search,
                     iconSize: 20,
-                    onTap: onSearch,
+                    onTap:
+                        // 所有空间的搜索统一进全局覆盖层：覆盖层按内容档过滤，
+                        // 并在页内自持查询状态，模块不再各自维护页内搜索条。
+                        () => unawaited(context.push('/search')),
                   ),
                   const SizedBox(width: 4),
                   const MobileAccountAvatar(),
@@ -389,14 +382,6 @@ class _MobileBottomNavigation extends ConsumerWidget {
       },
     );
   }
-}
-
-/// 返回分支对应的页内搜索宿主标识；无宿主的分支返回 null（走全局搜索）。
-String? _searchHostForBranch(int branch) {
-  return switch (branch) {
-    MobileNavigationConfig.filesBranch => MobileModuleSearchHosts.files,
-    _ => null,
-  };
 }
 
 class _MobileBottomDestination extends StatelessWidget {

@@ -367,6 +367,13 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                   icon: Icons.queue_music_rounded,
                   onPressed: _openImmersivePlayer,
                 ),
+                // 托管态此前没有任何搜索入口；补一个进全局覆盖层并预选音乐档。
+                MobileGlassIconButton(
+                  tooltip: l10n.musicSearch,
+                  icon: Icons.search_rounded,
+                  onPressed:
+                      () => unawaited(context.push('/search?scope=music')),
+                ),
               ],
             ),
           ],

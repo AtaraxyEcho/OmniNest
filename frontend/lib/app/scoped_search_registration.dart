@@ -1,4 +1,5 @@
 import 'package:omninest/core/search/scoped_search_registry.dart';
+import 'package:omninest/features/music/application/music_scoped_search_source.dart';
 import 'package:omninest/features/photos/application/photo_scoped_search_source.dart';
 import 'package:omninest/features/search/application/file_scoped_search_source.dart';
 import 'package:omninest/features/video/application/video_scoped_search_source.dart';
@@ -12,5 +13,6 @@ import 'package:omninest/features/video/application/video_scoped_search_source.d
 void registerScopedSearchSources() {
   ScopedSearchRegistry.register(const VideoScopedSearchSource());
   ScopedSearchRegistry.register(const PhotoScopedSearchSource());
+  ScopedSearchRegistry.register(const MusicScopedSearchSource());
   ScopedSearchRegistry.register(const FileScopedSearchSource());
 }

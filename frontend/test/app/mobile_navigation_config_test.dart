@@ -22,27 +22,6 @@ void main() {
       );
     });
 
-    test('模块搜索范围保持独立', () {
-      expect(
-        MobileNavigationConfig.searchScopeForBranch(
-          MobileNavigationConfig.filesBranch,
-        ),
-        'files',
-      );
-      expect(
-        MobileNavigationConfig.searchScopeForBranch(
-          MobileNavigationConfig.readerBranch,
-        ),
-        'reader',
-      );
-      expect(
-        MobileNavigationConfig.searchScopeForBranch(
-          MobileNavigationConfig.portalBranch,
-        ),
-        'all',
-      );
-    });
-
     test('四空间共享壁纸身份并按环境档位降存在感', () {
       expect(
         MobileNavigationConfig.backdropPolicyForBranch(
