@@ -242,7 +242,14 @@ class _MovieContent extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final canManage = ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
     if (state.section.requiresManagementRole && !canManage) {
-      return _ManagementAccessDenied(l10n: l10n);
+      // 托管态走环境空态族；工位态保留原图标加文案块，两形态各按自己的
+      // 密度排布，不为统一而把工位块放大。
+      return MobileShellScope.isHosted(context)
+          ? EnvEmptyState(
+            icon: OmniIcons.settings,
+            title: l10n.videoManageAdminOnly,
+          )
+          : _ManagementAccessDenied(l10n: l10n);
     }
     if (state.loadingSections.contains(state.section) &&
         !state.loadedSections.contains(state.section)) {
