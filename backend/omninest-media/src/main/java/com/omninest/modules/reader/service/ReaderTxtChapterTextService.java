@@ -3,9 +3,13 @@ package com.omninest.modules.reader.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderTextChapter;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
@@ -18,6 +22,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.IntConsumer;
@@ -58,12 +63,62 @@ public class ReaderTxtChapterTextService {
     private static final int PROGRESS_BODY_END = 95;
     private static final int PROGRESS_BODY_STEP = 5;
 
+    /** 单章正文请求限流键前缀，按用户与条目合并计数 */
+    private static final String RATE_LIMIT_KEY_PREFIX = "reader-chapter-text:";
+    private static final int RATE_LIMIT_PER_WINDOW = 120;
+    private static final Duration RATE_LIMIT_WINDOW = Duration.ofMinutes(1);
+
     private final ReaderItemRepository itemRepository;
     private final ReaderTextChapterRepository chapterRepository;
     private final FileMetadataQueryService fileMetadataQueryService;
+    private final FileQueryService fileQueryService;
     private final TxtContentDecoder txtContentDecoder;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final TempStagingPort tempStagingPort;
+    private final MediaProcessingLimitsProperties processingLimits;
+    private final RateLimitService rateLimitService;
+
+    /**
+     * 读取一章服务端解码后的 UTF-8 正文。
+     *
+     * <p>派生文件尚未生成（旧数据未重解析、或本章超过单章返回上限）时返回
+     * {@link ErrorCode#CHAPTER_TEXT_UNAVAILABLE}，客户端据此回退本地解析链。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param itemId 阅读条目 ID
+     * @param chapterIndex 章节顺序
+     * @return 单章正文
+     */
+    public ChapterTextDto readChapterText(UUID ownerUserId, UUID itemId, int chapterIndex) {
+        if (!rateLimitService.tryAcquire(
+                RATE_LIMIT_KEY_PREFIX + ownerUserId + ":" + itemId,
+                RATE_LIMIT_PER_WINDOW,
+                RATE_LIMIT_WINDOW)) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "正文请求过于频繁");
+        }
+        ReaderItem item = itemRepository.findByIdAndOwnerUserId(itemId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在或无权访问"));
+        if (!"TXT".equalsIgnoreCase(item.getItemType())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "当前条目不是 TXT 书籍");
+        }
+        ReaderTextChapter chapter = chapterRepository.findByReaderItemIdAndChapterIndex(itemId, chapterIndex)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "章节不存在"));
+        UUID contentFileNodeId = chapter.getContentFileNodeId();
+        if (contentFileNodeId == null) {
+            throw new BusinessException(ErrorCode.CHAPTER_TEXT_UNAVAILABLE, "本章正文尚未就绪");
+        }
+        long maxBytes = processingLimits.getMaxReaderChapterTextBytes();
+        try (FileContentStream content = fileQueryService.openOwnedFileContent(ownerUserId, contentFileNodeId)) {
+            if (content.sizeBytes() > maxBytes) {
+                throw new BusinessException(ErrorCode.CHAPTER_TEXT_UNAVAILABLE, "本章正文超过单章返回上限");
+            }
+            String text = new String(content.inputStream().readNBytes((int) content.sizeBytes()),
+                    StandardCharsets.UTF_8);
+            return new ChapterTextDto(chapter.getChapterIndex(), text, text.length());
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "读取本章正文失败");
+        }
+    }
 
     /**
      * 为 TXT 条目的每一章生成 UTF-8 正文派生资产。
@@ -119,8 +174,21 @@ public class ReaderTxtChapterTextService {
         try {
             tempFile = tempStagingPort.createTempFile(TEMP_SEGMENT, "chapter-", ".txt");
             ChapterWriteResult result = writeLines(tempFile, cursor, lookahead, end, expectedChars);
+            long maxBytes = processingLimits.getMaxReaderChapterTextBytes();
+            long assetBytes = sizeOf(tempFile);
             String fileName = "v" + item.getManifestVersion() + "_chapter_" + chapter.getChapterIndex() + ".txt";
             UUID previousFileNodeId = chapter.getContentFileNodeId();
+            if (assetBytes > maxBytes) {
+                // 超过单章返回上限：不派生本章，读取端回退本地解析链
+                chapter.setContentFileNodeId(null);
+                chapterRepository.save(chapter);
+                if (previousFileNodeId != null) {
+                    derivedAssetStorageService.deleteDerivedFileNode(previousFileNodeId);
+                }
+                log.warn("TXT 章节正文超过单章上限，跳过派生: itemId={}, chapterIndex={}, bytes={}, limit={}",
+                        item.getId(), chapter.getChapterIndex(), assetBytes, maxBytes);
+                return result.lookahead();
+            }
             UUID fileNodeId = derivedAssetStorageService.store(
                     item.getOwnerUserId(),
                     RESOURCE_TYPE,
@@ -186,6 +254,14 @@ public class ReaderTxtChapterTextService {
         return new ChapterWriteResult(written, line);
     }
 
+    private long sizeOf(Path path) {
+        try {
+            return Files.size(path);
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "TXT 章节正文写入失败");
+        }
+    }
+
     private void requireContiguous(ReaderTextChapter chapter, long previousEnd) {
         if (chapter.getSourceStartOffset() != previousEnd) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "TXT 章节偏移不连续");
@@ -221,5 +297,15 @@ public class ReaderTxtChapterTextService {
      * @param lookahead 起点已达到下一章的首行，没有则为 null
      */
     private record ChapterWriteResult(long writtenChars, TxtLine lookahead) {
+    }
+
+    /**
+     * 单章正文响应。
+     *
+     * @param chapterIndex 章节顺序
+     * @param text 本章 UTF-8 正文，含标题行；正文起点由清单的 bodyStartOffset 给出
+     * @param charCount 返回正文的字符数，客户端用它校验与本地清单是否同源
+     */
+    public record ChapterTextDto(int chapterIndex, String text, int charCount) {
     }
 }

@@ -56,6 +56,7 @@ public enum ErrorCode {
     // ==================== 阅读 6xxx ====================
     BOOK_NOT_FOUND(6001, "书籍不存在"),
     READING_PROGRESS_INVALID(6002, "阅读进度不合法"),
+    CHAPTER_TEXT_UNAVAILABLE(6003, "本章正文尚未就绪"),
 
     // ==================== 用户偏好 7xxx ====================
     PREFERENCE_VERSION_CONFLICT(7001, "用户偏好版本冲突"),

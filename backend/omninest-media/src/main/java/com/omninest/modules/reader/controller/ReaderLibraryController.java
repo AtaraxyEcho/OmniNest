@@ -38,6 +38,7 @@ import com.omninest.modules.reader.service.ReaderProgressService;
 import com.omninest.modules.reader.service.ReaderStatsService;
 import com.omninest.modules.reader.service.ReaderTextManifestService;
 import com.omninest.modules.reader.service.ReaderTextParseSubmissionService;
+import com.omninest.modules.reader.service.ReaderTxtChapterTextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -81,6 +82,7 @@ public class ReaderLibraryController {
     private final ReaderImportService readerImportService;
     private final ReaderComicManifestService comicManifestService;
     private final ReaderTextManifestService textManifestService;
+    private final ReaderTxtChapterTextService chapterTextService;
     private final ReaderTextParseSubmissionService textParseSubmissionService;
 
     // ==================== Dashboard ====================
@@ -563,6 +565,28 @@ public class ReaderLibraryController {
         return ApiResponse.success(textManifestService.getManifest(
                 currentUserContext.requireCurrentUserId(),
                 itemId
+        ));
+    }
+
+    /**
+     * 获取 TXT 单章正文（服务端解码后的 UTF-8）。
+     *
+     * @param itemId 阅读条目 ID
+     * @param chapterIndex 章节顺序
+     * @return 单章正文
+     */
+    @Operation(summary = "获取 TXT 单章正文",
+            description = "返回服务端解析时派生的 UTF-8 单章正文；派生文件尚未生成时返回 6003，客户端可回退本地解析")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/reader/items/{itemId}/text/chapters/{chapterIndex}")
+    ApiResponse<ReaderTxtChapterTextService.ChapterTextDto> getChapterText(
+            @PathVariable UUID itemId,
+            @PathVariable int chapterIndex
+    ) {
+        return ApiResponse.success(chapterTextService.readChapterText(
+                currentUserContext.requireCurrentUserId(),
+                itemId,
+                chapterIndex
         ));
     }
 

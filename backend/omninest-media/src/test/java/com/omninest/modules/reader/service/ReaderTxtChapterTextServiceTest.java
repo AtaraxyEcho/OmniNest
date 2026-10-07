@@ -3,6 +3,7 @@ package com.omninest.modules.reader.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -10,14 +11,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.processing.TempStagingPort;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderTextChapter;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
@@ -27,6 +31,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,8 +79,13 @@ class ReaderTxtChapterTextServiceTest {
     @Mock
     private TempStagingPort tempStagingPort;
 
+    @Mock
+    private RateLimitService rateLimitService;
+
     @TempDir
     Path tempDir;
+
+    private final MediaProcessingLimitsProperties processingLimits = new MediaProcessingLimitsProperties();
 
     private ReaderTxtChapterTextService service;
 
@@ -85,9 +95,12 @@ class ReaderTxtChapterTextServiceTest {
                 itemRepository,
                 chapterRepository,
                 fileMetadataQueryService,
+                fileQueryService,
                 new TxtContentDecoder(fileQueryService),
                 derivedAssetStorageService,
-                tempStagingPort
+                tempStagingPort,
+                processingLimits,
+                rateLimitService
         );
     }
 
@@ -181,6 +194,101 @@ class ReaderTxtChapterTextServiceTest {
         assertThat(progressValues).isNotEmpty();
         assertThat(progressValues).allSatisfy(value -> assertThat(value).isBetween(80, 95));
         assertThat(progressValues.getLast()).isEqualTo(95);
+    }
+
+    @Test
+    void returnsDerivedChapterTextWithItsCharCount() {
+        byte[] body = "第一章 甲\n正文".getBytes(StandardCharsets.UTF_8);
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
+        ReaderTextChapter chapter = chapter(0, 0L, 8L);
+        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
+        when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, 0)).thenReturn(Optional.of(chapter));
+        when(fileQueryService.openOwnedFileContent(OWNER_ID, OLD_CHAPTER_NODE_ID))
+                .thenReturn(new FileContentStream(
+                        new ByteArrayInputStream(body), "v3_chapter_0.txt", body.length, "text/plain"));
+
+        ReaderTxtChapterTextService.ChapterTextDto dto = service.readChapterText(OWNER_ID, ITEM_ID, 0);
+
+        assertThat(dto.text()).isEqualTo("第一章 甲\n正文");
+        assertThat(dto.charCount()).isEqualTo(8);
+        assertThat(dto.chapterIndex()).isZero();
+    }
+
+    @Test
+    void reportsUnavailableWhenChapterAssetWasNeverDerived() {
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
+        when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, 1))
+                .thenReturn(Optional.of(chapter(1, 9L, 17L)));
+
+        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 1))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.CHAPTER_TEXT_UNAVAILABLE));
+    }
+
+    @Test
+    void rejectsNonTxtItemsAndForeignItemsOnRead() {
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("EPUB", 3)));
+
+        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("当前条目不是 TXT 书籍");
+
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("阅读条目不存在或无权访问");
+    }
+
+    @Test
+    void refusesReadWhenRateLimitIsExhausted() {
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("正文请求过于频繁");
+        verify(itemRepository, never()).findByIdAndOwnerUserId(any(), any());
+    }
+
+    @Test
+    void refusesOversizedChapterAssetBeforeBufferingIt() {
+        byte[] body = "第一章 甲\n正文".getBytes(StandardCharsets.UTF_8);
+        processingLimits.setMaxReaderChapterTextBytes(8L);
+        ReaderTextChapter chapter = chapter(0, 0L, 8L);
+        chapter.setContentFileNodeId(OLD_CHAPTER_NODE_ID);
+        stubChapterAssetRead(chapter, body);
+
+        assertThatThrownBy(() -> service.readChapterText(OWNER_ID, ITEM_ID, 0))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("本章正文超过单章返回上限");
+    }
+
+    @Test
+    void skipsDerivingChaptersAboveThePerChapterLimit() {
+        ReaderTextChapter chapter = chapter(0, 0L, 8L);
+        prepareWithoutStore("第一章 甲\n正文", List.of(chapter), 1);
+        processingLimits.setMaxReaderChapterTextBytes(8L);
+
+        service.materialize(ITEM_ID, FILE_NODE_ID, progress -> {
+        });
+
+        verify(derivedAssetStorageService, never()).store(
+                any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
+        assertThat(chapter.getContentFileNodeId()).isNull();
+        verify(chapterRepository).save(chapter);
+        verify(tempStagingPort).deleteQuietly(any(Path.class));
+    }
+
+    private void stubChapterAssetRead(ReaderTextChapter chapter, byte[] body) {
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(textItem("TXT", 3)));
+        when(chapterRepository.findByReaderItemIdAndChapterIndex(ITEM_ID, chapter.getChapterIndex()))
+                .thenReturn(Optional.of(chapter));
+        when(fileQueryService.openOwnedFileContent(OWNER_ID, chapter.getContentFileNodeId()))
+                .thenReturn(new FileContentStream(
+                        new ByteArrayInputStream(body), "v3_chapter_0.txt", body.length, "text/plain"));
     }
 
     private void prepare(String text, List<ReaderTextChapter> chapters, int manifestVersion, List<String> captured) {

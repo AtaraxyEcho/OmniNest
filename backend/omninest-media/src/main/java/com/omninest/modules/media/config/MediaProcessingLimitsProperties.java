@@ -38,4 +38,7 @@ public class MediaProcessingLimitsProperties {
 
     /** 阅读封面上限 */
     private long maxReaderCoverBytes = 20L * 1024 * 1024;
+
+    /** TXT 单章 UTF-8 正文上限：超过则不派生该章，客户端回退本地解析 */
+    private long maxReaderChapterTextBytes = 4L * 1024 * 1024;
 }
