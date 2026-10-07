@@ -263,6 +263,34 @@ class MovieLibraryServiceTest {
     }
 
     @Test
+    void seriesByTypePageNormalizesKeywordAndTreatsBlankAsNoFilter() {
+        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(tvSeriesRepository.findPageByActiveReadableAndSeriesType(
+                any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+
+        // 大小写归一、去首尾空白，LIKE 通配符按字面量转义：直接透传原始关键词会搜错。
+        movieLibraryService.seriesByTypePage(OWNER_ID, "TV", 0, 50, "  Drift%  ");
+        verify(tvSeriesRepository).findPageByActiveReadableAndSeriesType(
+                eq(OWNER_ID),
+                eq(Set.of()),
+                eq("TV"),
+                eq("%drift\\%%"),
+                any(Pageable.class)
+        );
+
+        // 空白关键词必须是 null（不参与过滤），而不是 "%%"（匹配全库）。
+        movieLibraryService.seriesByTypePage(OWNER_ID, "TV", 0, 50, "   ");
+        verify(tvSeriesRepository).findPageByActiveReadableAndSeriesType(
+                eq(OWNER_ID),
+                eq(Set.of()),
+                eq("TV"),
+                isNull(),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
     void updateMetadataStoresManualInfoAndCoverAssets() {
         MediaVideoItem movie = movie("旧标题", "MOVIE");
         MediaMovie logicalMovie = logicalMovie("旧标题");
