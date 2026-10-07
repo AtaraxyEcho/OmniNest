@@ -65,11 +65,16 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
             // 高度未精测：估算图对章尾低估可达数十个百分点，此时落位
             // 会停在半途。触发精测并原地保持（返回 null 不 settle），
             // 待收敛后由本 builder 给出真实目标。
-            contentLoader?.ensurePreciseHeights(
-              chapterId: currentChapterId,
-              pageWidth: capturedPageWidth,
-              settings: capturedSettings,
-              textScale: capturedTextScale,
+            // 逐帧调用共享同一个在途任务并从上次中断处续测，
+            // 不再各起一轮互相杀死（loader 侧单飞保证）。
+            unawaited(
+              contentLoader?.ensurePreciseHeights(
+                    chapterId: currentChapterId,
+                    pageWidth: capturedPageWidth,
+                    settings: capturedSettings,
+                    textScale: capturedTextScale,
+                  ) ??
+                  Future<void>.value(),
             );
             return null;
           }

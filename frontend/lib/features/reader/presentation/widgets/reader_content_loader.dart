@@ -131,11 +131,33 @@ class ChapterData {
 
   /// 精测全部批次完成标记（仅限 ReaderContentLoader 调用）。
   void markPreciseHeights() => _hasPreciseHeights = true;
+
+  /// 本章精测代次。
+  ///
+  /// 代次必须按章隔离：loader 级单一计数器会让邻章预取的每一次排批
+  /// 都在批次边界杀死当前章的在途精测，当前章又因高度表非空不再重测，
+  /// 于是整章永久停留在估算高度上，进度与恢复落点全部按估算计算。
+  int heightsGeneration = 0;
+
+  /// 已精测到的块下标（用于中断后续测，而不是从第 0 块重来）。
+  int measuredThrough = 0;
+
+  /// 在途精测任务。重复请求（例如恢复落位每帧轮询）必须等同一个任务，
+  /// 不能再各起一轮互相杀死。
+  Future<void>? precisePass;
+
+  /// 作废在途精测：设置变更、缓存失效或重新排期前调用。
+  void cancelPrecisePass() {
+    heightsGeneration++;
+  }
 }
 
 /// 滚动模式测高分批参数：头部精确测量块数与每批测量块数。
 const _metricsPhaseOneBlocks = 12;
 const _metricsBatchBlocks = 40;
+
+/// 设置变更时允许同步重测全章的块数上限，超过则改走"估算＋分批精测"。
+const _rekeySyncMeasureBlocks = 200;
 
 /// 翻页模式的懒分页导航器。
 ///
@@ -389,7 +411,6 @@ class ReaderContentLoader {
 
   final List<ReaderChapter> allChapters;
   final Map<_CacheKey, ChapterData> _cache = {};
-  int _heightsGeneration = 0;
   final Map<_CacheKey, Future<ChapterData>> _inflight = {};
   final Map<String, ReaderChapterContent> _contentCache = {};
   String? _activeChapterId;
@@ -543,38 +564,93 @@ class ReaderContentLoader {
       estimated[i] = running;
     }
     data.updateCumulativeHeights(estimated);
-    unawaited(
-      _schedulePreciseHeights(
-        data,
-        pageWidth: pageWidth,
-        settings: settings,
-        textScale: textScale,
-      ),
+    // 邻章预取停在 phase-one 估算上即可，否则每翻一章要多跑两章的全量
+    // TextPainter。尚未确定当前章（首帧或缓存全清后）时不做抑制，保证
+    // 单独使用 loader 的场景也会收敛到精测高度。
+    final activeChapterId = _activeChapterId;
+    if (activeChapterId == null || data.chapterId == activeChapterId) {
+      unawaited(
+        _runPrecisePass(
+          data,
+          pageWidth: pageWidth,
+          settings: settings,
+          textScale: textScale,
+        ),
+      );
+    }
+  }
+
+  /// 确保本章高度已精测：返回在途或新建的精测任务，重复调用共享同一任务。
+  ///
+  /// 旧实现对每帧轮询都重排一整轮（并把上一轮在批次边界杀死、从第 0 块重来），
+  /// 两轮互相杀死导致净前进为零，恢复落位必然撞到总超时。
+  Future<void> ensurePreciseHeights({
+    required String chapterId,
+    required double pageWidth,
+    required ReaderViewSettings settings,
+    required double textScale,
+  }) {
+    final data = get(chapterId, settings);
+    if (data == null || data.blocks.isEmpty || data.hasPreciseHeights) {
+      return Future<void>.value();
+    }
+    return _runPrecisePass(
+      data,
+      pageWidth: pageWidth,
+      settings: settings,
+      textScale: textScale,
     );
   }
 
-  /// 第二阶段：分批精确测量并替换估算值。
+  /// 第二阶段：分批精确测量并替换估算值（可续测、单飞）。
   ///
-  /// 每批让出一帧；代次或 heights 数组身份变化（切章、设置重算、
-  /// rekey 替换）即中止，避免旧任务覆盖新状态。
-  Future<void> _schedulePreciseHeights(
+  /// 每批让出一帧；仅当代次或 heights 数组身份变化（切章、设置重算、
+  /// rekey 替换）才中止，且中止时保留已测前缀与续测位置，下次接着测。
+  Future<void> _runPrecisePass(
+    ChapterData data, {
+    required double pageWidth,
+    required ReaderViewSettings settings,
+    required double textScale,
+  }) {
+    final running = data.precisePass;
+    if (running != null) {
+      return running;
+    }
+    final pass = _measureHeights(
+      data,
+      pageWidth: pageWidth,
+      settings: settings,
+      textScale: textScale,
+    );
+    data.precisePass = pass;
+    return pass.whenComplete(() {
+      if (identical(data.precisePass, pass)) {
+        data.precisePass = null;
+      }
+    });
+  }
+
+  Future<void> _measureHeights(
     ChapterData data, {
     required double pageWidth,
     required ReaderViewSettings settings,
     required double textScale,
   }) async {
-    final generation = ++_heightsGeneration;
+    final generation = ++data.heightsGeneration;
     final blocks = data.blocks;
     // 以现有高度表为基线（phase-one 估算或部分精测），逐块用实测覆盖：
     // 分批发布的中间态保持单调且 totalHeight 恒有效，避免
-    // 「前缀实测 + 尾部全 0」窗口期内进度映射归零，也避免预取推进
-    // 代次时把当前章留在被截断的半精测状态。
+    // 「前缀实测 + 尾部全 0」窗口期内进度映射归零。
     final heights =
         data.cumulativeHeights.length == blocks.length
             ? List<double>.of(data.cumulativeHeights)
             : List<double>.filled(blocks.length, 0);
     var cumulative = 0.0;
-    for (var i = 0; i < blocks.length; i++) {
+    final start = data.measuredThrough.clamp(0, blocks.length);
+    for (var i = 0; i < start; i++) {
+      cumulative = heights[i];
+    }
+    for (var i = start; i < blocks.length; i++) {
       cumulative += ReaderPaginationEngine.measureBlockHeight(
         blocks[i],
         pageWidth,
@@ -585,38 +661,18 @@ class ReaderContentLoader {
       if (i > 0 && heights[i] < heights[i - 1]) {
         heights[i] = heights[i - 1];
       }
+      data.measuredThrough = i + 1;
       if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
         data.updateCumulativeHeights(heights);
+        data.measuredThrough = i + 1;
         await Future<void>.delayed(Duration.zero);
-        if (generation != _heightsGeneration ||
+        if (generation != data.heightsGeneration ||
             !identical(data.cumulativeHeights, heights)) {
           return;
         }
       }
     }
     data.markPreciseHeights();
-  }
-
-  /// 确保指定章节高度已精测：未精测且非空块章时触发分批精测（幂等，
-  /// 重复调用由代次去重）。供进度恢复在落位前等待真实高度使用。
-  void ensurePreciseHeights({
-    required String chapterId,
-    required double pageWidth,
-    required ReaderViewSettings settings,
-    required double textScale,
-  }) {
-    final data = get(chapterId, settings);
-    if (data == null || data.blocks.isEmpty || data.hasPreciseHeights) {
-      return;
-    }
-    unawaited(
-      _schedulePreciseHeights(
-        data,
-        pageWidth: pageWidth,
-        settings: settings,
-        textScale: textScale,
-      ),
-    );
   }
 
   /// 从首个已精测章节提取各块类型的平均高度，供邻章 phase-one 估算。
@@ -736,6 +792,11 @@ class ReaderContentLoader {
   /// 用新 settings 重新计算指定章节的累积高度，并重新映射缓存 key。
   ///
   /// 字体/行高变更时调用，避免清空缓存导致触发完整的章节重载。
+  /// 计算结果本身就是逐块实测，因此直接标记为已精测：旧实现只
+  /// `updateCumulativeHeights`（该入口一律视为未精测），于是下一次恢复
+  /// 又触发整章重测，把刚同步测完的一整章再测一遍。
+  /// 块数很多时不同步测完整章（会冻结 UI 数百毫秒到秒级），
+  /// 改为按 phase-one 估算立即发布、精测分批让帧。
   void rekeyAndRecomputeHeights(
     String chapterId,
     double pageWidth,
@@ -755,16 +816,36 @@ class ReaderContentLoader {
     }
     if (data == null || oldKey == null) return;
 
-    data.updateCumulativeHeights(
-      prepareScrollLayout
-          ? _computeCumulativeHeights(
-            data.blocks,
-            pageWidth,
-            newSettings,
-            textScale,
-          )
-          : const <double>[],
-    );
+    // 旧 settings 下在途的精测必须作废：继续测会把过期高度写进新表。
+    data.cancelPrecisePass();
+    data.measuredThrough = 0;
+
+    if (!prepareScrollLayout) {
+      data.updateCumulativeHeights(const <double>[]);
+    } else if (data.blocks.length > _rekeySyncMeasureBlocks) {
+      data.updateCumulativeHeights(
+        _estimateCumulativeHeights(data, pageWidth, newSettings, textScale),
+      );
+      unawaited(
+        _runPrecisePass(
+          data,
+          pageWidth: pageWidth,
+          settings: newSettings,
+          textScale: textScale,
+        ),
+      );
+    } else {
+      data.updateCumulativeHeights(
+        _computeCumulativeHeights(
+          data.blocks,
+          pageWidth,
+          newSettings,
+          textScale,
+        ),
+      );
+      data.measuredThrough = data.blocks.length;
+      data.markPreciseHeights();
+    }
 
     // 失效分页导航器（旧 settings 的闭包已过期）
     data.invalidatePageNavigator();
@@ -775,6 +856,40 @@ class ReaderContentLoader {
       _cache.remove(oldKey);
       _cache[newKey] = data;
     }
+  }
+
+  /// 头部精测＋按块型均值估算的整章高度表（与 phase-one 同一策略）。
+  List<double> _estimateCumulativeHeights(
+    ChapterData data,
+    double pageWidth,
+    ReaderViewSettings settings,
+    double textScale,
+  ) {
+    final blocks = data.blocks;
+    final headCount = math.min(_metricsPhaseOneBlocks, blocks.length);
+    final headHeights = <double>[];
+    var headCumulative = 0.0;
+    for (var i = 0; i < headCount; i++) {
+      headCumulative += ReaderPaginationEngine.measureBlockHeight(
+        blocks[i],
+        pageWidth,
+        settings,
+        textScale: textScale,
+      );
+      headHeights.add(headCumulative);
+    }
+    final estimateBase =
+        headHeights.isEmpty ? 0.0 : headHeights.last / headCount;
+    final result = List<double>.filled(blocks.length, 0);
+    var running = 0.0;
+    for (var i = 0; i < blocks.length; i++) {
+      running +=
+          i < headCount
+              ? headHeights[i] - (i == 0 ? 0.0 : headHeights[i - 1])
+              : estimateBase;
+      result[i] = running;
+    }
+    return result;
   }
 
   List<double> _computeCumulativeHeights(
