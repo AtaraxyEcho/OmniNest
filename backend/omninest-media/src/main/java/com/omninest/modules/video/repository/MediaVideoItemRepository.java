@@ -120,7 +120,7 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
               and file.deleted = false
               and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
               and (:titlePattern is null
-                   or lower(coalesce(movie.title, episode.title, file.name)) like :titlePattern)
+                   or lower(coalesce(movie.title, episode.title, file.name)) like :titlePattern escape '\\')
               and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
                    or i.librarySourceId in :librarySourceIds)
             """)

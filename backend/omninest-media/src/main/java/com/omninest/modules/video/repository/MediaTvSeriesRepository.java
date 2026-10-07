@@ -120,7 +120,7 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             join FileNode file on item.fileNodeId = file.id
             where series.seriesType = :seriesType
               and file.deleted = false
-              and (:titlePattern is null or lower(series.title) like :titlePattern)
+              and (:titlePattern is null or lower(series.title) like :titlePattern escape '\\')
               and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
                    or series.librarySourceId in :librarySourceIds)
             order by series.updatedAt desc
@@ -131,7 +131,7 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             join FileNode file on item.fileNodeId = file.id
             where series.seriesType = :seriesType
               and file.deleted = false
-              and (:titlePattern is null or lower(series.title) like :titlePattern)
+              and (:titlePattern is null or lower(series.title) like :titlePattern escape '\\')
               and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
                    or series.librarySourceId in :librarySourceIds)
             """)

@@ -232,6 +232,9 @@ public class MovieLibraryService {
     /**
      * 归一化标题检索串：小写、去首尾空白，并把 LIKE 通配符按字面量转义。
      *
+     * <p>转义符是反斜杠，因此消费方必须写 {@code like :titlePattern escape '\'}：
+     * PostgreSQL 的 {@code LIKE} 没有默认转义符，缺 {@code escape} 子句时反斜杠按普通字符匹配。
+     *
      * @param keyword 原始关键词
      * @return 可用于 LIKE 的模式串；关键词空白时返回 null 表示不过滤
      */
