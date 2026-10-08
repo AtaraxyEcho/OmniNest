@@ -1,5 +1,3 @@
-import 'package:omninest/features/backdrop/application/app_backdrop_polarity.dart';
-import 'package:omninest/features/backdrop/domain/app_backdrop_tone.dart';
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
@@ -10,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';

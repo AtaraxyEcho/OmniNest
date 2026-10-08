@@ -12,20 +12,8 @@ class _HostedPortalContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 首页属环境面：极性与壁纸亮度配对，不跟明暗设置——暗栈遇亮壁纸与浅栈遇暗壁纸
-    // 会在薄幕布带同时塌方（docs/2026-10-08/015 §四）。
-    final baseTheme = Theme.of(context);
-    final polarity = ref.watch(appBackdropPolarityProvider);
-    final shellTheme = baseTheme.copyWith(
-      extensions: [
-        ...baseTheme.extensions.values,
-        polarity == AppBackdropPolarity.light
-            ? MobileEnvPalette.light
-            : MobileEnvPalette.dark,
-      ],
-    );
-    return Theme(
-      data: shellTheme,
+    // 首页属环境面：极性与壁纸亮度配对，不跟明暗设置（docs/2026-10-08/015 §四）。
+    return MobileEnvironmentScope(
       child: RefreshIndicator(
         color: context.env.accent,
         onRefresh: onRefresh,

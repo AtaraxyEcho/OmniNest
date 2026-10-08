@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/module_entry_refresh_listener.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -87,28 +88,30 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     final padding = tier.horizontalPadding;
 
     Widget page(List<Widget> children) {
-      return RefreshIndicator(
-        color: MobileEnvColors.accent,
-        onRefresh: _refreshDashboardSections,
-        // 原型 `.module-overlay > main` 限宽居中，平板与桌面宽窗下内容不摊
-        // 满整幅；650 基线在 ≥980 档抬到 760（见 LibrarySpaceTier）。
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
+      return MobileEnvironmentScope(
+        child: RefreshIndicator(
+          color: context.env.accent,
+          onRefresh: _refreshDashboardSections,
+          // 原型 `.module-overlay > main` 限宽居中，平板与桌面宽窗下内容不摊
+          // 满整幅；650 基线在 ≥980 档抬到 760（见 LibrarySpaceTier）。
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                // 分段条吸顶浮在内容之上，列表首屏需让出同等的顶部净高，
+                // 否则横幅被永久遮住。
+                padding: EdgeInsets.fromLTRB(
+                  padding,
+                  _librarySegmentOverlayExtent + 14,
+                  padding,
+                  28,
+                ),
+                children: children,
               ),
-              // 分段条吸顶浮在内容之上，列表首屏需让出同等的顶部净高，
-              // 否则横幅被永久遮住。
-              padding: EdgeInsets.fromLTRB(
-                padding,
-                _librarySegmentOverlayExtent + 14,
-                padding,
-                28,
-              ),
-              children: children,
             ),
           ),
         ),
@@ -335,7 +338,7 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
             trailing: Icon(
               Icons.more_horiz_rounded,
               size: 19,
-              color: MobileEnvColors.inkFaint,
+              color: context.env.inkFaint,
             ),
           ),
       ],

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -43,9 +43,9 @@ class LibrarySegmentBar extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: MobileEnvColors.segmentBg,
+          color: context.env.segmentBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: MobileEnvColors.line09),
+          border: Border.all(color: context.env.line09),
         ),
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -88,7 +88,7 @@ class _LibrarySegmentChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         height: MobileLayoutTokens.minimumTarget,
         decoration: BoxDecoration(
-          color: selected ? MobileEnvColors.accent : Colors.transparent,
+          color: selected ? context.env.accent : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           boxShadow:
               selected
@@ -106,10 +106,7 @@ class _LibrarySegmentChip extends StatelessWidget {
             label,
             maxLines: 1,
             style: TextStyle(
-              color:
-                  selected
-                      ? MobileEnvColors.onAccentDeep
-                      : MobileEnvColors.inkMuted,
+              color: selected ? context.env.onAccentDeep : context.env.inkMuted,
               fontSize: AppTypography.bodyMedium,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
@@ -148,8 +145,8 @@ class LibrarySectionHeader extends StatelessWidget {
                 eyebrow.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MobileEnvColors.white43,
+                style: TextStyle(
+                  color: context.env.white43,
                   // ignore: font_size_whitelist
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
@@ -161,8 +158,8 @@ class LibrarySectionHeader extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MobileEnvColors.ink,
+                style: TextStyle(
+                  color: context.env.ink,
                   // ignore: font_size_whitelist
                   fontSize: 21,
                   fontWeight: FontWeight.w600,
@@ -177,7 +174,7 @@ class LibrarySectionHeader extends StatelessWidget {
           TextButton(
             onPressed: onAction,
             style: TextButton.styleFrom(
-              foregroundColor: MobileEnvColors.white70,
+              foregroundColor: context.env.white70,
               minimumSize: const Size(48, 38),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               textStyle: const TextStyle(fontSize: AppTypography.labelSmall),
@@ -187,10 +184,10 @@ class LibrarySectionHeader extends StatelessWidget {
               children: [
                 Text(actionLabel!),
                 const SizedBox(width: 1),
-                const OmniIcon(
+                OmniIcon(
                   icon: OmniIcons.chevron,
                   size: 16,
-                  color: MobileEnvColors.white70,
+                  color: context.env.white70,
                 ),
               ],
             ),
@@ -309,8 +306,8 @@ class LibraryFeatureBanner extends StatelessWidget {
                         detail,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.inkMuted,
+                        style: TextStyle(
+                          color: context.env.inkMuted,
                           fontSize: AppTypography.bodySmall,
                         ),
                       ),
@@ -320,8 +317,8 @@ class LibraryFeatureBanner extends StatelessWidget {
                         child: FilledButton.icon(
                           onPressed: onTap,
                           style: FilledButton.styleFrom(
-                            backgroundColor: MobileEnvColors.buttonInk,
-                            foregroundColor: MobileEnvColors.onButtonInk,
+                            backgroundColor: context.env.buttonInk,
+                            foregroundColor: context.env.onButtonInk,
                             minimumSize: const Size(64, 43),
                             padding: const EdgeInsets.symmetric(horizontal: 17),
                             shape: const StadiumBorder(),
@@ -330,10 +327,10 @@ class LibraryFeatureBanner extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          icon: const OmniIcon(
+                          icon: OmniIcon(
                             icon: OmniIcons.play,
                             size: 16,
-                            color: MobileEnvColors.onButtonInk,
+                            color: context.env.onButtonInk,
                           ),
                           label: Text(actionLabel),
                         ),
@@ -593,11 +590,11 @@ class LibraryPosterCard extends StatelessWidget {
                       borderRadius: BorderRadius.zero,
                       fallback: ColoredBox(
                         color: Colors.white.withValues(alpha: 0.05),
-                        child: const Center(
+                        child: Center(
                           child: OmniIcon(
                             icon: OmniIcons.film,
                             size: 26,
-                            color: MobileEnvColors.white46,
+                            color: context.env.white46,
                           ),
                         ),
                       ),
@@ -631,7 +628,7 @@ class LibraryPosterCard extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: progress!.clamp(0, 1),
                         minHeight: 3,
-                        color: MobileEnvColors.accent,
+                        color: context.env.accentInk,
                         backgroundColor: const Color(0x3DFFFFFF),
                       ),
                     ),
@@ -643,8 +640,8 @@ class LibraryPosterCard extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MobileEnvColors.ink,
+              style: TextStyle(
+                color: context.env.ink,
                 fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
@@ -656,8 +653,8 @@ class LibraryPosterCard extends StatelessWidget {
                   detail!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.inkMuted,
+                  style: TextStyle(
+                    color: context.env.inkMuted,
                     fontSize: AppTypography.labelMicro,
                   ),
                 ),
@@ -678,15 +675,15 @@ class _PosterPlayBadge extends StatelessWidget {
     return Container(
       width: 35,
       height: 35,
-      decoration: const BoxDecoration(
-        color: MobileEnvColors.posterPlayBg,
+      decoration: BoxDecoration(
+        color: context.env.posterPlayBg,
         shape: BoxShape.circle,
       ),
-      child: const Center(
+      child: Center(
         child: OmniIcon(
           icon: OmniIcons.play,
           size: 16,
-          color: MobileEnvColors.posterPlayFg,
+          color: context.env.posterPlayFg,
         ),
       ),
     );
@@ -744,11 +741,11 @@ class LibraryAlbumCard extends StatelessWidget {
                         borderRadius: BorderRadius.zero,
                         fallback: ColoredBox(
                           color: Colors.white.withValues(alpha: 0.05),
-                          child: const Center(
+                          child: Center(
                             child: OmniIcon(
                               icon: OmniIcons.music,
                               size: 26,
-                              color: MobileEnvColors.white46,
+                              color: context.env.white46,
                             ),
                           ),
                         ),
@@ -762,22 +759,20 @@ class LibraryAlbumCard extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: MobileEnvColors.accent,
+                        color: context.env.accent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: MobileEnvColors.accent.withValues(
-                              alpha: 0.35,
-                            ),
+                            color: context.env.accent.withValues(alpha: 0.35),
                             blurRadius: 12,
                           ),
                         ],
                       ),
-                      child: const Center(
+                      child: Center(
                         child: OmniIcon(
                           icon: OmniIcons.play,
                           size: 18,
-                          color: MobileEnvColors.onAccent,
+                          color: context.env.onAccent,
                         ),
                       ),
                     ),
@@ -790,8 +785,8 @@ class LibraryAlbumCard extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MobileEnvColors.ink,
+              style: TextStyle(
+                color: context.env.ink,
                 fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
@@ -803,8 +798,8 @@ class LibraryAlbumCard extends StatelessWidget {
                   detail!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.inkMuted,
+                  style: TextStyle(
+                    color: context.env.inkMuted,
                     fontSize: AppTypography.labelMicro,
                   ),
                 ),
