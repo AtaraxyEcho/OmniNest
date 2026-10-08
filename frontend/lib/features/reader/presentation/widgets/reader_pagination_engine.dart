@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';

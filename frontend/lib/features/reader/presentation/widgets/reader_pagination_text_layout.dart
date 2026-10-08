@@ -12,39 +12,13 @@ abstract final class _ReaderPaginationTextLayout {
     return offsets;
   }
 
-  static int blockCharCount(ContentBlock block) {
-    return switch (block) {
-      HeadingBlock(:final text) => text.length,
-      ParagraphBlock(:final lines) => _linesCharCount(lines),
-      ImageBlock() => 0,
-      DividerBlock() => 0,
-      BlockquoteBlock(:final lines) => _linesCharCount(lines),
-      ListBlock(:final items) => items.fold(
-        0,
-        (sum, item) => sum + _linesCharCount([LineData(spans: item.spans)]),
-      ),
-      TableBlock(:final rows) => rows.fold(
-        0,
-        (sum, row) =>
-            sum +
-            row.cells.fold(
-              0,
-              (cellSum, cell) =>
-                  cellSum + _linesCharCount([LineData(spans: cell)]),
-            ),
-      ),
-    };
-  }
-
-  static int _linesCharCount(List<LineData> lines) {
-    var total = 0;
-    for (final line in lines) {
-      for (final span in line.spans) {
-        total += span.text.length;
-      }
-    }
-    return total;
-  }
+  /// 单块字符数：统一走 `BlockClipper.blockCharCount` 的**源文本空间**口径。
+  ///
+  /// 页区间、块前缀与共享视觉行测量器必须共处同一坐标系：折叠空白虽不可
+  /// 绘制，却要计入页与页之间的区间，否则翻页会漏掉章尾字符，且同一
+  /// charOffset 在滚动侧与翻页侧指向不同文本。
+  static int blockCharCount(ContentBlock block) =>
+      BlockClipper.blockCharCount(block);
 
   static List<dynamic>? _getBlockLines(ContentBlock block) {
     return switch (block) {

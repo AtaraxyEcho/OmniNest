@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -44,7 +45,7 @@ class ChapterData {
     if (_blockCharPrefixes.length != blocks.length + 1) {
       final prefixes = List<int>.filled(blocks.length + 1, 0);
       for (var i = 0; i < blocks.length; i++) {
-        prefixes[i + 1] = prefixes[i] + _blockCharCount(blocks[i]);
+        prefixes[i + 1] = prefixes[i] + BlockClipper.blockCharCount(blocks[i]);
       }
       _blockCharPrefixes = prefixes;
     }
@@ -520,7 +521,10 @@ class ReaderContentLoader {
       blocks: blocks,
       slices: const <PageSlice>[],
       cumulativeHeights: const <double>[],
-      totalChars: blocks.fold(0, (sum, b) => sum + _blockCharCount(b)),
+      totalChars: blocks.fold(
+        0,
+        (sum, b) => sum + BlockClipper.blockCharCount(b),
+      ),
     );
   }
 
@@ -1011,7 +1015,7 @@ class ReaderContentLoader {
       final blockStart = lo > 0 ? data.cumulativeHeights[lo - 1] : 0;
       final offsetInBlock = normalizedOffset - blockStart;
       final block = data.blocks[lo];
-      final blockChars = _blockCharCount(block);
+      final blockChars = BlockClipper.blockCharCount(block);
 
       if (blockChars > 0 &&
           block is! ImageBlock &&
@@ -1069,32 +1073,4 @@ class ReaderContentLoader {
     final previous = index > 0 ? data.cumulativeHeights[index - 1] : 0;
     return cumulative - previous;
   }
-}
-
-/// 单块字符数：与 `BlockClipper.blockCharCount` 同一口径
-/// 的顶层实现，供 ChapterData 前缀表与 ReaderContentLoader 共用。
-///
-/// 段落与引用块按**源文本空间**计数（`LineData.sourceChars` 含行首折叠字符）；
-/// 两处口径不一致会让前缀表与页裁剪落到不同字符空间。
-int _blockCharCount(ContentBlock block) {
-  return switch (block) {
-    HeadingBlock(:final text) => text.length,
-    ParagraphBlock(:final lines) => lines.fold(0, (s, l) => s + l.sourceChars),
-    ImageBlock() => 0,
-    DividerBlock() => 0,
-    BlockquoteBlock(:final lines) => lines.fold(0, (s, l) => s + l.sourceChars),
-    ListBlock(:final items) => items.fold(
-      0,
-      (s, i) => s + i.spans.fold(0, (s2, sp) => s2 + sp.text.length),
-    ),
-    TableBlock(:final rows) => rows.fold(
-      0,
-      (s, r) =>
-          s +
-          r.cells.fold(
-            0,
-            (s2, c) => s2 + c.fold(0, (s3, sp) => s3 + sp.text.length),
-          ),
-    ),
-  };
 }
