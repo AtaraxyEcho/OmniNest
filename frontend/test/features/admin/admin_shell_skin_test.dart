@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,7 +70,7 @@ class _AdminSessionNotifier extends AuthSessionNotifier {
   }
 }
 
-Future<void> _pumpShell(WidgetTester tester) async {
+Future<void> _pumpShell(WidgetTester tester, {bool light = false}) async {
   tester.view.physicalSize = const Size(1440, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -83,7 +84,7 @@ Future<void> _pumpShell(WidgetTester tester) async {
         authSessionProvider.overrideWith(_AdminSessionNotifier.new),
       ],
       child: MaterialApp(
-        theme: OmniNestTheme.dark(),
+        theme: light ? OmniNestTheme.light() : OmniNestTheme.dark(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
@@ -92,6 +93,14 @@ Future<void> _pumpShell(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
+}
+
+/// 取导航项当前底色（悬停渐变结束后即目标档）。
+Color? _navItemBackground(WidgetTester tester, Finder label) {
+  final container = tester.widget<AnimatedContainer>(
+    find.ancestor(of: label, matching: find.byType(AnimatedContainer)).first,
+  );
+  return (container.decoration as BoxDecoration?)?.color;
 }
 
 void main() {
@@ -118,6 +127,55 @@ void main() {
     expect(
       Theme.of(ctx).colorScheme.outlineVariant,
       WorkstationPalette.lineDark,
+    );
+  });
+
+  testWidgets('浅色工位侧栏未激活项悬停压暗一档，不取纯白容器色', (tester) async {
+    await _pumpShell(tester, light: true);
+    final scheme = Theme.of(tester.element(find.text('PORTAL'))).colorScheme;
+    final l10n = AppLocalizations.of(tester.element(find.text('PORTAL')));
+    final label = find.text(l10n.adminNavLogs).first;
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(label));
+    await tester.pumpAndSettle();
+
+    // 浅色下 surfaceContainer 是纯白，比侧栏底更亮；悬停必须落在更暗的一档。
+    expect(scheme.surfaceContainer, WorkstationPalette.containerLight);
+    expect(_navItemBackground(tester, label), scheme.surfaceContainerLow);
+    expect(
+      _navItemBackground(tester, label)?.computeLuminance(),
+      lessThan(scheme.surface.computeLuminance()),
+    );
+
+    await gesture.moveTo(const Offset(1200, 400));
+    await tester.pumpAndSettle();
+    expect(_navItemBackground(tester, label), Colors.transparent);
+  });
+
+  testWidgets('暗档侧栏未激活项悬停弱于选中档，移出后完全复位', (tester) async {
+    await _pumpShell(tester);
+    final scheme = Theme.of(tester.element(find.text('PORTAL'))).colorScheme;
+    final l10n = AppLocalizations.of(tester.element(find.text('PORTAL')));
+    final label = find.text(l10n.adminNavLogs).first;
+    final selectedLabel = find.text(l10n.adminNavOverview).first;
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(label));
+    await tester.pumpAndSettle();
+
+    expect(_navItemBackground(tester, label), scheme.surfaceContainer);
+    expect(
+      _navItemBackground(tester, selectedLabel),
+      scheme.surfaceContainerHighest,
+    );
+    expect(
+      scheme.surfaceContainer.computeLuminance(),
+      greaterThan(scheme.surface.computeLuminance()),
     );
   });
 }

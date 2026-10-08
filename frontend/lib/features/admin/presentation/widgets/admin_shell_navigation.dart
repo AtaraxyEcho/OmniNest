@@ -1,6 +1,8 @@
 part of 'admin_shell.dart';
 
 /// 侧栏导航项：纯平直角，激活态靠背景与 1px 边框表达，禁左侧线段。
+/// 悬停档必须与侧栏 surface 同向递进且弱于选中档；浅色工位的
+/// surfaceContainer 是纯白容器色，取作悬停底会比侧栏底更亮，方向与选中档相反。
 class _AdminNavItem extends StatefulWidget {
   const _AdminNavItem({
     required this.section,
@@ -25,6 +27,10 @@ class _AdminNavItemState extends State<_AdminNavItem> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final selected = widget.selected;
+    final hoverColor =
+        scheme.brightness == Brightness.dark
+            ? scheme.surfaceContainer
+            : scheme.surfaceContainerLow;
     final foreground =
         selected || _hovering ? scheme.onSurface : scheme.onSurfaceVariant;
     return Padding(
@@ -51,7 +57,7 @@ class _AdminNavItemState extends State<_AdminNavItem> {
                   selected
                       ? scheme.surfaceContainerHighest
                       : _hovering
-                      ? scheme.surfaceContainer
+                      ? hoverColor
                       : Colors.transparent,
               border: Border.all(
                 color: selected ? scheme.outlineVariant : Colors.transparent,
