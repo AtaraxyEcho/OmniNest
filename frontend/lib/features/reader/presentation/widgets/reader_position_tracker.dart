@@ -83,45 +83,6 @@ class ReaderPositionTracker {
     );
   }
 
-  /// 从 API payload 恢复（兼容旧格式）。
-  static ReaderPosition fromPayload(Map<String, dynamic> json) {
-    // 新格式
-    if (json.containsKey('charOffset')) {
-      return ReaderPosition(
-        chapterId: json['chapterId'] as String? ?? '',
-        charOffset: (json['charOffset'] as num?)?.toInt() ?? 0,
-        chapterProgress: (json['chapterProgress'] as num?)?.toDouble() ?? 0,
-        mode: json['mode'] as String? ?? 'scroll',
-      );
-    }
-    // 旧格式：滚动模式（blockIndex → charOffset 兼容）
-    if (json.containsKey('scrollOffset')) {
-      final offset = (json['scrollOffset'] as num?)?.toDouble() ?? 0;
-      final maxExtent = (json['maxScrollExtent'] as num?)?.toDouble() ?? 1;
-      final ratio = maxExtent > 0 ? (offset / maxExtent).clamp(0.0, 1.0) : 0.0;
-      return ReaderPosition(
-        chapterId: json['chapterId'] as String? ?? '',
-        charOffset: 0,
-        chapterProgress: ratio,
-        mode: 'scroll',
-      );
-    }
-    // 旧格式：翻页模式
-    if (json.containsKey('page')) {
-      final page = (json['page'] as num?)?.toInt() ?? 0;
-      final totalPages = (json['totalPages'] as num?)?.toInt() ?? 1;
-      final ratio =
-          totalPages > 1 ? (page / (totalPages - 1)).clamp(0.0, 1.0) : 0.0;
-      return ReaderPosition(
-        chapterId: json['chapterId'] as String? ?? '',
-        charOffset: 0,
-        chapterProgress: ratio,
-        mode: 'page',
-      );
-    }
-    return ReaderPosition(chapterId: json['chapterId'] as String? ?? '');
-  }
-
   /// 直接设置 charOffset（用于进度恢复时初始化 tracker）。
   void setCharOffset(int charOffset, String chapterId) {
     _current = ReaderPosition(

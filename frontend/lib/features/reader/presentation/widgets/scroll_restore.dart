@@ -5,8 +5,8 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// 滚动位置恢复器。
 ///
-/// 封装 [addPersistentFrameCallback] 的生命周期管理，解决回调累积问题。
-/// 通过代际计数器自动失效旧回调，确保同一时间只有一个恢复流程在运行。
+/// 封装帧末回调自循环的启停：每次 start 抬高代次，旧循环在下一次 tick 上
+/// 发现代次不符即退出，因此不会有多条循环并存、互相把对方从批次边界杀死。
 ///
 /// ## 恢复策略
 ///
@@ -17,7 +17,9 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 /// 2. **监控期**：settle 后继续监控，只有 max 变化真正把落点带出容差
 ///   （说明有新内容加载导致布局偏移），重新激活恢复
 ///
-/// 监控期结束后（默认 5 秒），恢复流程彻底结束，`isActive` 变为 false。
+/// settle 即视为恢复完成：`isActive` 在进入监控期时就转 false，而写抑制
+/// （`shouldSuppressWrites`）与循环本身继续到监控期结束（默认 5 秒）或
+/// 用户滚动为止。
 class ScrollRestore {
   ScrollRestore({
     int stableFramesThreshold = 10,

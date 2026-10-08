@@ -17,9 +17,7 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
     final serverSnapshot = ReaderProgressSnapshot.fromServer(
       progressDetail?.progress,
     );
-    final routeSnapshot = initialProgress;
     final result = latestProgressForCurrentChapter([
-      routeSnapshot,
       localSnapshot,
       serverSnapshot,
     ]);

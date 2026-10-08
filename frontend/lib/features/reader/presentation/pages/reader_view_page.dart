@@ -67,14 +67,12 @@ class ReaderViewPage extends ConsumerStatefulWidget {
   const ReaderViewPage({
     required this.itemId,
     required this.chapterId,
-    this.initialProgress,
     this.entry,
     super.key,
   });
 
   final String itemId;
   final String chapterId;
-  final ReaderProgressSnapshot? initialProgress;
 
   /// 路由进入语义（`chapter`=目录显式选章进章首，其余=续读恢复）。
   final String? entry;
@@ -177,13 +175,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   DateTime? _remoteProgressCueOfferedAt;
 
   // ── 并发控制 ──
-  bool _isAnimating = false;
   bool _isSwitchingChapter = false;
   bool _isLoadingChapter = false;
   bool _showChapterLoadingOverlay = false;
   Timer? _chapterLoadingTimer;
   int _loadGeneration = 0;
-  ReaderViewSettings? _pendingSettings;
 
   // ── UI 状态 ──
   ReaderViewSettings _settings = ReaderViewSettings();
@@ -397,10 +393,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set remoteProgressCueOfferedAt(DateTime? v) =>
       _remoteProgressCueOfferedAt = v;
   @override
-  bool get isAnimating => _isAnimating;
-  @override
-  set isAnimating(bool v) => _isAnimating = v;
-  @override
   bool get isSwitchingChapter => _isSwitchingChapter;
   @override
   set isSwitchingChapter(bool v) => _isSwitchingChapter = v;
@@ -420,10 +412,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   int get loadGeneration => _loadGeneration;
   @override
   set loadGeneration(int v) => _loadGeneration = v;
-  @override
-  ReaderViewSettings? get pendingSettings => _pendingSettings;
-  @override
-  set pendingSettings(ReaderViewSettings? v) => _pendingSettings = v;
   @override
   bool get showControls => _showControls;
   @override
@@ -532,8 +520,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool get exitRequested => _exitRequested;
   @override
   set exitRequested(bool value) => _exitRequested = value;
-  @override
-  ReaderProgressSnapshot? get initialProgress => widget.initialProgress;
   @override
   Size? get pageViewportSize => _pageViewportSize;
   @override

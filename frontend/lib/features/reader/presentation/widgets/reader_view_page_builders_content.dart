@@ -162,7 +162,6 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
                   mode: 'page',
                   charOffset: charOffset,
                 );
-                onAnimationComplete();
                 prefetchNextChapterAtBoundary(index);
               },
               onPreviousChapterFn: () => tryNavigateChapter(-1),

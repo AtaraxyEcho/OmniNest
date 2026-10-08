@@ -62,27 +62,6 @@ class ReaderProgressSnapshot {
     );
   }
 
-  /// 从路由传递的 payload 构造
-  factory ReaderProgressSnapshot.fromPayload(Map<String, dynamic>? payload) {
-    if (payload == null) return ReaderProgressSnapshot(chapterId: '');
-    return ReaderProgressSnapshot(
-      chapterId: payload['chapterId']?.toString() ?? '',
-      charOffset: _asInt(payload['charOffset']),
-      bookProgress:
-          payload['bookProgress'] == null
-              ? null
-              : _asDouble(payload['bookProgress']),
-      chapterProgress: _asDouble(payload['chapterProgress']),
-      chapterTitle: payload['chapterTitle']?.toString() ?? '',
-      mode: payload['mode']?.toString() ?? 'scroll',
-      manifestVersion:
-          payload['manifestVersion'] == null
-              ? null
-              : _asInt(payload['manifestVersion']),
-      updatedAt: _parseDateTime(payload['updatedAt']),
-    );
-  }
-
   final String chapterId;
 
   /// 章节内字符偏移，用于精确定位恢复（跨端通用）。

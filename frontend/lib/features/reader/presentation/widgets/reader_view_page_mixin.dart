@@ -132,8 +132,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   // ── 并发控制 ──
 
-  bool get isAnimating;
-  set isAnimating(bool value);
   bool get isSwitchingChapter;
   set isSwitchingChapter(bool value);
   bool get isLoadingChapter;
@@ -144,8 +142,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   set chapterLoadingTimer(Timer? value);
   int get loadGeneration;
   set loadGeneration(int value);
-  ReaderViewSettings? get pendingSettings;
-  set pendingSettings(ReaderViewSettings? value);
 
   // ── UI 状态 ──
 
@@ -216,7 +212,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   // ── Widget 访问 ──
 
   String get itemId;
-  ReaderProgressSnapshot? get initialProgress;
 
   // ── 跨 mixin 方法（由 ReaderViewPageBuilders 实现） ──
 
@@ -630,10 +625,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     chapterNavigationIntent = intent;
     // 跳转提示只对候选快照所属章节有效，切章后点按会跳错位置。
     hideProgressJumpCue();
-
-    if (isAnimating) {
-      isAnimating = false;
-    }
 
     if (currentSnapshot != null) {
       final syncGeneration = ++syncProgressGeneration;

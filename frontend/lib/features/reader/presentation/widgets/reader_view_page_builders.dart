@@ -103,7 +103,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   // ── 跨 mixin 方法（由 State 实现） ──
   void dismissReturnSnackBar();
   void updateProgressFromPage();
-  void onAnimationComplete();
   void tryNavigateChapter(int offset);
   void toggleControls();
   void returnToOriginalProgress();
@@ -122,7 +121,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   });
   void onReaderSelectionActive(bool active);
   DateTime? get lastAppliedProgressAt;
-  void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
+  void applyProgressSnapshot(ReaderProgressSnapshot snapshot, {bool force});
   void prefetchNextChapterAtBoundary(int pageIndex);
 
   /// 反向章界回退：用户在窗口顶部继续上滚时回退到上一章末尾，

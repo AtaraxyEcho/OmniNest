@@ -271,19 +271,7 @@ mixin ReaderViewPageInteractionMixin
   /// 设置变更回调。
   void onSettingsChanged(ReaderViewSettings newSettings) {
     if (showControls) startHideTimer();
-    if (isAnimating) {
-      pendingSettings = newSettings;
-      return;
-    }
     applySettings(newSettings);
-  }
-
-  /// 动画完成后检查延迟的设置变更。
-  void onAnimationComplete() {
-    if (pendingSettings != null) {
-      applySettings(pendingSettings!);
-      pendingSettings = null;
-    }
   }
 
   /// 应用阅读设置变更。
