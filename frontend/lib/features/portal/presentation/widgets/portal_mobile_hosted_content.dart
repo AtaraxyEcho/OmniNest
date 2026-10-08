@@ -166,6 +166,11 @@ class _SpatialEnvironmentHeaderState
       TimeOfDay.fromDateTime(_now),
       alwaysUse24HourFormat: true,
     );
+    // 居中层里只有时钟会被 LayoutBuilder 拿到拉满宽的盒子（眉标与天气条是自己
+    // 收缩宽度的），所以光靠 Column 的 crossAxisAlignment 不足以让它居中：
+    // 盒子里的墨迹还要显式对齐。双栏档反过来贴着左侧栏。
+    final inlineAlignment =
+        widget.leftAligned ? TextAlign.start : TextAlign.center;
     return Padding(
       padding: EdgeInsets.only(top: widget.topPadding),
       child: Column(
@@ -179,6 +184,7 @@ class _SpatialEnvironmentHeaderState
             eyebrow.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            textAlign: inlineAlignment,
             style: const TextStyle(
               color: MobileEnvColors.inkFaint,
               fontSize: AppTypography.labelMicro,
@@ -201,6 +207,7 @@ class _SpatialEnvironmentHeaderState
                   timeOfDay,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: inlineAlignment,
                   style: TextStyle(
                     color: MobileEnvColors.ink,
                     fontFamily: AppTypography.serifFamily,
