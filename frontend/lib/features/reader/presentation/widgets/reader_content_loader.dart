@@ -72,13 +72,17 @@ class ChapterData {
     return _blockCharPrefixes;
   }
 
-  /// 滚动列表逐项确定高度；尚未整章测得时返回 null。
+  /// 滚动列表逐项确定高度；尚未整章精测时返回 null。
   ///
   /// 提供确定高度可让 maxScrollExtent 与"当前构建了哪些项"无关：懒构建的
   /// SliverList 会用已构建项均值外推未构建项，深位置恢复按虚高范围 jumpTo
   /// 后，范围随构建收缩会把落点钳到目标之前。itemExtentBuilder 不接受
   /// 空洞高度，因此只在整章测得后给出。
+  ///
+  /// 判据必须用精测标记而不是数组长度：估算填充同样是整章长度，把它当成
+  /// 确定高度会强制未测尾部按均值占位——真实文本更高时被裁字，更矮时留白。
   List<double>? get blockExtents {
+    if (!_hasPreciseHeights) return null;
     final heights = _cumulativeHeights;
     if (heights.isEmpty || heights.length != blocks.length) return null;
     final extents = List<double>.filled(heights.length, 0);

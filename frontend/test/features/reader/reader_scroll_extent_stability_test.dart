@@ -22,17 +22,25 @@ void main() {
   );
 
   group('ChapterData.blockExtents', () {
-    ChapterData chapterWith(List<double> heights, String html) {
+    ChapterData chapterWith(
+      List<double> heights,
+      String html, {
+      bool precise = true,
+    }) {
       final data = ChapterData(
         chapterId: 'chapter_1',
         content: ReaderChapterContent(title: '第一章', content: html),
         blocks: parseBlocks(html),
       );
       data.updateCumulativeHeights(heights);
+      if (precise) {
+        // 精测标记由 loader 在整章批次完成时置位，夹具直接代表该状态。
+        data.markPreciseHeights();
+      }
       return data;
     }
 
-    test('整章测得时逐项反推确定高度', () {
+    test('整章精测后逐项反推确定高度', () {
       final data = chapterWith([100, 250], '<h2>t</h2><p>x</p>');
       expect(data.blocks.length, 2);
       expect(data.blockExtents, [100, 150]);
@@ -40,6 +48,18 @@ void main() {
 
     test('未覆盖整章时不给确定高度（列表继续估算）', () {
       final data = chapterWith([100], '<h2>t</h2><p>x</p>');
+      expect(data.blocks.length, 2);
+      expect(data.blockExtents, isNull);
+    });
+
+    test('估算填充的整章长度不算确定高度', () {
+      // 估算尾部按均值填充，长度与块数相同但未精测；把它当确定高度会强制
+      // 未测块按均值占位，真实文本更高时被裁字、更矮时留白。
+      final data = chapterWith(
+        [100, 250],
+        '<h2>t</h2><p>x</p>',
+        precise: false,
+      );
       expect(data.blocks.length, 2);
       expect(data.blockExtents, isNull);
     });
