@@ -186,7 +186,9 @@ public final class ReaderDtos {
             /** 漫画：清单版本号。 */
             Integer manifestVersion,
             /** 漫画：页内偏移（滚动模式，0.0-1.0） */
-            Double intraPageOffset
+            Double intraPageOffset,
+            /** 客户端记录本次进度的时刻；离线补传必须沿用记录时刻而非发送时刻。 */
+            Instant clientUpdatedAt
     ) {
     }
 

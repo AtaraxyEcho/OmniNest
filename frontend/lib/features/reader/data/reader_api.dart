@@ -333,6 +333,9 @@ class ReaderApi {
   // ─── Progress ────────────────────────────────────────────────
 
   /// 更新阅读进度（自动写回）：无能力时静默 no-op，不发网络。
+  ///
+  /// [clientUpdatedAt] 是这条进度的本地记录时刻，不是发送时刻：离线补传必须带
+  /// 原记录时刻，服务端据此拒绝迟到的旧上报覆盖其他设备刚写入的位置。
   Future<void> updateProgress({
     required String itemId,
     int charOffset = 0,
@@ -347,6 +350,7 @@ class ReaderApi {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? clientUpdatedAt,
   }) async {
     if (!apiClient.hasPermission(activityWritePermission)) {
       return;
@@ -366,6 +370,8 @@ class ReaderApi {
         if (catalogKey != null) 'catalogKey': catalogKey,
         if (manifestVersion != null) 'manifestVersion': manifestVersion,
         if (intraPageOffset != null) 'intraPageOffset': intraPageOffset,
+        if (clientUpdatedAt != null)
+          'clientUpdatedAt': clientUpdatedAt.toUtc().toIso8601String(),
       },
     );
   }

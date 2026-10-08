@@ -2,6 +2,7 @@ package com.omninest.modules.reader.repository;
 
 import com.omninest.modules.reader.domain.ReaderProgress;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -39,20 +40,26 @@ public interface ReaderProgressRepository extends JpaRepository<ReaderProgress, 
     void deleteByReaderItemIdIn(Collection<UUID> readerItemIds);
 
     /**
-     * 原生 Upsert：插入或更新阅读进度，绕过乐观锁。
+     * 原生 Upsert：按客户端上报时间写入阅读进度，绕过乐观锁。
      *
-     * <p>并发请求时 ON CONFLICT 保证幂等性（最新写入胜出）。
+     * <p>{@code ON CONFLICT} 保证并发下的幂等性；{@code WHERE} 只允许不早于已存记录的上报
+     * 生效，离线排队的旧上报因此不会覆盖其他设备刚写入的位置。已存记录缺少上报时间时
+     * 视为无信息并放行，避免围栏把首次写入永久挡在门外。
+     *
+     * @return 受影响行数；0 表示本次上报被更新的记录拒绝
      */
     @Modifying
-    @Query(nativeQuery = true, value = """
+    @Query(value = """
             INSERT INTO omni.reader_progress
                 (id, owner_user_id, reader_item_id, char_offset, progress_percent,
                  reading_mode, chapter_id, page_id, page_index, page_fingerprint,
-                 source_id, source_page_index, catalog_key, manifest_version, intra_page_offset, updated_at, version)
+                 source_id, source_page_index, catalog_key, manifest_version, intra_page_offset,
+                 client_updated_at, updated_at, version)
             VALUES
                 (gen_random_uuid(), :ownerUserId, :readerItemId, :charOffset, :progressPercent,
                  :readingMode, :chapterId, :pageId, :pageIndex, :pageFingerprint,
-                 :sourceId, :sourcePageIndex, :catalogKey, :manifestVersion, :intraPageOffset, now(), 1)
+                 :sourceId, :sourcePageIndex, :catalogKey, :manifestVersion, :intraPageOffset,
+                 :clientUpdatedAt, now(), 1)
             ON CONFLICT (owner_user_id, reader_item_id)
             DO UPDATE SET char_offset         = EXCLUDED.char_offset,
                           progress_percent    = EXCLUDED.progress_percent,
@@ -66,10 +73,13 @@ public interface ReaderProgressRepository extends JpaRepository<ReaderProgress, 
                           catalog_key         = EXCLUDED.catalog_key,
                           manifest_version    = EXCLUDED.manifest_version,
                           intra_page_offset   = EXCLUDED.intra_page_offset,
+                          client_updated_at   = EXCLUDED.client_updated_at,
                           updated_at          = now(),
                           version             = omni.reader_progress.version + 1
-            """)
-    void upsertProgress(
+            WHERE omni.reader_progress.client_updated_at IS NULL
+               OR EXCLUDED.client_updated_at >= omni.reader_progress.client_updated_at
+            """, nativeQuery = true)
+    int upsertProgress(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("readerItemId") UUID readerItemId,
             @Param("charOffset") long charOffset,
@@ -83,6 +93,7 @@ public interface ReaderProgressRepository extends JpaRepository<ReaderProgress, 
             @Param("sourcePageIndex") Integer sourcePageIndex,
             @Param("catalogKey") String catalogKey,
             @Param("manifestVersion") Integer manifestVersion,
-            @Param("intraPageOffset") Double intraPageOffset);
+            @Param("intraPageOffset") Double intraPageOffset,
+            @Param("clientUpdatedAt") Instant clientUpdatedAt);
 }
 

@@ -598,6 +598,7 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
         catalogKey: _anchor.catalogKey,
         manifestVersion: _anchor.manifestVersion,
         intraPageOffset: intraPageOffset,
+        clientUpdatedAt: now,
       ),
     );
 

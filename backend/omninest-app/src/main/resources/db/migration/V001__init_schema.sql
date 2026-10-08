@@ -2232,9 +2232,11 @@ CREATE TABLE "omni"."reader_progress" (
   "manifest_version" int4 DEFAULT 0,
   "intra_page_offset" float8,
   "source_page_index" int4,
-  "catalog_key" varchar(500)
+  "catalog_key" varchar(500),
+  "client_updated_at" timestamptz(6)
 )
 ;
+COMMENT ON COLUMN "omni"."reader_progress"."client_updated_at" IS '客户端记录该进度的时刻，用于拒绝迟到的旧上报覆盖更新的位置；缺失时按服务端接收时间处理';
 COMMENT ON COLUMN "omni"."reader_progress"."char_offset" IS '章节内字符偏移，与 chapter_id 共同构成精确位置，用于恢复阅读进度';
 COMMENT ON COLUMN "omni"."reader_progress"."progress_percent" IS '全书进度比例（0-1），仅用于 UI 显示，不参与位置恢复';
 COMMENT ON COLUMN "omni"."reader_progress"."reading_mode" IS '阅读模式：scroll（滚动）/ page（翻页）';

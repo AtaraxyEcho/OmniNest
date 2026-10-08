@@ -172,6 +172,7 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
             readingMode: snapshot.mode,
             chapterId: snapshot.chapterId,
             manifestVersion: snapshot.manifestVersion,
+            clientUpdatedAt: snapshot.updatedAt,
           );
     } catch (error) {
       // 只有仍代表当前状态的调用才有权回退节流戳：generation 已被新

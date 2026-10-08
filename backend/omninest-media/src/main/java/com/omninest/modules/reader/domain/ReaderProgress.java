@@ -75,6 +75,10 @@ public class ReaderProgress {
     @Column(name = "manifest_version")
     private Integer manifestVersion = 0;
 
+    /** 客户端记录该进度的时刻，用于拒绝迟到的旧上报覆盖更新的位置 */
+    @Column(name = "client_updated_at")
+    private Instant clientUpdatedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

@@ -54,6 +54,7 @@ void main() {
         catalogKey: null,
         manifestVersion: null,
         intraPageOffset: null,
+        clientUpdatedAt: null,
       ),
     ).thenThrow(Exception('offline'));
 

@@ -677,6 +677,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         // 还是最后一次滚动读数，dispose 的 flush 会用那份旧值再写一遍
         // 本地行与 localStorage 备份（savedAt 更晚），把刚写下的退出
         // 位置覆盖掉。
+        // 退出快照与服务端补报共用同一记录时刻：补报若改用发送时刻，
+        // 本地协调器里那条待写进度的记录时间会比它更早，围栏无法识别
+        // 两者其实同源。
+        final exitReportedAt = DateTime.now();
         _progressSaveCoordinator.schedule(
           ReaderProgressSnapshot(
             chapterId: _currentChapterId,
@@ -685,7 +689,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
             chapterProgress: chapterProgress,
             mode: _isPageMode ? 'page' : 'scroll',
             manifestVersion: _manifestVersionCache,
-            updatedAt: DateTime.now(),
+            updatedAt: exitReportedAt,
           ),
         );
         if (bookProgress != null) {
@@ -698,6 +702,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
               readingMode: _isPageMode ? 'page' : 'scroll',
               chapterId: _currentChapterId,
               manifestVersion: _manifestVersionCache,
+              clientUpdatedAt: exitReportedAt,
             ),
           );
         }

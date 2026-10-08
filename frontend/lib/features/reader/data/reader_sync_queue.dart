@@ -77,8 +77,8 @@ class ReaderSyncQueue {
 
   /// 入队进度同步
   ///
-  /// 同一本书只保留最新一条待同步进度：服务端按 last-write-wins 落库，
-  /// 旧行重放只会把续读位置拉回更早的读数，离线期间逐次失败还会让行数无界增长。
+  /// 同一本书只保留最新一条待同步进度：服务端按上报的记录时刻围栏，旧行重放
+  /// 只会被拒绝并白占队列，离线期间逐次失败还会让行数无界增长。
   static Future<void> enqueueProgress({
     required String itemId,
     required int charOffset,
@@ -93,6 +93,7 @@ class ReaderSyncQueue {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? clientUpdatedAt,
   }) async {
     await _supersedePendingProgress(itemId);
     await _enqueue(opProgress, {
@@ -109,6 +110,8 @@ class ReaderSyncQueue {
       if (catalogKey != null) 'catalogKey': catalogKey,
       if (manifestVersion != null) 'manifestVersion': manifestVersion,
       if (intraPageOffset != null) 'intraPageOffset': intraPageOffset,
+      if (clientUpdatedAt != null)
+        'clientUpdatedAt': clientUpdatedAt.toUtc().toIso8601String(),
     });
   }
 
@@ -486,6 +489,10 @@ class ReaderSyncQueue {
           catalogKey: payload['catalogKey'] as String?,
           manifestVersion: payload['manifestVersion'] as int?,
           intraPageOffset: (payload['intraPageOffset'] as num?)?.toDouble(),
+          // 补传沿用入队时的记录时刻，围栏才有意义；缺失时交给服务端按接收时间处理。
+          clientUpdatedAt: DateTime.tryParse(
+            payload['clientUpdatedAt'] as String? ?? '',
+          ),
         );
 
       case opBookmarkCreate:

@@ -16,6 +16,7 @@ import com.omninest.modules.reader.repository.ReaderItemSourceRepository;
 import com.omninest.modules.reader.repository.ReaderPageRepository;
 import com.omninest.modules.reader.repository.ReaderProgressRepository;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -59,7 +60,8 @@ public class ReaderProgressService {
     /**
      * 更新阅读进度（Upsert 语义：存在则更新，不存在则创建）。
      *
-     * <p>使用原生 SQL upsert 绕过 JPA 乐观锁，保证并发安全。
+     * <p>使用原生 SQL upsert 绕过 JPA 乐观锁，保证并发安全；写入按客户端上报时间围栏，
+     * 早于已存记录的上报不会覆盖其他设备刚写入的位置，此时不产生同步事件。
      *
      * @param ownerUserId  所有者用户 ID
      * @param readerItemId 阅读条目 ID
@@ -82,7 +84,9 @@ public class ReaderProgressService {
                 .max(BigDecimal.ZERO)
                 .min(BigDecimal.ONE);
         Double intraPageOffset = clampIntraPageOffset(request.intraPageOffset());
-        progressRepository.upsertProgress(
+        // 缺少上报时间时按服务端接收时间处理：退化成"最新到达胜出"，而不是把写入永久挡住。
+        Instant clientUpdatedAt = request.clientUpdatedAt() != null ? request.clientUpdatedAt() : Instant.now();
+        int applied = progressRepository.upsertProgress(
                 ownerUserId,
                 readerItemId,
                 request.charOffset(),
@@ -96,7 +100,13 @@ public class ReaderProgressService {
                 request.sourcePageIndex(),
                 request.catalogKey(),
                 request.manifestVersion(),
-                intraPageOffset);
+                intraPageOffset,
+                clientUpdatedAt);
+        if (applied == 0) {
+            log.debug("阅读进度上报早于已存记录，已忽略: userId={}, itemId={}, reportedAt={}",
+                    ownerUserId, readerItemId, clientUpdatedAt);
+            return;
+        }
         syncEventService.record(
                 ownerUserId,
                 SyncScope.READER,

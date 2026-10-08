@@ -183,6 +183,7 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage> {
           readingMode: 'page',
           chapterId: 'pdf',
           pageIndex: _currentPage - 1,
+          clientUpdatedAt: now,
         );
   }
 

@@ -283,6 +283,7 @@ void main() {
         catalogKey: null,
         manifestVersion: null,
         intraPageOffset: null,
+        clientUpdatedAt: null,
       ),
     ).called(1);
   });
@@ -344,6 +345,7 @@ void main() {
         catalogKey: 'volume-1/chapter-a',
         manifestVersion: 3,
         intraPageOffset: 0.35,
+        clientUpdatedAt: null,
       ),
     ).thenAnswer((_) async {});
 
@@ -364,6 +366,7 @@ void main() {
         catalogKey: 'volume-1/chapter-a',
         manifestVersion: 3,
         intraPageOffset: 0.35,
+        clientUpdatedAt: null,
       ),
     ).called(1);
     // 同步成功后的 reader 操作（含明文 payload）会被清理，不留本地副本
@@ -423,5 +426,58 @@ void main() {
         chapterId: any(named: 'chapterId'),
       ),
     );
+  });
+
+  test('离线补传保留进度的记录时刻', () async {
+    // 服务端围栏比的是"这条进度何时记录"，补传若换成发送时刻，离线一小时的
+    // 旧读数就会反过来赢过在线设备刚写入的位置。
+    final reportedAt = DateTime.utc(2026, 10, 8, 1, 2, 3);
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 900,
+      progressPercent: 0.3,
+      readingMode: 'page',
+      chapterId: 'chapter_1',
+      clientUpdatedAt: reportedAt,
+    );
+    when(
+      () => api.updateProgress(
+        itemId: 'item-1',
+        charOffset: 900,
+        progressPercent: 0.3,
+        readingMode: 'page',
+        chapterId: 'chapter_1',
+        pageId: null,
+        pageIndex: null,
+        pageFingerprint: null,
+        sourceId: null,
+        sourcePageIndex: null,
+        catalogKey: null,
+        manifestVersion: null,
+        intraPageOffset: null,
+        clientUpdatedAt: reportedAt,
+      ),
+    ).thenAnswer((_) async {});
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateProgress(
+        itemId: 'item-1',
+        charOffset: 900,
+        progressPercent: 0.3,
+        readingMode: 'page',
+        chapterId: 'chapter_1',
+        pageId: null,
+        pageIndex: null,
+        pageFingerprint: null,
+        sourceId: null,
+        sourcePageIndex: null,
+        catalogKey: null,
+        manifestVersion: null,
+        intraPageOffset: null,
+        clientUpdatedAt: reportedAt,
+      ),
+    ).called(1);
   });
 }

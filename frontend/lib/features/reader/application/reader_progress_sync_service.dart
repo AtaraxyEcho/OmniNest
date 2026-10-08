@@ -24,6 +24,7 @@ class ReaderProgressSyncService {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? clientUpdatedAt,
   }) async {
     try {
       await _api.updateProgress(
@@ -40,6 +41,7 @@ class ReaderProgressSyncService {
         catalogKey: catalogKey,
         manifestVersion: manifestVersion,
         intraPageOffset: intraPageOffset,
+        clientUpdatedAt: clientUpdatedAt,
       );
     } on Exception {
       await ReaderSyncQueue.enqueueProgress(
@@ -56,6 +58,7 @@ class ReaderProgressSyncService {
         catalogKey: catalogKey,
         manifestVersion: manifestVersion,
         intraPageOffset: intraPageOffset,
+        clientUpdatedAt: clientUpdatedAt,
       );
     }
   }

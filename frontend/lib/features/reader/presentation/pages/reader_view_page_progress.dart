@@ -71,6 +71,7 @@ extension _ReaderViewPageProgress on _ReaderViewPageState {
         readingMode: snapshot.mode,
         chapterId: snapshot.chapterId,
         manifestVersion: snapshot.manifestVersion,
+        clientUpdatedAt: snapshot.updatedAt,
       ),
     );
   }
