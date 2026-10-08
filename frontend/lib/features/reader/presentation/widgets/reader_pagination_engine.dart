@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
@@ -105,6 +106,9 @@ class ReaderPaginationEngine {
       isContinuation: isContinuation,
     );
   }
+
+  /// 分割线块的块高，与渲染共用同一组常量（供对照测试引用）。
+  static const double dividerHeight = _ReaderPaginationMetrics.dividerHeight;
 
   /// 计算单个 block 的渲染高度（像素）。
   ///

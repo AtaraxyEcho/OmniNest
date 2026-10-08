@@ -106,5 +106,83 @@ void main() {
       final single = await totalHeightOnce(pageWidth: 600);
       expect(stable, closeTo(single, 1.0));
     });
+
+    test('亚像素宽度抖动不作废高度表', () async {
+      final loader = ReaderContentLoader(allChapters: chapters);
+      final data = await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: content,
+        pageWidth: 320,
+        pageHeight: 600,
+        settings: settings,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: content,
+        pageWidth: 320.3,
+        pageHeight: 600,
+        settings: settings,
+      );
+      expect(
+        data.scrollLayoutPageWidth,
+        320,
+        reason:
+            '桌面自由缩放窗口时每帧零点几像素的抖动都会整表作废；'
+            '小章等于每帧一次整章同步测量，翻页导航器早就是 0.5 容差',
+      );
+
+      await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: content,
+        pageWidth: 300,
+        pageHeight: 600,
+        settings: settings,
+      );
+      expect(data.scrollLayoutPageWidth, 300, reason: '真正的列宽变化仍必须作废重排');
+    });
+  });
+
+  group('scrollMetricsStale', () {
+    test('宽度按 0.5 容差、文字缩放按 0.01 容差判定', () {
+      expect(
+        scrollMetricsStale(
+          tablePageWidth: 320,
+          tableTextScale: 1.0,
+          pageWidth: 320.3,
+          textScale: 1.0,
+        ),
+        isFalse,
+      );
+      expect(
+        scrollMetricsStale(
+          tablePageWidth: 320,
+          tableTextScale: 1.0,
+          pageWidth: 319.4,
+          textScale: 1.0,
+        ),
+        isTrue,
+      );
+      expect(
+        scrollMetricsStale(
+          tablePageWidth: 320,
+          tableTextScale: 1.0,
+          pageWidth: 320,
+          textScale: 1.005,
+        ),
+        isFalse,
+        reason: '缩放是倍率而非像素，容差必须比宽度小一个量级',
+      );
+      expect(
+        scrollMetricsStale(
+          tablePageWidth: 320,
+          tableTextScale: 1.0,
+          pageWidth: 320,
+          textScale: 1.2,
+        ),
+        isTrue,
+      );
+    });
   });
 }

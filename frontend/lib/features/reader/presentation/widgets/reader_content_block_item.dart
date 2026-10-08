@@ -38,6 +38,13 @@ class ReaderContentBlockItem extends StatefulWidget {
   /// 只有一侧计入会让条目实际高度与表不符，字符偏移↔像素映射按标题数累积漂移。
   static const double headingBottomSpacing = 24.0;
 
+  /// 分割线条目的上下留白与中央字形高度。
+  ///
+  /// 分割线的块高不是那条细线，而是 `Padding` + `Stack` 里最高的子项；
+  /// 测高侧必须引用这两个常量，否则改渲染一侧会静默让高度表偏小。
+  static const double dividerVerticalPadding = 24.0;
+  static const double dividerGlyphSize = 16.0;
+
   static TextStyle spanStyle(
     ReaderInlineSpan span,
     ReaderViewSettings settings,
@@ -196,7 +203,9 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
       alpha: 0.20,
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(
+        vertical: ReaderContentBlockItem.dividerVerticalPadding,
+      ),
       child: Center(
         child: SizedBox(
           width: 96,
@@ -212,7 +221,7 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
                   color: widget.settings.onSurfaceVariantColor.withValues(
                     alpha: 0.36,
                   ),
-                  size: 16,
+                  size: ReaderContentBlockItem.dividerGlyphSize,
                 ),
               ),
             ],

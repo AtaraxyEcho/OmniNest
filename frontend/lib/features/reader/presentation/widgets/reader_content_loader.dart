@@ -27,8 +27,15 @@ bool scrollMetricsStale({
   required double pageWidth,
   required double textScale,
 }) {
-  return tablePageWidth != pageWidth || tableTextScale != textScale;
+  // 列宽用与翻页导航器同一档容差：桌面自由缩放时窗口宽度每帧抖动零点几像素，
+  // 精确相等判定会让整表反复作废重排。文字缩放是倍率，容差要小一个量级。
+  return (tablePageWidth - pageWidth).abs() >= _layoutWidthTolerance ||
+      (tableTextScale - textScale).abs() >= _layoutScaleTolerance;
 }
+
+/// 布局参数比较容差：列宽按像素，文字缩放按倍率。
+const _layoutWidthTolerance = 0.5;
+const _layoutScaleTolerance = 0.01;
 
 /// 单章分页数据。
 ///
@@ -205,6 +212,9 @@ class ChapterData {
   /// 作废在途精测：设置变更、缓存失效或重新排期前调用。
   void cancelPrecisePass() {
     heightsGeneration++;
+    // 在途句柄必须一并释放：只抬代次的话，新一轮请求会复用这个注定早退的旧
+    // 任务并立刻返回，新参数下反而再没人排精测，整章永久停在估算上。
+    precisePass = null;
   }
 }
 
@@ -596,29 +606,45 @@ class ReaderContentLoader {
     if (!prepareScrollLayout) {
       return;
     }
-    final layoutStale =
-        data.cumulativeHeights.isEmpty ||
-        data.scrollLayoutPageWidth != pageWidth ||
-        data.scrollLayoutTextScale != textScale;
-    if (!layoutStale) {
-      return;
-    }
-    if (data.cumulativeHeights.isNotEmpty) {
-      // 列宽或文字缩放变了：旧表整张作废。抬高代次让在途精测自行退出，
-      // 否则它会继续按旧宽度写回同一张表。
-      data.heightsGeneration++;
-      data.measuredThrough = 0;
-      data.updateCumulativeHeights(const []);
-      data.invalidatePageNavigator();
-    }
-    data.markScrollLayout(pageWidth, textScale);
-    final blocks = data.blocks;
     // 邻章预取停在估算上即可，否则每翻一章要多跑两章的全量 TextPainter。
     // 尚未确定当前章（首帧或缓存全清后）时不做抑制，保证单独使用 loader
     // 的场景也会收敛到精测高度。
     final activeChapterId = _activeChapterId;
     final isMeasuredChapter =
         activeChapterId == null || data.chapterId == activeChapterId;
+    final layoutStale =
+        data.cumulativeHeights.isEmpty ||
+        scrollMetricsStale(
+          tablePageWidth: data.scrollLayoutPageWidth,
+          tableTextScale: data.scrollLayoutTextScale,
+          pageWidth: pageWidth,
+          textScale: textScale,
+        );
+    if (!layoutStale) {
+      // 表已属于当前排版却只是估算（预取时填的那张）：成为当前章后必须补一轮
+      // 精测，否则顺序通读全程按均值算进度与落点，确定高度也永远不生效。
+      if (isMeasuredChapter && !data.hasPreciseHeights) {
+        unawaited(
+          _runPrecisePass(
+            data,
+            pageWidth: pageWidth,
+            settings: settings,
+            textScale: textScale,
+          ),
+        );
+      }
+      return;
+    }
+    if (data.cumulativeHeights.isNotEmpty) {
+      // 列宽或文字缩放变了：旧表整张作废。抬代次必须走 cancelPrecisePass，
+      // 否则在途句柄仍指向旧参数那一轮，新一轮会直接复用它并立刻早退。
+      data.cancelPrecisePass();
+      data.measuredThrough = 0;
+      data.updateCumulativeHeights(const []);
+      data.invalidatePageNavigator();
+    }
+    data.markScrollLayout(pageWidth, textScale);
+    final blocks = data.blocks;
     // 当前章且块数在同步预算内：首帧一次测完整章。估算尾部会让首次落点按
     // 均值偏一次、再由恢复监控期修正，而条目确定高度本来也要等整章精测才
     // 可用；块数很多时仍走"估算立即发布＋精测分批让帧"，同步测完整章会
@@ -758,9 +784,15 @@ class ReaderContentLoader {
       if (i > 0 && heights[i] < heights[i - 1]) {
         heights[i] = heights[i - 1];
       }
-      data.measuredThrough = i + 1;
       if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
+        // 先校验代次再发布：作废之后还写一整批旧参数高度，会把新表的起点数值
+        // 与 cumulative 基线一起带歪，而且那段下标永远不会再重测。
+        if (generation != data.heightsGeneration) {
+          return;
+        }
         data.updateCumulativeHeights(heights);
+        // 进度只在真正发布后推进：未发布的测量不算"已精测到"，否则中断后
+        // 续测会从这段从未落表的下标接着走，把它们当估算之外的既成事实。
         data.measuredThrough = i + 1;
         await Future<void>.delayed(Duration.zero);
         if (generation != data.heightsGeneration ||

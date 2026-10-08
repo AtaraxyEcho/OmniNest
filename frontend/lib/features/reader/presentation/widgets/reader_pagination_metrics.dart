@@ -9,8 +9,11 @@ abstract final class _ReaderPaginationMetrics {
     ReaderViewSettings settings,
     double textScale,
   ) {
+    // 渲染侧标题继承环境 textScaler，测量必须同样放大：否则大字体下
+    // 标题条目被确定高度裁掉。
     final baseSize =
-        level == 1 ? settings.fontSize * 1.5 : settings.fontSize * 1.25;
+        (level == 1 ? settings.fontSize * 1.5 : settings.fontSize * 1.25) *
+        textScale;
     final painter = TextPainter(
       text: TextSpan(
         text: text,
@@ -61,7 +64,13 @@ abstract final class _ReaderPaginationMetrics {
     return height;
   }
 
-  static const dividerHeight = 48.5;
+  /// 分割线块高：`Padding(上下)` + `Stack`，Stack 取最高子项（带字形的容器），
+  /// 而不是那条 0.5 的细线。常量与渲染共用，避免一侧改窄后静默裁字。
+  /// 分割线块高：`Padding(上下)` + `Stack`，Stack 取最高子项（带字形的容器），
+  /// 而不是那条 0.5 的细线。常量与渲染共用，避免一侧改窄后静默裁字。
+  static const dividerHeight =
+      ReaderContentBlockItem.dividerVerticalPadding * 2 +
+      ReaderContentBlockItem.dividerGlyphSize;
 
   static double listHeight(
     List<ListItemData> items,

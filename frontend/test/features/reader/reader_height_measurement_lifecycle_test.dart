@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 测高生命周期回归测试（D-18 / D-19 / D-20 / D-23c）。
@@ -159,6 +160,95 @@ void main() {
       prefetched.hasPreciseHeights,
       isFalse,
       reason: '未成为当前章前不应为它跑完整 TextPainter 精测',
+    );
+  });
+
+  test('列宽作废后必须按新宽收敛，不得复用旧参数的在途任务', () async {
+    final loader = ReaderContentLoader(
+      allChapters: const [ReaderChapter(id: 'chapter-1', title: '第一章')],
+    );
+    final settings = ReaderViewSettings();
+    loader.setActive('chapter-1');
+    final data = await loader.loadChapter(
+      chapterId: 'chapter-1',
+      content: chapterContent('第一章', 120),
+      pageWidth: 320,
+      pageHeight: 0,
+      settings: settings,
+    );
+
+    // 让 320 宽这一轮跑过至少一个批次边界，才谈得上"在途被作废"
+    for (var turn = 0; turn < 3; turn++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(data.measuredThrough, greaterThan(0), reason: '前置条件：旧宽精测已发布过批次');
+
+    await loader.loadChapter(
+      chapterId: 'chapter-1',
+      content: chapterContent('第一章', 120),
+      pageWidth: 140,
+      pageHeight: 0,
+      settings: settings,
+    );
+    await settle(data, maxTurns: 400);
+
+    expect(
+      data.hasPreciseHeights,
+      isTrue,
+      reason: '抬代次只杀掉旧任务却没释放在途句柄，新一轮会复用旧任务并直接早退，整章永久停在估算上',
+    );
+    final reference = <double>[];
+    var cumulative = 0.0;
+    for (final block in data.blocks) {
+      cumulative +=
+          ReaderPaginationEngine.measureBlockHeight(block, 140, settings) +
+          scrollBlockExtraSpacing(block);
+      reference.add(cumulative);
+    }
+    for (var i = 0; i < reference.length; i++) {
+      expect(
+        (data.cumulativeHeights[i] - reference[i]).abs(),
+        lessThan(0.51),
+        reason: '第 $i 块仍是旧列宽的值：作废后的旧任务在批次边界先发布后校验',
+      );
+    }
+  });
+
+  test('预取过的章节成为当前章后必须补排精测', () async {
+    final loader = ReaderContentLoader(
+      allChapters: const [
+        ReaderChapter(id: 'chapter-1', title: '第一章'),
+        ReaderChapter(id: 'chapter-2', title: '第二章'),
+      ],
+    );
+    final settings = ReaderViewSettings();
+    loader.setActive('chapter-1');
+
+    final prefetched = await loader.loadChapter(
+      chapterId: 'chapter-2',
+      content: chapterContent('第二章', 120),
+      pageWidth: 320,
+      pageHeight: 0,
+      settings: settings,
+      prepareScrollLayout: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(prefetched.hasPreciseHeights, isFalse, reason: '前置条件：预取时只填估算表');
+
+    loader.setActive('chapter-2');
+    await loader.loadChapter(
+      chapterId: 'chapter-2',
+      content: chapterContent('第二章', 120),
+      pageWidth: 320,
+      pageHeight: 0,
+      settings: settings,
+    );
+    await settle(prefetched, maxTurns: 400);
+
+    expect(
+      prefetched.hasPreciseHeights,
+      isTrue,
+      reason: '表已属于当前排版但只是估算：布局不“过期”，于是再没人补精测，顺序通读全程按均值算进度与落点',
     );
   });
 }
