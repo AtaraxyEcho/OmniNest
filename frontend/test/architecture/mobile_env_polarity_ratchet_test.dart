@@ -28,10 +28,12 @@ const _migrated = <String>[
   'lib/app/mobile_shell/mobile_account_sheet.dart',
   'lib/features/backdrop/presentation/mobile_env_settings_sheet.dart',
   'lib/features/search/presentation/pages/mobile_search_page.dart',
+  'lib/core/widgets/mobile_sample_kit.dart',
+  'lib/core/widgets/mobile_status_kit.dart',
 ];
 
-/// 本轮起点实测值（204 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
-const _remainingCeiling = 204;
+/// 本轮起点实测值（172 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
+const _remainingCeiling = 172;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。

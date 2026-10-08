@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 样例内容组件族（Extension index.css 逐值移植）：海报轨/专辑卡/
 /// 编号行/照片马赛克/NOW PLAYING 卡。供托管模块页（音乐/照片/影视）
@@ -123,10 +123,10 @@ class SamplePosterCard extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: MobileEnvColors.ink,
+                color: context.env.ink,
               ),
             ),
             const SizedBox(height: 2),
@@ -134,10 +134,7 @@ class SamplePosterCard extends StatelessWidget {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 9,
-                color: MobileEnvColors.inkMuted,
-              ),
+              style: TextStyle(fontSize: 9, color: context.env.inkMuted),
             ),
           ],
         ),
@@ -191,11 +188,11 @@ class _SampleProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 3,
-      color: const Color(0x3DFFFFFF),
+      color: context.env.line15,
       child: FractionallySizedBox(
         alignment: Alignment.centerLeft,
         widthFactor: value.clamp(0.0, 1.0),
-        child: Container(color: MobileEnvColors.accent),
+        child: Container(color: context.env.accentInk),
       ),
     );
   }
@@ -276,14 +273,14 @@ class SampleAlbumCard extends StatelessWidget {
                           child: Container(
                             width: 38,
                             height: 38,
-                            decoration: const BoxDecoration(
-                              color: MobileEnvColors.accent,
+                            decoration: BoxDecoration(
+                              color: context.env.accent,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.play_arrow_rounded,
                               size: 22,
-                              color: MobileEnvColors.onAccent,
+                              color: context.env.onAccent,
                             ),
                           ),
                         ),
@@ -297,10 +294,10 @@ class SampleAlbumCard extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: MobileEnvColors.ink,
+                color: context.env.ink,
               ),
             ),
             const SizedBox(height: 2),
@@ -308,10 +305,7 @@ class SampleAlbumCard extends StatelessWidget {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 9,
-                color: MobileEnvColors.inkMuted,
-              ),
+              style: TextStyle(fontSize: 9, color: context.env.inkMuted),
             ),
           ],
         ),
@@ -344,8 +338,8 @@ class SampleSerifRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 64),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -377,7 +371,7 @@ class SampleSerifRow extends StatelessWidget {
                         fontFamily: AppTypography.serifFamily,
                         fontFamilyFallback: AppTypography.serifFamilyFallback,
                         fontSize: 15,
-                        color: MobileEnvColors.ink,
+                        color: context.env.ink,
                       ),
                     ),
                     if (subtitle.isNotEmpty) ...[
@@ -386,9 +380,9 @@ class SampleSerifRow extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9,
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ],
@@ -428,8 +422,8 @@ class SampleFilmRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 70),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -452,10 +446,10 @@ class SampleFilmRow extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: MobileEnvColors.ink,
+                        color: context.env.ink,
                       ),
                     ),
                     if (subtitle.isNotEmpty) ...[
@@ -464,9 +458,9 @@ class SampleFilmRow extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9,
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ],
@@ -582,7 +576,7 @@ class SampleNowPlayingCard extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: [Color(0xC2101615), Color(0x7D1B2421)],
           ),
-          border: Border.all(color: MobileEnvColors.line15),
+          border: Border.all(color: context.env.line15),
         ),
         child: Row(
           children: [
@@ -611,11 +605,11 @@ class SampleNowPlayingCard extends StatelessWidget {
                 children: [
                   Text(
                     eyebrow.toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 8,
                       letterSpacing: 1.3,
                       fontWeight: FontWeight.w700,
-                      color: MobileEnvColors.accent,
+                      color: context.env.accentInk,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -623,10 +617,10 @@ class SampleNowPlayingCard extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.w700,
-                      color: MobileEnvColors.ink,
+                      color: context.env.ink,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -645,20 +639,20 @@ class SampleNowPlayingCard extends StatelessWidget {
                       Expanded(
                         child: Container(
                           height: 2,
-                          color: const Color(0x2EFFFFFF),
+                          color: context.env.line15,
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
                             widthFactor: progress.clamp(0.0, 1.0),
-                            child: Container(color: MobileEnvColors.accent),
+                            child: Container(color: context.env.accentInk),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         progressText,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9,
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ],

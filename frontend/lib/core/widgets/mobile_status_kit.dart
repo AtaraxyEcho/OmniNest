@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
@@ -8,19 +8,24 @@ import 'package:omninest/core/widgets/omni_icons.dart';
 enum MobileStatusTone { calm, warning, danger }
 
 /// 传输页三档色调的具体取值。
-const Map<MobileStatusTone, Color> _statusForeground =
-    <MobileStatusTone, Color>{
-      MobileStatusTone.calm: MobileEnvColors.accent,
-      MobileStatusTone.warning: Color(0xFFE9BD7C),
-      MobileStatusTone.danger: Color(0xFFE69696),
-    };
+///
+/// calm 档走强调色的"墨"角色（文字与其软填充同一角色），warning/danger 是彩性色，
+/// 两极性保持原值。
+Color _statusForeground(MobileEnvPalette env, MobileStatusTone tone) {
+  return switch (tone) {
+    MobileStatusTone.calm => env.accentInk,
+    MobileStatusTone.warning => const Color(0xFFE9BD7C),
+    MobileStatusTone.danger => const Color(0xFFE69696),
+  };
+}
 
-const Map<MobileStatusTone, Color> _statusBackground =
-    <MobileStatusTone, Color>{
-      MobileStatusTone.calm: Color(0x14D5F17D),
-      MobileStatusTone.warning: Color(0x1FD18A34),
-      MobileStatusTone.danger: Color(0x1FDA5050),
-    };
+Color _statusBackground(MobileEnvPalette env, MobileStatusTone tone) {
+  return switch (tone) {
+    MobileStatusTone.calm => env.accentInk.withValues(alpha: 0.08),
+    MobileStatusTone.warning => const Color(0x1FD18A34),
+    MobileStatusTone.danger => const Color(0x1FDA5050),
+  };
+}
 
 /// 原型 `.status-pill`：23 高、r8、7px 大写宽字距状态丸。
 class MobileStatusPill extends StatelessWidget {
@@ -39,7 +44,7 @@ class MobileStatusPill extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 23),
       padding: const EdgeInsets.symmetric(horizontal: 7),
       decoration: BoxDecoration(
-        color: _statusBackground[tone],
+        color: _statusBackground(context.env, tone),
         borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.center,
@@ -49,7 +54,7 @@ class MobileStatusPill extends StatelessWidget {
           fontSize: 7, // ignore: font_size_whitelist
           letterSpacing: 0.7,
           fontWeight: FontWeight.w800,
-          color: _statusForeground[tone],
+          color: _statusForeground(context.env, tone),
         ),
       ),
     );
@@ -84,8 +89,8 @@ class MobileTransferRow extends StatelessWidget {
     final row = Container(
       constraints: const BoxConstraints(minHeight: 78),
       padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
       ),
       child: Row(
         children: [
@@ -100,10 +105,10 @@ class MobileTransferRow extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -111,9 +116,9 @@ class MobileTransferRow extends StatelessWidget {
                   detail,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
                 if (progress != null) ...[
@@ -124,8 +129,8 @@ class MobileTransferRow extends StatelessWidget {
                       value: progress!.clamp(0, 1),
                       minHeight: 3,
                       backgroundColor: const Color(0x1AFFFFFF),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        MobileEnvColors.accent,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        context.env.accentInk,
                       ),
                     ),
                   ),
@@ -189,7 +194,7 @@ class _SummaryCell extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0x0CFFFFFF),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MobileEnvColors.line07),
+        border: Border.all(color: context.env.line07),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -204,7 +209,7 @@ class _SummaryCell extends StatelessWidget {
               fontFamilyFallback: AppTypography.serifFamilyFallback,
               fontSize: 21, // ignore: font_size_whitelist
               fontWeight: FontWeight.w400,
-              color: MobileEnvColors.ink,
+              color: context.env.ink,
             ),
           ),
           const SizedBox(height: 4),
@@ -212,10 +217,10 @@ class _SummaryCell extends StatelessWidget {
             entry.label.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 7, // ignore: font_size_whitelist
               letterSpacing: 1,
-              color: MobileEnvColors.inkMuted,
+              color: context.env.inkMuted,
             ),
           ),
         ],
@@ -254,14 +259,14 @@ class MobileDisabledCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0x0AFFFFFF),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: MobileEnvColors.line07),
+        border: Border.all(color: context.env.line07),
       ),
       child: Row(
         children: [
           OmniIcon(
             icon: icon,
             size: 17,
-            color: positive ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+            color: positive ? context.env.accentInk : context.env.inkMuted,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -273,10 +278,10 @@ class MobileDisabledCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -284,10 +289,10 @@ class MobileDisabledCard extends StatelessWidget {
                   message,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 8, // ignore: font_size_whitelist
                     height: 1.4,
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
               ],
@@ -308,9 +313,9 @@ class MobileDisabledCard extends StatelessWidget {
                 ),
                 child: Text(
                   actionLabel!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
               ),
@@ -375,11 +380,15 @@ class _StatusIconTile extends StatelessWidget {
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: _statusBackground[tone],
+        color: _statusBackground(context.env, tone),
         borderRadius: BorderRadius.circular(13),
       ),
       alignment: Alignment.center,
-      child: OmniIcon(icon: icon, size: 18, color: _statusForeground[tone]),
+      child: OmniIcon(
+        icon: icon,
+        size: 18,
+        color: _statusForeground(context.env, tone),
+      ),
     );
   }
 }
