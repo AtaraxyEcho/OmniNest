@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -41,15 +41,15 @@ class FileEnvGlyph extends StatelessWidget {
       return Container(
         width: 40,
         height: 40,
-        decoration: const BoxDecoration(
-          color: MobileEnvColors.accent,
+        decoration: BoxDecoration(
+          color: context.env.accent,
           borderRadius: BorderRadius.all(Radius.circular(13)),
         ),
-        child: const Center(
+        child: Center(
           child: OmniIcon(
             icon: OmniIcons.check,
             size: 18,
-            color: MobileEnvColors.onAccent,
+            color: context.env.onAccent,
           ),
         ),
       );
@@ -168,8 +168,8 @@ class FileEnvRow extends StatelessWidget {
                     file.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       fontSize: AppTypography.bodyMedium,
                       fontWeight: FontWeight.w600,
                     ),
@@ -181,7 +181,7 @@ class FileEnvRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     // ignore: font_size_whitelist
                     style: TextStyle(
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                       // ignore: font_size_whitelist
                       fontSize: 9,
                     ),
@@ -193,10 +193,10 @@ class FileEnvRow extends StatelessWidget {
               IconButton(
                 tooltip: AppLocalizations.of(context).filesMoreActions,
                 onPressed: onMore,
-                icon: const OmniIcon(
+                icon: OmniIcon(
                   icon: OmniIcons.more,
                   size: 20,
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
                 style: IconButton.styleFrom(
                   minimumSize: const Size.square(44),
@@ -259,10 +259,10 @@ class FileEnvTile extends StatelessWidget {
                 FileEnvGlyph(file: file, selected: selected),
                 const Spacer(),
                 if (favorite)
-                  const OmniIcon(
+                  OmniIcon(
                     icon: OmniIcons.heart,
                     size: 15,
-                    color: MobileEnvColors.accent,
+                    color: context.env.accentInk,
                   ),
               ],
             ),
@@ -271,8 +271,8 @@ class FileEnvTile extends StatelessWidget {
               file.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MobileEnvColors.ink,
+              style: TextStyle(
+                color: context.env.ink,
                 fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
@@ -284,8 +284,8 @@ class FileEnvTile extends StatelessWidget {
                   sub,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.inkMuted,
+                  style: TextStyle(
+                    color: context.env.inkMuted,
                     fontSize: AppTypography.labelMicro,
                   ),
                 ),

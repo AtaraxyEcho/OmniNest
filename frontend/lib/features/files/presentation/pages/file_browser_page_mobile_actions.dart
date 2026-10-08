@@ -49,7 +49,7 @@ Future<void> _showFileCreateActions(
     context: context,
     backgroundColor:
         ambience.hosted
-            ? MobileEnvColors.sheetSolid
+            ? context.env.sheetSolid
             : context.filesColors.surfaceContainer,
     // 移动壳层取原型 `.glass-sheet` 顶部 r28；窄窗工位形态保持直角。
     shape:
@@ -205,9 +205,9 @@ class _MobileCreateActionRow extends StatelessWidget {
     final hosted = MobileShellScope.isHosted(context);
     final foreground =
         enabled
-            ? (hosted ? MobileEnvColors.ink : context.filesColors.onSurface)
+            ? (hosted ? context.env.ink : context.filesColors.onSurface)
             : (hosted
-                ? MobileEnvColors.white46
+                ? context.env.white46
                 : context.filesColors.onSurfaceVariant);
     return InkWell(
       onTap: onTap,
@@ -217,9 +217,7 @@ class _MobileCreateActionRow extends StatelessWidget {
         decoration: BoxDecoration(
           border:
               hosted
-                  ? const Border(
-                    bottom: BorderSide(color: MobileEnvColors.line07),
-                  )
+                  ? Border(bottom: BorderSide(color: context.env.line07))
                   : null,
         ),
         child: Row(

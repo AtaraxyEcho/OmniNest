@@ -14,10 +14,19 @@ const _migrated = <String>[
   'lib/features/library/presentation/widgets/library_space_widgets.dart',
   'lib/features/library/presentation/pages/library_space_page.dart',
   'lib/features/portal/presentation/widgets/weather_detail_sheet.dart',
+  'lib/features/files/presentation/pages/file_browser_page.dart',
+  'lib/features/files/presentation/pages/file_browser_page_batch.dart',
+  'lib/features/files/presentation/pages/file_browser_page_mobile_actions.dart',
+  'lib/features/files/presentation/pages/file_browser_page_mobile_home.dart',
+  'lib/features/files/presentation/pages/file_browser_page_storage_stats.dart',
+  'lib/features/files/presentation/pages/file_mobile_folder_view.dart',
+  'lib/features/files/presentation/pages/file_mobile_section_views.dart',
+  'lib/features/files/presentation/widgets/file_env_glyph.dart',
+  'lib/app/theme/mobile_env_theme.dart',
 ];
 
-/// 本轮起点实测值（375 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
-const _remainingCeiling = 375;
+/// 本轮起点实测值（283 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
+const _remainingCeiling = 283;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。

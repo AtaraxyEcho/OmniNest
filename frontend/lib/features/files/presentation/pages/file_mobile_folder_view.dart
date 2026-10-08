@@ -97,7 +97,7 @@ class _MobileShareManageEntry extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Material(
-        color: MobileEnvColors.accent.withValues(alpha: 0.07),
+        color: context.env.accentInk.withValues(alpha: 0.07),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -111,22 +111,22 @@ class _MobileShareManageEntry extends StatelessWidget {
                 OmniIcon(
                   icon: OmniIcons.share,
                   size: 17,
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
                 const SizedBox(width: 7),
                 Text(
                   l10n.filesShareManageEntry,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(width: 7),
                 OmniIcon(
                   icon: OmniIcons.chevron,
                   size: 15,
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
               ],
             ),
@@ -157,8 +157,8 @@ class _MobileGoUpBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -169,18 +169,18 @@ class _MobileGoUpBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.expand_less_rounded,
                   size: 20,
-                  color: MobileEnvColors.accent,
+                  color: context.env.accentInk,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   AppLocalizations.of(context).videoBackToParentNode,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -190,9 +190,9 @@ class _MobileGoUpBar extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkFaint,
+                      color: context.env.inkFaint,
                     ),
                   ),
                 ),

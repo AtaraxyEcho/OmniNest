@@ -24,9 +24,9 @@ class _HostedSectionMetaRow extends StatelessWidget {
               text,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 9, // ignore: font_size_whitelist
-                color: MobileEnvColors.inkMuted,
+                color: context.env.inkMuted,
               ),
             ),
           ),
@@ -63,8 +63,8 @@ class _HostedInfoRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 69),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -75,10 +75,10 @@ class _HostedInfoRow extends StatelessWidget {
                 height: 42,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: MobileEnvColors.accent.withValues(alpha: 0.08),
+                  color: context.env.accentInk.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(icon, size: 18, color: MobileEnvColors.accent),
+                child: Icon(icon, size: 18, color: context.env.accentInk),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -90,10 +90,10 @@ class _HostedInfoRow extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11, // ignore: font_size_whitelist
                         fontWeight: FontWeight.w600,
-                        color: MobileEnvColors.ink,
+                        color: context.env.ink,
                       ),
                     ),
                     if (subtitle.isNotEmpty) ...[
@@ -102,9 +102,9 @@ class _HostedInfoRow extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9, // ignore: font_size_whitelist
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ],
@@ -642,7 +642,7 @@ class _HostedPillAction extends StatelessWidget {
       color: const Color(0x0FFFFFFF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(11),
-        side: const BorderSide(color: MobileEnvColors.line09),
+        side: BorderSide(color: context.env.line09),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(11),
@@ -653,13 +653,13 @@ class _HostedPillAction extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: MobileEnvColors.ink),
+              Icon(icon, size: 15, color: context.env.ink),
               const SizedBox(width: 5),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
               ),
             ],

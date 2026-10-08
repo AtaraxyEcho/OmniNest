@@ -301,8 +301,7 @@ class _BatchActionButton extends StatelessWidget {
     // 语义由图标与文案承载）。
     final filesColors = context.filesColors;
     final hosted = MobileShellScope.isHosted(context);
-    final base =
-        hosted ? MobileEnvColors.onSelectionBar : filesColors.onSurface;
+    final base = hosted ? context.env.onSelectionBar : filesColors.onSurface;
     final color = destructive && !hosted ? filesColors.error : base;
     return TextButton.icon(
       onPressed: enabled ? onTap : null,
@@ -340,7 +339,7 @@ class _MobileStickyBatchBar extends ConsumerWidget {
         constraints: const BoxConstraints(minHeight: 57),
         padding: const EdgeInsets.only(left: 16, right: 10),
         decoration: BoxDecoration(
-          color: MobileEnvColors.selectionBar,
+          color: context.env.selectionBar,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
@@ -357,8 +356,8 @@ class _MobileStickyBatchBar extends ConsumerWidget {
                 l10n.filesSelectedCount(state.selectionCount),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MobileEnvColors.onSelectionBar,
+                style: TextStyle(
+                  color: context.env.onSelectionBar,
                   fontSize: AppTypography.labelSmall,
                   fontWeight: FontWeight.w700,
                 ),
@@ -450,13 +449,9 @@ class _SelectionIconButton extends StatelessWidget {
     return IconButton(
       tooltip: tooltip,
       onPressed: onTap,
-      icon: OmniIcon(
-        icon: icon,
-        size: 19,
-        color: MobileEnvColors.onSelectionBar,
-      ),
+      icon: OmniIcon(icon: icon, size: 19, color: context.env.onSelectionBar),
       style: IconButton.styleFrom(
-        foregroundColor: MobileEnvColors.onSelectionBar,
+        foregroundColor: context.env.onSelectionBar,
         minimumSize: const Size.square(43),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),

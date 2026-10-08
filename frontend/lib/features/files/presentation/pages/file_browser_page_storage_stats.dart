@@ -124,11 +124,11 @@ class _HostedStorageStatsPage extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(0, 20, 0, 6),
                   child: Text(
                     l10n.filesStorageTypeDistribution.toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
                       letterSpacing: 1.4,
                       fontWeight: FontWeight.w700,
-                      color: MobileEnvColors.inkFaint,
+                      color: context.env.inkFaint,
                     ),
                   ),
                 ),

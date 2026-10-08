@@ -144,8 +144,8 @@ class _HomeToolbar extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final shared = state.spaceType == 'SHARED';
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
       ),
       child: SizedBox(
         height: 48,
@@ -226,8 +226,7 @@ class _HomeToolbarTab extends StatelessWidget {
                 child: Text(
                   label,
                   style: TextStyle(
-                    color:
-                        active ? MobileEnvColors.ink : MobileEnvColors.inkMuted,
+                    color: active ? context.env.ink : context.env.inkMuted,
                     fontSize: AppTypography.bodySmall,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                   ),
@@ -238,7 +237,7 @@ class _HomeToolbarTab extends StatelessWidget {
               duration: const Duration(milliseconds: 190),
               width: active ? 28 : 0,
               height: 2,
-              color: active ? MobileEnvColors.accent : Colors.transparent,
+              color: active ? context.env.accentInk : Colors.transparent,
             ),
           ],
         ),
@@ -269,11 +268,10 @@ class _ToolbarIconButton extends StatelessWidget {
       icon: OmniIcon(
         icon: icon,
         size: 19,
-        color: active ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+        color: active ? context.env.accentInk : context.env.inkMuted,
       ),
       style: IconButton.styleFrom(
-        foregroundColor:
-            active ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+        foregroundColor: active ? context.env.accentInk : context.env.inkMuted,
         minimumSize: const Size.square(43),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -297,13 +295,13 @@ class _ToolbarMoreButton extends ConsumerWidget {
     return IconButton(
       tooltip: l10n.filesMoreSections,
       onPressed: () => showFileMoreSectionsSheet(context, ref, onOpenSection),
-      icon: const OmniIcon(
+      icon: OmniIcon(
         icon: OmniIcons.more,
         size: 19,
-        color: MobileEnvColors.inkMuted,
+        color: context.env.inkMuted,
       ),
       style: IconButton.styleFrom(
-        foregroundColor: MobileEnvColors.inkMuted,
+        foregroundColor: context.env.inkMuted,
         minimumSize: const Size.square(43),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -335,16 +333,16 @@ class _HomeInlineList extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.folder,
               size: 22,
-              color: MobileEnvColors.white46,
+              color: context.env.white46,
             ),
             const SizedBox(width: 10),
             Text(
               l10n.filesEmpty,
-              style: const TextStyle(
-                color: MobileEnvColors.inkMuted,
+              style: TextStyle(
+                color: context.env.inkMuted,
                 fontSize: AppTypography.bodyMedium,
               ),
             ),
@@ -401,7 +399,7 @@ class _HomeInlineList extends StatelessWidget {
               onTap: () => _activate(context, visible[index]),
             ),
             if (index + 1 < visible.length)
-              const Divider(height: 1, color: MobileEnvColors.line07),
+              Divider(height: 1, color: context.env.line07),
           ],
         ],
       );
@@ -416,7 +414,7 @@ class _HomeInlineList extends StatelessWidget {
             child: TextButton(
               onPressed: () => onOpenSection(FileManagerSection.allFiles),
               style: TextButton.styleFrom(
-                foregroundColor: MobileEnvColors.white70,
+                foregroundColor: context.env.white70,
                 minimumSize: const Size(48, 44),
               ),
               child: Text(l10n.portalMobileViewAll),
@@ -474,10 +472,10 @@ class _HomeStorageStrip extends StatelessWidget {
                   color: c.storageAccent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.zero,
                 ),
-                child: const OmniIcon(
+                child: OmniIcon(
                   icon: OmniIcons.cloud,
                   size: 21,
-                  color: MobileEnvColors.storageCloud,
+                  color: context.env.storageCloud,
                 ),
               ),
               const SizedBox(width: 12),
@@ -509,7 +507,7 @@ class _HomeStorageStrip extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: value == null ? 0 : value.usageRatio.clamp(0, 1),
                         minHeight: 3,
-                        color: MobileEnvColors.storageProgressFill,
+                        color: context.env.storageProgressFill,
                         backgroundColor: const Color(0x1AFFFFFF),
                       ),
                     ),
@@ -517,10 +515,10 @@ class _HomeStorageStrip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const OmniIcon(
+              OmniIcon(
                 icon: OmniIcons.chevron,
                 size: 17,
-                color: MobileEnvColors.inkMuted,
+                color: context.env.inkMuted,
               ),
             ],
           ),
@@ -571,16 +569,12 @@ class _HomeSectionCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0x0CFFFFFF),
             borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: MobileEnvColors.line09),
+            border: Border.all(color: context.env.line09),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              OmniIcon(
-                icon: glyph,
-                size: 21,
-                color: MobileEnvColors.storageCloud,
-              ),
+              OmniIcon(icon: glyph, size: 21, color: context.env.storageCloud),
               const SizedBox(height: 8),
               Text(
                 title,
@@ -641,7 +635,7 @@ void showFileMoreSectionsSheet(
     ),
     // 托管态环境重绑后 filesColors 是玻璃半透明：贴底面板须实底。
     backgroundColor:
-        MobileShellScope.isHosted(context) ? MobileEnvColors.sheetSolid : null,
+        MobileShellScope.isHosted(context) ? context.env.sheetSolid : null,
     builder:
         (sheetContext) => SafeArea(
           top: false,
@@ -656,11 +650,11 @@ void showFileMoreSectionsSheet(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
                     child: Text(
                       entry.key.labelOf(l10n),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9, // ignore: font_size_whitelist
                         letterSpacing: 1.5,
                         fontWeight: FontWeight.w700,
-                        color: MobileEnvColors.inkFaint,
+                        color: context.env.inkFaint,
                       ),
                     ),
                   ),
@@ -700,8 +694,8 @@ class _MoreSheetRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 54),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
@@ -712,26 +706,26 @@ class _MoreSheetRow extends StatelessWidget {
                 height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: MobileEnvColors.accent.withValues(alpha: 0.08),
+                  color: context.env.accentInk.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(icon, size: 17, color: MobileEnvColors.accent),
+                child: Icon(icon, size: 17, color: context.env.accentInk),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
               ),
               Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: MobileEnvColors.inkFaint,
+                color: context.env.inkFaint,
               ),
             ],
           ),
@@ -753,11 +747,11 @@ class _HomeToolsLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(2, 16, 0, 2),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 9, // ignore: font_size_whitelist
           letterSpacing: 1.5,
           fontWeight: FontWeight.w700,
-          color: MobileEnvColors.inkFaint,
+          color: context.env.inkFaint,
         ),
       ),
     );
@@ -889,11 +883,11 @@ class _HomeToolShortcutRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0x0CFFFFFF),
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: MobileEnvColors.line07),
+          border: Border.all(color: context.env.line07),
         ),
         child: Row(
           children: [
-            OmniIcon(icon: icon, size: 18, color: MobileEnvColors.accent),
+            OmniIcon(icon: icon, size: 18, color: context.env.accentInk),
             const SizedBox(width: 11),
             Expanded(
               child: Column(
@@ -904,10 +898,10 @@ class _HomeToolShortcutRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11, // ignore: font_size_whitelist
                       fontWeight: FontWeight.w700,
-                      color: MobileEnvColors.ink,
+                      color: context.env.ink,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -915,19 +909,19 @@ class _HomeToolShortcutRow extends StatelessWidget {
                     detail,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 11),
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.chevron,
               size: 16,
-              color: MobileEnvColors.ink40,
+              color: context.env.ink40,
             ),
           ],
         ),
@@ -955,8 +949,8 @@ class _InlineGoUpBar extends StatelessWidget {
                 : l10n.filesHomeTabMyFiles)
             : crumbs[crumbs.length - 2].name;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -973,18 +967,18 @@ class _InlineGoUpBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.expand_less_rounded,
                   size: 20,
-                  color: MobileEnvColors.accent,
+                  color: context.env.accentInk,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   l10n.videoBackToParentNode,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -994,9 +988,9 @@ class _InlineGoUpBar extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkFaint,
+                      color: context.env.inkFaint,
                     ),
                   ),
                 ),

@@ -24,7 +24,8 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/app/theme/mobile_env_theme.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -632,7 +633,7 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                                 strokeWidth: 2.5,
                                 color:
                                     hosted
-                                        ? MobileEnvColors.accent
+                                        ? context.env.accent
                                         : context.filesColors.onSurfaceVariant,
                                 onRefresh: () async {
                                   await _runFileAction(
@@ -709,9 +710,16 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
     // 移动壳层样式隔离：托管态把 Files 工位调色板整体重绑为环境玻璃族，
     // 桌面端（非托管）继续使用原始工位皮肤。
     if (hosted) {
-      return Theme(
-        data: MobileEnvTheme.withFilesInEnv(context),
-        child: content,
+      // 环境面：先按壁纸极性注册配色表，模块调色板再从同一极性派生，
+      // 否则工位玻璃会停在暗值，与页面其余环境面不同极。
+      return MobileEnvironmentScope(
+        child: Builder(
+          builder:
+              (scopeContext) => Theme(
+                data: MobileEnvTheme.withFilesInEnv(scopeContext),
+                child: content,
+              ),
+        ),
       );
     }
     return content;
@@ -768,7 +776,7 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                   // 贴底抽屉需实底（样例 glass-sheet #171E1C）。
                   color:
                       MobileShellScope.isHosted(context)
-                          ? MobileEnvColors.sheetSolid
+                          ? context.env.sheetSolid
                           : context.filesColors.surfaceContainer,
                   border: Border(
                     top: BorderSide(color: context.filesColors.selectedBorder),
