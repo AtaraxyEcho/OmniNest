@@ -6,7 +6,6 @@ import 'package:omninest/features/reader/data/reader_sync_queue.dart';
 import 'package:omninest/features/reader/domain/reader_annotation.dart';
 import 'package:omninest/features/reader/domain/reader_bookmark.dart';
 import 'package:omninest/features/reader/domain/reader_note.dart';
-import 'package:omninest/features/reader/domain/reader_progress.dart';
 
 /// 阅读器数据管理器 — 离线优先写入模式
 ///
@@ -23,41 +22,6 @@ class ReaderDataManager {
   final ReaderApi _api;
   final ReaderLocalStorage _localStorage;
   static final Random _localIdRandom = Random();
-
-  // ── 进度 ──
-
-  /// 保存阅读进度（本地优先 + 服务端同步）
-  Future<void> saveProgress({
-    required String itemId,
-    required int charOffset,
-    required double progressPercent,
-    required String readingMode,
-  }) async {
-    final now = DateTime.now();
-    final progress = ReaderProgress(
-      readerItemId: itemId,
-      charOffset: charOffset,
-      progressPercent: progressPercent,
-      readingMode: readingMode,
-      updatedAt: now,
-    );
-
-    // 1. 本地写入（始终成功）
-    await _localStorage.saveProgress(progress);
-
-    // 2. 入队同步（异步，不阻塞）
-    await ReaderSyncQueue.enqueueProgress(
-      itemId: itemId,
-      charOffset: charOffset,
-      progressPercent: progressPercent,
-      readingMode: readingMode,
-    );
-  }
-
-  /// 加载阅读进度（本地优先，服务端对比取最新）
-  Future<ReaderProgress?> loadProgress(String itemId) async {
-    return _localStorage.loadProgress(itemId);
-  }
 
   // ── 书签 ──
 

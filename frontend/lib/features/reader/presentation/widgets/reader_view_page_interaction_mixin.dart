@@ -26,13 +26,15 @@ mixin ReaderViewPageInteractionMixin
     final max = scrollController.position.maxScrollExtent;
     if (max <= 0) return;
 
-    if (restore.shouldSuppressWrites ||
-        isRestoringProgress ||
-        isSwitchingChapter) {
+    // 主动恢复期（落点还在被 jumpTo 搬动）读数整体不可信；监控期与静默窗只是
+    // "此刻的写入不可靠"，位置追踪、邻章预取与章末续读必须照常——否则用户在这
+    // 5 秒里的回读既不进 tracker 也不推进度，退出时只能落在更早的读数上。
+    if (restore.isActive || isRestoringProgress || isSwitchingChapter) {
       return;
     }
-
-    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
+    final persistAllowed =
+        !restore.shouldSuppressWrites &&
+        !DateTime.now().isBefore(restoreSilenceUntil);
 
     // 指针驱动的滚动才写进度：长按住滚动、惯性滚动与程序滚动不代表用户
     // 停留在该位置。此判据只限制持久化，不得跳过位置追踪、邻章预取与
@@ -92,7 +94,7 @@ mixin ReaderViewPageInteractionMixin
     if ((newProgress - scrollProgress).abs() > 0.001) {
       // 热路径：只更新通知器（UI 消费者局部重建），不再 setState 整页。
       scrollProgress = newProgress;
-      if (pointerDriven) {
+      if (persistAllowed && pointerDriven) {
         if (kDebugMode) {
           readerDebugLog(
             'onScroll SAVE: $scrollProgress -> $newProgress, '
@@ -145,7 +147,8 @@ mixin ReaderViewPageInteractionMixin
   void handleBackwardChapterOverscroll() {
     if (!mounted || contentLoader == null) return;
     if (isLoadingChapter || isSwitchingChapter || isRestoringProgress) return;
-    if (restore.shouldSuppressWrites) return;
+    // 只在落点仍在被搬动时让位；监控期用户的越界意图是真实操作，不该被吞掉。
+    if (restore.isActive) return;
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
     if (_programmaticScrollSettleUntil != null &&
         DateTime.now().isBefore(_programmaticScrollSettleUntil!)) {
@@ -173,6 +176,9 @@ mixin ReaderViewPageInteractionMixin
     isRestoringProgress = false;
     pendingChapterProgress = null;
     pendingRestoreCharOffset = null;
+    // cancel() 不触发 onSettled，而 onSettled 是另一处唯一清零点；残留目标会让
+    // 之后的非指针读数被按"旧目标的一半"当成偏离丢弃。
+    restoreTargetCharOffset = 0;
     if (mounted) {
       setState(() {});
     }
@@ -376,7 +382,15 @@ mixin ReaderViewPageInteractionMixin
   /// 重新分页当前章节。
   void repaginateCurrentChapter({required int restoreCharOffset}) {
     final chapterData = contentLoader?.get(currentChapterId, settings);
-    if (chapterData == null) return;
+    if (chapterData == null) {
+      // 数据缺席时不能只 return：调用方已经置好切换相位，页模式下没有别的入口
+      // 会再安排一次落位，挂着不放的标志会持续吞掉后续回调。
+      modeSwitchInProgress = false;
+      modeSwitchAnchor = null;
+      isRestoringProgress = false;
+      pendingRestoreCharOffset = null;
+      return;
+    }
 
     if (isPageMode) {
       chapterData.invalidatePageNavigator();

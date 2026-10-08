@@ -63,6 +63,10 @@ void main() {
     expect(settled.last, isTrue);
     expect(jumps, isEmpty, reason: '落位后不得因 max 微增再次跳转');
     expect(restore.isActive, isFalse, reason: 'settle 后进入监控期');
+    // 监控期两标记必须分道：isActive 转 false 表示不再搬动落点，
+    // shouldSuppressWrites 仍为 true 表示写入仍未稳定。滚动侧闸门靠这一对
+    // 区分"整体早退"与"只抑制持久化"，两者同真同假就会把追踪一起停掉。
+    expect(restore.shouldSuppressWrites, isTrue, reason: '监控期内仍不该落盘');
   });
 
   testWidgets('监控期内 max 增长把落点带出容差时才重新激活', (tester) async {
