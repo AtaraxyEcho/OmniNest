@@ -27,6 +27,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_annotation_
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_skeleton.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_image_budget_notice.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_backup.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tts_controls.dart';
@@ -178,6 +179,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   ReaderViewSettings _settings = ReaderViewSettings();
   late String _currentChapterId = widget.chapterId;
   ReaderChapterContent? _cachedContent;
+  // 图片降级提示的关闭状态只属于当前这一章：切章后必须重新出现，
+  // 否则一次关闭会把后续章节的缺图数一起静音。
+  String? _dismissedImageBudgetChapterId;
   bool _showControls = false;
   bool _showTts = false;
   bool _isHoveringControls = false; // Web 端鼠标是否悬停在控件栏上

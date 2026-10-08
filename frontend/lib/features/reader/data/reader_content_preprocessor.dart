@@ -38,25 +38,33 @@ class ReaderContentPreprocessor {
   /// 提取 `<body>` 内容，将图片保存到磁盘缓存，
   /// HTML 中用占位符替代 base64 data URI。
   /// 返回的 HTML 可安全存入 SQLite（体积小）。
-  static Future<String> preprocessForStorage({
+  ///
+  /// `droppedImageCount` 是本章因超出数量或容量上限而未落盘的图片数：
+  /// 渲染端每张降级图只有自己占位错误，读者看不出"少了 N 张"，需要这个总数做集中提示。
+  static Future<ReaderPreprocessedContent> preprocessForStorage({
     required String itemId,
     required String xhtml,
     Archive? archive,
     Uint8List? archiveBytes,
     String? contentPath,
   }) async {
-    if (xhtml.trim().isEmpty) return xhtml;
+    if (xhtml.trim().isEmpty) {
+      return ReaderPreprocessedContent(html: xhtml, droppedImageCount: 0);
+    }
 
     var body = _extractBody(xhtml);
+    var droppedImageCount = 0;
 
     if (contentPath != null) {
       if (archive != null) {
         // 图片提取失败不得让整章不可读：保留原始 src，渲染端会对无法加载的图片
         // 单独显示错误与重试，而不是把章节判死。
-        body = await _guardedExtract(
+        final extracted = await _guardedExtract(
           body,
           () => _extractImagesToDisk(body, itemId, archive, contentPath),
         );
+        body = extracted.html;
+        droppedImageCount = extracted.droppedImageCount;
       } else if (archiveBytes != null) {
         try {
           // 整包解压可能处理数十 MB 归档，原生平台放到 isolate 执行；
@@ -69,7 +77,14 @@ class ReaderContentPreprocessor {
           } else {
             decoded = await compute(_decodeArchiveJob, archiveBytes);
           }
-          body = await _extractImagesToDisk(body, itemId, decoded, contentPath);
+          final extracted = await _extractImagesToDisk(
+            body,
+            itemId,
+            decoded,
+            contentPath,
+          );
+          body = extracted.html;
+          droppedImageCount = extracted.droppedImageCount;
         } on FormatException {
           rethrow;
         } catch (e) {
@@ -86,13 +101,19 @@ class ReaderContentPreprocessor {
         '${body.length} chars',
       );
     }
-    return body;
+    return ReaderPreprocessedContent(
+      html: body,
+      droppedImageCount: droppedImageCount,
+    );
   }
 
   /// 图片提取的兜底：任何意外都退化为"不替换占位符"，章节正文仍然可读。
-  static Future<String> _guardedExtract(
+  ///
+  /// 退化时返回的是未替换的原始正文，此前计数对应的占位符并不在其中，
+  /// 因此降级计数必须归零，否则提示会报出读者看不到的缺图数。
+  static Future<ReaderPreprocessedContent> _guardedExtract(
     String body,
-    Future<String> Function() extract,
+    Future<ReaderPreprocessedContent> Function() extract,
   ) async {
     try {
       return await extract();
@@ -100,7 +121,7 @@ class ReaderContentPreprocessor {
       if (kDebugMode) {
         readerDebugLog('Preprocessor: image extraction degraded: $e');
       }
-      return body;
+      return ReaderPreprocessedContent(html: body, droppedImageCount: 0);
     }
   }
 
@@ -109,7 +130,7 @@ class ReaderContentPreprocessor {
   /// 图片按顺序解压并写入磁盘，避免同一章节的图片同时驻留内存。
   /// 超出数量或容量上限的图片**降级**为"不加载"（HTML 保留占位符但不落盘），
   /// 渲染端会对该图单独显示错误与重试；旧实现直接抛异常让整章不可读且重试必败。
-  static Future<String> _extractImagesToDisk(
+  static Future<ReaderPreprocessedContent> _extractImagesToDisk(
     String html,
     String itemId,
     Archive archive,
@@ -224,7 +245,10 @@ class ReaderContentPreprocessor {
         '${droppedCount > 0 ? ', dropped $droppedCount over limits' : ''}',
       );
     }
-    return result;
+    return ReaderPreprocessedContent(
+      html: result,
+      droppedImageCount: droppedCount,
+    );
   }
 
   /// 图片是否仍在单章数量、单图与单章总容量限制内。
@@ -393,6 +417,17 @@ class ReaderContentPreprocessor {
     }
     return content;
   }
+}
+
+/// 预处理结果：可入库的正文与本章未落盘的图片数。
+class ReaderPreprocessedContent {
+  const ReaderPreprocessedContent({
+    required this.html,
+    required this.droppedImageCount,
+  });
+
+  final String html;
+  final int droppedImageCount;
 }
 
 class _InlineImage {

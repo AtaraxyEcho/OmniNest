@@ -2558,6 +2558,18 @@
       }
     }
   },
+  "readerImagesNotLoaded": "{count} images not loaded",
+  "@readerImagesNotLoaded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerImagesNotLoadedHint": "This chapter exceeded the per-chapter image budget; the text is unaffected",
+  "@readerImagesNotLoadedHint": {
+    "description": "图片降级提示的辅助说明；只说明范围，不承诺可恢复"
+  },
   "readerReadingProgress": "Reading progress {percent}%",
   "@readerReadingProgress": {
     "placeholders": {

@@ -65,6 +65,28 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             ),
           ),
         ),
+        // 本章图片降级计数提示：控制栏展开时让位，关闭后只在本章内静音。
+        if (!_showControls &&
+            _dismissedImageBudgetChapterId != _currentChapterId &&
+            shouldShowImageBudgetNotice(content.droppedImageCount))
+          Positioned(
+            top: MediaQuery.viewPaddingOf(context).top + 8,
+            left: offset,
+            right: offset,
+            child: ReaderImageBudgetNotice(
+              count: content.droppedImageCount ?? 0,
+              settings: _settings,
+              label: AppLocalizations.of(
+                context,
+              ).readerImagesNotLoaded(content.droppedImageCount!),
+              hint: AppLocalizations.of(context).readerImagesNotLoadedHint,
+              dismissTooltip: AppLocalizations.of(context).coreClose,
+              onDismiss:
+                  () => _updateState(
+                    () => _dismissedImageBudgetChapterId = _currentChapterId,
+                  ),
+            ),
+          ),
         // 进度恢复加载遮罩：定位完成后自动消失
         // 内容未加载时 skeleton 已有加载指示器，不重复显示
         if (_isRestoringProgress && _cachedContent != null)

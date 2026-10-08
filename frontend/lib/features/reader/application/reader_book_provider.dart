@@ -586,23 +586,28 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
     if (xhtml == null) return null;
 
     final String storageHtml;
+    final int droppedImageCount;
     if (!useArchive) {
-      storageHtml = await ReaderContentPreprocessor.preprocessForStorage(
+      final preprocessed = await ReaderContentPreprocessor.preprocessForStorage(
         itemId: itemId,
         xhtml: xhtml,
       );
+      storageHtml = preprocessed.html;
+      droppedImageCount = preprocessed.droppedImageCount;
     } else {
       // 优先使用 EpubParserService 已解压的 Archive（避免重复解压）；
       // Web 没有共享归档时退回整包字节解析。
       final sharedArchive = epubService!.cachedArchive;
       final source = await ref.read(cachedBookHandleProvider(itemId).future);
-      storageHtml = await ReaderContentPreprocessor.preprocessForStorage(
+      final preprocessed = await ReaderContentPreprocessor.preprocessForStorage(
         itemId: itemId,
         xhtml: xhtml,
         archive: sharedArchive,
         archiveBytes: sharedArchive == null ? source.memoryBytes : null,
         contentPath: contentPath,
       );
+      storageHtml = preprocessed.html;
+      droppedImageCount = preprocessed.droppedImageCount;
     }
 
     // SQLite 只存"体积小"的占位符 HTML。图片提取失败时正文可能仍带着
@@ -646,6 +651,7 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
       title: matched.title,
       content: storageHtml,
       wordCount: matched.charCount > 0 ? matched.charCount : storageHtml.length,
+      droppedImageCount: droppedImageCount,
     );
     _rememberChapterContent(memoryKey, ready);
     return ready;

@@ -5909,6 +5909,14 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String readerImagesNotLoaded(int count) {
+    return '$count 张图片未加载';
+  }
+
+  @override
+  String get readerImagesNotLoadedHint => '本章图片超出单章容量上限，正文不受影响';
+
+  @override
   String readerReadingProgress(int percent) {
     return '阅读进度 $percent%';
   }

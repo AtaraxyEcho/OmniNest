@@ -2432,6 +2432,18 @@
       }
     }
   },
+  "readerImagesNotLoaded": "{count} 张图片未加载",
+  "@readerImagesNotLoaded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerImagesNotLoadedHint": "本章图片超出单章容量上限，正文不受影响",
+  "@readerImagesNotLoadedHint": {
+    "description": "图片降级提示的辅助说明；只说明范围，不承诺可恢复"
+  },
   "readerReadingProgress": "阅读进度 {percent}%",
   "@readerReadingProgress": {
     "placeholders": {

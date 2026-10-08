@@ -6101,6 +6101,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String readerImagesNotLoaded(int count) {
+    return '$count images not loaded';
+  }
+
+  @override
+  String get readerImagesNotLoadedHint =>
+      'This chapter exceeded the per-chapter image budget; the text is unaffected';
+
+  @override
   String readerReadingProgress(int percent) {
     return 'Reading progress $percent%';
   }

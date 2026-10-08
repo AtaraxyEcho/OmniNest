@@ -54,11 +54,18 @@ class ReaderChapterContent {
     required this.title,
     required this.content,
     this.wordCount = 0,
+    this.droppedImageCount,
   });
 
   final String title;
   final String content;
   final int wordCount;
+
+  /// 本章因超出数量或容量上限而未加载的图片数；null 表示本次读取无法得知。
+  ///
+  /// 只有当章重新执行过图片预处理才有值：SQLite 命中时预处理不会重跑，
+  /// 该章的缺图数没有可靠来源，此时按 null 处理而不是显示旧的计数。
+  final int? droppedImageCount;
 
   /// 从 ParsedChapter 创建兼容实例
   factory ReaderChapterContent.fromParsed(dynamic parsed) {

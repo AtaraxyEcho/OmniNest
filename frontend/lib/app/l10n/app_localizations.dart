@@ -11219,6 +11219,18 @@ abstract class AppLocalizations {
   /// **'{count} matches'**
   String readerSearchResultCount(int count);
 
+  /// No description provided for @readerImagesNotLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} images not loaded'**
+  String readerImagesNotLoaded(int count);
+
+  /// 图片降级提示的辅助说明；只说明范围，不承诺可恢复
+  ///
+  /// In en, this message translates to:
+  /// **'This chapter exceeded the per-chapter image budget; the text is unaffected'**
+  String get readerImagesNotLoadedHint;
+
   /// No description provided for @readerReadingProgress.
   ///
   /// In en, this message translates to:
