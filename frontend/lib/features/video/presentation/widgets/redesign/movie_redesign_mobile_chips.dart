@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
 
@@ -43,24 +43,28 @@ class MovieRedesignMobileChips extends StatelessWidget {
             child: Row(
               children: [
                 _chip(
+                  env: context.env,
                   label: l10n.videoMobileSortRecent,
                   selected: sortBy == MovieSortBy.dateAdded,
                   onTap: () => onSortBy(MovieSortBy.dateAdded),
                 ),
                 const SizedBox(width: 7),
                 _chip(
+                  env: context.env,
                   label: l10n.videoRating,
                   selected: sortBy == MovieSortBy.rating,
                   onTap: () => onSortBy(MovieSortBy.rating),
                 ),
                 const SizedBox(width: 7),
                 _chip(
+                  env: context.env,
                   label: l10n.videoYear,
                   selected: sortBy == MovieSortBy.releaseDate,
                   onTap: () => onSortBy(MovieSortBy.releaseDate),
                 ),
                 const SizedBox(width: 7),
                 _chip(
+                  env: context.env,
                   label: l10n.videoSectionFavorites,
                   selected: favoritesOnly,
                   onTap: () => onFavoritesOnly(!favoritesOnly),
@@ -76,6 +80,7 @@ class MovieRedesignMobileChips extends StatelessWidget {
   }
 
   Widget _chip({
+    required MobileEnvPalette env,
     required String label,
     required bool selected,
     required VoidCallback onTap,
@@ -84,17 +89,14 @@ class MovieRedesignMobileChips extends StatelessWidget {
     // 选中态换成酸绿 10% 底 + 38% 描边 + ink 前景。
     // 行高取 38 与同排的筛选钮对齐：样例 32 的命中区落在次级控件
     // 35-45 档之下，扩命中必然撑行，故按行高档落地。
-    final accent = MobileEnvColors.accent;
+    final accent = env.accentInk;
     return Material(
       color:
           selected ? accent.withValues(alpha: 0.10) : const Color(0x0DFFFFFF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(11),
         side: BorderSide(
-          color:
-              selected
-                  ? accent.withValues(alpha: 0.38)
-                  : MobileEnvColors.line09,
+          color: selected ? accent.withValues(alpha: 0.38) : env.line09,
         ),
       ),
       child: InkWell(
@@ -112,7 +114,7 @@ class MovieRedesignMobileChips extends StatelessWidget {
               fontSize: 9, // ignore: font_size_whitelist
               height: 1.2,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? MobileEnvColors.ink : MobileEnvColors.inkMuted,
+              color: selected ? env.ink : env.inkMuted,
             ),
           ),
         ),
@@ -142,7 +144,7 @@ class _StatusFilterEntry extends StatelessWidget {
           child: Icon(
             Icons.tune_rounded,
             size: 18,
-            color: active ? MobileEnvColors.ink : MobileEnvColors.inkMuted,
+            color: active ? context.env.ink : context.env.inkMuted,
           ),
         ),
       ),
@@ -202,7 +204,7 @@ class _StatusFilterSheet extends StatelessWidget {
         child: ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: ColoredBox(
-            color: MobileEnvColors.sheetSolid,
+            color: context.env.sheetSolid,
             child: SafeArea(
               top: false,
               child: Column(
@@ -215,7 +217,7 @@ class _StatusFilterSheet extends StatelessWidget {
                       width: 36,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: MobileEnvColors.line15,
+                        color: context.env.line15,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -224,10 +226,10 @@ class _StatusFilterSheet extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
                     child: Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13, // ignore: font_size_whitelist
                         fontWeight: FontWeight.w700,
-                        color: MobileEnvColors.ink,
+                        color: context.env.ink,
                       ),
                     ),
                   ),
@@ -268,8 +270,8 @@ class _StatusFilterOptionRow extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Row(
           children: [
@@ -279,17 +281,12 @@ class _StatusFilterOptionRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12, // ignore: font_size_whitelist
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color:
-                      selected ? MobileEnvColors.ink : MobileEnvColors.inkMuted,
+                  color: selected ? context.env.ink : context.env.inkMuted,
                 ),
               ),
             ),
             if (selected)
-              const Icon(
-                Icons.check_rounded,
-                size: 18,
-                color: MobileEnvColors.accent,
-              ),
+              Icon(Icons.check_rounded, size: 18, color: context.env.accent),
           ],
         ),
       ),
@@ -352,11 +349,10 @@ class MovieMobileCinemaHero extends StatelessWidget {
               Image.network(
                 posterUrl!,
                 fit: BoxFit.cover,
-                errorBuilder:
-                    (_, _, _) => const ColoredBox(color: MobileEnvColors.stage),
+                errorBuilder: (_, _, _) => ColoredBox(color: context.env.stage),
               )
             else
-              const ColoredBox(color: MobileEnvColors.stage),
+              ColoredBox(color: context.env.stage),
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -383,7 +379,11 @@ class MovieMobileCinemaHero extends StatelessWidget {
                   ),
                   child: Text(
                     badgeText!,
-                    style: _heroMonoStyle(size: 8, weight: FontWeight.w800),
+                    style: _heroMonoStyle(
+                      env: context.env,
+                      size: 8,
+                      weight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -396,6 +396,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                   Text(
                     eyebrow,
                     style: _heroMonoStyle(
+                      env: context.env,
                       size: 9,
                       color: const Color(0xA1FFFFFF),
                     ),
@@ -405,7 +406,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: _heroTitleStyle(),
+                    style: _heroTitleStyle(context.env),
                   ),
                   const SizedBox(height: 6),
                   if (metaLine != null && metaLine!.isNotEmpty)
@@ -413,7 +414,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                       metaLine!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _heroMetaStyle,
+                      style: _heroMetaStyle(context.env),
                     ),
                   const SizedBox(height: 15),
                   Row(
@@ -444,8 +445,9 @@ class MovieMobileCinemaHero extends StatelessWidget {
 
 /// hero 等宽眉标/徽标（样例 mono 9/8，字重 700/800）。
 TextStyle _heroMonoStyle({
+  required MobileEnvPalette env,
   required double size,
-  Color color = MobileEnvColors.ink,
+  Color? color,
   FontWeight weight = FontWeight.w700,
 }) {
   return TextStyle(
@@ -455,30 +457,32 @@ TextStyle _heroMonoStyle({
     letterSpacing: 1.5,
     height: 1.2,
     fontWeight: weight,
-    color: color,
+    color: color ?? env.ink,
   );
 }
 
 /// hero 标题：Instrument Serif 35，样例 cinema-info h2。
-TextStyle _heroTitleStyle() {
-  return const TextStyle(
+TextStyle _heroTitleStyle(MobileEnvPalette env) {
+  return TextStyle(
     fontFamily: AppTypography.serifFamily,
     fontFamilyFallback: AppTypography.serifFamilyFallback,
     // ignore: font_size_whitelist
     fontSize: 35,
     height: 1.05,
     fontWeight: FontWeight.w400,
-    color: MobileEnvColors.ink,
+    color: env.ink,
   );
 }
 
 /// hero 元数据行：白 70%，题图上比 inkMuted 更贴样例。
-const TextStyle _heroMetaStyle = TextStyle(
-  // ignore: font_size_whitelist
-  fontSize: 11,
-  height: 1.4,
-  color: MobileEnvColors.white70,
-);
+TextStyle _heroMetaStyle(MobileEnvPalette env) {
+  return TextStyle(
+    // ignore: font_size_whitelist
+    fontSize: 11,
+    height: 1.4,
+    color: env.white70,
+  );
+}
 
 /// hero 动作钮：主钮米白实底深字（样例 .btn-primary），次钮深玻璃描边。
 class _HeroButton extends StatelessWidget {
@@ -496,10 +500,13 @@ class _HeroButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground =
-        filled ? MobileEnvColors.onButtonInk : MobileEnvColors.ink;
+    final foreground = filled ? context.env.onButtonInk : context.env.ink;
     return Material(
-      color: filled ? MobileEnvColors.buttonInk : const Color(0x8C121817),
+      color:
+          filled
+              ? context.env.buttonInk
+              // 次钮压在海报图上，深玻璃与白描边由图提供对比，两极性同值。
+              : const Color(0x8C121817),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: BorderSide(
