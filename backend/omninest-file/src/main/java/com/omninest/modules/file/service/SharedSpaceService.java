@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
@@ -161,7 +162,9 @@ public class SharedSpaceService {
         node.setName(newName);
         node.setNormalizedPath(newPath);
         // 分页收集后代节点，避免共享空间大文件量时整体加载到内存。
-        String prefix = oldPath + "/";
+        // 该前缀驱动共享空间改名的子树重写：只给 LIKE 用转义形式，
+        // 路径改写仍用原始 oldPath.length() 定位，不能让反斜杠进 substring。
+        String prefix = LikePatterns.escapeSpecials(oldPath + "/");
         int pageNumber = 0;
         final int batchSize = 500;
         Page<FileNode> page;
@@ -323,7 +326,8 @@ public class SharedSpaceService {
             return node.getSizeBytes();
         }
         List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                node.getOwnerUserId(), node.getNormalizedPath() + "/");
+                node.getOwnerUserId(),
+                LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"));
         long total = 0;
         for (FileNode descendant : descendants) {
             if (NodeType.FILE.getValue().equals(descendant.getNodeType())) {

@@ -229,7 +229,7 @@ public class FileDeletionService {
         fileNodeRepository.save(root);
         fileNodeRepository.assignDeletedDescendantsToPurge(
                 ownerUserId,
-                purgeSubtreePrefix(root),
+                subtreePrefix(root),
                 taskId,
                 FilePurgeState.QUEUED,
                 requestedAt
@@ -316,7 +316,7 @@ public class FileDeletionService {
         fileNodeRepository.saveAll(roots);
         roots.forEach(root -> fileNodeRepository.assignDeletedDescendantsToPurge(
                 ownerUserId,
-                purgeSubtreePrefix(root),
+                subtreePrefix(root),
                 taskId,
                 FilePurgeState.QUEUED,
                 requestedAt
@@ -389,7 +389,7 @@ public class FileDeletionService {
             do {
                 page = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
                         ownerUserId,
-                        root.getNormalizedPath() + "/",
+                        subtreePrefix(root),
                         PageRequest.of(pageNumber, LIFECYCLE_BATCH_SIZE)
                 );
                 accumulateImpactBatch(
@@ -478,11 +478,12 @@ public class FileDeletionService {
     /**
      * 构造子树前缀的 LIKE 字面量。
      *
-     * <p>前缀来自真实目录名，而消费方是把后代挂到本次清理任务的批量更新：目录名里的
-     * {@code _} 或 {@code %} 若按通配符解释，兄弟目录的已删除文件会被同一 {@code taskId}
-     * 认领并物理清除。配套查询必须声明 {@code escape '\'}。</p>
+     * <p>前缀来自真实目录名，消费方有两条批量更新与一条影响面预估：把后代挂到本次清理任务的
+     * 更新、按子树统计业务引用的分页读取。目录名里的 {@code _} 或 {@code %} 若按通配符解释，
+     * 兄弟目录的已删除文件会被同一 {@code taskId} 认领并物理清除。配套查询必须声明
+     * {@code escape '\'}。</p>
      */
-    private String purgeSubtreePrefix(FileNode root) {
+    private String subtreePrefix(FileNode root) {
         return LikePatterns.escapeSpecials(root.getNormalizedPath() + "/");
     }
 

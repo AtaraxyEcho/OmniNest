@@ -4,6 +4,7 @@ import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.ShareLink;
@@ -327,7 +328,8 @@ public class FileShareAccessService {
 
         List<FileNode> descendants = fileNodeRepository
                 .findDescendantsByPrefixOrdered(
-                        sourceFolder.getOwnerUserId(), sourceFolder.getNormalizedPath() + "/");
+                        sourceFolder.getOwnerUserId(),
+                        LikePatterns.escapeSpecials(sourceFolder.getNormalizedPath() + "/"));
 
         Map<String, FileNode> pathToNewNode = new LinkedHashMap<>();
         pathToNewNode.put(sourceFolder.getNormalizedPath(), savedFolder);

@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
@@ -133,7 +134,9 @@ public class FileMetadataQueryService {
      */
     @Transactional(readOnly = true)
     public List<FileDescriptor> listOwnedActiveByPathPrefix(UUID ownerUserId, String prefix) {
-        return fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(ownerUserId, prefix)
+        // 入参是字面量路径前缀（跨模块调用方不预先转义），转义只发生在这里一次。
+        return fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+                ownerUserId, LikePatterns.escapeSpecials(prefix))
                 .stream().map(this::toDescriptor).toList();
     }
 

@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileContentRef;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.SpaceType;
@@ -241,7 +242,9 @@ public class LocalMediaIndexService {
             String sourceRoot,
             Set<String> seenPaths
     ) {
-        String prefix = ".".equals(sourceRoot) ? "" : sourceRoot + "/";
+        // 扫描目录名里的 _ 或 % 必须按字面量匹配，否则相邻目录会被当成本子树。
+        String prefix = LikePatterns.escapeSpecials(
+                ".".equals(sourceRoot) ? "" : sourceRoot + "/");
         List<UUID> missingIds = contentRefRepository
                 .findByOwnerUserIdAndStorageLocationIdAndRelativePathStartingWith(
                         ownerUserId,

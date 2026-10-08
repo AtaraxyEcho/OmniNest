@@ -6,11 +6,13 @@ import static org.mockito.Mockito.mock;
 import com.omninest.OmniNestApplication;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.util.LikePatterns;
+import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.service.LocalMediaAvailabilityService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -232,6 +236,44 @@ class LocalMediaAvailabilitySweepIT {
         ));
         assertThat(unescaped).isEqualTo(2);
         assertThat(purgeTaskOf(bystander)).isEqualTo(taskId);
+    }
+
+    @Test
+    @DisplayName("读侧子树查询同样按字面量匹配，且分页查询保留按 id 排序")
+    void subtreeReadFindersKeepLiteralSemantics() {
+        UUID owner = UUID.randomUUID();
+        UUID inSubtree = insertActiveNode(owner, "S01_E01/a.mkv");
+        UUID sibling = insertActiveNode(owner, "S01XE01/b.mkv");
+
+        List<FileNode> listed = fileNodeRepository
+                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+                        owner, LikePatterns.escapeSpecials("/S01_E01/"));
+        assertThat(listed).singleElement().satisfies(node -> {
+            assertThat(node.getId()).isEqualTo(inSubtree);
+            assertThat(node.getNormalizedPath()).isEqualTo("/S01_E01/a.mkv");
+        });
+
+        // 这两个方法原本是 derived finder，改为显式查询后排序必须仍来自查询本身：
+        // 调用方传的是不带 Sort 的 PageRequest。
+        Page<FileNode> paged = fileNodeRepository
+                .findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
+                        owner, LikePatterns.escapeSpecials("/S01_E01/"), PageRequest.of(0, 10));
+        assertThat(paged.getContent()).singleElement()
+                .satisfies(node -> assertThat(node.getId()).isEqualTo(inSubtree));
+        assertThat(sibling).isNotNull();
+    }
+
+    private UUID insertActiveNode(UUID ownerUserId, String relativePath) {
+        UUID nodeId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path) "
+                        + "values (?, ?, 'FILE', ?, ?)",
+                nodeId,
+                ownerUserId,
+                relativePath.substring(relativePath.lastIndexOf('/') + 1),
+                "/" + relativePath
+        );
+        return nodeId;
     }
 
     private UUID insertDeletedNode(UUID ownerUserId, String normalizedPath) {

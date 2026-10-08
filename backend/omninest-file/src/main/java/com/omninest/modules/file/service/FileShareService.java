@@ -4,6 +4,7 @@ import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.user.UserAccountQuery;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FileShareRecipient;
@@ -303,7 +304,8 @@ public class FileShareService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅支持文件夹级联共享");
         }
         List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(ownerUserId, folder.getNormalizedPath());
+                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+                        ownerUserId, LikePatterns.escapeSpecials(folder.getNormalizedPath()));
         Instant now = Instant.now();
         for (FileNode node : descendants) {
             node.setShared(shared);

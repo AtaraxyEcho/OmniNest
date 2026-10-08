@@ -6,6 +6,7 @@ import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.config.FileTransferLimitsProperties;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
@@ -752,7 +753,8 @@ public class DerivedAssetStorageService {
      */
     @Transactional(readOnly = true)
     public List<DerivedNodeRef> listDerivedNodeRefs(UUID ownerUserId, String resourceType) {
-        String prefix = "/.metadata/" + segment(resourceType) + "/";
+        // segment() 规范化时会把非法字符写成下划线（READER_ITEM 这类），下划线是字面量不是通配符。
+        String prefix = LikePatterns.escapeSpecials("/.metadata/" + segment(resourceType) + "/");
         return fileNodeRepository
                 .findByOwnerUserIdAndSourceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                         ownerUserId, SOURCE_TYPE_DERIVED, prefix)
@@ -769,7 +771,8 @@ public class DerivedAssetStorageService {
      */
     @Transactional(readOnly = true)
     public List<UUID> listOwnerIdsByDerivedPathPrefix(String resourceType) {
-        String prefix = "/.metadata/" + segment(resourceType) + "/";
+        // segment() 规范化时会把非法字符写成下划线（READER_ITEM 这类），下划线是字面量不是通配符。
+        String prefix = LikePatterns.escapeSpecials("/.metadata/" + segment(resourceType) + "/");
         return fileNodeRepository.findOwnerIdsBySourceTypeAndNormalizedPathPrefix(
                 SOURCE_TYPE_DERIVED, prefix);
     }

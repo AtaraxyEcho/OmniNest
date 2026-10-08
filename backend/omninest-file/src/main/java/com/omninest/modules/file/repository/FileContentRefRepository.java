@@ -60,10 +60,27 @@ public interface FileContentRefRepository extends JpaRepository<FileContentRef, 
      * @param relativePathPrefix 相对路径前缀
      * @return 内容引用列表
      */
+    /**
+     * 查询来源目录下的全部内容引用。
+     *
+     * <p>由 derived 方法改为显式查询：派生属性的 {@code StartingWith} 生成的 LIKE 挂不上
+     * ESCAPE 子句，与本仓储其余缺失推进查询不同口径，同一次扫描会按两种语义解释同一前缀。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param storageLocationId 存储位置 ID
+     * @param relativePathPrefix 已转义的相对路径前缀
+     * @return 内容引用列表
+     */
+    @Query("""
+            select ref from FileContentRef ref
+             where ref.ownerUserId = :ownerUserId
+               and ref.storageLocationId = :storageLocationId
+               and ref.relativePath like concat(:relativePathPrefix, '%') escape '\\'
+            """)
     List<FileContentRef> findByOwnerUserIdAndStorageLocationIdAndRelativePathStartingWith(
-            UUID ownerUserId,
-            UUID storageLocationId,
-            String relativePathPrefix
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("storageLocationId") UUID storageLocationId,
+            @Param("relativePathPrefix") String relativePathPrefix
     );
 
     /**

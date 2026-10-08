@@ -62,7 +62,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
               AND n.nodeType = 'FILE'
               AND n.category = :category
               AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
-              AND n.normalizedPath LIKE concat(:pathPrefix, '%')
+              AND n.normalizedPath LIKE concat(:pathPrefix, '%') escape '\\'
             """)
     Page<FileNode> findVisibleSubtreeCategoryPage(
             @Param("ownerUserId") UUID ownerUserId,
@@ -94,35 +94,68 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
 
     List<FileNode> findByOwnerUserIdAndDeletedTrueOrderByDeletedAtDesc(UUID ownerUserId);
 
-    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(UUID ownerUserId, String prefix);
+    /**
+     * 按路径前缀读取活动节点。前缀是真实目录名的字面量，调用方必须转义，本查询声明 {@code escape '\'}。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param prefix 已转义的路径前缀
+     * @return 活动节点列表
+     */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
+    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("prefix") String prefix
+    );
 
-    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(UUID ownerUserId, String prefix);
+    /**
+     * 按路径前缀读取已软删除节点，口径同上。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param prefix 已转义的路径前缀
+     * @return 已软删除节点列表
+     */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
+    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("prefix") String prefix
+    );
 
     /**
      * 分页读取指定路径下的全部节点。
      *
+     * <p>由 derived 方法改为显式查询：派生属性的 {@code StartingWith} 生成的 LIKE 挂不上
+     * ESCAPE 子句；排序保留在查询里，因为部分调用方传的是不带 Sort 的 PageRequest。</p>
+     *
      * @param ownerUserId 所属用户 ID
-     * @param prefix 路径前缀
+     * @param prefix 已转义的路径前缀
      * @param pageable 分页参数
      * @return 文件节点分页
      */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' order by node.id asc")
     Page<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
-            UUID ownerUserId,
-            String prefix,
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("prefix") String prefix,
             Pageable pageable
     );
 
     /**
      * 分页读取共享空间指定路径前缀下的节点。
      *
+     * <p>该查询驱动共享空间改名时的子树路径重写，口径与排序保留同上。</p>
+     *
      * @param spaceType 空间类型
-     * @param prefix 路径前缀
+     * @param prefix 已转义的路径前缀
      * @param pageable 分页参数
      * @return 文件节点分页
      */
+    @Query("select node from FileNode node where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' order by node.id asc")
     Page<FileNode> findBySpaceTypeAndNormalizedPathStartingWithOrderById(
-            SpaceType spaceType,
-            String prefix,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix,
             Pageable pageable
     );
 
@@ -135,7 +168,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
      * @return 节点 ID 切片
      */
     @Query("select node.id from FileNode node where node.ownerUserId = :ownerUserId "
-            + "and node.normalizedPath like concat(:prefix, '%') and node.deleted = true order by node.id")
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true order by node.id")
     Slice<UUID> findDeletedIdsByPathPrefix(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("prefix") String prefix,
@@ -151,7 +184,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
      * @return 节点 ID 切片
      */
     @Query("select node.id from FileNode node where node.ownerUserId = :ownerUserId "
-            + "and node.normalizedPath like concat(:prefix, '%') and node.deleted = false order by node.id")
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false order by node.id")
     Slice<UUID> findActiveIdsByPathPrefix(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("prefix") String prefix,
@@ -176,7 +209,19 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("deletedAt") Instant deletedAt
     );
 
-    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWith(UUID ownerUserId, String prefix);
+    /**
+     * 按路径前缀读取全部节点（含已软删除），口径同上。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param prefix 已转义的路径前缀
+     * @return 节点列表
+     */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\'")
+    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWith(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("prefix") String prefix
+    );
 
     Optional<FileNode> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
@@ -243,15 +288,33 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             """)
     Optional<FileNode> findActivePath(@Param("ownerUserId") UUID ownerUserId, @Param("path") String path);
 
+    /**
+     * 按来源类型与路径前缀读取活动节点，口径同上。
+     *
+     * <p>派生资产前缀里的下划线是 {@code segment()} 规范化出来的（如
+     * {@code /.metadata/READER_ITEM/}），不是通配符意图。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param sourceType 来源类型编码
+     * @param normalizedPathPrefix 已转义的路径前缀
+     * @return 节点列表
+     */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.sourceType = :sourceType "
+            + "and node.normalizedPath like concat(:normalizedPathPrefix, '%') escape '\\' "
+            + "and node.deleted = false")
     List<FileNode> findByOwnerUserIdAndSourceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-            UUID ownerUserId, String sourceType, String normalizedPathPrefix);
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("sourceType") String sourceType,
+            @Param("normalizedPathPrefix") String normalizedPathPrefix
+    );
 
     @Query("""
             select distinct node.ownerUserId
             from FileNode node
             where node.sourceType = :sourceType
               and node.deleted = false
-              and node.normalizedPath like concat(:normalizedPathPrefix, '%')
+              and node.normalizedPath like concat(:normalizedPathPrefix, '%') escape '\\'
             """)
     List<UUID> findOwnerIdsBySourceTypeAndNormalizedPathPrefix(
             @Param("sourceType") String sourceType,
@@ -450,7 +513,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.ownerUserId = :ownerUserId
-              AND n.normalizedPath LIKE CONCAT(:prefix, '%')
+              AND n.normalizedPath LIKE CONCAT(:prefix, '%') escape '\\'
               AND n.deleted = false
             ORDER BY n.normalizedPath ASC
             """)

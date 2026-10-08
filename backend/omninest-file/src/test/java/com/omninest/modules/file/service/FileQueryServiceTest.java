@@ -350,6 +350,33 @@ class FileQueryServiceTest {
     }
 
     @Test
+    void renameEscapesWildcardsWhenCollectingDescendantsButKeepsPathMathLiteral() {
+        UUID folderId = UUID.fromString("40000000-0000-0000-0000-00000000000a");
+        FileNode folder = node(OWNER_ID, null, "FOLDER", "S01_E01", "/S01_E01");
+        folder.setId(folderId);
+        FileNode child = node(OWNER_ID, folderId, "FILE", "a.txt", "/S01_E01/a.txt");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
+                .thenReturn(Optional.of(folder));
+        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "Archive"))
+                .thenReturn(false);
+        // 前缀进 LIKE 必须带转义；未转义时 /S01XE01/ 这类兄弟目录会被一起改名。
+        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, "/S01\\_E01/"))
+                .thenReturn(List.of(child));
+        when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileQueryService.renameNode(OWNER_ID, folderId, new RenameFileNodeRequest("Archive"));
+
+        verify(fileNodeRepository).findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, "/S01\\_E01/");
+        // 子节点路径重写仍按原始 oldPath 定位，转义串不得进 substring。
+        assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
+    }
+
+    @Test
     void moveNodeRejectsMovingFolderIntoDescendant() {
         UUID folderId = UUID.fromString("40000000-0000-0000-0000-000000000003");
         UUID childFolderId = UUID.fromString("40000000-0000-0000-0000-000000000004");

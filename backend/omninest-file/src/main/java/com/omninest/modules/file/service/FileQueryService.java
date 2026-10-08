@@ -6,6 +6,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FileTypeCategories;
@@ -131,9 +132,30 @@ public class FileQueryService {
         return nodes.map(node -> toDto(node, uploaderNames, covers.get(node.getId())));
     }
 
+    /**
+     * 节点子树前缀的 LIKE 字面量。
+     *
+     * <p>这两个调用点（软删与还原后代）都是"读出来再写回去"：目录名里的 {@code _} 或 {@code %}
+     * 若按通配符解释，兄弟目录的节点会被一起软删或还原。</p>
+     */
+    private String subtreePrefix(FileNode node) {
+        return subtreePrefix(node.getNormalizedPath());
+    }
+
+    /**
+     * 路径前缀的 LIKE 字面量。
+     *
+     * <p>这几个调用点都是"按子树读出来再写回去"：批量软删、批量还原、改名时的子树路径重写，
+     * 以及共享标记。目录名里的下划线或百分号若按通配符解释，兄弟目录的节点会被一起改写。</p>
+     */
+    private String subtreePrefix(String path) {
+        return LikePatterns.escapeSpecials(path + "/");
+    }
+
     private String resolveSubtreePrefix(UUID ownerUserId, UUID parentId) {
         FileNode parent = resolveParent(ownerUserId, parentId);
-        return parent.getNormalizedPath() + "/";
+        // 前缀来自目录名，进 LIKE 前必须按字面量转义（配套查询声明 escape '\'）。
+        return LikePatterns.escapeSpecials(parent.getNormalizedPath() + "/");
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -222,7 +244,7 @@ public class FileQueryService {
         while (true) {
             List<UUID> descendantIds = fileNodeRepository.findActiveIdsByPathPrefix(
                             ownerUserId,
-                            node.getNormalizedPath() + "/",
+                            subtreePrefix(node),
                             PageRequest.of(0, LIFECYCLE_BATCH_SIZE)
                     )
                     .getContent();
@@ -272,7 +294,7 @@ public class FileQueryService {
         markRestored(node);
         List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
                 ownerUserId,
-                node.getNormalizedPath() + "/"
+                subtreePrefix(node)
         );
         descendants.forEach(this::markRestored);
         fileNodeRepository.saveAll(descendants);
@@ -317,7 +339,7 @@ public class FileQueryService {
             allDeletedIds.add(node.getId());
             List<FileNode> descendants = fileNodeRepository
                     .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                            ownerUserId, node.getNormalizedPath() + "/");
+                            ownerUserId, subtreePrefix(node));
             descendants.forEach(d -> markDeleted(d, ownerUserId, deletedAt));
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(allDeletedIds::add);
@@ -367,7 +389,7 @@ public class FileQueryService {
             restoredIds.add(node.getId());
             List<FileNode> descendants = fileNodeRepository
                     .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
-                            ownerUserId, node.getNormalizedPath() + "/");
+                            ownerUserId, subtreePrefix(node));
             descendants.forEach(this::markRestored);
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(restoredIds::add);
@@ -700,7 +722,7 @@ public class FileQueryService {
     private void updateActiveDescendantPaths(UUID ownerUserId, String oldPath, String newPath) {
         List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
                 ownerUserId,
-                oldPath + "/"
+                subtreePrefix(oldPath)
         );
         for (FileNode descendant : descendants) {
             descendant.setNormalizedPath(newPath + descendant.getNormalizedPath().substring(oldPath.length()));
@@ -765,7 +787,7 @@ public class FileQueryService {
         FileNode parent = resolveParent(ownerUserId, parentId);
         return visibleNodes(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
                 ownerUserId,
-                parent.getNormalizedPath() + "/"
+                subtreePrefix(parent)
         ));
     }
 
