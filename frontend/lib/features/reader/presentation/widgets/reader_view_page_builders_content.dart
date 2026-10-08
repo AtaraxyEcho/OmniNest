@@ -291,6 +291,9 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
     _schedulePendingScrollRestore();
 
     final chapterData = contentLoader?.get(currentChapterId, settings);
+    // 滚动模式没有视口变化的触发点，这里顺带核对高度表是否仍属于当前排版；
+    // 方法内部只在过期时安排一次帧末重算，尺寸未变时直接返回。
+    ensureScrollMetricsFresh();
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) {

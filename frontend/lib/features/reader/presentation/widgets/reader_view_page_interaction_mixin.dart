@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -434,6 +435,29 @@ mixin ReaderViewPageInteractionMixin
               ? trackedAnchor
               : (isPageMode ? computePageCharOffset(pageModePage) : 0);
       repaginateCurrentChapter(restoreCharOffset: anchor);
+    });
+  }
+
+  /// 滚动模式下发现高度表不属于当前排版参数时，重算并回到当前锚点。
+  ///
+  /// 页模式有 LayoutBuilder 触发点，滚动模式没有：视口变化后表会长期按旧列宽
+  /// 使用，而该表既决定字符↔像素映射，也决定滚动范围。
+  void ensureScrollMetricsFresh() {
+    if (isPageMode || contentLoader == null) return;
+    final data = contentLoader?.getByChapterId(currentChapterId);
+    if (data == null) return;
+    if (!scrollMetricsStale(
+      tablePageWidth: data.scrollLayoutPageWidth,
+      tableTextScale: data.scrollLayoutTextScale,
+      pageWidth: computePageWidth(),
+      textScale: MediaQuery.textScalerOf(context).scale(1.0),
+    )) {
+      return;
+    }
+    repaginateTimer?.cancel();
+    repaginateTimer = Timer(const Duration(milliseconds: 80), () {
+      if (!mounted || isPageMode) return;
+      repaginateCurrentChapter(restoreCharOffset: positionTracker.charOffset);
     });
   }
 

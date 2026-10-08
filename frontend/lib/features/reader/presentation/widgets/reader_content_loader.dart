@@ -18,6 +18,18 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 double scrollBlockExtraSpacing(ContentBlock block) =>
     block is HeadingBlock ? ReaderContentBlockItem.headingBottomSpacing : 0.0;
 
+/// 滚动模式的高度表是否已不属于当前排版参数。
+///
+/// 未记录过参数（-1）同样算过期：那张表不是在当前列宽下测出来的。
+bool scrollMetricsStale({
+  required double tablePageWidth,
+  required double tableTextScale,
+  required double pageWidth,
+  required double textScale,
+}) {
+  return tablePageWidth != pageWidth || tableTextScale != textScale;
+}
+
 /// 单章分页数据。
 ///
 /// slices 和 cumulativeHeights 为内部状态，

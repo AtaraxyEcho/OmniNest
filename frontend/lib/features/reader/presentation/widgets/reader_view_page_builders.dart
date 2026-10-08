@@ -107,6 +107,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void toggleControls();
   void returnToOriginalProgress();
   void jumpToRemoteProgress();
+  void ensureScrollMetricsFresh();
   void onViewportChanged(Size newSize);
   Future<int?> findPageByCharOffset(ChapterData chapterData, int charOffset);
   Future<void> switchToChapter(
