@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
@@ -52,6 +55,17 @@ bool resolveMobileShell({
   return compact;
 }
 
+/// 推入路由是否继续强制暗色环境基底。
+///
+/// 壁纸在场时维持暗栈：环境可读性的极性由壁纸亮度决定（尚未实现），不跟随明暗设置。
+/// 无壁纸的实底工具面随根主题，消除「壳强制暗、页内随主题」的分裂态。
+bool shouldForceEnvironmentDark({
+  required bool solidSurface,
+  required bool backdropActive,
+}) {
+  return !solidSurface || backdropActive;
+}
+
 /// 根级推入路由的移动形态宿主包装。
 ///
 /// 顶层的模块路由（/notifications 等）在 StatefulShellRoute 之外，天然
@@ -59,13 +73,21 @@ bool resolveMobileShell({
 /// scope，使页面可用 isHosted 分叉移动形态，并让页内工位弹窗经批次化
 /// 分流走底部玻璃面板。桌面宽窗原样透传；测试直接 pump 页面组件时不经
 /// 路由，scope 不存在，桌面路径不受影响。
-class MobileHostedRoute extends StatelessWidget {
-  const MobileHostedRoute({required this.child, super.key});
+class MobileHostedRoute extends ConsumerWidget {
+  const MobileHostedRoute({
+    required this.child,
+    this.solidSurface = false,
+    super.key,
+  });
 
   final Widget child;
 
+  /// 该路由是否为不依赖环境壁纸的实底工具面（工具目录、通知中心）。
+  /// 媒体与阅读模块页保持环境档，不设此标记。
+  final bool solidSurface;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final active = shouldUseResponsiveMobileShell(
       mobilePlatform: isMobilePlatform,
       width: MediaQuery.sizeOf(context).width,
@@ -73,13 +95,20 @@ class MobileHostedRoute extends StatelessWidget {
     if (!active) {
       return child;
     }
-    // 根级推入页脱离壳层的暗色 Theme：此处按壳层同规则兜底，浅色根
-    // 主题下 scheme 派生色（分段控件/设置组/弹窗面板）不翻白。
+    // 根级推入页脱离壳层的暗色 Theme：环境档与壁纸在场时按壳层同规则兜底，
+    // 浅色根主题下 scheme 派生色（分段控件/设置组/弹窗面板）不翻白；
+    // 无壁纸的实底工具面随根主题，页内配色由 MobileEnvPalette 的浅实例提供。
     final baseTheme = Theme.of(context);
+    final forceDark = shouldForceEnvironmentDark(
+      solidSurface: solidSurface,
+      backdropActive: ref.watch(mobileShellLocalBackdropActiveProvider),
+    );
     final shellTheme =
         baseTheme.brightness == Brightness.dark
             ? baseTheme
-            : OmniNestTheme.dark();
+            : forceDark
+            ? OmniNestTheme.dark()
+            : MobileAppTheme.resolve(baseTheme);
     return Theme(
       data: shellTheme,
       child: MobileShellScope(hosted: true, child: child),

@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 移动端壳层使用的主题组合器。
 ///
@@ -105,9 +106,12 @@ abstract final class MobileAppTheme {
         textColor: colors.onSurface,
       ),
       dividerTheme: source.dividerTheme.copyWith(color: colors.outlineVariant),
-      extensions: source.extensions.values.map(
-        (extension) => _adaptExtension(extension, colors),
-      ),
+      extensions: [
+        ...source.extensions.values.map(
+          (extension) => _adaptExtension(extension, colors),
+        ),
+        MobileEnvPalette.resolve(source.brightness),
+      ],
     );
   }
 

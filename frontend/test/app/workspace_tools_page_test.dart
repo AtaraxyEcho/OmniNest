@@ -1,16 +1,23 @@
 // 工作区工具总入口回归（原型 FeatureDirectory）：分组与行数、行标题/描述
 // 同源复用模块既有标签，且每行都真的落到目标路由——不留死键。
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/workspace_tools_page.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/mobile_app_theme.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 
 void main() {
-  Future<void> pumpTools(WidgetTester tester, {double textScale = 1.0}) async {
+  Future<void> pumpTools(
+    WidgetTester tester, {
+    double textScale = 1.0,
+    Brightness brightness = Brightness.dark,
+  }) async {
     tester.platformDispatcher.textScaleFactorTestValue = textScale;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     tester.view.physicalSize = const Size(390, 844);
@@ -73,10 +80,15 @@ void main() {
     );
     addTearDown(router.dispose);
 
+    final rootTheme =
+        brightness == Brightness.dark
+            ? OmniNestTheme.dark()
+            : MobileAppTheme.resolve(OmniNestTheme.light());
+
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp.router(
-          theme: OmniNestTheme.dark(),
+          theme: rootTheme,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
@@ -209,5 +221,21 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('每样东西都有一个家。'), findsOneWidget);
     expect(find.text('存储统计'), findsOneWidget);
+  });
+
+  testWidgets('浅色极性下目录文字取浅实例墨色，不残留暗栈白字', (tester) async {
+    await pumpTools(tester, brightness: Brightness.light);
+
+    Color inkOf(String label) =>
+        tester
+            .renderObject<RenderParagraph>(find.text(label))
+            .text
+            .style!
+            .color!;
+
+    expect(inkOf('文件'), MobileEnvPalette.light.inkFaint, reason: '分组眉标');
+    expect(inkOf('每样东西都有一个家。'), MobileEnvPalette.light.ink, reason: '衬线标题');
+    expect(inkOf('存储统计'), MobileEnvPalette.light.ink, reason: '行标题');
+    expect(inkOf('存储统计'), isNot(MobileEnvPalette.dark.ink));
   });
 }

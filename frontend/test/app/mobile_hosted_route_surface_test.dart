@@ -3,9 +3,11 @@
 // 直接拿到 Frame 暖纸面，手机打开分享链接时整页亮底。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,6 +38,49 @@ void main() {
 
     expect(surface, OmniNestTheme.light().extension<PhotosColors>()!.surface);
   });
+
+  testWidgets('实底工具路由在无壁纸的浅色根主题下随主题翻浅', (tester) async {
+    late Color ink;
+    await _run(
+      tester,
+      hostedRoute: true,
+      surface: const Size(390, 844),
+      solidSurface: true,
+      onProbe: (context) => context.env.ink,
+      onSurface: (value) => ink = value,
+    );
+
+    expect(ink, MobileEnvPalette.light.ink);
+    expect(ink, isNot(MobileEnvPalette.dark.ink));
+  });
+
+  testWidgets('实底工具路由在壁纸在场时仍锁暗环境基底', (tester) async {
+    late Color ink;
+    await _run(
+      tester,
+      hostedRoute: true,
+      surface: const Size(390, 844),
+      solidSurface: true,
+      backdropActive: true,
+      onProbe: (context) => context.env.ink,
+      onSurface: (value) => ink = value,
+    );
+
+    expect(ink, MobileEnvPalette.dark.ink);
+  });
+
+  testWidgets('环境档路由（媒体模块）不受实底标记影响', (tester) async {
+    late Color ink;
+    await _run(
+      tester,
+      hostedRoute: true,
+      surface: const Size(390, 844),
+      onProbe: (context) => context.env.ink,
+      onSurface: (value) => ink = value,
+    );
+
+    expect(ink, MobileEnvPalette.dark.ink);
+  });
 }
 
 Future<void> _run(
@@ -43,27 +88,36 @@ Future<void> _run(
   required bool hostedRoute,
   required Size surface,
   required ValueChanged<Color> onSurface,
+  bool solidSurface = false,
+  bool backdropActive = false,
+  Color Function(BuildContext)? onProbe,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
+  final probe = onProbe ?? (context) => context.photosColors.surface;
   final child = Builder(
     builder: (context) {
-      onSurface(context.photosColors.surface);
+      onSurface(probe(context));
       return const SizedBox.shrink();
     },
   );
 
   await tester.pumpWidget(
     ProviderScope(
+      overrides: [
+        mobileShellLocalBackdropActiveProvider.overrideWithValue(
+          backdropActive,
+        ),
+      ],
       child: MaterialApp(
         theme: OmniNestTheme.light(),
         home: Scaffold(
           body:
               hostedRoute
-                  ? MobileHostedRoute(child: child)
+                  ? MobileHostedRoute(child: child, solidSurface: solidSurface)
                   : MobileShellScope(hosted: false, child: child),
         ),
       ),

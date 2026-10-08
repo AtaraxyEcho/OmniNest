@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
@@ -157,11 +157,12 @@ class _NotificationMobileViewState
     NotificationState state,
     bool canManage,
   ) {
+    final env = context.env;
     if (state.isLoading && state.items.isEmpty) {
       return Center(
         child: CircularProgressIndicator.adaptive(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(MobileEnvColors.inkMuted),
+          valueColor: AlwaysStoppedAnimation<Color>(env.inkMuted),
         ),
       );
     }
@@ -202,11 +203,11 @@ class _NotificationMobileViewState
             padding: const EdgeInsets.fromLTRB(0, 16, 0, 2),
             child: Text(
               entry.groupLabel!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 9, // ignore: font_size_whitelist
                 letterSpacing: 1.5,
                 fontWeight: FontWeight.w700,
-                color: MobileEnvColors.inkFaint,
+                color: env.inkFaint,
               ),
             ),
           );
@@ -258,6 +259,7 @@ class _NotificationSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final env = context.env;
     final l10n = AppLocalizations.of(context);
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 40),
@@ -268,20 +270,20 @@ class _NotificationSummaryRow extends StatelessWidget {
               unreadLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 9, // ignore: font_size_whitelist
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.w700,
-                color: MobileEnvColors.inkFaint,
+                color: env.inkFaint,
               ),
             ),
           ),
           const SizedBox(width: 12),
           Material(
-            color: const Color(0x12FFFFFF),
+            color: env.line07,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: MobileEnvColors.line09),
+              side: BorderSide(color: env.line09),
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
@@ -291,17 +293,13 @@ class _NotificationSummaryRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.check_rounded,
-                      size: 14,
-                      color: MobileEnvColors.ink,
-                    ),
+                    Icon(Icons.check_rounded, size: 14, color: env.ink),
                     const SizedBox(width: 5),
                     Text(
                       l10n.notificationMarkAllRead,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9, // ignore: font_size_whitelist
-                        color: MobileEnvColors.ink,
+                        color: env.ink,
                       ),
                     ),
                   ],
@@ -370,12 +368,13 @@ class _NotificationMobileRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final env = context.env;
     final l10n = AppLocalizations.of(context);
     final isUnread = !notification.read;
     final row = Container(
       constraints: const BoxConstraints(minHeight: 58),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: env.line07)),
       ),
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
@@ -387,12 +386,12 @@ class _NotificationMobileRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(13),
-              color: MobileEnvColors.accent.withValues(alpha: 0.08),
+              color: env.accent.withValues(alpha: 0.08),
             ),
             child: Icon(
               notificationTypeIcon(notification.type),
               size: 19,
-              color: MobileEnvColors.accent,
+              color: env.accent,
             ),
           ),
           const SizedBox(width: 12),
@@ -406,11 +405,11 @@ class _NotificationMobileRow extends StatelessWidget {
                       l10n.notificationNoTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w700,
                     height: 1.35,
-                    color: MobileEnvColors.ink,
+                    color: env.ink,
                   ),
                 ),
                 if (notification.message?.isNotEmpty == true) ...[
@@ -419,10 +418,10 @@ class _NotificationMobileRow extends StatelessWidget {
                     notification.message!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
                       height: 1.45,
-                      color: MobileEnvColors.inkMuted,
+                      color: env.inkMuted,
                     ),
                   ),
                 ],
@@ -444,9 +443,9 @@ class _NotificationMobileRow extends StatelessWidget {
             children: [
               Text(
                 formatNotificationTime(context, notification.createdAt),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 8, // ignore: font_size_whitelist
-                  color: MobileEnvColors.ink40,
+                  color: env.ink40,
                 ),
               ),
               if (isUnread) ...[
@@ -455,11 +454,11 @@ class _NotificationMobileRow extends StatelessWidget {
                   width: 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: MobileEnvColors.accent,
+                    color: env.accent,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: MobileEnvColors.accent.withValues(alpha: 0.5),
+                        color: env.accent.withValues(alpha: 0.5),
                         blurRadius: 8,
                       ),
                     ],
@@ -481,11 +480,11 @@ class _NotificationMobileRow extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Color(0x1FE2A1A1),
           border: Border(
-            top: BorderSide(color: MobileEnvColors.line09),
-            bottom: BorderSide(color: MobileEnvColors.line07),
+            top: BorderSide(color: env.line09),
+            bottom: BorderSide(color: env.line07),
           ),
         ),
         child: Row(
@@ -544,6 +543,7 @@ class _NotificationActionLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final env = context.env;
     return Semantics(
       button: true,
       child: GestureDetector(
@@ -560,17 +560,13 @@ class _NotificationActionLink extends StatelessWidget {
             children: [
               Text(
                 action.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
                   fontWeight: FontWeight.w600,
-                  color: MobileEnvColors.accent,
+                  color: env.accent,
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 14,
-                color: MobileEnvColors.accent,
-              ),
+              Icon(Icons.chevron_right_rounded, size: 14, color: env.accent),
             ],
           ),
         ),

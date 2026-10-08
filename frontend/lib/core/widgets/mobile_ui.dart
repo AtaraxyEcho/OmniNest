@@ -2,7 +2,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
 /// 移动端页面的半透明内容表面。
@@ -25,7 +25,7 @@ class MobilePageSurface extends StatelessWidget {
     if (MobileShellScope.isHosted(context)) {
       final double alpha = (backdropOpacity ?? 0.94).clamp(0.0, 1.0).toDouble();
       return ColoredBox(
-        color: MobileEnvColors.stage.withValues(alpha: alpha),
+        color: context.env.stage.withValues(alpha: alpha),
         child: child,
       );
     }
@@ -148,9 +148,9 @@ class MobileSegmentedControl<T> extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: MobileEnvColors.segmentBg,
+            color: context.env.segmentBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: MobileEnvColors.line09),
+            border: Border.all(color: context.env.line09),
           ),
           child: Padding(
             padding: const EdgeInsets.all(4),
@@ -205,7 +205,7 @@ class _MobileSegment extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 66, minHeight: 40),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: selected ? MobileEnvColors.accent : Colors.transparent,
+              color: selected ? context.env.accent : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               boxShadow:
                   selected
@@ -230,8 +230,8 @@ class _MobileSegment extends StatelessWidget {
                     size: 18,
                     color:
                         selected
-                            ? MobileEnvColors.onAccentDeep
-                            : MobileEnvColors.inkMuted,
+                            ? context.env.onAccentDeep
+                            : context.env.inkMuted,
                   ),
                   const SizedBox(width: 7),
                 ],
@@ -242,8 +242,8 @@ class _MobileSegment extends StatelessWidget {
                   style: TextStyle(
                     color:
                         selected
-                            ? MobileEnvColors.onAccentDeep
-                            : MobileEnvColors.inkMuted,
+                            ? context.env.onAccentDeep
+                            : context.env.inkMuted,
                     fontSize: 12,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
@@ -572,11 +572,11 @@ class MobileGlassIconButton extends StatelessWidget {
         message: tooltip,
         child: IconButton(
           onPressed: onPressed,
-          icon: Icon(icon, size: 20, color: MobileEnvColors.ink),
+          icon: Icon(icon, size: 20, color: context.env.ink),
           style: IconButton.styleFrom(
-            backgroundColor: MobileEnvColors.iconButtonGlass,
-            foregroundColor: MobileEnvColors.ink,
-            side: const BorderSide(color: MobileEnvColors.line10),
+            backgroundColor: context.env.iconButtonGlass,
+            foregroundColor: context.env.ink,
+            side: BorderSide(color: context.env.line10),
             minimumSize: const Size.square(48),
           ),
         ),
@@ -610,7 +610,7 @@ class MobileEnvInlineIconButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: SizedBox.square(
           dimension: 38,
-          child: Icon(icon, size: iconSize, color: MobileEnvColors.inkMuted),
+          child: Icon(icon, size: iconSize, color: context.env.inkMuted),
         ),
       ),
     );
@@ -661,10 +661,10 @@ class MobileModuleHeader extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: MobileEnvColors.ink,
+                        color: context.env.ink,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -672,9 +672,9 @@ class MobileModuleHeader extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9,
-                        color: MobileEnvColors.inkMuted,
+                        color: context.env.inkMuted,
                       ),
                     ),
                   ],
@@ -709,7 +709,7 @@ Future<bool> showMobileConfirmSheet(
   final result = await showModalBottomSheet<bool>(
     context: context,
     useRootNavigator: true,
-    backgroundColor: MobileEnvColors.sheetSolid,
+    backgroundColor: context.env.sheetSolid,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -729,7 +729,7 @@ Future<bool> showMobileConfirmSheet(
                   color:
                       destructive
                           ? const Color(0x1FDA5050)
-                          : const Color(0x14D5F17D),
+                          : context.env.accentInk.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(17),
                 ),
                 child: OmniIcon(
@@ -738,7 +738,7 @@ Future<bool> showMobileConfirmSheet(
                   color:
                       destructive
                           ? const Color(0xFFE69696)
-                          : MobileEnvColors.accent,
+                          : context.env.accentInk,
                 ),
               ),
               const SizedBox(height: 13),
@@ -752,17 +752,17 @@ Future<bool> showMobileConfirmSheet(
                   fontSize: 23,
                   height: 1.0,
                   fontWeight: FontWeight.w400,
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
               ),
               const SizedBox(height: 7),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
                   height: 1.55,
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
               ),
               const SizedBox(height: 17),
@@ -771,8 +771,8 @@ Future<bool> showMobileConfirmSheet(
                   Expanded(
                     child: _MobileConfirmButton(
                       label: cancelLabel ?? l10n.cancelButtonLabel,
-                      background: const Color(0x12FFFFFF),
-                      foreground: MobileEnvColors.ink,
+                      background: context.env.line07,
+                      foreground: context.env.ink,
                       onTap: () => Navigator.of(sheetContext).pop(false),
                     ),
                   ),
@@ -783,9 +783,9 @@ Future<bool> showMobileConfirmSheet(
                       background:
                           destructive
                               ? const Color(0xFFB95F5F)
-                              : MobileEnvColors.accent,
+                              : context.env.accent,
                       foreground:
-                          destructive ? Colors.white : MobileEnvColors.onAccent,
+                          destructive ? Colors.white : context.env.onAccent,
                       onTap: () => Navigator.of(sheetContext).pop(true),
                     ),
                   ),
@@ -866,7 +866,7 @@ class MobileEnvSwitch extends StatelessWidget {
           width: 34,
           height: 20,
           decoration: BoxDecoration(
-            color: value ? MobileEnvColors.accent : const Color(0x24FFFFFF),
+            color: value ? context.env.accent : context.env.line15,
             borderRadius: BorderRadius.circular(10),
           ),
           child: AnimatedAlign(
@@ -881,10 +881,7 @@ class MobileEnvSwitch extends StatelessWidget {
                 height: 14,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color:
-                      value
-                          ? MobileEnvColors.onAccentDeep
-                          : MobileEnvColors.ink,
+                  color: value ? context.env.onAccentDeep : context.env.ink,
                 ),
               ),
             ),
@@ -922,7 +919,7 @@ class MobileEnvSectionHeader extends StatelessWidget {
             // 样例 .section-title 眉标：白 43% + 9px + 字距 1.5。
             // inkFaint（墨 58%）与 labelSmall（11）都是工位档，托管态不用。
             style: TextStyle(
-              color: MobileEnvColors.white43,
+              color: context.env.white43,
               fontSize: AppTypography.labelNano,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
@@ -938,7 +935,7 @@ class MobileEnvSectionHeader extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: AppTypography.serifFamily,
                   fontFamilyFallback: AppTypography.serifFamilyFallback,
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                   // 样例 .section-title 的 h2 是 21，不是卡片区头档（24）。
                   fontSize: AppTypography.headlineSection,
                   fontWeight: FontWeight.w600,
@@ -1019,8 +1016,8 @@ class MobileFeatureListRow extends StatelessWidget {
     final row = Container(
       constraints: const BoxConstraints(minHeight: 69),
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
       ),
       child: Row(
         children: [
@@ -1031,17 +1028,14 @@ class MobileFeatureListRow extends StatelessWidget {
             decoration: BoxDecoration(
               color:
                   neutralIcon
-                      ? const Color(0x0DFFFFFF)
-                      : MobileEnvColors.accent.withValues(alpha: 0.08),
+                      ? context.env.surfaceTint
+                      : context.env.accentInk.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(13),
             ),
             child: OmniIcon(
               icon: icon,
               size: 18,
-              color:
-                  neutralIcon
-                      ? MobileEnvColors.inkMuted
-                      : MobileEnvColors.accent,
+              color: neutralIcon ? context.env.inkMuted : context.env.accentInk,
             ),
           ),
           const SizedBox(width: 10),
@@ -1054,10 +1048,10 @@ class MobileFeatureListRow extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -1065,9 +1059,9 @@ class MobileFeatureListRow extends StatelessWidget {
                   detail,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
               ],
@@ -1076,10 +1070,10 @@ class MobileFeatureListRow extends StatelessWidget {
           if (trailing != null) ...[const SizedBox(width: 10), trailing!],
           if (showChevron) ...[
             const SizedBox(width: 8),
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.chevron,
               size: 16,
-              color: MobileEnvColors.ink40,
+              color: context.env.ink40,
             ),
           ],
         ],

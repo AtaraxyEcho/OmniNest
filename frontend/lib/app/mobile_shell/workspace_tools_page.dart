@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/files/application/file_browser_models.dart';
@@ -21,6 +21,7 @@ class WorkspaceToolsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final env = context.env;
     final l10n = AppLocalizations.of(context);
     final groups = <_WorkspaceToolGroup>[
       _WorkspaceToolGroup(
@@ -95,11 +96,11 @@ class WorkspaceToolsPage extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(0, 14, 0, 2),
                     child: Text(
                       group.label.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9, // ignore: font_size_whitelist
                         letterSpacing: 1.5,
                         fontWeight: FontWeight.w700,
-                        color: MobileEnvColors.inkFaint,
+                        color: env.inkFaint,
                       ),
                     ),
                   ),
@@ -178,6 +179,7 @@ class _WorkspaceToolsIntro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final env = context.env;
     final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 14, 2, 20),
@@ -186,32 +188,32 @@ class _WorkspaceToolsIntro extends StatelessWidget {
         children: [
           Text(
             l10n.toolsIntroEyebrow.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 8, // ignore: font_size_whitelist
               letterSpacing: 1.4,
               fontWeight: FontWeight.w700,
-              color: MobileEnvColors.accent,
+              color: env.accentInk,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             l10n.toolsIntroTitle,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: AppTypography.serifFamily,
               fontFamilyFallback: AppTypography.serifFamilyFallback,
               fontSize: 34,
               height: 1.02,
               fontWeight: FontWeight.w400,
-              color: MobileEnvColors.ink,
+              color: env.ink,
             ),
           ),
           const SizedBox(height: 7),
           Text(
             l10n.toolsIntroBody,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10, // ignore: font_size_whitelist
               height: 1.55,
-              color: MobileEnvColors.inkMuted,
+              color: env.inkMuted,
             ),
           ),
         ],
@@ -229,6 +231,7 @@ class _ToolGridRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final env = context.env;
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
       child: MobilePressable(
@@ -238,9 +241,9 @@ class _ToolGridRow extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 66),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0x0BFFFFFF),
+            color: env.surfaceTint,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: MobileEnvColors.line07),
+            border: Border.all(color: env.line07),
           ),
           child: Row(
             children: [
@@ -249,14 +252,10 @@ class _ToolGridRow extends StatelessWidget {
                 height: 42,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: MobileEnvColors.accent.withValues(alpha: 0.08),
+                  color: env.accentInk.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: OmniIcon(
-                  icon: row.icon,
-                  size: 18,
-                  color: MobileEnvColors.accent,
-                ),
+                child: OmniIcon(icon: row.icon, size: 18, color: env.accentInk),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -268,10 +267,10 @@ class _ToolGridRow extends StatelessWidget {
                       row.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: MobileEnvColors.ink,
+                        color: env.ink,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -279,20 +278,16 @@ class _ToolGridRow extends StatelessWidget {
                       row.detail,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9, // ignore: font_size_whitelist
-                        color: MobileEnvColors.inkMuted,
+                        color: env.inkMuted,
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              const OmniIcon(
-                icon: OmniIcons.chevron,
-                size: 16,
-                color: MobileEnvColors.ink40,
-              ),
+              OmniIcon(icon: OmniIcons.chevron, size: 16, color: env.ink40),
             ],
           ),
         ),
