@@ -68,6 +68,7 @@ class AppBackdropHost extends ConsumerWidget {
               asset: asset,
               settings: backdropState.settings,
               policy: effectivePolicy,
+              environmentBlurSigma: presentation?.blurSigma ?? 0.0,
               active:
                   enabled &&
                   policy.playbackMode == AppBackdropPlaybackMode.continuous,

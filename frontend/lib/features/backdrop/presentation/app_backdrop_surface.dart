@@ -19,6 +19,7 @@ class AppBackdropSurface extends ConsumerWidget {
     required this.asset,
     required this.settings,
     required this.policy,
+    required this.environmentBlurSigma,
     required this.active,
     super.key,
   });
@@ -26,6 +27,13 @@ class AppBackdropSurface extends ConsumerWidget {
   final AppBackdropAsset? asset;
   final AppBackdropSettings settings;
   final AppBackdropPolicy policy;
+
+  /// 环境模式折算后的壁纸模糊 sigma，必须由宿主按壳层形态给出。
+  ///
+  /// 桌面端传 0：`policy.environmentMode` 是移动壳层档位语义，桌面直接消费
+  /// 它会给实底前景页（如 `/reader` 的 staticContent=focus 档 sigma 28）压上
+  /// 一层全屏 `ImageFilter.blur`，深色前景与该模糊层合成时沿边界出现对角亮缝。
+  final double environmentBlurSigma;
   final bool active;
 
   @override
@@ -50,12 +58,10 @@ class AppBackdropSurface extends ConsumerWidget {
       alignment,
       motionAllowed,
     );
-    // 环境模式对非视频壁纸叠加的环境模糊与用户设置取较大值；
+    // 宿主折算的环境模糊与用户设置取较大值；
     // 视频不做全屏实时模糊（成本过高），存在感由宿主遮罩与不透明度承担。
     final environmentSigma =
-        asset?.isVideo == true
-            ? 0.0
-            : AppEnvironmentPresentation.of(policy.environmentMode).blurSigma;
+        asset?.isVideo == true ? 0.0 : environmentBlurSigma;
     final userBlur = settings.blurAmount;
     final shouldBlur =
         (userBlur > 0.05 || environmentSigma > 0.05) && asset?.isVideo != true;
@@ -182,9 +188,7 @@ class AppBackdropSurface extends ConsumerWidget {
   ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
       final blurActive =
-          settings.blurAmount > 0.05 ||
-          AppEnvironmentPresentation.of(policy.environmentMode).blurSigma >
-              0.05;
+          settings.blurAmount > 0.05 || environmentBlurSigma > 0.05;
       final thumbnail =
           asset.thumbnailPath?.isNotEmpty == true ? asset.thumbnailPath : null;
       return AppBackdropImage(
