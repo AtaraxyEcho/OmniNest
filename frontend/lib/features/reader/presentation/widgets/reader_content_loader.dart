@@ -212,8 +212,11 @@ class ChapterData {
 const _metricsPhaseOneBlocks = 12;
 const _metricsBatchBlocks = 40;
 
-/// 设置变更时允许同步重测全章的块数上限，超过则改走"估算＋分批精测"。
-const _rekeySyncMeasureBlocks = 200;
+/// 允许同步测完整章的块数上限，超过则改走"估算＋分批精测"。
+///
+/// 章节首次准备滚动布局与设置变更重测共用该预算：同步测完整章会让首帧
+/// 或改字号那一帧停住数百毫秒，只在块数足够小时才值得换掉估算窗口。
+const _syncFullMeasureBlocks = 200;
 
 /// 翻页模式的懒分页导航器。
 ///
@@ -609,11 +612,29 @@ class ReaderContentLoader {
       data.invalidatePageNavigator();
     }
     data.markScrollLayout(pageWidth, textScale);
+    final blocks = data.blocks;
+    // 邻章预取停在估算上即可，否则每翻一章要多跑两章的全量 TextPainter。
+    // 尚未确定当前章（首帧或缓存全清后）时不做抑制，保证单独使用 loader
+    // 的场景也会收敛到精测高度。
+    final activeChapterId = _activeChapterId;
+    final isMeasuredChapter =
+        activeChapterId == null || data.chapterId == activeChapterId;
+    // 当前章且块数在同步预算内：首帧一次测完整章。估算尾部会让首次落点按
+    // 均值偏一次、再由恢复监控期修正，而条目确定高度本来也要等整章精测才
+    // 可用；块数很多时仍走"估算立即发布＋精测分批让帧"，同步测完整章会
+    // 冻结 UI 数百毫秒到秒级。
+    if (isMeasuredChapter && blocks.length <= _syncFullMeasureBlocks) {
+      data.updateCumulativeHeights(
+        _computeCumulativeHeights(blocks, pageWidth, settings, textScale),
+      );
+      data.measuredThrough = blocks.length;
+      data.markPreciseHeights();
+      return;
+    }
     // 第一阶段：精确测量头部若干块，以平均块高估算整章，立即填充
     // cumulative 数组，保证滚动映射从首帧起无空洞。
     // 估算基线优先取已精测章节的分块型高度均值（同书排版一致），
     // 降低 estimate→precise 转换时的窗口高度跳变。
-    final blocks = data.blocks;
     final headCount = math.min(_metricsPhaseOneBlocks, blocks.length);
     final headHeights = <double>[];
     var headCumulative = 0.0;
@@ -641,11 +662,7 @@ class ReaderContentLoader {
       estimated[i] = running;
     }
     data.updateCumulativeHeights(estimated);
-    // 邻章预取停在 phase-one 估算上即可，否则每翻一章要多跑两章的全量
-    // TextPainter。尚未确定当前章（首帧或缓存全清后）时不做抑制，保证
-    // 单独使用 loader 的场景也会收敛到精测高度。
-    final activeChapterId = _activeChapterId;
-    if (activeChapterId == null || data.chapterId == activeChapterId) {
+    if (isMeasuredChapter) {
       unawaited(
         _runPrecisePass(
           data,
@@ -903,7 +920,7 @@ class ReaderContentLoader {
 
     if (!prepareScrollLayout) {
       data.updateCumulativeHeights(const <double>[]);
-    } else if (data.blocks.length > _rekeySyncMeasureBlocks) {
+    } else if (data.blocks.length > _syncFullMeasureBlocks) {
       data.updateCumulativeHeights(
         _estimateCumulativeHeights(data, pageWidth, newSettings, textScale),
       );
@@ -984,12 +1001,16 @@ class ReaderContentLoader {
     final heights = <double>[];
     var cumulative = 0.0;
     for (final block in blocks) {
-      cumulative += ReaderPaginationEngine.measureBlockHeight(
-        block,
-        pageWidth,
-        settings,
-        textScale: textScale,
-      );
+      cumulative +=
+          ReaderPaginationEngine.measureBlockHeight(
+            block,
+            pageWidth,
+            settings,
+            textScale: textScale,
+          ) +
+          // 标题后的包装层间距由列表条目实际占据，漏算会让整章表比渲染矮，
+          // 且该入口标记为已精测后还直接决定条目确定高度。
+          scrollBlockExtraSpacing(block);
       heights.add(cumulative);
     }
     return heights;

@@ -44,7 +44,9 @@ void main() {
 
     final current = await loader.loadChapter(
       chapterId: 'chapter-1',
-      content: chapterContent('第一章', 60),
+      // 块数必须超出同步预算（每段 p+hr 两块）：小章首帧就测完整章，
+      // 精测不再在途，本用例要验的"在途精测不被邻章打断"就无从发生。
+      content: chapterContent('第一章', 120),
       pageWidth: 320,
       pageHeight: 0,
       settings: settings,
@@ -71,7 +73,8 @@ void main() {
     loader.setActive('chapter-1');
     final data = await loader.loadChapter(
       chapterId: 'chapter-1',
-      content: chapterContent('第一章', 60),
+      // 超出同步预算才有"在途精测"可共享；小章首帧已测完，轮询无需收敛。
+      content: chapterContent('第一章', 120),
       pageWidth: 320,
       pageHeight: 0,
       settings: settings,
