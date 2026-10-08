@@ -28,35 +28,6 @@ abstract final class _ReaderPaginationMetrics {
     return 8 + painter.height + 8;
   }
 
-  static double paragraphHeight(
-    List<LineData> lines,
-    bool hasTrailingSpacing,
-    double effectiveWidth,
-    ReaderViewSettings settings,
-    double textScale,
-  ) {
-    var height = 0.0;
-    // 与渲染一致：仅 hasTrailingSpacing 时加 0.6 字号间距，不再另加 lineHeight。
-    if (hasTrailingSpacing) {
-      height += settings.fontSize * 0.6;
-    }
-    for (final line in lines) {
-      final spans = lineTextSpans(line.spans, settings, textScale);
-      if (spans.isEmpty) continue;
-      final painter = TextPainter(
-        text: TextSpan(
-          children: spans,
-          style: baseStyle(settings, settings.fontSize * textScale),
-        ),
-        strutStyle: settings.bodyStrutStyle(textScale: textScale),
-        textDirection: TextDirection.ltr,
-        maxLines: null,
-      )..layout(maxWidth: effectiveWidth);
-      height += painter.height;
-    }
-    return height;
-  }
-
   /// 图片固定槽位高度：与 ReaderContentImage 的渲染槽一致。
   ///
   /// 槽位在解码前后保持不变，测高与真实布局零漂移；640 上限接近手机
@@ -91,31 +62,6 @@ abstract final class _ReaderPaginationMetrics {
   }
 
   static const dividerHeight = 48.5;
-
-  static double blockquoteHeight(
-    List<LineData> lines,
-    double effectiveWidth,
-    ReaderViewSettings settings,
-    double textScale,
-  ) {
-    var textHeight = 0.0;
-    final innerWidth = effectiveWidth - 16;
-    for (final line in lines) {
-      final spans = lineTextSpans(line.spans, settings, textScale);
-      if (spans.isEmpty) continue;
-      final painter = TextPainter(
-        text: TextSpan(
-          children: spans,
-          style: baseStyle(settings, settings.fontSize * textScale),
-        ),
-        strutStyle: settings.bodyStrutStyle(textScale: textScale),
-        textDirection: TextDirection.ltr,
-        maxLines: null,
-      )..layout(maxWidth: innerWidth);
-      textHeight += painter.height;
-    }
-    return textHeight + 48;
-  }
 
   static double listHeight(
     List<ListItemData> items,

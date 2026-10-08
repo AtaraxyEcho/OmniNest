@@ -124,26 +124,20 @@ class ReaderPaginationEngine {
           settings,
           textScale,
         ),
-      ParagraphBlock(:final lines, :final hasTrailingSpacing) =>
-        _ReaderPaginationMetrics.paragraphHeight(
-          lines,
-          hasTrailingSpacing,
-          effectiveWidth,
-          settings,
-          textScale,
-        ),
+      ParagraphBlock(:final hasTrailingSpacing) => _flowBlockHeight(
+        block,
+        effectiveWidth,
+        settings,
+        textScale,
+        hasTrailingSpacing: hasTrailingSpacing,
+      ),
       ImageBlock(:final caption) => _ReaderPaginationMetrics.imageHeight(
         effectiveWidth,
         caption,
       ),
       DividerBlock() => _ReaderPaginationMetrics.dividerHeight,
-      BlockquoteBlock(:final lines) =>
-        _ReaderPaginationMetrics.blockquoteHeight(
-          lines,
-          effectiveWidth,
-          settings,
-          textScale,
-        ),
+      BlockquoteBlock() =>
+        _flowBlockHeight(block, effectiveWidth, settings, textScale) + 48,
       ListBlock(:final items) => _ReaderPaginationMetrics.listHeight(
         items,
         effectiveWidth,
@@ -157,6 +151,36 @@ class ReaderPaginationEngine {
         textScale,
       ),
     };
+  }
+
+  /// 段落与引用块的渲染高度：直接累加共享视觉行结果。
+  ///
+  /// 逐逻辑行测量会把源文本里的硬换行当成排版换行，与合并渲染的行盒不符：
+  /// 同一块在高度表里和块内 charOffset 插值里得到两个高度，差值随硬换行数
+  /// 累积（4 行硬换行样例实测 232 对 174 像素）。滚动与翻页共用这一份行盒。
+  static double _flowBlockHeight(
+    ContentBlock block,
+    double effectiveWidth,
+    ReaderViewSettings settings,
+    double textScale, {
+    bool hasTrailingSpacing = false,
+  }) {
+    final visualLines = _ReaderPaginationTextLayout.measureVisualLinesInternal(
+      block,
+      effectiveWidth,
+      settings,
+      textScale,
+      blockGlobalOffset: 0,
+    );
+    var height = visualLines.fold<double>(
+      0.0,
+      (sum, line) => sum + line.height,
+    );
+    if (hasTrailingSpacing) {
+      // 段尾间距按渲染位置计入（ReaderContentBlockItem 加在段落之后）。
+      height += settings.fontSize * 0.6;
+    }
+    return height;
   }
 
   /// 计算从块起始到 [charOffset] 的渲染高度（像素）。
@@ -176,7 +200,10 @@ class ReaderPaginationEngine {
     if (block is HeadingBlock ||
         block is ImageBlock ||
         block is DividerBlock ||
-        block is TableBlock) {
+        block is TableBlock ||
+        block is ListBlock) {
+      // 列表按项渲染（Column + 每项 4px 间隙），视觉行模型把项当作连排文本，
+      // 两者不可混用：块高与块内定位统一走整块口径，项内偏移按线性处理。
       return charOffsetInBlock > 0
           ? measureBlockHeight(
             block,
