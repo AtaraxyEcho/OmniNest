@@ -1,10 +1,14 @@
 // 个人中心托管移动形态验证：样例形态（模块横幅 + 分组行 + 退出登录）、
 // security 直达二级、视觉环境行打开移动端 EnvSettings 抽屉。
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
+import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/app/environment.dart';
@@ -39,6 +43,7 @@ void main() {
   Future<void> pumpProfile(
     WidgetTester tester, {
     String? initialSection,
+    Brightness brightness = Brightness.dark,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
@@ -55,8 +60,8 @@ void main() {
           // 掩盖路由缺宿主的缺口，必须走真实链路）。
           builder:
               (context, state) => MobileHostedRoute(
+                solidSurface: true,
                 child: Scaffold(
-                  backgroundColor: const Color(0xFF0B1110),
                   body: ProfilePage(
                     initialSection: state.uri.queryParameters['section'],
                   ),
@@ -75,6 +80,7 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionProvider.overrideWith(_AuthedSessionNotifier.new),
+          mobileShellLocalBackdropActiveProvider.overrideWithValue(false),
           appEnvironmentProvider.overrideWithValue(
             const AppEnvironment(
               apiBaseUrl: 'http://localhost',
@@ -83,6 +89,10 @@ void main() {
           ),
         ],
         child: MaterialApp.router(
+          theme:
+              brightness == Brightness.dark
+                  ? OmniNestTheme.dark()
+                  : OmniNestTheme.light(),
           locale: const Locale('zh'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -120,5 +130,20 @@ void main() {
     expect(find.text('设备与会话'), findsNothing);
     expect(find.text('退出登录'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('两极性下分组眉标取对应极性的墨色', (tester) async {
+    Color groupInk() =>
+        tester
+            .renderObject<RenderParagraph>(find.text('外观'))
+            .text
+            .style!
+            .color!;
+
+    await pumpProfile(tester);
+    expect(groupInk(), MobileEnvPalette.dark.inkFaint);
+
+    await pumpProfile(tester, brightness: Brightness.light);
+    expect(groupInk(), MobileEnvPalette.light.inkFaint);
   });
 }

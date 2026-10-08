@@ -231,11 +231,12 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     return brightness == Brightness.light ? light : dark;
   }
 
-  /// 优先取主题上注册的实例（壁纸极性在 W4 接管后由宿主下发），
-  /// 未注册时按亮度回落，保证脱离壳层上下文的组件也能取到值。
+  /// 只认宿主显式注册的实例；未注册一律取暗基准。
+  ///
+  /// 不按亮度推断：桌面端与媒体托管页在浅色根主题下同样会读到 light，
+  /// 而它们的字面量尚未接入极性表，翻转会留下浅底暗字的混合态。
   static MobileEnvPalette of(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.extension<MobileEnvPalette>() ?? resolve(theme.brightness);
+    return Theme.of(context).extension<MobileEnvPalette>() ?? dark;
   }
 
   /// 令牌表按整体切换，不做逐色插值：亮度过渡期取任一档都不会出现"深底深字"的中间态。

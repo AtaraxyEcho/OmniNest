@@ -13,9 +13,12 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_polarity.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop_tone.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/portal/presentation/pages/portal_page.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_mobile_shell.dart';
@@ -71,6 +74,7 @@ Future<void> _pumpHome(
   WidgetTester tester, {
   required double width,
   required Widget home,
+  AppBackdropPolarity? polarity,
 }) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   tester.view.physicalSize = Size(width, 900);
@@ -89,6 +93,9 @@ Future<void> _pumpHome(
           ),
         ),
         realtimeWeatherProvider.overrideWith((ref) async => _weather()),
+        appBackdropPolarityProvider.overrideWithValue(
+          polarity ?? AppBackdropPolarity.dark,
+        ),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -134,20 +141,29 @@ void main() {
   });
 
   testWidgets('≥980 双栏档时间块仍贴左栏，不跟着居中', (tester) async {
-    await _pumpHome(
-      tester,
-      width: 1000,
-      home: const PortalMobileShell(),
-    );
+    await _pumpHome(tester, width: 1000, home: const PortalMobileShell());
 
     // 双栏档 `.home-stage` 页边距 40：时间块左缘就该落在内容左边界。
     // 容差放到 2.5：-4 字距会给墨迹留 2px 的尾距误差，那是字体度量不是对齐问题。
     final ink = _inkOf(tester, _clock);
     expect(ink.left, closeTo(40.0, 2.5), reason: '双栏档时间块应贴内容左缘');
-    expect(
-      ink.center,
-      lessThan(500.0),
-      reason: '双栏档时间块不该跑到视口中央，右侧是焦点卡',
+    expect(ink.center, lessThan(500.0), reason: '双栏档时间块不该跑到视口中央，右侧是焦点卡');
+  });
+
+  testWidgets('首页时钟极性跟壁纸走：亮壁纸翻浅，其余留暗基准', (tester) async {
+    Color clockInk() =>
+        tester.renderObject<RenderParagraph>(_clock).text.style!.color!;
+
+    // 根主题是暗的：极性只应由壁纸亮度决定，与明暗设置无关。
+    await _pumpHome(tester, width: 390, home: const PortalPage());
+    expect(clockInk(), MobileEnvPalette.dark.ink);
+
+    await _pumpHome(
+      tester,
+      width: 390,
+      home: const PortalPage(),
+      polarity: AppBackdropPolarity.light,
     );
+    expect(clockInk(), MobileEnvPalette.light.ink);
   });
 }

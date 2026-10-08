@@ -5,6 +5,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
@@ -108,10 +109,20 @@ class MobileHostedRoute extends ConsumerWidget {
             ? baseTheme
             : forceDark
             ? OmniNestTheme.dark()
-            : MobileAppTheme.resolve(baseTheme);
+            : _withLightPolarity(MobileAppTheme.resolve(baseTheme));
     return Theme(
       data: shellTheme,
       child: MobileShellScope(hosted: true, child: child),
     );
   }
+}
+
+/// 追加浅色极性表。
+///
+/// `ThemeData.copyWith(extensions:)` 整体替换扩展集，因此必须带上既有扩展，
+/// 否则实底页会丢掉模块调色板（Photos/Files/Reader 等）。
+ThemeData _withLightPolarity(ThemeData theme) {
+  return theme.copyWith(
+    extensions: [...theme.extensions.values, MobileEnvPalette.light],
+  );
 }

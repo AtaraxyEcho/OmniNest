@@ -8,9 +8,9 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/workspace_tools_page.dart';
 import 'package:omninest/app/theme/app_theme.dart';
-import 'package:omninest/app/theme/mobile_app_theme.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
-import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 
 void main() {
   Future<void> pumpTools(
@@ -31,8 +31,8 @@ void main() {
         GoRoute(
           path: '/tools',
           builder:
-              (context, state) => const MobileShellScope(
-                hosted: true,
+              (context, state) => const MobileHostedRoute(
+                solidSurface: true,
                 child: Scaffold(body: WorkspaceToolsPage()),
               ),
         ),
@@ -83,10 +83,13 @@ void main() {
     final rootTheme =
         brightness == Brightness.dark
             ? OmniNestTheme.dark()
-            : MobileAppTheme.resolve(OmniNestTheme.light());
+            : OmniNestTheme.light();
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          mobileShellLocalBackdropActiveProvider.overrideWithValue(false),
+        ],
         child: MaterialApp.router(
           theme: rootTheme,
           localizationsDelegates: AppLocalizations.localizationsDelegates,

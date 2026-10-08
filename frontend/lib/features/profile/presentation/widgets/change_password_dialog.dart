@@ -4,7 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
@@ -121,6 +121,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
 
   /// 托管移动态表单：玻璃底字段 + 酸绿主钮（底部 sheet 宿主内）。
   Widget _buildMobileForm(BuildContext context, AppLocalizations l10n) {
+    final env = context.env;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
       child: Form(
@@ -131,20 +132,20 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
           children: [
             Text(
               'SECURITY',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 8, // ignore: font_size_whitelist
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.w700,
-                color: MobileEnvColors.accent,
+                color: env.accent,
               ),
             ),
             const SizedBox(height: 3),
             Text(
               l10n.profileChangePassword,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 21, // ignore: font_size_whitelist
                 fontWeight: FontWeight.w400,
-                color: MobileEnvColors.ink,
+                color: env.ink,
               ),
             ),
             const SizedBox(height: 18),
@@ -185,8 +186,8 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
             TextButton(
               onPressed: _loading ? null : _submit,
               style: TextButton.styleFrom(
-                backgroundColor: MobileEnvColors.accent,
-                foregroundColor: MobileEnvColors.onAccent,
+                backgroundColor: env.accent,
+                foregroundColor: env.onAccent,
                 minimumSize: const Size.fromHeight(46),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(13),
@@ -220,16 +221,17 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
     String? Function(String?)? validator,
   }) {
     final l10n = AppLocalizations.of(context);
+    final env = context.env;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 9, // ignore: font_size_whitelist
             letterSpacing: 1.2,
             fontWeight: FontWeight.w700,
-            color: MobileEnvColors.inkFaint,
+            color: env.inkFaint,
           ),
         ),
         const SizedBox(height: 6),
@@ -244,9 +246,9 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
                 }
                 return null;
               },
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13, // ignore: font_size_whitelist
-            color: MobileEnvColors.ink,
+            color: env.ink,
           ),
           decoration: InputDecoration(
             isCollapsed: true,
@@ -258,18 +260,15 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
             fillColor: const Color(0x12FFFFFF),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: MobileEnvColors.line09),
+              borderSide: BorderSide(color: env.line09),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: MobileEnvColors.line09),
+              borderSide: BorderSide(color: env.line09),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: MobileEnvColors.accent,
-                width: 1.5,
-              ),
+              borderSide: BorderSide(color: env.accent, width: 1.5),
             ),
             suffixIcon: IconButton(
               tooltip: obscure ? l10n.coreShowPassword : l10n.coreHidePassword,
@@ -278,7 +277,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
                 size: 17,
-                color: MobileEnvColors.inkMuted,
+                color: env.inkMuted,
               ),
               onPressed: onToggle,
             ),

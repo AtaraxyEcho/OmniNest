@@ -164,7 +164,7 @@ void main() {
     }
   });
 
-  testWidgets('未注册扩展时按亮度回落，注册后以注册实例为准', (tester) async {
+  testWidgets('未注册扩展时一律取暗基准，注册后以注册实例为准', (tester) async {
     late MobileEnvPalette byBrightness;
     await tester.pumpWidget(
       MaterialApp(
@@ -177,7 +177,11 @@ void main() {
         ),
       ),
     );
-    expect(byBrightness, MobileEnvPalette.light);
+    expect(
+      byBrightness,
+      MobileEnvPalette.dark,
+      reason: '浅色根主题不等于实底浅面：桌面与媒体页仍取暗基准',
+    );
 
     late MobileEnvPalette registered;
     await tester.pumpWidget(

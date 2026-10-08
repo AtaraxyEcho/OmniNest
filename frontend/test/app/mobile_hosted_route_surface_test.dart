@@ -54,6 +54,24 @@ void main() {
     expect(ink, isNot(MobileEnvPalette.dark.ink));
   });
 
+  testWidgets('实底浅面注册极性表时不抹掉既有模块调色板', (tester) async {
+    late Color surface;
+    await _run(
+      tester,
+      hostedRoute: true,
+      surface: const Size(390, 844),
+      solidSurface: true,
+      onProbe: (context) => context.photosColors.surface,
+      onSurface: (value) => surface = value,
+    );
+
+    expect(
+      surface,
+      OmniNestTheme.light().extension<PhotosColors>()!.surface,
+      reason: 'copyWith 追加极性表必须按类型合并，不得替换整个扩展集',
+    );
+  });
+
   testWidgets('实底工具路由在壁纸在场时仍锁暗环境基底', (tester) async {
     late Color ink;
     await _run(
@@ -117,7 +135,7 @@ Future<void> _run(
         home: Scaffold(
           body:
               hostedRoute
-                  ? MobileHostedRoute(child: child, solidSurface: solidSurface)
+                  ? MobileHostedRoute(solidSurface: solidSurface, child: child)
                   : MobileShellScope(hosted: false, child: child),
         ),
       ),

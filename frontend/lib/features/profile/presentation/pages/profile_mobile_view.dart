@@ -140,9 +140,9 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
         Center(
           child: Text(
             l10n.profileFooterTag,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9, // ignore: font_size_whitelist
-              color: MobileEnvColors.inkFaint,
+              color: context.env.inkFaint,
             ),
           ),
         ),
@@ -180,11 +180,11 @@ class _PmGroupLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 4),
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 9, // ignore: font_size_whitelist
           letterSpacing: 1.5,
           fontWeight: FontWeight.w700,
-          color: MobileEnvColors.inkFaint,
+          color: context.env.inkFaint,
         ),
       ),
     );
@@ -209,15 +209,15 @@ class _PmRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = MobileEnvColors.accent;
+    final color = context.env.accentInk;
     // InkWell 自带 onTap 语义节点，行内标题/副题文本即读屏标签，
     // 这里不再叠加 Semantics，避免同一行出现两个可聚焦节点。
     return InkWell(
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 62),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 9),
@@ -243,7 +243,7 @@ class _PmRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12, // ignore: font_size_whitelist
                         fontWeight: FontWeight.w600,
-                        color: MobileEnvColors.ink,
+                        color: context.env.ink,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -251,9 +251,9 @@ class _PmRow extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 9, // ignore: font_size_whitelist
-                        color: MobileEnvColors.inkMuted,
+                        color: context.env.inkMuted,
                       ),
                     ),
                   ],
@@ -266,7 +266,7 @@ class _PmRow extends StatelessWidget {
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
-                  color: MobileEnvColors.inkFaint,
+                  color: context.env.inkFaint,
                 ),
             ],
           ),
@@ -348,11 +348,11 @@ class _PmTextField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 9, // ignore: font_size_whitelist
             letterSpacing: 1.2,
             fontWeight: FontWeight.w700,
-            color: MobileEnvColors.inkFaint,
+            color: context.env.inkFaint,
           ),
         ),
         const SizedBox(height: 6),
@@ -363,9 +363,9 @@ class _PmTextField extends StatelessWidget {
           autofocus: autofocus,
           maxLength: maxLength,
           validator: validator,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13, // ignore: font_size_whitelist
-            color: MobileEnvColors.ink,
+            color: context.env.ink,
           ),
           decoration: InputDecoration(
             isCollapsed: true,
@@ -378,18 +378,15 @@ class _PmTextField extends StatelessWidget {
             fillColor: const Color(0x12FFFFFF),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: MobileEnvColors.line09),
+              borderSide: BorderSide(color: context.env.line09),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: MobileEnvColors.line09),
+              borderSide: BorderSide(color: context.env.line09),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: MobileEnvColors.accent,
-                width: 1.5,
-              ),
+              borderSide: BorderSide(color: context.env.accentInk, width: 1.5),
             ),
           ),
         ),
@@ -410,8 +407,8 @@ class _PmPrimaryButton extends StatelessWidget {
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        backgroundColor: MobileEnvColors.accent,
-        foregroundColor: MobileEnvColors.onAccent,
+        backgroundColor: context.env.accent,
+        foregroundColor: context.env.onAccent,
         minimumSize: const Size.fromHeight(46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
       ),
@@ -565,10 +562,10 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
                 const SizedBox(height: 10),
                 Text(
                   l10n.profileChangeAvatar,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.accent,
+                    color: context.env.accentInk,
                   ),
                 ),
               ],
@@ -701,9 +698,9 @@ class _PmSecuritySection extends ConsumerWidget {
             child: Center(
               child: Text(
                 l10n.profileSessionsEmpty,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11, // ignore: font_size_whitelist
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
               ),
             ),
@@ -775,15 +772,15 @@ class _PmTwoFactorRow extends ConsumerWidget {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: MobileEnvColors.accent.withValues(alpha: 0.12),
+                      color: context.env.accentInk.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       l10n.profileTwoFactorRequiredBadge,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 8, // ignore: font_size_whitelist
                         fontWeight: FontWeight.w800,
-                        color: MobileEnvColors.accent,
+                        color: context.env.accentInk,
                       ),
                     ),
                   )
@@ -821,8 +818,8 @@ class _PmSessionRow extends StatelessWidget {
     final subtitle = '${session.ipAddress} · ${session.lastActiveAt}';
     return Container(
       constraints: const BoxConstraints(minHeight: 60),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line07)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line07)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9),
@@ -839,7 +836,7 @@ class _PmSessionRow extends StatelessWidget {
               child: Icon(
                 Icons.devices_other_rounded,
                 size: 17,
-                color: MobileEnvColors.inkMuted,
+                color: context.env.inkMuted,
               ),
             ),
             const SizedBox(width: 12),
@@ -854,10 +851,10 @@ class _PmSessionRow extends StatelessWidget {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12, // ignore: font_size_whitelist
                             fontWeight: FontWeight.w600,
-                            color: MobileEnvColors.ink,
+                            color: context.env.ink,
                           ),
                         ),
                       ),
@@ -869,17 +866,17 @@ class _PmSessionRow extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: MobileEnvColors.accent.withValues(
+                            color: context.env.accentInk.withValues(
                               alpha: 0.12,
                             ),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             l10n.profileSessionsCurrent,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 8, // ignore: font_size_whitelist
                               fontWeight: FontWeight.w800,
-                              color: MobileEnvColors.accent,
+                              color: context.env.accentInk,
                             ),
                           ),
                         ),
@@ -891,9 +888,9 @@ class _PmSessionRow extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                     ),
                   ),
                 ],
@@ -1010,9 +1007,9 @@ class _PmNotificationsSection extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     child: Text(
                       l10n.profileNotificationTypesLoadFailed,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10, // ignore: font_size_whitelist
-                        color: MobileEnvColors.inkMuted,
+                        color: context.env.inkMuted,
                       ),
                     ),
                   ),
@@ -1069,9 +1066,9 @@ class _PmServerSection extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: Text(
             environment?.apiBaseUrl ?? '-',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13, // ignore: font_size_whitelist
-              color: MobileEnvColors.ink,
+              color: context.env.ink,
             ),
           ),
         ),
@@ -1105,9 +1102,9 @@ class _PmAboutSection extends StatelessWidget {
         Center(
           child: Text(
             l10n.profileFooterTag,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9, // ignore: font_size_whitelist
-              color: MobileEnvColors.inkFaint,
+              color: context.env.inkFaint,
             ),
           ),
         ),
@@ -1145,8 +1142,8 @@ class _ProfileAvatarChip extends StatelessWidget {
     final body = Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        color: MobileEnvColors.avatarBg,
+      decoration: BoxDecoration(
+        color: context.env.avatarBg,
         shape: BoxShape.circle,
       ),
       child:
@@ -1163,7 +1160,7 @@ class _ProfileAvatarChip extends StatelessWidget {
                             fontSize:
                                 size * 0.33, // ignore: font_size_whitelist
                             fontWeight: FontWeight.w700,
-                            color: MobileEnvColors.avatarFg,
+                            color: context.env.avatarFg,
                           ),
                         ),
                       ),
@@ -1175,7 +1172,7 @@ class _ProfileAvatarChip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: size * 0.33, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w700,
-                    color: MobileEnvColors.avatarFg,
+                    color: context.env.avatarFg,
                   ),
                 ),
               ),

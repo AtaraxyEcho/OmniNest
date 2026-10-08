@@ -137,6 +137,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       _animatedRoute(
         '/profile',
         (state) => MobileHostedRoute(
+          solidSurface: true,
           child: ProfilePage(
             initialSection: state.uri.queryParameters['section'],
           ),

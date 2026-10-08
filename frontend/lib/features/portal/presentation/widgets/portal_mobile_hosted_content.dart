@@ -12,98 +12,113 @@ class _HostedPortalContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return RefreshIndicator(
-      color: MobileEnvColors.accent,
-      onRefresh: onRefresh,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final viewport = constraints.maxHeight;
-          final tier = PortalMobileTier.resolveWidth(constraints.maxWidth);
-          final spacious = viewport > 640;
-          // 样例 home-stage 顶部内边距为 5vh：时钟从视口顶部 5% 处开始，
-          // 不再使用固定高度盒子沉底（会在眉标上方堆出大片死空间）。
-          final headerTop = (viewport * 0.05).clamp(20.0, 48.0);
-          final horizontal = tier.homeHorizontalPadding;
-          final header = _SpatialEnvironmentHeader(
-            topPadding: headerTop,
-            leftAligned: tier.twoColumnHome,
-            heroMaxFontSize: tier.heroTimeMaxFontSize,
-          );
-          final focus = const _SpatialFocusCard();
-          final lower = <Widget>[
-            const _SpatialRecentHeading(),
-            const SizedBox(height: 12),
-            _SpatialRecentStrip(tier: tier),
-            const SizedBox(height: 12),
-            _SpatialQuickLine(tier: tier),
-          ];
+    // 首页属环境面：极性与壁纸亮度配对，不跟明暗设置——暗栈遇亮壁纸与浅栈遇暗壁纸
+    // 会在薄幕布带同时塌方（docs/2026-10-08/015 §四）。
+    final baseTheme = Theme.of(context);
+    final polarity = ref.watch(appBackdropPolarityProvider);
+    final shellTheme = baseTheme.copyWith(
+      extensions: [
+        ...baseTheme.extensions.values,
+        polarity == AppBackdropPolarity.light
+            ? MobileEnvPalette.light
+            : MobileEnvPalette.dark,
+      ],
+    );
+    return Theme(
+      data: shellTheme,
+      child: RefreshIndicator(
+        color: context.env.accent,
+        onRefresh: onRefresh,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final viewport = constraints.maxHeight;
+            final tier = PortalMobileTier.resolveWidth(constraints.maxWidth);
+            final spacious = viewport > 640;
+            // 样例 home-stage 顶部内边距为 5vh：时钟从视口顶部 5% 处开始，
+            // 不再使用固定高度盒子沉底（会在眉标上方堆出大片死空间）。
+            final headerTop = (viewport * 0.05).clamp(20.0, 48.0);
+            final horizontal = tier.homeHorizontalPadding;
+            final header = _SpatialEnvironmentHeader(
+              topPadding: headerTop,
+              leftAligned: tier.twoColumnHome,
+              heroMaxFontSize: tier.heroTimeMaxFontSize,
+            );
+            final focus = const _SpatialFocusCard();
+            final lower = <Widget>[
+              const _SpatialRecentHeading(),
+              const SizedBox(height: 12),
+              _SpatialRecentStrip(tier: tier),
+              const SizedBox(height: 12),
+              _SpatialQuickLine(tier: tier),
+            ];
 
-          final scroll = CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.symmetric(horizontal: horizontal),
-                sliver: SliverToBoxAdapter(
-                  child:
-                      tier.twoColumnHome
-                          // 原型 ≥980：`.home-stage` 为 1.1fr/.9fr 双栏，
-                          // 时间块左对齐、焦点卡同排右侧。
-                          ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(flex: 11, child: header),
-                              const SizedBox(width: 30),
-                              Expanded(flex: 9, child: focus),
-                            ],
-                          )
-                          : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              header,
-                              // 样例手机档 time-block 与 home-focus 近乎相连
-                              //（auto-margin 余量很小），高屏略增。
-                              SizedBox(height: spacious ? 24 : 12),
-                              focus,
-                            ],
-                          ),
-                ),
+            final scroll = CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  tier.twoColumnHome ? 36 : 0,
-                  horizontal,
-                  24,
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  sliver: SliverToBoxAdapter(
+                    child:
+                        tier.twoColumnHome
+                            // 原型 ≥980：`.home-stage` 为 1.1fr/.9fr 双栏，
+                            // 时间块左对齐、焦点卡同排右侧。
+                            ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(flex: 11, child: header),
+                                const SizedBox(width: 30),
+                                Expanded(flex: 9, child: focus),
+                              ],
+                            )
+                            : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                header,
+                                // 样例手机档 time-block 与 home-focus 近乎相连
+                                //（auto-margin 余量很小），高屏略增。
+                                SizedBox(height: spacious ? 24 : 12),
+                                focus,
+                              ],
+                            ),
+                  ),
                 ),
-                sliver: SliverList.list(
-                  children:
-                      tier.twoColumnHome
-                          ? lower
-                          : <Widget>[
-                            SizedBox(height: spacious ? 36 : 24),
-                            ...lower,
-                          ],
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    tier.twoColumnHome ? 36 : 0,
+                    horizontal,
+                    24,
+                  ),
+                  sliver: SliverList.list(
+                    children:
+                        tier.twoColumnHome
+                            ? lower
+                            : <Widget>[
+                              SizedBox(height: spacious ? 36 : 24),
+                              ...lower,
+                            ],
+                  ),
                 ),
-              ),
-            ],
-          );
+              ],
+            );
 
-          final stageMaxWidth = tier.stageMaxWidth;
-          if (stageMaxWidth == null) {
-            return scroll;
-          }
-          // 原型 `.app-frame` 限宽：720-979 收 760，≥980 由壳层侧栏轨
-          // 约束舞台，本模块沿用基线上限避免内容摊满超宽视口。
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: stageMaxWidth),
-              child: scroll,
-            ),
-          );
-        },
+            final stageMaxWidth = tier.stageMaxWidth;
+            if (stageMaxWidth == null) {
+              return scroll;
+            }
+            // 原型 `.app-frame` 限宽：720-979 收 760，≥980 由壳层侧栏轨
+            // 约束舞台，本模块沿用基线上限避免内容摊满超宽视口。
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: stageMaxWidth),
+                child: scroll,
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -185,8 +200,8 @@ class _SpatialEnvironmentHeaderState
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: inlineAlignment,
-            style: const TextStyle(
-              color: MobileEnvColors.inkFaint,
+            style: TextStyle(
+              color: context.env.inkFaint,
               fontSize: AppTypography.labelMicro,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.65,
@@ -209,7 +224,7 @@ class _SpatialEnvironmentHeaderState
                   overflow: TextOverflow.ellipsis,
                   textAlign: inlineAlignment,
                   style: TextStyle(
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                     fontFamily: AppTypography.serifFamily,
                     fontFamilyFallback: AppTypography.serifFamilyFallback,
                     fontSize: scale,
@@ -239,14 +254,14 @@ class _SpatialEnvironmentHeaderState
                         int.tryParse(value.icon) ?? -1,
                       ),
                       size: 19,
-                      color: MobileEnvColors.white78,
+                      color: context.env.white78,
                     ),
                     const SizedBox(width: 7),
                     Flexible(
                       child: Text(
                         '${value.temp}°',
-                        style: const TextStyle(
-                          color: MobileEnvColors.white78,
+                        style: TextStyle(
+                          color: context.env.white78,
                           fontSize: AppTypography.bodyMedium,
                           fontWeight: FontWeight.w600,
                         ),
@@ -267,17 +282,17 @@ class _SpatialEnvironmentHeaderState
                         '${value.text}$location',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.white78,
+                        style: TextStyle(
+                          color: context.env.white78,
                           fontSize: AppTypography.bodyMedium,
                         ),
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const OmniIcon(
+                    OmniIcon(
                       icon: OmniIcons.chevron,
                       size: 15,
-                      color: MobileEnvColors.white52,
+                      color: context.env.white52,
                     ),
                   ],
                 ),
@@ -296,16 +311,16 @@ class _SpatialEnvironmentHeaderState
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const OmniIcon(
+                      OmniIcon(
                         icon: OmniIcons.cloud,
                         size: 18,
-                        color: MobileEnvColors.white78,
+                        color: context.env.white78,
                       ),
                       const SizedBox(width: 7),
                       Text(
                         AppLocalizations.of(context).portalWeatherDisconnected,
-                        style: const TextStyle(
-                          color: MobileEnvColors.white78,
+                        style: TextStyle(
+                          color: context.env.white78,
                           fontSize: AppTypography.bodyMedium,
                         ),
                       ),
@@ -483,8 +498,8 @@ class _SpatialFocusCard extends ConsumerWidget {
       children: [
         Text(
           _dayPartEyebrow(l10n).toUpperCase(),
-          style: const TextStyle(
-            color: MobileEnvColors.inkFaint,
+          style: TextStyle(
+            color: context.env.inkFaint,
             fontSize: AppTypography.labelMicro,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.65,
@@ -558,7 +573,7 @@ class _SpatialFocusTile extends StatelessWidget {
                   ? OmniIcons.music
                   : OmniIcons.film,
           size: 24,
-          color: MobileEnvColors.white46,
+          color: context.env.white46,
         ),
       ),
     );
@@ -589,15 +604,15 @@ class _SpatialFocusTile extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  MobileEnvColors.focusGradientStart,
-                  MobileEnvColors.focusGradientEnd,
+                  context.env.focusGradientStart,
+                  context.env.focusGradientEnd,
                 ],
               ),
-              border: Border.all(color: MobileEnvColors.line15),
+              border: Border.all(color: context.env.line15),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.2),
@@ -627,7 +642,7 @@ class _SpatialFocusTile extends StatelessWidget {
                               child: LinearProgressIndicator(
                                 value: progress!.clamp(0, 1),
                                 minHeight: 3,
-                                color: MobileEnvColors.accent,
+                                color: context.env.accentInk,
                                 backgroundColor: Colors.black45,
                               ),
                             ),
@@ -645,8 +660,8 @@ class _SpatialFocusTile extends StatelessWidget {
                           contextLine,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.inkMuted,
+                          style: TextStyle(
+                            color: context.env.inkMuted,
                             fontSize: AppTypography.labelMicro,
                           ),
                         ),
@@ -655,8 +670,8 @@ class _SpatialFocusTile extends StatelessWidget {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.ink,
+                          style: TextStyle(
+                            color: context.env.ink,
                             // ignore: font_size_whitelist
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
@@ -668,8 +683,8 @@ class _SpatialFocusTile extends StatelessWidget {
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.white52,
+                          style: TextStyle(
+                            color: context.env.white52,
                             fontSize: AppTypography.labelSmall,
                           ),
                         ),
@@ -684,13 +699,11 @@ class _SpatialFocusTile extends StatelessWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: MobileEnvColors.accent,
+                        color: context.env.accent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: MobileEnvColors.accent.withValues(
-                              alpha: 0.35,
-                            ),
+                            color: context.env.accent.withValues(alpha: 0.35),
                             blurRadius: 14,
                           ),
                         ],
@@ -699,7 +712,7 @@ class _SpatialFocusTile extends StatelessWidget {
                         child: OmniIcon(
                           icon: actionIcon,
                           size: 21,
-                          color: MobileEnvColors.onAccent,
+                          color: context.env.onAccent,
                         ),
                       ),
                     ),
@@ -728,8 +741,8 @@ class _SpatialRecentHeading extends StatelessWidget {
             l10n.spatialRecentlyEyebrow.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: MobileEnvColors.inkFaint,
+            style: TextStyle(
+              color: context.env.inkFaint,
               fontSize: AppTypography.labelMicro,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.65,
@@ -739,7 +752,7 @@ class _SpatialRecentHeading extends StatelessWidget {
         TextButton(
           onPressed: () => context.go('/library'),
           style: TextButton.styleFrom(
-            foregroundColor: MobileEnvColors.white70,
+            foregroundColor: context.env.white70,
             minimumSize: const Size(48, 40),
             padding: const EdgeInsets.symmetric(horizontal: 8),
             textStyle: const TextStyle(fontSize: AppTypography.labelSmall),
@@ -749,10 +762,10 @@ class _SpatialRecentHeading extends StatelessWidget {
             children: [
               Text(l10n.spatialViewLibrary),
               const SizedBox(width: 1),
-              const OmniIcon(
+              OmniIcon(
                 icon: OmniIcons.chevron,
                 size: 16,
-                color: MobileEnvColors.white70,
+                color: context.env.white70,
               ),
             ],
           ),
@@ -882,14 +895,14 @@ class _SpatialRecentTile extends StatelessWidget {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: MobileEnvColors.folderGlyphBg,
+          color: context.env.folderGlyphBg,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Center(
           child: OmniIcon(
             icon: OmniIcons.folder,
             size: 24,
-            color: MobileEnvColors.folderGlyph,
+            color: context.env.folderGlyph,
           ),
         ),
       );
@@ -922,9 +935,9 @@ class _SpatialRecentTile extends StatelessWidget {
         height: height,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: MobileEnvColors.surfaceRaised,
+            color: context.env.surfaceRaised,
             borderRadius: BorderRadius.circular(19),
-            border: Border.all(color: MobileEnvColors.line10),
+            border: Border.all(color: context.env.line10),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(19),
@@ -969,8 +982,8 @@ class _SpatialRecentTile extends StatelessWidget {
                             title,
                             maxLines: photo != null ? 1 : 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MobileEnvColors.ink,
+                            style: TextStyle(
+                              color: context.env.ink,
                               fontSize: AppTypography.bodySmall,
                               fontWeight: FontWeight.w700,
                               height: 1.25,
@@ -982,8 +995,8 @@ class _SpatialRecentTile extends StatelessWidget {
                               subtitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: MobileEnvColors.inkMuted,
+                              style: TextStyle(
+                                color: context.env.inkMuted,
                                 fontSize: AppTypography.labelMicro,
                               ),
                             ),
@@ -1015,24 +1028,21 @@ class _BookMini extends StatelessWidget {
     return Container(
       width: 35,
       height: 48,
-      decoration: const BoxDecoration(
-        color: MobileEnvColors.bookMiniBg,
+      decoration: BoxDecoration(
+        color: context.env.bookMiniBg,
         borderRadius: BorderRadius.horizontal(
           left: Radius.circular(2),
           right: Radius.circular(7),
         ),
         boxShadow: [
-          BoxShadow(
-            color: MobileEnvColors.bookMiniSpine,
-            offset: Offset(-3, 0),
-          ),
+          BoxShadow(color: context.env.bookMiniSpine, offset: Offset(-3, 0)),
         ],
       ),
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: const TextStyle(
-          color: MobileEnvColors.bookMiniFg,
+        style: TextStyle(
+          color: context.env.bookMiniFg,
           fontFamily: AppTypography.serifFamily,
           fontFamilyFallback: AppTypography.serifFamilyFallback,
           fontSize: AppTypography.titleLarge,
@@ -1066,28 +1076,24 @@ class _SpatialQuickLine extends StatelessWidget {
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: MobileEnvColors.surfaceGlass,
+                  color: context.env.surfaceGlass,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: MobileEnvColors.line09),
+                  border: Border.all(color: context.env.line09),
                 ),
                 child: SizedBox(
                   height: MobileLayoutTokens.minimumTarget,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      OmniIcon(
-                        icon: icon,
-                        size: 18,
-                        color: MobileEnvColors.ink,
-                      ),
+                      OmniIcon(icon: icon, size: 18, color: context.env.ink),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.ink,
+                          style: TextStyle(
+                            color: context.env.ink,
                             fontSize: AppTypography.labelSmall,
                             fontWeight: FontWeight.w600,
                           ),
