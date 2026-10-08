@@ -4,6 +4,7 @@ import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.NodeType;
@@ -228,7 +229,7 @@ public class FileDeletionService {
         fileNodeRepository.save(root);
         fileNodeRepository.assignDeletedDescendantsToPurge(
                 ownerUserId,
-                root.getNormalizedPath() + "/",
+                purgeSubtreePrefix(root),
                 taskId,
                 FilePurgeState.QUEUED,
                 requestedAt
@@ -315,7 +316,7 @@ public class FileDeletionService {
         fileNodeRepository.saveAll(roots);
         roots.forEach(root -> fileNodeRepository.assignDeletedDescendantsToPurge(
                 ownerUserId,
-                root.getNormalizedPath() + "/",
+                purgeSubtreePrefix(root),
                 taskId,
                 FilePurgeState.QUEUED,
                 requestedAt
@@ -472,6 +473,17 @@ public class FileDeletionService {
                 fileNodeId,
                 ACTIVE_STATUSES
         );
+    }
+
+    /**
+     * 构造子树前缀的 LIKE 字面量。
+     *
+     * <p>前缀来自真实目录名，而消费方是把后代挂到本次清理任务的批量更新：目录名里的
+     * {@code _} 或 {@code %} 若按通配符解释，兄弟目录的已删除文件会被同一 {@code taskId}
+     * 认领并物理清除。配套查询必须声明 {@code escape '\'}。</p>
+     */
+    private String purgeSubtreePrefix(FileNode root) {
+        return LikePatterns.escapeSpecials(root.getNormalizedPath() + "/");
     }
 
     private void markPurgeQueued(FileNode node, UUID taskId, Instant requestedAt) {

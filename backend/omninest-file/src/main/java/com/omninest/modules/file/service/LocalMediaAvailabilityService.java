@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileContentRef;
 import com.omninest.modules.file.dto.LocalMediaExistingRef;
 import com.omninest.modules.file.repository.FileContentRefRepository;
@@ -78,7 +79,11 @@ public class LocalMediaAvailabilityService {
             int requiredConfirmations,
             Duration gracePeriod
     ) {
-        String prefix = ".".equals(sourceRelativeRoot) ? "" : sourceRelativeRoot + "/";
+        // 前缀是真实目录名，不是模式：库里存在 S01_E01 这类目录名时，未转义的 _ 会当成
+        // 单字符通配、% 当成任意串，把兄弟目录的引用一起标成缺失。下面四个消费方都声明
+        // escape '\'，与此处口径配对（含 countUnavailableInSubtree）。
+        String rawPrefix = ".".equals(sourceRelativeRoot) ? "" : sourceRelativeRoot + "/";
+        String prefix = LikePatterns.escapeSpecials(rawPrefix);
         contentRefRepository.advanceMissingPending(ownerUserId, storageLocationId, prefix, scanRunId);
         contentRefRepository.confirmMissing(
                 ownerUserId,
@@ -95,7 +100,7 @@ public class LocalMediaAvailabilityService {
                 Instant.now()
         );
         return Math.toIntExact(contentRefRepository
-                .countByOwnerUserIdAndStorageLocationIdAndRelativePathStartingWithAndAvailabilityStatusIn(
+                .countUnavailableInSubtree(
                         ownerUserId,
                         storageLocationId,
                         prefix,

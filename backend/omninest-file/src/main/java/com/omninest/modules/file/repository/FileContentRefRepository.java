@@ -112,7 +112,7 @@ public interface FileContentRefRepository extends JpaRepository<FileContentRef, 
                    ref.lastAvailabilityRunId = :scanRunId
              where ref.ownerUserId = :ownerUserId
                and ref.storageLocationId = :storageLocationId
-               and ref.relativePath like concat(:relativePathPrefix, '%')
+               and ref.relativePath like concat(:relativePathPrefix, '%') escape '\\'
                and ref.availabilityStatus = 'MISSING_PENDING'
                and (ref.lastSeenScanRunId is null or ref.lastSeenScanRunId <> :scanRunId)
                and (ref.lastAvailabilityRunId is null or ref.lastAvailabilityRunId <> :scanRunId)
@@ -131,7 +131,7 @@ public interface FileContentRefRepository extends JpaRepository<FileContentRef, 
                set ref.availabilityStatus = 'MISSING'
              where ref.ownerUserId = :ownerUserId
                and ref.storageLocationId = :storageLocationId
-               and ref.relativePath like concat(:relativePathPrefix, '%')
+               and ref.relativePath like concat(:relativePathPrefix, '%') escape '\\'
                and ref.availabilityStatus = 'MISSING_PENDING'
                and ref.missingConfirmations >= :requiredConfirmations
                and ref.missingSince <= :confirmationBefore
@@ -154,7 +154,7 @@ public interface FileContentRefRepository extends JpaRepository<FileContentRef, 
                    ref.lastAvailabilityRunId = :scanRunId
              where ref.ownerUserId = :ownerUserId
                and ref.storageLocationId = :storageLocationId
-               and ref.relativePath like concat(:relativePathPrefix, '%')
+               and ref.relativePath like concat(:relativePathPrefix, '%') escape '\\'
                and ref.availabilityStatus = 'AVAILABLE'
                and (ref.lastSeenScanRunId is null or ref.lastSeenScanRunId <> :scanRunId)
             """)
@@ -166,11 +166,25 @@ public interface FileContentRefRepository extends JpaRepository<FileContentRef, 
             @Param("missingSince") Instant missingSince
     );
 
-    long countByOwnerUserIdAndStorageLocationIdAndRelativePathStartingWithAndAvailabilityStatusIn(
-            UUID ownerUserId,
-            UUID storageLocationId,
-            String relativePathPrefix,
-            Collection<String> availabilityStatuses
+    /**
+     * 统计本子树内仍处于不可用状态的引用数。
+     *
+     * <p>由 derived 方法改为显式查询：派生属性的 {@code StartingWith} 生成的 LIKE
+     * 无法声明转义符，与本仓储其余三个缺失更新不同口径，会让同一次扫描用两种
+     * 前缀语义（详见 {@code LocalMediaAvailabilityService.finishSuccessfulScan}）。</p>
+     */
+    @Query("""
+            select count(ref) from FileContentRef ref
+             where ref.ownerUserId = :ownerUserId
+               and ref.storageLocationId = :storageLocationId
+               and ref.relativePath like concat(:relativePathPrefix, '%') escape '\\'
+               and ref.availabilityStatus in :availabilityStatuses
+            """)
+    long countUnavailableInSubtree(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("storageLocationId") UUID storageLocationId,
+            @Param("relativePathPrefix") String relativePathPrefix,
+            @Param("availabilityStatuses") Collection<String> availabilityStatuses
     );
 
     /**

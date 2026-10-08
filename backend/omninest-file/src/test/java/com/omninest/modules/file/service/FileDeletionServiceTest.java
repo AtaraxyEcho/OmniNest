@@ -229,6 +229,24 @@ class FileDeletionServiceTest {
         verify(distributedLock).unlock("lock:file-lifecycle:" + SECOND_FILE_NODE_ID, "lock-token");
     }
 
+    @Test
+    void deletePermanentlyEscapesWildcardCharactersInThePurgeSubtreePrefix() {
+        // 前缀是真实目录名，消费方是"把后代挂到本次 taskId"的批量更新：
+        // /100%_done/ 不转义就会同时匹配兄弟目录，那些文件被同一任务认领后物理清除。
+        FileNode root = deletedRoot(FILE_NODE_ID, "/100%_done");
+        when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(root));
+
+        fileDeletionService.deletePermanently(OWNER_ID, FILE_NODE_ID);
+
+        verify(fileNodeRepository).assignDeletedDescendantsToPurge(
+                eq(OWNER_ID),
+                eq("/100\\%\\_done/"),
+                any(),
+                eq(FilePurgeState.QUEUED),
+                any()
+        );
+    }
+
     private FileNode deletedRoot() {
         return deletedRoot(FILE_NODE_ID, "/movie.mkv");
     }

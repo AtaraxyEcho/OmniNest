@@ -367,7 +367,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update FileNode node set node.purgeTaskId = :taskId, node.purgeState = :state, "
             + "node.purgeRequestedAt = :requestedAt where node.ownerUserId = :ownerUserId "
-            + "and node.normalizedPath like concat(:prefix, '%') and node.deleted = true")
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
     int assignDeletedDescendantsToPurge(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("prefix") String prefix,
