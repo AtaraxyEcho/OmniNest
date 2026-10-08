@@ -11,19 +11,129 @@ import 'package:omninest/features/reader/data/epub_archive_source.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:xml/xml.dart';
 
+/// EPUB 内部文本声明了客户端无法解码的字符集。
+///
+/// 客户端只带 GBK 与 UTF-8/UTF-16 的解码能力：Big5/cp936 之类没有码表（Dart 标准库不提供，
+/// 引表包与 AGENTS 的依赖收敛原则冲突）。这类条目过去会落进 `allowMalformed` 静默产出乱码，
+/// 读者看到"打开成功但内容是坏的"，比明确失败更难诊断。
+class EpubUnsupportedEncodingException implements Exception {
+  const EpubUnsupportedEncodingException(this.encoding);
+
+  /// XHTML/OPF 里声明的原始编码名。
+  final String encoding;
+
+  @override
+  String toString() => 'EpubUnsupportedEncodingException: $encoding';
+}
+
 /// 按条目声明解码 EPUB 内部文本。
 ///
 /// 中文圈常见旧制 EPUB 的内部 XHTML/OPF 为 GBK 编码；严格 utf8 解码会
-/// 抛异常导致章节静默空白。优先读取 XML 声明的 encoding，声明为 GBK
-/// 系列时用 GBK 解码，其余按宽松 utf8 处理避免坏字节毁掉整章。
+/// 抛异常导致章节静默空白。顺序是：BOM/字节形状判 UTF-16 → 声明名判 GBK 家族 →
+/// 其余声明先试严格 UTF-8（纯 ASCII 但声明写错的条目仍能读），只有两者都不成立才
+/// 显式报"编码不支持"。
 String decodeEpubText(List<int> bytes) {
+  final byteOrder = _utf16ByteOrder(bytes);
+  if (byteOrder != null) {
+    return _decodeUtf16(bytes, bigEndian: byteOrder == _Utf16Order.bigEndian);
+  }
   final declared = _declaredEncoding(bytes);
-  if (declared != null && _isGbkFamily(declared)) {
-    // `gbk` 的映射表以双字节 GBK 码元为键，逐字节查表永不命中（等价 Latin-1）；
-    // 必须使用按双字节组合查表的 `gbk_bytes`。
-    return gbk_bytes.decode(bytes);
+  if (declared != null) {
+    final normalized =
+        declared.replaceAll('-', '').replaceAll('_', '').toLowerCase();
+    if (_isGbkFamily(normalized)) {
+      // `gbk` 的映射表以双字节 GBK 码元为键，逐字节查表永不命中（等价 Latin-1）；
+      // 必须使用按双字节组合查表的 `gbk_bytes`。
+      return gbk_bytes.decode(bytes);
+    }
+    if (normalized == 'utf16le') {
+      return _decodeUtf16(bytes, bigEndian: false);
+    }
+    if (normalized == 'utf16be') {
+      return _decodeUtf16(bytes, bigEndian: true);
+    }
+    if (!_isUtf8Family(normalized)) {
+      try {
+        return utf8.decode(bytes);
+      } on FormatException {
+        throw EpubUnsupportedEncodingException(declared);
+      }
+    }
   }
   return utf8.decode(bytes, allowMalformed: true);
+}
+
+bool _isUtf8Family(String normalized) =>
+    normalized == 'utf8' ||
+    normalized == 'utf' ||
+    normalized == 'unicode11utf8' ||
+    normalized.isEmpty;
+
+enum _Utf16Order { littleEndian, bigEndian }
+
+/// 识别 UTF-16：BOM 优先，其次用"ASCII 文本每隔一字节为 0"的字节形状。
+///
+/// 没有 BOM 且没声明可辨的 UTF-16 名时，声明正则也会被 NUL 打断，所以字节形状这一路
+/// 是不能省的第二道判据。
+_Utf16Order? _utf16ByteOrder(List<int> bytes) {
+  if (bytes.length >= 2) {
+    if (bytes[0] == 0xFF && bytes[1] == 0xFE) {
+      return _Utf16Order.littleEndian;
+    }
+    if (bytes[0] == 0xFE && bytes[1] == 0xFF) {
+      return _Utf16Order.bigEndian;
+    }
+  }
+  // XML 文本必以 `<`（0x3C）开头；UTF-16 编码下它落在偶字节，另一个字节是 0。
+  if (bytes.length >= 8) {
+    final littleEndianShaped = bytes[0] == 0x3C && bytes[1] == 0x00;
+    final bigEndianShaped = bytes[0] == 0x00 && bytes[1] == 0x3C;
+    if (!littleEndianShaped && !bigEndianShaped) {
+      return null;
+    }
+    final nulOnEvenBytes = bigEndianShaped;
+    for (var i = 2; i < 8; i++) {
+      final shouldBeZero = nulOnEvenBytes ? i.isEven : i.isOdd;
+      if (shouldBeZero != (bytes[i] == 0x00)) {
+        return null;
+      }
+    }
+    return littleEndianShaped
+        ? _Utf16Order.littleEndian
+        : _Utf16Order.bigEndian;
+  }
+  return null;
+}
+
+String _decodeUtf16(List<int> bytes, {required bool bigEndian}) {
+  var start = 0;
+  if (bytes.length >= 2 &&
+      ((bytes[0] == 0xFF && bytes[1] == 0xFE) ||
+          (bytes[0] == 0xFE && bytes[1] == 0xFF))) {
+    start = 2;
+  }
+  final buffer = StringBuffer();
+  for (var i = start; i + 1 < bytes.length; i += 2) {
+    var unit =
+        bigEndian
+            ? (bytes[i] << 8) | bytes[i + 1]
+            : (bytes[i + 1] << 8) | bytes[i];
+    if (unit >= 0xD800 && unit <= 0xDBFF && i + 3 < bytes.length) {
+      final next =
+          bigEndian
+              ? (bytes[i + 2] << 8) | bytes[i + 3]
+              : (bytes[i + 3] << 8) | bytes[i + 2];
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        buffer.writeCharCode(
+          0x10000 + ((unit - 0xD800) << 10) + (next - 0xDC00),
+        );
+        i += 2;
+        continue;
+      }
+    }
+    buffer.writeCharCode(unit);
+  }
+  return buffer.toString();
 }
 
 String? _declaredEncoding(List<int> bytes) {
@@ -258,6 +368,9 @@ class EpubParserService {
       return decodeEpubText(_entryBytes(fileEntry));
     } on EpubParseLimitException {
       rethrow;
+    } on EpubUnsupportedEncodingException {
+      // 编码不支持必须冒到提示层：吞成 null 会让读者看到"章节不存在"而不是"这章编码读不了"。
+      rethrow;
     } catch (e) {
       if (kDebugMode) {
         readerDebugLog('EPUB: parseChapter failed for $contentPath: $e');
@@ -406,6 +519,8 @@ class EpubParserService {
       final rootfile = doc.findAllElements('rootfile').firstOrNull;
       return rootfile?.getAttribute('full-path');
     } on EpubParseLimitException {
+      rethrow;
+    } on EpubUnsupportedEncodingException {
       rethrow;
     } catch (e) {
       if (kDebugMode) {

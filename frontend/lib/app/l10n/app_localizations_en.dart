@@ -6265,6 +6265,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The chapter text no longer matches this book. Reparse it in the book details and try again.';
 
   @override
+  String get readerChapterUnsupportedEncoding =>
+      'This chapter uses a text encoding that can\'t be decoded here. Convert the book to UTF-8 and import it again.';
+
+  @override
   String get readerRemoveFavorite => 'Remove from favorites';
 
   @override

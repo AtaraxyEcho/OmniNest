@@ -6065,6 +6065,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerChapterNeedsReparse => '本章正文与书籍内容不一致，请在书籍详情中重新解析后重试';
 
   @override
+  String get readerChapterUnsupportedEncoding =>
+      '本章使用了无法解码的字符集，请把书籍转为 UTF-8 后重新导入';
+
+  @override
   String get readerRemoveFavorite => '取消收藏';
 
   @override

@@ -11495,6 +11495,12 @@ abstract class AppLocalizations {
   /// **'The chapter text no longer matches this book. Reparse it in the book details and try again.'**
   String get readerChapterNeedsReparse;
 
+  /// EPUB 条目声明了客户端没有解码能力的字符集（如 Big5/cp936）时的提示
+  ///
+  /// In en, this message translates to:
+  /// **'This chapter uses a text encoding that can\'t be decoded here. Convert the book to UTF-8 and import it again.'**
+  String get readerChapterUnsupportedEncoding;
+
   /// No description provided for @readerRemoveFavorite.
   ///
   /// In en, this message translates to:

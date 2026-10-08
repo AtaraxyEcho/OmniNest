@@ -88,6 +88,9 @@ enum ReaderChapterFailure {
 
   /// 服务端与本地切片与清单不一致（偏移漂移或清单超前）：需要重新解析本书。
   needsReparse,
+
+  /// 条目声明了客户端没有解码能力的字符集（Big5/cp936 等）：重导或转成 UTF-8 才有解。
+  unsupportedEncoding,
 }
 
 /// TXT 单章正文不可用，携带可提示给用户的原因。

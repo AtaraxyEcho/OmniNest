@@ -2528,6 +2528,10 @@
   "@readerChapterNeedsReparse": {
     "description": "章节正文与清单偏移不一致时的提示"
   },
+  "readerChapterUnsupportedEncoding": "本章使用了无法解码的字符集，请把书籍转为 UTF-8 后重新导入",
+  "@readerChapterUnsupportedEncoding": {
+    "description": "EPUB 条目声明了客户端没有解码能力的字符集（如 Big5/cp936）时的提示"
+  },
   "readerRemoveFavorite": "取消收藏",
   "readerAddFavorite": "加入收藏",
   "readerReadComic": "阅读漫画",

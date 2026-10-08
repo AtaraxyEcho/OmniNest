@@ -83,13 +83,34 @@ Future<String?> loadChapterContent(
 
   final source = await ref.read(cachedBookHandleProvider(itemId).future);
   final epubService = ref.read(epubParserServiceProvider(itemId));
+
+  // 编码不支持是可诊断的读者动作（重导或转 UTF-8），必须翻成带原因的章节失败；
+  // 其它异常仍按原样上抛，交给通用加载失败文案。
+  Future<String?> readWithEncodingFailure(
+    Future<String?> Function() read,
+  ) async {
+    try {
+      return await read();
+    } on EpubUnsupportedEncodingException catch (error) {
+      throw TxtChapterTextException(
+        'EPUB 条目声明了无法解码的字符集（$error, chapter=$chapterIndex）',
+        reason: ReaderChapterFailure.unsupportedEncoding,
+      );
+    }
+  }
+
   final bytes = source.memoryBytes;
   if (bytes != null) {
     if (bytes.isEmpty) return null;
-    return epubService.parseChapter(bytes, contentPath);
+    return readWithEncodingFailure(
+      () => epubService.parseChapter(bytes, contentPath),
+    );
   }
   final path = await source.openFilePath();
-  return path == null ? null : epubService.parseChapterFile(path, contentPath);
+  if (path == null) return null;
+  return readWithEncodingFailure(
+    () => epubService.parseChapterFile(path, contentPath),
+  );
 }
 
 /// 读取服务端已解码的 TXT 单章正文；不可用或疑似陈旧时返回 null，交由本地链兜底。

@@ -25,6 +25,12 @@ class ReaderProgressIndicator extends StatelessWidget {
   /// 样例 ReaderFocus 形态（移动壳层）。
   final bool sampleChrome;
 
+  /// 常驻进度胶囊/进度线本体。
+  ///
+  /// 本控件**不再**自包 `Positioned`：它被放进 `IgnorePointer → AnimatedOpacity` 的
+  /// 交叉淡入链里，而 `Positioned` 只能作为 `Stack` 的直接子节点，否则父数据
+  /// （StackParentData）会挂到 FadeTransition 上并触发 ParentDataWidget 断言。
+  /// 定位几何由唯一消费方 `reader_view_page_layout.dart` 在 Stack 层给出。
   @override
   Widget build(BuildContext context) {
     final percent = (progress * 100).clamp(0, 100);
@@ -34,62 +40,53 @@ class ReaderProgressIndicator extends StatelessWidget {
             : '${percent.toStringAsFixed(1)}%';
 
     if (sampleChrome) {
-      return Positioned(
-        left: 20,
-        right: 20,
-        bottom: 10 + MediaQuery.viewPaddingOf(context).bottom,
-        child: Row(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  minHeight: 3,
-                  color: settings.accentColor,
-                  backgroundColor: settings.onSurfaceColor.withValues(
-                    alpha: 0.12,
-                  ),
+      return Row(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 3,
+                color: settings.accentColor,
+                backgroundColor: settings.onSurfaceColor.withValues(
+                  alpha: 0.12,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              '${percent.round()}%',
-              style: TextStyle(
-                color: settings.onSurfaceVariantColor.withValues(alpha: 0.70),
-                // ignore: font_size_whitelist
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                height: 1.2,
-              ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${percent.round()}%',
+            style: TextStyle(
+              color: settings.onSurfaceVariantColor.withValues(alpha: 0.70),
+              // ignore: font_size_whitelist
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              height: 1.2,
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    return Positioned(
-      right: 16,
-      bottom: 16 + MediaQuery.viewPaddingOf(context).bottom,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: settings.surfaceColor.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: settings.onSurfaceVariantColor.withValues(alpha: 0.10),
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: settings.surfaceColor.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: settings.onSurfaceVariantColor.withValues(alpha: 0.10),
         ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: settings.onSurfaceVariantColor.withValues(alpha: 0.70),
-            fontSize: AppTypography.labelSmall,
-            fontWeight: FontWeight.w600,
-            height: 1.2,
-          ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: settings.onSurfaceVariantColor.withValues(alpha: 0.70),
+          fontSize: AppTypography.labelSmall,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
         ),
       ),
     );

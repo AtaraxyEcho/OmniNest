@@ -11,6 +11,8 @@ String chapterLoadErrorMessage(
   return switch (reason) {
     ReaderChapterFailure.needsNetwork => l10n.readerChapterNeedsNetwork,
     ReaderChapterFailure.needsReparse => l10n.readerChapterNeedsReparse,
+    ReaderChapterFailure.unsupportedEncoding =>
+      l10n.readerChapterUnsupportedEncoding,
     null => l10n.readerChapterLoadFailed,
   };
 }
