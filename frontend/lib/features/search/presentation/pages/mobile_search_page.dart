@@ -348,9 +348,9 @@ class _SearchHeader extends StatelessWidget {
                   height: 48,
                   padding: const EdgeInsets.symmetric(horizontal: 13),
                   decoration: BoxDecoration(
-                    color: const Color(0x13FFFFFF),
+                    color: context.env.line07,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0x1AFFFFFF)),
+                    border: Border.all(color: context.env.line10),
                   ),
                   child: Row(
                     children: [
@@ -385,8 +385,8 @@ class _SearchHeader extends StatelessWidget {
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
                             isCollapsed: true,
-                            hintStyle: const TextStyle(
-                              color: Color(0x5CFFFFFF),
+                            hintStyle: TextStyle(
+                              color: context.env.ink40,
                               // ignore: font_size_whitelist
                               fontSize: 14,
                             ),
@@ -419,7 +419,7 @@ class _SearchHeader extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0x1FFFFFFF),
+                          color: context.env.line12,
                           borderRadius: BorderRadius.circular(7),
                         ),
                         child: const Text(
@@ -457,8 +457,8 @@ class _RecentRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 51),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0x12FFFFFF))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Row(
           children: [
@@ -727,13 +727,13 @@ class _ScopeGrid extends StatelessWidget {
                       color:
                           scope == selected
                               ? context.env.accentInk.withValues(alpha: 0.10)
-                              : const Color(0x0CFFFFFF),
+                              : context.env.surfaceTint,
                       borderRadius: BorderRadius.circular(17),
                       border: Border.all(
                         color:
                             scope == selected
                                 ? context.env.accentInk.withValues(alpha: 0.38)
-                                : const Color(0x14FFFFFF),
+                                : context.env.line09,
                       ),
                     ),
                     child: Column(
@@ -775,7 +775,7 @@ class _SkeletonRow extends StatelessWidget {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0x0CFFFFFF),
+        color: context.env.surfaceTint,
         borderRadius: BorderRadius.circular(14),
       ),
     );
