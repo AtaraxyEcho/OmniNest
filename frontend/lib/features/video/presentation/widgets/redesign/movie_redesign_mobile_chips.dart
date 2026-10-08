@@ -91,8 +91,7 @@ class MovieRedesignMobileChips extends StatelessWidget {
     // 35-45 档之下，扩命中必然撑行，故按行高档落地。
     final accent = env.accentInk;
     return Material(
-      color:
-          selected ? accent.withValues(alpha: 0.10) : const Color(0x0DFFFFFF),
+      color: selected ? accent.withValues(alpha: 0.10) : env.surfaceTint,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(11),
         side: BorderSide(
@@ -375,6 +374,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0x8C090D0C),
                     borderRadius: BorderRadius.circular(8),
+                    // polarity-stable: imagery supplies the contrast in both polarities
                     border: Border.all(color: const Color(0x29FFFFFF)),
                   ),
                   child: Text(
@@ -398,6 +398,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                     style: _heroMonoStyle(
                       env: context.env,
                       size: 9,
+                      // polarity-stable: imagery supplies the contrast in both polarities
                       color: const Color(0xA1FFFFFF),
                     ),
                   ),
@@ -510,6 +511,7 @@ class _HeroButton extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: BorderSide(
+          // polarity-stable: imagery supplies the contrast in both polarities
           color: filled ? Colors.transparent : const Color(0x38FFFFFF),
         ),
       ),

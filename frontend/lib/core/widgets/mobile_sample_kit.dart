@@ -350,10 +350,10 @@ class SampleSerifRow extends StatelessWidget {
                   width: 22,
                   child: Text(
                     number!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
-                      color: Color(0x59FFFFFF),
+                      color: context.env.ink40,
                     ),
                   ),
                 ),
@@ -628,10 +628,7 @@ class SampleNowPlayingCard extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0x85FFFFFF),
-                    ),
+                    style: TextStyle(fontSize: 11, color: context.env.white52),
                   ),
                   const SizedBox(height: 7),
                   Row(
@@ -759,6 +756,7 @@ class SampleSeriesBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0x8C090D0C),
         borderRadius: BorderRadius.circular(7),
+        // polarity-stable: imagery supplies the contrast in both polarities
         border: Border.all(color: const Color(0x29FFFFFF)),
       ),
       child: Text(
@@ -767,6 +765,7 @@ class SampleSeriesBadge extends StatelessWidget {
           fontSize: 7,
           letterSpacing: 1,
           fontWeight: FontWeight.w700,
+          // polarity-stable: imagery supplies the contrast in both polarities
           color: Color(0xCCFFFFFF),
         ),
       ),

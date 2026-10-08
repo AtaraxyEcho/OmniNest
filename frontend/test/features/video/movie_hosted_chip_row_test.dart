@@ -1,5 +1,5 @@
 // 托管影视胶囊行与状态筛选面板回归：排序/收藏胶囊按样例 `.chip`（r11、9px、
-// 白 5% 底、gap 7、行高 38），酸绿选中态，状态筛选落 `.glass-sheet` 实底面板
+// 半透明 tint 底、gap 7、行高 38），酸绿选中态，状态筛选落 `.glass-sheet` 实底面板
 // 并以行族呈现选项。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
@@ -89,7 +90,7 @@ void main() {
       selectedShape.side.color,
       MobileEnvColors.accent.withValues(alpha: 0.38),
     );
-    expect(plain.color, const Color(0x0DFFFFFF));
+    expect(plain.color, MobileEnvPalette.dark.surfaceTint);
     expect(plainShape.side.color, MobileEnvColors.line09);
     // 工位件是 2px 直角；托管胶囊按样例圆角。
     expect(

@@ -128,7 +128,7 @@ class MobileTransferRow extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: progress!.clamp(0, 1),
                       minHeight: 3,
-                      backgroundColor: const Color(0x1AFFFFFF),
+                      backgroundColor: context.env.line10,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         context.env.accentInk,
                       ),
@@ -192,7 +192,7 @@ class _SummaryCell extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
-        color: const Color(0x0CFFFFFF),
+        color: context.env.surfaceTint,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.env.line07),
       ),
@@ -257,7 +257,7 @@ class MobileDisabledCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
       decoration: BoxDecoration(
-        color: const Color(0x0AFFFFFF),
+        color: context.env.surfaceTint,
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: context.env.line07),
       ),
@@ -308,7 +308,7 @@ class MobileDisabledCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0x12FFFFFF),
+                  color: context.env.line07,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(

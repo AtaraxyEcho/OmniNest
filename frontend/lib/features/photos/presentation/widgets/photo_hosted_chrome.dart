@@ -138,7 +138,7 @@ class PhotoHostedPillButton extends StatelessWidget {
       color:
           active
               ? context.env.accentInk.withValues(alpha: 0.1)
-              : const Color(0x12FFFFFF),
+              : context.env.line07,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
         side: BorderSide(
