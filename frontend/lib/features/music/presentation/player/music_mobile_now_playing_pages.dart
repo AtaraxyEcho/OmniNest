@@ -175,7 +175,7 @@ class _MobileLyricsPage extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.66),
+                color: context.env.white52,
                 // ignore: font_size_whitelist
                 fontSize: 11,
               ),
@@ -325,8 +325,8 @@ class _MobileTrackHeader extends StatelessWidget {
                   track?.title ?? l10n.musicNotPlaying,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.env.ink,
                     fontFamily: AppTypography.serifFamily,
                     fontFamilyFallback: AppTypography.serifFamilyFallback,
                     // ignore: font_size_whitelist
@@ -343,7 +343,7 @@ class _MobileTrackHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   // ignore: font_size_whitelist
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.62),
+                    color: context.env.inkMuted,
                     // ignore: font_size_whitelist
                     fontSize: 10,
                   ),
@@ -364,7 +364,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 color:
                     track?.favorite == true
                         ? context.env.accent
-                        : Colors.white.withValues(alpha: 0.84),
+                        : context.env.white78,
               ),
             ),
         ],
@@ -412,7 +412,7 @@ class _MobileProgress extends StatelessWidget {
                   semanticLabel: l10n.portalMusicVisualizerSeek,
                   // 样例进度是近白（`--ink`），酸绿只留给强调文本与选中态。
                   activeColor: context.env.ink,
-                  inactiveColor: Colors.white.withValues(alpha: 0.14),
+                  inactiveColor: context.env.line15,
                   thumbColor: context.env.ink,
                   onChanged:
                       enabled && totalMs > 0
@@ -427,9 +427,15 @@ class _MobileProgress extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(
                     children: [
-                      Text(_formatDuration(position), style: _timeStyle),
+                      Text(
+                        _formatDuration(position),
+                        style: _timeStyle(context.env),
+                      ),
                       const Spacer(),
-                      Text(_formatDuration(duration), style: _timeStyle),
+                      Text(
+                        _formatDuration(duration),
+                        style: _timeStyle(context.env),
+                      ),
                     ],
                   ),
                 ),
@@ -441,8 +447,8 @@ class _MobileProgress extends StatelessWidget {
     );
   }
 
-  TextStyle get _timeStyle => TextStyle(
-    color: Colors.white.withValues(alpha: 0.58),
+  TextStyle _timeStyle(MobileEnvPalette env) => TextStyle(
+    color: env.inkFaint,
     fontSize: AppTypography.labelSmall,
     fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
   );
@@ -504,7 +510,7 @@ class _MobileTransportRow extends StatelessWidget {
             tooltip: l10n.musicDeckPrevious,
             onPressed: enabled ? onPrevious : null,
             style: IconButton.styleFrom(
-              foregroundColor: Colors.white,
+              foregroundColor: context.env.ink,
               minimumSize: const Size.square(48),
             ),
             icon: const Icon(Icons.skip_previous_rounded, size: 30),
@@ -524,7 +530,7 @@ class _MobileTransportRow extends StatelessWidget {
             tooltip: l10n.musicDeckNext,
             onPressed: enabled ? onNext : null,
             style: IconButton.styleFrom(
-              foregroundColor: Colors.white,
+              foregroundColor: context.env.ink,
               minimumSize: const Size.square(48),
             ),
             icon: const Icon(Icons.skip_next_rounded, size: 30),
@@ -571,10 +577,7 @@ class _MobileModeButton extends StatelessWidget {
         tooltip: tooltip,
         onPressed: onPressed,
         style: IconButton.styleFrom(
-          foregroundColor:
-              active
-                  ? context.env.accent
-                  : Colors.white.withValues(alpha: 0.62),
+          foregroundColor: active ? context.env.accent : context.env.inkMuted,
           minimumSize: const Size.square(48),
         ),
         icon: Icon(icon, size: 20),
@@ -676,6 +679,7 @@ class _LosslessBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      // 徽标压在封面图上：深玻璃底与白描边由图片提供对比，两极性同值。
       decoration: BoxDecoration(
         color: const Color(0x7A090D0C),
         borderRadius: BorderRadius.circular(7),

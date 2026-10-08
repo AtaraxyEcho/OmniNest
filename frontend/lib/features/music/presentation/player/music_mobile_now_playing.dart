@@ -156,7 +156,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.env.ink,
                                   fontSize: AppTypography.labelSmall,
                                   fontWeight: FontWeight.w600,
                                 ),
