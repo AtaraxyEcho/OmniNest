@@ -679,15 +679,17 @@ class _LosslessBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-      // 徽标压在封面图上：深玻璃底与白描边由图片提供对比，两极性同值。
+      // 徽标压在封面图上，见下方 polarity-stable 标注。
       decoration: BoxDecoration(
         color: const Color(0x7A090D0C),
         borderRadius: BorderRadius.circular(7),
+        // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
         border: Border.all(color: const Color(0x29FFFFFF)),
       ),
       child: const Text(
         'LOSSLESS',
         style: TextStyle(
+          // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
           color: Colors.white,
           // ignore: font_size_whitelist
           fontSize: 7,

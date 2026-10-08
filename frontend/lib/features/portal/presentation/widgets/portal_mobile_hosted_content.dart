@@ -259,8 +259,8 @@ class _SpatialEnvironmentHeaderState
                     Container(
                       width: 3,
                       height: 3,
-                      decoration: const BoxDecoration(
-                        color: Color(0x8CFFFFFF),
+                      decoration: BoxDecoration(
+                        color: context.env.white52,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -369,10 +369,7 @@ class _WeatherLinePillState extends State<_WeatherLinePill> {
               constraints: const BoxConstraints(minHeight: 42),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color:
-                    _hovered
-                        ? Colors.white.withValues(alpha: 0.07)
-                        : Colors.transparent,
+                color: _hovered ? context.env.line07 : Colors.transparent,
                 borderRadius: BorderRadius.circular(21),
               ),
               child: widget.child,
@@ -551,7 +548,7 @@ class _SpatialFocusTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final artFallback = ColoredBox(
-      color: Colors.white.withValues(alpha: 0.06),
+      color: context.env.surfaceTint,
       child: Center(
         child: OmniIcon(
           icon:
@@ -936,9 +933,7 @@ class _SpatialRecentTile extends StatelessWidget {
                   Positioned.fill(child: image)
                 else
                   Positioned.fill(
-                    child: ColoredBox(
-                      color: Colors.white.withValues(alpha: 0.02),
-                    ),
+                    child: ColoredBox(color: context.env.surfaceTint),
                   ),
                 if (image != null)
                   Positioned.fill(

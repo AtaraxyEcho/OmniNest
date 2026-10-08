@@ -710,8 +710,8 @@ class _ForecastRow extends StatelessWidget {
             : DateFormat('EEEE').format(date);
     return Container(
       constraints: const BoxConstraints(minHeight: 52),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0x12FFFFFF))),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: context.env.line07)),
       ),
       child: Row(
         children: [

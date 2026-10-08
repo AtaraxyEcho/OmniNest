@@ -257,7 +257,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
               vertical: 12,
             ),
             filled: true,
-            fillColor: const Color(0x12FFFFFF),
+            fillColor: env.line07,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: env.line09),

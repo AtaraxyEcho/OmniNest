@@ -314,7 +314,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                           width: 36,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.22),
+                            color: context.env.line25,
                             borderRadius: BorderRadius.circular(3),
                           ),
                         ),

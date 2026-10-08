@@ -756,7 +756,7 @@ class SampleSeriesBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0x8C090D0C),
         borderRadius: BorderRadius.circular(7),
-        // polarity-stable: imagery supplies the contrast in both polarities
+        // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
         border: Border.all(color: const Color(0x29FFFFFF)),
       ),
       child: Text(
@@ -765,7 +765,7 @@ class SampleSeriesBadge extends StatelessWidget {
           fontSize: 7,
           letterSpacing: 1,
           fontWeight: FontWeight.w700,
-          // polarity-stable: imagery supplies the contrast in both polarities
+          // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
           color: Color(0xCCFFFFFF),
         ),
       ),

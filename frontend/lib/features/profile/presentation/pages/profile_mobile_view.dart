@@ -375,7 +375,7 @@ class _PmTextField extends StatelessWidget {
               vertical: 12,
             ),
             filled: true,
-            fillColor: const Color(0x12FFFFFF),
+            fillColor: context.env.line07,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: context.env.line09),
@@ -830,7 +830,7 @@ class _PmSessionRow extends StatelessWidget {
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0x0FFFFFFF),
+                color: context.env.surfaceTint,
                 borderRadius: BorderRadius.circular(11),
               ),
               child: Icon(

@@ -374,7 +374,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0x8C090D0C),
                     borderRadius: BorderRadius.circular(8),
-                    // polarity-stable: imagery supplies the contrast in both polarities
+                    // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
                     border: Border.all(color: const Color(0x29FFFFFF)),
                   ),
                   child: Text(
@@ -398,7 +398,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                     style: _heroMonoStyle(
                       env: context.env,
                       size: 9,
-                      // polarity-stable: imagery supplies the contrast in both polarities
+                      // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
                       color: const Color(0xA1FFFFFF),
                     ),
                   ),
@@ -511,7 +511,7 @@ class _HeroButton extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: BorderSide(
-          // polarity-stable: imagery supplies the contrast in both polarities
+          // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
           color: filled ? Colors.transparent : const Color(0x38FFFFFF),
         ),
       ),

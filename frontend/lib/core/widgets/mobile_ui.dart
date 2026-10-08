@@ -785,6 +785,7 @@ Future<bool> showMobileConfirmSheet(
                               ? const Color(0xFFB95F5F)
                               : context.env.accent,
                       foreground:
+                          // polarity-stable：危险红底不变，其白字两极性同值（红底白字 4.35:1）
                           destructive ? Colors.white : context.env.onAccent,
                       onTap: () => Navigator.of(sheetContext).pop(true),
                     ),

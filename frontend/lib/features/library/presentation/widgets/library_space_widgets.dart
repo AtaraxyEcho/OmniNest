@@ -278,7 +278,7 @@ class LibraryFeatureBanner extends StatelessWidget {
                       Text(
                         eyebrow.toUpperCase(),
                         style: const TextStyle(
-                          // polarity-stable: imagery supplies the contrast in both polarities
+                          // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
                           color: Color(0xA1FFFFFF),
                           fontSize: AppTypography.labelMicro,
                           fontWeight: FontWeight.w700,
@@ -291,7 +291,7 @@ class LibraryFeatureBanner extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          // polarity-stable: imagery supplies the contrast in both polarities
+                          // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
                           color: Colors.white,
                           fontFamily: AppTypography.serifFamily,
                           fontFamilyFallback: AppTypography.serifFamilyFallback,
@@ -350,14 +350,12 @@ class LibraryFeatureBanner extends StatelessWidget {
 
   Widget _bannerFallback(BuildContext context) {
     return ColoredBox(
-      // polarity-stable: imagery supplies the contrast in both polarities
-      color: Colors.white.withValues(alpha: 0.05),
+      color: context.env.surfaceTint,
       child: Center(
         child: OmniIcon(
           icon: OmniIcons.image,
           size: 40,
-          // polarity-stable: imagery supplies the contrast in both polarities
-          color: Colors.white.withValues(alpha: 0.34),
+          color: context.env.ink40,
         ),
       ),
     );
@@ -499,7 +497,7 @@ class _MoreTile extends StatelessWidget {
           child: Text(
             '+$count',
             style: const TextStyle(
-              // polarity-stable: imagery supplies the contrast in both polarities
+              // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
               color: Colors.white,
               fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w700,
@@ -594,8 +592,7 @@ class LibraryPosterCard extends StatelessWidget {
                       fit: BoxFit.cover,
                       borderRadius: BorderRadius.zero,
                       fallback: ColoredBox(
-                        // polarity-stable: imagery supplies the contrast in both polarities
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: context.env.surfaceTint,
                         child: Center(
                           child: OmniIcon(
                             icon: OmniIcons.film,
@@ -635,7 +632,7 @@ class LibraryPosterCard extends StatelessWidget {
                         value: progress!.clamp(0, 1),
                         minHeight: 3,
                         color: context.env.accentInk,
-                        // polarity-stable: imagery supplies the contrast in both polarities
+                        // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
                         backgroundColor: const Color(0x3DFFFFFF),
                       ),
                     ),
@@ -747,7 +744,7 @@ class LibraryAlbumCard extends StatelessWidget {
                         fit: BoxFit.cover,
                         borderRadius: BorderRadius.zero,
                         fallback: ColoredBox(
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: context.env.surfaceTint,
                           child: Center(
                             child: OmniIcon(
                               icon: OmniIcons.music,
