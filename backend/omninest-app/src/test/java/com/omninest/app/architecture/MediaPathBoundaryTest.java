@@ -52,6 +52,7 @@ class MediaPathBoundaryTest {
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderImportService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderItemService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderEpubArchiveStager.java",
+            "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderTxtChapterTextService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderArchiveSafetyPolicy.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderFileDetector.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/EpubArchive.java",
