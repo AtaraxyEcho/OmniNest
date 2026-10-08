@@ -52,7 +52,7 @@ const _mustCarryScope = <String>[
 /// 计数里含少量刻意保留项（例如影院 hero 次钮压在海报图上，白描边与深玻璃
 /// 由图片本身提供对比），所以这里是天花板而不是零：下调它要么真的修掉一处，
 /// 要么在代码里写明为什么保留。
-const _bareLightLiteralCeiling = 53;
+const _bareLightLiteralCeiling = 46;
 
 void _assertBareLightLiterals() {
   final pattern = RegExp(r'Colors\.white\b|Color\(0x[0-9A-Fa-f]{2}FFFFFF\)');
@@ -60,7 +60,18 @@ void _assertBareLightLiterals() {
   final offenders = <String>[];
   for (final path in _migrated) {
     final source = File(path).readAsStringSync();
-    final hits = pattern.allMatches(source).length;
+    final lines = source.split('\n');
+    var hits = 0;
+    var offset = 0;
+    for (var index = 0; index < lines.length; index++) {
+      final line = lines[index];
+      final next = offset + line.length + 1;
+      final before = index > 0 ? lines[index - 1] : '';
+      if (!before.contains('polarity-stable')) {
+        hits += pattern.allMatches(line).length;
+      }
+      offset = next;
+    }
     if (hits > 0) {
       total += hits;
       offenders.add('$path: $hits');

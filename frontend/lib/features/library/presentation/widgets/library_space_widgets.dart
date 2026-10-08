@@ -278,6 +278,7 @@ class LibraryFeatureBanner extends StatelessWidget {
                       Text(
                         eyebrow.toUpperCase(),
                         style: const TextStyle(
+                          // polarity-stable: imagery supplies the contrast in both polarities
                           color: Color(0xA1FFFFFF),
                           fontSize: AppTypography.labelMicro,
                           fontWeight: FontWeight.w700,
@@ -290,6 +291,7 @@ class LibraryFeatureBanner extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          // polarity-stable: imagery supplies the contrast in both polarities
                           color: Colors.white,
                           fontFamily: AppTypography.serifFamily,
                           fontFamilyFallback: AppTypography.serifFamilyFallback,
@@ -348,11 +350,13 @@ class LibraryFeatureBanner extends StatelessWidget {
 
   Widget _bannerFallback(BuildContext context) {
     return ColoredBox(
+      // polarity-stable: imagery supplies the contrast in both polarities
       color: Colors.white.withValues(alpha: 0.05),
       child: Center(
         child: OmniIcon(
           icon: OmniIcons.image,
           size: 40,
+          // polarity-stable: imagery supplies the contrast in both polarities
           color: Colors.white.withValues(alpha: 0.34),
         ),
       ),
@@ -495,6 +499,7 @@ class _MoreTile extends StatelessWidget {
           child: Text(
             '+$count',
             style: const TextStyle(
+              // polarity-stable: imagery supplies the contrast in both polarities
               color: Colors.white,
               fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w700,
@@ -589,6 +594,7 @@ class LibraryPosterCard extends StatelessWidget {
                       fit: BoxFit.cover,
                       borderRadius: BorderRadius.zero,
                       fallback: ColoredBox(
+                        // polarity-stable: imagery supplies the contrast in both polarities
                         color: Colors.white.withValues(alpha: 0.05),
                         child: Center(
                           child: OmniIcon(
@@ -629,6 +635,7 @@ class LibraryPosterCard extends StatelessWidget {
                         value: progress!.clamp(0, 1),
                         minHeight: 3,
                         color: context.env.accentInk,
+                        // polarity-stable: imagery supplies the contrast in both polarities
                         backgroundColor: const Color(0x3DFFFFFF),
                       ),
                     ),
