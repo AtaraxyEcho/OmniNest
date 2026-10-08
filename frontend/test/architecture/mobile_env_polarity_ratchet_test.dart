@@ -46,6 +46,33 @@ const _mustCarryScope = <String>[
   'lib/features/portal/presentation/widgets/weather_detail_sheet.dart',
 ];
 
+/// 已迁移文件里残留的裸白前景/描边。
+///
+/// 这些文件已经按 context.env 解析颜色，再出现硬编码白值就意味着浅态不会翻。
+/// 计数里含少量刻意保留项（例如影院 hero 次钮压在海报图上，白描边与深玻璃
+/// 由图片本身提供对比），所以这里是天花板而不是零：下调它要么真的修掉一处，
+/// 要么在代码里写明为什么保留。
+const _bareLightLiteralCeiling = 71;
+
+void _assertBareLightLiterals() {
+  final pattern = RegExp(r'Colors\.white\b|Color\(0x[0-9A-Fa-f]{2}FFFFFF\)');
+  var total = 0;
+  final offenders = <String>[];
+  for (final path in _migrated) {
+    final source = File(path).readAsStringSync();
+    final hits = pattern.allMatches(source).length;
+    if (hits > 0) {
+      total += hits;
+      offenders.add('$path: $hits');
+    }
+  }
+  expect(
+    total,
+    lessThanOrEqualTo(_bareLightLiteralCeiling),
+    reason: '当前 $total 处：${offenders.join(' / ')}',
+  );
+}
+
 void main() {
   test('已迁移文件不再引用 MobileEnvColors', () {
     for (final path in _migrated) {
@@ -66,6 +93,10 @@ void main() {
         reason: '$path 由 root navigator 推入，不带作用域就会退回壳层暗基准',
       );
     }
+  });
+
+  test('已迁移文件里的裸白字面量不再增长', () {
+    _assertBareLightLiterals();
   });
 
   test('未迁移的暗字面量引用不再增长', () {
