@@ -416,20 +416,23 @@ mixin ReaderViewPageInteractionMixin
   }
 
   /// 视口变化时保持当前阅读锚点并重新分页。
+  ///
+  /// 滚动模式同样要重算：高度表按列宽测得，视口变化后不重算就会让条目实际
+  /// 高度与表脱节，而该表现在还直接决定滚动范围。
   void repaginateForViewportChange(Size newSize) {
     final previousSize = lastViewportSize;
     if (previousSize == newSize) return;
     lastViewportSize = newSize;
     pageViewportSize = newSize;
-    if (contentLoader == null || !isPageMode) return;
+    if (contentLoader == null) return;
     repaginateTimer?.cancel();
     repaginateTimer = Timer(const Duration(milliseconds: 80), () {
-      if (!mounted || !isPageMode) return;
+      if (!mounted) return;
       final trackedAnchor = modeSwitchAnchor ?? positionTracker.charOffset;
       final anchor =
           trackedAnchor > 0
               ? trackedAnchor
-              : computePageCharOffset(pageModePage);
+              : (isPageMode ? computePageCharOffset(pageModePage) : 0);
       repaginateCurrentChapter(restoreCharOffset: anchor);
     });
   }

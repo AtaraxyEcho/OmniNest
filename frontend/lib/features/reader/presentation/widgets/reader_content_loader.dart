@@ -159,6 +159,19 @@ class ChapterData {
   /// 精测全部批次完成标记（仅限 ReaderContentLoader 调用）。
   void markPreciseHeights() => _hasPreciseHeights = true;
 
+  /// 本表所依据的列宽与文字缩放；与之不符的表视为过期。
+  ///
+  /// 缓存键只含章节与字号/行高/字体，视口变化不会换键，因此宽度与缩放要
+  /// 由表自身记账，否则换宽后条目实际高度与表不符，字符偏移↔像素映射整章偏。
+  double scrollLayoutPageWidth = -1;
+  double scrollLayoutTextScale = -1;
+
+  /// 记录本表对应的列宽与文字缩放（仅限 ReaderContentLoader 调用）。
+  void markScrollLayout(double pageWidth, double textScale) {
+    scrollLayoutPageWidth = pageWidth;
+    scrollLayoutTextScale = textScale;
+  }
+
   /// 本章精测代次。
   ///
   /// 代次必须按章隔离：loader 级单一计数器会让邻章预取的每一次排批
@@ -561,9 +574,25 @@ class ReaderContentLoader {
     required ReaderViewSettings settings,
     required double textScale,
   }) {
-    if (!prepareScrollLayout || data.cumulativeHeights.isNotEmpty) {
+    if (!prepareScrollLayout) {
       return;
     }
+    final layoutStale =
+        data.cumulativeHeights.isEmpty ||
+        data.scrollLayoutPageWidth != pageWidth ||
+        data.scrollLayoutTextScale != textScale;
+    if (!layoutStale) {
+      return;
+    }
+    if (data.cumulativeHeights.isNotEmpty) {
+      // 列宽或文字缩放变了：旧表整张作废。抬高代次让在途精测自行退出，
+      // 否则它会继续按旧宽度写回同一张表。
+      data.heightsGeneration++;
+      data.measuredThrough = 0;
+      data.updateCumulativeHeights(const []);
+      data.invalidatePageNavigator();
+    }
+    data.markScrollLayout(pageWidth, textScale);
     // 第一阶段：精确测量头部若干块，以平均块高估算整章，立即填充
     // cumulative 数组，保证滚动映射从首帧起无空洞。
     // 估算基线优先取已精测章节的分块型高度均值（同书排版一致），
@@ -573,12 +602,14 @@ class ReaderContentLoader {
     final headHeights = <double>[];
     var headCumulative = 0.0;
     for (var i = 0; i < headCount; i++) {
-      headCumulative += ReaderPaginationEngine.measureBlockHeight(
-        blocks[i],
-        pageWidth,
-        settings,
-        textScale: textScale,
-      );
+      headCumulative +=
+          ReaderPaginationEngine.measureBlockHeight(
+            blocks[i],
+            pageWidth,
+            settings,
+            textScale: textScale,
+          ) +
+          scrollBlockExtraSpacing(blocks[i]);
       headHeights.add(headCumulative);
     }
     final estimateBase =
@@ -852,6 +883,7 @@ class ReaderContentLoader {
     // 旧 settings 下在途的精测必须作废：继续测会把过期高度写进新表。
     data.cancelPrecisePass();
     data.measuredThrough = 0;
+    data.markScrollLayout(pageWidth, textScale);
 
     if (!prepareScrollLayout) {
       data.updateCumulativeHeights(const <double>[]);
@@ -903,12 +935,14 @@ class ReaderContentLoader {
     final headHeights = <double>[];
     var headCumulative = 0.0;
     for (var i = 0; i < headCount; i++) {
-      headCumulative += ReaderPaginationEngine.measureBlockHeight(
-        blocks[i],
-        pageWidth,
-        settings,
-        textScale: textScale,
-      );
+      headCumulative +=
+          ReaderPaginationEngine.measureBlockHeight(
+            blocks[i],
+            pageWidth,
+            settings,
+            textScale: textScale,
+          ) +
+          scrollBlockExtraSpacing(blocks[i]);
       headHeights.add(headCumulative);
     }
     final estimateBase =
