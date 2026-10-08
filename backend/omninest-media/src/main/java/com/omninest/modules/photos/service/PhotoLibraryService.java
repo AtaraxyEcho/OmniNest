@@ -215,6 +215,9 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public List<PhotoItemDto> searchPhotos(UUID ownerUserId, String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
         List<UUID> luceneIds = photoSearchIndexService.search(ownerUserId, query, 200);
         if (!luceneIds.isEmpty()) {
             List<PhotoItem> items = photoItemRepository

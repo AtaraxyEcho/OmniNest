@@ -385,6 +385,17 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
+    void searchPhotosStopsBeforeTheFallbackQueryWhenKeywordIsBlank() {
+        // 回退查询词要先经 escapeSpecials，而其约定入参非空：空关键词必须在触达
+        // Lucene 与 SQL 之前就早退，否则 null 关键词会抛 NPE 而不是返回空结果。
+        assertThat(service.searchPhotos(OWNER_ID, null)).isEmpty();
+        assertThat(service.searchPhotos(OWNER_ID, "   ")).isEmpty();
+
+        verify(photoItemRepository, Mockito.never())
+                .searchByOwnerUserIdAndKeyword(any(), any(), any(Pageable.class));
+    }
+
+    @Test
     void listFavoritesPage_selectsTypedQueryBranch() {
         when(photoItemRepository.findFavoriteListPage(eq(OWNER_ID), any(Pageable.class)))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
