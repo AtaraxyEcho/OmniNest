@@ -160,22 +160,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
-     * 分页读取指定路径下已软删除节点的 ID。
-     *
-     * @param ownerUserId 所属用户 ID
-     * @param prefix 路径前缀
-     * @param pageable 分页参数
-     * @return 节点 ID 切片
-     */
-    @Query("select node.id from FileNode node where node.ownerUserId = :ownerUserId "
-            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true order by node.id")
-    Slice<UUID> findDeletedIdsByPathPrefix(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("prefix") String prefix,
-            Pageable pageable
-    );
-
-    /**
      * 分页读取指定路径下尚未软删除节点的 ID。
      *
      * @param ownerUserId 所属用户 ID
@@ -207,20 +191,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("ownerUserId") UUID ownerUserId,
             @Param("ids") Collection<UUID> ids,
             @Param("deletedAt") Instant deletedAt
-    );
-
-    /**
-     * 按路径前缀读取全部节点（含已软删除），口径同上。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param prefix 已转义的路径前缀
-     * @return 节点列表
-     */
-    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
-            + "and node.normalizedPath like concat(:prefix, '%') escape '\\'")
-    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWith(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("prefix") String prefix
     );
 
     Optional<FileNode> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);

@@ -120,10 +120,6 @@ class FileDeletionServiceTest {
         FileNode root = deletedRoot();
         UUID readerItemId = UUID.fromString("30000000-0000-0000-0000-000000000001");
         when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(root));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWith(
-                OWNER_ID,
-                "/movie.mkv/"
-        )).thenReturn(List.of());
         when(participant.findBusinessReferences(any(PurgeContext.class))).thenReturn(List.of(
                 new FileBusinessReference("READER", "READER_ITEM", readerItemId, FILE_NODE_ID)
         ));
@@ -145,10 +141,6 @@ class FileDeletionServiceTest {
         FileNode root = deletedRoot();
         UUID readerItemId = UUID.fromString("30000000-0000-0000-0000-000000000001");
         when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(root));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWith(
-                OWNER_ID,
-                "/movie.mkv/"
-        )).thenReturn(List.of());
         when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
                 OWNER_ID,
                 "/movie.mkv/"
@@ -183,14 +175,6 @@ class FileDeletionServiceTest {
         )).thenReturn(true);
         when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(firstRoot));
         when(fileNodeRepository.findOwnedForUpdate(SECOND_FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(secondRoot));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWith(
-                OWNER_ID,
-                "/first.jpg/"
-        )).thenReturn(List.of());
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWith(
-                OWNER_ID,
-                "/second.jpg/"
-        )).thenReturn(List.of());
         when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
                 OWNER_ID,
                 "/first.jpg/"

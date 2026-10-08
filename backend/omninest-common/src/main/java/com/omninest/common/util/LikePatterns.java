@@ -13,11 +13,6 @@ package com.omninest.common.util;
  */
 public final class LikePatterns {
 
-    /**
-     * 与 {@link #escapeSpecials(String)} 配套的转义符，查询里必须用同一个字符声明 ESCAPE。
-     */
-    public static final char ESCAPE_CHAR = '\\';
-
     private LikePatterns() {
     }
 

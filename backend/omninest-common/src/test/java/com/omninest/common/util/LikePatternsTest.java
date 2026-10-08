@@ -22,10 +22,4 @@ class LikePatternsTest {
     void leavesPlainTextUnchanged() {
         assertThat(LikePatterns.escapeSpecials("northern drift")).isEqualTo("northern drift");
     }
-
-    @Test
-    void escapeCharacterMatchesWhatQueriesDeclare() {
-        // 查询里写的是 like :pattern escape '\'，两侧口径必须一致。
-        assertThat(LikePatterns.ESCAPE_CHAR).isEqualTo('\\');
-    }
 }
