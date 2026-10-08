@@ -114,7 +114,7 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
             join FileNode file on track.fileNodeId = file.id
             where album.ownerUserId = :ownerUserId
               and file.deleted = false
-              and lower(album.title) like lower(concat('%', :keyword, '%'))
+              and lower(album.title) like lower(concat('%', :keyword, '%')) escape '\\'
             order by album.updatedAt desc
             limit 10
             """)

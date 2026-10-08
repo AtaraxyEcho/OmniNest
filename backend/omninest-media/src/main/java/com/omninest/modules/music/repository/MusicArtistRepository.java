@@ -80,7 +80,7 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
             join FileNode file on track.fileNodeId = file.id
             where artist.ownerUserId = :ownerUserId
               and file.deleted = false
-              and lower(artist.name) like lower(concat('%', :keyword, '%'))
+              and lower(artist.name) like lower(concat('%', :keyword, '%')) escape '\\'
             order by artist.name asc
             limit 10
             """)

@@ -10,6 +10,7 @@ import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
 import com.omninest.modules.media.service.MediaPlaybackProgressService;
@@ -258,10 +259,8 @@ public class MovieLibraryService {
                     "搜索关键词长度不能超过 " + LIBRARY_KEYWORD_MAX_LENGTH + " 个字符"
             );
         }
-        String normalized = trimmed.toLowerCase(Locale.ROOT)
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
+        String normalized = LikePatterns.escapeSpecials(
+                trimmed.toLowerCase(Locale.ROOT));
         return "%" + normalized + "%";
     }
 

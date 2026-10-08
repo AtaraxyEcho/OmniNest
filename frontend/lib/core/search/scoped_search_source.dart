@@ -5,16 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///
 /// 档标识必须稳定，界面标签另由本地化映射，避免用译文当键导致中英文分叉。
 enum ScopedSearchId {
-  /// 影视库（服务端关键词）。
+  /// 影视库（服务端关键词，影片与剧集/动漫系列）。
   video,
 
   /// 相册（服务端关键词）。
   photo,
 
-  /// 音乐曲库（当前已加载列表）。
+  /// 音乐曲库（服务端关键词，覆盖全库）。
   music,
 
-  /// 文件（当前目录已加载列表）。
+  /// 文件（全文索引，覆盖全库）。
   file,
 
   /// 阅读（服务端关键词，由阅读模块注册）。
@@ -40,13 +40,20 @@ class ScopedSearchResult {
   final String? subtitle;
 }
 
-/// 覆盖层的结果上限：单档 20 条、合计 60 条。
+/// 覆盖层的量化口径：单档 20 条、合计 60 条、查询词 200 字。
 ///
 /// 来源按 [perSource] 取一页，聚合层再按 [total] 截断，避免「全部」档
 /// 一次性把各档分页拉满。
 abstract final class ScopedSearchLimits {
   static const int perSource = 20;
   static const int total = 60;
+
+  /// 查询词长度上限，与服务端影视库关键词的校验同口径。
+  ///
+  /// 在输入侧就限住，用户看到的文本与实际检索的文本才一致；否则超长输入会让
+  /// 服务端回参数错误，而覆盖层对异常的处理是"该档暂时不可用"——那等于告诉用户
+  /// 搜索坏了，真实原因却是输入被拒。
+  static const int maxQueryLength = 200;
 }
 
 /// 一个内容档的取数来源。

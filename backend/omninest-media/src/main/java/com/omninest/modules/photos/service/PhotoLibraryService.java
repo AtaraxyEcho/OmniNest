@@ -6,6 +6,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
@@ -222,8 +223,10 @@ public class PhotoLibraryService {
                     .toList();
             return mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
         }
+        // Lucene 那侧不需要转义；回退到 SQL LIKE 时查询词必须按字面量处理，
+        // 否则用户敲的 % 会变成通配符。
         List<PhotoItem> fallback = photoItemRepository.searchByOwnerUserIdAndKeyword(
-                ownerUserId, query, PageRequest.of(0, LIST_PAGE_MAX));
+                ownerUserId, LikePatterns.escapeSpecials(query), PageRequest.of(0, LIST_PAGE_MAX));
         return mapPhotoItemDtos(ownerUserId, fallback, favoriteIdsFor(ownerUserId, photoIds(fallback)));
     }
 
@@ -1044,7 +1047,8 @@ public class PhotoLibraryService {
         if (query == null || query.isBlank()) {
             return null;
         }
-        return query.trim();
+        // 走 LIKE 的查询词按字面量处理，配套的查询必须声明 escape 符。
+        return LikePatterns.escapeSpecials(query.trim());
     }
 
     private String resolveCoverUrl(UUID ownerUserId, UUID photoId, UUID coverFileId) {

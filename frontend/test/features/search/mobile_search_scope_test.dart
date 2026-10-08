@@ -207,6 +207,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('超长输入在输入侧就被限住，框里文本即实际检索文本', (tester) async {
+    final video = _FakeSource(ScopedSearchId.video, label: '影片命中');
+    await _pumpSearch(tester, sources: <ScopedSearchSource>[video]);
+
+    await tester.enterText(
+      find.byType(TextField).first,
+      'a' * (ScopedSearchLimits.maxQueryLength + 50),
+    );
+    await tester.pump(_debounceWindow);
+
+    // 不是"发出去再被服务端拒掉"：用户看到的和被打出去的必须同一条。
+    expect(
+      tester
+          .widget<TextField>(find.byType(TextField).first)
+          .controller!
+          .text
+          .length,
+      ScopedSearchLimits.maxQueryLength,
+    );
+    expect(video.queries, <String>['a' * ScopedSearchLimits.maxQueryLength]);
+  });
+
   testWidgets('带未完成请求退出页面后无过期回写', (tester) async {
     await _pumpSearch(
       tester,

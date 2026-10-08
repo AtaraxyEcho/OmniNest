@@ -6,6 +6,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.domain.SpaceType;
@@ -312,10 +313,13 @@ public class MusicLibraryService {
 
     @Transactional(readOnly = true)
     public MusicSearchResultDto search(UUID ownerUserId, String keyword) {
-        String normalized = keyword == null ? "" : keyword.trim();
-        if (normalized.isEmpty()) {
+        String trimmed = keyword == null ? "" : keyword.trim();
+        if (trimmed.isEmpty()) {
             return new MusicSearchResultDto(List.of(), List.of(), List.of());
         }
+        // 查询词是字面量文本：仓储用 concat 拼模式，所以这里只转义不包裹，
+        // 并且三条查询都要声明 escape 符。
+        String normalized = LikePatterns.escapeSpecials(trimmed);
         return new MusicSearchResultDto(
                 toTrackSummaryDtos(ownerUserId, trackRepository.searchByOwnerUserId(
                         ownerUserId,

@@ -358,6 +358,33 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
+    void listPhotosPageEscapesLikeWildcardsBeforeReachingTheQuery() {
+        // 前后通配已经由 SQL 拼好，用户敲的 % 与 _ 必须变成字面量，否则条件会被放宽。
+        when(photoItemRepository.searchListPage(
+                eq(OWNER_ID), eq("100\\% \\_x"), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(2), 0));
+
+        service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", " 100% _x ");
+
+        verify(photoItemRepository).searchListPage(
+                eq(OWNER_ID), eq("100\\% \\_x"), any(Pageable.class));
+    }
+
+    @Test
+    void searchPhotosEscapesTheSqlFallbackKeywordButNotTheIndexQuery() {
+        // Lucene 那侧要拿到原样查询词；只有回退到 SQL LIKE 时才转义。
+        when(photoSearchIndexService.search(OWNER_ID, "100% sunset", 200)).thenReturn(List.of());
+        when(photoItemRepository.searchByOwnerUserIdAndKeyword(
+                eq(OWNER_ID), eq("100\\% sunset"), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        service.searchPhotos(OWNER_ID, "100% sunset");
+
+        verify(photoItemRepository).searchByOwnerUserIdAndKeyword(
+                eq(OWNER_ID), eq("100\\% sunset"), any(Pageable.class));
+    }
+
+    @Test
     void listFavoritesPage_selectsTypedQueryBranch() {
         when(photoItemRepository.findFavoriteListPage(eq(OWNER_ID), any(Pageable.class)))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));

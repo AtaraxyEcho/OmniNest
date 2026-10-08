@@ -97,8 +97,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
              WHERE p.ownerUserId = :ownerUserId
                AND file.deleted = false
                AND p.deletedAt IS NULL
-               AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%'))
-                    OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')))
+               AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                    OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
             """,
             countQuery = """
                     SELECT COUNT(p)
@@ -107,8 +107,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                      WHERE p.ownerUserId = :ownerUserId
                        AND file.deleted = false
                        AND p.deletedAt IS NULL
-                       AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%'))
-                            OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')))
+                       AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                            OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
                     """)
     Page<PhotoListItemProjection> searchListPage(
             @Param("ownerUserId") UUID ownerUserId,
@@ -197,8 +197,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                AND file.id = p.fileNodeId
                AND file.deleted = false
                AND p.deletedAt IS NULL
-               AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%'))
-                    OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')))
+               AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                    OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
             """,
             countQuery = """
                     SELECT COUNT(p)
@@ -209,8 +209,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                        AND file.id = p.fileNodeId
                        AND file.deleted = false
                        AND p.deletedAt IS NULL
-                       AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%'))
-                            OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')))
+                       AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                            OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
                     """)
     Page<PhotoListItemProjection> searchFavoriteListPage(
             @Param("ownerUserId") UUID ownerUserId,
@@ -748,7 +748,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
             JOIN FileNode file ON p.fileNodeId = file.id
             WHERE p.ownerUserId = :ownerUserId AND file.deleted = false
               AND p.deletedAt IS NULL
-              AND LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              AND LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '\\'
             """)
     List<PhotoItem> searchByOwnerUserIdAndKeyword(
             @Param("ownerUserId") UUID ownerUserId,

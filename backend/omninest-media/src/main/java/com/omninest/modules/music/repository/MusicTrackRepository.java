@@ -98,9 +98,9 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
             where t.ownerUserId = :ownerUserId
               and file.deleted = false
               and (
-                lower(coalesce(t.title, '')) like lower(concat('%', :keyword, '%'))
-                or lower(coalesce(t.artistName, '')) like lower(concat('%', :keyword, '%'))
-                or lower(coalesce(t.albumTitle, '')) like lower(concat('%', :keyword, '%'))
+                lower(coalesce(t.title, '')) like lower(concat('%', :keyword, '%')) escape '\\'
+                or lower(coalesce(t.artistName, '')) like lower(concat('%', :keyword, '%')) escape '\\'
+                or lower(coalesce(t.albumTitle, '')) like lower(concat('%', :keyword, '%')) escape '\\'
               )
             order by t.updatedAt desc
             """)

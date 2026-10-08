@@ -38,6 +38,7 @@ import org.mockito.ArgumentMatchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 /**
@@ -404,6 +405,21 @@ class MusicLibraryServiceTest {
         assertThat(result.tracks()).hasSize(1);
         assertThat(result.tracks().getFirst().artistName()).isEqualTo("Omni Band");
         verify(trackRepository).searchByOwnerUserId(OWNER_ID, "Omni", pageRequest);
+    }
+
+    @Test
+    void searchEscapesLikeWildcardsBeforeReachingTheThreeQueries() {
+        // 仓储用 concat 拼模式，所以关键词必须在服务侧就变成字面量，
+        // 否则用户敲的 % 会把条件放宽成近似全库匹配。
+        libraryService.search(OWNER_ID, " 100% _x ");
+
+        verify(trackRepository).searchByOwnerUserId(
+                eq(OWNER_ID),
+                eq("100\\% \\_x"),
+                ArgumentMatchers.any(Pageable.class)
+        );
+        verify(albumRepository).searchActiveByOwnerUserId(OWNER_ID, "100\\% \\_x");
+        verify(artistRepository).searchActiveByOwnerUserId(OWNER_ID, "100\\% \\_x");
     }
 
     @Test

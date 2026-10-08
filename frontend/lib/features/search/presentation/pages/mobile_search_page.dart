@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -365,6 +366,13 @@ class _SearchHeader extends StatelessWidget {
                           focusNode: focusNode,
                           keyboardType: TextInputType.webSearch,
                           textInputAction: TextInputAction.search,
+                          // 与服务端关键词上限同口径：限在输入侧，框里的文本才等于真正被检索
+                          // 的文本，超长粘贴不会变成一次"该档不可用"。
+                          inputFormatters: <TextInputFormatter>[
+                            LengthLimitingTextInputFormatter(
+                              ScopedSearchLimits.maxQueryLength,
+                            ),
+                          ],
                           style: const TextStyle(
                             color: MobileEnvColors.ink,
                             // ignore: font_size_whitelist
