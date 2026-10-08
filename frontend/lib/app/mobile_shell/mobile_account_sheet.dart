@@ -126,7 +126,7 @@ class _OmniAccountSheet extends ConsumerWidget {
           decoration: BoxDecoration(
             color: context.env.sheetSolid,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(top: BorderSide(color: Color(0x21FFFFFF))),
+            border: Border(top: BorderSide(color: context.env.line13)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black54,
@@ -170,7 +170,7 @@ class _SheetHandle extends StatelessWidget {
         height: 4,
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: const Color(0x38FFFFFF),
+          color: context.env.line25,
           borderRadius: BorderRadius.circular(3),
         ),
       ),
@@ -440,8 +440,8 @@ class _AccountSheetRow extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(minHeight: 61),
         padding: const EdgeInsets.symmetric(vertical: 7),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0x12FFFFFF))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Row(
           children: [
@@ -449,7 +449,7 @@ class _AccountSheetRow extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: const Color(0x0FFFFFFF),
+                color: context.env.surfaceTint,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -537,7 +537,7 @@ class _ManageAccountButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(47),
           foregroundColor: context.env.ink,
-          backgroundColor: Colors.white.withValues(alpha: 0.07),
+          backgroundColor: context.env.line07,
           side: BorderSide.none,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),

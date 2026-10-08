@@ -195,9 +195,9 @@ class PhotoHostedAddTile extends StatelessWidget {
       onTap: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0x08FFFFFF),
+          color: context.env.surfaceTint,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0x40FFFFFF)),
+          border: Border.all(color: context.env.line25),
         ),
         child: Center(
           child: Icon(Icons.add_rounded, size: 22, color: context.env.inkFaint),

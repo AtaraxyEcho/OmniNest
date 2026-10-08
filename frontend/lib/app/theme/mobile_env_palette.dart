@@ -31,6 +31,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     required this.line07,
     required this.line09,
     required this.line15,
+    required this.line25,
     required this.line12,
     required this.accent,
     required this.accentInk,
@@ -84,6 +85,9 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
   final Color line07;
   final Color line09;
   final Color line15;
+
+  /// 强中性叠加：把手、加号舱描边这类需要明显可见的 25% 档。
+  final Color line25;
   final Color line12;
   final Color accent;
 
@@ -141,6 +145,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     line07: Color(0x12FFFFFF),
     line09: Color(0x17FFFFFF),
     line15: Color(0x26FFFFFF),
+    line25: Color(0x40FFFFFF),
     line12: Color(0x1FFFFFFF),
     accent: Color(0xFFD5F17D),
     accentInk: Color(0xFFD5F17D),
@@ -196,6 +201,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     line07: Color(0x141A1D1B),
     line09: Color(0x1C1A1D1B),
     line15: Color(0x331A1D1B),
+    line25: Color(0x561A1D1B),
     line12: Color(0x291A1D1B),
     accent: Color(0xFFD5F17D),
     accentInk: Color(0xFF0B6B61),

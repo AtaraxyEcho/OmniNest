@@ -100,6 +100,7 @@ void main() {
       ('inkMuted', dark.inkMuted, light.inkMuted),
       ('inkFaint', dark.inkFaint, light.inkFaint),
       ('ink40', dark.ink40, light.ink40),
+      ('line25', dark.line25, light.line25),
       ('white43', dark.white43, light.white43),
       ('white70', dark.white70, light.white70),
       ('white78', dark.white78, light.white78),

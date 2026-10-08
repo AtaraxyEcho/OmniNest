@@ -251,7 +251,7 @@ class _CurrentEnvCard extends StatelessWidget {
       height: 108,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0x14FFFFFF),
+        color: context.env.line07,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: context.env.line09),
       ),
@@ -326,7 +326,7 @@ class _EnvPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = asset;
     if (value == null) {
-      return const ColoredBox(color: Color(0x1FFFFFFF));
+      return ColoredBox(color: context.env.line12);
     }
     if (value.sourceType == AppBackdropSourceType.bundled) {
       return Image.asset(value.path, fit: BoxFit.cover);
@@ -348,7 +348,7 @@ class _EnvPreview extends StatelessWidget {
         fit: BoxFit.cover,
       );
     }
-    return const ColoredBox(color: Color(0x1FFFFFFF));
+    return ColoredBox(color: context.env.line12);
   }
 }
 
@@ -426,7 +426,7 @@ class _UploadTile extends StatelessWidget {
         aspectRatio: 1,
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0x0CFFFFFF),
+            color: context.env.surfaceTint,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: context.env.line09),
           ),
