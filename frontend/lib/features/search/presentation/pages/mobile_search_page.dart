@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/search/scoped_search_registry.dart';
 import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
@@ -117,7 +117,7 @@ class _MobileSearchPageState extends ConsumerState<MobileSearchPage>
     final query = ref.watch(searchQueryProvider);
     final results = ref.watch(scopedSearchProvider);
     return Scaffold(
-      backgroundColor: MobileEnvColors.searchOverlayBg,
+      backgroundColor: context.env.searchOverlayBg,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         bottom: false,
@@ -332,13 +332,13 @@ class _SearchHeader extends StatelessWidget {
               IconButton(
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: onClose,
-                icon: const OmniIcon(
+                icon: OmniIcon(
                   icon: OmniIcons.arrow,
                   size: 21,
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
                 style: IconButton.styleFrom(
-                  foregroundColor: MobileEnvColors.ink,
+                  foregroundColor: context.env.ink,
                   minimumSize: const Size.square(48),
                 ),
               ),
@@ -373,8 +373,8 @@ class _SearchHeader extends StatelessWidget {
                               ScopedSearchLimits.maxQueryLength,
                             ),
                           ],
-                          style: const TextStyle(
-                            color: MobileEnvColors.ink,
+                          style: TextStyle(
+                            color: context.env.ink,
                             // ignore: font_size_whitelist
                             fontSize: 14,
                           ),
@@ -473,8 +473,8 @@ class _RecentRow extends StatelessWidget {
                 item,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MobileEnvColors.ink,
+                style: TextStyle(
+                  color: context.env.ink,
                   // ignore: font_size_whitelist
                   fontSize: 12,
                 ),
@@ -526,7 +526,7 @@ class _CommandRow extends StatelessWidget {
                 child: OmniIcon(
                   icon: icon,
                   size: 18,
-                  color: MobileEnvColors.accent,
+                  color: context.env.accentInk,
                 ),
               ),
             ),
@@ -536,8 +536,8 @@ class _CommandRow extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MobileEnvColors.ink,
+                style: TextStyle(
+                  color: context.env.ink,
                   // ignore: font_size_whitelist
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -576,8 +576,8 @@ class _SearchResultRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         constraints: const BoxConstraints(minHeight: 69),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: MobileEnvColors.line13)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line13)),
         ),
         child: Row(
           children: [
@@ -588,7 +588,7 @@ class _SearchResultRow extends StatelessWidget {
                 color: const Color(0x14D5F17D),
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: Icon(icon, size: 19, color: MobileEnvColors.accent),
+              child: Icon(icon, size: 19, color: context.env.accentInk),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -600,8 +600,8 @@ class _SearchResultRow extends StatelessWidget {
                     result.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       // ignore: font_size_whitelist
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -667,8 +667,8 @@ class _UnavailableScopeRow extends StatelessWidget {
           Expanded(
             child: Text(
               '$label · $message',
-              style: const TextStyle(
-                color: MobileEnvColors.inkMuted,
+              style: TextStyle(
+                color: context.env.inkMuted,
                 // ignore: font_size_whitelist
                 fontSize: 10,
               ),
@@ -726,13 +726,13 @@ class _ScopeGrid extends StatelessWidget {
                     decoration: BoxDecoration(
                       color:
                           scope == selected
-                              ? MobileEnvColors.accent.withValues(alpha: 0.10)
+                              ? context.env.accentInk.withValues(alpha: 0.10)
                               : const Color(0x0CFFFFFF),
                       borderRadius: BorderRadius.circular(17),
                       border: Border.all(
                         color:
                             scope == selected
-                                ? MobileEnvColors.accent.withValues(alpha: 0.38)
+                                ? context.env.accentInk.withValues(alpha: 0.38)
                                 : const Color(0x14FFFFFF),
                       ),
                     ),
@@ -742,7 +742,7 @@ class _ScopeGrid extends StatelessWidget {
                         OmniIcon(
                           icon: icon,
                           size: 22,
-                          color: MobileEnvColors.accent,
+                          color: context.env.accentInk,
                         ),
                         const SizedBox(height: 7),
                         Text(

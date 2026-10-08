@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
@@ -88,7 +88,7 @@ class ShareLinkSheet extends ConsumerStatefulWidget {
       isScrollControlled: true,
       // 移动壳层：原型 `.glass-sheet` 形态（实底 #171E1C + 顶部 r28）。
       backgroundColor:
-          ambience.hosted ? MobileEnvColors.sheetSolid : Colors.transparent,
+          ambience.hosted ? context.env.sheetSolid : Colors.transparent,
       shape:
           ambience.hosted
               ? const RoundedRectangleBorder(
@@ -165,7 +165,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                     top: BorderSide(
                       color:
                           hosted
-                              ? MobileEnvColors.line13
+                              ? context.env.line13
                               : context.filesColors.outlineVariant,
                     ),
                   ),

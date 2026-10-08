@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -16,7 +16,7 @@ Future<void> showMobileEnvSettingsSheet(BuildContext context) {
     isScrollControlled: true,
     isDismissible: true,
     enableDrag: false,
-    backgroundColor: MobileEnvColors.sheetSolid,
+    backgroundColor: context.env.sheetSolid,
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * 0.85,
       minHeight: MediaQuery.sizeOf(context).height * 0.6,
@@ -79,19 +79,19 @@ class _MobileEnvSettingsSheetState
                     children: [
                       Text(
                         'PREFERENCES',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 8, // ignore: font_size_whitelist
                           letterSpacing: 1.4,
                           fontWeight: FontWeight.w700,
-                          color: MobileEnvColors.accent,
+                          color: context.env.accentInk,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         l10n.accountEntryEnvironment,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 21, // ignore: font_size_whitelist
-                          color: MobileEnvColors.ink,
+                          color: context.env.ink,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
@@ -101,10 +101,10 @@ class _MobileEnvSettingsSheetState
                 IconButton(
                   tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.close_rounded,
                     size: 20,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
               ],
@@ -125,9 +125,9 @@ class _MobileEnvSettingsSheetState
                     child: Center(
                       child: Text(
                         l10n.envSheetEmpty,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12, // ignore: font_size_whitelist
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ),
@@ -164,9 +164,9 @@ class _MobileEnvSettingsSheetState
                 Center(
                   child: Text(
                     l10n.envSheetUploadHint,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 8, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkFaint,
+                      color: context.env.inkFaint,
                     ),
                   ),
                 ),
@@ -227,11 +227,11 @@ class _GroupLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 8, // ignore: font_size_whitelist
         letterSpacing: 1.4,
         fontWeight: FontWeight.w700,
-        color: MobileEnvColors.inkFaint,
+        color: context.env.inkFaint,
       ),
     );
   }
@@ -253,7 +253,7 @@ class _CurrentEnvCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0x14FFFFFF),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: MobileEnvColors.line09),
+        border: Border.all(color: context.env.line09),
       ),
       child: Row(
         children: [
@@ -274,10 +274,10 @@ class _CurrentEnvCard extends StatelessWidget {
                   selected?.title ?? l10n.accountEntryEnvironmentDefault,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w700,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -285,9 +285,9 @@ class _CurrentEnvCard extends StatelessWidget {
                   enabled ? l10n.envSheetLiveSub : l10n.envSheetLive,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
               ],
@@ -297,16 +297,16 @@ class _CurrentEnvCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: MobileEnvColors.accent.withValues(alpha: 0.12),
+                color: context.env.accentInk.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 l10n.envSheetActive,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 8, // ignore: font_size_whitelist
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1,
-                  color: MobileEnvColors.accent,
+                  color: context.env.accentInk,
                 ),
               ),
             ),
@@ -374,7 +374,7 @@ class _LibraryTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: active ? MobileEnvColors.accent : MobileEnvColors.line09,
+              color: active ? context.env.accentInk : context.env.line09,
               width: active ? 2 : 1,
             ),
           ),
@@ -391,8 +391,8 @@ class _LibraryTile extends StatelessWidget {
                     child: Container(
                       width: 26,
                       height: 26,
-                      decoration: const BoxDecoration(
-                        color: MobileEnvColors.accent,
+                      decoration: BoxDecoration(
+                        color: context.env.accent,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -428,22 +428,18 @@ class _UploadTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0x0CFFFFFF),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: MobileEnvColors.line09),
+            border: Border.all(color: context.env.line09),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.add_rounded,
-                size: 22,
-                color: MobileEnvColors.inkMuted,
-              ),
+              Icon(Icons.add_rounded, size: 22, color: context.env.inkMuted),
               const SizedBox(height: 5),
               Text(
                 l10n.envSheetUpload,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 8, // ignore: font_size_whitelist
-                  color: MobileEnvColors.inkFaint,
+                  color: context.env.inkFaint,
                 ),
               ),
             ],
@@ -481,10 +477,10 @@ class _BehaviorToggleRow extends StatelessWidget {
             height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: MobileEnvColors.accent.withValues(alpha: 0.08),
+              color: context.env.accentInk.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 18, color: MobileEnvColors.accent),
+            child: Icon(icon, size: 18, color: context.env.accentInk),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -493,18 +489,18 @@ class _BehaviorToggleRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
               ],

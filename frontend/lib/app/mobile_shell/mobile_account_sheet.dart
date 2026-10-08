@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -42,15 +42,16 @@ class MobileAccountAvatar extends ConsumerWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        const ColoredBox(color: MobileEnvColors.avatarBg),
+                        ColoredBox(color: context.env.avatarBg),
                         if (avatarUrl != null && avatarUrl.isNotEmpty)
                           Image.network(
                             avatarUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _initials(initials, 13),
+                            errorBuilder:
+                                (_, _, _) => _initials(context, initials, 13),
                           )
                         else
-                          _initials(initials, 13),
+                          _initials(context, initials, 13),
                       ],
                     ),
                   ),
@@ -63,10 +64,7 @@ class MobileAccountAvatar extends ConsumerWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color:
-                        online
-                            ? MobileEnvColors.accent
-                            : MobileEnvColors.white46,
+                    color: online ? context.env.accent : context.env.white46,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: const Color(0xFF25302D),
@@ -82,12 +80,12 @@ class MobileAccountAvatar extends ConsumerWidget {
     );
   }
 
-  Widget _initials(String initials, double fontSize) {
+  Widget _initials(BuildContext context, String initials, double fontSize) {
     return Center(
       child: Text(
         initials,
         style: TextStyle(
-          color: MobileEnvColors.avatarFg,
+          color: context.env.avatarFg,
           fontSize: fontSize,
           fontWeight: FontWeight.w700,
         ),
@@ -125,8 +123,8 @@ class _OmniAccountSheet extends ConsumerWidget {
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         child: DecoratedBox(
-          decoration: const BoxDecoration(
-            color: MobileEnvColors.sheetSolid,
+          decoration: BoxDecoration(
+            color: context.env.sheetSolid,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             border: Border(top: BorderSide(color: Color(0x21FFFFFF))),
             boxShadow: [
@@ -206,15 +204,16 @@ class _AccountProfileRow extends ConsumerWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    const ColoredBox(color: MobileEnvColors.avatarBg),
+                    ColoredBox(color: context.env.avatarBg),
                     if (avatarUrl != null && avatarUrl.isNotEmpty)
                       Image.network(
                         avatarUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _initials(initials, 15),
+                        errorBuilder:
+                            (_, _, _) => _initials(context, initials, 15),
                       )
                     else
-                      _initials(initials, 15),
+                      _initials(context, initials, 15),
                   ],
                 ),
               ),
@@ -229,8 +228,8 @@ class _AccountProfileRow extends ConsumerWidget {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
@@ -240,8 +239,8 @@ class _AccountProfileRow extends ConsumerWidget {
                       email,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: MobileEnvColors.inkMuted,
+                      style: TextStyle(
+                        color: context.env.inkMuted,
                         fontSize: 10,
                         height: 1.4,
                       ),
@@ -249,10 +248,10 @@ class _AccountProfileRow extends ConsumerWidget {
                 ],
               ),
             ),
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.chevron,
               size: 18,
-              color: MobileEnvColors.inkMuted,
+              color: context.env.inkMuted,
             ),
           ],
         ),
@@ -260,12 +259,12 @@ class _AccountProfileRow extends ConsumerWidget {
     );
   }
 
-  Widget _initials(String initials, double fontSize) {
+  Widget _initials(BuildContext context, String initials, double fontSize) {
     return Center(
       child: Text(
         initials,
         style: TextStyle(
-          color: MobileEnvColors.avatarFg,
+          color: context.env.avatarFg,
           fontSize: fontSize,
           fontWeight: FontWeight.w700,
         ),
@@ -285,7 +284,7 @@ class _AccountStatusRow extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(vertical: 13),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
       decoration: BoxDecoration(
-        color: MobileEnvColors.accent.withValues(alpha: 0.07),
+        color: context.env.accentInk.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -297,8 +296,7 @@ class _AccountStatusRow extends ConsumerWidget {
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color:
-                      online ? MobileEnvColors.accent : MobileEnvColors.white46,
+                  color: online ? context.env.accent : context.env.white46,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -310,8 +308,8 @@ class _AccountStatusRow extends ConsumerWidget {
                       : l10n.accountStatusOffline,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.ink,
+                  style: TextStyle(
+                    color: context.env.ink,
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                   ),
@@ -322,10 +320,7 @@ class _AccountStatusRow extends ConsumerWidget {
           const SizedBox(height: 3),
           Text(
             online ? l10n.accountStatusSyncNote : l10n.accountStatusOfflineNote,
-            style: const TextStyle(
-              color: MobileEnvColors.inkMuted,
-              fontSize: 8,
-            ),
+            style: TextStyle(color: context.env.inkMuted, fontSize: 8),
           ),
         ],
       ),
@@ -344,8 +339,8 @@ class _AccountNavRows extends ConsumerWidget {
     final backdrop = ref.watch(appBackdropControllerProvider).asData?.value;
     final backdropTitle = backdrop?.selectedBackdrop?.title;
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: MobileEnvColors.line13)),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: context.env.line13)),
       ),
       child: Column(
         children: [
@@ -461,7 +456,7 @@ class _AccountSheetRow extends StatelessWidget {
                 child: OmniIcon(
                   icon: icon,
                   size: 18,
-                  color: MobileEnvColors.accent,
+                  color: context.env.accentInk,
                 ),
               ),
             ),
@@ -475,8 +470,8 @@ class _AccountSheetRow extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -488,8 +483,8 @@ class _AccountSheetRow extends StatelessWidget {
                         subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.inkMuted,
+                        style: TextStyle(
+                          color: context.env.inkMuted,
                           fontSize: 9,
                         ),
                       ),
@@ -502,14 +497,14 @@ class _AccountSheetRow extends StatelessWidget {
                 width: 19,
                 height: 19,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: MobileEnvColors.accent,
+                decoration: BoxDecoration(
+                  color: context.env.accent,
                   shape: BoxShape.circle,
                 ),
                 child: Text(
                   badge!,
-                  style: const TextStyle(
-                    color: MobileEnvColors.onAccent,
+                  style: TextStyle(
+                    color: context.env.onAccent,
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                   ),
@@ -517,10 +512,10 @@ class _AccountSheetRow extends StatelessWidget {
               ),
               const SizedBox(width: 4),
             ],
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.chevron,
               size: 18,
-              color: MobileEnvColors.inkMuted,
+              color: context.env.inkMuted,
             ),
           ],
         ),
@@ -541,7 +536,7 @@ class _ManageAccountButton extends StatelessWidget {
         onPressed: () => _closeAnd(context, () => context.push('/profile')),
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(47),
-          foregroundColor: MobileEnvColors.ink,
+          foregroundColor: context.env.ink,
           backgroundColor: Colors.white.withValues(alpha: 0.07),
           side: BorderSide.none,
           shape: RoundedRectangleBorder(

@@ -79,11 +79,12 @@ class _HostedCreateSection extends StatelessWidget {
               enableSuggestions: false,
               autocorrect: false,
               textInputAction: TextInputAction.done,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13, // ignore: font_size_whitelist
-                color: MobileEnvColors.ink,
+                color: context.env.ink,
               ),
               decoration: _hostedFieldDecoration(
+                context: context,
                 label: l10n.filesCustomPassword,
                 hint: l10n.filesEnterPassword,
               ),
@@ -111,11 +112,12 @@ class _HostedCreateSection extends StatelessWidget {
           TextField(
             controller: maxAccessController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13, // ignore: font_size_whitelist
-              color: MobileEnvColors.ink,
+              color: context.env.ink,
             ),
             decoration: _hostedFieldDecoration(
+              context: context,
               label: l10n.filesMaxAccessCount,
               hint: l10n.filesNoLimit,
             ),
@@ -144,31 +146,35 @@ class _HostedCreateSection extends StatelessWidget {
   }
 }
 
-/// 原型 `.field-input`：46 高、r14、白 7.5% 实底 + 白 10% 描边。
-InputDecoration _hostedFieldDecoration({required String label, String? hint}) {
-  const border = OutlineInputBorder(
+/// 原型 `.field-input`：46 高、r14，低透明实底 + 发丝描边；取环境配色表而非写死白值。
+InputDecoration _hostedFieldDecoration({
+  required BuildContext context,
+  required String label,
+  String? hint,
+}) {
+  final border = OutlineInputBorder(
     borderRadius: BorderRadius.all(Radius.circular(14)),
-    borderSide: BorderSide(color: MobileEnvColors.line10),
+    borderSide: BorderSide(color: context.env.line10),
     gapPadding: 0,
   );
   return InputDecoration(
     labelText: label,
     hintText: hint,
     filled: true,
-    fillColor: const Color(0x13FFFFFF),
+    fillColor: context.env.line07,
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    labelStyle: const TextStyle(
+    labelStyle: TextStyle(
       fontSize: 9, // ignore: font_size_whitelist
-      color: MobileEnvColors.inkMuted,
+      color: context.env.inkMuted,
     ),
-    hintStyle: const TextStyle(
+    hintStyle: TextStyle(
       fontSize: 13, // ignore: font_size_whitelist
-      color: MobileEnvColors.white46,
+      color: context.env.white46,
     ),
     enabledBorder: border,
     focusedBorder: border.copyWith(
-      borderSide: const BorderSide(color: MobileEnvColors.line15),
+      borderSide: BorderSide(color: context.env.line15),
     ),
     border: border,
   );
@@ -186,11 +192,11 @@ class _HostedGroupLabel extends StatelessWidget {
       padding: const EdgeInsets.only(top: 16, bottom: 6),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 9, // ignore: font_size_whitelist
           letterSpacing: 1.4,
           fontWeight: FontWeight.w700,
-          color: MobileEnvColors.inkFaint,
+          color: context.env.inkFaint,
         ),
       ),
     );
@@ -226,10 +232,10 @@ class _HostedToggleRow extends StatelessWidget {
             height: 42,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: MobileEnvColors.accent.withValues(alpha: 0.08),
+              color: context.env.accentInk.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(icon, size: 18, color: MobileEnvColors.accent),
+            child: Icon(icon, size: 18, color: context.env.accentInk),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -241,10 +247,10 @@ class _HostedToggleRow extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11, // ignore: font_size_whitelist
                     fontWeight: FontWeight.w600,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -252,10 +258,10 @@ class _HostedToggleRow extends StatelessWidget {
                   subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
                     height: 1.35,
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
               ],
@@ -288,14 +294,14 @@ class _HostedOptionsToggle extends StatelessWidget {
             Icon(
               expanded ? Icons.expand_less : Icons.expand_more,
               size: 18,
-              color: MobileEnvColors.inkMuted,
+              color: context.env.inkMuted,
             ),
             const SizedBox(width: 4),
             Text(
               l10n.filesAdvancedOptions,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10, // ignore: font_size_whitelist
-                color: MobileEnvColors.inkMuted,
+                color: context.env.inkMuted,
               ),
             ),
           ],
@@ -330,30 +336,30 @@ class _HostedAccentButton extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               onPressed == null
-                  ? MobileEnvColors.accent.withValues(alpha: 0.4)
-                  : MobileEnvColors.accent,
+                  ? context.env.accent.withValues(alpha: 0.4)
+                  : context.env.accent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (busy)
-              const SizedBox.square(
+              SizedBox.square(
                 dimension: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: MobileEnvColors.onAccent,
+                  color: context.env.onAccent,
                 ),
               )
             else
-              OmniIcon(icon: icon, size: 17, color: MobileEnvColors.onAccent),
+              OmniIcon(icon: icon, size: 17, color: context.env.onAccent),
             const SizedBox(width: 7),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11, // ignore: font_size_whitelist
                 fontWeight: FontWeight.w700,
-                color: MobileEnvColors.onAccent,
+                color: context.env.onAccent,
               ),
             ),
           ],
