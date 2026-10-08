@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -184,6 +186,11 @@ class _MovieSearchField extends ConsumerWidget {
       child: TextField(
         onChanged:
             ref.read(movieCenterControllerProvider.notifier).setSearchQuery,
+        // 服务端影视库关键词有 200 字上限，超长输入会变成一次被拒的请求；
+        // 限在输入侧，框里的文本才等于真正打出去的关键词。
+        inputFormatters: <TextInputFormatter>[
+          LengthLimitingTextInputFormatter(ScopedSearchLimits.maxQueryLength),
+        ],
         style: TextStyle(
           fontFamily: 'JetBrainsMono',
           fontFamilyFallback: const ['NotoSansSC'],
