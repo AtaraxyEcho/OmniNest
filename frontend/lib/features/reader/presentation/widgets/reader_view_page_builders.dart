@@ -82,6 +82,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   set pageViewportSize(Size? value);
   bool get showReturnControl;
   bool get showControls;
+  bool get showRemoteProgressCue;
+  ReaderProgressSnapshot? get remoteProgressCandidate;
   bool get modeSwitchInProgress;
   set modeSwitchInProgress(bool value);
   int? get modeSwitchAnchor;
@@ -104,6 +106,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void tryNavigateChapter(int offset);
   void toggleControls();
   void returnToOriginalProgress();
+  void jumpToRemoteProgress();
   void onViewportChanged(Size newSize);
   Future<int?> findPageByCharOffset(ChapterData chapterData, int charOffset);
   Future<void> switchToChapter(

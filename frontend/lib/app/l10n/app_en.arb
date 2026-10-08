@@ -2629,7 +2629,15 @@
   "readerTtsStop": "Stop",
   "readerAlreadyFirstChapter": "Already at the first chapter",
   "readerChapterSwitching": "Switching chapter, please wait…",
-  "readerSyncRemoteProgress": "Progress updated on another device — tap to sync",
+  "readerSyncRemoteProgress": "Another device is at {percent} of this chapter — tap to go",
+  "@readerSyncRemoteProgress": {
+    "description": "同章远端进度落后于本机位置而被自动丢弃时，提示可手动跳转到该进度",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "readerAlreadyLastChapter": "Already at the last chapter",
   "readerRestoringProgress": "Restoring reading position…",
   "readerReturnToProgress": "Return to last position",

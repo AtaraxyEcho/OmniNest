@@ -244,6 +244,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
         child: ReaderTtsControls(text: getPlainText(content.content)),
       ),
     if (_showReturnControl) buildReturnToProgressControl(),
+    if (_showRemoteProgressCue) buildRemoteProgressCue(),
   ];
 
   /// 底部浮动"返回原进度"控件（参考微信读书样式）。

@@ -170,6 +170,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   ReaderProgressSnapshot? _returnToProgressSnapshot;
   bool _showReturnControl = false; // 是否显示"返回原进度"控件
   Timer? _returnControlTimer; // 自动隐藏计时器
+  // 被方向性守卫丢弃的同章远端进度，与是否显示其跳转提示。
+  ReaderProgressSnapshot? _remoteProgressCandidate;
+  bool _showRemoteProgressCue = false;
+  Timer? _remoteProgressTimer;
+  DateTime? _remoteProgressCueOfferedAt;
 
   // ── 并发控制 ──
   bool _isAnimating = false;
@@ -308,6 +313,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   ReaderProgressSnapshot? get lastOwnProgressSave => _lastOwnProgressSave;
 
   @override
+  bool isOwnProgressEcho(ReaderProgressSnapshot snapshot) {
+    final at = snapshot.updatedAt;
+    if (at == null) {
+      return false;
+    }
+    return _isOwnProgressEcho(snapshot, at);
+  }
+
+  @override
   double? get pendingChapterProgress => _pendingChapterProgress;
   @override
   set pendingChapterProgress(double? v) => _pendingChapterProgress = v;
@@ -363,6 +377,25 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Timer? get dismissReturnTimer => _dismissReturnTimer;
   @override
   set dismissReturnTimer(Timer? v) => _dismissReturnTimer = v;
+  @override
+  ReaderProgressSnapshot? get remoteProgressCandidate =>
+      _remoteProgressCandidate;
+  @override
+  set remoteProgressCandidate(ReaderProgressSnapshot? v) =>
+      _remoteProgressCandidate = v;
+  @override
+  bool get showRemoteProgressCue => _showRemoteProgressCue;
+  @override
+  set showRemoteProgressCue(bool v) => _showRemoteProgressCue = v;
+  @override
+  Timer? get remoteProgressTimer => _remoteProgressTimer;
+  @override
+  set remoteProgressTimer(Timer? v) => _remoteProgressTimer = v;
+  @override
+  DateTime? get remoteProgressCueOfferedAt => _remoteProgressCueOfferedAt;
+  @override
+  set remoteProgressCueOfferedAt(DateTime? v) =>
+      _remoteProgressCueOfferedAt = v;
   @override
   bool get isAnimating => _isAnimating;
   @override
@@ -690,6 +723,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _repaginateTimer?.cancel();
     _returnControlTimer?.cancel();
     _dismissReturnTimer?.cancel();
+    _remoteProgressTimer?.cancel();
     _chapterLoadingTimer?.cancel();
     unawaited(_progressSaveCoordinator.dispose());
     _restore.cancel();

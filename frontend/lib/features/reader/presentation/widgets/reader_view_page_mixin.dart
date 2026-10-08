@@ -113,6 +113,23 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   Timer? get dismissReturnTimer;
   set dismissReturnTimer(Timer? value);
 
+  // ── 跨设备进度跳转提示 ──
+
+  /// 被方向性守卫丢弃的同章远端进度，等待用户决定是否跳转。
+  ReaderProgressSnapshot? get remoteProgressCandidate;
+  set remoteProgressCandidate(ReaderProgressSnapshot? value);
+  bool get showRemoteProgressCue;
+  set showRemoteProgressCue(bool value);
+  Timer? get remoteProgressTimer;
+  set remoteProgressTimer(Timer? value);
+
+  /// 已挂出过提示的候选进度时间戳，避免详情 provider 重建反复弹回。
+  DateTime? get remoteProgressCueOfferedAt;
+  set remoteProgressCueOfferedAt(DateTime? value);
+
+  /// 判断回灌快照是否是本机刚写入进度的回声。
+  bool isOwnProgressEcho(ReaderProgressSnapshot snapshot);
+
   // ── 并发控制 ──
 
   bool get isAnimating;
@@ -274,7 +291,13 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   }
 
   /// 应用进度快照到当前阅读位置。
-  void applyProgressSnapshot(ReaderProgressSnapshot snapshot) {
+  ///
+  /// [force] 用于用户显式点按跳转提示：跳过回声与同章方向性守卫，
+  /// 其余校验（章节归属、清单版本、数据就绪）仍然生效。
+  void applyProgressSnapshot(
+    ReaderProgressSnapshot snapshot, {
+    bool force = false,
+  }) {
     if (snapshot.chapterId.isNotEmpty &&
         snapshot.chapterId != currentChapterId) {
       if (kDebugMode) {
@@ -314,14 +337,23 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     // 只丢弃不超前于本机已知位置的快照；跨设备更靠前的同章进度必须放行，
     // 否则续读只能靠章切换生效。
     final ownSaved = lastOwnProgressSave;
-    if (isStaleSameChapterSnapshot(
-      snapshotChapterId: snapshot.chapterId,
-      snapshotCharOffset: snapshot.charOffset,
-      trackedChapterId: positionTracker.chapterId,
-      trackedCharOffset: positionTracker.charOffset,
-      ownSavedChapterId: ownSaved?.chapterId,
-      ownSavedCharOffset: ownSaved?.charOffset ?? 0,
-    )) {
+    if (!force &&
+        isStaleSameChapterSnapshot(
+          snapshotChapterId: snapshot.chapterId,
+          snapshotCharOffset: snapshot.charOffset,
+          trackedChapterId: positionTracker.chapterId,
+          trackedCharOffset: positionTracker.charOffset,
+          ownSavedChapterId: ownSaved?.chapterId,
+          ownSavedCharOffset: ownSaved?.charOffset ?? 0,
+        )) {
+      // 丢弃是保守一侧，手动通道补回来：非自身回声且确实带位置的，
+      // 给一次点按跳转的提示，由用户决定是否让本机回退。
+      if (shouldOfferProgressJumpCue(
+        isOwnEcho: isOwnProgressEcho(snapshot),
+        snapshotCharOffset: snapshot.charOffset,
+      )) {
+        offerProgressJumpCue(snapshot);
+      }
       if (kDebugMode) {
         readerDebugLog(
           'ProgressRestore SKIP: same-chapter stale snapshot '
@@ -594,6 +626,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     chapterLoadCoordinator.cancel();
     pageLocator.cancel();
     chapterNavigationIntent = intent;
+    // 跳转提示只对候选快照所属章节有效，切章后点按会跳错位置。
+    hideProgressJumpCue();
 
     if (isAnimating) {
       isAnimating = false;
@@ -672,6 +706,52 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       ),
     );
   }
+
+  /// 挂出"其他设备停在本章 X%"的一次性跳转提示。
+  ///
+  /// 方向性守卫只会丢弃靠后的同章进度，其中非本机回声的部分确实来自
+  /// 其它设备；不静默回跳，但也不能让用户无路可走。
+  void offerProgressJumpCue(ReaderProgressSnapshot snapshot) {
+    if (!mounted) return;
+    if (showReturnControl) {
+      // 两个控件共用同一条底部轨道，返回原进度优先占位。
+      return;
+    }
+    final offeredAt = snapshot.updatedAt;
+    if (offeredAt != null && offeredAt == remoteProgressCueOfferedAt) {
+      // 同一份回灌在超时收起后不再挂出：详情 provider 每次重建都会重新
+      // 走到这里，否则切换书架或刷新详情都会让提示重新出现。
+      return;
+    }
+    remoteProgressTimer?.cancel();
+    _updateState(() {
+      remoteProgressCandidate = snapshot;
+      showRemoteProgressCue = true;
+      remoteProgressCueOfferedAt = offeredAt;
+    });
+    remoteProgressTimer = Timer(const Duration(seconds: 8), () {
+      hideProgressJumpCue();
+    });
+  }
+
+  /// 收起跳转提示。候选快照保留到点按或切章，避免同一份回灌反复挂出。
+  void hideProgressJumpCue() {
+    remoteProgressTimer?.cancel();
+    remoteProgressTimer = null;
+    if (!mounted) return;
+    if (showRemoteProgressCue) {
+      _updateState(() => showRemoteProgressCue = false);
+    }
+  }
+
+  /// 用户点按提示：把被守卫丢弃的远端进度强制施加到本机。
+  void jumpToRemoteProgress() {
+    final candidate = remoteProgressCandidate;
+    remoteProgressCandidate = null;
+    hideProgressJumpCue();
+    if (candidate == null) return;
+    applyProgressSnapshot(candidate, force: true);
+  }
 }
 
 /// 判定同章进度回灌是否为自身回声或旧副本。
@@ -718,4 +798,15 @@ bool isProgressOffsetVersionMismatch({
     return false;
   }
   return snapshotVersion != currentVersion;
+}
+
+/// 同章靠后进度被丢弃后，是否挂出手动跳转提示。
+///
+/// 自身回声不能提示：那是本机刚写入的位置，文案会谎称其他设备，且每轮
+/// 滚动都可能重新弹出。章首降级副本没有可跳转的偏移，同样不提示。
+bool shouldOfferProgressJumpCue({
+  required bool isOwnEcho,
+  required int snapshotCharOffset,
+}) {
+  return !isOwnEcho && snapshotCharOffset > 0;
 }

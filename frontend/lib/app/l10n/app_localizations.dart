@@ -11381,11 +11381,11 @@ abstract class AppLocalizations {
   /// **'Switching chapter, please wait…'**
   String get readerChapterSwitching;
 
-  /// No description provided for @readerSyncRemoteProgress.
+  /// 同章远端进度落后于本机位置而被自动丢弃时，提示可手动跳转到该进度
   ///
   /// In en, this message translates to:
-  /// **'Progress updated on another device — tap to sync'**
-  String get readerSyncRemoteProgress;
+  /// **'Another device is at {percent} of this chapter — tap to go'**
+  String readerSyncRemoteProgress(String percent);
 
   /// No description provided for @readerAlreadyLastChapter.
   ///
