@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
@@ -122,10 +123,14 @@ class _WeatherDragDismissSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onVerticalDragEnd:
-          (details) => _maybeDismiss(context, details.primaryVelocity),
-      child: _WeatherDetailSheet(weather: weather),
+    // 面板经 PopupRoute 推入，可能挂在 root navigator 上而拿不到首页子树的极性注册，
+    // 所以自带一份；取值仍是全局壁纸极性，不是明暗设置。
+    return MobileEnvironmentScope(
+      child: GestureDetector(
+        onVerticalDragEnd:
+            (details) => _maybeDismiss(context, details.primaryVelocity),
+        child: _WeatherDetailSheet(weather: weather),
+      ),
     );
   }
 
@@ -154,10 +159,10 @@ class _WeatherDetailSheet extends ConsumerWidget {
       width: isWide ? 600 : double.infinity,
       constraints: BoxConstraints(maxHeight: maxHeight),
       clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
-        color: Color(0xFF17201E),
+      decoration: BoxDecoration(
+        color: context.env.sheetSolid,
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        border: Border(top: BorderSide(color: Color(0x2EFFFFFF))),
+        border: Border(top: BorderSide(color: context.env.line15)),
         boxShadow: [
           BoxShadow(
             color: Colors.black54,
@@ -187,8 +192,8 @@ class _WeatherDetailSheet extends ConsumerWidget {
                               l10n
                                   .weatherSheetLocationEyebrow(location)
                                   .toUpperCase(),
-                              style: const TextStyle(
-                                color: Color(0xA3FFFFFF),
+                              style: TextStyle(
+                                color: context.env.white70,
                                 // ignore: font_size_whitelist
                                 fontSize: 8,
                                 letterSpacing: 1.4,
@@ -200,8 +205,8 @@ class _WeatherDetailSheet extends ConsumerWidget {
                               weather.text,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: MobileEnvColors.ink,
+                              style: TextStyle(
+                                color: context.env.ink,
                                 fontFamily: 'InstrumentSerif',
                                 // ignore: font_size_whitelist
                                 fontSize: 27,
@@ -217,13 +222,13 @@ class _WeatherDetailSheet extends ConsumerWidget {
                               context,
                             ).closeButtonTooltip,
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const OmniIcon(
+                        icon: OmniIcon(
                           icon: OmniIcons.close,
                           size: 20,
-                          color: MobileEnvColors.ink,
+                          color: context.env.ink,
                         ),
                         style: IconButton.styleFrom(
-                          foregroundColor: MobileEnvColors.ink,
+                          foregroundColor: context.env.ink,
                           minimumSize: const Size.square(48),
                         ),
                       ),
@@ -248,12 +253,12 @@ class _WeatherDetailSheet extends ConsumerWidget {
                             Container(
                               width: 6,
                               height: 6,
-                              decoration: const BoxDecoration(
-                                color: MobileEnvColors.accent,
+                              decoration: BoxDecoration(
+                                color: context.env.accent,
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: MobileEnvColors.accent,
+                                    color: context.env.accent,
                                     blurRadius: 8,
                                   ),
                                 ],
@@ -265,7 +270,7 @@ class _WeatherDetailSheet extends ConsumerWidget {
                                 l10n.weatherSheetEnvironmentNote,
                                 // ignore: font_size_whitelist
                                 style: TextStyle(
-                                  color: MobileEnvColors.inkMuted,
+                                  color: context.env.inkMuted,
                                   // ignore: font_size_whitelist
                                   fontSize: 8,
                                 ),
@@ -383,14 +388,14 @@ class _WeatherCurrent extends StatelessWidget {
               OmniIcon(
                 icon: OmniIcons.weatherFor(int.tryParse(weather.icon) ?? -1),
                 size: 35,
-                color: MobileEnvColors.ink,
+                color: context.env.ink,
               ),
               const SizedBox(width: 14),
               // 样例 weather-current strong：固定 74px 衬线，不随宽度缩放。
               Text(
                 '${weather.temp}°',
-                style: const TextStyle(
-                  color: MobileEnvColors.ink,
+                style: TextStyle(
+                  color: context.env.ink,
                   fontFamily: 'InstrumentSerif',
                   // ignore: font_size_whitelist
                   fontSize: 74,
@@ -405,7 +410,7 @@ class _WeatherCurrent extends StatelessWidget {
             l10n.weatherSheetFeelsLike(weather.feelsLike),
             // ignore: font_size_whitelist
             style: TextStyle(
-              color: MobileEnvColors.ink,
+              color: context.env.ink,
               // ignore: font_size_whitelist
               fontSize: 10,
             ),
@@ -414,7 +419,7 @@ class _WeatherCurrent extends StatelessWidget {
           Text(
             l10n.weatherSheetSummary,
             // ignore: font_size_whitelist
-            style: TextStyle(color: MobileEnvColors.inkMuted, fontSize: 10),
+            style: TextStyle(color: context.env.inkMuted, fontSize: 10),
           ),
         ],
       ),
@@ -433,10 +438,10 @@ class _HourlyWeather extends StatelessWidget {
     // 样例固定 5 项、flex:1 均分（min-width 67），无横向间隙。
     final hours = weather.hourly.take(5).toList();
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: MobileEnvColors.line13),
-          bottom: BorderSide(color: MobileEnvColors.line13),
+          top: BorderSide(color: context.env.line13),
+          bottom: BorderSide(color: context.env.line13),
         ),
       ),
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
@@ -453,7 +458,7 @@ class _HourlyWeather extends StatelessWidget {
                     index == 0 ? l10n.weatherHourNow : hours[index].displayTime,
                     // ignore: font_size_whitelist
                     style: TextStyle(
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                       // ignore: font_size_whitelist
                       fontSize: 8,
                     ),
@@ -462,13 +467,13 @@ class _HourlyWeather extends StatelessWidget {
                   OmniIcon(
                     icon: OmniIcons.weatherByCode(hours[index].icon),
                     size: 19,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                   const SizedBox(height: 10),
                   Text(
                     '${hours[index].temp}°',
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       // ignore: font_size_whitelist
                       fontSize: 12,
                     ),
@@ -510,7 +515,7 @@ class _WeatherMetrics extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
-        border: Border.all(color: MobileEnvColors.line13),
+        border: Border.all(color: context.env.line13),
         borderRadius: BorderRadius.circular(18),
       ),
       child: ClipRRect(
@@ -526,19 +531,17 @@ class _WeatherMetrics extends StatelessWidget {
                         child: Container(
                           constraints: const BoxConstraints(minHeight: 88),
                           decoration: BoxDecoration(
-                            color: const Color(0xF2111816),
+                            color: context.env.sheetSolid.withValues(
+                              alpha: 0.95,
+                            ),
                             border: Border(
                               right:
                                   col == 0
-                                      ? const BorderSide(
-                                        color: MobileEnvColors.line13,
-                                      )
+                                      ? BorderSide(color: context.env.line13)
                                       : BorderSide.none,
                               bottom:
                                   row == 0
-                                      ? const BorderSide(
-                                        color: MobileEnvColors.line13,
-                                      )
+                                      ? BorderSide(color: context.env.line13)
                                       : BorderSide.none,
                             ),
                           ),
@@ -600,7 +603,7 @@ class _MetricCell extends StatelessWidget {
           label.toUpperCase(),
           // ignore: font_size_whitelist
           style: TextStyle(
-            color: MobileEnvColors.inkMuted,
+            color: context.env.inkMuted,
             // ignore: font_size_whitelist
             fontSize: 7,
             letterSpacing: 1.2,
@@ -610,8 +613,8 @@ class _MetricCell extends StatelessWidget {
         const SizedBox(height: 5),
         Text(
           value,
-          style: const TextStyle(
-            color: MobileEnvColors.ink,
+          style: TextStyle(
+            color: context.env.ink,
             fontFamily: 'InstrumentSerif',
             // ignore: font_size_whitelist
             fontSize: 22,
@@ -624,8 +627,7 @@ class _MetricCell extends StatelessWidget {
             detail,
             // ignore: font_size_whitelist
             style: TextStyle(
-              color:
-                  highlight ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+              color: highlight ? context.env.accent : context.env.inkMuted,
               // ignore: font_size_whitelist
               fontSize: 8,
             ),
@@ -656,7 +658,7 @@ class _WeatherForecast extends StatelessWidget {
                   l10n.weatherForecastTitle.toUpperCase(),
                   // ignore: font_size_whitelist
                   style: TextStyle(
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                     // ignore: font_size_whitelist
                     fontSize: 8,
                     letterSpacing: 1.2,
@@ -666,14 +668,14 @@ class _WeatherForecast extends StatelessWidget {
               ),
               TextButton.icon(
                 onPressed: () => unawaited(_openEnvironmentSettings(context)),
-                icon: const OmniIcon(
+                icon: OmniIcon(
                   icon: OmniIcons.settings,
                   size: 14,
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
                 label: Text(l10n.weatherSettingsAction),
                 style: TextButton.styleFrom(
-                  foregroundColor: MobileEnvColors.inkMuted,
+                  foregroundColor: context.env.inkMuted,
                   minimumSize: const Size(48, 40),
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   // ignore: font_size_whitelist
@@ -716,8 +718,8 @@ class _ForecastRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: MobileEnvColors.ink,
+              style: TextStyle(
+                color: context.env.ink,
                 // ignore: font_size_whitelist
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -731,7 +733,7 @@ class _ForecastRow extends StatelessWidget {
                 OmniIcon(
                   icon: OmniIcons.weatherByCode(day.iconDay),
                   size: 18,
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
                 const SizedBox(width: 7),
                 Expanded(
@@ -741,7 +743,7 @@ class _ForecastRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     // ignore: font_size_whitelist
                     style: TextStyle(
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                       // ignore: font_size_whitelist
                       fontSize: 9,
                     ),
@@ -754,8 +756,8 @@ class _ForecastRow extends StatelessWidget {
             width: 30,
             child: Text(
               '${day.tempMax}°',
-              style: const TextStyle(
-                color: MobileEnvColors.ink,
+              style: TextStyle(
+                color: context.env.ink,
                 // ignore: font_size_whitelist
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -766,8 +768,8 @@ class _ForecastRow extends StatelessWidget {
             width: 25,
             child: Text(
               '${day.tempMin}°',
-              style: const TextStyle(
-                color: MobileEnvColors.inkMuted,
+              style: TextStyle(
+                color: context.env.inkMuted,
                 // ignore: font_size_whitelist
                 fontSize: 10,
               ),
