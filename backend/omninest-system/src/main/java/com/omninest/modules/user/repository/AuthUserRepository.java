@@ -39,8 +39,8 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             select user from AuthUser user
             where user.status = :status
               and (:query = ''
-                   or lower(user.username) like concat('%', :query, '%')
-                   or lower(coalesce(user.displayName, '')) like concat('%', :query, '%'))
+                   or lower(user.username) like concat('%', :query, '%') escape '\\'
+                   or lower(coalesce(user.displayName, '')) like concat('%', :query, '%') escape '\\')
             """)
     Page<AuthUser> searchByStatus(
             @Param("status") String status,

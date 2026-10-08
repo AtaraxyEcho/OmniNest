@@ -3,6 +3,7 @@ package com.omninest.modules.user.service;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -55,7 +56,10 @@ public class UserDirectoryQueryService {
     public PageResponse<UserDirectoryEntry> findActiveUsers(String query, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
-        String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        String trimmed = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        // 输入是字面量文本而不是模式：与媒体库同一口径，谓词侧声明 escape '\'。
+        // 空串转义后仍是空串，继续走谓词里的 :query = '' 短路分支。
+        String normalizedQuery = LikePatterns.escapeSpecials(trimmed);
         Page<AuthUser> users = userRepository.searchByStatus(
                 UserStatus.ACTIVE.getValue(),
                 normalizedQuery,
