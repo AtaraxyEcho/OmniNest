@@ -639,7 +639,7 @@ class _HostedPillAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0x0FFFFFFF),
+      color: context.env.surfaceTint,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(11),
         side: BorderSide(color: context.env.line09),

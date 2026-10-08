@@ -519,7 +519,7 @@ class _CommandRow extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: const Color(0x1AD5F17D),
+                color: context.env.accentInk.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(11),
               ),
               child: Center(
@@ -585,7 +585,7 @@ class _SearchResultRow extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0x14D5F17D),
+                color: context.env.accentInk.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(13),
               ),
               child: Icon(icon, size: 19, color: context.env.accentInk),

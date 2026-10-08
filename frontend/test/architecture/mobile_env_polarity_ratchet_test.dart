@@ -52,37 +52,34 @@ const _mustCarryScope = <String>[
 /// 计数里含少量刻意保留项（例如影院 hero 次钮压在海报图上，白描边与深玻璃
 /// 由图片本身提供对比），所以这里是天花板而不是零：下调它要么真的修掉一处，
 /// 要么在代码里写明为什么保留。
-const _bareLightLiteralCeiling = 22;
+const _bareLightLiteralCeiling = 13;
 
-void _assertBareLightLiterals() {
-  final pattern = RegExp(r'Colors\.white\b|Color\(0x[0-9A-Fa-f]{2}FFFFFF\)');
-  var total = 0;
+/// 已迁移文件里残留的酸绿字面量。强调色在浅态必须换成 accentInk，
+/// 残留的 D5F17D 意味着浅态下填充与标签同为不可见；刻意保留的影像浮层
+/// 用 polarity-stable 标注，所以这里允许 0。
+const _bareAccentLiteralCeiling = 0;
+
+/// 逐行统计命中 pattern 的字面量，跳过上一行标了 polarity-stable 的位置。
+List<String> _scanMigratedLiterals(RegExp pattern) {
   final offenders = <String>[];
   for (final path in _migrated) {
-    final source = File(path).readAsStringSync();
-    final lines = source.split('\n');
+    final lines = File(path).readAsStringSync().split('\n');
     var hits = 0;
-    var offset = 0;
     for (var index = 0; index < lines.length; index++) {
-      final line = lines[index];
-      final next = offset + line.length + 1;
       final before = index > 0 ? lines[index - 1] : '';
       if (!before.contains('polarity-stable')) {
-        hits += pattern.allMatches(line).length;
+        hits += pattern.allMatches(lines[index]).length;
       }
-      offset = next;
     }
     if (hits > 0) {
-      total += hits;
       offenders.add('$path: $hits');
     }
   }
-  expect(
-    total,
-    lessThanOrEqualTo(_bareLightLiteralCeiling),
-    reason: '当前 $total 处：${offenders.join(' / ')}',
-  );
+  return offenders;
 }
+
+int _totalOf(List<String> offenders) =>
+    offenders.fold(0, (sum, entry) => sum + int.parse(entry.split(': ').last));
 
 void main() {
   test('已迁移文件不再引用 MobileEnvColors', () {
@@ -107,7 +104,25 @@ void main() {
   });
 
   test('已迁移文件里的裸白字面量不再增长', () {
-    _assertBareLightLiterals();
+    final offenders = _scanMigratedLiterals(
+      RegExp(r'Colors\.white\b|Color\(0x[0-9A-Fa-f]{2}FFFFFF\)'),
+    );
+    expect(
+      _totalOf(offenders),
+      lessThanOrEqualTo(_bareLightLiteralCeiling),
+      reason: '当前 ${_totalOf(offenders)} 处：${offenders.join(' / ')}',
+    );
+  });
+
+  test('已迁移文件里的酸绿字面量清零', () {
+    final offenders = _scanMigratedLiterals(
+      RegExp(r'Color\(0x[0-9A-Fa-f]{2}D5F17D\)'),
+    );
+    expect(
+      _totalOf(offenders),
+      lessThanOrEqualTo(_bareAccentLiteralCeiling),
+      reason: '当前 ${_totalOf(offenders)} 处：${offenders.join(' / ')}',
+    );
   });
 
   test('未迁移的暗字面量引用不再增长', () {

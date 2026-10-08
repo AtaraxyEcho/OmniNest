@@ -508,7 +508,7 @@ class _HomeStorageStrip extends StatelessWidget {
                         value: value == null ? 0 : value.usageRatio.clamp(0, 1),
                         minHeight: 3,
                         color: context.env.storageProgressFill,
-                        backgroundColor: const Color(0x1AFFFFFF),
+                        backgroundColor: context.env.line10,
                       ),
                     ),
                   ],
@@ -567,7 +567,7 @@ class _HomeSectionCard extends StatelessWidget {
         child: Container(
           height: 77,
           decoration: BoxDecoration(
-            color: const Color(0x0CFFFFFF),
+            color: context.env.surfaceTint,
             borderRadius: BorderRadius.circular(17),
             border: Border.all(color: context.env.line09),
           ),
@@ -580,8 +580,8 @@ class _HomeSectionCard extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xB8FFFFFF),
+                style: TextStyle(
+                  color: context.env.white70,
                   fontSize: AppTypography.labelSmall,
                   fontWeight: FontWeight.w600,
                 ),
@@ -881,7 +881,7 @@ class _HomeToolShortcutRow extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 58),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0x0CFFFFFF),
+          color: context.env.surfaceTint,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: context.env.line07),
         ),

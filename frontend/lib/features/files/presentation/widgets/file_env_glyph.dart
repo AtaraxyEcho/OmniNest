@@ -154,7 +154,10 @@ class FileEnvRow extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(minHeight: 66),
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-        color: selected ? const Color(0x0FD5F17D) : Colors.transparent,
+        color:
+            selected
+                ? context.env.accentInk.withValues(alpha: 0.06)
+                : Colors.transparent,
         child: Row(
           children: [
             FileEnvGlyph(file: file, selected: selected),
@@ -245,10 +248,16 @@ class FileEnvTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0x0FD5F17D) : const Color(0x0AFFFFFF),
+          color:
+              selected
+                  ? context.env.accentInk.withValues(alpha: 0.06)
+                  : context.env.surfaceTint,
           borderRadius: BorderRadius.circular(17),
           border: Border.all(
-            color: selected ? const Color(0x42D5F17D) : const Color(0x14FFFFFF),
+            color:
+                selected
+                    ? context.env.accentInk.withValues(alpha: 0.26)
+                    : context.env.line07,
           ),
         ),
         child: Column(

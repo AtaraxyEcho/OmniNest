@@ -207,7 +207,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
         decoration: BoxDecoration(
           color:
               hosted
-                  ? const Color(0x38FFFFFF)
+                  ? context.env.line25
                   : Theme.of(
                     context,
                   ).colorScheme.outlineVariant.withValues(alpha: 0.4),

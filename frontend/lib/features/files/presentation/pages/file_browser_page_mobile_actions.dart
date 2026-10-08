@@ -176,7 +176,7 @@ class _MobileSheetHandle extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 hosted
-                    ? const Color(0x38FFFFFF)
+                    ? context.env.line25
                     : context.filesColors.outlineVariant,
             borderRadius: BorderRadius.circular(hosted ? 3 : 0),
           ),
