@@ -93,7 +93,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   bool get modeSwitchInProgress;
   set modeSwitchInProgress(bool value);
 
-  /// 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留原始锚点。
+  /// 模式切换时冻结的 charOffset；真实翻页或切章前保留，单击不消耗。
   int? get modeSwitchAnchor;
   set modeSwitchAnchor(int? value);
   int get restoreTargetCharOffset;
@@ -184,6 +184,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   DateTime get sessionStart;
   static const hideDelay = Duration(seconds: 3);
+
+  /// 恢复或切换落位后吞掉程序驱动回调的静默窗，各入口共用此值。
   static const restoreSilenceMs = 400;
 
   // ── 按需加载章节内容 ──

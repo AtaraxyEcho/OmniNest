@@ -14,8 +14,6 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 /// 阅读页面的滚动交互、设置应用与重新分页逻辑。
 mixin ReaderViewPageInteractionMixin
     on ConsumerState<ReaderViewPage>, ReaderViewPageMixin {
-  static const restoreSilenceMs = 400;
-
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 滚动模式交互
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -467,7 +465,7 @@ mixin ReaderViewPageInteractionMixin
     isRestoringProgress = true;
     restoreTargetCharOffset = charOffset;
     restoreSilenceUntil = DateTime.now().add(
-      const Duration(milliseconds: restoreSilenceMs),
+      const Duration(milliseconds: ReaderViewPageMixin.restoreSilenceMs),
     );
     pendingChapterProgress = null;
     pendingRestoreCharOffset = charOffset;

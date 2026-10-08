@@ -154,7 +154,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   int? _pendingRestoreCharOffset; // 模式切换时待恢复的字符偏移（用于精确像素定位）
   bool _isRestoringProgress = false; // 正在恢复阅读位置，显示加载遮罩
   bool _modeSwitchInProgress = false; // 模式切换中，首次翻页/滚动后清除
-  int? _modeSwitchAnchor; // 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留
+  int? _modeSwitchAnchor; // 模式切换时冻结的 charOffset，真实翻页或切章后释放
   int _restoreTargetCharOffset = 0; // 当前恢复目标 charOffset，用于防回退
   DateTime _restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(
     0,

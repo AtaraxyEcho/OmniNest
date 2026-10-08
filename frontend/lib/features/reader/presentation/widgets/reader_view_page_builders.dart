@@ -23,6 +23,7 @@ import 'package:omninest/features/reader/application/reader_progress_snapshot.da
 import 'package:omninest/features/reader/presentation/widgets/reader_return_to_progress_control.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -221,4 +222,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     final match = pattern.firstMatch(html);
     return match?.start;
   }
+}
+
+/// 本次物理页回调是否只是模式切换落地的回声。
+///
+/// 落地页的页首偏移比冻结锚点更浅，按它记账会把刚切完模式的位置凭空退回
+/// 页首；换到别的页面才说明用户真实翻过页。单击只切换工具栏可见性，不再
+/// 参与该判定。
+bool isModeSwitchLandingEcho({
+  required bool anchorActive,
+  required int changedPageIndex,
+  required int landedPageIndex,
+}) {
+  return anchorActive && changedPageIndex == landedPageIndex;
 }

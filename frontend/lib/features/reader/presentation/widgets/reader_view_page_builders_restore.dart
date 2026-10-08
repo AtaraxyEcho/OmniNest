@@ -201,10 +201,10 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
       if (pageCountNotifier.value < targetPage + 1) {
         pageCountNotifier.value = navigator.readablePageCount;
       }
-      // 落位动画（_syncPageView animateToPage）期间物理页会路过中间页，
-      // 静默窗内的提交按闸门丢弃，动画结束后的正常翻页不受影响。
+      // 落位对齐（_syncPageView jumpToPage）会派发一次 onPageChanged 回声，
+      // 静默窗内的提交按闸门丢弃；窗长与其余恢复入口共用同一常量。
       restoreSilenceUntil = DateTime.now().add(
-        const Duration(milliseconds: 450),
+        const Duration(milliseconds: ReaderViewPageMixin.restoreSilenceMs),
       );
       _updateState(() {
         pageModePage = targetPage;

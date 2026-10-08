@@ -63,11 +63,10 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
 
         return Listener(
           behavior: HitTestBehavior.translucent,
-          onPointerDown: (_) {
-            lastPointerDownTime = DateTime.now();
-            // 用户真实触摸：消耗模式切换冻结锚点
-            if (modeSwitchAnchor != null) modeSwitchAnchor = null;
-          },
+          // 翻页模式下不按触摸消耗冻结锚点：单击只是开关工具栏，锚点一旦被
+          // 清掉，buildProgressSnapshot 就退到页首偏移，记账位置凭空回退半页。
+          // 锚点改由真实翻页（onPageChanged 换页）或切章释放。
+          onPointerDown: (_) => lastPointerDownTime = DateTime.now(),
           child: ReaderPageView(
             key: ValueKey(
               'reader-page-$currentChapterId-'
@@ -133,22 +132,28 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
                 }
                 if (isRestoringProgress || isSwitchingChapter) return;
                 if (DateTime.now().isBefore(restoreSilenceUntil)) return;
+                final landingEcho = isModeSwitchLandingEcho(
+                  anchorActive: modeSwitchAnchor != null,
+                  changedPageIndex: index,
+                  landedPageIndex: pageModePage,
+                );
                 if (pageModePage != index) {
                   pageModePage = index;
                   _requestReaderRebuild();
                 }
-                // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
-                // 只更新展示进度，不写 tracker 和 SQLite。
-                if (modeSwitchAnchor != null) {
+                if (landingEcho) {
+                  // 切换落地的那一页：位置以精确锚点显示，不写 tracker 与
+                  // SQLite，否则刚切完模式就把位置退回页首。
                   final data = contentLoader?.get(currentChapterId, settings);
-                  if (data != null && data.totalChars > 0) {
-                    final charOffset = computePageCharOffset(index);
-                    scrollProgress = (charOffset / data.totalChars).clamp(
-                      0.0,
-                      1.0,
-                    );
+                  final anchor = modeSwitchAnchor;
+                  if (data != null && anchor != null && data.totalChars > 0) {
+                    scrollProgress = (anchor / data.totalChars).clamp(0.0, 1.0);
                   }
                   return;
+                }
+                if (modeSwitchAnchor != null) {
+                  // 真实翻页：锚点使命结束，之后按页首记账。
+                  modeSwitchAnchor = null;
                 }
                 updateProgressFromPage();
                 final charOffset = computePageCharOffset(index);
@@ -298,7 +303,8 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) {
         lastPointerDownTime = DateTime.now();
-        // 用户真实触摸：消耗模式切换冻结锚点
+        // 滚动模式的锚点兜底是像素实时读数，释放后仍然准确，触摸即可消耗；
+        // 翻页模式不能照搬，见上方 LandingEcho 分支。
         if (modeSwitchAnchor != null) modeSwitchAnchor = null;
       },
       onPointerMove: (event) {
