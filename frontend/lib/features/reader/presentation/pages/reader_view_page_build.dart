@@ -1,5 +1,20 @@
 part of 'reader_view_page.dart';
 
+/// 章节加载失败提示：能确定可执行动作时不用通用文案。
+///
+/// 未标注原因的失败（例如本地整本超过解析上限）走通用文案，
+/// 不猜测成"需要联网"。
+String chapterLoadErrorMessage(
+  AppLocalizations l10n,
+  ReaderChapterFailure? reason,
+) {
+  return switch (reason) {
+    ReaderChapterFailure.needsNetwork => l10n.readerChapterNeedsNetwork,
+    ReaderChapterFailure.needsReparse => l10n.readerChapterNeedsReparse,
+    null => l10n.readerChapterLoadFailed,
+  };
+}
+
 /// [_ReaderViewPageState] 的根构建树：路由退出、详情/章节错误与骨架态。
 extension _ReaderViewPageRootBuild on _ReaderViewPageState {
   /// 移动壳层 + 夜间玻璃调色板：底色降为 92% 玻璃，路由注册的 focus
@@ -73,16 +88,11 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
             if (content == null || _contentLoader == null) {
               if (parsedBook != null &&
                   _chapterLoadCoordinator.hasFailed(_currentChapterId)) {
-                final l10n = AppLocalizations.of(context);
-                final message = switch (_chapterLoadCoordinator.failureReason) {
-                  ReaderChapterFailure.needsNetwork =>
-                    l10n.readerChapterNeedsNetwork,
-                  ReaderChapterFailure.needsReparse =>
-                    l10n.readerChapterNeedsReparse,
-                  null => l10n.readerChapterLoadFailed,
-                };
                 return AppErrorView(
-                  message: message,
+                  message: chapterLoadErrorMessage(
+                    AppLocalizations.of(context),
+                    _chapterLoadCoordinator.failureReason,
+                  ),
                   onBack: safePop,
                   onRetry: () {
                     _chapterLoadCoordinator.clearFailure(_currentChapterId);

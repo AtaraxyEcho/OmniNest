@@ -87,42 +87,52 @@ extension _ReaderViewPageProgress on _ReaderViewPageState {
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return _scrollProgressNotifier.value.clamp(0.0, 1.0);
     }
-    final chapterCharCounts =
-        parsedBook.chapters.map((c) => c.charCount).toList();
-    // 当前章节使用实际解析的 totalChars（与 parsedBook.charCount 可能因 HTML 标签不同）
     final chapterData = _contentLoader?.getByChapterId(_currentChapterId);
     final currentChapterIdx =
         _contentLoader?.allChapters.indexWhere(
           (c) => c.id == _currentChapterId,
         ) ??
         0;
-    if (chapterData != null && currentChapterIdx < chapterCharCounts.length) {
-      chapterCharCounts[currentChapterIdx] = chapterData.totalChars;
-    }
-    final totalBookChars = chapterCharCounts.fold<int>(0, (s, c) => s + c);
-    if (totalBookChars <= 0) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
-    }
-
-    // 当前章节之前的字符数之和
-    int previousChars = 0;
-    for (
-      var i = 0;
-      i < currentChapterIdx && i < chapterCharCounts.length;
-      i++
-    ) {
-      previousChars += chapterCharCounts[i];
-    }
-    // 当前章节内的字符数：直接用 tracker 的 charOffset，不依赖 _scrollProgress
-    final chapterChars = chapterData?.totalChars ?? 0;
-    final currentChapterChars = _positionTracker.charOffset.clamp(
-      0,
-      chapterChars,
-    );
-
-    return ((previousChars + currentChapterChars) / totalBookChars).clamp(
-      0.0,
-      1.0,
+    return computeBookProgress(
+      manifestCharCounts:
+          parsedBook.chapters.map((chapter) => chapter.charCount).toList(),
+      currentChapterIndex: currentChapterIdx,
+      paintedChapterChars: chapterData?.totalChars ?? 0,
+      chapterOffsetChars: _positionTracker.charOffset,
+      fallbackChapterRatio: _scrollProgressNotifier.value.clamp(0.0, 1.0),
     );
   }
+}
+
+/// 全书进度：分母恒为清单字符数，当前章按「章内比例 × 清单权重」计入。
+///
+/// 旧的写法把当前章的 painted 字符数写回权重数组，等于每打开一章就改掉分母：
+/// EPUB 的清单 `charCount` 由服务端按 DOM 文本节点统计，与客户端折叠空白后的
+/// painted 值本就不同口径，于是读数会随「翻开某章」而不是「读到某处」变化。
+/// 章内比例本来就是 painted 空间内的相对量，乘回清单权重即可与分母同口径。
+double computeBookProgress({
+  required List<int> manifestCharCounts,
+  required int currentChapterIndex,
+  required int paintedChapterChars,
+  required int chapterOffsetChars,
+  required double fallbackChapterRatio,
+}) {
+  final totalChars = manifestCharCounts.fold<int>(
+    0,
+    (sum, count) => sum + count,
+  );
+  if (manifestCharCounts.isEmpty || totalChars <= 0) {
+    return fallbackChapterRatio;
+  }
+  final index = currentChapterIndex.clamp(0, manifestCharCounts.length - 1);
+  final chapterRatio =
+      paintedChapterChars > 0
+          ? (chapterOffsetChars / paintedChapterChars).clamp(0.0, 1.0)
+          : fallbackChapterRatio;
+  var previousChars = 0;
+  for (var i = 0; i < index; i++) {
+    previousChars += manifestCharCounts[i];
+  }
+  final weighted = previousChars + manifestCharCounts[index] * chapterRatio;
+  return (weighted / totalChars).clamp(0.0, 1.0);
 }
