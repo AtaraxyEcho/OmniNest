@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
@@ -138,8 +138,8 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                             children: [
                               Text(
                                 l10n.musicImmersiveEyebrow.toUpperCase(),
-                                style: const TextStyle(
-                                  color: MobileEnvColors.inkFaint,
+                                style: TextStyle(
+                                  color: context.env.inkFaint,
                                   // ignore: font_size_whitelist
                                   fontSize: 8,
                                   letterSpacing: 1.2,
@@ -236,7 +236,10 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                           track: track,
                           lyrics: lyrics,
                           lyricsLoadFailed: item?.lyricsLoadFailed ?? false,
-                          lyricSettings: _mobileLyricSettings(visual.lyrics),
+                          lyricSettings: _mobileLyricSettings(
+                            visual.lyrics,
+                            context.env,
+                          ),
                           scrollMode: lyricScrollMode,
                           trackOffsetMs: trackOffsetMs,
                           onAdjustLyricOffset: _adjustTrackLyricOffset,

@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 @immutable
 class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
   const MobileEnvPalette({
+    required this.brightness,
     required this.stage,
     required this.ink,
     required this.inkMuted,
@@ -66,6 +67,8 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     required this.onButtonInk,
   });
 
+  /// 该极性的明暗档，供第三方编辑器等需要 ThemeData.brightness 的场合使用。
+  final Brightness brightness;
   final Color stage;
   final Color ink;
   final Color inkMuted;
@@ -122,6 +125,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
 
   /// 与 `MobileEnvColors` 逐值相同的环境基准。
   static const MobileEnvPalette dark = MobileEnvPalette(
+    brightness: Brightness.dark,
     stage: Color(0xFF0B1110),
     ink: Color(0xFFF6F6F2),
     inkMuted: Color(0xBFF6F6F2),
@@ -176,6 +180,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
   /// 纸面同位物：中性墨/线按等对比反解上调 α，表面族换成浅色 surface，
   /// 彩色插画族（头像、书脊、封面、文件夹、存储条）与酸绿填充保持原值。
   static const MobileEnvPalette light = MobileEnvPalette(
+    brightness: Brightness.light,
     stage: Color(0xFFF7F8F6),
     ink: Color(0xFF1A1D1B),
     inkMuted: Color(0xD91A1D1B),

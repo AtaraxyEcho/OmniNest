@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
 /// 图片编辑器的配色：与壳层活体玻璃同一套暗色环境。
@@ -8,30 +8,35 @@ import 'package:pro_image_editor/pro_image_editor.dart';
 /// 只给 `ThemeData(brightness: dark)` 会落到 M3 默认色板，其 primary 是淡紫，
 /// 在编辑器主行动钮上直接违反单强调色与「Zero Purple」；这里把 primary 换成
 /// 环境酸绿，表面色换成玻璃面板色。
-ThemeData photoEditorTheme() {
-  const scheme = ColorScheme.dark(
-    primary: MobileEnvColors.accent,
-    onPrimary: MobileEnvColors.onAccent,
-    surface: MobileEnvColors.sheetSolid,
-    onSurface: MobileEnvColors.ink,
-    surfaceContainerHighest: MobileEnvColors.surfaceRaised,
-    onSurfaceVariant: MobileEnvColors.inkMuted,
-    outline: MobileEnvColors.line15,
-  );
+ThemeData photoEditorTheme(MobileEnvPalette env) {
+  final scheme = (env.brightness == Brightness.dark
+          ? const ColorScheme.dark()
+          : const ColorScheme.light())
+      .copyWith(
+        primary: env.accent,
+        onPrimary: env.onAccent,
+        surface: env.sheetSolid,
+        onSurface: env.ink,
+        surfaceContainerHighest: env.surfaceRaised,
+        onSurfaceVariant: env.inkMuted,
+        outline: env.line15,
+      );
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
     colorScheme: scheme,
-    scaffoldBackgroundColor: MobileEnvColors.stage,
+    scaffoldBackgroundColor: env.stage,
   );
 }
 
 /// 构建随应用语言变化的图片编辑器配置。
 ///
 /// 滤镜名为专有名词，保留英文原名；其余用户可见文案统一来自 ARB。
-ProImageEditorConfigs buildPhotoEditorConfigs(AppLocalizations l10n) {
+ProImageEditorConfigs buildPhotoEditorConfigs(
+  AppLocalizations l10n,
+  MobileEnvPalette env,
+) {
   return ProImageEditorConfigs(
-    theme: photoEditorTheme(),
+    theme: photoEditorTheme(env),
     mainEditor: MainEditorConfigs(
       // 底栏铺满含手势导航区：外层纯黑 Scaffold 兜底，SafeArea 只避让内容，
       // 避免系统手势区出现 Portal 背景空隙。

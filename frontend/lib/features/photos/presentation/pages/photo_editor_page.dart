@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
@@ -36,6 +37,7 @@ class PhotoEditorPage extends ConsumerWidget {
                       photo.sourceUrl ?? photo.coverUrl!,
                       configs: buildPhotoEditorConfigs(
                         AppLocalizations.of(context),
+                        context.env,
                       ),
                       callbacks: ProImageEditorCallbacks(
                         onImageEditingComplete: (bytes) async {

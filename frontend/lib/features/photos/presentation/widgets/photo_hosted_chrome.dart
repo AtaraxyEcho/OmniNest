@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -80,9 +80,9 @@ class PhotoHostedToolbarRow extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                     ),
                   ),
                 ),
@@ -137,15 +137,15 @@ class PhotoHostedPillButton extends StatelessWidget {
     return Material(
       color:
           active
-              ? MobileEnvColors.accent.withValues(alpha: 0.1)
+              ? context.env.accentInk.withValues(alpha: 0.1)
               : const Color(0x12FFFFFF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
         side: BorderSide(
           color:
               active
-                  ? MobileEnvColors.accent.withValues(alpha: 0.38)
-                  : MobileEnvColors.line09,
+                  ? context.env.accentInk.withValues(alpha: 0.38)
+                  : context.env.line09,
         ),
       ),
       child: InkWell(
@@ -158,13 +158,13 @@ class PhotoHostedPillButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: iconSize, color: MobileEnvColors.ink),
+                Icon(icon, size: iconSize, color: context.env.ink),
                 const SizedBox(width: 5),
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                 ),
               ],
@@ -199,12 +199,8 @@ class PhotoHostedAddTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0x40FFFFFF)),
         ),
-        child: const Center(
-          child: Icon(
-            Icons.add_rounded,
-            size: 22,
-            color: MobileEnvColors.inkFaint,
-          ),
+        child: Center(
+          child: Icon(Icons.add_rounded, size: 22, color: context.env.inkFaint),
         ),
       ),
     );
@@ -256,7 +252,7 @@ class PhotoHostedSquareTile extends StatelessWidget {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    border: Border.all(color: MobileEnvColors.accent, width: 2),
+                    border: Border.all(color: context.env.accentInk, width: 2),
                   ),
                 ),
               ),
@@ -266,17 +262,17 @@ class PhotoHostedSquareTile extends StatelessWidget {
               right: 7,
               top: 7,
               child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  color: MobileEnvColors.accent,
+                decoration: BoxDecoration(
+                  color: context.env.accent,
                   shape: BoxShape.circle,
                 ),
-                child: const SizedBox.square(
+                child: SizedBox.square(
                   dimension: 24,
                   child: Center(
                     child: OmniIcon(
                       icon: OmniIcons.check,
                       size: 14,
-                      color: MobileEnvColors.onAccent,
+                      color: context.env.onAccent,
                     ),
                   ),
                 ),

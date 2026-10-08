@@ -30,10 +30,14 @@ const _migrated = <String>[
   'lib/features/search/presentation/pages/mobile_search_page.dart',
   'lib/core/widgets/mobile_sample_kit.dart',
   'lib/core/widgets/mobile_status_kit.dart',
+  'lib/features/photos/presentation/widgets/photo_editor_configs.dart',
+  'lib/features/photos/presentation/widgets/photo_hosted_chrome.dart',
+  'lib/features/music/presentation/player/music_mobile_now_playing.dart',
+  'lib/features/music/presentation/player/music_mobile_now_playing_pages.dart',
 ];
 
-/// 本轮起点实测值（172 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
-const _remainingCeiling = 172;
+/// 本轮起点实测值（138 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
+const _remainingCeiling = 138;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。

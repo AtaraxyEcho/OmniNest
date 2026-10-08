@@ -160,7 +160,7 @@ class _MobileLyricsPage extends StatelessWidget {
             textAlign: TextAlign.center,
             // ignore: font_size_whitelist
             style: TextStyle(
-              color: MobileEnvColors.inkFaint,
+              color: context.env.inkFaint,
               // ignore: font_size_whitelist
               fontSize: 10,
               letterSpacing: 1.6,
@@ -216,6 +216,7 @@ class _MobileLyricsPage extends StatelessWidget {
 /// 与歌词渲染层同一判据（默认双色即用户未改色），避免把用户显式配色覆盖掉。
 PortalLyricVisualSettings _mobileLyricSettings(
   PortalLyricVisualSettings settings,
+  MobileEnvPalette env,
 ) {
   final fallback = PortalLyricVisualSettings.defaults.currentPaint;
   final current = settings.currentPaint;
@@ -227,7 +228,7 @@ PortalLyricVisualSettings _mobileLyricSettings(
     return settings;
   }
   return settings.copyWith(
-    currentPaint: LyricPaint.solid(MobileEnvColors.accent.toARGB32()),
+    currentPaint: LyricPaint.solid(env.accentInk.toARGB32()),
   );
 }
 
@@ -311,8 +312,8 @@ class _MobileTrackHeader extends StatelessWidget {
               children: [
                 Text(
                   l10n.musicNowPlayingEyebrow.toUpperCase(),
-                  style: const TextStyle(
-                    color: MobileEnvColors.accent,
+                  style: TextStyle(
+                    color: context.env.accent,
                     // ignore: font_size_whitelist
                     fontSize: 8,
                     letterSpacing: 1.3,
@@ -362,7 +363,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 size: 22,
                 color:
                     track?.favorite == true
-                        ? MobileEnvColors.accent
+                        ? context.env.accent
                         : Colors.white.withValues(alpha: 0.84),
               ),
             ),
@@ -410,9 +411,9 @@ class _MobileProgress extends StatelessWidget {
                   value: progress,
                   semanticLabel: l10n.portalMusicVisualizerSeek,
                   // 样例进度是近白（`--ink`），酸绿只留给强调文本与选中态。
-                  activeColor: MobileEnvColors.ink,
+                  activeColor: context.env.ink,
                   inactiveColor: Colors.white.withValues(alpha: 0.14),
-                  thumbColor: MobileEnvColors.ink,
+                  thumbColor: context.env.ink,
                   onChanged:
                       enabled && totalMs > 0
                           ? (value) => unawaited(
@@ -514,9 +515,9 @@ class _MobileTransportRow extends StatelessWidget {
             onPressed: enabled ? onTogglePlayback : null,
             buttonSize: MusicPlaybackButtonSize.primary,
             // 样例主播放钮是近白实盘配深色符号，不带渐变与青绿。
-            backgroundColor: MobileEnvColors.ink,
-            accentColor: MobileEnvColors.ink,
-            foregroundColor: MobileEnvColors.posterPlayFg,
+            backgroundColor: context.env.ink,
+            accentColor: context.env.ink,
+            foregroundColor: context.env.posterPlayFg,
             iconSize: 30,
           ),
           IconButton(
@@ -572,7 +573,7 @@ class _MobileModeButton extends StatelessWidget {
         style: IconButton.styleFrom(
           foregroundColor:
               active
-                  ? MobileEnvColors.accent
+                  ? context.env.accent
                   : Colors.white.withValues(alpha: 0.62),
           minimumSize: const Size.square(48),
         ),
@@ -610,7 +611,7 @@ class _MobileUtilityRow extends StatelessWidget {
             onPressed: onOpenSettings,
             icon: const Icon(Icons.equalizer_rounded, size: 20),
             style: IconButton.styleFrom(
-              foregroundColor: MobileEnvColors.white46,
+              foregroundColor: context.env.white46,
               minimumSize: const Size(44, 40),
             ),
           ),
@@ -619,7 +620,7 @@ class _MobileUtilityRow extends StatelessWidget {
             onPressed: onOpenQueue,
             icon: const Icon(Icons.queue_music_rounded, size: 21),
             style: IconButton.styleFrom(
-              foregroundColor: MobileEnvColors.white46,
+              foregroundColor: context.env.white46,
               minimumSize: const Size(44, 40),
             ),
           ),
@@ -647,9 +648,9 @@ class _MobileHeaderButton extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onPressed,
       style: IconButton.styleFrom(
-        foregroundColor: MobileEnvColors.ink,
-        backgroundColor: MobileEnvColors.iconButtonGlass,
-        side: const BorderSide(color: MobileEnvColors.line10),
+        foregroundColor: context.env.ink,
+        backgroundColor: context.env.iconButtonGlass,
+        side: BorderSide(color: context.env.line10),
         minimumSize: const Size(48, 48),
         maximumSize: const Size(48, 48),
       ),
