@@ -39,8 +39,10 @@ extension _ReaderViewPageProgress on _ReaderViewPageState {
       return false;
     }
     return own.chapterId == snapshot.chapterId &&
-        (own.charOffset - snapshot.charOffset).abs() <= 64 &&
-        (own.progress - snapshot.progress).abs() <= 0.002 &&
+        (own.charOffset - snapshot.charOffset).abs() <=
+            progressEchoCharTolerance &&
+        ((own.bookProgress ?? 0) - (snapshot.bookProgress ?? 0)).abs() <=
+            0.002 &&
         at.isBefore(ownAt.add(const Duration(seconds: 30)));
   }
 
@@ -55,14 +57,20 @@ extension _ReaderViewPageProgress on _ReaderViewPageState {
     if (snapshot == null) {
       return;
     }
+    final bookProgress = snapshot.bookProgress;
+    if (bookProgress == null) {
+      // 全书口径未知：上报会写入误导性百分比，本地记账已经落盘。
+      return;
+    }
     noteOwnProgressSave(snapshot);
     unawaited(
       _progressSync.sync(
         itemId: widget.itemId,
         charOffset: snapshot.charOffset,
-        progressPercent: snapshot.progress,
+        progressPercent: bookProgress,
         readingMode: snapshot.mode,
         chapterId: snapshot.chapterId,
+        manifestVersion: snapshot.manifestVersion,
       ),
     );
   }
@@ -81,27 +89,48 @@ extension _ReaderViewPageProgress on _ReaderViewPageState {
     return '';
   }
 
-  /// 全书进度百分比（0.0-1.0），用于显示和同步。
-  double get _bookProgress {
+  /// 全书进度百分比（0.0-1.0）；null 表示从未算出过（清单尚未就绪）。
+  double? get _bookProgress {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
-    if (parsedBook == null || parsedBook.chapters.isEmpty) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
-    }
     final chapterData = _contentLoader?.getByChapterId(_currentChapterId);
     final currentChapterIdx =
         _contentLoader?.allChapters.indexWhere(
           (c) => c.id == _currentChapterId,
         ) ??
         0;
-    return computeBookProgress(
+    return resolveBookProgress(
       manifestCharCounts:
-          parsedBook.chapters.map((chapter) => chapter.charCount).toList(),
+          parsedBook?.chapters.map((chapter) => chapter.charCount).toList(),
       currentChapterIndex: currentChapterIdx,
       paintedChapterChars: chapterData?.totalChars ?? 0,
       chapterOffsetChars: _positionTracker.charOffset,
-      fallbackChapterRatio: _scrollProgressNotifier.value.clamp(0.0, 1.0),
+      lastKnown: _bookProgressNotifier.value,
     );
   }
+}
+
+/// 全书进度读数：口径暂时无法确定时沿用最近一次已知值。
+///
+/// 与「未知不上报」是两件事：切章或尚未精测出本章字符数时，读数仍可用，
+/// 常驻进度胶囊就不必掉回 0%；而真的从未算出过时返回 null，调用方跳过上报，
+/// 绝不回退成章内比例。
+double? resolveBookProgress({
+  required List<int>? manifestCharCounts,
+  required int currentChapterIndex,
+  required int paintedChapterChars,
+  required int chapterOffsetChars,
+  required double? lastKnown,
+}) {
+  if (manifestCharCounts == null || manifestCharCounts.isEmpty) {
+    return lastKnown;
+  }
+  return computeBookProgress(
+        manifestCharCounts: manifestCharCounts,
+        currentChapterIndex: currentChapterIndex,
+        paintedChapterChars: paintedChapterChars,
+        chapterOffsetChars: chapterOffsetChars,
+      ) ??
+      lastKnown;
 }
 
 /// 全书进度：分母恒为清单字符数，当前章按「章内比例 × 清单权重」计入。
@@ -110,25 +139,31 @@ extension _ReaderViewPageProgress on _ReaderViewPageState {
 /// EPUB 的清单 `charCount` 由服务端按 DOM 文本节点统计，与客户端折叠空白后的
 /// painted 值本就不同口径，于是读数会随「翻开某章」而不是「读到某处」变化。
 /// 章内比例本来就是 painted 空间内的相对量，乘回清单权重即可与分母同口径。
-double computeBookProgress({
+///
+/// 返回 null 表示口径无法确定（清单缺失、当前章不在清单、本章还没测出字符数）。
+/// 调用方必须跳过上报而不是回退成章内比例：章节比例作为全书比例上传会在
+/// 读到任意长章章尾时被记成接近读完。
+double? computeBookProgress({
   required List<int> manifestCharCounts,
   required int currentChapterIndex,
   required int paintedChapterChars,
   required int chapterOffsetChars,
-  required double fallbackChapterRatio,
 }) {
+  if (currentChapterIndex < 0 || paintedChapterChars <= 0) {
+    return null;
+  }
   final totalChars = manifestCharCounts.fold<int>(
     0,
     (sum, count) => sum + count,
   );
   if (manifestCharCounts.isEmpty || totalChars <= 0) {
-    return fallbackChapterRatio;
+    return null;
   }
   final index = currentChapterIndex.clamp(0, manifestCharCounts.length - 1);
-  final chapterRatio =
-      paintedChapterChars > 0
-          ? (chapterOffsetChars / paintedChapterChars).clamp(0.0, 1.0)
-          : fallbackChapterRatio;
+  final chapterRatio = (chapterOffsetChars / paintedChapterChars).clamp(
+    0.0,
+    1.0,
+  );
   var previousChars = 0;
   for (var i = 0; i < index; i++) {
     previousChars += manifestCharCounts[i];

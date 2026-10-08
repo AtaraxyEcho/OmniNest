@@ -5,6 +5,7 @@ class ReaderProgressBackupWeb {
     required String chapterId,
     required int charOffset,
     required double chapterProgress,
+    int? manifestVersion,
   }) {}
 
   static Map<String, dynamic>? load(String itemId) => null;

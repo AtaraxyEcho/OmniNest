@@ -65,23 +65,17 @@ mixin ReaderViewPageInteractionMixin
         totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
 
     final savedCharOffset = positionTracker.charOffset;
-    final restoreTarget = restoreTargetCharOffset;
-    if (restoreTarget > 100 && charOffset < restoreTarget * 0.5) {
+    if (shouldDeferScrollProgress(
+      charOffset: charOffset,
+      savedCharOffset: savedCharOffset,
+      restoreTargetCharOffset: restoreTargetCharOffset,
+      pointerDriven: pointerDriven,
+    )) {
       if (kDebugMode) {
         readerDebugLog(
-          'onScroll SKIP: charOffset deviates from restore target '
-          '$restoreTarget -> $charOffset',
-        );
-      }
-      return;
-    }
-    if (charOffset > 0 &&
-        savedCharOffset > 100 &&
-        charOffset < savedCharOffset * 0.5 &&
-        !isSwitchingChapter) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'onScroll SKIP: charOffset regression $savedCharOffset -> $charOffset',
+          'onScroll SKIP: untrusted reading '
+          '(saved=$savedCharOffset, restoreTarget=$restoreTargetCharOffset, '
+          'reading=$charOffset)',
         );
       }
       return;
@@ -451,4 +445,29 @@ mixin ReaderViewPageInteractionMixin
     pendingChapterProgress = null;
     pendingRestoreCharOffset = charOffset;
   }
+}
+
+/// 判定本次滚动读数是否不可信、应整体跳过位置追踪与持久化。
+///
+/// 闸门针对的是布局未收敛时的读数：块高精测过程中同一像素位置会解出
+/// 远小于已记录位置的字符偏移，写入会把 tracker 钉在假位置上。指针驱动
+/// 的滚动不存在这种歧义——用户确实回到了那里，此前实现无条件丢弃深度
+/// 回退，导致往回读超过一半时进度条冻结、退出上报停在最远处，重开跳过
+/// 用户回读的位置。
+bool shouldDeferScrollProgress({
+  required int charOffset,
+  required int savedCharOffset,
+  required int restoreTargetCharOffset,
+  required bool pointerDriven,
+}) {
+  if (pointerDriven) {
+    return false;
+  }
+  if (restoreTargetCharOffset > 100 &&
+      charOffset < restoreTargetCharOffset * 0.5) {
+    return true;
+  }
+  return charOffset > 0 &&
+      savedCharOffset > 100 &&
+      charOffset < savedCharOffset * 0.5;
 }

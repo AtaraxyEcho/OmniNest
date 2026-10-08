@@ -142,7 +142,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             bottom:
                 (sampleChrome ? 10 : 16) +
                 MediaQuery.viewPaddingOf(context).bottom,
-            child: ValueListenableBuilder<double>(
+            child: ValueListenableBuilder<double?>(
               valueListenable: _bookProgressNotifier,
               builder:
                   (context, bookProgress, _) => IgnorePointer(
@@ -159,7 +159,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                       child: ReaderProgressIndicator(
                         key: const Key('readerPersistentProgress'),
                         settings: _settings,
-                        progress: bookProgress,
+                        progress: bookProgress ?? 0,
                         currentPage: _isPageMode ? _pageModePage : null,
                         totalPages: null, // 懒分页不预知总页数
                         sampleChrome: sampleChrome,
@@ -326,12 +326,12 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
           child: MouseRegion(
             onEnter: (_) => onHoverControls(true),
             onExit: (_) => onHoverControls(false),
-            child: ValueListenableBuilder<double>(
+            child: ValueListenableBuilder<double?>(
               valueListenable: _bookProgressNotifier,
               builder:
                   (context, bookProgress, _) => ReaderViewBottomBar(
                     settings: _settings,
-                    progress: bookProgress,
+                    progress: bookProgress ?? 0,
                     isPageMode: _isPageMode,
                     sampleChrome: sampleChrome,
                     onPrevious: () => _navigateReader(detail, forward: false),

@@ -140,11 +140,16 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     0,
   );
   // 全书进度通知器：_bookProgress 计算是 O(章节)，用防抖避免逐帧重算。
-  final ValueNotifier<double> _bookProgressNotifier = ValueNotifier<double>(0);
+  // null 表示清单或本章字符数尚不可用，不得退化成章内比例。
+  final ValueNotifier<double?> _bookProgressNotifier = ValueNotifier<double?>(
+    null,
+  );
   Timer? _bookProgressRecomputeTimer;
   double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
   ReaderProgressSnapshot? _lastOwnProgressSave; // 本机最近一次推送的进度快照
+  // 清单版本缓存：dispose 路径不能读 Provider，写入与降级判定都用这份缓存。
+  int? _manifestVersionCache;
   double? _pendingChapterProgress; // 恢复时的章节进度比例（0-1）
   int? _pendingRestoreCharOffset; // 模式切换时待恢复的字符偏移（用于精确像素定位）
   bool _isRestoringProgress = false; // 正在恢复阅读位置，显示加载遮罩
@@ -298,6 +303,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot) {
     _lastOwnProgressSave = snapshot;
   }
+
+  @override
+  ReaderProgressSnapshot? get lastOwnProgressSave => _lastOwnProgressSave;
 
   @override
   double? get pendingChapterProgress => _pendingChapterProgress;
@@ -458,12 +466,32 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   String get currentChapterTitle => _currentChapterTitle;
   @override
-  double get bookProgress => _bookProgress;
+  double? get bookProgress => _bookProgress;
 
   /// 通知器保存的是最近一次算出的值，读取不触碰 Provider，
-  /// 因此 dispose 之后仍然可用。
+  /// 因此 dispose 之后仍然可用；null 表示全书口径尚不可用。
   @override
-  double get lastKnownBookProgress => _bookProgressNotifier.value;
+  double? get lastKnownBookProgress => _bookProgressNotifier.value;
+
+  @override
+  int? get currentManifestVersion {
+    if (!mounted) {
+      return _manifestVersionCache;
+    }
+    final version =
+        ref
+            .read(readerItemDetailProvider(widget.itemId))
+            .value
+            ?.item
+            .manifestVersion;
+    if (version != null) {
+      _manifestVersionCache = version;
+    }
+    return _manifestVersionCache;
+  }
+
+  @override
+  int? get lastKnownManifestVersion => _manifestVersionCache;
 
   @override
   String get itemId => widget.itemId;
@@ -512,6 +540,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           chapterId: snapshot.chapterId,
           charOffset: snapshot.charOffset,
           chapterProgress: snapshot.chapterProgress,
+          manifestVersion: snapshot.manifestVersion,
         );
         await ReaderLocalProgress.save(
           itemId: widget.itemId,
@@ -519,6 +548,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           mode: snapshot.mode,
           chapterId: snapshot.chapterId,
           charOffset: snapshot.charOffset,
+          manifestVersion: snapshot.manifestVersion,
         );
       },
       onError: (error, stackTrace) {
@@ -600,26 +630,44 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         final chapterProgress =
             totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
         // 上报口径必须是全书进度：章节内比例会在读到任意章尾时被
-        // 误判为整本完成。复用会话期间维护的防抖全书进度通知器。
-        final notifierProgress = _bookProgressNotifier.value.clamp(0.0, 1.0);
-        final progress =
-            notifierProgress > 0 ? notifierProgress : chapterProgress;
+        // 误判为整本完成。取会话期间维护的防抖全书进度通知器；未知时
+        // 跳过上报（本地记账已含 charOffset，恢复定位不依赖百分比）。
+        final bookProgress = _bookProgressNotifier.value;
         ReaderProgressBackupWeb.save(
           itemId: widget.itemId,
           chapterId: _currentChapterId,
           charOffset: charOffset,
           chapterProgress: chapterProgress,
+          manifestVersion: _manifestVersionCache,
         );
-        // 退出时向服务端强制补报最终位置（节流不适用于离场）
-        unawaited(
-          _progressSync.sync(
-            itemId: widget.itemId,
-            charOffset: charOffset,
-            progressPercent: progress,
-            readingMode: _isPageMode ? 'page' : 'scroll',
+        // 退出位置必须成为协调器里的最后一条待写进度：此前 pending 里
+        // 还是最后一次滚动读数，dispose 的 flush 会用那份旧值再写一遍
+        // 本地行与 localStorage 备份（savedAt 更晚），把刚写下的退出
+        // 位置覆盖掉。
+        _progressSaveCoordinator.schedule(
+          ReaderProgressSnapshot(
             chapterId: _currentChapterId,
+            charOffset: charOffset,
+            bookProgress: bookProgress,
+            chapterProgress: chapterProgress,
+            mode: _isPageMode ? 'page' : 'scroll',
+            manifestVersion: _manifestVersionCache,
+            updatedAt: DateTime.now(),
           ),
         );
+        if (bookProgress != null) {
+          // 退出时向服务端强制补报最终位置（节流不适用于离场）
+          unawaited(
+            _progressSync.sync(
+              itemId: widget.itemId,
+              charOffset: charOffset,
+              progressPercent: bookProgress,
+              readingMode: _isPageMode ? 'page' : 'scroll',
+              chapterId: _currentChapterId,
+              manifestVersion: _manifestVersionCache,
+            ),
+          );
+        }
       }
     }
     _windowChromeLease?.release();

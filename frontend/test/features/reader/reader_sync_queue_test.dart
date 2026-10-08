@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -172,6 +173,118 @@ void main() {
     ).called(1);
     final cached = await storage.loadAnnotations('item-annotations');
     expect(cached.single.chapterId, 'chapter_3');
+  });
+
+  test('enqueueProgress 取代同书旧的进度行，保留其它书', () async {
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 100,
+      progressPercent: 0.1,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+    );
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-2',
+      charOffset: 200,
+      progressPercent: 0.2,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+    );
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 900,
+      progressPercent: 0.9,
+      readingMode: 'scroll',
+      chapterId: 'chapter_2',
+    );
+
+    final rows = await db.select(db.syncOperations).get();
+    final progressRows =
+        rows.where((row) => row.type == ReaderSyncQueue.opProgress).toList();
+    // 服务端进度是 last-write-wins：旧行重放只会用过期位置覆盖新位置，
+    // 且离线期间每次失败都留下一行，重放时对同一本书逐条发 PUT。
+    expect(progressRows, hasLength(2));
+    final item1 =
+        progressRows
+            .where((row) => row.payload.contains('"itemId":"item-1"'))
+            .toList();
+    expect(item1, hasLength(1));
+    expect(item1.single.payload.contains('"charOffset":900'), isTrue);
+  });
+
+  test('flush 清理重试耗尽的进度失败行，保留笔记失败行', () async {
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            type: ReaderSyncQueue.opProgress,
+            payload:
+                '{"itemId":"item-1","charOffset":100,"progressPercent":0.1,"readingMode":"scroll"}',
+            status: const Value('failed'),
+            retryCount: const Value(3),
+            createdAt: DateTime(2026, 6, 30),
+          ),
+        );
+    await db
+        .into(db.syncOperations)
+        .insert(
+          SyncOperationsCompanion.insert(
+            type: ReaderSyncQueue.opNoteUpdate,
+            payload: '{"noteId":"note-1","content":"草稿"}',
+            status: const Value('failed'),
+            retryCount: const Value(3),
+            createdAt: DateTime(2026, 6, 30),
+          ),
+        );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    final rows = await db.select(db.syncOperations).get();
+    // 进度有本地行为真值，耗尽重试的失败行只是噪声；
+    // 笔记/批注本地即真值，必须留着重试或对用户可见。
+    expect(rows.map((row) => row.type), [ReaderSyncQueue.opNoteUpdate]);
+  });
+
+  test('flush 在笔记积压超过一批时仍先上报进度', () async {
+    for (var index = 0; index < 60; index++) {
+      await db
+          .into(db.syncOperations)
+          .insert(
+            SyncOperationsCompanion.insert(
+              type: ReaderSyncQueue.opNoteUpdate,
+              payload:
+                  '{"noteId":"note-$index","title":null,"content":"草稿 $index"}',
+              createdAt: DateTime(2026, 6, 1).add(Duration(minutes: index)),
+            ),
+          );
+    }
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 4000,
+      progressPercent: 0.4,
+      readingMode: 'scroll',
+      chapterId: 'chapter_2',
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.updateProgress(
+        itemId: 'item-1',
+        charOffset: 4000,
+        progressPercent: 0.4,
+        readingMode: 'scroll',
+        chapterId: 'chapter_2',
+        pageId: null,
+        pageIndex: null,
+        pageFingerprint: null,
+        sourceId: null,
+        sourcePageIndex: null,
+        catalogKey: null,
+        manifestVersion: null,
+        intraPageOffset: null,
+      ),
+    ).called(1);
   });
 
   test('flush ignores non reader operations in shared sync table', () async {

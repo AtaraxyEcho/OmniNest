@@ -9,16 +9,18 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 ///
 /// - [charOffset] — 章节内字符偏移，用于精确定位恢复（跨端通用）
 /// - [chapterProgress] — 章节内滚动比例（0-1），用于本地快速恢复
-/// - [progress] — 全书进度（0-1），仅用于 UI 显示
+/// - [bookProgress] — 全书进度（0-1），null 表示口径无法确定；
+///   章内比例不得填入此字段，否则任意长章章尾会被记成接近读完
 /// - [chapterId] — 章节 ID
 class ReaderProgressSnapshot {
   ReaderProgressSnapshot({
     required this.chapterId,
     this.charOffset = 0,
-    this.progress = 0.0,
+    this.bookProgress,
     this.chapterProgress = 0.0,
     this.chapterTitle = '',
     this.mode = 'scroll',
+    this.manifestVersion,
     this.updatedAt,
   });
 
@@ -28,10 +30,14 @@ class ReaderProgressSnapshot {
     return ReaderProgressSnapshot(
       chapterId: payload['chapterId']?.toString() ?? '',
       charOffset: _asInt(payload['charOffset']),
-      progress: _asDouble(payload['chapterProgress']),
+      // 本地行只存章内口径，全书进度需要清单才能算出。
       chapterProgress: _asDouble(payload['chapterProgress']),
       chapterTitle: payload['chapterTitle']?.toString() ?? '',
       mode: payload['mode']?.toString() ?? 'scroll',
+      manifestVersion:
+          payload['manifestVersion'] == null
+              ? null
+              : _asInt(payload['manifestVersion']),
       updatedAt: _parseDateTime(payload['updatedAt']),
     );
   }
@@ -49,8 +55,9 @@ class ReaderProgressSnapshot {
     return ReaderProgressSnapshot(
       chapterId: progress.chapterId ?? '',
       charOffset: progress.charOffset,
-      progress: normalized, // 全书进度，仅显示用
+      bookProgress: normalized, // 全书进度，仅显示用
       mode: progress.readingMode,
+      manifestVersion: progress.manifestVersion,
       updatedAt: progress.updatedAt,
     );
   }
@@ -61,10 +68,17 @@ class ReaderProgressSnapshot {
     return ReaderProgressSnapshot(
       chapterId: payload['chapterId']?.toString() ?? '',
       charOffset: _asInt(payload['charOffset']),
-      progress: _asDouble(payload['progress']),
+      bookProgress:
+          payload['bookProgress'] == null
+              ? null
+              : _asDouble(payload['bookProgress']),
       chapterProgress: _asDouble(payload['chapterProgress']),
       chapterTitle: payload['chapterTitle']?.toString() ?? '',
       mode: payload['mode']?.toString() ?? 'scroll',
+      manifestVersion:
+          payload['manifestVersion'] == null
+              ? null
+              : _asInt(payload['manifestVersion']),
       updatedAt: _parseDateTime(payload['updatedAt']),
     );
   }
@@ -74,19 +88,37 @@ class ReaderProgressSnapshot {
   /// 章节内字符偏移，用于精确定位恢复（跨端通用）。
   final int charOffset;
 
-  /// 全书进度（0-1），仅用于 UI 显示。
-  final double progress;
+  /// 全书进度（0-1）；null 表示清单或本章字符数尚不可用。
+  final double? bookProgress;
 
   /// 章节内滚动比例（0-1），用于本地快速恢复。
   final double chapterProgress;
 
   final String chapterTitle;
   final String mode;
+
+  /// 写入时的章节清单版本；null 表示未知（历史行或服务端未下发）。
+  ///
+  /// 服务端重解析会改变章节边界与字符偏移口径，版本不一致时字符偏移
+  /// 不再可比，只能按章首恢复。
+  final int? manifestVersion;
   final DateTime? updatedAt;
 
   /// 是否有可恢复的阅读进度
   bool get hasReadableProgress =>
-      chapterId.isNotEmpty && (progress > 0 || charOffset > 0);
+      chapterId.isNotEmpty &&
+      (charOffset > 0 || chapterProgress > 0 || (bookProgress ?? 0) > 0);
+
+  /// 降级为章首恢复：清单版本变化后字符偏移不再可比。
+  ReaderProgressSnapshot degradeToChapterStart() {
+    return ReaderProgressSnapshot(
+      chapterId: chapterId,
+      chapterTitle: chapterTitle,
+      mode: mode,
+      manifestVersion: manifestVersion,
+      updatedAt: updatedAt,
+    );
+  }
 
   /// 从两个快照中选取更新时间较新的一方。
   ///

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
@@ -26,28 +24,42 @@ class ReaderProgressHelper {
       final backupSavedAt = backup['savedAt']?.toString() ?? '';
       final localSavedAt = localPayload?['updatedAt']?.toString() ?? '';
       if (backupSavedAt.compareTo(localSavedAt) > 0) {
+        final backupCharOffset = (backup['charOffset'] as num?)?.toInt() ?? 0;
+        final backupChapterProgress =
+            (backup['chapterProgress'] as num?)?.toDouble() ?? 0;
+        final backupManifestVersion =
+            (backup['manifestVersion'] as num?)?.toInt();
         localPayload = {
           'chapterId': backup['chapterId'],
-          'charOffset': backup['charOffset'],
-          'chapterProgress': backup['chapterProgress'],
+          'charOffset': backupCharOffset,
+          'chapterProgress': backupChapterProgress,
           'mode': 'scroll',
+          'manifestVersion': backupManifestVersion,
           'updatedAt': backupSavedAt,
         };
-        unawaited(
-          ReaderLocalProgress.save(
+        // 先落 SQLite 再清备份：备份是唯一崩溃副本，写入失败时就地保留，
+        // 否则清早了会把这份进度永久丢掉。
+        try {
+          await ReaderLocalProgress.save(
             itemId: itemId,
-            chapterProgress:
-                (backup['chapterProgress'] as num?)?.toDouble() ?? 0,
+            chapterProgress: backupChapterProgress,
             mode: 'scroll',
             chapterId: chapterId,
-            charOffset: (backup['charOffset'] as num?)?.toInt() ?? 0,
-          ),
-        );
-        ReaderProgressBackupWeb.clear(itemId);
-        if (kDebugMode) {
-          readerDebugLog(
-            'ProgressLoad: used localStorage backup, synced to SQLite',
+            charOffset: backupCharOffset,
+            manifestVersion: backupManifestVersion,
           );
+          ReaderProgressBackupWeb.clear(itemId);
+          if (kDebugMode) {
+            readerDebugLog(
+              'ProgressLoad: used localStorage backup, synced to SQLite',
+            );
+          }
+        } on Exception catch (error) {
+          if (kDebugMode) {
+            readerDebugLog(
+              'ProgressLoad: backup sync failed, keeping backup: $error',
+            );
+          }
         }
       }
     }

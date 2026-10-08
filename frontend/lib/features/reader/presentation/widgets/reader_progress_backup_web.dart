@@ -16,6 +16,7 @@ class ReaderProgressBackupWeb {
     required String chapterId,
     required int charOffset,
     required double chapterProgress,
+    int? manifestVersion,
   }) {
     try {
       final key = '$_prefix$itemId';
@@ -23,6 +24,8 @@ class ReaderProgressBackupWeb {
         'chapterId': chapterId,
         'charOffset': charOffset,
         'chapterProgress': chapterProgress,
+        // 崩溃恢复也要能判定清单版本，否则重解析后旧偏移会被当成有效位置。
+        if (manifestVersion != null) 'manifestVersion': manifestVersion,
         'savedAt': DateTime.now().toIso8601String(),
       });
       web.window.localStorage.setItem(key, data);

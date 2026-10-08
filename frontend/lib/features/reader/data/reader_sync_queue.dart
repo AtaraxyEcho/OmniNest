@@ -20,6 +20,12 @@ class ReaderSyncQueue {
   static OfflineTextCipher? _textCipher;
   static String? _userId;
 
+  /// 操作重试上限，超过后进度行按过期数据清理。
+  static const int maxOperationRetries = 3;
+
+  /// 单批重放的 reader 操作数上限。
+  static const int maxOperationBatch = 50;
+
   /// 操作类型常量
   static const opProgress = 'reader.progress';
   static const opBookmarkCreate = 'reader.bookmark.create';
@@ -70,6 +76,9 @@ class ReaderSyncQueue {
   // ── 入队操作 ──
 
   /// 入队进度同步
+  ///
+  /// 同一本书只保留最新一条待同步进度：服务端按 last-write-wins 落库，
+  /// 旧行重放只会把续读位置拉回更早的读数，离线期间逐次失败还会让行数无界增长。
   static Future<void> enqueueProgress({
     required String itemId,
     required int charOffset,
@@ -85,6 +94,7 @@ class ReaderSyncQueue {
     int? manifestVersion,
     double? intraPageOffset,
   }) async {
+    await _supersedePendingProgress(itemId);
     await _enqueue(opProgress, {
       'itemId': itemId,
       'charOffset': charOffset,
@@ -330,6 +340,45 @@ class ReaderSyncQueue {
     )).get();
   }
 
+  /// 按类型取出待重放的 reader 操作，按入队时间升序。
+  static Future<List<SyncOperation>> _pendingReaderOps({
+    required List<String> types,
+    int? limit,
+  }) async {
+    final query =
+        (_database.select(_database.syncOperations)
+          ..where(
+            (table) => table.status.equals('pending') & table.type.isIn(types),
+          )
+          ..orderBy([(table) => OrderingTerm.asc(table.createdAt)]));
+    if (limit != null) {
+      query.limit(limit);
+    }
+    return query.get();
+  }
+
+  /// 清除同书（以及载荷已损坏）的未同步进度行。
+  static Future<void> _supersedePendingProgress(String itemId) async {
+    final operations =
+        await (_database.select(_database.syncOperations)..where(
+          (table) =>
+              table.type.equals(opProgress) &
+              table.status.isIn(const ['pending', 'failed']),
+        )).get();
+    final staleIds = <int>[];
+    for (final operation in operations) {
+      final payload = _decodePayload(operation);
+      if (payload == null || payload['itemId'] == itemId) {
+        staleIds.add(operation.id);
+      }
+    }
+    if (staleIds.isEmpty) {
+      return;
+    }
+    await (_database.delete(_database.syncOperations)
+      ..where((table) => table.id.isIn(staleIds))).go();
+  }
+
   static Map<String, dynamic>? _decodePayload(SyncOperation operation) {
     try {
       return jsonDecode(operation.payload) as Map<String, dynamic>;
@@ -358,16 +407,24 @@ class ReaderSyncQueue {
 
   /// 执行实际的队列刷新逻辑。
   static Future<void> _doFlush(ReaderApi api) async {
-    final pending =
-        await (_database.select(_database.syncOperations)
-              ..where(
-                (table) =>
-                    table.status.equals('pending') &
-                    table.type.isIn(_readerOperationTypes),
-              )
-              ..orderBy([(table) => OrderingTerm.asc(table.createdAt)])
-              ..limit(50))
-            .get();
+    // 进度行先出：同一本书已合并为一条，数量很小，但笔记/批注积压超过一批时
+    // 不能把续读指针排在 50 条之外等下一轮。其余操作仍按 createdAt 升序，
+    // 保持 create→update 的先后语义（倒序会让旧更新覆盖新创建载荷）。
+    final progressOps = await _pendingReaderOps(types: const [opProgress]);
+    final otherOps = await _pendingReaderOps(
+      types: _readerOperationTypes,
+      limit: maxOperationBatch,
+    );
+    final remainingSlots = (maxOperationBatch - progressOps.length).clamp(
+      0,
+      maxOperationBatch,
+    );
+    final pending = <SyncOperation>[
+      ...progressOps,
+      ...otherOps
+          .where((operation) => operation.type != opProgress)
+          .take(remainingSlots),
+    ];
 
     for (final op in pending) {
       try {
@@ -398,6 +455,15 @@ class ReaderSyncQueue {
             table.type.isIn(_readerOperationTypes),
       )).go();
     }
+    // 进度以本地 cached_reader_progress 为真值，重试耗尽的失败行只会
+    // 长期占表并在下次 retryFailed 里被反复捞起；笔记/批注失败行保留，
+    // 那些数据本地即唯一副本。
+    await (_database.delete(_database.syncOperations)..where(
+      (table) =>
+          table.type.equals(opProgress) &
+          table.status.equals('failed') &
+          table.retryCount.isBiggerOrEqualValue(maxOperationRetries),
+    )).go();
   }
 
   /// 根据操作类型分发到对应的 API 调用。
@@ -494,7 +560,7 @@ class ReaderSyncQueue {
   }
 
   /// 将可重试失败项重新放回待同步状态。
-  static Future<void> retryFailed({int maxRetries = 3}) {
+  static Future<void> retryFailed({int maxRetries = maxOperationRetries}) {
     return (_database.update(_database.syncOperations)..where(
       (table) =>
           table.status.equals('failed') &
@@ -575,6 +641,4 @@ class ReaderSyncQueue {
       ),
     );
   }
-
-  static void dispose() {}
 }

@@ -102,6 +102,9 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
             // 让进度写入立即恢复，追踪由下一次滚动回调修正
             restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
           }
+          // 恢复目标只在恢复流程期间起作用；settle 后仍挂着会让本章节
+          // 此后所有深度回读被当成偏离丢弃。
+          restoreTargetCharOffset = 0;
           isRestoringProgress = false;
           if (mounted) _updateState(() {});
         },
@@ -269,6 +272,7 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
           } else if (!completed) {
             restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
           }
+          restoreTargetCharOffset = 0;
           isRestoringProgress = false;
           if (mounted) _updateState(() {});
         },

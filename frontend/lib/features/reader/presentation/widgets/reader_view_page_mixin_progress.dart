@@ -25,7 +25,7 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
     ]);
     if (kDebugMode) {
       readerDebugLog(
-        'ProgressLoad RESULT: ${result != null ? "chapterId=${result.chapterId}, progress=${result.progress}, charOffset=${result.charOffset}" : "null"}',
+        'ProgressLoad RESULT: ${result != null ? "chapterId=${result.chapterId}, chapterProgress=${result.chapterProgress}, charOffset=${result.charOffset}" : "null"}',
       );
     }
     return result;
@@ -61,10 +61,11 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
     final chapterProg = (progressOverride ?? scrollProgress).clamp(0.0, 1.0);
     return ReaderProgressSnapshot(
       chapterId: currentChapterId,
-      progress: lastKnownBookProgress.clamp(0.0, 1.0),
+      bookProgress: lastKnownBookProgress,
       chapterProgress: chapterProg,
       chapterTitle: currentChapterTitle,
       mode: isPageMode ? 'page' : 'scroll',
+      manifestVersion: lastKnownManifestVersion,
       updatedAt: DateTime.now(),
     );
   }
@@ -114,7 +115,7 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
     if (kDebugMode) {
       readerDebugLog(
         'ProgressSync START: chapter=${snapshot.chapterId}, '
-        'progress=${snapshot.progress}, mode=${snapshot.mode}',
+        'progress=${snapshot.bookProgress}, mode=${snapshot.mode}',
       );
     }
 
@@ -126,13 +127,23 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
       return;
     }
 
+    final bookProgress = snapshot.bookProgress;
+    if (bookProgress == null) {
+      // 全书口径未知（清单或本章字符数尚未就绪）：本地记账已落盘，
+      // 上报会写成误导性的百分比，跳过而不是拿章内比例顶替。
+      if (kDebugMode) {
+        readerDebugLog('ProgressSync SKIP: book progress unknown');
+      }
+      return;
+    }
+
     // 节流判定：未跨过最小间隔且位置变化不显著时不上报
     final now = DateTime.now();
     final lastAt = _lastServerSyncAt;
     final movedEnough =
         snapshot.chapterId != _lastSyncedChapterId ||
         (snapshot.charOffset - (_lastSyncedCharOffset ?? -1)).abs() >= 64 ||
-        (snapshot.progress - (_lastSyncedProgress ?? -1)).abs() >= 0.002;
+        (bookProgress - (_lastSyncedProgress ?? -1)).abs() >= 0.002;
     if (!force &&
         (now.difference(lastAt ?? DateTime.fromMillisecondsSinceEpoch(0)) <
                 ReaderViewPageMixin._serverSyncMinInterval ||
@@ -148,7 +159,7 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
     final previousChapterId = _lastSyncedChapterId;
     final previousCharOffset = _lastSyncedCharOffset;
     _lastServerSyncAt = now;
-    _lastSyncedProgress = snapshot.progress;
+    _lastSyncedProgress = bookProgress;
     _lastSyncedChapterId = snapshot.chapterId;
     _lastSyncedCharOffset = snapshot.charOffset;
     try {
@@ -157,15 +168,28 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
           .sync(
             itemId: itemId,
             charOffset: snapshot.charOffset,
-            progressPercent: snapshot.progress,
+            progressPercent: bookProgress,
             readingMode: snapshot.mode,
             chapterId: snapshot.chapterId,
+            manifestVersion: snapshot.manifestVersion,
           );
-    } catch (_) {
-      _lastServerSyncAt = previousSyncAt;
-      _lastSyncedProgress = previousProgress;
-      _lastSyncedChapterId = previousChapterId;
-      _lastSyncedCharOffset = previousCharOffset;
+    } catch (error) {
+      // 只有仍代表当前状态的调用才有权回退节流戳：generation 已被新
+      // 上报推进的过期调用回退，会抹掉新调用刚占位的时间，最小间隔失效。
+      if (generation == null || generation == syncProgressGeneration) {
+        _lastServerSyncAt = previousSyncAt;
+        _lastSyncedProgress = previousProgress;
+        _lastSyncedChapterId = previousChapterId;
+        _lastSyncedCharOffset = previousCharOffset;
+      }
+      if (error is Exception) {
+        // 远端失败已在同步服务内离线入队；走到这里说明连入队也失败，
+        // 本地进度已落盘。记日志而不是把异常抛给无人 await 的调用点。
+        if (kDebugMode) {
+          readerDebugLog('ProgressSync FAILED: $error');
+        }
+        return;
+      }
       rethrow;
     }
   }
@@ -178,7 +202,7 @@ extension ReaderViewPageMixinProgress on ReaderViewPageMixin {
     if (kDebugMode) {
       readerDebugLog(
         'ProgressSyncSync: chapter=${snapshot.chapterId}, '
-        'progress=${snapshot.progress}, offset=${snapshot.charOffset}',
+        'progress=${snapshot.bookProgress}, offset=${snapshot.charOffset}',
       );
     }
     progressSaveCoordinator.schedule(snapshot);

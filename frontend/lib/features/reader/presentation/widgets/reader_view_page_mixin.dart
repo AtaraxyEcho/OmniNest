@@ -69,6 +69,17 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 记录本机推送的进度快照，供 provider 回灌时判定自身回声。
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot);
 
+  /// 本机最近一次推送的进度快照，供同章方向性守卫比较。
+  ReaderProgressSnapshot? get lastOwnProgressSave;
+
+  /// 当前章节清单版本，写入进度时随行落库。
+  ///
+  /// 服务端重解析会改变章节边界，版本号是唯一能证明旧偏移仍可比对的信号。
+  int? get currentManifestVersion;
+
+  /// 不依赖 ref 的清单版本缓存，dispose 路径构造快照时使用。
+  int? get lastKnownManifestVersion;
+
   /// 章节加载/切换完成后立即重算全书进度一次（切章期间防抖重算被挂起）。
   void refreshBookProgressNow();
   double? get pendingChapterProgress;
@@ -171,13 +182,14 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   String get currentChapterTitle;
 
-  double get bookProgress;
+  /// 全书进度；null 表示清单或本章字符数尚不可用。
+  double? get bookProgress;
 
   /// 最近一次已算出的全书进度，读取不依赖 ref。
   ///
   /// dispose 之后仍需要构造进度快照时使用：`bookProgress` 需要读
   /// parsedBookProvider，Element 已卸载时不可用。
-  double get lastKnownBookProgress;
+  double? get lastKnownBookProgress;
 
   Size? get pageViewportSize;
   set pageViewportSize(Size? value);
@@ -281,15 +293,40 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
 
-    // 同章回灌守卫：本机刚保存的进度经 provider 回灌会再次自动应用，
-    // 恢复编排把用户拉回保存点（实机日志 charOffset=1011 被 767 拉回）。
-    // 同章以本机记账为准；开书首载记账为空（chapterId 空串）不受影响。
-    if (positionTracker.chapterId == snapshot.chapterId &&
-        positionTracker.charOffset > 0) {
+    // 清单版本变化说明服务端重解析过章节：旧字符偏移落在新文本上是另一个
+    // 位置，直接定位会跳到无关段落。降级为章首恢复，章节归属仍然有效。
+    if (isProgressOffsetVersionMismatch(
+      snapshotVersion: snapshot.manifestVersion,
+      currentVersion: currentManifestVersion,
+    )) {
       if (kDebugMode) {
         readerDebugLog(
-          'ProgressRestore SKIP: same-chapter echo '
+          'ProgressRestore DEGRADE: manifest version '
+          '${snapshot.manifestVersion} -> $currentManifestVersion, '
+          'restore chapter start only',
+        );
+      }
+      snapshot = snapshot.degradeToChapterStart();
+    }
+
+    // 同章方向性守卫：本机刚保存的进度经 provider 回灌会再次自动应用，
+    // 恢复编排把用户拉回保存点（实机日志 charOffset=1011 被 767 拉回）。
+    // 只丢弃不超前于本机已知位置的快照；跨设备更靠前的同章进度必须放行，
+    // 否则续读只能靠章切换生效。
+    final ownSaved = lastOwnProgressSave;
+    if (isStaleSameChapterSnapshot(
+      snapshotChapterId: snapshot.chapterId,
+      snapshotCharOffset: snapshot.charOffset,
+      trackedChapterId: positionTracker.chapterId,
+      trackedCharOffset: positionTracker.charOffset,
+      ownSavedChapterId: ownSaved?.chapterId,
+      ownSavedCharOffset: ownSaved?.charOffset ?? 0,
+    )) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'ProgressRestore SKIP: same-chapter stale snapshot '
           '(tracked=${positionTracker.charOffset}, '
+          'saved=${ownSaved?.charOffset ?? 0}, '
           'snapshot=${snapshot.charOffset})',
         );
       }
@@ -432,10 +469,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     return ReaderProgressSnapshot(
       chapterId: snapshotChapterId,
       charOffset: effectiveCharOffset,
-      progress: bookProgress,
+      bookProgress: bookProgress,
       chapterProgress: chapterProgress,
       mode: isPageMode ? 'page' : 'scroll',
       chapterTitle: snapshotChapterTitle,
+      manifestVersion: currentManifestVersion,
       updatedAt: DateTime.now(),
     );
   }
@@ -449,10 +487,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     final snapshot = ReaderProgressSnapshot(
       chapterId: currentChapterId,
       charOffset: charOffset,
-      progress: bookProgress,
+      bookProgress: bookProgress,
       chapterProgress: chapterProgress,
       chapterTitle: cachedContent?.title ?? '',
       mode: mode,
+      manifestVersion: currentManifestVersion,
       updatedAt: DateTime.now(),
     );
     progressSaveCoordinator.schedule(snapshot);
@@ -633,4 +672,50 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       ),
     );
   }
+}
+
+/// 判定同章进度回灌是否为自身回声或旧副本。
+///
+/// 回声容差：服务端落库后回灌的 charOffset 与本机写入值一致或极接近，
+/// 位置差在 64 字符内视为同一点。
+const int progressEchoCharTolerance = 64;
+
+/// 同章进度快照是否不超前于本机已知位置（因而应丢弃）。
+///
+/// 已知位置取「当前章的追踪值」与「本机最近写入的同章值」的较大者；
+/// 两者都不属于快照所在章节时视为无记账，首载进度照常施加。
+bool isStaleSameChapterSnapshot({
+  required String snapshotChapterId,
+  required int snapshotCharOffset,
+  required String trackedChapterId,
+  required int trackedCharOffset,
+  required String? ownSavedChapterId,
+  required int ownSavedCharOffset,
+}) {
+  var knownFloor = 0;
+  if (trackedChapterId == snapshotChapterId && trackedCharOffset > knownFloor) {
+    knownFloor = trackedCharOffset;
+  }
+  if (ownSavedChapterId == snapshotChapterId &&
+      ownSavedCharOffset > knownFloor) {
+    knownFloor = ownSavedCharOffset;
+  }
+  if (knownFloor <= 0) {
+    return false;
+  }
+  return snapshotCharOffset <= knownFloor + progressEchoCharTolerance;
+}
+
+/// 进度快照的字符偏移是否已因清单重解析而失去口径。
+///
+/// 任一版本未知时不降级：历史进度行没有版本列，把 null 当成不一致会让
+/// 全部老用户的精确定位一次性失效，只剩章首恢复。
+bool isProgressOffsetVersionMismatch({
+  required int? snapshotVersion,
+  required int? currentVersion,
+}) {
+  if (snapshotVersion == null || currentVersion == null) {
+    return false;
+  }
+  return snapshotVersion != currentVersion;
 }

@@ -18,7 +18,7 @@ mixin ReaderViewPageLibraryActionsMixin on ConsumerState<ReaderViewPage> {
   bool get isInBookshelf;
   set isInBookshelf(bool value);
   String get itemId;
-  double get bookProgress;
+  double? get bookProgress;
 
   ReaderProgressSnapshot? buildProgressSnapshot({double? progressOverride});
   Future<void> checkBookmarkState();
@@ -46,7 +46,8 @@ mixin ReaderViewPageLibraryActionsMixin on ConsumerState<ReaderViewPage> {
         await dataManager.createBookmark(
           itemId: itemId,
           charOffset: snapshot?.charOffset ?? 0,
-          progressPercent: bookProgress,
+          // 全书口径未知时记 0，不把章内比例写成全书百分比。
+          progressPercent: bookProgress ?? 0,
         );
         msg = l10n.readerBookmarkAdded;
       }
