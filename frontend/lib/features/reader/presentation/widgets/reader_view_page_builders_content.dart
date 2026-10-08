@@ -330,6 +330,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           itemId: itemId,
           annotations: annotationHandler?.chapterAnnotations ?? [],
           rawBlocks: chapterData?.blocks,
+          blockExtents: chapterData?.blockExtents,
           scrollController: scrollController,
           onHighlight: (text, start, end) {
             if (!mounted) return;

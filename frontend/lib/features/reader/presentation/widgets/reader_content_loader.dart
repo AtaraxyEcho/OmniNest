@@ -5,10 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+
+/// 滚动列表条目相对块高的附加间距。
+///
+/// 标题块之后渲染层会多插一段间距（ReaderViewContent._buildBlock），
+/// 高度表必须计同一份，否则条目实际高度与表按标题数累积偏离。
+double scrollBlockExtraSpacing(ContentBlock block) =>
+    block is HeadingBlock ? ReaderContentBlockItem.headingBottomSpacing : 0.0;
 
 /// 单章分页数据。
 ///
@@ -50,6 +58,24 @@ class ChapterData {
       _blockCharPrefixes = prefixes;
     }
     return _blockCharPrefixes;
+  }
+
+  /// 滚动列表逐项确定高度；尚未整章测得时返回 null。
+  ///
+  /// 提供确定高度可让 maxScrollExtent 与"当前构建了哪些项"无关：懒构建的
+  /// SliverList 会用已构建项均值外推未构建项，深位置恢复按虚高范围 jumpTo
+  /// 后，范围随构建收缩会把落点钳到目标之前。itemExtentBuilder 不接受
+  /// 空洞高度，因此只在整章测得后给出。
+  List<double>? get blockExtents {
+    final heights = _cumulativeHeights;
+    if (heights.isEmpty || heights.length != blocks.length) return null;
+    final extents = List<double>.filled(heights.length, 0);
+    var previous = 0.0;
+    for (var i = 0; i < heights.length; i++) {
+      extents[i] = heights[i] - previous;
+      previous = heights[i];
+    }
+    return extents.every((extent) => extent >= 0) ? extents : null;
   }
 
   /// 翻页模式的懒分页导航器（按需计算单页）。
@@ -655,12 +681,15 @@ class ReaderContentLoader {
       cumulative = heights[i];
     }
     for (var i = start; i < blocks.length; i++) {
-      cumulative += ReaderPaginationEngine.measureBlockHeight(
-        blocks[i],
-        pageWidth,
-        settings,
-        textScale: textScale,
-      );
+      cumulative +=
+          ReaderPaginationEngine.measureBlockHeight(
+            blocks[i],
+            pageWidth,
+            settings,
+            textScale: textScale,
+          ) +
+          // 标题后的包装层间距同样占据滚动条目高度，不计入会让表比渲染矮。
+          scrollBlockExtraSpacing(blocks[i]);
       heights[i] = cumulative;
       if (i > 0 && heights[i] < heights[i - 1]) {
         heights[i] = heights[i - 1];

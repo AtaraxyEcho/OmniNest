@@ -32,6 +32,12 @@ class ReaderContentBlockItem extends StatefulWidget {
   final bool isFirstBlockContinuation;
 
   /// 与 [ReaderViewContent.spanStyle] 同源，供测量与渲染共用。
+  /// 标题块之后的额外段间距，与滚动列表条目高度同源。
+  ///
+  /// 这条间距由渲染的条目包装层产生，因此必须同时进入滚动高度表：
+  /// 只有一侧计入会让条目实际高度与表不符，字符偏移↔像素映射按标题数累积漂移。
+  static const double headingBottomSpacing = 24.0;
+
   static TextStyle spanStyle(
     ReaderInlineSpan span,
     ReaderViewSettings settings,

@@ -26,6 +26,7 @@ class ReaderViewContent extends StatefulWidget {
     this.scrollController,
     this.scrollPhysics,
     this.initialScrollOffset,
+    this.blockExtents,
     this.isFirstBlockContinuation = false,
     this.onImageTap,
     this.onLinkTap,
@@ -59,6 +60,17 @@ class ReaderViewContent extends StatefulWidget {
   /// 初始滚动偏移量（仅在 scrollController 为 null 时生效）。
   /// 用于恢复阅读进度时设置 ListView 的起始位置。
   final double? initialScrollOffset;
+
+  /// 滚动列表末尾留白条目高度，同时作为该项的确定高度。
+  static const double trailingSpacerHeight = 80.0;
+
+  /// 逐块确定高度，来自整章测得后的章节高度表。
+  ///
+  /// 懒构建的 SliverList 会用已构建项的均值外推未构建项，使 maxScrollExtent
+  /// 随构建进度变化；深位置恢复按虚高范围 jumpTo 后，范围收缩会把落点钳到目标
+  /// 之前。给出确定高度可让滚动范围与构建进度无关。null 表示高度表尚未覆盖
+  /// 整章（itemExtentBuilder 不接受空洞高度），此时沿用列表自身估算。
+  final List<double>? blockExtents;
 
   /// 第一个 block 是否是段落续接（前一页段落的延续）。
   /// 为 true 时，第一个 block 的首行不加首行缩进。
@@ -290,6 +302,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     // 翻页模式（NeverScrollableScrollPhysics）：无额外 padding/spacer，避免高度不一致
     // 滚动模式：保留 padding 和末尾 spacer
     final isPageMode = widget.scrollPhysics is NeverScrollableScrollPhysics;
+    final extents = widget.blockExtents;
     final layout = ReaderControlLayout.resolve(
       viewport: MediaQuery.sizeOf(context),
       fontSize: widget.settings.fontSize,
@@ -335,11 +348,21 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
                           physics: widget.scrollPhysics,
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           itemCount: _blocks.length + 1,
+                          itemExtentBuilder:
+                              extents == null
+                                  ? null
+                                  : (index, creator) =>
+                                      index < extents.length
+                                          ? extents[index]
+                                          : ReaderViewContent
+                                              .trailingSpacerHeight,
                           addAutomaticKeepAlives: false,
                           addRepaintBoundaries: false,
                           itemBuilder: (context, index) {
                             if (index == _blocks.length) {
-                              return const SizedBox(height: 80);
+                              return const SizedBox(
+                                height: ReaderViewContent.trailingSpacerHeight,
+                              );
                             }
                             return RepaintBoundary(child: _buildBlock(index));
                           },
@@ -368,7 +391,10 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     if (block is HeadingBlock) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [item, const SizedBox(height: 24)],
+        children: [
+          item,
+          const SizedBox(height: ReaderContentBlockItem.headingBottomSpacing),
+        ],
       );
     }
     return item;
