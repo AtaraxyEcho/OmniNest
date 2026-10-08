@@ -47,6 +47,9 @@ class ReaderProgressHelper {
             chapterId: chapterId,
             charOffset: backupCharOffset,
             manifestVersion: backupManifestVersion,
+            // 崩溃副本的备份时刻就是它的记录时刻；重新打戳会把这份陈旧读数
+            // 伪装成刚读的，进而压过服务端更新的位置。
+            updatedAt: DateTime.tryParse(backupSavedAt),
           );
           ReaderProgressBackupWeb.clear(itemId);
           if (kDebugMode) {

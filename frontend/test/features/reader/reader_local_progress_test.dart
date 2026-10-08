@@ -1,7 +1,57 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
+import 'package:omninest/features/reader/data/reader_local_progress.dart';
 
 void main() {
+  test('本地行沿用进度自己的记录时刻', () async {
+    final db = LocalDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = DatabaseReaderLocalProgressStore(db);
+    final recordedAt = DateTime.utc(2026, 10, 8, 1, 2, 3);
+
+    await store.save(
+      itemId: 'book-1',
+      chapterProgress: 0.4,
+      mode: 'scroll',
+      chapterId: 'chapter-1',
+      charOffset: 500,
+      updatedAt: recordedAt,
+    );
+
+    final row = await db.select(db.cachedReaderProgress).getSingle();
+    // drift 取回的是本地无时区的同一时刻，比较必须换算到 UTC。
+    expect(
+      row.updatedAt.toUtc(),
+      recordedAt,
+      reason:
+          '写盘时刻顶掉记录时刻后，延迟落盘或失败重放的旧读数会被打成"刚刚"，'
+          '与服务端行的时间戳混比时会被误判为最新',
+    );
+  });
+
+  test('未指定记录时刻时退回写盘时刻', () async {
+    final db = LocalDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = DatabaseReaderLocalProgressStore(db);
+    final before = DateTime.now();
+
+    await store.save(
+      itemId: 'book-1',
+      chapterProgress: 0.4,
+      mode: 'scroll',
+      chapterId: 'chapter-1',
+      charOffset: 500,
+    );
+
+    final row = await db.select(db.cachedReaderProgress).getSingle();
+    expect(
+      row.updatedAt.isAfter(before.subtract(const Duration(seconds: 5))),
+      isTrue,
+    );
+  });
+
   test('阅读进度门面将操作委托给注入的存储端口', () async {
     final store = _FakeReaderLocalProgressStore();
     ReaderLocalProgress.init(store);
@@ -50,6 +100,7 @@ class _FakeReaderLocalProgressStore implements ReaderLocalProgressStore {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? updatedAt,
   }) async {
     savedItemId = itemId;
     savedChapterId = chapterId;

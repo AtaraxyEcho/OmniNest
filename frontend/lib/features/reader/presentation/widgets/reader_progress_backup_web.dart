@@ -17,6 +17,7 @@ class ReaderProgressBackupWeb {
     required int charOffset,
     required double chapterProgress,
     int? manifestVersion,
+    DateTime? savedAt,
   }) {
     try {
       final key = '$_prefix$itemId';
@@ -26,7 +27,9 @@ class ReaderProgressBackupWeb {
         'chapterProgress': chapterProgress,
         // 崩溃恢复也要能判定清单版本，否则重解析后旧偏移会被当成有效位置。
         if (manifestVersion != null) 'manifestVersion': manifestVersion,
-        'savedAt': DateTime.now().toIso8601String(),
+        // 沿用进度自己的记录时刻：备份与本地行、上报三者必须是同一时刻，
+        // 否则延迟写入会把旧读数打成"刚刚"。
+        'savedAt': (savedAt ?? DateTime.now()).toIso8601String(),
       });
       web.window.localStorage.setItem(key, data);
     } on Exception catch (error) {

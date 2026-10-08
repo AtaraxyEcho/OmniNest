@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -479,5 +481,35 @@ void main() {
         clientUpdatedAt: reportedAt,
       ),
     ).called(1);
+  });
+
+  test('旧记录时刻的入队不得顶掉队列里更新的进度', () async {
+    final newer = DateTime.utc(2026, 10, 8, 3, 0);
+    final older = DateTime.utc(2026, 10, 8, 1, 0);
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 900,
+      progressPercent: 0.6,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+      clientUpdatedAt: newer,
+    );
+    // 慢请求超时后才失败的那一条：记录时刻更早，却最后一个入队。
+    await ReaderSyncQueue.enqueueProgress(
+      itemId: 'item-1',
+      charOffset: 300,
+      progressPercent: 0.2,
+      readingMode: 'scroll',
+      chapterId: 'chapter_1',
+      clientUpdatedAt: older,
+    );
+
+    final rows = await db.select(db.syncOperations).get();
+    expect(
+      rows.where((row) => row.type == ReaderSyncQueue.opProgress),
+      hasLength(1),
+      reason: '同一本书仍然只保留一条，但留下的必须是记录时刻更新的那条',
+    );
+    expect(jsonDecode(rows.single.payload)['charOffset'], 900);
   });
 }

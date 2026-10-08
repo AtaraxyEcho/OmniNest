@@ -25,8 +25,11 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? updatedAt,
   }) async {
-    final now = DateTime.now();
+    // 沿用进度自己的记录时刻：写盘时刻顶掉它，会让延迟落盘或失败重放的旧读数
+    // 被打成"刚刚"，与上报侧的时间口径分家。
+    final recordedAt = updatedAt ?? DateTime.now();
     await _database
         .into(_database.cachedReaderProgress)
         .insertOnConflictUpdate(
@@ -44,7 +47,7 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
             catalogKey: Value(catalogKey),
             manifestVersion: Value(manifestVersion),
             intraPageOffset: Value(intraPageOffset),
-            updatedAt: now,
+            updatedAt: recordedAt,
           ),
         );
   }

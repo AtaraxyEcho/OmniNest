@@ -15,6 +15,7 @@ abstract interface class ReaderLocalProgressStore {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? updatedAt,
   });
 
   /// 按书籍和章节读取进度。
@@ -62,6 +63,7 @@ class ReaderLocalProgress {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? updatedAt,
   }) {
     return _requiredStore.save(
       itemId: itemId,
@@ -77,6 +79,7 @@ class ReaderLocalProgress {
       catalogKey: catalogKey,
       manifestVersion: manifestVersion,
       intraPageOffset: intraPageOffset,
+      updatedAt: updatedAt,
     );
   }
 

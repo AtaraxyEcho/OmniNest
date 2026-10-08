@@ -560,6 +560,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           charOffset: snapshot.charOffset,
           chapterProgress: snapshot.chapterProgress,
           manifestVersion: snapshot.manifestVersion,
+          savedAt: snapshot.updatedAt,
         );
         await ReaderLocalProgress.save(
           itemId: widget.itemId,
@@ -568,6 +569,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           chapterId: snapshot.chapterId,
           charOffset: snapshot.charOffset,
           manifestVersion: snapshot.manifestVersion,
+          updatedAt: snapshot.updatedAt,
         );
       },
       onError: (error, stackTrace) {
@@ -640,7 +642,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     );
     // dispose 时用 localStorage 同步备份（不依赖 ref，不读 scroll controller 位置）。
     // _syncProgressSync 不能在此调用 — ref 已卸载，_bookProgress 会崩溃。
-    if (!_restore.shouldSuppressWrites) {
+    // 判据用"是否仍在主动搬动落点"而不是"是否抑制写入"：监控期长达 5 秒，
+    // 用它挡退出兜底会把这次会话的位置整个丢掉，而此刻的读数本身是可信的。
+    if (!_restore.isActive) {
       final charOffset = _exitBackupCharOffset();
       if (charOffset != null) {
         final totalChars =
@@ -652,21 +656,22 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         // 误判为整本完成。取会话期间维护的防抖全书进度通知器；未知时
         // 跳过上报（本地记账已含 charOffset，恢复定位不依赖百分比）。
         final bookProgress = _bookProgressNotifier.value;
+        // 退出快照、本地备份与服务端补报共用同一记录时刻：三处各自打戳会让
+        // 同源的三份数据比出不同新旧——补报若用发送时刻，本地那条反而更早，
+        // 围栏认不出它们同源；本地行若用写盘时刻，旧读数会被打成"刚刚"。
+        final exitReportedAt = DateTime.now();
         ReaderProgressBackupWeb.save(
           itemId: widget.itemId,
           chapterId: _currentChapterId,
           charOffset: charOffset,
           chapterProgress: chapterProgress,
           manifestVersion: _manifestVersionCache,
+          savedAt: exitReportedAt,
         );
         // 退出位置必须成为协调器里的最后一条待写进度：此前 pending 里
         // 还是最后一次滚动读数，dispose 的 flush 会用那份旧值再写一遍
         // 本地行与 localStorage 备份（savedAt 更晚），把刚写下的退出
         // 位置覆盖掉。
-        // 退出快照与服务端补报共用同一记录时刻：补报若改用发送时刻，
-        // 本地协调器里那条待写进度的记录时间会比它更早，围栏无法识别
-        // 两者其实同源。
-        final exitReportedAt = DateTime.now();
         _progressSaveCoordinator.schedule(
           ReaderProgressSnapshot(
             chapterId: _currentChapterId,

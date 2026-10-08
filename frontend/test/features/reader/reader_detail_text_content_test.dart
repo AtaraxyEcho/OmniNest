@@ -91,6 +91,7 @@ class _FakeReaderLocalProgressStore implements ReaderLocalProgressStore {
     String? catalogKey,
     int? manifestVersion,
     double? intraPageOffset,
+    DateTime? updatedAt,
   }) async {}
 
   @override

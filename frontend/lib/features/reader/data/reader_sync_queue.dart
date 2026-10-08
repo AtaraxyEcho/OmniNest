@@ -77,8 +77,9 @@ class ReaderSyncQueue {
 
   /// 入队进度同步
   ///
-  /// 同一本书只保留最新一条待同步进度：服务端按上报的记录时刻围栏，旧行重放
-  /// 只会被拒绝并白占队列，离线期间逐次失败还会让行数无界增长。
+  /// 同一本书只保留最新一条待同步进度：合并判据是**记录时刻**，不是入队顺序。
+  /// 慢请求超时后才失败的那一条记录时刻更早，按入队顺序合并会让它删掉队列里
+  /// 更新的一行，新位置从此永不补传；服务端围栏救不到这一步，因为它发生在发网之前。
   static Future<void> enqueueProgress({
     required String itemId,
     required int charOffset,
@@ -95,7 +96,13 @@ class ReaderSyncQueue {
     double? intraPageOffset,
     DateTime? clientUpdatedAt,
   }) async {
-    await _supersedePendingProgress(itemId);
+    final hasNewerRow = await _supersedePendingProgress(
+      itemId,
+      reportedAt: clientUpdatedAt,
+    );
+    if (hasNewerRow) {
+      return;
+    }
     await _enqueue(opProgress, {
       'itemId': itemId,
       'charOffset': charOffset,
@@ -361,7 +368,14 @@ class ReaderSyncQueue {
   }
 
   /// 清除同书（以及载荷已损坏）的未同步进度行。
-  static Future<void> _supersedePendingProgress(String itemId) async {
+  /// 删除同书里记录时刻不晚于本次的待传/失败进度行。
+  ///
+  /// 返回 true 表示队列里存在记录时刻更晚的一行，本次入队应当作废。
+  /// 缺记录时刻的行按最旧处理；本次也没有时刻时退化为原样合并（无从比较）。
+  static Future<bool> _supersedePendingProgress(
+    String itemId, {
+    DateTime? reportedAt,
+  }) async {
     final operations =
         await (_database.select(_database.syncOperations)..where(
           (table) =>
@@ -369,17 +383,32 @@ class ReaderSyncQueue {
               table.status.isIn(const ['pending', 'failed']),
         )).get();
     final staleIds = <int>[];
+    var hasNewerRow = false;
     for (final operation in operations) {
       final payload = _decodePayload(operation);
-      if (payload == null || payload['itemId'] == itemId) {
+      if (payload == null) {
         staleIds.add(operation.id);
+        continue;
       }
+      if (payload['itemId'] != itemId) {
+        continue;
+      }
+      final storedAt = DateTime.tryParse(
+        payload['clientUpdatedAt'] as String? ?? '',
+      );
+      if (reportedAt != null &&
+          storedAt != null &&
+          storedAt.isAfter(reportedAt)) {
+        hasNewerRow = true;
+        continue;
+      }
+      staleIds.add(operation.id);
     }
-    if (staleIds.isEmpty) {
-      return;
+    if (staleIds.isNotEmpty) {
+      await (_database.delete(_database.syncOperations)
+        ..where((table) => table.id.isIn(staleIds))).go();
     }
-    await (_database.delete(_database.syncOperations)
-      ..where((table) => table.id.isIn(staleIds))).go();
+    return hasNewerRow;
   }
 
   static Map<String, dynamic>? _decodePayload(SyncOperation operation) {
