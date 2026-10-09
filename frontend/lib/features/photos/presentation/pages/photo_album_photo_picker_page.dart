@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
@@ -153,12 +154,12 @@ class _PhotoAlbumPhotoPickerPageState
       );
     }
     if (state.isInitialLoading) {
-      return const Center(
+      return Center(
         child: SizedBox.square(
           dimension: 24,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: MobileEnvColors.inkMuted,
+            color: context.env.inkMuted,
           ),
         ),
       );
@@ -195,12 +196,12 @@ class _PhotoAlbumPhotoPickerPageState
             candidates.length + (state.hasMore || state.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= candidates.length) {
-            return const Center(
+            return Center(
               child: SizedBox.square(
                 dimension: 22,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
               ),
             );

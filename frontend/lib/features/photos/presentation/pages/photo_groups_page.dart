@@ -6,7 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -128,13 +129,13 @@ class _YearList extends StatelessWidget {
                   flex: 2,
                   child: Text(
                     '${year.year}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: AppTypography.serifFamily,
                       fontFamilyFallback: AppTypography.serifFamilyFallback,
                       fontSize: AppTypography.displayMedium,
                       height: 1.0,
                       fontWeight: FontWeight.w400,
-                      color: MobileEnvColors.ink,
+                      color: context.env.ink,
                     ),
                   ),
                 ),
@@ -145,9 +146,9 @@ class _YearList extends StatelessWidget {
                       context,
                     ).photosAlbumPhotoCountLabel(_yearPhotoCount(year)),
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
-                      color: MobileEnvColors.inkMuted,
+                      color: context.env.inkMuted,
                     ),
                   ),
                 ),
@@ -214,7 +215,7 @@ class _MonthTile extends StatelessWidget {
               if (cover != null)
                 PhotoThumbImage(imageUrl: cover)
               else
-                const ColoredBox(color: MobileEnvColors.surfaceRaised),
+                ColoredBox(color: context.env.surfaceRaised),
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -236,6 +237,7 @@ class _MonthTile extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 8, // ignore: font_size_whitelist
                         fontWeight: FontWeight.w700,
+                        // polarity-stable：压在封面图的黑渐变遮罩上，两极性同值
                         color: Colors.white,
                       ),
                     ),
@@ -244,6 +246,7 @@ class _MonthTile extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 8, // ignore: font_size_whitelist
                         fontWeight: FontWeight.w700,
+                        // polarity-stable：压在封面图的黑渐变遮罩上，两极性同值
                         color: Colors.white,
                       ),
                     ),

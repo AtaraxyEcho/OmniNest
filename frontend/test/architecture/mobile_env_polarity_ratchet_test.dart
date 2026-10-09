@@ -46,12 +46,20 @@ const _migrated = <String>[
   'lib/features/video/presentation/pages/movie_center_sample_rails.dart',
   'lib/features/video/presentation/widgets/movie_admin_list.dart',
   'lib/features/video/presentation/widgets/movie_history.dart',
+  'lib/features/photos/presentation/pages/photos_page_batch_actions.dart',
+  'lib/features/photos/presentation/pages/photos_page_view_content.dart',
+  'lib/features/photos/presentation/pages/photo_album_detail_page_hosted.dart',
+  'lib/features/photos/presentation/pages/photo_album_photo_picker_page.dart',
+  'lib/features/photos/presentation/pages/photo_editor_page.dart',
+  'lib/features/photos/presentation/pages/photo_groups_page.dart',
+  'lib/features/photos/presentation/pages/photo_period_page_hosted.dart',
 ];
 
 /// 未接入极性表的 `MobileEnvColors.` 引用出现数（按 allMatches 计；
-/// `grep -c` 数行会少算一行多次）。当前 96：reader 56、photos 28、壳层 11、app.dart 1。
+/// `grep -c` 数行会少算一行多次）。当前 75：reader 空间 56、相册查看器 7、
+/// 壳层 11、`app.dart` 的系统导航条 1。
 /// 每接完一个面就把它降到新值；接完之前不给壳层注册极性。
-const _remainingCeiling = 96;
+const _remainingCeiling = 75;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。

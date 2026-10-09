@@ -121,12 +121,12 @@ extension _PhotoAlbumDetailHostedBuild on _AlbumDetailBodyState {
 
   Widget _hostedGridFooter(BuildContext context, AppLocalizations l10n) {
     if (_isLoadingMore) {
-      return const Center(
+      return Center(
         child: SizedBox.square(
           dimension: 22,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: MobileEnvColors.inkMuted,
+            color: context.env.inkMuted,
           ),
         ),
       );

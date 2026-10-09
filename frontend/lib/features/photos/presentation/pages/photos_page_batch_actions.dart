@@ -134,7 +134,7 @@ class _BatchActionBar extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 57),
         padding: const EdgeInsets.only(left: 16, right: 10),
         decoration: BoxDecoration(
-          color: MobileEnvColors.selectionBar,
+          color: context.env.selectionBar,
           borderRadius: BorderRadius.circular(18),
           boxShadow: const [
             BoxShadow(
@@ -151,10 +151,10 @@ class _BatchActionBar extends StatelessWidget {
                 l10n.photosSelectedCount(state.selectedPhotoIds.length),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11, // ignore: font_size_whitelist
                   fontWeight: FontWeight.w700,
-                  color: MobileEnvColors.onSelectionBar,
+                  color: context.env.onSelectionBar,
                 ),
               ),
             ),
@@ -386,9 +386,9 @@ class _SelectionBarIconButton extends StatelessWidget {
       message: tooltip,
       child: IconButton(
         onPressed: onTap,
-        icon: Icon(icon, size: 21, color: MobileEnvColors.onSelectionBar),
+        icon: Icon(icon, size: 21, color: context.env.onSelectionBar),
         style: IconButton.styleFrom(
-          foregroundColor: MobileEnvColors.onSelectionBar,
+          foregroundColor: context.env.onSelectionBar,
           minimumSize: const Size.square(43),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),

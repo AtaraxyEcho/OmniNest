@@ -174,9 +174,9 @@ class _FrameViewContent extends ConsumerWidget {
                   state.isSelectionMode
                       ? l10n.photosSelectedCount(state.selectedPhotoIds.length)
                       : l10n.photosHostedToolbarCount(state.photoTotalElements),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 9, // ignore: font_size_whitelist
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ),
               ),
@@ -299,15 +299,15 @@ class _ToolbarPillButton extends StatelessWidget {
     return Material(
       color:
           active
-              ? MobileEnvColors.accent.withValues(alpha: 0.1)
-              : const Color(0x0FFFFFFF),
+              ? context.env.accentInk.withValues(alpha: 0.1)
+              : context.env.surfaceTint,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(11),
         side: BorderSide(
           color:
               active
-                  ? MobileEnvColors.accent.withValues(alpha: 0.38)
-                  : MobileEnvColors.line09,
+                  ? context.env.accentInk.withValues(alpha: 0.38)
+                  : context.env.line09,
         ),
       ),
       child: InkWell(
@@ -318,13 +318,13 @@ class _ToolbarPillButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 11),
           child: Row(
             children: [
-              Icon(icon, size: 15, color: MobileEnvColors.ink),
+              Icon(icon, size: 15, color: context.env.ink),
               const SizedBox(width: 5),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
               ),
             ],
@@ -349,7 +349,7 @@ class _HostedTimelineBody extends ConsumerWidget {
       return Center(
         child: CircularProgressIndicator.adaptive(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(MobileEnvColors.inkMuted),
+          valueColor: AlwaysStoppedAnimation<Color>(context.env.inkMuted),
         ),
       );
     }
@@ -365,11 +365,11 @@ class _HostedTimelineBody extends ConsumerWidget {
                 DateFormat.yMMMM(
                   languageCode,
                 ).format(DateTime(year.year, month.month)).toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w700,
-                  color: MobileEnvColors.inkFaint,
+                  color: context.env.inkFaint,
                 ),
               ),
             ),

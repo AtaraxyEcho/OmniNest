@@ -118,11 +118,11 @@ extension _PhotoPeriodPageHosted on _PhotoPeriodPageState {
       child: Center(
         child:
             state.isLoadingMore
-                ? const SizedBox.square(
+                ? SizedBox.square(
                   dimension: 22,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 )
                 : PhotoHostedPillButton(
