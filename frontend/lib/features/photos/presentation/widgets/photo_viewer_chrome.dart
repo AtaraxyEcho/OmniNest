@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -613,17 +613,22 @@ class _HostedViewerActionButton extends StatelessWidget {
           icon: Icon(
             icon,
             size: 20,
-            color: active ? MobileEnvColors.accent : MobileEnvColors.ink,
+            color:
+                active
+                    ? MobileEnvPalette.dark.accent
+                    : MobileEnvPalette.dark.ink,
           ),
           style: IconButton.styleFrom(
-            backgroundColor: MobileEnvColors.iconButtonGlass,
+            backgroundColor: MobileEnvPalette.dark.iconButtonGlass,
             foregroundColor:
-                active ? MobileEnvColors.accent : MobileEnvColors.ink,
+                active
+                    ? MobileEnvPalette.dark.accent
+                    : MobileEnvPalette.dark.ink,
             side: BorderSide(
               color:
                   active
-                      ? MobileEnvColors.accent.withValues(alpha: 0.45)
-                      : MobileEnvColors.line10,
+                      ? MobileEnvPalette.dark.accent.withValues(alpha: 0.45)
+                      : MobileEnvPalette.dark.line10,
             ),
             minimumSize: const Size.square(48),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,

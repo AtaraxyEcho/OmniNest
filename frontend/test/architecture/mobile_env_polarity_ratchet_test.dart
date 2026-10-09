@@ -59,11 +59,11 @@ const _migrated = <String>[
   'lib/app/app.dart',
 ];
 
-/// 未接入极性表的 `MobileEnvColors.` 引用出现数（按 allMatches 计；
-/// `grep -c` 数行会少算一行多次）。当前 7：相册查看器（它按 `Theme.brightness` +
-/// Photos 模块调色板分支，不属环境角色，需要单独一次对齐而不是换字面量）。
-/// 每接完一个面就把它降到新值。
-const _remainingCeiling = 7;
+/// 全仓 `MobileEnvColors.` 引用出现数（按 allMatches 计；`grep -c` 数行会少算一行多次）。
+/// 当前 0：移动面全部走 `context.env`，相册查看器那 7 处显式写成
+/// `MobileEnvPalette.dark.*`——沉浸浮层固定暗档，不参与极性翻转。
+/// 该类此后只作为暗基线的等值参照物存在，不得再被新代码读取。
+const _remainingCeiling = 0;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。
