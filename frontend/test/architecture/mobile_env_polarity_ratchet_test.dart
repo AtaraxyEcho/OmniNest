@@ -53,13 +53,15 @@ const _migrated = <String>[
   'lib/features/photos/presentation/pages/photo_editor_page.dart',
   'lib/features/photos/presentation/pages/photo_groups_page.dart',
   'lib/features/photos/presentation/pages/photo_period_page_hosted.dart',
+  'lib/features/reader/presentation/widgets/book_detail_space.dart',
+  'lib/features/reader/presentation/widgets/reader_space_content.dart',
 ];
 
 /// 未接入极性表的 `MobileEnvColors.` 引用出现数（按 allMatches 计；
-/// `grep -c` 数行会少算一行多次）。当前 75：reader 空间 56、相册查看器 7、
-/// 壳层 11、`app.dart` 的系统导航条 1。
+/// `grep -c` 数行会少算一行多次）。当前 19：壳层 11、`app.dart` 的系统导航条 1、
+/// 相册查看器 7（它按 `Theme.brightness` + Photos 模块调色板分支，不属环境角色）。
 /// 每接完一个面就把它降到新值；接完之前不给壳层注册极性。
-const _remainingCeiling = 75;
+const _remainingCeiling = 19;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。

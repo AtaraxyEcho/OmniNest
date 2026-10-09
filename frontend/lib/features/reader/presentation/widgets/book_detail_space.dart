@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -147,14 +147,14 @@ class _BookIdentity extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.horizontal(
               left: Radius.circular(3),
               right: Radius.circular(14),
             ),
             boxShadow: [
               BoxShadow(
-                color: MobileEnvColors.readerCoverSpine,
+                color: context.env.readerCoverSpine,
                 offset: Offset(-5, 0),
               ),
               BoxShadow(
@@ -192,8 +192,8 @@ class _BookIdentity extends StatelessWidget {
               children: [
                 Text(
                   l10n.bookDetailInLibrary.toUpperCase(),
-                  style: const TextStyle(
-                    color: MobileEnvColors.accent,
+                  style: TextStyle(
+                    color: context.env.accentInk,
                     fontSize: AppTypography.labelMicro,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.3,
@@ -204,8 +204,8 @@ class _BookIdentity extends StatelessWidget {
                   item.title,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.ink,
+                  style: TextStyle(
+                    color: context.env.ink,
                     fontFamily: AppTypography.serifFamily,
                     fontFamilyFallback: AppTypography.serifFamilyFallback,
                     fontSize: AppTypography.displaySmall,
@@ -220,8 +220,8 @@ class _BookIdentity extends StatelessWidget {
                       item.authorName!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: MobileEnvColors.inkMuted,
+                      style: TextStyle(
+                        color: context.env.inkMuted,
                         fontSize: AppTypography.bodyMedium,
                       ),
                     ),
@@ -232,8 +232,8 @@ class _BookIdentity extends StatelessWidget {
                     item.itemType.toUpperCase(),
                     chapterCount,
                   ),
-                  style: const TextStyle(
-                    color: MobileEnvColors.inkMuted,
+                  style: TextStyle(
+                    color: context.env.inkMuted,
                     fontSize: AppTypography.labelSmall,
                   ),
                 ),
@@ -253,7 +253,7 @@ class _PaperIdentityCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 由父级 ClipRRect 提供尺寸；此处仅铺纸色与细纹。
-    return const ColoredBox(color: MobileEnvColors.readerCoverBg);
+    return ColoredBox(color: context.env.readerCoverBg);
   }
 }
 
@@ -280,8 +280,8 @@ class _BookActions extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.only(bottom: 24),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line13)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line13)),
       ),
       child: Row(
         children: [
@@ -293,11 +293,11 @@ class _BookActions extends StatelessWidget {
               child: Container(
                 height: 50,
                 decoration: BoxDecoration(
-                  color: MobileEnvColors.accent,
+                  color: context.env.accent,
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
-                      color: MobileEnvColors.accent.withValues(alpha: 0.32),
+                      color: context.env.accent.withValues(alpha: 0.32),
                       blurRadius: 14,
                     ),
                   ],
@@ -305,10 +305,10 @@ class _BookActions extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const OmniIcon(
+                    OmniIcon(
                       icon: OmniIcons.book,
                       size: 18,
-                      color: MobileEnvColors.onAccent,
+                      color: context.env.onAccent,
                     ),
                     const SizedBox(width: 8),
                     Flexible(
@@ -318,8 +318,8 @@ class _BookActions extends StatelessWidget {
                             : l10n.bookDetailStart,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.onAccent,
+                        style: TextStyle(
+                          color: context.env.onAccent,
                           fontSize: AppTypography.labelSmall,
                           fontWeight: FontWeight.w700,
                         ),
@@ -376,9 +376,9 @@ class _SquareAction extends StatelessWidget {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.07),
+            color: context.env.line07,
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0x14FFFFFF)),
+            border: Border.all(color: context.env.line09),
           ),
           child: Center(
             child:
@@ -391,8 +391,7 @@ class _SquareAction extends StatelessWidget {
                     : OmniIcon(
                       icon: icon,
                       size: 19,
-                      color:
-                          active ? MobileEnvColors.accent : MobileEnvColors.ink,
+                      color: active ? context.env.accentInk : context.env.ink,
                     ),
           ),
         ),
@@ -417,8 +416,8 @@ class _BookProgress extends StatelessWidget {
         updated == null ? '' : localizations.formatShortDate(updated);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 23),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line13)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line13)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -428,15 +427,15 @@ class _BookProgress extends StatelessWidget {
             children: [
               Text(
                 l10n.bookDetailProgressLabel,
-                style: const TextStyle(
-                  color: MobileEnvColors.inkMuted,
+                style: TextStyle(
+                  color: context.env.inkMuted,
                   fontSize: AppTypography.labelSmall,
                 ),
               ),
               Text(
                 '${(percent * 100).round()}%',
-                style: const TextStyle(
-                  color: MobileEnvColors.ink,
+                style: TextStyle(
+                  color: context.env.ink,
                   fontSize: AppTypography.labelSmall,
                   fontWeight: FontWeight.w700,
                 ),
@@ -449,16 +448,16 @@ class _BookProgress extends StatelessWidget {
             child: LinearProgressIndicator(
               value: percent.clamp(0, 1),
               minHeight: 3,
-              color: MobileEnvColors.accent,
-              backgroundColor: const Color(0x1AFFFFFF),
+              color: context.env.accentInk,
+              backgroundColor: context.env.line10,
             ),
           ),
           if (lastOpened.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               l10n.bookDetailLastOpened(lastOpened),
-              style: const TextStyle(
-                color: MobileEnvColors.inkMuted,
+              style: TextStyle(
+                color: context.env.inkMuted,
                 fontSize: AppTypography.labelMicro,
               ),
             ),
@@ -489,16 +488,16 @@ class _BookAbout extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.only(top: 24, bottom: 21),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: MobileEnvColors.line13)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.env.line13)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             l10n.bookDetailAbout.toUpperCase(),
-            style: const TextStyle(
-              color: MobileEnvColors.inkMuted,
+            style: TextStyle(
+              color: context.env.inkMuted,
               fontSize: AppTypography.labelMicro,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -509,8 +508,8 @@ class _BookAbout extends StatelessWidget {
             description,
             maxLines: expanded ? null : 3,
             overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xBDFFFFFF),
+            style: TextStyle(
+              color: context.env.inkMuted,
               fontFamily: AppTypography.serifFamily,
               fontFamilyFallback: AppTypography.serifFamilyFallback,
               fontSize: AppTypography.titleMedium,
@@ -521,7 +520,7 @@ class _BookAbout extends StatelessWidget {
           TextButton(
             onPressed: onToggle,
             style: TextButton.styleFrom(
-              foregroundColor: MobileEnvColors.accent,
+              foregroundColor: context.env.accentInk,
               minimumSize: const Size(48, 38),
               padding: EdgeInsets.zero,
               alignment: Alignment.centerLeft,
@@ -578,8 +577,8 @@ class _ChapterList extends StatelessWidget {
                   children: [
                     Text(
                       l10n.bookDetailContents.toUpperCase(),
-                      style: const TextStyle(
-                        color: MobileEnvColors.white43,
+                      style: TextStyle(
+                        color: context.env.white43,
                         fontSize: AppTypography.labelMicro,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.5,
@@ -588,8 +587,8 @@ class _ChapterList extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       l10n.bookDetailChapters,
-                      style: const TextStyle(
-                        color: MobileEnvColors.ink,
+                      style: TextStyle(
+                        color: context.env.ink,
                         fontSize: AppTypography.titleLarge,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.4,
@@ -601,7 +600,7 @@ class _ChapterList extends StatelessWidget {
               TextButton(
                 onPressed: null,
                 style: TextButton.styleFrom(
-                  foregroundColor: MobileEnvColors.white70,
+                  foregroundColor: context.env.white70,
                   minimumSize: const Size(48, 38),
                   textStyle: const TextStyle(
                     fontSize: AppTypography.labelSmall,
@@ -645,8 +644,8 @@ class _ChapterRow extends StatelessWidget {
       onTap: onOpen,
       child: Container(
         constraints: const BoxConstraints(minHeight: 64),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0x12FFFFFF))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
         child: Row(
           children: [
@@ -654,8 +653,8 @@ class _ChapterRow extends StatelessWidget {
               width: 34,
               child: Text(
                 (index + 1).toString().padLeft(2, '0'),
-                style: const TextStyle(
-                  color: Color(0x59FFFFFF),
+                style: TextStyle(
+                  color: context.env.ink40,
                   fontFamily: AppTypography.serifFamily,
                   fontFamilyFallback: AppTypography.serifFamilyFallback,
                   fontSize: AppTypography.titleMedium,
@@ -672,8 +671,8 @@ class _ChapterRow extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       fontSize: AppTypography.labelSmall,
                       fontWeight: FontWeight.w600,
                     ),
@@ -685,8 +684,8 @@ class _ChapterRow extends StatelessWidget {
                         AppLocalizations.of(
                           context,
                         ).bookDetailChapterPages(chapter.pageCount!),
-                        style: const TextStyle(
-                          color: MobileEnvColors.inkMuted,
+                        style: TextStyle(
+                          color: context.env.inkMuted,
                           fontSize: AppTypography.labelMicro,
                         ),
                       ),
@@ -697,7 +696,7 @@ class _ChapterRow extends StatelessWidget {
             OmniIcon(
               icon: read ? OmniIcons.check : OmniIcons.chevron,
               size: 17,
-              color: read ? MobileEnvColors.accent : MobileEnvColors.inkMuted,
+              color: read ? context.env.accentInk : context.env.inkMuted,
             ),
           ],
         ),

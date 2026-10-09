@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -138,8 +138,8 @@ class _SpaceSectionHeader extends StatelessWidget {
             eyebrow.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: MobileEnvColors.white43,
+            style: TextStyle(
+              color: context.env.white43,
               // ignore: font_size_whitelist
               fontSize: 9,
               letterSpacing: 1.5,
@@ -154,8 +154,8 @@ class _SpaceSectionHeader extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.ink,
+                  style: TextStyle(
+                    color: context.env.ink,
                     fontSize: AppTypography.titleLarge + 1,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.5,
@@ -167,7 +167,7 @@ class _SpaceSectionHeader extends StatelessWidget {
                 TextButton(
                   onPressed: onAction,
                   style: TextButton.styleFrom(
-                    foregroundColor: MobileEnvColors.white70,
+                    foregroundColor: context.env.white70,
                     minimumSize: const Size(48, 38),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     textStyle: const TextStyle(
@@ -179,10 +179,10 @@ class _SpaceSectionHeader extends StatelessWidget {
                     children: [
                       Text(actionLabel!),
                       const SizedBox(width: 1),
-                      const OmniIcon(
+                      OmniIcon(
                         icon: OmniIcons.chevron,
                         size: 16,
-                        color: MobileEnvColors.white70,
+                        color: context.env.white70,
                       ),
                     ],
                   ),
@@ -221,8 +221,8 @@ class _ContinueFeature extends StatelessWidget {
               children: [
                 Text(
                   l10n.readerSpaceContinueEyebrow.toUpperCase(),
-                  style: const TextStyle(
-                    color: MobileEnvColors.accent,
+                  style: TextStyle(
+                    color: context.env.accentInk,
                     // ignore: font_size_whitelist
                     fontSize: 8,
                     letterSpacing: 1.3,
@@ -234,8 +234,8 @@ class _ContinueFeature extends StatelessWidget {
                   item.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MobileEnvColors.ink,
+                  style: TextStyle(
+                    color: context.env.ink,
                     fontFamily: AppTypography.serifFamily,
                     fontFamilyFallback: AppTypography.serifFamilyFallback,
                     // ignore: font_size_whitelist
@@ -251,8 +251,8 @@ class _ContinueFeature extends StatelessWidget {
                       item.authorName!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: MobileEnvColors.inkMuted,
+                      style: TextStyle(
+                        color: context.env.inkMuted,
                         fontSize: AppTypography.bodySmall - 1,
                         height: 1.3,
                       ),
@@ -269,18 +269,16 @@ class _ContinueFeature extends StatelessWidget {
                             child: LinearProgressIndicator(
                               value: fraction,
                               minHeight: 3,
-                              color: MobileEnvColors.accent,
-                              backgroundColor: Colors.white.withValues(
-                                alpha: 0.15,
-                              ),
+                              color: context.env.accentInk,
+                              backgroundColor: context.env.line15,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           '${(fraction * 100).round()}%',
-                          style: const TextStyle(
-                            color: MobileEnvColors.inkMuted,
+                          style: TextStyle(
+                            color: context.env.inkMuted,
                             // ignore: font_size_whitelist
                             fontSize: 9,
                           ),
@@ -293,9 +291,9 @@ class _ContinueFeature extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: () => onResume(item),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: MobileEnvColors.ink,
-                    backgroundColor: Colors.white.withValues(alpha: 0.09),
-                    side: const BorderSide(color: MobileEnvColors.line13),
+                    foregroundColor: context.env.ink,
+                    backgroundColor: context.env.line09,
+                    side: BorderSide(color: context.env.line13),
                     minimumSize: const Size.fromHeight(45),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     textStyle: const TextStyle(
@@ -306,10 +304,10 @@ class _ContinueFeature extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  icon: const OmniIcon(
+                  icon: OmniIcon(
                     icon: OmniIcons.arrow,
                     size: 18,
-                    color: MobileEnvColors.ink,
+                    color: context.env.ink,
                   ),
                   label: Text(l10n.readerContinueChapter),
                 ),
@@ -331,16 +329,13 @@ class _FeatureCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.horizontal(
           left: Radius.circular(3),
           right: Radius.circular(14),
         ),
         boxShadow: [
-          BoxShadow(
-            color: MobileEnvColors.readerCoverSpine,
-            offset: Offset(-5, 0),
-          ),
+          BoxShadow(color: context.env.readerCoverSpine, offset: Offset(-5, 0)),
           BoxShadow(
             color: Colors.black45,
             blurRadius: 35,
@@ -388,7 +383,7 @@ class _PaperCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: MobileEnvColors.readerCoverBg,
+      color: context.env.readerCoverBg,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 20, 14, 20),
         child: Column(
@@ -398,8 +393,8 @@ class _PaperCover extends StatelessWidget {
               title,
               maxLines: 5,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MobileEnvColors.readerCoverFg,
+              style: TextStyle(
+                color: context.env.readerCoverFg,
                 fontFamily: AppTypography.serifFamily,
                 fontFamilyFallback: AppTypography.serifFamilyFallback,
                 // ignore: font_size_whitelist
@@ -413,8 +408,8 @@ class _PaperCover extends StatelessWidget {
                 '— $author',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: MobileEnvColors.readerCoverFg,
+                style: TextStyle(
+                  color: context.env.readerCoverFg,
                   // ignore: font_size_whitelist
                   fontSize: 8,
                 ),
@@ -463,10 +458,10 @@ class _InsightStrip extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 30),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(color: MobileEnvColors.line13),
-            bottom: BorderSide(color: MobileEnvColors.line13),
+            top: BorderSide(color: context.env.line13),
+            bottom: BorderSide(color: context.env.line13),
           ),
         ),
         child: Material(
@@ -478,10 +473,10 @@ class _InsightStrip extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const OmniIcon(
+                  OmniIcon(
                     icon: OmniIcons.sparkle,
                     size: 20,
-                    color: MobileEnvColors.accent,
+                    color: context.env.accentInk,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -490,8 +485,8 @@ class _InsightStrip extends StatelessWidget {
                       children: [
                         Text(
                           l10n.readerSpaceInsightEyebrow.toUpperCase(),
-                          style: const TextStyle(
-                            color: MobileEnvColors.inkMuted,
+                          style: TextStyle(
+                            color: context.env.inkMuted,
                             // ignore: font_size_whitelist
                             fontSize: 8,
                             letterSpacing: 1.3,
@@ -501,8 +496,8 @@ class _InsightStrip extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           l10n.readerInsightFocus(_formatDuration(minutes)),
-                          style: const TextStyle(
-                            color: MobileEnvColors.ink,
+                          style: TextStyle(
+                            color: context.env.ink,
                             fontFamily: AppTypography.serifFamily,
                             fontFamilyFallback:
                                 AppTypography.serifFamilyFallback,
@@ -517,8 +512,8 @@ class _InsightStrip extends StatelessWidget {
                           detail,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.inkMuted,
+                          style: TextStyle(
+                            color: context.env.inkMuted,
                             // ignore: font_size_whitelist
                             fontSize: 10,
                             height: 1.3,
@@ -569,8 +564,8 @@ class _BookRail extends StatelessWidget {
                     item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MobileEnvColors.ink,
+                    style: TextStyle(
+                      color: context.env.ink,
                       fontSize: AppTypography.bodySmall,
                       fontWeight: FontWeight.w600,
                     ),
@@ -582,8 +577,8 @@ class _BookRail extends StatelessWidget {
                         item.authorName!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: MobileEnvColors.inkMuted,
+                        style: TextStyle(
+                          color: context.env.inkMuted,
                           // ignore: font_size_whitelist
                           fontSize: 9,
                         ),
@@ -622,6 +617,7 @@ class _RailCover extends StatelessWidget {
           left: Radius.circular(2),
           right: Radius.circular(10),
         ),
+        // polarity-stable：封面书脊高光落在纸色封面上，两极性同值
         boxShadow: [BoxShadow(color: Color(0x29FFFFFF), offset: Offset(-4, 0))],
       ),
       child: ClipRRect(
@@ -708,10 +704,8 @@ class _NotesList extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(minHeight: 72),
               padding: const EdgeInsets.symmetric(vertical: 11),
-              decoration: const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: MobileEnvColors.line13),
-                ),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: context.env.line13)),
               ),
               child: Row(
                 children: [
@@ -723,8 +717,8 @@ class _NotesList extends StatelessWidget {
                           '"${note.quote}"',
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.ink,
+                          style: TextStyle(
+                            color: context.env.ink,
                             fontFamily: AppTypography.serifFamily,
                             fontFamilyFallback:
                                 AppTypography.serifFamilyFallback,
@@ -737,8 +731,8 @@ class _NotesList extends StatelessWidget {
                           _secondary(note, localizations),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: MobileEnvColors.inkMuted,
+                          style: TextStyle(
+                            color: context.env.inkMuted,
                             // ignore: font_size_whitelist
                             fontSize: 9,
                           ),
@@ -747,10 +741,10 @@ class _NotesList extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const OmniIcon(
+                  OmniIcon(
                     icon: OmniIcons.chevron,
                     size: 18,
-                    color: MobileEnvColors.inkMuted,
+                    color: context.env.inkMuted,
                   ),
                 ],
               ),
