@@ -106,7 +106,7 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
 
     private String callForString(String method, List<Object> params) {
         JsonNode result = call(method, params);
-        if (!result.isTextual() || result.asString().isBlank()) {
+        if (!result.isString() || result.asString().isBlank()) {
             throw new IllegalStateException("aria2 响应缺少结果");
         }
         return result.asString();
