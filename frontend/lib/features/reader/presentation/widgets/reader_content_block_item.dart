@@ -18,6 +18,7 @@ class ReaderContentBlockItem extends StatefulWidget {
     this.onLinkTap,
     this.onImageTap,
     this.isFirstBlockContinuation = false,
+    this.clampImageSlotToConstraints = true,
     super.key,
   });
 
@@ -30,6 +31,9 @@ class ReaderContentBlockItem extends StatefulWidget {
 
   /// 续接页首块不加首行缩进（翻页模式切页时使用）。
   final bool isFirstBlockContinuation;
+
+  /// 图片槽位是否按可用高度钳制（滚动列表用确定高度时必须关掉）。
+  final bool clampImageSlotToConstraints;
 
   /// 与 [ReaderViewContent.spanStyle] 同源，供测量与渲染共用。
   /// 标题块之后的额外段间距，与滚动列表条目高度同源。
@@ -86,6 +90,7 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
         retryCount: _imageRetry,
         onTap: (_) => widget.onImageTap?.call(block.src),
         onRetry: () => setState(() => _imageRetry++),
+        clampSlotToConstraints: widget.clampImageSlotToConstraints,
       ),
       DividerBlock() => _divider(),
       BlockquoteBlock block => _blockquote(block),

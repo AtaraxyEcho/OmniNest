@@ -22,10 +22,18 @@ class ReaderContentImage extends StatelessWidget {
     required this.onRetry,
     this.itemId,
     this.onTap,
+    this.clampSlotToConstraints = true,
     super.key,
   });
 
   static const String _placeholderPrefix = '__IMG_';
+
+  /// 是否按可用高度钳制槽位。
+  ///
+  /// 页框等真有界上下文必须钳制，避免整块溢出；滚动列表在条目高度已由高度表
+  /// 定死时必须关掉，否则槽位被反向钳成 `extent-54`，图片比表里记的矮、
+  /// 题注还会在紧约束里被裁。
+  final bool clampSlotToConstraints;
 
   final ImageBlock block;
   final ReaderViewSettings settings;
@@ -47,7 +55,8 @@ class ReaderContentImage extends StatelessWidget {
                 ? outerConstraints.maxWidth
                 : MediaQuery.sizeOf(context).width;
         var slotHeight = ReaderPaginationEngine.imageSlotHeight(width);
-        final available = outerConstraints.maxHeight;
+        final available =
+            clampSlotToConstraints ? outerConstraints.maxHeight : 0.0;
         final hasCaption = block.caption?.isNotEmpty == true;
         if (available.isFinite && available > 0) {
           // 预留：上下内边距 48 + 容器边框 2 + 题注区（顶距 10 + 行高 + 余量）。

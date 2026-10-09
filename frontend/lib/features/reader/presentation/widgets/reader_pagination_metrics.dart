@@ -100,9 +100,12 @@ abstract final class _ReaderPaginationMetrics {
     return height + 8;
   }
 
+  /// 表格块高。
+  ///
+  /// 渲染把整张表放进横向滚动容器，单元格因此**不折行**，行高只由一行文字、
+  /// 上下各 6 的内边距和 1px 下边框决定；按列宽折行的测量会多算行数。
   static double tableHeight(
     List<TableRowData> rows,
-    double effectiveWidth,
     ReaderViewSettings settings,
     double textScale,
   ) {
@@ -120,12 +123,12 @@ abstract final class _ReaderPaginationMetrics {
           strutStyle: settings.bodyStrutStyle(textScale: textScale),
           textDirection: TextDirection.ltr,
           maxLines: null,
-        )..layout(maxWidth: effectiveWidth);
+        )..layout();
         if (painter.height > maxCellHeight) {
           maxCellHeight = painter.height;
         }
       }
-      height += maxCellHeight + 12;
+      height += maxCellHeight + 6 + 6 + 1;
     }
     return height + 12;
   }

@@ -150,7 +150,6 @@ class ReaderPaginationEngine {
       ),
       TableBlock(:final rows) => _ReaderPaginationMetrics.tableHeight(
         rows,
-        effectiveWidth,
         settings,
         textScale,
       ),

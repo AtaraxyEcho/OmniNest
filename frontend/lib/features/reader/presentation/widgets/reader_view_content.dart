@@ -384,6 +384,9 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       chapterId: widget.itemId ?? '',
       // 仅分页模式的首块可能是段落续接，避免后续块误去缩进。
       isFirstBlockContinuation: widget.isFirstBlockContinuation && index == 0,
+      // 条目高度已由高度表定死时，槽位不能再被可用高度反向钳制；
+      // 页框等真有界的上下文仍然钳制，避免整块溢出。
+      clampImageSlotToConstraints: widget.blockExtents == null,
       onLinkTap: _launchUrl,
       onImageTap: _handleImageTap,
     );
