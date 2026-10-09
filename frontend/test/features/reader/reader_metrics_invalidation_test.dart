@@ -142,6 +142,70 @@ void main() {
       );
       expect(data.scrollLayoutPageWidth, 300, reason: '真正的列宽变化仍必须作废重排');
     });
+    test('跨列宽的已精测章节不参与邻章估算基线', () async {
+      // 章 A 在 700 宽下已是精测表，章 B 在 300 宽下取估算：
+      // 沿用 A 的块型均值会把 B 的尾部整体压低（同一段文字在 300 宽下更高）。
+      Future<double> totalWithWarmChapter({required bool warmOther}) async {
+        final loader = ReaderContentLoader(
+          allChapters: const [
+            ReaderChapter(id: 'chapter_1', chapterNumber: 1, title: '第一章'),
+            ReaderChapter(id: 'chapter_2', chapterNumber: 2, title: '第二章'),
+          ],
+        );
+        final wide = ReaderChapterContent(
+          title: '章',
+          content:
+              List<String>.generate(
+                60,
+                (index) =>
+                    '<h3>小节 $index</h3><p>第 $index 段正文内容 words text。</p>',
+              ).join(),
+        );
+        if (warmOther) {
+          loader.setActive('chapter_1');
+          final other = await loader.loadChapter(
+            chapterId: 'chapter_1',
+            content: wide,
+            pageWidth: 700,
+            pageHeight: 600,
+            settings: settings,
+          );
+          expect(
+            other.hasPreciseHeights,
+            isTrue,
+            reason: '前置条件：邻章已是精测表，才会被估算基线取用',
+          );
+        }
+        loader.setActive('chapter_2');
+        final data = await loader.loadChapter(
+          // 240 块超出同步预算，确保走估算尾部。
+          chapterId: 'chapter_2',
+          content: ReaderChapterContent(
+            title: '第二章',
+            content:
+                List<String>.generate(
+                  120,
+                  (index) =>
+                      '<h3>小节 $index</h3><p>第 $index 段正文内容 words text。</p>',
+                ).join(),
+          ),
+          pageWidth: 300,
+          pageHeight: 600,
+          settings: settings,
+        );
+        expect(data.blocks.length, greaterThan(200));
+        expect(data.hasPreciseHeights, isFalse, reason: '本例看的是估算尾部');
+        return data.cumulativeHeights.last;
+      }
+
+      final withNeighbour = await totalWithWarmChapter(warmOther: true);
+      final alone = await totalWithWarmChapter(warmOther: false);
+      expect(
+        withNeighbour,
+        closeTo(alone, 1.0),
+        reason: '邻章的块型均值来自别的列宽，拿它当基线会让本章估算整体偏小',
+      );
+    });
   });
 
   group('scrollMetricsStale', () {

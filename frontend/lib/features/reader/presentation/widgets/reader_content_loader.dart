@@ -462,7 +462,10 @@ class ReaderContentLoader {
     }
     final estimateBase =
         headHeights.isEmpty ? 0.0 : headHeights.last / headCount;
-    final typeAverages = _measuredBlockAverages();
+    final typeAverages = _measuredBlockAverages(
+      pageWidth: pageWidth,
+      textScale: textScale,
+    );
     final estimated = List<double>.filled(blocks.length, 0);
     var running = 0.0;
     for (var i = 0; i < blocks.length; i++) {
@@ -593,9 +596,21 @@ class ReaderContentLoader {
   ///
   /// 同一书排版一致，跨章块型均值比仅头部块实测更接近全章真实均值；
   /// 无已精测章节时返回 null，调用方退回头部均值。
-  Map<Type, double>? _measuredBlockAverages() {
+  Map<Type, double>? _measuredBlockAverages({
+    required double pageWidth,
+    required double textScale,
+  }) {
     for (final data in _cache.values) {
       if (!data.hasPreciseHeights || data.blocks.isEmpty) {
+        continue;
+      }
+      // 均值只能来自同一套排版参数：旧列宽测出的表会让新章尾部估算整体偏小。
+      if (scrollMetricsStale(
+        tablePageWidth: data.scrollLayoutPageWidth,
+        tableTextScale: data.scrollLayoutTextScale,
+        pageWidth: pageWidth,
+        textScale: textScale,
+      )) {
         continue;
       }
       final heights = data.cumulativeHeights;
@@ -607,6 +622,10 @@ class ReaderContentLoader {
       for (var i = 0; i < data.blocks.length; i++) {
         final type = data.blocks[i].runtimeType;
         final height = heights[i] - (i == 0 ? 0.0 : heights[i - 1]);
+        // 零高块（空段等）不参与均值，否则会把该类型的估算整体拉低。
+        if (height <= 0) {
+          continue;
+        }
         sums[type] = (sums[type] ?? 0) + height;
         counts[type] = (counts[type] ?? 0) + 1;
       }
