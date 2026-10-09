@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
@@ -75,6 +76,8 @@ Future<void> _pumpHome(
   required double width,
   required Widget home,
   AppBackdropPolarity? polarity,
+  bool backdropActive = false,
+  Brightness brightness = Brightness.dark,
 }) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   tester.view.physicalSize = Size(width, 900);
@@ -96,12 +99,18 @@ Future<void> _pumpHome(
         appBackdropPolarityProvider.overrideWithValue(
           polarity ?? AppBackdropPolarity.dark,
         ),
+        mobileShellLocalBackdropActiveProvider.overrideWithValue(
+          backdropActive,
+        ),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
-        theme: OmniNestTheme.from(AppThemePalette.dark),
+        theme:
+            brightness == Brightness.light
+                ? OmniNestTheme.from(AppThemePalette.light)
+                : OmniNestTheme.from(AppThemePalette.dark),
         home: MobileShellScope(hosted: true, child: Scaffold(body: home)),
       ),
     ),
@@ -150,20 +159,39 @@ void main() {
     expect(ink.center, lessThan(500.0), reason: '双栏档时间块不该跑到视口中央，右侧是焦点卡');
   });
 
-  testWidgets('首页时钟极性跟壁纸走：亮壁纸翻浅，其余留暗基准', (tester) async {
+  testWidgets('首页时钟极性：有壁纸看采样亮度，无壁纸看根主题', (tester) async {
     Color clockInk() =>
         tester.renderObject<RenderParagraph>(_clock).text.style!.color!;
 
-    // 根主题是暗的：极性只应由壁纸亮度决定，与明暗设置无关。
-    await _pumpHome(tester, width: 390, home: const PortalPage());
-    expect(clockInk(), MobileEnvPalette.dark.ink);
-
+    // 壁纸在场：极性只由采样亮度决定，暗根主题下亮壁纸照样翻浅。
     await _pumpHome(
       tester,
       width: 390,
       home: const PortalPage(),
       polarity: AppBackdropPolarity.light,
+      backdropActive: true,
     );
     expect(clockInk(), MobileEnvPalette.light.ink);
+
+    await _pumpHome(
+      tester,
+      width: 390,
+      home: const PortalPage(),
+      polarity: AppBackdropPolarity.dark,
+      backdropActive: true,
+    );
+    expect(clockInk(), MobileEnvPalette.dark.ink);
+
+    // 无壁纸的实底面随根主题明暗（与壳层同一判定），浅根主题下取浅实例。
+    await _pumpHome(
+      tester,
+      width: 390,
+      home: const PortalPage(),
+      brightness: Brightness.light,
+    );
+    expect(clockInk(), MobileEnvPalette.light.ink);
+
+    await _pumpHome(tester, width: 390, home: const PortalPage());
+    expect(clockInk(), MobileEnvPalette.dark.ink);
   });
 }
