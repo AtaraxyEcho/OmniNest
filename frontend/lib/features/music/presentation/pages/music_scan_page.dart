@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -84,10 +84,10 @@ class MusicScanPage extends ConsumerWidget {
                         activeScan.message!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9, // ignore: font_size_whitelist
                           height: 1.4,
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ),
@@ -96,10 +96,10 @@ class MusicScanPage extends ConsumerWidget {
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         l10n.musicScanPollTimeout,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9, // ignore: font_size_whitelist
                           height: 1.4,
-                          color: MobileEnvColors.inkMuted,
+                          color: context.env.inkMuted,
                         ),
                       ),
                     ),

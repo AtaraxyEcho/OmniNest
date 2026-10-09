@@ -109,7 +109,7 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
                   child: RefreshIndicator(
                     color:
                         hosted
-                            ? MobileEnvColors.ink
+                            ? context.env.ink
                             : context.movieRedesign.primary,
                     onRefresh: widget.onRefresh ?? () async {},
                     child: MovieSectionTransition(
@@ -129,8 +129,7 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
               displacement: 40,
               edgeOffset: hosted ? 0 : 44,
               strokeWidth: 2.5,
-              color:
-                  hosted ? MobileEnvColors.ink : context.movieRedesign.primary,
+              color: hosted ? context.env.ink : context.movieRedesign.primary,
               onRefresh: () async {
                 await (widget.onRefresh ?? () async {})();
                 await Future<void>.delayed(const Duration(milliseconds: 200));

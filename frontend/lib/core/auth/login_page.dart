@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/auth/login_page_controller.dart';
 import 'package:omninest/core/auth/login_two_factor_panel.dart';
@@ -113,7 +113,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         return Scaffold(
           backgroundColor:
               mobileForm
-                  ? MobileEnvColors.stage
+                  ? context.env.stage
                   : Theme.of(context).scaffoldBackgroundColor,
           body:
               mobileForm
@@ -411,12 +411,10 @@ class _LoginFormCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(26),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: MobileEnvColors.sheetSolid,
+        decoration: BoxDecoration(
+          color: context.env.sheetSolid,
           borderRadius: BorderRadius.all(Radius.circular(26)),
-          border: Border.fromBorderSide(
-            BorderSide(color: MobileEnvColors.line13),
-          ),
+          border: Border.fromBorderSide(BorderSide(color: context.env.line13)),
         ),
         child: Padding(padding: const EdgeInsets.all(24), child: cardChild),
       ),

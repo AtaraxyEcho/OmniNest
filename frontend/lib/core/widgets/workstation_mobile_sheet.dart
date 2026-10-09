@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 标记当前子树渲染于移动端工位底部面板内。
 ///
@@ -60,14 +60,12 @@ Future<T?> showWorkstationMobileSheet<T>({
                   top: Radius.circular(28),
                 ),
                 child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    color: MobileEnvColors.sheetSolid,
+                  decoration: BoxDecoration(
+                    color: context.env.sheetSolid,
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(28),
                     ),
-                    border: Border(
-                      top: BorderSide(color: MobileEnvColors.line13),
-                    ),
+                    border: Border(top: BorderSide(color: context.env.line13)),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black54,
@@ -120,7 +118,7 @@ class WorkstationSheetHandle extends StatelessWidget {
         height: 4,
         margin: const EdgeInsets.only(top: 10, bottom: 14),
         decoration: BoxDecoration(
-          color: const Color(0x38FFFFFF),
+          color: context.env.line25,
           borderRadius: BorderRadius.circular(3),
         ),
       ),

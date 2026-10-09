@@ -219,7 +219,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
                     child: TextButton(
                       onPressed: () => setState(() => _page = safePage + 1),
                       style: TextButton.styleFrom(
-                        foregroundColor: MobileEnvColors.inkMuted,
+                        foregroundColor: context.env.inkMuted,
                         minimumSize: const Size(0, 38),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),

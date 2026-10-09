@@ -35,10 +35,23 @@ const _migrated = <String>[
   'lib/features/music/presentation/player/music_mobile_now_playing.dart',
   'lib/features/music/presentation/player/music_mobile_now_playing_pages.dart',
   'lib/features/video/presentation/widgets/redesign/movie_redesign_mobile_chips.dart',
+  'lib/core/widgets/env_empty_state.dart',
+  'lib/core/widgets/workstation_mobile_sheet.dart',
+  'lib/core/auth/login_page.dart',
+  'lib/features/music/presentation/pages/music_history_page.dart',
+  'lib/features/music/presentation/pages/music_scan_page.dart',
+  'lib/features/music/presentation/deck/music_deck_content.dart',
+  'lib/features/music/presentation/deck/music_deck_content_support.dart',
+  'lib/features/video/presentation/widgets/movie_shell_mobile.dart',
+  'lib/features/video/presentation/pages/movie_center_sample_rails.dart',
+  'lib/features/video/presentation/widgets/movie_admin_list.dart',
+  'lib/features/video/presentation/widgets/movie_history.dart',
 ];
 
-/// 本轮起点实测值（117 处出现，按 allMatches 计；早先引用的 416/453 是 grep -c 的行数，会少算一行多次）；每接完一个面就把它降到新的计数。
-const _remainingCeiling = 117;
+/// 未接入极性表的 `MobileEnvColors.` 引用出现数（按 allMatches 计；
+/// `grep -c` 数行会少算一行多次）。当前 96：reader 56、photos 28、壳层 11、app.dart 1。
+/// 每接完一个面就把它降到新值；接完之前不给壳层注册极性。
+const _remainingCeiling = 96;
 
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。

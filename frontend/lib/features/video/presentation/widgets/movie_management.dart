@@ -25,7 +25,7 @@ import 'package:omninest/core/utils/status_labels.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
@@ -204,14 +204,14 @@ class HostedHistorySection extends StatelessWidget {
                       ),
             ),
         if (isLoadingMore)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Center(
               child: SizedBox.square(
                 dimension: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: MobileEnvColors.inkMuted,
+                  color: context.env.inkMuted,
                 ),
               ),
             ),

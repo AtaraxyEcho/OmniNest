@@ -24,10 +24,10 @@ class _FilmMoreButton extends StatelessWidget {
     return IconButton(
       tooltip: AppLocalizations.of(context).videoMore,
       onPressed: () => context.push(movieDetailRoute(item)),
-      icon: const Icon(
+      icon: Icon(
         Icons.more_horiz_rounded,
         size: 18,
-        color: MobileEnvColors.inkFaint,
+        color: context.env.inkFaint,
       ),
       visualDensity: VisualDensity.compact,
     );

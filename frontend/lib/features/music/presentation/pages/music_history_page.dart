@@ -6,7 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
@@ -262,7 +262,7 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
               dimension: hosted ? 22 : 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: hosted ? MobileEnvColors.inkMuted : null,
+                color: hosted ? context.env.inkMuted : null,
               ),
             ),
           ),
@@ -282,7 +282,7 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
               style:
                   hosted
                       ? TextButton.styleFrom(
-                        foregroundColor: MobileEnvColors.inkMuted,
+                        foregroundColor: context.env.inkMuted,
                         minimumSize: const Size(0, 38),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       )

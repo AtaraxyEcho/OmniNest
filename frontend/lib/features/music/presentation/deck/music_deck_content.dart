@@ -12,7 +12,7 @@ import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
@@ -1122,7 +1122,7 @@ Widget _hostedHomeBody(
             trailing: Icon(
               Icons.more_horiz_rounded,
               size: 19,
-              color: MobileEnvColors.inkFaint,
+              color: context.env.inkFaint,
             ),
           ),
       ],

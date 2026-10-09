@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
@@ -45,19 +45,19 @@ class EnvEmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 原型 .empty-action：54 r18 酸绿 8% 图块 + 酸绿描边图标。
+            // 原型 .empty-action：54 r18 强调色 8% 图块 + 同色描边图标。
             Container(
               width: compact ? 40 : 54,
               height: compact ? 40 : 54,
               decoration: BoxDecoration(
-                color: const Color(0x14D5F17D),
+                color: context.env.accentInk.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(compact ? 14 : 18),
               ),
               alignment: Alignment.center,
               child: OmniIcon(
                 icon: icon,
                 size: compact ? 18 : 24,
-                color: MobileEnvColors.accent,
+                color: context.env.accentInk,
               ),
             ),
             SizedBox(height: compact ? 10 : 12),
@@ -65,7 +65,7 @@ class EnvEmptyState extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: MobileEnvColors.ink,
+                color: context.env.ink,
                 fontFamily: AppTypography.serifFamily,
                 fontFamilyFallback: AppTypography.serifFamilyFallback,
                 // 原型 .empty-action strong 为衬线 400 字重 20 号；紧凑档
@@ -80,8 +80,8 @@ class EnvEmptyState extends StatelessWidget {
               Text(
                 message!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: MobileEnvColors.inkMuted,
+                style: TextStyle(
+                  color: context.env.inkMuted,
                   fontSize: 9, // ignore: font_size_whitelist
                   height: 1.55,
                 ),
@@ -98,15 +98,15 @@ class EnvEmptyState extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: MobileEnvColors.accent,
+                    color: context.env.accent,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     actionLabel!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
                       fontWeight: FontWeight.w700,
-                      color: MobileEnvColors.onAccent,
+                      color: context.env.onAccent,
                     ),
                   ),
                 ),

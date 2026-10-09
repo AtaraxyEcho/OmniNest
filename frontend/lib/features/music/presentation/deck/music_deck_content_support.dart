@@ -255,7 +255,7 @@ class _SectionTitle extends StatelessWidget {
                 : TextButton(
                   onPressed: onAction,
                   style: TextButton.styleFrom(
-                    foregroundColor: MobileEnvColors.inkMuted,
+                    foregroundColor: context.env.inkMuted,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     minimumSize: const Size(0, 38),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
