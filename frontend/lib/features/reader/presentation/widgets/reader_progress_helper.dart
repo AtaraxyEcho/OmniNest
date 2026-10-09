@@ -23,7 +23,10 @@ class ReaderProgressHelper {
         (backup['chapterId']?.toString() ?? '') == chapterId) {
       final backupSavedAt = backup['savedAt']?.toString() ?? '';
       final localSavedAt = localPayload?['updatedAt']?.toString() ?? '';
-      if (backupSavedAt.compareTo(localSavedAt) > 0) {
+      if (preferCrashBackup(
+        backupSavedAt: backupSavedAt,
+        localUpdatedAt: localSavedAt,
+      )) {
         final backupCharOffset = (backup['charOffset'] as num?)?.toInt() ?? 0;
         final backupChapterProgress =
             (backup['chapterProgress'] as num?)?.toDouble() ?? 0;
@@ -97,4 +100,22 @@ class ReaderProgressHelper {
     }
     return null;
   }
+}
+
+/// 崩溃备份是否比本地 SQLite 行更新。
+///
+/// 两侧都按时刻比较：备份自 2026-10-09 起带时区写出，但历史值与 drift 读回的
+/// 本地无时区串仍会相遇，字符串比较会把"同一时刻的两种写法"判成新旧。
+/// 备份时间戳解析不出来时不采信它（本地行是唯一可证的事实时就地保留），
+/// 本地行缺时间戳则备份直接胜出。
+bool preferCrashBackup({
+  required String? backupSavedAt,
+  required String? localUpdatedAt,
+}) {
+  final backupAt = DateTime.tryParse(backupSavedAt ?? '');
+  if (backupAt == null) {
+    return false;
+  }
+  final localAt = DateTime.tryParse(localUpdatedAt ?? '');
+  return localAt == null || backupAt.isAfter(localAt);
 }
