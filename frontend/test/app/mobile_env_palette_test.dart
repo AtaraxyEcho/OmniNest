@@ -91,6 +91,11 @@ void main() {
     expect(light.ink, const Color(0xFF1A1D1B));
     expect(light.accent, MobileEnvColors.accent, reason: '酸绿仍是酸绿，只改用法');
     expect(light.accentInk, const Color(0xFF0B6B61));
+    expect(
+      light.elevShadow.a,
+      lessThan(MobileEnvPalette.dark.elevShadow.a),
+      reason: '浅态玻璃面半透明，投影透上来会把卡片染成灰板，必须比暗态淡',
+    );
   });
 
   test('浅实例的墨色族按等对比上调 α，深于同名的暗值比例', () {

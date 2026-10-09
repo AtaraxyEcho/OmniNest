@@ -45,6 +45,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     required this.surfaceGlass,
     required this.surfaceRaised,
     required this.surfaceTint,
+    required this.elevShadow,
     required this.navGlass,
     required this.sheetSolid,
     required this.focusGradientStart,
@@ -105,6 +106,10 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
 
   /// 低透明表面着色：列表行底、格内图标片。
   final Color surfaceTint;
+
+  /// 抬升投影色。浅态只留一档淡影：玻璃面自身半透明，暗态那档投影透上来
+  /// 会把纸面卡片染成灰板（实测胶囊内 L 0.79、下方条带 L 0.36）。
+  final Color elevShadow;
   final Color navGlass;
   final Color sheetSolid;
   final Color focusGradientStart;
@@ -159,6 +164,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     surfaceGlass: Color(0xB8121918),
     surfaceRaised: Color(0x8F111816),
     surfaceTint: Color(0x0BFFFFFF),
+    elevShadow: Color(0x59000000),
     navGlass: Color(0xC70E1413),
     sheetSolid: Color(0xFF171E1C),
     focusGradientStart: Color(0xC2101615),
@@ -215,6 +221,7 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     surfaceGlass: Color(0xB8F7F8F6),
     surfaceRaised: Color(0x8FF7F8F6),
     surfaceTint: Color(0x0D1A1D1B),
+    elevShadow: Color(0x1A000000),
     navGlass: Color(0xC7F7F8F6),
     sheetSolid: Color(0xFFF7F8F6),
     focusGradientStart: Color(0xC2F7F8F6),

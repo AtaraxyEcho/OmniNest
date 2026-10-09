@@ -337,7 +337,7 @@ class _MobileBottomNavigation extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(23),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
+                      color: context.env.elevShadow,
                       blurRadius: 35,
                       offset: const Offset(0, 12),
                     ),
