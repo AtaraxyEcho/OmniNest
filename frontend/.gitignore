@@ -64,3 +64,5 @@ windows/flutter/ephemeral/
 # OS
 .DS_Store
 Thumbs.db
+# Widget Preview related
+.widget_preview/
