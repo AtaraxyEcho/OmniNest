@@ -7,12 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_account_sheet.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_theme.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_app_theme.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -75,20 +77,23 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     );
     final offline = ref.watch(appOnlineStatusProvider).asData?.value == false;
     final backdropActive = ref.watch(mobileShellLocalBackdropActiveProvider);
-    // 环境设计为固定暗色族：浅色根主题下强制暗色基底，保证环境配色
-    // 与文字对比不随系统明暗翻转。
+    // 极性在这里决定并注册：壁纸在场取采样亮度，无壁纸的实底壳随根主题明暗。
+    // 壳层之下的所有面都已接进极性表，未注册时 MobileEnvPalette.of 仍取暗基准。
     final baseTheme = Theme.of(context);
-    final shellTheme =
-        baseTheme.brightness == Brightness.dark
-            ? baseTheme
-            : OmniNestTheme.dark();
+    final envPalette = watchMobileEnvPalette(ref, baseTheme);
+    final shellTheme = (envPalette.brightness == Brightness.dark
+            ? (baseTheme.brightness == Brightness.dark
+                ? baseTheme
+                : OmniNestTheme.dark())
+            : MobileAppTheme.resolve(baseTheme))
+        .withEnvPalette(envPalette);
     final content = Theme(
       data: shellTheme,
       child: MobileShellScope(
         hosted: true,
         child: Scaffold(
           backgroundColor:
-              backdropActive ? Colors.transparent : MobileEnvColors.stage,
+              backdropActive ? Colors.transparent : envPalette.stage,
           // 平板与手机统一底部导航（浮动胶囊 tab 组限宽居中），不再切换
           // 左侧 rail：触屏可达性与三端一致性优先于 M3 导航规范。
           body: _buildBottomNavigationLayout(
@@ -202,8 +207,8 @@ class _MobileTopBar extends ConsumerWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MobileEnvColors.ink,
+                            style: TextStyle(
+                              color: context.env.ink,
                               // ignore: font_size_whitelist
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
@@ -215,8 +220,8 @@ class _MobileTopBar extends ConsumerWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: MobileEnvColors.inkMuted,
+                            style: TextStyle(
+                              color: context.env.inkMuted,
                               fontSize: 11,
                               height: 1.4,
                             ),
@@ -344,8 +349,8 @@ class _MobileBottomNavigation extends ConsumerWidget {
                     filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: MobileEnvColors.navGlass,
-                        border: Border.all(color: MobileEnvColors.line12),
+                        color: context.env.navGlass,
+                        border: Border.all(color: context.env.line12),
                       ),
                       child: SizedBox(
                         height: 70,
@@ -418,7 +423,7 @@ class _MobileBottomDestination extends StatelessWidget {
                 width: 48,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: selected ? MobileEnvColors.accent : Colors.transparent,
+                  color: selected ? context.env.accent : Colors.transparent,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow:
                       selected
@@ -436,9 +441,7 @@ class _MobileBottomDestination extends StatelessWidget {
                     icon: destination.icon,
                     size: 20,
                     color:
-                        selected
-                            ? MobileEnvColors.onAccent
-                            : MobileEnvColors.white46,
+                        selected ? context.env.onAccent : context.env.white46,
                   ),
                 ),
               ),
@@ -448,8 +451,7 @@ class _MobileBottomDestination extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color:
-                      selected ? MobileEnvColors.ink : MobileEnvColors.white46,
+                  color: selected ? context.env.ink : context.env.white46,
                   // ignore: font_size_whitelist
                   fontSize: 9,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -508,15 +510,15 @@ class _GlassCircleButton extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: const Color(0x520D1817),
+                color: context.env.iconButtonGlass,
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0x1AFFFFFF)),
+                border: Border.all(color: context.env.line10),
               ),
               child: Center(
                 child: OmniIcon(
                   icon: icon,
                   size: iconSize,
-                  color: MobileEnvColors.ink,
+                  color: context.env.ink,
                 ),
               ),
             ),

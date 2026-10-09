@@ -10,6 +10,7 @@ import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
@@ -24,7 +25,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// - 顶栏无背景：元素直接呈现在环境上，仅搜索 + 头像两个动作；
 /// - 底栏为 0.78 烟熏玻璃胶囊（70 高、左右 12 留边、max(12, inset) 底距），
 ///   选中胶囊为原型 lime 强调色；
-/// - 浅色根主题下壳层强制暗色基底，无壁纸时壳底为环境舞台色。
+/// - 壳层极性由 resolveMobileEnvPalette 决定：无壁纸随根主题，有壁纸随采样亮度。
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -39,7 +40,7 @@ void main() {
 
   Widget host({
     required String initialLocation,
-    Brightness brightness = Brightness.light,
+    Brightness brightness = Brightness.dark,
     bool backdropActive = false,
   }) {
     final router = GoRouter(
@@ -100,7 +101,7 @@ void main() {
   Future<void> pumpShell(
     WidgetTester tester, {
     required String initialLocation,
-    Brightness brightness = Brightness.light,
+    Brightness brightness = Brightness.dark,
     bool backdropActive = false,
     Size surface = const Size(360, 860),
     double textScale = 1.0,
@@ -192,11 +193,7 @@ void main() {
   });
 
   testWidgets('顶栏无背景：仅品牌/标题 + 搜索 + 头像，无铃铛与壁纸按钮', (tester) async {
-    await pumpShell(
-      tester,
-      initialLocation: '/portal',
-      brightness: Brightness.light,
-    );
+    await pumpShell(tester, initialLocation: '/portal');
     // 首页顶栏只保留品牌标记，不出现品牌字标与多余动作。
     expect(find.byType(BrandLogo), findsOneWidget);
     expect(find.text('OmniNest'), findsNothing);
@@ -302,23 +299,34 @@ void main() {
     );
   });
 
-  testWidgets('浅色根主题下壳层强制暗色基底，无壁纸时壳底为舞台色', (tester) async {
+  testWidgets('壳层极性随根主题，无壁纸时壳底取对应舞台色', (tester) async {
+    await pumpShell(tester, initialLocation: '/library');
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      MobileEnvPalette.dark.stage,
+      reason: '暗根主题下壳层维持暗环境基底',
+    );
     await pumpShell(
       tester,
       initialLocation: '/library',
       brightness: Brightness.light,
     );
-    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-    expect(scaffold.backgroundColor, MobileEnvColors.stage);
-    // 壁纸激活时壳底透明，由环境层绘制底。
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      MobileEnvPalette.light.stage,
+      reason: '无壁纸的实底壳随根主题翻浅，不再强制暗栈',
+    );
+    // 壁纸在场时壳底透明，由环境层绘制底；极性改由采样亮度决定。
     await pumpShell(
       tester,
       initialLocation: '/library',
       brightness: Brightness.light,
       backdropActive: true,
     );
-    final active = tester.widget<Scaffold>(find.byType(Scaffold).first);
-    expect(active.backgroundColor, Colors.transparent);
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      Colors.transparent,
+    );
   });
 
   testWidgets('非首页空间顶栏展示标题与副题', (tester) async {

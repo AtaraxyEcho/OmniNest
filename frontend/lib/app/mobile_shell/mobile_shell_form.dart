@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
-import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
@@ -56,15 +56,13 @@ bool resolveMobileShell({
   return compact;
 }
 
-/// 推入路由是否继续强制暗色环境基底。
+/// 推入路由是否强制暗色环境基底。
 ///
-/// 壁纸在场时维持暗栈：环境可读性的极性由壁纸亮度决定（尚未实现），不跟随明暗设置。
-/// 无壁纸的实底工具面随根主题，消除「壳强制暗、页内随主题」的分裂态。
-bool shouldForceEnvironmentDark({
-  required bool solidSurface,
-  required bool backdropActive,
-}) {
-  return !solidSurface || backdropActive;
+/// 只有非实底（沉浸/透明）路由保持暗栈：它们的底色由环境层绘制，极性归空间自己。
+/// 实底工具面自带底色，必须与壳层共用同一极性判定，否则出现
+/// 「浅壳导航胶囊压着暗工具页」这类分裂态。
+bool shouldForceEnvironmentDark({required bool solidSurface}) {
+  return !solidSurface;
 }
 
 /// 根级推入路由的移动形态宿主包装。
@@ -96,33 +94,23 @@ class MobileHostedRoute extends ConsumerWidget {
     if (!active) {
       return child;
     }
-    // 根级推入页脱离壳层的暗色 Theme：环境档与壁纸在场时按壳层同规则兜底，
-    // 浅色根主题下 scheme 派生色（分段控件/设置组/弹窗面板）不翻白；
-    // 无壁纸的实底工具面随根主题，页内配色由 MobileEnvPalette 的浅实例提供。
+    // 根级推入页脱离壳层的暗色 Theme：实底面与壳层共用同一极性判定，
+    // 非实底（沉浸）路由维持暗栈，底色由环境层绘制。
     final baseTheme = Theme.of(context);
-    final forceDark = shouldForceEnvironmentDark(
-      solidSurface: solidSurface,
-      backdropActive: ref.watch(mobileShellLocalBackdropActiveProvider),
-    );
-    final shellTheme =
-        baseTheme.brightness == Brightness.dark
-            ? baseTheme
-            : forceDark
-            ? OmniNestTheme.dark()
-            : _withLightPolarity(MobileAppTheme.resolve(baseTheme));
+    final forceDark = shouldForceEnvironmentDark(solidSurface: solidSurface);
+    final envPalette =
+        forceDark
+            ? MobileEnvPalette.dark
+            : watchMobileEnvPalette(ref, baseTheme);
+    final shellTheme = (envPalette.brightness == Brightness.dark
+            ? (baseTheme.brightness == Brightness.dark
+                ? baseTheme
+                : OmniNestTheme.dark())
+            : MobileAppTheme.resolve(baseTheme))
+        .withEnvPalette(envPalette);
     return Theme(
       data: shellTheme,
       child: MobileShellScope(hosted: true, child: child),
     );
   }
-}
-
-/// 追加浅色极性表。
-///
-/// `ThemeData.copyWith(extensions:)` 整体替换扩展集，因此必须带上既有扩展，
-/// 否则实底页会丢掉模块调色板（Photos/Files/Reader 等）。
-ThemeData _withLightPolarity(ThemeData theme) {
-  return theme.copyWith(
-    extensions: [...theme.extensions.values, MobileEnvPalette.light],
-  );
 }

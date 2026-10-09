@@ -38,7 +38,7 @@ import 'package:omninest/features/search/search_ui.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
 import 'package:omninest/core/deep_link/deep_link_service.dart';
 import 'package:omninest/core/notifications/notification_tap_binding.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/features/tasks/application/task_notification_service.dart';
 
 class OmniNestApp extends ConsumerStatefulWidget {
@@ -162,14 +162,18 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       mobilePlatform: isMobilePlatform,
       width: mediaQuery.size.width,
     );
-    // 移动壳层在浅色根主题下仍强制暗色环境基底，系统栏样式必须跟随壳层
-    // 实际亮度，否则会出现深色图标压在暗色壳底上不可读。
-    final overlayDark = rootTheme.brightness == Brightness.dark || mobileForm;
+    // 系统栏样式必须跟随壳层实际极性：壳层在浅色根主题且无壁纸时是纸面基底，
+    // 沿用"移动形态一律暗图标"会让浅色图标压在浅底上不可读。
+    final envPalette = watchMobileEnvPalette(ref, rootTheme);
+    final overlayDark =
+        mobileForm
+            ? envPalette.brightness == Brightness.dark
+            : rootTheme.brightness == Brightness.dark;
     Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor:
-            mobileForm ? MobileEnvColors.stage : rootTheme.colorScheme.surface,
+            mobileForm ? envPalette.stage : rootTheme.colorScheme.surface,
         statusBarIconBrightness:
             overlayDark ? Brightness.light : Brightness.dark,
         systemNavigationBarIconBrightness:

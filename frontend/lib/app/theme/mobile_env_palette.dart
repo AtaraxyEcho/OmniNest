@@ -267,3 +267,13 @@ extension MobileEnvPaletteContext on BuildContext {
   /// 当前极性的环境配色表。
   MobileEnvPalette get env => MobileEnvPalette.of(this);
 }
+
+/// 注册极性表到主题。
+///
+/// `ThemeData.copyWith(extensions:)` 整体替换扩展集，因此必须带上既有扩展，
+/// 否则模块调色板（Photos/Files/Reader 等）会被抹掉。
+extension MobileEnvPaletteTheme on ThemeData {
+  ThemeData withEnvPalette(MobileEnvPalette palette) {
+    return copyWith(extensions: [...extensions.values, palette]);
+  }
+}
