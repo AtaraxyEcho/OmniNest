@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/widgets.dart' show Size;
+import 'package:flutter/widgets.dart' show MediaQuery, Size;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
@@ -12,6 +12,15 @@ import 'package:omninest/features/reader/presentation/pages/reader_view_page.dar
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+
+/// 按壳层套用阅读默认：只有移动壳层把深色档的正文换成样例的衬线 19/1.85。
+@visibleForTesting
+ReaderViewSettings applyReaderShellDefaults({
+  required ReaderViewSettings loaded,
+  required bool mobileShell,
+}) {
+  return mobileShell ? loaded.withMobileDefaults() : loaded;
+}
 
 /// 阅读页设置与状态初始化逻辑。
 mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
@@ -65,10 +74,16 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
         values.isEmpty
             ? ReaderViewSettings()
             : ReaderViewSettings.fromJson(values);
-    // 移动壳层默认：夜间玻璃 + 衬线 19/1.7（样例 ReaderFocus 书体）；
+    // 移动壳层默认：深色档正文换成衬线 19/1.85（样例 ReaderFocus 书体）；判据与
+    // 阅读页其余壳层分叉同源，桌面宽窗浏览器不跟着换档。
     // 用户已显式保存非默认主题时尊重其选择。
-    final isMobileDefault = isMobilePlatform || kIsWeb;
-    final resolved = isMobileDefault ? loaded.withMobileDefaults() : loaded;
+    final resolved = applyReaderShellDefaults(
+      loaded: loaded,
+      mobileShell: shouldUseResponsiveMobileShell(
+        mobilePlatform: isMobilePlatform,
+        width: MediaQuery.sizeOf(context).width,
+      ),
+    );
     setState(() {
       settings = resolved;
     });

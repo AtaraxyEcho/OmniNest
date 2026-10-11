@@ -63,7 +63,15 @@ mixin ReaderViewPageControlsMixin on ConsumerState<ReaderViewPage> {
     }
     exitRequested = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && context.mounted) {
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      // 阅读页由条目详情 push 进来，pop 才能保留来路（首页、媒体库或
+      // 阅读空间里的上一级）；go 会把整条栈换成详情页，退出阅读后系统
+      // 返回就落在栈底，表现为直接退出应用。深链直入没有可弹层时才回落。
+      if (context.canPop()) {
+        context.pop();
+      } else {
         context.go('/reader/items/$itemId');
       }
     });

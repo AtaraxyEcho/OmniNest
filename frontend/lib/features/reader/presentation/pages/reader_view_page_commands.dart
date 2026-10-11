@@ -297,8 +297,9 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
   List<Widget> _buildReaderPanels(
     ReaderItemDetail detail,
     ReaderChapterContent content,
-    ReaderControlLayout layout,
-  ) {
+    ReaderControlLayout layout, {
+    bool sampleChrome = false,
+  }) {
     final active = _panelCoordinator.active;
     if (active == null) {
       return const [];
@@ -317,6 +318,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         settings: _settings,
         onSettingsChanged: onSettingsChanged,
         embedded: true,
+        mobile: sampleChrome,
       ),
       ReaderPanelType.search => ReaderFindPanel(
         plainText: getPlainText(content.content),
@@ -336,6 +338,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           title: title,
           settings: _settings,
           layout: layout,
+          eyebrow: detail.item.title,
           onClose: _closeReaderPanel,
           child: child,
         ),

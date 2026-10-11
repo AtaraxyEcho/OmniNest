@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -99,6 +100,8 @@ void main() {
     tester.view.physicalSize = const Size(320, 568);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    // 用例覆盖的是有物理键盘的窄桌面窗；测试 VM 默认平台是 android。
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
     var ttsToggled = false;
     var immersiveToggled = false;
@@ -137,6 +140,7 @@ void main() {
     await tester.tap(find.text('朗读'));
     await tester.pumpAndSettle();
     expect(ttsToggled, isTrue);
+    debugDefaultTargetPlatformOverride = null;
     expect(tester.takeException(), isNull);
   });
 
@@ -145,6 +149,7 @@ void main() {
     tester.view.physicalSize = const Size(1280, 800);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
     await tester.pumpWidget(
       buildApp(
@@ -164,6 +169,7 @@ void main() {
     );
     expect(find.byIcon(Icons.keyboard_rounded), findsOneWidget);
     expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
     expect(tester.takeException(), isNull);
   });
 
@@ -191,7 +197,7 @@ void main() {
     await tester.pumpWidget(
       buildApp(
         ReaderViewTopBar(
-          settings: ReaderViewSettings(paletteId: 'nightGlass'),
+          settings: ReaderViewSettings(paletteId: 'dark'),
           bookTitle: 'The Art of Stillness',
           chapterTitle: 'Chapter 6',
           sampleChrome: true,
@@ -242,7 +248,7 @@ void main() {
     await tester.pumpWidget(
       buildApp(
         ReaderViewBottomBar(
-          settings: ReaderViewSettings(paletteId: 'nightGlass'),
+          settings: ReaderViewSettings(paletteId: 'dark'),
           progress: 0.64,
           isPageMode: false,
           sampleChrome: true,
@@ -259,11 +265,17 @@ void main() {
 
     expect(find.text('64%'), findsOneWidget);
     expect(find.text('Aa'), findsOneWidget);
+    // 五槽玻璃条：Aa 那槽按稿子用文字标记替掉图标，其余四槽各一枚图标。
+    expect(
+      find.byWidgetPredicate((widget) => widget is OmniIcon),
+      findsNWidgets(4),
+    );
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is OmniIcon && widget.icon == OmniIcons.settings,
+        (widget) => widget is OmniIcon && widget.icon == OmniIcons.bookmark,
       ),
       findsOneWidget,
+      reason: '书签按稿子占第五槽，顶栏不再重复',
     );
     // 样例页脚不再出现工位实底按钮组。
     expect(find.byKey(const Key('readerControlsCompact')), findsNothing);
@@ -377,5 +389,101 @@ void main() {
     // 冲刷自动关闭计时器，避免用例结束残留 pending timer。
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  group('快捷键入口按物理键盘收敛', () {
+    Widget zh(Widget child) => buildApp(child, locale: const Locale('zh'));
+
+    ReaderViewTopBar buildTopBar({bool sampleChrome = false}) {
+      return ReaderViewTopBar(
+        settings: ReaderViewSettings(paletteId: 'dark'),
+        bookTitle: '书名',
+        chapterTitle: '第一章',
+        sampleChrome: sampleChrome,
+        onBack: () {},
+        onSearch: () {},
+        onShowShortcuts: () {},
+        onAddBookmark: () {},
+        onToggleTts: () {},
+        onShowAnnotations: () {},
+        onToggleImmersive: () {},
+      );
+    }
+
+    Future<void> openSampleOverflow(WidgetTester tester) async {
+      // 样例顶栏只有一个溢出菜单：它的图标是玻璃圆钮，没有可定位的 Icon。
+      await tester.tap(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget.runtimeType.toString().startsWith('PopupMenuButton<'),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('触屏客户端不提供快捷键入口', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+      await tester.pumpWidget(zh(buildTopBar(sampleChrome: true)));
+      await tester.pump();
+      await openSampleOverflow(tester);
+
+      expect(find.text('快捷键'), findsNothing);
+      // 同菜单其余条目仍在，确认菜单确实打开过。
+      expect(find.text('添加书签'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('有物理键盘时保留快捷键入口', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      await tester.pumpWidget(zh(buildTopBar(sampleChrome: true)));
+      await tester.pump();
+      await openSampleOverflow(tester);
+
+      expect(find.text('快捷键'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('工位窄屏触屏溢出菜单不收纳快捷键', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+      await tester.pumpWidget(zh(buildTopBar()));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.more_vert_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('快捷键'), findsNothing);
+      expect(find.text('朗读'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('工位窄屏有键盘时溢出菜单收纳快捷键', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 568);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      await tester.pumpWidget(zh(buildTopBar()));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.more_vert_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('快捷键'), findsOneWidget);
+      debugDefaultTargetPlatformOverride = null;
+    });
   });
 }

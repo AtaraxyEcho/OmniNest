@@ -3,7 +3,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
-import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
@@ -17,6 +16,7 @@ class ComicReaderSettingsPanel extends StatelessWidget {
     required this.volumeKeyPaging,
     required this.onVolumeKeyPagingChanged,
     this.pageModeEnabled,
+    this.mobile = false,
     super.key,
   });
 
@@ -28,6 +28,9 @@ class ComicReaderSettingsPanel extends StatelessWidget {
 
   /// 是否提供翻页模式；null 时跟随 [supportsPageMode]（Web 恒 false）。
   final bool? pageModeEnabled;
+
+  /// 移动壳层：开关换成样例 .env-switch 胶囊（见 [ReaderToggleSwitch]）。
+  final bool mobile;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +93,9 @@ class ComicReaderSettingsPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              WorkstationSwitch(
+              ReaderToggleSwitch(
+                settings: themeSettings,
+                mobile: mobile,
                 value: displaySettings.fullWidth,
                 onChanged:
                     (value) =>
@@ -145,7 +150,9 @@ class ComicReaderSettingsPanel extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                WorkstationSwitch(
+                ReaderToggleSwitch(
+                  settings: themeSettings,
+                  mobile: mobile,
                   value: volumeKeyPaging,
                   onChanged: onVolumeKeyPagingChanged,
                 ),

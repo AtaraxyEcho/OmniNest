@@ -7,7 +7,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
 
   Widget _buildReaderSkeleton() {
     return Scaffold(
-      backgroundColor: _resolveSurface(),
+      backgroundColor: _settings.surfaceColor,
       body: SafeArea(child: ReaderContentSkeleton(settings: _settings)),
     );
   }
@@ -179,7 +179,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                       ? Duration.zero
                       : const Duration(milliseconds: 120),
               child: ColoredBox(
-                color: _resolveSurface(),
+                color: _settings.surfaceColor,
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -211,7 +211,12 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             ),
           ),
         ),
-        ..._buildReaderPanels(detail, content, readerLayout),
+        ..._buildReaderPanels(
+          detail,
+          content,
+          readerLayout,
+          sampleChrome: sampleChrome,
+        ),
       ],
     );
   }
@@ -226,6 +231,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
       chapters: allChapters,
       currentChapterId: _currentChapterId,
       settings: _settings,
+      bookTitle: detail.item.title,
       onChapterTap: (chapterId) {
         _closeReaderPanel();
         onChapterSelected(chapterId);
@@ -342,6 +348,10 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                     onShowSettings:
                         () => _toggleReaderPanel(ReaderPanelType.settings),
                     onToggleImmersive: _toggleReaderImmersive,
+                    onAddBookmark:
+                        _bookmarkBusy
+                            ? null
+                            : () => toggleBookmark(detail, content),
                     onProgressSeek: (value) => _seekBookProgress(value),
                   ),
             ),

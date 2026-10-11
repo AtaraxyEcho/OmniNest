@@ -172,7 +172,9 @@ abstract final class _ReaderPaginationTextLayout {
 
     final innerWidth =
         block is BlockquoteBlock
-            ? pageWidth - 16
+            // 渲染侧引用块是 padding-left 16 + 3px 强调边框，两条都要从可用宽度
+            // 里扣掉；只扣 16 会让测量比实际多出一行能塞下的空间。
+            ? pageWidth - 19
             : block is ListBlock
             ? pageWidth - 24
             : pageWidth;

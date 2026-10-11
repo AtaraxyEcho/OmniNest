@@ -28,7 +28,7 @@ class ReaderImageBudgetNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
-      label: label,
+      // 子级已有 Text(label) 与 Text(hint)，再写 label 会让播报把标题重复一遍。
       child: Container(
         key: const Key('readerImageBudgetNotice'),
         padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),

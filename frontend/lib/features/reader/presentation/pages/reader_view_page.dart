@@ -41,7 +41,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_find_panel.
 import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_side_tap_zone.dart';

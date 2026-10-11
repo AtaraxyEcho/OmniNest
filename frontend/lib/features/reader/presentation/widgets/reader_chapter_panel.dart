@@ -15,6 +15,7 @@ class ChapterPanel extends StatefulWidget {
     required this.onChapterTap,
     required this.onDismiss,
     this.embedded = false,
+    this.bookTitle,
     super.key,
   });
 
@@ -24,6 +25,9 @@ class ChapterPanel extends StatefulWidget {
   final ValueChanged<String> onChapterTap;
   final VoidCallback onDismiss;
   final bool embedded;
+
+  /// 稿子 `.sheet-header small` 的书名眉标；调用方没有书名时留空不占行。
+  final String? bookTitle;
 
   @override
   State<ChapterPanel> createState() => ChapterPanelState();
@@ -79,6 +83,9 @@ class ChapterPanelState extends State<ChapterPanel>
     );
     final mq = MediaQuery.of(context);
     final chapterList = _buildChapterList(visible, mq);
+    final currentIndex = widget.chapters.indexWhere(
+      (chapter) => chapter.id == widget.currentChapterId,
+    );
 
     if (widget.embedded) {
       return chapterList;
@@ -91,40 +98,76 @@ class ChapterPanelState extends State<ChapterPanel>
           maxHeight: MediaQuery.sizeOf(context).height * 0.6,
         ),
         decoration: BoxDecoration(
-          color: widget.settings.surfaceColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          // 稿子 `.bottom-sheet`：--glass-solid 实底、顶部 r28、三边 --line 描边
+          //（底边贴屏幕不画）、投影 0 -20 60。
+          color: widget.settings.glassSolidColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border(
+            top: BorderSide(color: widget.settings.lineColor),
+            left: BorderSide(color: widget.settings.lineColor),
+            right: BorderSide(color: widget.settings.lineColor),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: widget.settings.shadowColor,
+              blurRadius: 60,
+              offset: const Offset(0, -20),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 拖拽手柄
+            // 拖拽手柄：稿子 .sheet-handle 38×4 r3，正文墨色 18%。
             Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 6),
+              padding: const EdgeInsets.only(top: 10),
               child: Container(
-                width: 32,
+                width: 38,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: widget.settings.onSurfaceVariantColor.withValues(
-                    alpha: 0.25,
-                  ),
-                  borderRadius: BorderRadius.circular(2),
+                  color: widget.settings.onSurfaceColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
             ),
-            // 标题栏
+            // 标题栏：9/700 强调色书名 + 25/600 衬线面板名。
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
               child: Row(
                 children: [
-                  Text(
-                    AppLocalizations.of(context).readerChapterList,
-                    style: TextStyle(
-                      color: widget.settings.onSurfaceColor,
-                      fontSize: AppTypography.titleMedium,
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if ((widget.bookTitle ?? '').isNotEmpty)
+                          Text(
+                            widget.bookTitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: widget.settings.accentColor,
+                              fontSize: AppTypography.labelNano,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.08,
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            AppLocalizations.of(context).readerChapterList,
+                            style: TextStyle(
+                              fontFamily: AppTypography.serifFamily,
+                              fontFamilyFallback:
+                                  AppTypography.serifFamilyFallback,
+                              color: widget.settings.onSurfaceColor,
+                              fontSize: 25, // ignore: font_size_whitelist
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
                   IconButton(
                     onPressed: widget.onDismiss,
                     tooltip: AppLocalizations.of(context).readerClose,
@@ -135,12 +178,36 @@ class ChapterPanelState extends State<ChapterPanel>
                 ],
               ),
             ),
-            Divider(
-              height: 1,
-              color: widget.settings.onSurfaceVariantColor.withValues(
-                alpha: 0.12,
+            // .chapter-summary：左右两段 10px 弱化信息，底下压一条发丝线。
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      currentIndex < 0
+                          ? AppLocalizations.of(context).readerChapterList
+                          : widget.chapters[currentIndex].title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.settings.onSurfaceVariantColor,
+                        fontSize: AppTypography.labelMicro,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${currentIndex + 1} / ${widget.chapters.length}',
+                    style: TextStyle(
+                      color: widget.settings.onSurfaceVariantColor,
+                      fontSize: AppTypography.labelMicro,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
               ),
             ),
+            Divider(height: 1, color: widget.settings.lineColor),
             // 章节列表（Expanded 确保占满剩余空间）
             Expanded(child: chapterList),
           ],
@@ -171,29 +238,45 @@ class ChapterPanelState extends State<ChapterPanel>
               widget.onChapterTap(chapter.id);
             },
             child: Padding(
-              padding: EdgeInsets.only(left: 16 + indent, right: 8),
-              child: SizedBox(
-                height: isParent ? 52 : 48,
+              padding: EdgeInsets.only(left: 12 + indent, right: 8),
+              child: Container(
+                // 稿子 `.chapter-list button`：min-height 65、padding 8 4、
+                // gap 12，每行底下一条 --line 发丝线。
+                constraints: const BoxConstraints(minHeight: 65),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: widget.settings.lineColor),
+                  ),
+                ),
                 child: Row(
                   children: [
+                    // .chapter-number：27 宽衬线序号；当前章整行转强调色。
                     SizedBox(
-                      width: 28,
+                      width: 27,
                       child:
-                          isCurrent
-                              ? Icon(
-                                Icons.play_arrow_rounded,
-                                color: widget.settings.accentColor,
-                                size: 18,
-                              )
-                              : chapter.level > 0
+                          chapter.level > 0
                               ? Icon(
                                 Icons.circle,
-                                color: widget.settings.onSurfaceVariantColor
-                                    .withValues(alpha: 0.35),
+                                color: widget.settings.faintColor,
                                 size: 5,
                               )
-                              : null,
+                              : Text(
+                                '${index + 1}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: AppTypography.serifFamily,
+                                  fontFamilyFallback:
+                                      AppTypography.serifFamilyFallback,
+                                  fontSize: AppTypography.titleSmall,
+                                  color:
+                                      isCurrent
+                                          ? widget.settings.accentColor
+                                          : widget.settings.faintColor,
+                                ),
+                              ),
                     ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,

@@ -105,7 +105,14 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     }
     _leaving = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (!mounted) {
+        return;
+      }
+      // 本页由漫画详情 push 进来：pop 才保得住来路；go 会把整条栈换成
+      // 详情页，之后的系统返回落在栈底，表现为直接退出应用。
+      if (context.canPop()) {
+        context.pop();
+      } else {
         context.go('/reader/items/${widget.itemId}');
       }
     });

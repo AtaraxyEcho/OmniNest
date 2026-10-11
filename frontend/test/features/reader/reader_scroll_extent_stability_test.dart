@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -111,10 +112,20 @@ void main() {
         html,
         blockExtents: List.filled(parseBlocks(html).length, blockExtent),
       );
+      final insets = ReaderChromeLayout.scrollContentInsets(
+        viewportHeight: 600,
+        frame:
+            ReaderChromeLayout.resolve(
+              immersiveMode: settings.immersiveMode,
+              isPageMode: false,
+            ).contentPadding,
+        immersiveMode: settings.immersiveMode,
+      );
       final expected =
           blockExtent * parseBlocks(html).length +
           ReaderViewContent.trailingSpacerHeight +
-          40 -
+          insets.top +
+          insets.bottom -
           600;
 
       final atTop = controller.position.maxScrollExtent;

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
@@ -11,6 +13,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 漫画阅读器的响应式顶部控制栏。
 class ComicReaderTopBar extends StatelessWidget {
@@ -127,7 +130,9 @@ class ComicReaderTopBar extends StatelessWidget {
                               settings: settings,
                               onPressed: onShowSettings,
                             ),
-                          if (layout.density == ReaderControlDensity.expanded)
+                          if (layout.density == ReaderControlDensity.expanded &&
+                              PlatformCapabilities.current()
+                                  .supportsPhysicalKeyboard)
                             _ComicControlButton(
                               icon: Icons.keyboard_rounded,
                               tooltip: l10n.readerShortcutsTitle,
@@ -170,11 +175,13 @@ class ComicReaderTopBar extends StatelessWidget {
                                       Icons.tune_rounded,
                                       l10n.readerSettingsTitle,
                                     ),
-                                    _menuItem(
-                                      _ComicTopAction.shortcuts,
-                                      Icons.keyboard_rounded,
-                                      l10n.readerShortcutsTitle,
-                                    ),
+                                    if (PlatformCapabilities.current()
+                                        .supportsPhysicalKeyboard)
+                                      _menuItem(
+                                        _ComicTopAction.shortcuts,
+                                        Icons.keyboard_rounded,
+                                        l10n.readerShortcutsTitle,
+                                      ),
                                   ],
                             ),
                         ],
@@ -608,6 +615,10 @@ class ComicReaderPanelOverlay extends StatelessWidget {
         onChanged: onDisplaySettingsChanged,
         volumeKeyPaging: volumeKeyPaging,
         onVolumeKeyPagingChanged: onVolumeKeyPagingChanged,
+        mobile: shouldUseResponsiveMobileShell(
+          mobilePlatform: isMobilePlatform,
+          width: MediaQuery.sizeOf(context).width,
+        ),
       ),
       _ => ReaderShortcutPanel(settings: settings, isComic: true),
     };

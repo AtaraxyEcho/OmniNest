@@ -35,6 +35,45 @@ void main() {
     expect(paginated.showPersistentProgress, isTrue);
   });
 
+  test('滚动正文首尾净空取稿子的上下 padding', () {
+    final frame =
+        ReaderChromeLayout.resolve(
+          immersiveMode: false,
+          isPageMode: false,
+        ).contentPadding;
+    final insets = ReaderChromeLayout.scrollContentInsets(
+      viewportHeight: 844,
+      frame: frame,
+      immersiveMode: false,
+    );
+    // 外层是裁切框，净空只补到稿子 `.article-column` 的取值：
+    // padding-top clamp(118px, 15vh, 154px)、padding-bottom 164px。
+    expect(frame.top + insets.top, closeTo(126.6, 0.01));
+    expect(frame.bottom + insets.bottom, 164);
+
+    final short = ReaderChromeLayout.scrollContentInsets(
+      viewportHeight: 300,
+      frame: frame,
+      immersiveMode: false,
+    );
+    expect(short.top, 83, reason: '15vh 低于下限时取 clamp 下限 118');
+
+    const safe = EdgeInsets.only(top: 44, bottom: 34);
+    final immersiveInsets = ReaderChromeLayout.scrollContentInsets(
+      viewportHeight: 844,
+      frame:
+          ReaderChromeLayout.resolve(
+            immersiveMode: true,
+            isPageMode: false,
+            safePadding: safe,
+          ).contentPadding,
+      immersiveMode: true,
+      safePadding: safe,
+    );
+    expect(immersiveInsets.top, 80, reason: '稿子 max(68px, safe-top + 36px)');
+    expect(immersiveInsets.bottom, 62, reason: 'max(62px, 34 + 28) 取上限');
+  });
+
   test('layout resolves compact medium and expanded viewports', () {
     final compact = ReaderControlLayout.resolve(
       viewport: const Size(320, 568),
@@ -54,6 +93,22 @@ void main() {
     expect(expanded.density, ReaderControlDensity.expanded);
     expect(expanded.usesSidePanel, isTrue);
     expect(compact.textColumnWidth, lessThanOrEqualTo(284));
+    // 列宽按行长定标（30 字），宽窗不再随视口长到 40 字以上。
+    expect(medium.textColumnWidth, 540, reason: '18px × 30 字');
+    expect(expanded.textColumnWidth, 540);
+    final phone = ReaderControlLayout.resolve(
+      viewport: const Size(390, 844),
+      fontSize: 19,
+    );
+    expect(phone.textColumnWidth, closeTo(333.8, 0.1), reason: '手机侧仍受视口约束');
+    expect(
+      ReaderControlLayout.resolve(
+        viewport: const Size(1280, 720),
+        fontSize: 28,
+      ).textColumnWidth,
+      660,
+      reason: '大字号被上界收到 23.6 字',
+    );
   });
 
   test('short landscape uses a scrollable bottom panel', () {

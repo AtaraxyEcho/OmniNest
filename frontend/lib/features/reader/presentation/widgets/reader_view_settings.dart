@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
@@ -39,7 +40,7 @@ class ReaderViewSettings {
   /// 音量键翻页：移动端将音量键映射为翻页命令，默认开启。
   final bool volumeKeyPaging;
 
-  /// 移动壳层默认值：夜间玻璃调色板 + 衬线 19/1.7（样例正文书体）。
+  /// 移动壳层默认值：暗档正文改用样例的衬线 19/1.85。
   /// 桌面端与已保存偏好看不见此分支。
   final bool mobileDefaults;
 
@@ -48,29 +49,39 @@ class ReaderViewSettings {
       return this;
     }
     return copyWith(
-      paletteId: ReaderReadingPalette.nightGlass.id,
       // ignore: font_size_whitelist
       fontSize: 19,
-      lineHeight: 1.7,
+      lineHeight: 1.85,
     );
   }
 
   ReaderReadingPalette get palette => ReaderReadingPalette.fromId(paletteId);
   Color get surfaceColor => palette.surface;
+  Color get elevatedColor => palette.elevated;
   Color get onSurfaceColor => palette.onSurface;
   Color get onSurfaceVariantColor => palette.onSurfaceVariant;
+  Color get faintColor => palette.faint;
+  Color get lineColor => palette.line;
   Color get accentColor => palette.accent;
+  Color get accentSoftColor => palette.accentSoft;
   Color get controlSurfaceColor => palette.controlSurface;
+  Color get glassColor => palette.glass;
+  Color get glassSolidColor => palette.glassSolid;
+  Color get shadowColor => palette.shadow;
   Color get selectionColor => palette.selection;
   bool get isDark => paletteId == ReaderReadingPalette.dark.id;
 
   String? get resolvedFontFamily =>
       fontFamily == 'serif' ? 'NotoSerifSC' : null;
 
+  /// 正文样式：字距按稿子 `.article-column > p` 的 `letter-spacing: .025em`，
+  /// 分页引擎的 `ReaderViewContent.spanStyle` 必须跟着同一份，否则测量与渲染
+  /// 的行长不一致，断页会漂。
   TextStyle get bodyStyle => TextStyle(
     fontFamily: resolvedFontFamily,
     fontSize: fontSize,
     height: lineHeight,
+    letterSpacing: fontSize * 0.025,
     color: onSurfaceColor,
   );
 
@@ -184,6 +195,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
     required this.onSettingsChanged,
     this.embedded = false,
     this.pageModeEnabled,
+    this.mobile = false,
     super.key,
   });
 
@@ -193,6 +205,10 @@ class ReaderViewSettingsPanel extends StatelessWidget {
 
   /// 是否提供翻页模式；null 时跟随 [supportsPageMode]（Web 恒 false）。
   final bool? pageModeEnabled;
+
+  /// 移动壳层：开关换成样例 .env-switch 胶囊，整行作为点按目标。
+  /// 工位皮肤保持直角开关，两种形态不共用一套几何。
+  final bool mobile;
 
   @override
   Widget build(BuildContext context) {
@@ -227,18 +243,35 @@ class ReaderViewSettingsPanel extends StatelessWidget {
         child: content,
       );
     }
+    // 稿子 `.bottom-sheet`：max-height min(82dvh, 720px)，超出纵向滚动。
+    // 头部换成 25pt 衬线 + 手柄后面板更高，不滚动尾部开关就落在剪切区外。
+    final sheetMaxHeight = MediaQuery.sizeOf(context).height * 0.82;
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
       decoration: BoxDecoration(
-        color: settings.controlSurfaceColor.withValues(alpha: 0.98),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+        // 与目录面板同一张稿子 `.bottom-sheet`：glass-solid 实底、顶部 r28、
+        // 三边 --line 描边（底边贴屏不画）、投影 0 -20 60。
+        color: settings.glassSolidColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(
-          top: BorderSide(
-            color: settings.onSurfaceColor.withValues(alpha: 0.10),
-          ),
+          top: BorderSide(color: settings.lineColor),
+          left: BorderSide(color: settings.lineColor),
+          right: BorderSide(color: settings.lineColor),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: settings.shadowColor,
+            blurRadius: 60,
+            offset: const Offset(0, -20),
+          ),
+        ],
       ),
-      child: content,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: sheetMaxHeight > 720 ? 720.0 : sheetMaxHeight,
+        ),
+        child: SingleChildScrollView(child: content),
+      ),
     );
   }
 
@@ -247,27 +280,38 @@ class ReaderViewSettingsPanel extends StatelessWidget {
       0 => l10n.readerThemeLight,
       1 => l10n.readerThemeEyeCare,
       2 => l10n.readerThemeDark,
-      3 => l10n.readerThemeGreen,
-      _ => l10n.readerThemeNightGlass,
+      _ => l10n.readerThemeGreen,
     };
   }
 
+  /// 稿子 `.sheet-handle` + `.sheet-header h2`：先手柄，再 25/600 衬线面板名。
+  /// 样式的抽屉头部不放图标，图标位留给右侧关闭钮。
   Widget _buildHeader(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          Icons.text_format_rounded,
-          color: settings.onSurfaceColor,
-          size: 20,
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 12),
+          child: Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: settings.onSurfaceColor.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
         ),
-        const SizedBox(width: 10),
         Text(
           l10n.readerSettingsTitle,
           style: TextStyle(
+            fontFamily: AppTypography.serifFamily,
+            fontFamilyFallback: AppTypography.serifFamilyFallback,
             color: settings.onSurfaceColor,
-            fontSize: AppTypography.titleMedium,
-            fontWeight: FontWeight.w800,
+            fontSize: 25, // ignore: font_size_whitelist
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -568,30 +612,12 @@ class ReaderViewSettingsPanel extends StatelessWidget {
 
   Widget _buildImmersiveToggle(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Row(
-      children: [
-        Icon(
-          Icons.fullscreen_rounded,
-          color: settings.onSurfaceVariantColor,
-          size: 20,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            l10n.readerImmersiveMode,
-            style: TextStyle(
-              color: settings.onSurfaceVariantColor,
-              fontSize: AppTypography.bodyMedium,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        WorkstationSwitch(
-          value: settings.immersiveMode,
-          onChanged:
-              (v) => onSettingsChanged(settings.copyWith(immersiveMode: v)),
-        ),
-      ],
+    return _buildToggleRow(
+      context,
+      icon: Icons.fullscreen_rounded,
+      label: l10n.readerImmersiveMode,
+      value: settings.immersiveMode,
+      onChanged: (v) => onSettingsChanged(settings.copyWith(immersiveMode: v)),
     );
   }
 
@@ -601,33 +627,112 @@ class ReaderViewSettingsPanel extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final l10n = AppLocalizations.of(context);
-    return Row(
-      children: [
-        Icon(
-          Icons.volume_up_rounded,
-          color: settings.onSurfaceVariantColor,
-          size: 20,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            l10n.readerVolumeKeyPaging,
-            style: TextStyle(
-              color: settings.onSurfaceVariantColor,
-              fontSize: AppTypography.bodyMedium,
-              fontWeight: FontWeight.w600,
-            ),
+    return _buildToggleRow(
+      context,
+      icon: Icons.volume_up_rounded,
+      label: l10n.readerVolumeKeyPaging,
+      value: settings.volumeKeyPaging,
+      onChanged:
+          (v) => onSettingsChanged(settings.copyWith(volumeKeyPaging: v)),
+    );
+  }
+
+  /// 开关行：工位保持直角开关；移动壳层换成样例胶囊，并把整行做成点按目标
+  /// （胶囊本体 34×20，低于次级控件触控下限）。
+  Widget _buildToggleRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final children = <Widget>[
+      Icon(icon, color: settings.onSurfaceVariantColor, size: 20),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: settings.onSurfaceVariantColor,
+            fontSize: AppTypography.bodyMedium,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        WorkstationSwitch(
-          value: settings.volumeKeyPaging,
-          onChanged:
-              (v) => onSettingsChanged(settings.copyWith(volumeKeyPaging: v)),
+      ),
+      _buildToggleSwitch(value, onChanged),
+    ];
+    if (!mobile) {
+      return Row(children: children);
+    }
+    // excludeSemantics：行内胶囊自带 button+toggled 节点，不屏蔽会念两遍。
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(!value),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(children: children),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildToggleSwitch(bool value, ValueChanged<bool> onChanged) {
+    return ReaderToggleSwitch(
+      settings: settings,
+      mobile: mobile,
+      value: value,
+      onChanged: onChanged,
     );
   }
 }
+
+/// 阅读设置里的开关：工位保持直角开关，移动壳层换成样例 .env-switch 胶囊。
+///
+/// 颜色全部来自阅读调色板（面板底与正文色由用户选的调色板决定），
+/// 不跟全局极性表，否则浅色纸面 + 深色环境会配出看不见的旋钮。
+class ReaderToggleSwitch extends StatelessWidget {
+  const ReaderToggleSwitch({
+    required this.settings,
+    required this.mobile,
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final ReaderViewSettings settings;
+  final bool mobile;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!mobile) {
+      return WorkstationSwitch(value: value, onChanged: onChanged);
+    }
+    // 样例 .env-switch：轨道是面板上的墨色低透明档，开=强调色；
+    // 旋钮与所在面反相——强调色亮时用画布色，面板亮时用近白 + 投影。
+    final lightPanel = settings.controlSurfaceColor.computeLuminance() > 0.5;
+    return MobilePillSwitch(
+      value: value,
+      onChanged: onChanged,
+      trackOn: settings.accentColor,
+      trackOff: settings.onSurfaceColor.withValues(alpha: 0.16),
+      knobOn: settings.surfaceColor,
+      knobOff: lightPanel ? const Color(0xFFFFFFFF) : const Color(0xFFF6F6F2),
+      knobShadow: lightPanel ? _lightPanelKnobShadow : null,
+    );
+  }
+}
+
+/// 样例浅态 `.env-switch::after` 的旋钮投影：`0 1px 3px rgba(26,29,27,.25)`。
+const List<BoxShadow> _lightPanelKnobShadow = [
+  BoxShadow(color: Color(0x401A1D1B), offset: Offset(0, 1), blurRadius: 3),
+];
 
 class _ReadingModeOption extends StatelessWidget {
   const _ReadingModeOption({

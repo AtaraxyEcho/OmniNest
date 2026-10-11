@@ -6,6 +6,10 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 阅读器目录、设置和辅助工具共用的面板框架。
+///
+/// 底部形态（移动壳层）按稿子 `.bottom-sheet` 画：glass-solid 实底、顶部 r28、
+/// 三边 --line 描边（底边贴屏不画）、投影 0 -20 60、38×4 手柄，头部是
+/// 9pt 强调色眉标 + 25pt 衬线面板名。侧栏形态（桌面宽窗）保持工位直角框架。
 class ReaderAdaptivePanelFrame extends StatelessWidget {
   const ReaderAdaptivePanelFrame({
     required this.title,
@@ -14,6 +18,7 @@ class ReaderAdaptivePanelFrame extends StatelessWidget {
     required this.onClose,
     required this.child,
     this.headerAction,
+    this.eyebrow,
     super.key,
   });
 
@@ -24,56 +29,136 @@ class ReaderAdaptivePanelFrame extends StatelessWidget {
   final Widget child;
   final Widget? headerAction;
 
+  /// 稿子 `.sheet-header small`：面板上方的上下文眉标（阅读器里是书名）。
+  final String? eyebrow;
+
   @override
   Widget build(BuildContext context) {
+    if (!layout.usesSidePanel) {
+      return _bottomSheet(context);
+    }
     return Material(
       color: settings.controlSurfaceColor,
-      elevation: layout.usesSidePanel ? 8 : 12,
-      borderRadius:
-          layout.usesSidePanel
-              ? BorderRadius.circular(8)
-              : const BorderRadius.vertical(top: Radius.circular(8)),
+      elevation: 8,
+      borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          SizedBox(
-            height: 56,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 20, right: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: settings.onSurfaceColor,
-                        fontSize: AppTypography.titleMedium,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (headerAction != null) headerAction!,
-                  IconButton(
-                    tooltip:
-                        MaterialLocalizations.of(context).closeButtonTooltip,
-                    onPressed: onClose,
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: settings.onSurfaceVariantColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _headerRow(context, compact: true),
           Divider(
             height: 1,
             color: settings.onSurfaceColor.withValues(alpha: 0.10),
           ),
           Expanded(child: child),
         ],
+      ),
+    );
+  }
+
+  Widget _bottomSheet(BuildContext context) {
+    return Container(
+      // 描边挂在 Container 上：Border 会把子节点按线宽内缩，
+      // 画在 Material 自己那层会被实底内容盖掉。
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: settings.lineColor),
+          left: BorderSide(color: settings.lineColor),
+          right: BorderSide(color: settings.lineColor),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: settings.shadowColor,
+            blurRadius: 60,
+            offset: const Offset(0, -20),
+          ),
+        ],
+      ),
+      child: Material(
+        color: settings.glassSolidColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 2),
+              child: Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: settings.onSurfaceColor.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+            _headerRow(context, compact: false),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _headerRow(BuildContext context, {required bool compact}) {
+    final eyebrowText = eyebrow;
+    return SizedBox(
+      height: compact ? 56 : 74,
+      child: Padding(
+        padding: EdgeInsets.only(left: compact ? 20 : 24, right: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!compact && eyebrowText != null && eyebrowText.isNotEmpty)
+                    Text(
+                      eyebrowText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: settings.accentColor,
+                        fontSize: AppTypography.labelNano,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.08,
+                      ),
+                    ),
+                  Padding(
+                    padding: EdgeInsets.only(top: compact ? 0 : 3),
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: compact ? null : AppTypography.serifFamily,
+                        fontFamilyFallback:
+                            compact ? null : AppTypography.serifFamilyFallback,
+                        color: settings.onSurfaceColor,
+                        fontSize:
+                            compact
+                                ? AppTypography.titleMedium
+                                : 25, // ignore: font_size_whitelist
+                        fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (headerAction != null) headerAction!,
+            IconButton(
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              onPressed: onClose,
+              icon: Icon(
+                Icons.close_rounded,
+                color: settings.onSurfaceVariantColor,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -88,6 +173,7 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
     required this.onClose,
     required this.child,
     this.headerAction,
+    this.eyebrow,
     super.key,
   });
 
@@ -98,6 +184,9 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
   final Widget child;
   final Widget? headerAction;
 
+  /// 见 [ReaderAdaptivePanelFrame.eyebrow]。
+  final String? eyebrow;
+
   @override
   Widget build(BuildContext context) {
     final panel = ReaderAdaptivePanelFrame(
@@ -106,6 +195,7 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
       layout: layout,
       onClose: onClose,
       headerAction: headerAction,
+      eyebrow: eyebrow,
       child: child,
     );
     final duration =

@@ -79,7 +79,7 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (hasTrailingSpacing)
-            SizedBox(height: widget.settings.fontSize * 0.6),
+            SizedBox(height: widget.settings.fontSize * 1.35),
           _paragraph(lines),
         ],
       ),
@@ -142,6 +142,10 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
     }
     return Text.rich(
       TextSpan(style: widget.settings.bodyStyle, children: allSpans),
+      // 稿子 `.article-column > p` 是 text-align: justify + text-justify:
+      // inter-ideograph；Flutter 3.47 没有 text-justify 这一档，只能按词两端
+      // 对齐，中文混排的大缝比稿子明显。
+      textAlign: TextAlign.justify,
       strutStyle: widget.settings.bodyStrutStyle(),
     );
   }

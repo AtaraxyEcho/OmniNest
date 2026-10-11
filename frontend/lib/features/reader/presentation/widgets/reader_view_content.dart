@@ -110,6 +110,8 @@ class ReaderViewContent extends StatefulWidget {
       fontFamily: settings.resolvedFontFamily,
       fontSize: fontSize,
       height: settings.lineHeight,
+      // 与 ReaderViewSettings.bodyStyle 同源：稿子 `.article-column > p` 的 .025em。
+      letterSpacing: fontSize * 0.025,
       fontWeight: span.isBold ? FontWeight.w700 : FontWeight.w400,
       fontStyle: span.isItalic ? FontStyle.italic : FontStyle.normal,
       color: settings.onSurfaceColor.withValues(alpha: 0.90),
@@ -346,7 +348,19 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
                         : ListView.builder(
                           controller: widget.scrollController,
                           physics: widget.scrollPhysics,
-                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          padding: ReaderChromeLayout.scrollContentInsets(
+                            viewportHeight: MediaQuery.sizeOf(context).height,
+                            frame:
+                                ReaderChromeLayout.resolve(
+                                  immersiveMode: widget.settings.immersiveMode,
+                                  isPageMode: isPageMode,
+                                  safePadding: MediaQuery.viewPaddingOf(
+                                    context,
+                                  ),
+                                ).contentPadding,
+                            immersiveMode: widget.settings.immersiveMode,
+                            safePadding: MediaQuery.viewPaddingOf(context),
+                          ),
                           itemCount: _blocks.length + 1,
                           itemExtentBuilder:
                               extents == null

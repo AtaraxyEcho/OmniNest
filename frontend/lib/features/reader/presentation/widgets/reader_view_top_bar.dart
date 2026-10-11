@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 顶栏溢出菜单动作：紧凑/中等档收纳低频操作（对齐漫画阅读器顶栏先例）；
 /// 样例皮肤的 more 菜单在此基础上额外承载书签/章内搜索/书架。
@@ -59,6 +60,10 @@ class ReaderViewTopBar extends StatelessWidget {
 
   /// 样例 ReaderFocus 皮肤（移动壳层玻璃 chrome）。
   final bool sampleChrome;
+
+  /// 快捷键说明只对物理键盘客户端有意义；触屏客户端不提供该入口。
+  bool get hasPhysicalKeyboard =>
+      PlatformCapabilities.current().supportsPhysicalKeyboard;
 
   @override
   Widget build(BuildContext context) {
@@ -158,15 +163,16 @@ class ReaderViewTopBar extends StatelessWidget {
                                   context,
                                 ).readerAddToBookshelf,
                       ),
-                    if (layout.density == ReaderControlDensity.expanded)
-                      _TopBarButton(
-                        icon: Icons.keyboard_rounded,
-                        onTap: onShowShortcuts,
-                        settings: settings,
-                        tooltip:
-                            AppLocalizations.of(context).readerShortcutsTitle,
-                      )
-                    else
+                    if (layout.density == ReaderControlDensity.expanded) ...[
+                      if (hasPhysicalKeyboard)
+                        _TopBarButton(
+                          icon: Icons.keyboard_rounded,
+                          onTap: onShowShortcuts,
+                          settings: settings,
+                          tooltip:
+                              AppLocalizations.of(context).readerShortcutsTitle,
+                        ),
+                    ] else
                       PopupMenuButton<_ReaderTopBarOverflowAction>(
                         tooltip:
                             MaterialLocalizations.of(context).moreButtonTooltip,
@@ -211,13 +217,14 @@ class ReaderViewTopBar extends StatelessWidget {
                                     context,
                                   ).readerAnnotations,
                                 ),
-                              _menuItem(
-                                _ReaderTopBarOverflowAction.shortcuts,
-                                Icons.keyboard_rounded,
-                                AppLocalizations.of(
-                                  context,
-                                ).readerShortcutsTitle,
-                              ),
+                              if (hasPhysicalKeyboard)
+                                _menuItem(
+                                  _ReaderTopBarOverflowAction.shortcuts,
+                                  Icons.keyboard_rounded,
+                                  AppLocalizations.of(
+                                    context,
+                                  ).readerShortcutsTitle,
+                                ),
                               if (onToggleImmersive != null)
                                 _menuItem(
                                   _ReaderTopBarOverflowAction.immersive,
@@ -311,7 +318,8 @@ class _TopBarButton extends StatelessWidget {
   }
 }
 
-/// 样例 ReaderFocus 顶栏：透明底 + 顶部轻渐隐 + 玻璃圆钮 + 居中双行标题。
+/// 样例 `.reader-topbar`：66 高（安全区另计）+ 顶部实底到 58% 再渐隐 +
+/// 玻璃圆钮 + 左起双行书名/章节。
 class _ReaderSampleTopBar extends StatelessWidget {
   const _ReaderSampleTopBar({required this.bar});
 
@@ -324,19 +332,21 @@ class _ReaderSampleTopBar extends StatelessWidget {
       bottom: false,
       child: DecoratedBox(
         decoration: BoxDecoration(
+          // 样例 `.reader-topbar`：linear-gradient(to bottom, --page 58%, transparent)。
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              bar.settings.surfaceColor.withValues(alpha: 0.62),
+              bar.settings.surfaceColor,
               bar.settings.surfaceColor.withValues(alpha: 0),
             ],
+            stops: const [0.58, 1],
           ),
         ),
         child: SizedBox(
-          height: 56,
+          height: 66,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
                 _ReaderGlassCircleButton(
@@ -350,31 +360,30 @@ class _ReaderSampleTopBar extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      // 稿子的 .book-context 是网格中列，文字左起。
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           bar.bookTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: bar.settings.onSurfaceColor,
                             fontSize: AppTypography.bodyMedium,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             height: 1.2,
                           ),
                         ),
                         if (bar.chapterTitle.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(top: 1),
+                            padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               bar.chapterTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: bar.settings.onSurfaceVariantColor,
-                                // ignore: font_size_whitelist
-                                fontSize: 9,
+                                fontSize: AppTypography.labelMicro,
                                 height: 1.3,
                               ),
                             ),
@@ -488,17 +497,19 @@ class _ReaderSampleOverflowMenu extends StatelessWidget {
                     ? l10n.readerRemoveFromBookshelf
                     : l10n.readerAddToBookshelf,
               ),
-            menuItem(
-              _ReaderTopBarOverflowAction.shortcuts,
-              Icons.keyboard_rounded,
-              l10n.readerShortcutsTitle,
-            ),
+            if (bar.hasPhysicalKeyboard)
+              menuItem(
+                _ReaderTopBarOverflowAction.shortcuts,
+                Icons.keyboard_rounded,
+                l10n.readerShortcutsTitle,
+              ),
           ],
     );
   }
 }
 
-/// 样例 icon-button：48 圆形玻璃钮（调色板底 32% + 10% 描边 + blur 16）。
+/// 样例 `.icon-button`：圆形玻璃钮（elevated 72% 底 + `--line` 描边 + blur 22
+/// + 投影 0 5 18），舱体留在 48 以满足返回/工具类控件的触控下限。
 class _ReaderGlassCircleButton extends StatelessWidget {
   const _ReaderGlassCircleButton({
     required this.icon,
@@ -522,24 +533,42 @@ class _ReaderGlassCircleButton extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           customBorder: const CircleBorder(),
-          child: ClipOval(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: settings.surfaceColor.withValues(alpha: 0.32),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: settings.onSurfaceColor.withValues(alpha: 0.10),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              // 样例 `.icon-button` 的投影 0 5 18，着色取 --shadow 再打 48%。
+              // 阴影画在舱体之外，所以挂在外层：ClipOval 会把子节点的投影剪掉。
+              boxShadow: [
+                BoxShadow(
+                  color: settings.shadowColor.withValues(
+                    alpha: settings.shadowColor.a * 0.48,
                   ),
+                  blurRadius: 18,
+                  offset: const Offset(0, 5),
                 ),
-                child: Center(
-                  child: OmniIcon(
-                    icon: icon,
-                    size: 20,
-                    color: settings.onSurfaceColor,
+              ],
+            ),
+            child: ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    // 稿子是 44 舱 + color-mix(--page-elevated 72%) + --line 描边；
+                    // 舱体留在 48：返回与更多都是逃生/工具控件，触控下限不许压到 44。
+                    color: settings.elevatedColor.withValues(alpha: 0.72),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: settings.lineColor),
+                  ),
+                  child: Center(
+                    child: OmniIcon(
+                      icon: icon,
+                      size: 22,
+                      color: settings.onSurfaceColor,
+                    ),
                   ),
                 ),
               ),

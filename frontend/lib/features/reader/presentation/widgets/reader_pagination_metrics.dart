@@ -133,11 +133,15 @@ abstract final class _ReaderPaginationMetrics {
     return height + 12;
   }
 
+  /// 分页测量的基准样式。必须与渲染侧的 `ReaderViewSettings.bodyStyle` 与
+  /// `ReaderViewContent.spanStyle` 同参数（含 .025em 字距），否则换行不一致，
+  /// 量出来的块高与实际渲染对不上。
   static TextStyle baseStyle(ReaderViewSettings settings, double fontSize) {
     return TextStyle(
       fontFamily: settings.resolvedFontFamily,
       fontSize: fontSize,
       height: settings.lineHeight,
+      letterSpacing: fontSize * 0.025,
     );
   }
 
