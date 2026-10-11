@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/library/presentation/widgets/library_space_tier.dart';
 import 'package:omninest/features/photos/application/photo_browse_scope.dart';
@@ -22,21 +23,27 @@ class LibrarySegmentBar extends StatelessWidget {
   const LibrarySegmentBar({
     required this.segment,
     required this.onChanged,
+    this.page,
     super.key,
   });
 
   final LibrarySegment segment;
   final ValueChanged<LibrarySegment> onChanged;
 
+  /// 与原生 PageView 同轴的连续档页码：传入后选中胶囊跟手滑过，
+  /// 而不是等页面落定才跳到新段。
+  final double? page;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final labels = {
-      LibrarySegment.all: l10n.librarySegmentAll,
-      LibrarySegment.photos: l10n.portalDockPhotos,
-      LibrarySegment.movies: l10n.portalDockMovies,
-      LibrarySegment.music: l10n.mobileNavMusic,
-    };
+    // 顺序必须与 LibrarySegment.values 一致（all, photos, movies, music）。
+    final labels = [
+      l10n.librarySegmentAll,
+      l10n.portalDockPhotos,
+      l10n.portalDockMovies,
+      l10n.mobileNavMusic,
+    ];
     // 分段是空间内主导航，按触控裁决抬到 48；标签总宽超出可用宽度时
     // 横向可滚，不靠缩放或裁剪兜底。
     return SingleChildScrollView(
@@ -47,69 +54,30 @@ class LibrarySegmentBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: context.env.line09),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final entry in LibrarySegment.values)
-                _LibrarySegmentChip(
-                  label: labels[entry]!,
-                  selected: segment == entry,
-                  onTap: () => onChanged(entry),
-                ),
+        child: MobileSlidingSegmentRow(
+          labels: labels,
+          selectedIndex: segment.index,
+          page: page,
+          onTap: (index) => onChanged(LibrarySegment.values[index]),
+          activeInk: context.env.onAccentDeep,
+          idleInk: context.env.inkMuted,
+          // 媒体库分段按标签自定宽度、段间不留隙（与改造前的排布一致）。
+          gap: 0,
+          segmentHeight: MobileLayoutTokens.minimumTarget,
+          minimumSegmentWidth: 0,
+          labelPadding: 16,
+          labelSize: AppTypography.bodyMedium,
+          // 选中胶囊配方与模块分段同源：暗态黑 18%、浅态 6% 墨，都走 pillGlow。
+          pill: BoxDecoration(
+            color: context.env.accent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: context.env.pillGlow,
+                offset: const Offset(0, 3),
+                blurRadius: 10,
+              ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LibrarySegmentChip extends StatelessWidget {
-  const _LibrarySegmentChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return MobilePressable(
-      semanticLabel: label,
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: MobileLayoutTokens.stateDuration,
-        curve: MobileLayoutTokens.motionCurve,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        height: MobileLayoutTokens.minimumTarget,
-        decoration: BoxDecoration(
-          color: selected ? context.env.accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow:
-              selected
-                  ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                  : null,
-        ),
-        child: Center(
-          child: Text(
-            label,
-            maxLines: 1,
-            style: TextStyle(
-              color: selected ? context.env.onAccentDeep : context.env.inkMuted,
-              fontSize: AppTypography.bodyMedium,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
           ),
         ),
       ),
@@ -146,9 +114,10 @@ class LibrarySectionHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: context.env.white43,
+                  color: context.env.groupLabelInk,
                   // ignore: font_size_whitelist
                   fontSize: 9,
+                  height: 1.45,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5,
                 ),

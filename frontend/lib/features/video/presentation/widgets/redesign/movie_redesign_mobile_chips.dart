@@ -285,7 +285,7 @@ class _StatusFilterOptionRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              Icon(Icons.check_rounded, size: 18, color: context.env.accent),
+              Icon(Icons.check_rounded, size: 18, color: context.env.accentInk),
           ],
         ),
       ),

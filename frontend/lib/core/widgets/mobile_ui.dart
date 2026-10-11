@@ -1,4 +1,7 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -20,6 +23,19 @@ class MobilePageSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 托管页可以整页不带 Scaffold：那样子树里没有 Material 装 DefaultTextStyle，
+    // 每个 Text 都会去继承 MaterialApp 的兜底样式（monospace / 48px /
+    // 黄色双下划线），字重与字号被各自的 style 盖掉之后，只剩那条双下划线
+    // 画在每一行字下面。这里补一层正常正文；子树里的 Material 仍会覆盖它。
+    return DefaultTextStyle(
+      style:
+          Theme.of(context).textTheme.bodyMedium ??
+          const TextStyle(inherit: false),
+      child: _surfaceBody(context),
+    );
+  }
+
+  Widget _surfaceBody(BuildContext context) {
     // 托管模块页固定环境深底（样例 module-overlay rgba(10,15,14,.94)）：
     // pageMask 取自主题，浅色主题下为浅色会导致浅字内容不可见。
     if (MobileShellScope.isHosted(context)) {
@@ -40,6 +56,9 @@ class MobilePageSurface extends StatelessWidget {
     );
   }
 }
+
+/// polarity-stable：危险红底上的白字两极性同值（红底白字 4.35:1），不随极性翻转。
+const Color _dangerForeground = Color(0xFFFFFFFF);
 
 /// 移动端区块标题及可选尾部操作。
 class MobileSectionHeader extends StatelessWidget {
@@ -126,127 +145,47 @@ class MobileSegmentedControl<T> extends StatelessWidget {
     required this.selected,
     required this.labelBuilder,
     required this.onSelected,
-    this.iconBuilder,
     super.key,
   });
 
   final List<T> values;
   final T selected;
   final String Function(T value) labelBuilder;
-  final IconData? Function(T value)? iconBuilder;
   final ValueChanged<T> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    // 样例 .segmented：紧凑胶囊容器（r16·内衬 4·白 9% 描边），
-    // 选中段酸绿实心 + 墨绿深字 + 投影。段数超出可用宽度时整体
-    // 等比缩放兜底（样例最多四档，不会触达该路径）。
+    // 样例 .segmented：紧凑胶囊容器（r16·内衬 4·白 9% 描边），选中段是
+    // 酸绿实心 + 墨绿深字 + 投影的单层滑块，切换时滑过去而不是就地换色。
+    // 段数超出可用宽度时横向滚动：样例在 390 宽下让六档分段溢出滚动，
+    // 整体等比缩放会把按钮缩到小于其它模块（照片页实测 66×40 → 54×33）。
+    final selectedIndex = values.indexOf(selected);
     return Semantics(
       container: true,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: context.env.segmentBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.env.line09),
+            border: Border.all(color: context.env.segmentBorder),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final value in values) ...[
-                  _MobileSegment(
-                    label: labelBuilder(value),
-                    icon: iconBuilder?.call(value),
-                    selected: value == selected,
-                    onTap: () => onSelected(value),
-                  ),
-                  if (value != values.last) const SizedBox(width: 4),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileSegment extends StatelessWidget {
-  const _MobileSegment({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: MobileLayoutTokens.stateDuration,
-            curve: MobileLayoutTokens.motionCurve,
-            constraints: const BoxConstraints(minWidth: 66, minHeight: 40),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: selected ? context.env.accent : Colors.transparent,
+          child: MobileSlidingSegmentRow(
+            labels: [for (final value in values) labelBuilder(value)],
+            selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+            onTap: (index) => onSelected(values[index]),
+            activeInk: context.env.segmentActiveInk,
+            idleInk: context.env.inkMuted,
+            // 样例 `.segmented button.active`：暗态黑 18%、浅态
+            // rgba(26,29,27,.06) 的投影都取自 pillGlow，随极性换档。
+            pill: BoxDecoration(
+              color: context.env.segmentActiveBg,
               borderRadius: BorderRadius.circular(12),
-              boxShadow:
-                  selected
-                      ? const [
-                        BoxShadow(
-                          color: Color(0x2E000000),
-                          offset: Offset(0, 3),
-                          blurRadius: 10,
-                        ),
-                      ]
-                      : null,
-            ),
-            // 紧凑分段下宽度由文字自定（minWidth 66 兜底），不得使用
-            // 弹性子级，避免 shrink-wrap 链路的无界宽度断言。
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: 18,
-                    color:
-                        selected
-                            ? context.env.onAccentDeep
-                            : context.env.inkMuted,
-                  ),
-                  const SizedBox(width: 7),
-                ],
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color:
-                        selected
-                            ? context.env.onAccentDeep
-                            : context.env.inkMuted,
-                    fontSize: 12,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: context.env.pillGlow,
+                  offset: const Offset(0, 3),
+                  blurRadius: 10,
                 ),
               ],
             ),
@@ -550,6 +489,25 @@ class MobileSettingsTile extends StatelessWidget {
   }
 }
 
+/// 玻璃面的高斯模糊层。
+///
+/// 两态都需要：样例的 `.bottom-nav`、`.mini-player` 在浅态仍是半透明白
+/// 加 `backdrop-filter`，模糊是这一档表面的一部分，不是暗态专属。
+class MobileEnvBlur extends StatelessWidget {
+  const MobileEnvBlur({required this.sigma, required this.child, super.key});
+
+  final double sigma;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      child: child,
+    );
+  }
+}
+
 /// 模块全屏页的玻璃圆动作钮（样例 .icon-button：48px 圆、深绿玻璃底、
 /// 白 10% 细描边）。
 class MobileGlassIconButton extends StatelessWidget {
@@ -783,10 +741,11 @@ Future<bool> showMobileConfirmSheet(
                       background:
                           destructive
                               ? const Color(0xFFB95F5F)
-                              : context.env.accent,
+                              : context.env.actionFill,
                       foreground:
-                          // polarity-stable：危险红底不变，其白字两极性同值（红底白字 4.35:1）
-                          destructive ? Colors.white : context.env.onAccent,
+                          destructive
+                              ? _dangerForeground
+                              : context.env.actionFillInk,
                       onTap: () => Navigator.of(sheetContext).pop(true),
                     ),
                   ),
@@ -841,17 +800,27 @@ class _MobileConfirmButton extends StatelessWidget {
   }
 }
 
-/// 样例 .env-switch：34×20 胶囊轨道（关=白 14%，开=酸绿）+ 14px 圆点
-/// （关=墨白，开=深墨右移 14px），200ms ease。
-class MobileEnvSwitch extends StatelessWidget {
-  const MobileEnvSwitch({
+/// 样例 .env-switch 的几何与动效：34×20 胶囊轨道 + 14px 圆点，右移 14px，
+/// 200ms ease。颜色由调用方给出：环境面板取极性表，阅读调色板用自己的实底。
+class MobilePillSwitch extends StatelessWidget {
+  const MobilePillSwitch({
     required this.value,
     required this.onChanged,
+    required this.trackOn,
+    required this.trackOff,
+    required this.knobOn,
+    required this.knobOff,
+    this.knobShadow,
     super.key,
   });
 
   final bool value;
   final ValueChanged<bool>? onChanged;
+  final Color trackOn;
+  final Color trackOff;
+  final Color knobOn;
+  final Color knobOff;
+  final List<BoxShadow>? knobShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -867,7 +836,7 @@ class MobileEnvSwitch extends StatelessWidget {
           width: 34,
           height: 20,
           decoration: BoxDecoration(
-            color: value ? context.env.accent : context.env.line15,
+            color: value ? trackOn : trackOff,
             borderRadius: BorderRadius.circular(10),
           ),
           child: AnimatedAlign(
@@ -882,13 +851,51 @@ class MobileEnvSwitch extends StatelessWidget {
                 height: 14,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: value ? context.env.onAccentDeep : context.env.ink,
+                  color: value ? knobOn : knobOff,
+                  boxShadow: knobShadow,
                 ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 环境面板用的样例 .env-switch：关=白 14% 轨道 + 墨白旋钮，
+/// 开=酸绿轨道 + 深墨旋钮；浅态旋钮是白的，靠投影与浅灰轨道分离。
+class MobileEnvSwitch extends StatelessWidget {
+  const MobileEnvSwitch({
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return MobilePillSwitch(
+      value: value,
+      onChanged: onChanged,
+      trackOn: context.env.switchOn,
+      trackOff: context.env.switchOff,
+      knobOn: context.env.switchKnobOn,
+      knobOff: context.env.switchKnobOff,
+      // 浅态旋钮是白的，落在 16% 的浅灰轨道上必须靠投影分离；
+      // 暗态旋钮本来就是浅色实底配深色轨道，不加这层。
+      knobShadow:
+          context.env.brightness == Brightness.light
+              ? const [
+                BoxShadow(
+                  color: Color(0x401A1D1B),
+                  offset: Offset(0, 1),
+                  blurRadius: 3,
+                ),
+              ]
+              : null,
     );
   }
 }
@@ -917,11 +924,13 @@ class MobileEnvSectionHeader extends StatelessWidget {
             eyebrow!.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            // 样例 .section-title 眉标：白 43% + 9px + 字距 1.5。
-            // inkFaint（墨 58%）与 labelSmall（11）都是工位档，托管态不用。
+            // 样例 .section-title > small 眉标：9px + 字距 1.5，浅态第 4 层把它
+            // 与 .notif-group 一起换成 rgba(26,29,27,.58)，暗态是主墨 43%——同一档
+            // groupLabelInk。行高 1.45 只在浅层声明，暗态无人声明，两态按 1.45 走。
             style: TextStyle(
-              color: context.env.white43,
+              color: context.env.groupLabelInk,
               fontSize: AppTypography.labelNano,
+              height: 1.45,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
             ),

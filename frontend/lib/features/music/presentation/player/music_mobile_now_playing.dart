@@ -290,7 +290,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.45),
+      barrierColor: context.env.modalScrim,
       builder: (sheetContext) {
         return SafeArea(
           top: false,

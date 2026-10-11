@@ -5997,9 +5997,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerThemeDark => 'Dark';
 
   @override
-  String get readerThemeNightGlass => 'Night glass';
-
-  @override
   String get readerThemeGreen => 'Green';
 
   @override
@@ -11859,9 +11856,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolsVideoCollectionsDetail => 'Curated sets and seasons';
 
   @override
-  String get toolsMusicHistoryDetail => 'Recent plays grouped by day.';
-
-  @override
   String get toolsMusicScanDetail => 'Sources, scans and matches';
 
   @override
@@ -12088,8 +12082,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get weatherSheetSummary =>
-      'Clear skies through the evening. A cooler, quiet night ahead.';
+  String weatherSheetHourRange(int count, int low, int high) {
+    return 'Between $low° and $high° over the next $count hours.';
+  }
+
+  @override
+  String get weatherHumidityDry => 'Dry';
+
+  @override
+  String get weatherHumidityComfortable => 'Comfortable';
+
+  @override
+  String get weatherHumidityHumid => 'Humid';
 
   @override
   String get weatherHourNow => 'Now';

@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
@@ -175,17 +176,26 @@ void main() {
     await tester.pumpAndSettle();
 
     // 分段是空间内主导航，按触控裁决不低于 48（稿子的次级 40 不适用）。
-    final chips = find.descendant(
+    final taps = find.descendant(
       of: find.byType(LibrarySegmentBar),
-      matching: find.byType(AnimatedContainer),
+      matching: find.byType(InkWell),
     );
-    expect(chips, findsNWidgets(4));
-    for (final candidate in chips.evaluate()) {
+    expect(taps, findsNWidgets(4));
+    for (final candidate in taps.evaluate()) {
       expect(
         tester.getSize(find.byWidget(candidate.widget)).height,
         greaterThanOrEqualTo(48),
       );
     }
+    // 选中态是**单层滑动胶囊**，不再逐段各自换底色；媒体库分段与原生 PageView
+    // 同轴，滑块按页码跟手，因此滑块层不是 AnimatedPositioned 而是 Positioned。
+    expect(
+      find.descendant(
+        of: find.byType(LibrarySegmentBar),
+        matching: find.byKey(segmentPillKey),
+      ),
+      findsOneWidget,
+    );
     // 吸顶层带真实模糊，内容从其下方穿过。
     expect(
       find.ancestor(

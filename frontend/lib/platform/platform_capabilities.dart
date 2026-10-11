@@ -7,6 +7,7 @@ class PlatformCapabilities {
   const PlatformCapabilities({
     required this.supportsSystemTray,
     required this.supportsHoverPointer,
+    required this.supportsPhysicalKeyboard,
     required this.supportsDragAndDropUpload,
     required this.supportsFullscreenToggle,
     required this.supportsPictureInPicture,
@@ -53,6 +54,12 @@ class PlatformCapabilities {
   /// 显现的操作入口在该类设备上不可达；Web 端按宿主 OS 判定。
   final bool supportsHoverPointer;
 
+  /// 是否可能存在物理键盘。
+  ///
+  /// 触屏客户端（移动原生与手机浏览器）没有实体键盘，键盘快捷键说明与
+  /// `?` 之类的按键入口对它们不可达；Web 端按宿主 OS 判定。
+  final bool supportsPhysicalKeyboard;
+
   /// 是否支持视频画中画（当前仅 Android 原生实现）。
   final bool supportsPictureInPicture;
 
@@ -79,6 +86,7 @@ class PlatformCapabilities {
     return PlatformCapabilities(
       supportsSystemTray: false,
       supportsHoverPointer: !hostIsTouch,
+      supportsPhysicalKeyboard: !hostIsTouch,
       supportsDragAndDropUpload: false,
       supportsFullscreenToggle: true,
       supportsPictureInPicture: false,
@@ -93,6 +101,7 @@ class PlatformCapabilities {
   factory PlatformCapabilities.android() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
+    supportsPhysicalKeyboard: false,
     supportsDragAndDropUpload: false,
     supportsFullscreenToggle: false,
     supportsPictureInPicture: true,
@@ -106,6 +115,7 @@ class PlatformCapabilities {
   factory PlatformCapabilities.ios() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
+    supportsPhysicalKeyboard: false,
     supportsDragAndDropUpload: false,
     supportsFullscreenToggle: false,
     supportsPictureInPicture: false,
@@ -119,6 +129,7 @@ class PlatformCapabilities {
   factory PlatformCapabilities.windows() => const PlatformCapabilities(
     supportsSystemTray: true,
     supportsHoverPointer: true,
+    supportsPhysicalKeyboard: true,
     supportsDragAndDropUpload: true,
     supportsFullscreenToggle: true,
     supportsPictureInPicture: false,
@@ -133,6 +144,7 @@ class PlatformCapabilities {
   factory PlatformCapabilities.macOS() => const PlatformCapabilities(
     supportsSystemTray: true,
     supportsHoverPointer: true,
+    supportsPhysicalKeyboard: true,
     supportsDragAndDropUpload: true,
     supportsFullscreenToggle: true,
     supportsPictureInPicture: false,
@@ -147,6 +159,7 @@ class PlatformCapabilities {
   factory PlatformCapabilities.linux() => const PlatformCapabilities(
     supportsSystemTray: true,
     supportsHoverPointer: true,
+    supportsPhysicalKeyboard: true,
     supportsDragAndDropUpload: true,
     supportsFullscreenToggle: true,
     supportsPictureInPicture: false,
@@ -164,6 +177,7 @@ class PlatformCapabilities {
   factory PlatformCapabilities.fallback() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
+    supportsPhysicalKeyboard: false,
     supportsDragAndDropUpload: false,
     supportsFullscreenToggle: false,
     supportsPictureInPicture: false,

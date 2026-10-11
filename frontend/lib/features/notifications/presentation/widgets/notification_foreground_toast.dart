@@ -78,7 +78,8 @@ class NotificationForegroundToast extends ConsumerWidget {
       context,
       title,
       actionLabel: AppLocalizations.of(context).notificationForegroundToastView,
-      onAction: () => router.go('/notifications'),
+      // push：通知是打断，看完要能回到被打断的那一页。
+      onAction: () => router.push('/notifications'),
     );
   }
 }

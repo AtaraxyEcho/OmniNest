@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 
 /// 样例内容组件族（Extension index.css 逐值移植）：海报轨/专辑卡/
 /// 编号行/照片马赛克/NOW PLAYING 卡。供托管模块页（音乐/照片/影视）
@@ -234,11 +235,12 @@ class SampleAlbumCard extends StatelessWidget {
                   DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(17),
-                      boxShadow: const [
+                      boxShadow: [
                         BoxShadow(
-                          color: Color(0x38444444),
+                          // 样例 .album > span：暗态黑 22%，浅态 rgba(26,29,27,.08)。
+                          color: context.env.artworkGlow,
                           blurRadius: 25,
-                          offset: Offset(0, 12),
+                          offset: const Offset(0, 12),
                         ),
                       ],
                     ),
@@ -274,13 +276,13 @@ class SampleAlbumCard extends StatelessWidget {
                             width: 38,
                             height: 38,
                             decoration: BoxDecoration(
-                              color: context.env.accent,
+                              color: context.env.actionFill,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               Icons.play_arrow_rounded,
                               size: 22,
-                              color: context.env.onAccent,
+                              color: context.env.actionFillInk,
                             ),
                           ),
                         ),
@@ -768,6 +770,88 @@ class SampleSeriesBadge extends StatelessWidget {
           // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
           color: Color(0xCCFFFFFF),
         ),
+      ),
+    );
+  }
+}
+
+/// 样例 `.feature-hero`：次级分区页的身份块。54×54 r17 图标舱 + 衬线 24 标题
+/// + 9px 说明，压在 115° 渐变、r21、酸绿 16% 描边的面板上（`.feature-hero` 的
+/// min-height 104 / padding 14 / margin 2 0 17）。
+class SampleFeatureHero extends StatelessWidget {
+  const SampleFeatureHero({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.trailing,
+    super.key,
+  });
+
+  final OmniIconsData icon;
+  final String title;
+  final String detail;
+
+  /// 尾部状态位；无真实状态时不占位（样例的 HEALTHY/READY 是写死的演示值）。
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final env = context.env;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 104),
+      margin: const EdgeInsets.only(top: 2, bottom: 17),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        // 样例 background: linear-gradient(115deg, start, end)。
+        gradient: LinearGradient(
+          begin: const Alignment(-0.9, -0.42),
+          end: const Alignment(0.9, 0.42),
+          colors: [env.featureHeroStart, env.featureHeroEnd],
+        ),
+        borderRadius: BorderRadius.circular(21),
+        border: Border.all(color: env.featureHeroLine),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: env.featureHeroIconBg,
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: OmniIcon(icon: icon, size: 25, color: env.accentInk),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: AppTypography.serifFamily,
+                    fontFamilyFallback: AppTypography.serifFamilyFallback,
+                    fontSize: 24,
+                    color: env.ink,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 9, color: env.inkMuted),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 13), trailing!],
+        ],
       ),
     );
   }

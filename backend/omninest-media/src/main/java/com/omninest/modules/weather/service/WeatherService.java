@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -65,6 +66,8 @@ import tools.jackson.databind.node.ObjectNode;
 public class WeatherService {
 
     private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
+    /** 界面语言缺失或不在白名单时的状况文案语言。 */
+    private static final String DEFAULT_LANG = "zh";
     private static final Pattern COORD_PATTERN = Pattern.compile("^-?\\d{1,3}\\.\\d+,\\s*-?\\d{1,3}\\.\\d+$");
     private static final List<String> CONFIG_KEYS = List.of(
             "weather.enabled",
@@ -121,7 +124,7 @@ public class WeatherService {
      * 配置错误等关键问题抛出 BusinessException。
      */
     public WeatherDto getRealtimeWeather(String location) {
-        return getRealtimeWeather(location, null);
+        return getRealtimeWeather(location, null, null);
     }
 
     /**
@@ -129,9 +132,11 @@ public class WeatherService {
      *
      * @param location API 查询位置（GPS 经纬度或城市名）
      * @param displayName 展示用地区名；location 为 GPS 时用于回填用户偏好城市
+     * @param lang 状况文案语言（客户端已同步的界面语言），白名单外一律回落到中文
      */
-    public WeatherDto getRealtimeWeather(String location, String displayName) {
+    public WeatherDto getRealtimeWeather(String location, String displayName, String lang) {
         final Map<String, String> config = loadConfig();
+        final String apiLang = normalizeLang(lang);
 
         if (!"true".equalsIgnoreCase(config.get("weather.enabled"))) {
             return WeatherDto.empty();
@@ -159,8 +164,10 @@ public class WeatherService {
         // 检查天气数据缓存
         final ResolvedWeatherLocation finalResolved = resolved;
         final String finalBaseUrl = baseUrl;
-        final String requestKey = finalResolved.latLon();
-        WeatherDto cachedWeather = weatherCacheStore.findWeather(finalResolved.latLon()).orElse(null);
+        // 状况文案按语言返回，缓存与 singleflight 都必须带语言，
+        // 否则中文用户先落缓存会让英文用户拿到中文文本。
+        final String requestKey = cacheKey(finalResolved.latLon(), apiLang);
+        WeatherDto cachedWeather = weatherCacheStore.findWeather(requestKey).orElse(null);
         if (cachedWeather != null) {
             return withLocationName(cachedWeather, effectiveDisplayName);
         }
@@ -180,17 +187,17 @@ public class WeatherService {
                 // 预生成 JWT，并行请求外部 API
                 String jwt = generateJwt(config);
                 CompletableFuture<JsonNode> weatherNowFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt),
+                        () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt, apiLang),
                         weatherExecutor
                 );
                 CompletableFuture<JsonNode> airNowFuture = CompletableFuture.supplyAsync(
-                        () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt), weatherExecutor);
+                        () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt, apiLang), weatherExecutor);
                 CompletableFuture<JsonNode> weather7dFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt),
+                        () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt, apiLang),
                         weatherExecutor
                 );
                 CompletableFuture<JsonNode> weather24hFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt),
+                        () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt, apiLang),
                         weatherExecutor
                 );
 
@@ -208,7 +215,7 @@ public class WeatherService {
                         finalResolved.locationName() != null && !finalResolved.locationName().isBlank()
                                 ? finalResolved.locationName()
                                 : effectiveDisplayName);
-                weatherCacheStore.saveWeather(finalResolved.latLon(), result);
+                weatherCacheStore.saveWeather(requestKey, result);
                 return result;
             } catch (Exception e) {
                 log.error("获取天气数据失败", e);
@@ -350,10 +357,34 @@ public class WeatherService {
 
     // ==================== 外部 API 调用 ====================
 
-    private JsonNode fetchApi(String baseUrl, String path, String location, String jwt) {
+    /**
+     * 界面语言代码 → 和风天气 {@code lang} 取值。
+     *
+     * 值要拼进出站 URL，所以只放行精确白名单：取主语言子tag（{@code zh-Hans}→{@code zh}）
+     * 并要求整体就是 zh 或 en，其余（含 {@code en&x=1} 这类带分隔符的注入串）
+     * 一律回落到中文，不原样转发调用方传入的字符串。
+     */
+    static String normalizeLang(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return DEFAULT_LANG;
+        }
+        String primary = raw.trim().toLowerCase(Locale.ROOT).split("[-_]")[0];
+        return switch (primary) {
+            case "en" -> "en";
+            case "zh" -> "zh";
+            default -> DEFAULT_LANG;
+        };
+    }
+
+    /** 天气数据缓存键：同一经纬度在不同语言下是不同份文本。 */
+    private static String cacheKey(String latLon, String lang) {
+        return latLon + ":" + lang;
+    }
+
+    private JsonNode fetchApi(String baseUrl, String path, String location, String jwt, String lang) {
         try {
             String encoded = URLEncoder.encode(location, StandardCharsets.UTF_8);
-            URI uri = URI.create(baseUrl + path + "?location=" + encoded);
+            URI uri = URI.create(baseUrl + path + "?location=" + encoded + "&lang=" + lang);
             return httpGet(uri, jwt);
         } catch (Exception e) {
             log.error("调用天气 API 失败: {}", path, e);
@@ -361,13 +392,15 @@ public class WeatherService {
         }
     }
 
-    private JsonNode fetchAirQuality(String baseUrl, String latLon, String jwt) {
+    private JsonNode fetchAirQuality(String baseUrl, String latLon, String jwt, String lang) {
         try {
             String[] parts = latLon.split(",");
             if (parts.length != 2) {
                 return null;
             }
-            URI uri = URI.create(baseUrl + "/airquality/v1/current/" + parts[1].trim() + "/" + parts[0].trim());
+            // 空气质量 v1 接口的 category 与 advice 也是文案，同样按语言请求。
+            URI uri = URI.create(baseUrl + "/airquality/v1/current/" + parts[1].trim() + "/" + parts[0].trim()
+                    + "?lang=" + lang);
             JsonNode json = httpGet(uri, jwt);
             return json != null ? parseAirQualityResponse(json) : null;
         } catch (Exception e) {

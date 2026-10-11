@@ -129,12 +129,12 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
     /**
      * 查询天气聚合结果。
      *
-     * @param latLon 经度和纬度
+     * @param cacheKey 位置与语言的组合键（{@code 经度,纬度:lang}）
      * @return 天气聚合结果
      */
     @Override
-    public Optional<WeatherDto> findWeather(String latLon) {
-        Optional<String> cached = read(WEATHER_KEY_PREFIX + latLon, "读取天气数据缓存失败");
+    public Optional<WeatherDto> findWeather(String cacheKey) {
+        Optional<String> cached = read(WEATHER_KEY_PREFIX + cacheKey, "读取天气数据缓存失败");
         if (cached.isEmpty()) {
             return Optional.empty();
         }
@@ -149,13 +149,13 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
     /**
      * 保存天气聚合结果。
      *
-     * @param latLon 经度和纬度
+     * @param cacheKey 位置与语言的组合键（{@code 经度,纬度:lang}）
      * @param weather 天气聚合结果
      */
     @Override
-    public void saveWeather(String latLon, WeatherDto weather) {
+    public void saveWeather(String cacheKey, WeatherDto weather) {
         write(
-                WEATHER_KEY_PREFIX + latLon,
+                WEATHER_KEY_PREFIX + cacheKey,
                 serializeWeather(weather),
                 WEATHER_TTL,
                 "保存天气数据缓存失败"

@@ -119,6 +119,12 @@ abstract final class OmniIcons {
       OmniIconCircle(19, 12, 1),
     ],
   );
+  static const OmniIconsData bookmark = OmniIconsData(
+    paths: [
+      'M6.5 4.5A1.5 1.5 0 0 1 8 3h8a1.5 1.5 0 0 1 1.5 1.5V21L12 17.7 6.5 21z',
+    ],
+  );
+
   static const OmniIconsData heart = OmniIconsData(
     paths: [
       'M20.8 5.7a5.5 5.5 0 0 0-7.8 0L12 6.8l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.5a5.5 5.5 0 0 0 0-7.8z',

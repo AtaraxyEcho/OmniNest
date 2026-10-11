@@ -313,7 +313,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 Text(
                   l10n.musicNowPlayingEyebrow.toUpperCase(),
                   style: TextStyle(
-                    color: context.env.accent,
+                    color: context.env.accentInk,
                     // ignore: font_size_whitelist
                     fontSize: 8,
                     letterSpacing: 1.3,
@@ -363,7 +363,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 size: 22,
                 color:
                     track?.favorite == true
-                        ? context.env.accent
+                        ? context.env.accentInk
                         : context.env.white78,
               ),
             ),

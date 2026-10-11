@@ -655,7 +655,8 @@ class _NotificationActionLinkState extends State<_NotificationActionLink> {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           widget.beforeNavigate?.call();
-          context.go(widget.action.route);
+          // push 而不是 go：go 会换掉整条栈，返回时落不到通知中心。
+          context.push(widget.action.route);
         },
         child: Padding(
           padding: EdgeInsets.symmetric(

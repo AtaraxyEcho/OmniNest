@@ -60,7 +60,6 @@ void main() {
           // 掩盖路由缺宿主的缺口，必须走真实链路）。
           builder:
               (context, state) => MobileHostedRoute(
-                solidSurface: true,
                 child: Scaffold(
                   body: ProfilePage(
                     initialSection: state.uri.queryParameters['section'],
@@ -141,9 +140,56 @@ void main() {
             .color!;
 
     await pumpProfile(tester);
-    expect(groupInk(), MobileEnvPalette.dark.inkFaint);
+    expect(groupInk(), MobileEnvPalette.dark.groupLabelInk);
 
     await pumpProfile(tester, brightness: Brightness.light);
-    expect(groupInk(), MobileEnvPalette.light.inkFaint);
+    expect(groupInk(), MobileEnvPalette.light.groupLabelInk);
+  });
+
+  testWidgets('外观分组：字号档位显示中文标签且三组按钮等宽', (tester) async {
+    await pumpProfile(tester, initialSection: 'appearance');
+
+    // 回归守卫：曾经直接把枚举名渲染成 comfortable，中文界面里是英文串。
+    expect(find.text('comfortable'), findsNothing);
+    expect(find.text('紧凑'), findsOneWidget);
+    expect(find.text('标准'), findsOneWidget);
+    expect(find.text('舒适'), findsOneWidget);
+    expect(find.text('大'), findsOneWidget);
+
+    double widthOf(String label) =>
+        tester
+            .getSize(
+              find.ancestor(
+                of: find.text(label),
+                matching: find.byType(AnimatedContainer),
+              ),
+            )
+            .width;
+
+    double leftOf(String label) =>
+        tester
+            .getTopLeft(
+              find.ancestor(
+                of: find.text(label),
+                matching: find.byType(AnimatedContainer),
+              ),
+            )
+            .dx;
+
+    // 主题（三档）、语言（两档）、字号（五档）都是 repeat(3,1fr)，
+    // 同一列的左边缘必须对齐，否则就是分段控件的 max-content 宽度。
+    for (final label in const ['浅色模式', 'English', '标准', '大']) {
+      expect(
+        widthOf(label),
+        closeTo(widthOf('深色模式'), 0.01),
+        reason: '$label 应与同列按钮等宽',
+      );
+    }
+    expect(
+      leftOf('English'),
+      closeTo(leftOf('浅色模式'), 0.01),
+      reason: '语言组只有两项，首列左边缘要与主题组同列',
+    );
+    expect(tester.takeException(), isNull);
   });
 }

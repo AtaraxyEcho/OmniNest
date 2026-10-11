@@ -10,6 +10,7 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -17,7 +18,7 @@ import 'package:omninest/features/music/application/music_playback_session.dart'
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
-import 'golden_fonts.dart';
+import '../support/golden_fonts.dart';
 
 class _ZeroUnreadCount extends UnreadCountNotifier {
   @override
@@ -129,6 +130,9 @@ void main() {
             ),
           ),
           mobileShellLocalBackdropActiveProvider.overrideWithValue(false),
+          // 壳层离线横幅会拉起 connectivity 平台流，测试宿主没有实现该通道，
+          // 未桩住时流订阅的 MissingPluginException 会记到当前用例头上。
+          appOnlineStatusProvider.overrideWith((ref) => Stream.value(true)),
           unreadCountProvider.overrideWith(_ZeroUnreadCount.new),
           mobileShellSelectionActiveProvider.overrideWith(
             (ref, branch) => false,
@@ -137,16 +141,19 @@ void main() {
             (ref) => const _SilentMusicAudioPlayback(),
           ),
         ],
-        child: MaterialApp.router(
-          debugShowCheckedModeBanner: false,
-          theme:
-              brightness == Brightness.light
-                  ? OmniNestTheme.light()
-                  : OmniNestTheme.dark(),
-          routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('zh'),
+        child: RepaintBoundary(
+          key: const ValueKey('shell-golden'),
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            theme:
+                brightness == Brightness.light
+                    ? OmniNestTheme.light()
+                    : OmniNestTheme.dark(),
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('zh'),
+          ),
         ),
       ),
     );
@@ -159,8 +166,8 @@ void main() {
   ]) {
     testWidgets('移动壳层极性基线 $name', (tester) async {
       await pumpShell(tester, brightness);
-      expect(
-        find.byType(MobileAppShell),
+      await expectLater(
+        find.byKey(const ValueKey('shell-golden')),
         matchesGoldenFile('goldens/mobile_shell_$name.png'),
       );
     });

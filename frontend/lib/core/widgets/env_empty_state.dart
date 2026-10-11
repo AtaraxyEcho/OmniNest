@@ -98,7 +98,7 @@ class EnvEmptyState extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: context.env.accent,
+                    color: context.env.actionFill,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -106,7 +106,7 @@ class EnvEmptyState extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 9, // ignore: font_size_whitelist
                       fontWeight: FontWeight.w700,
-                      color: context.env.onAccent,
+                      color: context.env.actionFillInk,
                     ),
                   ),
                 ),

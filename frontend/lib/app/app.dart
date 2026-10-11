@@ -164,7 +164,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     );
     // 系统栏样式必须跟随壳层实际极性：壳层在浅色根主题且无壁纸时是纸面基底，
     // 沿用"移动形态一律暗图标"会让浅色图标压在浅底上不可读。
-    final envPalette = watchMobileEnvPalette(ref, rootTheme);
+    final envPalette = mobileEnvPaletteFor(rootTheme);
     final overlayDark =
         mobileForm
             ? envPalette.brightness == Brightness.dark

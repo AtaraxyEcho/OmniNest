@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -20,13 +22,21 @@ const _allBackdropFilter = 'all';
 
 /// 显示应用本机背景设置面板。
 ///
-/// 颜色统一由 [Theme.colorScheme] 派生,不再接受外部调色板,避免
-/// 深色写死面板 + 主题前景色混用导致的对比度问题。
+/// 面板配色整组派生：桌面取 [Theme.colorScheme]，移动壳层取环境极性表，
+/// 不接受逐项外部调色板，避免深色写死面板 + 主题前景色混用的对比度问题。
 Future<void> showAppBackdropSettings(BuildContext context) {
-  final palette = AppBackdropPalette.fromScheme(Theme.of(context).colorScheme);
+  // 壳层下面板必须实底：根主题在壁纸在场时给的是半透容器色，
+  // 面板铺上去会透出底下的页面。
+  final palette =
+      MobileShellScope.isHosted(context)
+          ? AppBackdropPalette.fromEnv(context.env)
+          : AppBackdropPalette.fromScheme(Theme.of(context).colorScheme);
   return showWorkstationDialog(
     context: context,
-    barrierColor: Colors.black54,
+    barrierColor:
+        MobileShellScope.isHosted(context)
+            ? context.env.modalScrim
+            : Colors.black54,
     builder: (_) => _AppBackdropSettingsDialog(palette: palette),
   );
 }

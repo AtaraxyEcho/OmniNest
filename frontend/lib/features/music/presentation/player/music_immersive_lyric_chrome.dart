@@ -18,7 +18,7 @@ class _BackToCurrentButton extends StatelessWidget {
       message: tooltip,
       child: Semantics(
         button: true,
-        label: tooltip,
+        // 子级 Text(tooltip) 已提供名称，重复写会让按钮名播两遍。
         child: Material(
           color: palette.surfaceStrong,
           borderRadius: BorderRadius.circular(999),

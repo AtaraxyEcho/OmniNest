@@ -2391,7 +2391,6 @@
   "readerThemeLight": "浅色",
   "readerThemeEyeCare": "护眼",
   "readerThemeDark": "深色",
-  "readerThemeNightGlass": "夜间玻璃",
   "readerThemeGreen": "绿色",
   "readerSettingsTitle": "阅读设置",
   "readerReadingMode": "阅读模式",
@@ -5142,7 +5141,6 @@
   "toolsGroupMedia": "影视与音乐",
   "toolsGroupPhotosReader": "相册与阅读",
   "toolsVideoCollectionsDetail": "自定义与自动生成的合集",
-  "toolsMusicHistoryDetail": "按天回看最近播放记录。",
   "toolsMusicScanDetail": "来源、扫描与匹配",
   "toolsScraperDetail": "已匹配、待处理与失败",
   "accountSheetTitle": "账户",
@@ -5223,7 +5221,17 @@
   "filesViewGrid": "网格视图",
   "weatherSheetLocationEyebrow": "{city} · 本地天气",
   "@weatherSheetLocationEyebrow": {"placeholders": {"city": {"type": "String"}}},
-  "weatherSheetSummary": "晴好将持续到傍晚，夜间转凉、安静。",
+  "weatherSheetHourRange": "未来 {count} 小时 {low}° 到 {high}°。",
+  "@weatherSheetHourRange": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "low": {"type": "int"},
+      "high": {"type": "int"}
+    }
+  },
+  "weatherHumidityDry": "干燥",
+  "weatherHumidityComfortable": "舒适",
+  "weatherHumidityHumid": "潮湿",
   "weatherHourNow": "现在",
   "weatherMetricWind": "风力",
   "weatherMetricHumidity": "湿度",

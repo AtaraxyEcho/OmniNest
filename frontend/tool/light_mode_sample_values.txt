@@ -1,0 +1,117 @@
+# 移动深浅适配的样例事实表：由设计稿 index.css（暗）与 light-theme.css（浅）的级联最终值导出。
+# 刷新方式：python tool/light_sample_values.py <样例 src 目录> ；角色映射见 tool/light_sample_roles.json。
+# 样例目录不在仓库内，本文件就是它在仓库里的那一份事实；改浅态或暗态配色必须同步改这里。
+# 求值口径：后写覆盖前写，但 :where() 内容特异度为 0（样例第 5 层的 11px 微型字号因此不生效，
+# 微型字号两极性一致）；简写与长写互相归一；@media 内的条件态不入表。
+# 格式：角色<TAB>暗值<TAB>浅值<TAB>#来源选择器；'-' 表示样例该极性未声明这一项。
+accent	#d5f17d	#dceba8	# .eyebrow
+accentInk	-	#225f4e	# .eyebrow
+ink	#f6f6f2	#17231e	# .hero-time
+inkMuted	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .text-button
+line13	rgba(255, 255, 255, 0.13)	rgba(36, 62, 51, 0.12)	# .appearance-setting
+stageSolid	#0b1110	#e9eee7	# .omninest
+surfaceGlass	rgba(18, 25, 24, 0.72)	rgba(250, 252, 246, 0.82)	# .glass-sheet
+surfaceSolid	#141a19	#f8faf4	# :root
+sheetSolid	#171e1c	#f1f4ed	# .glass-sheet
+navGlass	rgba(14, 20, 19, .78)	#f2f5ee	# .bottom-nav
+miniPlayer	rgba(18, 24, 23, .91)	#f2f5ee	# .mini-player
+segmentBg	rgba(20, 28, 26, .72)	rgba(31, 62, 50, 0.07)	# .segmented
+segmentActiveBg	#d5f17d	rgba(255, 255, 252, 0.9)	# .segmented button.active
+segmentActiveInk	#151c13	#17372c	# .segmented button.active
+actionFill	#d5f17d	#1e5949	# .focus-play
+actionFillInk	#172014	#f8faef	# .focus-play
+switchOn	#d5f17d	#2a6957	# .env-switch.on
+selectionBar	#d9ef91	#dce9ae	# .selection-bar
+modalScrim	rgba(0,0,0,.45)	rgba(25, 40, 33, 0.28)	# .modal-layer
+metricCell	-	#eef2eb	# .weather-metrics > div
+searchOverlayBg	rgba(10, 15, 14, .94)	#edf1e9	# .search-overlay
+canvas	rgba(7, 13, 12, .34)	#edf1e9	# .content-space
+headerSolid	-	#edf1e9	# .content-space .app-header
+inputField	-	rgba(255, 255, 252, 0.72)	# input
+navInk	rgba(255,255,255,.46)	rgba(23, 35, 30, 0.68)	# .bottom-nav button
+navActiveInk	#f6f6f2	#17372c	# .bottom-nav button.active
+navActivePill	#d5f17d	#dce9ae	# .bottom-nav button.active > span
+iconButtonGlass	rgba(18, 24, 23, .32)	rgba(250, 252, 246, 0.58)	# .icon-button
+avatarBg	#d6c0a9	rgba(250, 252, 246, 0.58)	# .avatar
+loginCard	-	rgba(242, 246, 239, 0.94)	# .login-card
+bootScreen	#09100f	#e9eee7	# .boot-screen
+envPhotoOpacity	-	1	# .environment > img[data-mode=immersive]
+envPhotoBrightness	-	0.84	# .environment > img[data-mode=immersive]
+envVeilTop	-	rgba(11, 24, 19, 0.1)	# .environment-color[data-mode=immersive]
+envVeilMid	-	rgba(10, 22, 17, 0.16)	# .environment-color[data-mode=immersive]
+envVeilBottom	-	rgba(8, 18, 14, 0.64)	# .environment-color[data-mode=immersive]
+canvasVeil	-	#e9eee7	# .environment-color[data-mode=ambient]
+homeInk	-	#f4f7f1	# .home-space
+homeHeroInk	-	#f7f8f3	# .home-space .hero-time
+homeCardGlass	-	rgba(13, 28, 22, 0.74)	# .home-space .focus-feature
+homeCardBorder	-	rgba(255, 255, 255, 0.12)	# .home-space .focus-feature
+weatherSceneVeil	-	rgba(15, 33, 25, 0.14)	# .weather-scene span
+appearanceActive	#d5f17d	#1e5949	# .appearance-options button.active
+appearanceActiveInk	#172014	#f8faef	# .appearance-options button.active
+segmentBorder	rgba(255, 255, 255, .09)	rgba(40, 70, 58, 0.07)	# .segmented
+appearanceOptionBg	rgba(255, 255, 255, .05)	rgba(31, 62, 50, 0.07)	# .appearance-options
+appearanceOptionBorder	rgba(255, 255, 255, 0.13)	rgba(36, 62, 51, 0.17)	# .appearance-options
+appearanceOptionInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.72)	# .appearance-options button
+settingBorder	-	rgba(36, 62, 51, 0.17)	# .appearance-setting
+settingIconBg	rgba(213, 241, 125, .08)	rgba(218, 234, 166, 0.34)	# .notif-icon
+settingIconInk	#d5f17d	#225f4e	# .notif-icon
+controlFocus	#d5f17d	#176c59	# .appearance-setting
+warningInk	#f0c98e	#7a4712	# .appearance-setting
+dangerInk	#f0a4a4	#9f3434	# .appearance-setting
+borderSubtle	rgba(255, 255, 255, 0.13)	rgba(36, 62, 51, 0.17)	# .appearance-setting
+homeEyebrowInk	-	rgba(247, 249, 243, 0.82)	# .home-space .eyebrow
+homeWeatherLineInk	-	rgba(247, 249, 243, 0.82)	# .home-space .weather-line
+homeIconButtonGlass	-	rgba(13, 27, 21, 0.28)	# .home-space .icon-button
+homeIconButtonBorder	-	rgba(255, 255, 255, 0.18)	# .home-space .icon-button
+homeIconButtonInk	-	#f7f9f3	# .home-space .icon-button
+homeCardInk	-	#f6f8f3	# .home-space .focus-feature
+homeCardMutedInk	-	rgba(244, 247, 241, 0.62)	# .home-space .focus-copy small
+homeCardBlur	-	blur(20px)	# .home-space .focus-feature
+homePlayFill	-	#dce9ae	# .home-space .focus-play
+homePlayInk	-	#18382d	# .home-space .focus-play
+homeHeroShadow	-	0 3px 24px rgba(5, 13, 10, 0.34)	# .home-space .hero-time
+envPhotoSaturate	-	0.82	# .environment > img[data-mode=immersive]
+envPhotoContrast	-	1.02	# .environment > img[data-mode=immersive]
+canvasSegmentActiveBg	#d5f17d	rgba(255, 255, 252, 0.9)	# .segmented button.active
+canvasSheetInk	-	-	# .glass-sheet
+eyebrowSize	10px	10px	# .eyebrow
+eyebrowLineHeight	-	1.45	# .eyebrow
+eyebrowInk	rgba(246, 246, 242, .58)	#225f4e	# .eyebrow
+sectionTitleSmallSize	9px	9px	# .section-title > small
+sectionTitleSmallLineHeight	-	1.45	# .section-title > small
+sectionTitleSmallInk	rgba(255, 255, 255, .43)	rgba(26,29,27,0.58)	# .section-title > small
+notifGroupSize	9px	9px	# .notif-group
+notifGroupLineHeight	-	1.45	# .notif-group
+notifGroupInk	rgba(246, 246, 242, .43)	rgba(26,29,27,0.58)	# .notif-group
+notifGroupLabelSize	8px	8px	# .notif-group-label
+notifGroupLabelLineHeight	-	1.45	# .notif-group-label
+notifGroupLabelInk	rgba(246, 246, 242, .43)	rgba(26,29,27,0.58)	# .notif-group-label
+platformNoteSize	9px	9px	# .platform-note
+platformNoteLineHeight	1.55	1.55	# .platform-note
+platformNoteInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .platform-note
+weatherEnvironmentSize	8px	8px	# .weather-environment
+weatherEnvironmentLineHeight	-	1.45	# .weather-environment
+weatherEnvironmentInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .weather-environment
+queueHintSize	8px	8px	# .queue-hint
+queueHintLineHeight	-	1.45	# .queue-hint
+queueHintInk	rgba(246, 246, 242, .35)	rgba(26,29,27,0.48)	# .queue-hint
+focusCopySmallSize	10px	10px	# .focus-copy small
+focusCopySmallLineHeight	-	1.4	# .focus-copy small
+posterSmallSize	9px	9px	# .poster small
+posterSmallLineHeight	-	1.4	# .poster small
+weatherMetricLabelInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .weather-metrics small
+weatherMetricDetailInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .weather-metrics span
+hourlyTimeInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .hourly-weather small
+forecastHeaderInk	-	-	# .forecast > div:first-child > small
+forecastConditionInk	rgba(246, 246, 242, 0.62)	rgba(23, 35, 30, 0.62)	# .forecast-row span
+weatherFeelsInk	-	-	# .weather-current p
+weatherSummaryInk	-	-	# .weather-current > span
+homeCardRaised	-	rgba(13, 28, 22, 0.74)	# .home-space .recent-folder
+homeCardLine	-	rgba(255, 255, 255, 0.12)	# .home-space .recent-folder
+homeQuickLineBorder	-	rgba(255, 255, 255, 0.12)	# .home-space .quick-line button
+homeFocusStart	-	rgba(13, 28, 22, 0.74)	# .home-space .focus-feature
+homeFocusEnd	-	rgba(13, 28, 22, 0.74)	# .home-space .focus-feature
+featureHeroStart	rgba(213,241,125,.1)	rgba(213,241,125,.1)	# .feature-hero
+featureHeroEnd	rgba(255,255,255,.035)	rgba(26,29,27,0.04)	# .feature-hero
+featureHeroLine	rgba(213,241,125,.16)	#0b6b61	# .feature-hero
+featureHeroIconBg	rgba(213,241,125,.09)	rgba(213,241,125,.09)	# .feature-hero-icon

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#ffffff</color>
+    <color name="ic_launcher_background">#171b1a</color>
     <!-- 移动端环境设计的舞台色：冷启动窗口底色，避免浅色系统下白闪。 -->
     <color name="launch_background">#09100F</color>
 </resources>

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
@@ -97,6 +98,8 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
     final preset = ref.read(fontScaleControllerProvider);
     final selected = await showModalBottomSheet<FontScalePreset>(
       context: context,
+      // 面板底色与壳层其余抽屉同源，不跟桌面主题的容器色。
+      backgroundColor: context.env.sheetSolid,
       builder: (sheetContext) => _FontScaleSheet(current: preset),
     );
     if (selected == null || !mounted) {
@@ -229,7 +232,8 @@ class _FontScaleCell extends StatelessWidget {
   }
 }
 
-/// 移动端底部面板：与桌面面板同构（标签行 + 档位方格行）。
+/// 移动端底部面板：档位是设置项而不是字号演示，逐行列出本地化名称并标出
+/// 当前档；桌面的 S/M/L/XL 方格在手机上既不中文也读不出层级。
 class _FontScaleSheet extends ConsumerWidget {
   const _FontScaleSheet({required this.current});
 
@@ -238,41 +242,85 @@ class _FontScaleSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final colors = Theme.of(context).colorScheme;
+    final env = context.env;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+            child: Text(
               l10n.fontScaleTitle,
               style: TextStyle(
-                fontFamily: AppTypography.monoFamily,
-                fontFamilyFallback: AppTypography.monoFamilyFallback,
-                // ignore: font_size_whitelist
-                fontSize: 10,
-                letterSpacing: 2,
-                color: colors.onSurfaceVariant,
+                fontSize: AppTypography.titleSmall,
+                fontWeight: FontWeight.w600,
+                color: env.ink,
               ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final preset in FontScalePreset.values) ...[
-                  if (preset != FontScalePreset.values.first)
-                    const SizedBox(width: 4),
-                  _FontScaleCell(
-                    preset: preset,
-                    selected: preset == current,
-                    onTap: () => Navigator.of(context).pop(preset),
-                  ),
-                ],
-              ],
+          ),
+          for (final preset in FontScalePreset.values)
+            _FontScaleOptionRow(
+              label: fontScalePresetLabel(l10n, preset),
+              selected: preset == current,
+              onTap: () => Navigator.of(context).pop(preset),
             ),
-          ],
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+/// 字号档位的本地化标签：顶栏快捷面板与移动端设置页共用一份映射，
+/// 避免设置页直接显示枚举名。
+String fontScalePresetLabel(AppLocalizations l10n, FontScalePreset preset) {
+  return switch (preset) {
+    FontScalePreset.followSystem => l10n.fontScaleFollowSystem,
+    FontScalePreset.compact => l10n.fontScaleCompact,
+    FontScalePreset.standard => l10n.fontScaleStandard,
+    FontScalePreset.comfortable => l10n.fontScaleComfortable,
+    FontScalePreset.large => l10n.fontScaleLarge,
+  };
+}
+
+class _FontScaleOptionRow extends StatelessWidget {
+  const _FontScaleOptionRow({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final env = context.env;
+    return InkWell(
+      onTap: onTap,
+      child: Semantics(
+        selected: selected,
+        child: Container(
+          color: selected ? env.selectionBar.withValues(alpha: 0.26) : null,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: AppTypography.bodyMedium,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: selected ? env.accentInk : env.ink,
+                  ),
+                ),
+              ),
+              if (selected)
+                Icon(Icons.check_rounded, size: 18, color: env.accentInk),
+            ],
+          ),
         ),
       ),
     );

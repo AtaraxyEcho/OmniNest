@@ -97,14 +97,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       _animatedRoute('/login', (state) => const LoginPage()),
       _animatedRoute('/server-setup', (state) => const ServerSetupPage()),
       // 通知中心为根级路由：移动壳层启用时经 MobileHostedRoute 补挂
-      // scope，页面分叉移动形态且页内弹窗走底部面板。实底工具面无环境
-      // 壁纸，浅色根主题下随主题翻浅。
+      // scope，页面分叉移动形态且页内弹窗走底部面板。极性随外观设置。
       _animatedRoute(
         '/notifications',
-        (state) => const MobileHostedRoute(
-          solidSurface: true,
-          child: NotificationPage(),
-        ),
+        (state) => const MobileHostedRoute(child: NotificationPage()),
       ),
       GoRoute(
         path: '/profile/notifications',
@@ -129,15 +125,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       _animatedRoute(
         '/tools',
-        (_) => const MobileHostedRoute(
-          solidSurface: true,
-          child: WorkspaceToolsPage(),
-        ),
+        (_) => const MobileHostedRoute(child: WorkspaceToolsPage()),
       ),
       _animatedRoute(
         '/profile',
         (state) => MobileHostedRoute(
-          solidSurface: true,
           child: ProfilePage(
             initialSection: state.uri.queryParameters['section'],
           ),

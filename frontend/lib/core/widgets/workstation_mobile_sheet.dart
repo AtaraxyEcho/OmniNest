@@ -38,7 +38,7 @@ Future<T?> showWorkstationMobileSheet<T>({
     isDismissible: dismissible,
     enableDrag: dismissible,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.45),
+    barrierColor: MobileEnvPalette.of(context).modalScrim,
     builder: (sheetContext) {
       return Theme(
         data: ambientTheme,
@@ -68,9 +68,9 @@ Future<T?> showWorkstationMobileSheet<T>({
                     border: Border(top: BorderSide(color: context.env.line13)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black54,
+                        color: context.env.sheetGlow,
                         blurRadius: 50,
-                        offset: Offset(0, -20),
+                        offset: const Offset(0, -20),
                       ),
                     ],
                   ),

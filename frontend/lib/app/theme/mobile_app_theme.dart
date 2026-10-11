@@ -8,12 +8,16 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 移动端壳层使用的主题组合器。
 ///
 /// 深色主题保持根主题配置，浅色主题统一各模块的中性表面和正文颜色
 /// （取桌面端同一份 AppThemePalette.light，三端不另立移动色板），
 /// 模块强调色继续由对应主题扩展维护。
+///
+/// 例外只有强调族：浅态的 primary/primaryContainer 取环境极性表，因为设计稿
+/// 的浅态主行动钮与桌面浅主题的深青不是同一族绿。
 abstract final class MobileAppTheme {
   static const GlobalThemeColors _lightColors = AppThemePalette.light;
 
@@ -32,10 +36,13 @@ abstract final class MobileAppTheme {
       surfaceContainerHighest: colors.surfaceContainerHighest,
       onSurface: colors.onSurface,
       onSurfaceVariant: colors.onSurfaceVariant,
-      primary: colors.primary,
-      primaryContainer: colors.primaryContainer,
-      onPrimary: colors.onPrimary,
-      onPrimaryContainer: colors.onPrimaryContainer,
+      // 主行动色在移动端单开：样例浅态的 CTA 族是薄荷填充配深墨字
+      //（`.login-enter`、`.accent-square-btn`、`.segmented button.active`），
+      // 软性动作是 5% 中性叠加配墨字，与桌面共享的那份深青 primary 不同族。
+      primary: MobileEnvPalette.light.actionFill,
+      onPrimary: MobileEnvPalette.light.actionFillInk,
+      primaryContainer: MobileEnvPalette.light.surfaceTint,
+      onPrimaryContainer: MobileEnvPalette.light.ink,
       secondary: colors.secondary,
       secondaryContainer: colors.secondaryContainer,
       tertiary: colors.tertiary,
@@ -48,8 +55,10 @@ abstract final class MobileAppTheme {
     );
     return source.copyWith(
       colorScheme: scheme,
-      scaffoldBackgroundColor: colors.surface,
-      canvasColor: colors.surface,
+      // 无壁纸时的画布必须与环境层同色，否则"有壁纸/无壁纸"两态会露出
+      // 一层接缝；样例的浅态画布是 #f4f6f3。
+      scaffoldBackgroundColor: MobileEnvPalette.light.stageSolid,
+      canvasColor: MobileEnvPalette.light.stageSolid,
       cardColor: colors.surfaceContainerLow,
       dividerColor: colors.outlineVariant,
       textTheme: source.textTheme.apply(

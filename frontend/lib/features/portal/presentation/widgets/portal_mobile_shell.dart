@@ -654,7 +654,7 @@ class _PortalRecentPhotoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        onTap: () => context.go('/photos'),
+        onTap: () => context.push('/photos'),
         child: Row(
           children: [
             SizedBox.square(

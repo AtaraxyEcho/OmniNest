@@ -168,6 +168,27 @@ scripts/build_signed_windows_release.ps1 -CertificateThumbprint <证书指纹> -
 - `-RequireHttps` 构建**严格包**：应用拒绝所有 `http://` 服务器地址（含互斥校验），等价于 `--dart-define=OMNINEST_REQUIRE_HTTPS=true`，适合公网 HTTPS 部署。
 - Android 通用包放行明文 HTTP 以支持内网自托管（见 `android/app/src/main/res/xml/network_security_config.xml`），引导页对 http 地址展示风险提示。
 
+## 品牌图标
+
+品牌标识有两个源文件，分别服务两类场景：
+
+- `assets/icon/icon.png`：不透明深色底（`#171b1a`）方形图，供 Android / iOS / macOS / Web / Windows 启动图标使用，生成配置在 `pubspec.yaml` 的 `flutter_launcher_icons_plus` 段。
+- `assets/icon/brand_mark.png`：透明底标记（512px），供应用内 `BrandLogo` 与 macOS / Linux 托盘使用。应用内必须用透明底，否则深色底块在浅色主题下会变成一块黑方框。
+
+替换启动图标源后在 `frontend` 目录重生成全部派生位：
+
+```bash
+dart run flutter_launcher_icons_plus:main
+```
+
+以下三项不由该命令负责，需手工处理：
+
+- `assets/icon/tray.ico` 是 Windows 托盘图标，命令不生成 `.ico` 到该位置；把重生成后的 `windows/runner/resources/app_icon.ico` 复制过来即可。
+- 不要在 `flutter_launcher_icons_plus.web` 下配置 `background_color` 或 `theme_color`，否则该命令会用生成配置覆盖 `web/manifest.json` 中手工维护的舞台色。
+- `../imgs/omninest-logo.webp` 是 README 头图，使用横向组合标识单独出图。
+
+`flutter_launcher_icons_plus.linux` 在当前使用的生成器里没有对应实现，配置存在但不会产出 Linux 图标。
+
 ## 开发规范
 
 - 使用 Riverpod 管理业务状态，Widget 的 `setState` 只用于短生命周期的 hover、展开、临时选择和局部动画。

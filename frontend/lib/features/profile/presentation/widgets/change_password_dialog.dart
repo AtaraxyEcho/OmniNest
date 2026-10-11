@@ -134,9 +134,10 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
               'SECURITY',
               style: TextStyle(
                 fontSize: 8, // ignore: font_size_whitelist
+                height: 1.45,
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.w700,
-                color: env.accent,
+                color: env.groupLabelInk,
               ),
             ),
             const SizedBox(height: 3),

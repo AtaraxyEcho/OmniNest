@@ -22,7 +22,13 @@ void main() {
 
     expect(scheme.surface, const Color(0xFFF7F8F6));
     expect(scheme.onSurface, const Color(0xFF1A1D1B));
-    expect(scheme.primary, const Color(0xFF0B6B61));
+    // 中性族仍与桌面同值；只有强调族在移动端单开：样例第 3 层的浅态 CTA 是
+    // 深绿 `#1e5949` 填充配近白字 `#f8faef`，不再是薄荷填充配深墨字。
+    expect(scheme.surfaceContainerHigh, const Color(0xFFDDE1DC));
+    expect(scheme.primary, const Color(0xFF1E5949));
+    expect(scheme.onPrimary, const Color(0xFFF8FAEF));
+    expect(scheme.primaryContainer, const Color(0x0D243E33));
+    expect(scheme.onPrimaryContainer, const Color(0xFF17231E));
     expect(resolved.textTheme.bodyMedium!.color, scheme.onSurface);
     expect(resolved.cardTheme.color, scheme.surfaceContainerLow);
     expect(resolved.extension<FilesColors>()!.surface, scheme.surface);

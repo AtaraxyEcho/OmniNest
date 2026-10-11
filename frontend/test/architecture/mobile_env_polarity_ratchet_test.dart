@@ -34,6 +34,7 @@ const _migrated = <String>[
   'lib/features/photos/presentation/widgets/photo_hosted_chrome.dart',
   'lib/features/music/presentation/player/music_mobile_now_playing.dart',
   'lib/features/music/presentation/player/music_mobile_now_playing_pages.dart',
+  'lib/features/music/presentation/widgets/music_mobile_mini_player_slot.dart',
   'lib/features/video/presentation/widgets/redesign/movie_redesign_mobile_chips.dart',
   'lib/core/widgets/env_empty_state.dart',
   'lib/core/widgets/workstation_mobile_sheet.dart',

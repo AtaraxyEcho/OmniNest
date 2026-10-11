@@ -33,30 +33,65 @@ enum AppEnvironmentMode {
 }
 
 /// 环境模式对应的壁纸呈现参数（仅移动壳层消费）。
+///
+/// 两极性不是"同一张照片压暗/洗白"的程度差，而是**面不同**：样例第 4 层
+/// 规定浅态只有沉浸档仍是摄影面（照片满显 + 墨色压暗渐变 + 浅色内容），
+/// 其余三档照片 `opacity: 0`，环境层直接是纸面画布 `#e9eee7`。
 class AppEnvironmentPresentation {
   const AppEnvironmentPresentation({
     required this.wallpaperOpacity,
     required this.blurSigma,
+    required this.lightWallpaperOpacity,
+    this.lightPhotoSaturate,
+    this.lightPhotoContrast,
+    this.lightPhotoBrightness,
   });
 
   /// 壁纸不透明度。
   final double wallpaperOpacity;
 
+  /// 浅极性下的壁纸不透明度；0 表示该档换成画布面，照片不再参与。
+  final double lightWallpaperOpacity;
+
   /// 非视频壁纸叠加的环境模糊 sigma；视频由宿主以遮罩降存在感。
   final double blurSigma;
 
+  /// 浅态摄影面的照片处理，取样例 `filter: saturate() contrast() brightness()`；
+  /// null 表示该档不做处理。
+  final double? lightPhotoSaturate;
+  final double? lightPhotoContrast;
+  final double? lightPhotoBrightness;
+
+  /// 浅态照片是否需要调色（只有摄影档要）。
+  bool get hasLightPhotoFilter => lightPhotoSaturate != null;
+
+  /// 按极性取实际不透明度（本文件不引 Flutter 类型，用布尔位表示浅极性）。
+  double opacityFor({required bool light}) {
+    return light ? lightWallpaperOpacity : wallpaperOpacity;
+  }
+
   static const AppEnvironmentPresentation _immersive =
-      AppEnvironmentPresentation(wallpaperOpacity: 1, blurSigma: 0);
+      AppEnvironmentPresentation(
+        wallpaperOpacity: 1,
+        lightWallpaperOpacity: 1,
+        blurSigma: 0,
+        lightPhotoSaturate: 0.82,
+        lightPhotoContrast: 1.02,
+        lightPhotoBrightness: 0.84,
+      );
   static const AppEnvironmentPresentation _ambient = AppEnvironmentPresentation(
     wallpaperOpacity: 0.48,
+    lightWallpaperOpacity: 0,
     blurSigma: 12,
   );
   static const AppEnvironmentPresentation _focus = AppEnvironmentPresentation(
     wallpaperOpacity: 0.28,
+    lightWallpaperOpacity: 0,
     blurSigma: 28,
   );
   static const AppEnvironmentPresentation _utility = AppEnvironmentPresentation(
     wallpaperOpacity: 0.14,
+    lightWallpaperOpacity: 0,
     blurSigma: 34,
   );
 

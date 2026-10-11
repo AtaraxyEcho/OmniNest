@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -103,7 +105,7 @@ Future<void> showOmniAccountSheet(BuildContext ownerContext) {
     context: ownerContext,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.45),
+    barrierColor: ownerContext.env.modalScrim,
     sheetAnimationStyle:
         MotionToken.prefersReduced(ownerContext)
             ? AnimationStyle.noAnimation
@@ -129,9 +131,9 @@ class _OmniAccountSheet extends ConsumerWidget {
             border: Border(top: BorderSide(color: context.env.line13)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black54,
+                color: context.env.sheetGlow,
                 blurRadius: 50,
-                offset: Offset(0, -20),
+                offset: const Offset(0, -20),
               ),
             ],
           ),
@@ -191,7 +193,7 @@ class _AccountProfileRow extends ConsumerWidget {
         name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
     return MobilePressable(
       semanticLabel: name,
-      onTap: () => _closeAnd(context, () => context.push('/profile')),
+      onTap: () => _closeAnd(context, (router) => router.push('/profile')),
       child: Container(
         constraints: const BoxConstraints(minHeight: 65),
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -353,7 +355,10 @@ class _AccountNavRows extends ConsumerWidget {
                     : l10n.accountEntryNotificationsNone,
             badge: unread > 0 ? (unread > 99 ? '99+' : '$unread') : null,
             onTap:
-                () => _closeAnd(context, () => context.push('/notifications')),
+                () => _closeAnd(
+                  context,
+                  (router) => router.push('/notifications'),
+                ),
           ),
           _AccountSheetRow(
             icon: OmniIcons.device,
@@ -365,7 +370,7 @@ class _AccountNavRows extends ConsumerWidget {
             onTap:
                 () => _closeAnd(
                   context,
-                  () => context.push('/profile?section=security'),
+                  (router) => router.push('/profile?section=security'),
                 ),
           ),
           _AccountSheetRow(
@@ -382,7 +387,7 @@ class _AccountNavRows extends ConsumerWidget {
             icon: OmniIcons.grid,
             label: l10n.toolsEntryLabel,
             subtitle: l10n.toolsEntrySub,
-            onTap: () => _closeAnd(context, () => context.push('/tools')),
+            onTap: () => _closeAnd(context, (router) => router.push('/tools')),
           ),
           _AccountSheetRow(
             icon: OmniIcons.settings,
@@ -391,7 +396,7 @@ class _AccountNavRows extends ConsumerWidget {
             onTap:
                 () => _closeAnd(
                   context,
-                  () => context.push('/profile?section=appearance'),
+                  (router) => router.push('/profile?section=appearance'),
                 ),
           ),
         ],
@@ -407,11 +412,55 @@ class _AccountNavRows extends ConsumerWidget {
   }
 }
 
-void _closeAnd(BuildContext sheetContext, void Function() action) {
+/// 关闭账户面板，等它真正退场后再发起跳转。
+///
+/// 同帧 pop + push 会让两条路由动画并发：整屏玻璃模糊与两层内容同帧重绘，
+/// 而推入页按背景策略是透明表面（见 `RouteEnvironmentSurface`），于是正在
+/// 下滑的面板和它的遮罩会从新页面底下透出来。串行化后同一时刻只有一条动画。
+///
+/// 跳转句柄收 `GoRouter` 而不是沿用面板的 `BuildContext`：面板 pop 之后该
+/// context 即失效，延迟执行再走 context 就是跨生命周期访问。看门狗定时器
+/// 保证跳转不会被丢掉——兜住任何不再派发 `dismissed` 的退场路径。
+void _closeAnd(
+  BuildContext sheetContext,
+  void Function(GoRouter router) action,
+) {
   // 只弹面板自身（modal 路由）；根导航 pop 会炸掉最后一页。
-  Navigator.of(sheetContext).pop();
-  action();
+  final router = GoRouter.of(sheetContext);
+  final navigator = Navigator.of(sheetContext);
+  final animation = ModalRoute.of(sheetContext)?.animation;
+  if (animation == null) {
+    navigator.pop();
+    action(router);
+    return;
+  }
+
+  var dispatched = false;
+  late Timer watchdog;
+  late void Function(AnimationStatus) onStatus;
+
+  void dispatch() {
+    if (dispatched) {
+      return;
+    }
+    dispatched = true;
+    watchdog.cancel();
+    animation.removeStatusListener(onStatus);
+    action(router);
+  }
+
+  onStatus = (status) {
+    if (status == AnimationStatus.dismissed) {
+      dispatch();
+    }
+  };
+  watchdog = Timer(_sheetDismissWatchdog, dispatch);
+  animation.addStatusListener(onStatus);
+  navigator.pop();
 }
+
+/// 面板退场约 250ms，留一档冗余；超过这个时间还没收到退场事件就照常跳转。
+const Duration _sheetDismissWatchdog = Duration(milliseconds: 400);
 
 class _AccountSheetRow extends StatelessWidget {
   const _AccountSheetRow({
@@ -533,7 +582,8 @@ class _ManageAccountButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 14),
       child: OutlinedButton(
-        onPressed: () => _closeAnd(context, () => context.push('/profile')),
+        onPressed:
+            () => _closeAnd(context, (router) => router.push('/profile')),
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(47),
           foregroundColor: context.env.ink,

@@ -35,6 +35,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('分段控件的读屏节点名称只播一次且用 tab 的选中态', (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileSegmentedControl<int>(
+            values: const [0, 1],
+            selected: 1,
+            labelBuilder: (value) => '选项 ${value + 1}',
+            onSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final selectedNode = tester.getSemantics(find.text('选项 2')).toString();
+    final plainNode = tester.getSemantics(find.text('选项 1')).toString();
+
+    expect(selectedNode, contains('isSelected'));
+    expect(
+      selectedNode,
+      isNot(contains('isChecked')),
+      reason: '样例 .segmented 是 tablist，用 aria-selected 不用 aria-checked',
+    );
+    expect(selectedNode, contains('label: "选项 2"'));
+    expect(
+      selectedNode,
+      isNot(contains(r'选项 2\n选项 2')),
+      reason: 'Semantics 与子级 Text 同写 label 会让段名播两遍',
+    );
+    expect(plainNode, isNot(contains('isSelected')));
+    expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
+
   testWidgets('移动端状态视图支持 1.3 倍文字缩放', (tester) async {
     await tester.binding.setSurfaceSize(const Size(360, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));

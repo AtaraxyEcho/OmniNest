@@ -346,7 +346,9 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
   Future<void> _playEpisode(MovieVideoItem episode) async {
     await _syncAndRefreshHistory();
     if (mounted) {
-      context.go('/video/${episode.id}/play');
+      // 只换掉播放器这一层：go 会连带换掉整条栈，看完一集后系统返回
+      // 落在栈底直接退出应用；pushReplacement 保住进入播放页之前的来路。
+      context.pushReplacement('/video/${episode.id}/play');
     }
   }
 

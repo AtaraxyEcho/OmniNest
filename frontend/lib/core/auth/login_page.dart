@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
+import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/auth/login_page_controller.dart';
@@ -76,6 +77,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         // 原生移动端为样例玻璃卡形态：暗底 + 玻璃卡（Web 登录多为
         // 同源已配置场景，保持工位面板不变）。
         final mobileForm = !isWide && isMobilePlatform;
+        // 登录页挂在根 Navigator 上，取不到壳层的极性注册：不自己按外观设置
+        // 解析一档，浅态下整页会停在暗底，样例的登录卡在浅态是纸面玻璃。
+        final rootTheme = Theme.of(context);
+        final palette = mobileEnvPaletteFor(rootTheme);
+        final shellTheme = (palette.brightness == Brightness.light
+                ? MobileAppTheme.resolve(rootTheme)
+                : rootTheme)
+            .withEnvPalette(palette);
         final content = Stack(
           children: [
             SafeArea(
@@ -112,13 +121,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         );
         return Scaffold(
           backgroundColor:
-              mobileForm
-                  ? context.env.stage
-                  : Theme.of(context).scaffoldBackgroundColor,
-          body:
-              mobileForm
-                  ? Theme(data: OmniNestTheme.dark(), child: content)
-                  : content,
+              mobileForm ? palette.stage : rootTheme.scaffoldBackgroundColor,
+          body: mobileForm ? Theme(data: shellTheme, child: content) : content,
         );
       },
     );

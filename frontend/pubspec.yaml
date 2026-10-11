@@ -130,11 +130,11 @@ flutter:
         - asset: assets/fonts/JetBrainsMono-Regular.ttf
 
 flutter_launcher_icons_plus:
-  # 全局默认图标
-  image_path: "assets/icon/icon.png"   # 请替换为您的图标文件路径（推荐1024x1024 PNG）  # Android 单独使用专用图标
+  # 全局默认图标：源图为 assets/icon/icon.png（1254x1254，深色底 #171b1a）
+  image_path: "assets/icon/icon.png"   # Android 单独使用专用图标
   android: "launcher_icon"
   image_path_android: "assets/icon/icon.png"
-  adaptive_icon_background: "#ffffff"
+  adaptive_icon_background: "#171b1a"
   adaptive_icon_foreground: "assets/icon/icon.png"
   ios: true
 #  image_path_ios: "assets/icon/mobile_icon.png"
@@ -143,7 +143,6 @@ flutter_launcher_icons_plus:
     generate: true
 #    image_path_web: "assets/icon/web_icon.png"
     image_path: "assets/icon/icon.png"
-    background_color: "#ffffff"
   windows:
     generate: true
     icon_size: 256   # 可填 48~256，建议保持 48 或 256

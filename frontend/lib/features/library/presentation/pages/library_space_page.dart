@@ -187,9 +187,19 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                       borderRadius: BorderRadius.circular(20),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                        child: LibrarySegmentBar(
-                          segment: _segment,
-                          onChanged: _selectSegment,
+                        child: ListenableBuilder(
+                          // 滑块跟手：PageView 每帧通知，页码是连续值，段标签
+                          // 仍在 onPageChanged 落定时才换，避免中途双高亮。
+                          listenable: _pageController,
+                          builder:
+                              (context, _) => LibrarySegmentBar(
+                                segment: _segment,
+                                page:
+                                    _pageController.hasClients
+                                        ? _pageController.page
+                                        : null,
+                                onChanged: _selectSegment,
+                              ),
                         ),
                       ),
                     ),

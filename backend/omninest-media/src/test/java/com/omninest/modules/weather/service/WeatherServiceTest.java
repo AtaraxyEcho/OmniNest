@@ -3,6 +3,9 @@ package com.omninest.modules.weather.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.nimbusds.jose.JWSAlgorithm;
@@ -23,6 +26,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpMethod;
@@ -438,6 +443,74 @@ class WeatherServiceTest {
 
             assertThat(result.temp()).isEqualTo(10.0);
             assertThat(result.aqi()).isEqualTo(46);
+        }
+    }
+
+    @Nested
+    @DisplayName("按界面语言请求与缓存")
+    class LanguageAndCacheKey {
+
+        private static final String NOW_RESPONSE = """
+            {
+              "code":"200",
+              "updateTime":"2025-06-01T12:00:00+08:00",
+              "now":{
+                "temp":"28","feelsLike":"30","text":"晴","icon":"100","humidity":"45",
+                "windSpeed":"12","windDir":"南风","pressure":"1013","vis":"25"
+              }
+            }
+            """;
+
+        /** 以指定语言发起一次聚合查询，返回全部出站 URI。 */
+        @SuppressWarnings("unchecked")
+        private List<String> requestedUris(String lang) {
+            stubConfigs(baseConfigs());
+            stubJwtCache();
+            Map<String, String> responses = new HashMap<>();
+            responses.put("/v7/weather/now", NOW_RESPONSE);
+            stubRestTemplateWithResponses(responses);
+
+            weatherService.getRealtimeWeather("116.41,39.92", null, lang);
+
+            ArgumentCaptor<URI> captor = ArgumentCaptor.forClass(URI.class);
+            verify(restTemplate, times(4))
+                    .exchange(captor.capture(), any(HttpMethod.class), any(), (Class<Object>) any());
+            return captor.getAllValues().stream().map(URI::toString).toList();
+        }
+
+        @Test
+        @DisplayName("带文案的四个调用都带上请求语言")
+        void passesLangOnEveryTextBearingCall() {
+            List<String> uris = requestedUris("en");
+
+            assertThat(uris).hasSize(4);
+            assertThat(uris).allSatisfy(uri -> assertThat(uri).endsWith("lang=en"));
+            assertThat(uris).anyMatch(uri -> uri.contains("/v7/weather/now"));
+            assertThat(uris).anyMatch(uri -> uri.contains("/v7/weather/7d"));
+            assertThat(uris).anyMatch(uri -> uri.contains("/v7/weather/24h"));
+            assertThat(uris).anyMatch(uri -> uri.contains("/airquality/v1/current/"));
+        }
+
+        @Test
+        @DisplayName("缓存键带语言，避免中文文案被英文用户复用")
+        void keysWeatherCacheByLanguage() {
+            requestedUris("en");
+
+            verify(weatherCacheStore).findWeather("116.41,39.92:en");
+            verify(weatherCacheStore).saveWeather(eq("116.41,39.92:en"), any(WeatherDto.class));
+        }
+
+        @Test
+        @DisplayName("白名单外的语言码回落到中文，不原样拼进入站 URL")
+        void fallsBackOutsideWhitelist() {
+            assertThat(WeatherService.normalizeLang(null)).isEqualTo("zh");
+            assertThat(WeatherService.normalizeLang("zh-Hans")).isEqualTo("zh");
+            assertThat(WeatherService.normalizeLang("EN-us")).isEqualTo("en");
+            assertThat(WeatherService.normalizeLang("ru")).isEqualTo("zh");
+            assertThat(WeatherService.normalizeLang("en&lang=zh")).isEqualTo("zh");
+
+            assertThat(requestedUris("en&lang=zh"))
+                    .allSatisfy(uri -> assertThat(uri).endsWith("lang=zh"));
         }
     }
 

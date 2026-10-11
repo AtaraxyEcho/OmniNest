@@ -54,7 +54,7 @@ void main() {
     }
   });
 
-  testWidgets('移动端点击弹出档位方格底部面板并回写状态', (tester) async {
+  testWidgets('移动端弹出本地化档位清单并回写状态', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
       await tester.pumpWidget(host(const FontScaleControl(size: 20)));
@@ -62,10 +62,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('字体大小'), findsOneWidget);
-      expect(find.text('Auto'), findsOneWidget);
-      expect(find.text('XL'), findsOneWidget);
+      expect(find.text('跟随系统'), findsOneWidget);
+      expect(find.text('紧凑'), findsOneWidget);
+      expect(find.text('标准'), findsOneWidget);
+      expect(find.text('舒适'), findsOneWidget);
+      expect(find.text('大'), findsOneWidget);
+      // 桌面的 S/M/L/XL 方格在手机上既不中文也读不出层级。
+      expect(find.text('Auto'), findsNothing);
+      expect(find.text('XL'), findsNothing);
 
-      await tester.tap(find.text('XL'));
+      await tester.tap(find.text('大'));
       await tester.pumpAndSettle();
 
       expect(_state, FontScalePreset.large);

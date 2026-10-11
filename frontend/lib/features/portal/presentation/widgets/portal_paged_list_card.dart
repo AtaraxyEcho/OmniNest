@@ -82,7 +82,8 @@ class _PortalPagedListCardState<T>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            onTap: () => context.go(widget.openRoute),
+            // push：卡片指向模块页，go 会换掉整条栈，返回时落不回首页。
+            onTap: () => context.push(widget.openRoute),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
               child: Row(

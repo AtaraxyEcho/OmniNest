@@ -367,9 +367,10 @@ class _HostedTimelineBody extends ConsumerWidget {
                 ).format(DateTime(year.year, month.month)).toUpperCase(),
                 style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
+                  height: 1.45,
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w700,
-                  color: context.env.inkFaint,
+                  color: context.env.groupLabelInk,
                 ),
               ),
             ),

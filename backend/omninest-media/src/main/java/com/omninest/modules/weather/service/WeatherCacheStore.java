@@ -60,18 +60,19 @@ public interface WeatherCacheStore {
     /**
      * 查询天气聚合结果。
      *
-     * @param latLon 经度和纬度
+     * @param cacheKey 位置与语言的组合键（{@code 经度,纬度:lang}）；状况文案按语言返回，
+     *                 同一位置的不同语言必须是不同条目
      * @return 天气聚合结果
      */
-    Optional<WeatherDto> findWeather(String latLon);
+    Optional<WeatherDto> findWeather(String cacheKey);
 
     /**
      * 保存天气聚合结果。
      *
-     * @param latLon 经度和纬度
+     * @param cacheKey 位置与语言的组合键，与 {@link #findWeather(String)} 同口径
      * @param weather 天气聚合结果
      */
-    void saveWeather(String latLon, WeatherDto weather);
+    void saveWeather(String cacheKey, WeatherDto weather);
 
     /**
      * 天气 API 位置标识与经纬度组合。

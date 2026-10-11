@@ -42,6 +42,8 @@ public class WeatherController {
 
     private static final String WEATHER_PREF_SCOPE = "weather";
     private static final String LOCATION_PREF_KEY = "location";
+    private static final String LOCALE_PREF_SCOPE = "locale.v1";
+    private static final String LANGUAGE_PREF_KEY = "language";
     private final WeatherService weatherService;
     private final UserLocationService userLocationService;
     private final UserPreferenceQuery userPreferenceQuery;
@@ -72,8 +74,10 @@ public class WeatherController {
         // 优先级：Redis GPS（设备上报） > 前端 GPS 坐标 > 用户偏好城市 > 配置中心默认值
         String resolvedLocation = null;
         String displayName = null;
+        String lang = null;
         try {
             UUID userId = currentUserContext.requireCurrentUserId();
+            lang = getPreferenceLanguage(userId);
             // 1. 最高优先级：设备上报的 GPS 坐标（最精确、最实时）
             resolvedLocation = userLocationService.getLocation(userId);
             // 2. 无 Redis GPS 时，使用前端传参（仅接受坐标格式，拒绝城市名覆盖）
@@ -98,7 +102,7 @@ public class WeatherController {
                 resolvedLocation = location.trim();
             }
         }
-        WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation, displayName);
+        WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation, displayName, lang);
         return ApiResponse.success(weather);
     }
 
@@ -120,6 +124,22 @@ public class WeatherController {
     private String getPreferenceLocation(UUID userId) {
         Map<String, Object> prefs = userPreferenceQuery.findValues(userId, WEATHER_PREF_SCOPE);
         Object val = prefs.get(LOCATION_PREF_KEY);
+        if (val instanceof String s && !s.isBlank()) {
+            return s.trim();
+        }
+        return null;
+    }
+
+    /**
+     * 从用户偏好中读取界面语言。
+     *
+     * 客户端切换语言时会把 {@code locale.v1} 作用域同步到服务端，天气状况文案
+     * 因此按这份偏好向外部 API 请求，而不是按调用方传参或服务端默认值——
+     * 后者会让中文界面里出现英文的"晴/多云"文本。
+     */
+    private String getPreferenceLanguage(UUID userId) {
+        Map<String, Object> prefs = userPreferenceQuery.findValues(userId, LOCALE_PREF_SCOPE);
+        Object val = prefs.get(LANGUAGE_PREF_KEY);
         if (val instanceof String s && !s.isBlank()) {
             return s.trim();
         }

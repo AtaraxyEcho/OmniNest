@@ -38,6 +38,8 @@ import 'package:omninest/features/profile/presentation/widgets/profile_desktop_s
 import 'package:omninest/features/profile/presentation/widgets/profile_edit_dialog.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_appearance_options.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_mobile_content.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
@@ -49,6 +51,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
 part 'profile_mobile_view.dart';
+part 'profile_mobile_sections.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({this.initialSection, super.key});

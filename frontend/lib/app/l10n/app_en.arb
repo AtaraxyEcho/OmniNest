@@ -2517,7 +2517,6 @@
   "readerThemeLight": "Light",
   "readerThemeEyeCare": "Eye Care",
   "readerThemeDark": "Dark",
-  "readerThemeNightGlass": "Night glass",
   "readerThemeGreen": "Green",
   "readerSettingsTitle": "Reading Settings",
   "readerReadingMode": "Reading Mode",
@@ -5270,7 +5269,6 @@
   "toolsGroupMedia": "Movies & music",
   "toolsGroupPhotosReader": "Photos & reader",
   "toolsVideoCollectionsDetail": "Curated sets and seasons",
-  "toolsMusicHistoryDetail": "Recent plays grouped by day.",
   "toolsMusicScanDetail": "Sources, scans and matches",
   "toolsScraperDetail": "Matched, pending and failed",
   "accountSheetTitle": "Account",
@@ -5350,7 +5348,17 @@
   "filesViewGrid": "Grid view",
   "weatherSheetLocationEyebrow": "{city} · LOCAL WEATHER",
   "@weatherSheetLocationEyebrow": {"placeholders": {"city": {"type": "String"}}},
-  "weatherSheetSummary": "Clear skies through the evening. A cooler, quiet night ahead.",
+  "weatherSheetHourRange": "Between {low}° and {high}° over the next {count} hours.",
+  "@weatherSheetHourRange": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "low": {"type": "int"},
+      "high": {"type": "int"}
+    }
+  },
+  "weatherHumidityDry": "Dry",
+  "weatherHumidityComfortable": "Comfortable",
+  "weatherHumidityHumid": "Humid",
   "weatherHourNow": "Now",
   "weatherMetricWind": "Wind",
   "weatherMetricHumidity": "Humidity",

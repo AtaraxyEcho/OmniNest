@@ -166,6 +166,27 @@ scripts/build_signed_windows_release.ps1 -CertificateThumbprint <fingerprint> -T
 - `-RequireHttps` builds a **strict package**: the app rejects every `http://` server address (with a mutual-exclusion check), equivalent to `--dart-define=OMNINEST_REQUIRE_HTTPS=true`; suited to public HTTPS deployments.
 - Android universal packages allow cleartext HTTP for LAN self-hosting (see `android/app/src/main/res/xml/network_security_config.xml`); the setup page shows a risk notice for http addresses.
 
+## Brand icons
+
+The brand mark has two source files, one per context:
+
+- `assets/icon/icon.png`: an opaque square on the dark `#171b1a` background, used for the Android / iOS / macOS / Web / Windows launcher icons and configured in the `flutter_launcher_icons_plus` section of `pubspec.yaml`.
+- `assets/icon/brand_mark.png`: a 512px transparent mark used by the in-app `BrandLogo` and the macOS / Linux tray. In-app usage must be transparent, otherwise the dark background block reads as a black square on light themes.
+
+After replacing the launcher icon source, regenerate every derived slot from the `frontend` directory:
+
+```bash
+dart run flutter_launcher_icons_plus:main
+```
+
+Three items are outside that command and need manual handling:
+
+- `assets/icon/tray.ico` is the Windows tray icon; the command does not write an `.ico` there. Copy the regenerated `windows/runner/resources/app_icon.ico` over it.
+- Do not set `background_color` or `theme_color` under `flutter_launcher_icons_plus.web`, otherwise the command overwrites the stage colors maintained by hand in `web/manifest.json`.
+- `../imgs/omninest-logo.webp` is the README header and uses the horizontal lockup, produced separately.
+
+`flutter_launcher_icons_plus.linux` has no matching implementation in the generator currently in use: the key exists but produces no Linux icons.
+
 ## Development conventions
 
 - Riverpod owns business state; widget `setState` is only for short-lived hover, expansion, transient selection, and local animation.

@@ -15,6 +15,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -350,4 +351,77 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
     expect(controller.sharedPage, 1);
   });
+
+  testWidgets('最近使用给 .feature-hero 身份块', (tester) async {
+    await _expectHero(tester, FileManagerSection.recent);
+  });
+
+  testWidgets('我的收藏给 .feature-hero 身份块', (tester) async {
+    await _expectHero(tester, FileManagerSection.favorites);
+  });
+
+  testWidgets('与我共享给 .feature-hero 身份块', (tester) async {
+    await _expectHero(tester, FileManagerSection.sharedWithMe);
+  });
+
+  testWidgets('离线下载给 .feature-hero 身份块', (tester) async {
+    await _expectHero(tester, FileManagerSection.offlineDownloads);
+  });
+
+  testWidgets('文件夹分区不给身份块，仍是三档分段', (tester) async {
+    await _pump(
+      tester,
+      const FileBrowserState(
+        files: <FileNode>[],
+        recycleBin: <FileNode>[],
+        section: FileManagerSection.allFiles,
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byType(SampleFeatureHero),
+      findsNothing,
+      reason: 'FolderView 档的页头是分段器，不给 .feature-hero',
+    );
+  });
+}
+
+/// 样例 featureMeta 给这四个分区各一张 FeaturePage：页头之下先落身份块。
+///
+/// 页头留真实计数、hero 留分区说明，两行不再同文；标题按样例在两处各现一次。
+Future<void> _expectHero(
+  WidgetTester tester,
+  FileManagerSection section,
+) async {
+  await _pump(
+    tester,
+    FileBrowserState(
+      files: const <FileNode>[],
+      recycleBin: const <FileNode>[],
+      section: section,
+    ),
+  );
+
+  expect(tester.takeException(), isNull, reason: section.name);
+  expect(
+    find.byType(SampleFeatureHero),
+    findsOneWidget,
+    reason: '${section.name} 是样例 featureMeta 里的 FeaturePage',
+  );
+  expect(
+    find.descendant(
+      of: find.byType(SampleFeatureHero),
+      matching: find.text(section.labelOf(_l10n(tester))),
+    ),
+    findsOneWidget,
+    reason: section.name,
+  );
+}
+
+/// 从已挂载的树里取本地化实例，用于按分区名反查文案。
+AppLocalizations _l10n(WidgetTester tester) {
+  return AppLocalizations.of(
+    tester.element(find.byType(FileBrowserPage).first),
+  );
 }

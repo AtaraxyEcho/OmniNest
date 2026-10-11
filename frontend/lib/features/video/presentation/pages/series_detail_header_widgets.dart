@@ -391,7 +391,7 @@ class _SeriesPlayButton extends StatelessWidget {
     final label = _label(l10n);
     return Semantics(
       button: true,
-      label: label,
+      // 子级 Text 已提供名称，这里再写 label 会让合并节点变成 "label\nlabel"。
       child: MouseRegion(
         cursor: busy ? MouseCursor.defer : SystemMouseCursors.click,
         child: Material(

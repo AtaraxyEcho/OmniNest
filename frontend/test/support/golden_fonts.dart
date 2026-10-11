@@ -19,10 +19,19 @@ Future<void> loadGoldenFonts() async {
         ..addFont(rootBundle.load('assets/fonts/NotoSansSC-600.ttf'))
         ..addFont(rootBundle.load('assets/fonts/NotoSansSC-700.ttf'));
   final icons = FontLoader('MaterialIcons')..addFont(_loadMaterialIcons());
+  // 衬线数字与等宽档位是样例签名排版；漏装会让这些文字在基线图里
+  // 变成实心矩形，整张图的可读性判断随之失效。只登记没有中文覆盖的字族：
+  // 再登记一款中文族会让 CJK 的回退目标变得不确定，既有基线整体位移。
+  final serif = FontLoader('InstrumentSerif')
+    ..addFont(rootBundle.load('assets/fonts/InstrumentSerif-Regular.ttf'));
+  final mono = FontLoader('JetBrainsMono')
+    ..addFont(rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
   await Future.wait(<Future<void>>[
     inter.load(),
     notoSans.load(),
     icons.load(),
+    serif.load(),
+    mono.load(),
   ]);
 }
 

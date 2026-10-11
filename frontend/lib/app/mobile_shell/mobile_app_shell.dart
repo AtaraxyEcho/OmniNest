@@ -12,7 +12,6 @@ import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/providers.dart';
-import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -77,15 +76,13 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     );
     final offline = ref.watch(appOnlineStatusProvider).asData?.value == false;
     final backdropActive = ref.watch(mobileShellLocalBackdropActiveProvider);
-    // 极性在这里决定并注册：壁纸在场取采样亮度，无壁纸的实底壳随根主题明暗。
+    // 极性在这里决定并注册：外观设置就是极性源，壁纸不参与判定。
     // 壳层之下的所有面都已接进极性表，未注册时 MobileEnvPalette.of 仍取暗基准。
     final baseTheme = Theme.of(context);
-    final envPalette = watchMobileEnvPalette(ref, baseTheme);
-    final shellTheme = (envPalette.brightness == Brightness.dark
-            ? (baseTheme.brightness == Brightness.dark
-                ? baseTheme
-                : OmniNestTheme.dark())
-            : MobileAppTheme.resolve(baseTheme))
+    final envPalette = mobileEnvPaletteFor(baseTheme);
+    final shellTheme = (envPalette.brightness == Brightness.light
+            ? MobileAppTheme.resolve(baseTheme)
+            : baseTheme)
         .withEnvPalette(envPalette);
     final content = Theme(
       data: shellTheme,
@@ -194,7 +191,10 @@ class _MobileTopBar extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Row(
                 children: [
-                  BrandLogo(size: 28, radius: 9),
+                  // 透明底标记的可视内容只占画布宽约 70%，取与搜索钮同档的
+                  // 48 才能在顶栏读成品牌位；圆角对透明图不产生裁切，仅按
+                  // 其余展示位约 29% 的比例保持数值一致。
+                  const BrandLogo(size: 48, radius: 14),
                   if (!isHome) ...[
                     const SizedBox(width: 12),
                     Expanded(
@@ -330,56 +330,92 @@ class _MobileBottomNavigation extends ConsumerWidget {
             child: ConstrainedBox(
               key: const ValueKey('omninest.mobile.bottom-nav'),
               constraints: BoxConstraints(maxWidth: tabGroupMaxWidth),
-              child: DecoratedBox(
-                // 投影留在裁切之外，模糊与描边在裁切之内（对齐原型
-                // .bottom-nav：r23 + blur(28) + 白 12% 描边 + 0 12 35 投影）。
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(23),
-                  boxShadow: [
-                    BoxShadow(
-                      color: context.env.elevShadow,
-                      blurRadius: 35,
-                      offset: const Offset(0, 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 滑块层要按"整条带"算槽位，Positioned 又必须是 Stack 的
+                  // 直接子级，因此带宽在这里量一次再传进去。
+                  final bandWidth =
+                      constraints.maxWidth - _navHorizontalPadding * 2;
+                  return DecoratedBox(
+                    // 投影留在裁切之外，模糊与描边在裁切之内；样例 `.bottom-nav`
+                    // 两态都带 backdrop-filter，浅态只是把底色换成半透明白。
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(23),
+                      boxShadow: [
+                        BoxShadow(
+                          color: context.env.elevShadow,
+                          blurRadius: 35,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(23),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: context.env.navGlass,
-                        border: Border.all(color: context.env.line12),
-                      ),
-                      child: SizedBox(
-                        height: 70,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 5,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(23),
+                      child: MobileEnvBlur(
+                        sigma: 28,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: context.env.navGlass,
+                            border: Border.all(color: context.env.line12),
                           ),
-                          child: Row(
-                            children: [
-                              for (
-                                var index = 0;
-                                index < destinations.length;
-                                index++
-                              )
-                                Expanded(
-                                  child: _MobileBottomDestination(
-                                    destination: destinations[index],
-                                    selected: selectedIndex == index,
-                                    onTap: () => onSelected(index),
+                          child: SizedBox(
+                            height: _navBarHeight,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: _navHorizontalPadding,
+                                vertical: _navVerticalPadding,
+                              ),
+                              child: Stack(
+                                children: [
+                                  // 选中胶囊是单层滑块：横向按等宽槽位居中，竖向
+                                  // 复刻目的地列的整组居中（图标带 + 间隙 + 单行
+                                  // 标签），因此滑块与图标带同心且槽位几何不变。
+                                  AnimatedPositioned(
+                                    key: const ValueKey(
+                                      'omninest.mobile.bottom-nav-pill',
+                                    ),
+                                    duration: MotionToken.reduced(
+                                      context,
+                                      MobileLayoutTokens.stateDuration,
+                                    ),
+                                    curve: MobileLayoutTokens.motionCurve,
+                                    left: _navPillLeft(
+                                      bandWidth: bandWidth,
+                                      selectedIndex: selectedIndex,
+                                      slotCount: destinations.length,
+                                    ),
+                                    top: _navPillTop(context),
+                                    width: _navPillWidth,
+                                    height: _navPillHeight,
+                                    child: const IgnorePointer(
+                                      child: _MobileBottomPill(),
+                                    ),
                                   ),
-                                ),
-                            ],
+                                  Row(
+                                    children: [
+                                      for (
+                                        var index = 0;
+                                        index < destinations.length;
+                                        index++
+                                      )
+                                        Expanded(
+                                          child: _MobileBottomDestination(
+                                            destination: destinations[index],
+                                            selected: selectedIndex == index,
+                                            onTap: () => onSelected(index),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -411,31 +447,12 @@ class _MobileBottomDestination extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                // 原型 `.bottom-nav button > span` 是 min-width:48 + height:30，
-                // 选中只换底色与投影，舱体宽度不随状态跳变；减弱动效时
-                // 连配色补间一起跳过，直接落终态。
-                duration: MotionToken.reduced(
-                  context,
-                  MobileLayoutTokens.stateDuration,
-                ),
-                curve: MobileLayoutTokens.motionCurve,
-                width: 48,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: selected ? context.env.accent : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow:
-                      selected
-                          ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                          : null,
-                ),
+              // 原型 `.bottom-nav button > span` 是 min-width:48 + height:30。
+              // 选中底色与投影归底栏的单层滑块，这里只保留同尺寸的图标带，
+              // 使槽位几何与改造前逐字节一致。
+              SizedBox(
+                width: _navPillWidth,
+                height: _navPillHeight,
                 child: Center(
                   child: OmniIcon(
                     icon: destination.icon,
@@ -445,23 +462,101 @@ class _MobileBottomDestination extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: _navItemGap),
               Text(
                 destination.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? context.env.ink : context.env.white46,
-                  // ignore: font_size_whitelist
-                  fontSize: 9,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  height: 1.2,
+                style: _navLabelStyle(
+                  ink: selected ? context.env.ink : context.env.white46,
+                  bold: selected,
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// 底栏几何：目的地列与滑块层共用同一组常量，避免两处各算一遍居中。
+const double _navBarHeight = 70;
+const double _navHorizontalPadding = 6;
+const double _navVerticalPadding = 5;
+const double _navPillWidth = 48;
+const double _navPillHeight = 30;
+const double _navItemGap = 3;
+const double _navLabelSize = 9;
+const double _navLabelHeightFactor = 1.2;
+
+/// 图标带所在的高度：底栏高减去上下内衬。
+const double _navBandHeight = _navBarHeight - _navVerticalPadding * 2;
+
+/// 滑块横向位置：等宽槽位的中心减去胶囊半宽。
+double _navPillLeft({
+  required double bandWidth,
+  required int selectedIndex,
+  required int slotCount,
+}) {
+  final slotWidth = bandWidth / slotCount;
+  return slotWidth * (selectedIndex + 0.5) - _navPillWidth / 2;
+}
+
+/// 滑块竖向位置。
+///
+/// 目的地列是"图标带 + 间隙 + 单行标签"整组居中，图标带顶边因此落在
+/// (带高 − 整组高) / 2；标签行高用同一份样式实测，而不是按字号乘行高系数
+/// 手算——手算会留下亚像素差，滑块与图标带就不同心了。
+double _navPillTop(BuildContext context) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: '甲',
+      style: _navLabelStyle(ink: Colors.transparent, bold: false),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final labelExtent = painter.height;
+  painter.dispose();
+  final groupHeight = _navPillHeight + _navItemGap + labelExtent;
+  return ((_navBandHeight - groupHeight) / 2)
+      .clamp(0.0, _navBandHeight)
+      .toDouble();
+}
+
+/// 底栏标签样式。目的地列与滑块的竖向定位测量共用它——两处行高必须一致，
+/// 胶囊才谈得上与图标带同心。
+TextStyle _navLabelStyle({required Color ink, required bool bold}) {
+  return TextStyle(
+    color: ink,
+    // ignore: font_size_whitelist
+    fontSize: _navLabelSize,
+    fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+    height: _navLabelHeightFactor,
+  );
+}
+
+/// 底栏选中胶囊：样例 `.bottom-nav button.active > span` 的酸绿底与投影。
+class _MobileBottomPill extends StatelessWidget {
+  const _MobileBottomPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.env.accent,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: context.env.pillGlow,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const SizedBox(width: _navPillWidth, height: _navPillHeight),
     );
   }
 }

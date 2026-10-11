@@ -15,7 +15,7 @@ class NowPlayingWidget extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => context.go('/music'),
+        onTap: () => context.push('/music'),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

@@ -5,17 +5,16 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
-import 'package:omninest/features/files/application/file_browser_models.dart';
-import 'package:omninest/features/files/presentation/pages/file_browser_page.dart'
-    show FileManagerSectionMeta;
 
 /// 工作区工具总入口（原型 `FeatureDirectory`）：分组列出壳层内已落地的
 /// 工具页，行了 `.feature-link-grid` 卡片（66 高、r16、白 4.5% 底 +
 /// 白 7% 描边、42 图标舱 + 11/9 双行 + 箭头）。
 ///
-/// 只收已能在托管态打开的目标：原型里 `media-collections`、
-/// `watch-history`、`scraper` 与 `music-scan` 都没有模块内入口，它们的
-/// 托管形态落地后才进这张表，避免做成死键。
+/// 收表规则只有一条：**模块内已有一级入口的页面不进这里**。Files 首页的
+/// 四张分区卡与三枚工具快捷、音乐岛的播放历史都已各自可达，重复列在这里
+/// 只会让同一页有两个入口；留下来的都是除深链外无处可去的页。
+///
+/// 行内一律 push：go 会换掉整条栈，从工具页进目标后系统返回直接退出应用。
 class WorkspaceToolsPage extends StatelessWidget {
   const WorkspaceToolsPage({super.key});
 
@@ -26,7 +25,14 @@ class WorkspaceToolsPage extends StatelessWidget {
     final groups = <_WorkspaceToolGroup>[
       _WorkspaceToolGroup(
         label: l10n.toolsGroupFiles,
-        rows: _fileRows(context, l10n),
+        rows: <_WorkspaceToolRow>[
+          _WorkspaceToolRow(
+            icon: OmniIcons.share,
+            title: l10n.filesMyShares,
+            detail: l10n.filesMySharesDesc,
+            onTap: () => context.push('/files?section=myShares'),
+          ),
+        ],
       ),
       _WorkspaceToolGroup(
         label: l10n.toolsGroupMedia,
@@ -35,19 +41,13 @@ class WorkspaceToolsPage extends StatelessWidget {
             icon: OmniIcons.film,
             title: l10n.videoSectionCollections,
             detail: l10n.toolsVideoCollectionsDetail,
-            onTap: () => context.go('/video?section=collections'),
+            onTap: () => context.push('/video?section=collections'),
           ),
           _WorkspaceToolRow(
             icon: OmniIcons.list,
             title: l10n.videoSectionHistory,
             detail: l10n.videoHistorySubtitle,
-            onTap: () => context.go('/video?section=history'),
-          ),
-          _WorkspaceToolRow(
-            icon: OmniIcons.music,
-            title: l10n.musicHistoryTitle,
-            detail: l10n.toolsMusicHistoryDetail,
-            onTap: () => context.push('/music/history'),
+            onTap: () => context.push('/video?section=history'),
           ),
           _WorkspaceToolRow(
             icon: OmniIcons.queue,
@@ -59,7 +59,7 @@ class WorkspaceToolsPage extends StatelessWidget {
             icon: OmniIcons.sparkle,
             title: l10n.videoSectionMovieAdmin,
             detail: l10n.toolsScraperDetail,
-            onTap: () => context.go('/video?section=management'),
+            onTap: () => context.push('/video?section=management'),
           ),
         ],
       ),
@@ -98,9 +98,10 @@ class WorkspaceToolsPage extends StatelessWidget {
                       group.label.toUpperCase(),
                       style: TextStyle(
                         fontSize: 9, // ignore: font_size_whitelist
+                        height: 1.45,
                         letterSpacing: 1.5,
                         fontWeight: FontWeight.w700,
-                        color: env.inkFaint,
+                        color: env.groupLabelInk,
                       ),
                     ),
                   ),
@@ -112,43 +113,6 @@ class WorkspaceToolsPage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  /// Files 分区行直连 `/files?section=`：分区名与描述都取模块既有标签，
-  /// 不另造文案。
-  List<_WorkspaceToolRow> _fileRows(
-    BuildContext context,
-    AppLocalizations l10n,
-  ) {
-    const sections = <FileManagerSection>[
-      FileManagerSection.recent,
-      FileManagerSection.favorites,
-      FileManagerSection.myShares,
-      FileManagerSection.offlineDownloads,
-      FileManagerSection.storageStats,
-      FileManagerSection.externalStorage,
-      FileManagerSection.importTasks,
-      FileManagerSection.uploadQueue,
-    ];
-    const glyphs = <OmniIconsData>[
-      OmniIcons.clock,
-      OmniIcons.heart,
-      OmniIcons.share,
-      OmniIcons.download,
-      OmniIcons.cloud,
-      OmniIcons.device,
-      OmniIcons.list,
-      OmniIcons.queue,
-    ];
-    return [
-      for (final (index, section) in sections.indexed)
-        _WorkspaceToolRow(
-          icon: glyphs[index],
-          title: section.labelOf(l10n),
-          detail: section.descriptionOf(l10n),
-          onTap: () => context.go('/files?section=${section.name}'),
-        ),
-    ];
   }
 }
 
@@ -190,9 +154,10 @@ class _WorkspaceToolsIntro extends StatelessWidget {
             l10n.toolsIntroEyebrow.toUpperCase(),
             style: TextStyle(
               fontSize: 8, // ignore: font_size_whitelist
+              height: 1.45,
               letterSpacing: 1.4,
               fontWeight: FontWeight.w700,
-              color: env.accentInk,
+              color: env.groupLabelInk,
             ),
           ),
           const SizedBox(height: 8),

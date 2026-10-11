@@ -76,7 +76,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
+      await expectLater(
         find.byKey(_goldenKey),
         matchesGoldenFile('goldens/workbench_${testCase.name}.png'),
       );

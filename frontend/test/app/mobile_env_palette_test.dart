@@ -1,5 +1,6 @@
 // 环境色板两极性的守卫：暗实例必须与既有基准逐值相同（迁移不得改变环境外观），
 // 浅实例必须满足可读性下限，且"填充 + 其上的字"必须成对翻转。
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -56,6 +57,13 @@ void main() {
     expect(dark.onAccent, MobileEnvColors.onAccent);
     expect(dark.onAccentDeep, MobileEnvColors.onAccentDeep);
     expect(dark.segmentBg, MobileEnvColors.segmentBg);
+    // 新增角色在暗态必须复现改动前那句表达式，逐字节不变才算零回归。
+    expect(dark.segmentActiveBg, MobileEnvColors.accent);
+    expect(dark.actionFill, MobileEnvColors.accent);
+    expect(dark.actionFillInk, MobileEnvColors.onAccent);
+    expect(dark.switchOn, MobileEnvColors.accent);
+    expect(dark.switchKnobOff, MobileEnvColors.ink);
+    expect(dark.switchKnobOn, MobileEnvColors.onAccentDeep);
     expect(dark.iconButtonGlass, MobileEnvColors.iconButtonGlass);
     expect(dark.posterPlayBg, MobileEnvColors.posterPlayBg);
     expect(dark.posterPlayFg, MobileEnvColors.posterPlayFg);
@@ -85,58 +93,101 @@ void main() {
     expect(dark.onButtonInk, MobileEnvColors.onButtonInk);
   });
 
-  test('浅实例的中性墨与表面换成纸面对应物', () {
-    const light = MobileEnvPalette.light;
-    expect(light.stage, const Color(0xFFF7F8F6));
-    expect(light.ink, const Color(0xFF1A1D1B));
-    expect(light.accent, MobileEnvColors.accent, reason: '酸绿仍是酸绿，只改用法');
-    expect(light.accentInk, const Color(0xFF0B6B61));
-    expect(
-      light.elevShadow.a,
-      lessThan(MobileEnvPalette.dark.elevShadow.a),
-      reason: '浅态玻璃面半透明，投影透上来会把卡片染成灰板，必须比暗态淡',
-    );
-  });
+  test('两极性的各级文字墨色在每张实底承载面上都过 AA', () {
+    // 次级说明与眉标不只落在 stage 上，实底面板、指标格、舞台实底都比 stage 更深，
+    // 只判 stage 会漏掉真正最差的那张面。玻璃面按壁纸合成，不在本断言范围内。
+    final surfaces = <MobileEnvPalette, Map<String, Color>>{
+      MobileEnvPalette.dark: {
+        'stage': MobileEnvPalette.dark.stage,
+        'stageSolid': MobileEnvPalette.dark.stageSolid,
+        'sheetSolid': MobileEnvPalette.dark.sheetSolid,
+        'metricCell': MobileEnvPalette.dark.metricCell,
+      },
+      MobileEnvPalette.light: {
+        'stage': MobileEnvPalette.light.stage,
+        'stageSolid': MobileEnvPalette.light.stageSolid,
+        'sheetSolid': MobileEnvPalette.light.sheetSolid,
+        'metricCell': MobileEnvPalette.light.metricCell,
+        'navGlass': MobileEnvPalette.light.navGlass,
+        'canvas': MobileEnvPalette.light.searchOverlayBg,
+      },
+    };
 
-  test('浅实例的墨色族按等对比上调 α，深于同名的暗值比例', () {
-    const dark = MobileEnvPalette.dark;
-    const light = MobileEnvPalette.light;
-    for (final (name, d, l) in [
-      ('inkMuted', dark.inkMuted, light.inkMuted),
-      ('inkFaint', dark.inkFaint, light.inkFaint),
-      ('ink40', dark.ink40, light.ink40),
-      ('line25', dark.line25, light.line25),
-      ('white43', dark.white43, light.white43),
-      ('white70', dark.white70, light.white70),
-      ('white78', dark.white78, light.white78),
-    ]) {
-      expect(l.a, greaterThan(d.a), reason: '$name 在纸面需要更高 α 才能等对比');
-    }
-  });
-
-  test('两极性的正文墨色与各自舞台底都保持 AA 以上对比', () {
-    for (final palette in [MobileEnvPalette.dark, MobileEnvPalette.light]) {
+    for (final polarity in surfaces.entries) {
+      final palette = polarity.key;
       expect(
         _contrast(palette.ink, palette.stage),
         greaterThan(12),
-        reason: '主文字',
+        reason: '${palette.brightness} 主文字',
       );
-      expect(
-        _contrast(palette.inkMuted, palette.stage),
-        greaterThan(7),
-        reason: '次级说明',
-      );
-      expect(
-        _contrast(palette.inkFaint, palette.stage),
-        greaterThan(4.5),
-        reason: '眉标',
-      );
-      expect(
-        _contrast(palette.accentInk, palette.stage),
-        greaterThan(4.5),
-        reason: '强调色作文字/图标/细条',
-      );
+      for (final surface in polarity.value.entries) {
+        for (final role
+            in {
+              'inkMuted': palette.inkMuted,
+              'inkFaint': palette.inkFaint,
+              'groupLabelInk': palette.groupLabelInk,
+              'appearanceOptionInk': palette.appearanceOptionInk,
+              'accentInk': palette.accentInk,
+            }.entries) {
+          expect(
+            _contrast(role.value, surface.value),
+            greaterThan(4.5),
+            reason:
+                '${palette.brightness} ${role.key} 压在 ${surface.key} 上'
+                '实测 ${_contrast(role.value, surface.value).toStringAsFixed(3)}',
+          );
+        }
+      }
     }
+  });
+
+  test('三处 α 是对样例字面量的刻意偏离，闸门只判 RGB 所以必须在这里钉住', () {
+    // light_mode_parity_test 把 `_cssToHex` 只取到 r/g/b，α 漂移它抓不到；
+    // 样例这几档的 α 压在浅纸上过不了 AA，于是色相照抄、α 单独提档。
+    expect(
+      MobileEnvPalette.light.inkMuted.a,
+      closeTo(0xA3 / 255, 0.001),
+      reason: '样例 rgba(23,35,30,.62)=0x9E，为过 AA 提到 0xA3',
+    );
+    expect(
+      MobileEnvPalette.light.groupLabelInk.a,
+      closeTo(0x9F / 255, 0.001),
+      reason: '样例 rgba(26,29,27,.58)=0x94，提到 0x9F',
+    );
+    expect(
+      MobileEnvPalette.dark.groupLabelInk.a,
+      closeTo(0x7C / 255, 0.001),
+      reason: '样例 rgba(246,246,242,.43)=0x6E，提到 0x7C',
+    );
+    // 偏离只允许发生在 α：色相必须仍是样例那一支。
+    expect(MobileEnvPalette.light.inkMuted.toARGB32() & 0xFFFFFF, 0x17231E);
+    expect(
+      MobileEnvPalette.light.groupLabelInk.toARGB32() & 0xFFFFFF,
+      0x1A1D1B,
+    );
+    expect(MobileEnvPalette.dark.groupLabelInk.toARGB32() & 0xFFFFFF, 0xF6F6F2);
+
+    // 天气抽屉那批 7-10px 小字：样例字面量是 --muted（浅 .62，实测压在指标格上
+    // 只有 4.68），设备截图上整层发灰；改用样例自己的标签档 --text-secondary
+    // .72（实测 6.06）。暗态 --muted 本来就够，不跟着提档。
+    expect(
+      MobileEnvPalette.light.microLabelInk.a,
+      closeTo(0xB8 / 255, 0.001),
+      reason: '样例 .weather-metrics small 是 rgba(23,35,30,.62)=0x9E，提到 0xB8',
+    );
+    expect(
+      MobileEnvPalette.dark.microLabelInk.a,
+      MobileEnvPalette.dark.inkMuted.a,
+      reason: '暗态维持 --muted，避免把已经够强的那一档再推一遍',
+    );
+    expect(
+      _contrast(
+        MobileEnvPalette.light.microLabelInk,
+        MobileEnvPalette.light.metricCell,
+      ),
+      greaterThan(5.5),
+      reason: '微型标签档在指标格上要比 --muted 明显',
+    );
   });
 
   test('填充与其上的字成对定义，两极性都不出现同色相叠', () {
@@ -207,5 +258,71 @@ void main() {
     // MaterialApp 的 AnimatedTheme 会插值主题，未走完时取到的是上一棵树的主题。
     await tester.pumpAndSettle();
     expect(registered, MobileEnvPalette.dark, reason: 'AnimatedTheme 需要走完插值');
+  });
+
+  testWidgets('未传 barrierColor 的模态面板，遮罩随注册的极性走', (tester) async {
+    // showModalBottomSheet 的遮罩解析链是「显式参数 → bottomSheetTheme
+    // .modalBarrierColor → Colors.black54」，全仓 32 处调用里 29 处没传参数，
+    // 所以判据必须走真实路由，而不是只看主题字段。
+    for (final palette in const [
+      MobileEnvPalette.dark,
+      MobileEnvPalette.light,
+    ]) {
+      late BuildContext hostContext;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            brightness: palette.brightness,
+          ).withEnvPalette(palette),
+          home: Builder(
+            builder: (context) {
+              hostContext = context;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      unawaited(
+        showModalBottomSheet<void>(
+          context: hostContext,
+          builder: (context) => const SizedBox(height: 80),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final barrier = tester.widget<ModalBarrier>(
+        find
+            .byWidgetPredicate(
+              (widget) => widget is ModalBarrier && widget.color != null,
+            )
+            .first,
+      );
+      expect(
+        barrier.color,
+        palette.modalScrim,
+        reason: '${palette.brightness} 档的模态遮罩必须来自同一极性',
+      );
+      expect(barrier.color, isNot(Colors.black54));
+
+      Navigator.of(hostContext, rootNavigator: true).pop();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  test('浅态的强调色只能当填充，当文字或图标会直接看不见', () {
+    const light = MobileEnvPalette.light;
+    expect(
+      _contrast(light.accent, light.stage),
+      lessThan(1.6),
+      reason: '这就是 accent 当字色必须换成 accentInk 的量依据',
+    );
+    expect(
+      _contrast(light.accentInk, light.stage),
+      greaterThan(4.5),
+      reason: '同一位置换成墨用法后要过 AA',
+    );
+    // 暗态两者同值，所以这条换用不会动暗基线。
+    expect(MobileEnvPalette.dark.accent, MobileEnvPalette.dark.accentInk);
   });
 }

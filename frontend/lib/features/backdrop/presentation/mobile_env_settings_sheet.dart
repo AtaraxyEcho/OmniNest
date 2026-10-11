@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -9,6 +10,15 @@ import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart'
 
 /// 视觉环境移动端设置（样例 EnvSettings）：根级全覆盖贴底抽屉——
 /// 当前环境大卡 + 图库网格（选中打勾 + 上传瓦片）+ 行为开关。
+///
+/// 抽屉走 `useRootNavigator: true`，而 `showModalBottomSheet` 用
+/// `InheritedTheme.capture` 把属主链上的 Theme 冻结进模态子树：抽屉里
+/// `Theme.of` 要么拿到没有极性注册的根主题（`MobileEnvPalette.of` 退回暗
+/// 基准，于是"浅色模式"成了空操作），要么拿到打开那一刻的旧主题（翻设置
+/// 不跟随）。两条都不是要的，所以极性不在自身 Theme 上取，而是按壳层同一
+/// 判据现取（外观设置解析出的亮度，即 `mobileEnvPaletteFor` 读的
+/// `theme.brightness`），再由 [_MobileEnvPaletteScope] 注册回抽屉子树。
+/// modal 背景同时改透明：表面色由抽屉自身画，取值不再冻在打开那一刻。
 Future<void> showMobileEnvSettingsSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -16,7 +26,7 @@ Future<void> showMobileEnvSettingsSheet(BuildContext context) {
     isScrollControlled: true,
     isDismissible: true,
     enableDrag: false,
-    backgroundColor: context.env.sheetSolid,
+    backgroundColor: Colors.transparent,
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * 0.85,
       minHeight: MediaQuery.sizeOf(context).height * 0.6,
@@ -24,8 +34,37 @@ Future<void> showMobileEnvSettingsSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (_) => const _MobileEnvSettingsSheet(),
+    builder:
+        (_) => const _MobileEnvPaletteScope(child: _MobileEnvSettingsSheet()),
   );
+}
+
+/// 抽屉子树的极性注册：与壳层共用 `MobileEnvPalette.resolve`，
+/// 亮度来源是外观设置，翻设置即刻跟随（不把 palette 快照进 widget）。
+class _MobileEnvPaletteScope extends ConsumerWidget {
+  const _MobileEnvPaletteScope({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final base = Theme.of(context);
+    return Theme(
+      data: base.withEnvPalette(
+        MobileEnvPalette.resolve(_appearanceBrightness(context, ref)),
+      ),
+      child: child,
+    );
+  }
+
+  /// ThemeMode.system 时 MaterialApp 用的就是平台亮度，这里保持同一结果。
+  Brightness _appearanceBrightness(BuildContext context, WidgetRef ref) {
+    return switch (ref.watch(appearanceControllerProvider)) {
+      ThemeMode.light => Brightness.light,
+      ThemeMode.dark => Brightness.dark,
+      ThemeMode.system => MediaQuery.platformBrightnessOf(context),
+    };
+  }
 }
 
 class _MobileEnvSettingsSheet extends ConsumerStatefulWidget {
@@ -63,155 +102,165 @@ class _MobileEnvSettingsSheetState
     final selected = state?.selectedBackdrop;
     final enabled = state?.settings.enabled ?? true;
 
-    return SafeArea(
-      top: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 抽屉头：眉标 + 衬线标题 + 关闭圆钮（样例 sheet-head）。
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 10, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'PREFERENCES',
-                        style: TextStyle(
-                          fontSize: 8, // ignore: font_size_whitelist
-                          letterSpacing: 1.4,
-                          fontWeight: FontWeight.w700,
-                          color: context.env.accentInk,
+    return DecoratedBox(
+      key: const ValueKey<String>('omninest.envSheet.surface'),
+      decoration: BoxDecoration(
+        color: context.env.sheetSolid,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(top: BorderSide(color: context.env.line12)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 抽屉头：眉标 + 衬线标题 + 关闭圆钮（样例 sheet-head）。
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 10, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PREFERENCES',
+                          style: TextStyle(
+                            fontSize: 8, // ignore: font_size_whitelist
+                            height: 1.45,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w700,
+                            color: context.env.groupLabelInk,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        l10n.accountEntryEnvironment,
-                        style: TextStyle(
-                          fontSize: 21, // ignore: font_size_whitelist
-                          color: context.env.ink,
-                          fontWeight: FontWeight.w400,
+                        const SizedBox(height: 3),
+                        Text(
+                          l10n.accountEntryEnvironment,
+                          style: TextStyle(
+                            fontSize: 21, // ignore: font_size_whitelist
+                            color: context.env.ink,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(
-                    Icons.close_rounded,
-                    size: 20,
-                    color: context.env.ink,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-              children: [
-                // 当前环境大卡（样例 env-current）。
-                _CurrentEnvCard(selected: selected, enabled: enabled),
-                const SizedBox(height: 18),
-                _GroupLabel(l10n.envSheetLibrary),
-                const SizedBox(height: 8),
-                if (backdrops.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Center(
-                      child: Text(
-                        l10n.envSheetEmpty,
-                        style: TextStyle(
-                          fontSize: 12, // ignore: font_size_whitelist
-                          color: context.env.inkMuted,
-                        ),
-                      ),
+                      ],
                     ),
-                  )
-                else
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: EdgeInsets.zero,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: 7,
-                          crossAxisSpacing: 7,
+                  ),
+                  IconButton(
+                    tooltip:
+                        MaterialLocalizations.of(context).closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 20,
+                      color: context.env.ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                children: [
+                  // 当前环境大卡（样例 env-current）。
+                  _CurrentEnvCard(selected: selected, enabled: enabled),
+                  const SizedBox(height: 18),
+                  _GroupLabel(l10n.envSheetLibrary),
+                  const SizedBox(height: 8),
+                  if (backdrops.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      child: Center(
+                        child: Text(
+                          l10n.envSheetEmpty,
+                          style: TextStyle(
+                            fontSize: 12, // ignore: font_size_whitelist
+                            color: context.env.inkMuted,
+                          ),
                         ),
-                    itemCount: backdrops.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == backdrops.length) {
-                        return _UploadTile(
-                          onTap: () => controller.addBackdropFiles(),
+                      ),
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 7,
+                            crossAxisSpacing: 7,
+                          ),
+                      itemCount: backdrops.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == backdrops.length) {
+                          return _UploadTile(
+                            onTap: () => controller.addBackdropFiles(),
+                          );
+                        }
+                        final backdrop = backdrops[index];
+                        final active =
+                            selected != null && backdrop.id == selected.id;
+                        return _LibraryTile(
+                          backdrop: backdrop,
+                          active: active,
+                          onTap: () => controller.selectBackdrop(backdrop.id),
                         );
-                      }
-                      final backdrop = backdrops[index];
-                      final active =
-                          selected != null && backdrop.id == selected.id;
-                      return _LibraryTile(
-                        backdrop: backdrop,
-                        active: active,
-                        onTap: () => controller.selectBackdrop(backdrop.id),
-                      );
-                    },
-                  ),
-                const SizedBox(height: 6),
-                Center(
-                  child: Text(
-                    l10n.envSheetUploadHint,
-                    style: TextStyle(
-                      fontSize: 8, // ignore: font_size_whitelist
-                      color: context.env.inkFaint,
+                      },
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _GroupLabel(l10n.envSheetBehavior),
-                _BehaviorToggleRow(
-                  icon: Icons.image_outlined,
-                  label: l10n.envSheetLive,
-                  subtitle: l10n.envSheetLiveSub,
-                  value: enabled,
-                  onChanged: (value) => controller.setEnabled(value),
-                ),
-                _BehaviorToggleRow(
-                  icon: Icons.devices_other_rounded,
-                  label: l10n.envSheetSeparate,
-                  subtitle: l10n.envSheetSeparateSub,
-                  value: state?.settings.separateDeviceBackdrops ?? false,
-                  onChanged: (value) => controller.setDeviceSeparation(value),
-                ),
-                if (backdrops.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 14),
-                    child: TextButton(
-                      onPressed: () => controller.clearBackdrops(),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFFE2A1A1),
-                        minimumSize: const Size.fromHeight(44),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(13),
-                          side: const BorderSide(color: Color(0x38E2A1A1)),
-                        ),
-                      ),
-                      child: Text(
-                        l10n.envSheetClearAll,
-                        style: const TextStyle(
-                          fontSize: 11, // ignore: font_size_whitelist
-                          fontWeight: FontWeight.w700,
-                        ),
+                  const SizedBox(height: 6),
+                  Center(
+                    child: Text(
+                      l10n.envSheetUploadHint,
+                      style: TextStyle(
+                        fontSize: 8, // ignore: font_size_whitelist
+                        color: context.env.inkFaint,
                       ),
                     ),
                   ),
-              ],
+                  const SizedBox(height: 12),
+                  _GroupLabel(l10n.envSheetBehavior),
+                  _BehaviorToggleRow(
+                    icon: Icons.image_outlined,
+                    label: l10n.envSheetLive,
+                    subtitle: l10n.envSheetLiveSub,
+                    value: enabled,
+                    onChanged: (value) => controller.setEnabled(value),
+                  ),
+                  _BehaviorToggleRow(
+                    icon: Icons.devices_other_rounded,
+                    label: l10n.envSheetSeparate,
+                    subtitle: l10n.envSheetSeparateSub,
+                    value: state?.settings.separateDeviceBackdrops ?? false,
+                    onChanged: (value) => controller.setDeviceSeparation(value),
+                  ),
+                  if (backdrops.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: TextButton(
+                        onPressed: () => controller.clearBackdrops(),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFE2A1A1),
+                          minimumSize: const Size.fromHeight(44),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(13),
+                            side: const BorderSide(color: Color(0x38E2A1A1)),
+                          ),
+                        ),
+                        child: Text(
+                          l10n.envSheetClearAll,
+                          style: const TextStyle(
+                            fontSize: 11, // ignore: font_size_whitelist
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -229,9 +278,10 @@ class _GroupLabel extends StatelessWidget {
       text.toUpperCase(),
       style: TextStyle(
         fontSize: 8, // ignore: font_size_whitelist
+        height: 1.45,
         letterSpacing: 1.4,
         fontWeight: FontWeight.w700,
-        color: context.env.inkFaint,
+        color: context.env.groupLabelInk,
       ),
     );
   }

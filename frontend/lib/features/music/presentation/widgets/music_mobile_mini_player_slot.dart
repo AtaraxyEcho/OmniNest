@@ -1,13 +1,14 @@
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -129,7 +130,7 @@ class _MusicMobileMiniPlayerSlotState
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.32),
+                        color: context.env.elevShadow,
                         blurRadius: 28,
                         offset: const Offset(0, 10),
                       ),
@@ -137,14 +138,14 @@ class _MusicMobileMiniPlayerSlotState
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                    child: MobileEnvBlur(
+                      sigma: 24,
                       child: DecoratedBox(
-                        // 样例固定配方：rgba(18,24,23,.91) + 白 13% 描边。
+                        // 浮起卡片：两态都带模糊，浅态是与底栏同源的半透明白。
                         decoration: BoxDecoration(
-                          color: const Color(0xE8121817),
+                          color: context.env.miniPlayer,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: const Color(0x21FFFFFF)),
+                          border: Border.all(color: context.env.line13),
                         ),
                         child: SizedBox(
                           height: 58,
@@ -237,15 +238,15 @@ class _MusicMobileMiniPlayerSlotState
                                   ],
                                 ),
                               ),
-                              // 样例 mini-progress：2px 渐变（lime 到当前进度）。
+                              // 2px 进度：强调色走到当前进度，其余轨道取最浅发丝档。
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(1),
                                 child: SizedBox(
                                   height: 2,
                                   child: LinearGradientProgress(
                                     value: progress.clamp(0, 1),
-                                    barColor: const Color(0xFFD5F17D),
-                                    trackColor: const Color(0x14FFFFFF),
+                                    barColor: context.env.accent,
+                                    trackColor: context.env.line07,
                                   ),
                                 ),
                               ),
@@ -343,7 +344,7 @@ class _MiniStrokeButton extends StatelessWidget {
           width: 41,
           height: 43,
           child: Center(
-            child: OmniIcon(icon: icon, size: 19, color: Colors.white),
+            child: OmniIcon(icon: icon, size: 19, color: context.env.ink),
           ),
         ),
       ),
@@ -351,7 +352,7 @@ class _MiniStrokeButton extends StatelessWidget {
   }
 }
 
-/// 样例 mini-progress 的渐变进度（lime 到 value 比例，其余白 8%）。
+/// 迷你条的渐变进度：强调色走到 value 比例，其余为轨道色。
 class LinearGradientProgress extends StatelessWidget {
   const LinearGradientProgress({
     required this.value,

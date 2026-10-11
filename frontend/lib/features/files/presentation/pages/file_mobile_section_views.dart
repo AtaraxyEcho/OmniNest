@@ -6,6 +6,29 @@ part of 'file_browser_page.dart';
 /// 分区宿主自带纵向滚动（下发无界高约束），因此各分区体只出非滚动内容：
 /// 不用 Expanded，横排也不取 stretch。
 
+/// 次级分区页的 `.feature-hero` 身份块：分区名 + 分区说明 + 样例同源的图标舱。
+///
+/// 样例把 header 与 hero 的同一份文案渲染两遍，这里 header 留给真实计数
+/// （[MobileModuleHeader] 的副题），hero 说明用 `descriptionOf`，两行不再重复。
+class _FeatureSectionHero extends StatelessWidget {
+  const _FeatureSectionHero({required this.section});
+
+  final FileManagerSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SampleFeatureHero(
+        icon: section.featureHeroIcon,
+        title: section.labelOf(l10n),
+        detail: section.descriptionOf(l10n),
+      ),
+    );
+  }
+}
+
 /// 计数眉标行（9px 弱化 + 右侧可选动作胶囊）。
 class _HostedSectionMetaRow extends StatelessWidget {
   const _HostedSectionMetaRow({required this.text, this.action});

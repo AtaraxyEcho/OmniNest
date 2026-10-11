@@ -5805,9 +5805,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerThemeDark => '深色';
 
   @override
-  String get readerThemeNightGlass => '夜间玻璃';
-
-  @override
   String get readerThemeGreen => '绿色';
 
   @override
@@ -11473,9 +11470,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolsVideoCollectionsDetail => '自定义与自动生成的合集';
 
   @override
-  String get toolsMusicHistoryDetail => '按天回看最近播放记录。';
-
-  @override
   String get toolsMusicScanDetail => '来源、扫描与匹配';
 
   @override
@@ -11702,7 +11696,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get weatherSheetSummary => '晴好将持续到傍晚，夜间转凉、安静。';
+  String weatherSheetHourRange(int count, int low, int high) {
+    return '未来 $count 小时 $low° 到 $high°。';
+  }
+
+  @override
+  String get weatherHumidityDry => '干燥';
+
+  @override
+  String get weatherHumidityComfortable => '舒适';
+
+  @override
+  String get weatherHumidityHumid => '潮湿';
 
   @override
   String get weatherHourNow => '现在';

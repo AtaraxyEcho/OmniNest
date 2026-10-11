@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
-import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -56,15 +55,6 @@ bool resolveMobileShell({
   return compact;
 }
 
-/// 推入路由是否强制暗色环境基底。
-///
-/// 只有非实底（沉浸/透明）路由保持暗栈：它们的底色由环境层绘制，极性归空间自己。
-/// 实底工具面自带底色，必须与壳层共用同一极性判定，否则出现
-/// 「浅壳导航胶囊压着暗工具页」这类分裂态。
-bool shouldForceEnvironmentDark({required bool solidSurface}) {
-  return !solidSurface;
-}
-
 /// 根级推入路由的移动形态宿主包装。
 ///
 /// 顶层的模块路由（/notifications 等）在 StatefulShellRoute 之外，天然
@@ -72,18 +62,13 @@ bool shouldForceEnvironmentDark({required bool solidSurface}) {
 /// scope，使页面可用 isHosted 分叉移动形态，并让页内工位弹窗经批次化
 /// 分流走底部玻璃面板。桌面宽窗原样透传；测试直接 pump 页面组件时不经
 /// 路由，scope 不存在，桌面路径不受影响。
+///
+/// 推入页不再按"实底/非实底"分叉极性：样例的浅态把 `.module-overlay`、
+/// `.book-detail`、`.reader-focus` 一律铺成纸面玻璃，只有媒体查看器自己钉暗。
 class MobileHostedRoute extends ConsumerWidget {
-  const MobileHostedRoute({
-    required this.child,
-    this.solidSurface = false,
-    super.key,
-  });
+  const MobileHostedRoute({required this.child, super.key});
 
   final Widget child;
-
-  /// 该路由是否为不依赖环境壁纸的实底工具面（工具目录、通知中心）。
-  /// 媒体与阅读模块页保持环境档，不设此标记。
-  final bool solidSurface;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -94,19 +79,11 @@ class MobileHostedRoute extends ConsumerWidget {
     if (!active) {
       return child;
     }
-    // 根级推入页脱离壳层的暗色 Theme：实底面与壳层共用同一极性判定，
-    // 非实底（沉浸）路由维持暗栈，底色由环境层绘制。
     final baseTheme = Theme.of(context);
-    final forceDark = shouldForceEnvironmentDark(solidSurface: solidSurface);
-    final envPalette =
-        forceDark
-            ? MobileEnvPalette.dark
-            : watchMobileEnvPalette(ref, baseTheme);
-    final shellTheme = (envPalette.brightness == Brightness.dark
-            ? (baseTheme.brightness == Brightness.dark
-                ? baseTheme
-                : OmniNestTheme.dark())
-            : MobileAppTheme.resolve(baseTheme))
+    final envPalette = mobileEnvPaletteFor(baseTheme);
+    final shellTheme = (envPalette.brightness == Brightness.light
+            ? MobileAppTheme.resolve(baseTheme)
+            : baseTheme)
         .withEnvPalette(envPalette);
     return Theme(
       data: shellTheme,

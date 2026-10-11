@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
-import 'golden_fonts.dart';
+import '../support/golden_fonts.dart';
 
 const _goldenKey = ValueKey<String>('mobile-env-polarity-golden');
 
@@ -58,7 +58,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
+      await expectLater(
         find.byKey(_goldenKey),
         matchesGoldenFile('goldens/mobile_env_${testCase.name}.png'),
       );
@@ -182,12 +182,12 @@ class _PolarityFixture extends StatelessWidget {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: env.accent,
+                                color: env.actionFill,
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
                                 Icons.play_arrow_rounded,
-                                color: env.onAccent,
+                                color: env.actionFillInk,
                               ),
                             ),
                             const SizedBox(width: 12),

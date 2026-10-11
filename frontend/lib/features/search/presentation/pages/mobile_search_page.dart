@@ -290,11 +290,12 @@ class _Eyebrow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
-        color: Color(0x94F6F6F2),
+      style: TextStyle(
+        color: context.env.eyebrowInk,
         // ignore: font_size_whitelist
         fontSize: 10,
         letterSpacing: 1.65,
+        height: 1.45,
         fontWeight: FontWeight.w700,
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 应用背景设置面板使用的颜色。
 class AppBackdropPalette {
@@ -22,6 +23,23 @@ class AppBackdropPalette {
       surface: scheme.surfaceContainerHigh,
       surfaceContainer: scheme.surfaceContainerHighest,
       outline: scheme.outlineVariant,
+    );
+  }
+
+  /// 移动壳层下的面板配色：整组取自环境极性表。
+  ///
+  /// 壳层的 `surfaceContainerHigh` 在浅主题 + 壁纸在场时是 52% 烟熏值，
+  /// 面板直接铺上去会让页面从设置面板底下透出来；壳层的其余抽屉与面板
+  /// 都是 `sheetSolid` 实底，这里按同一规则整组换掉，不混用两套配色。
+  factory AppBackdropPalette.fromEnv(MobileEnvPalette env) {
+    return AppBackdropPalette(
+      text: env.ink,
+      muted: env.inkMuted,
+      accent: env.accentInk,
+      accentAlt: env.accentInk,
+      surface: env.sheetSolid,
+      surfaceContainer: env.surfaceRaised,
+      outline: env.line09,
     );
   }
 

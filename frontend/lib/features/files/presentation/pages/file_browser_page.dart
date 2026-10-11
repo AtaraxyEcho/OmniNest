@@ -27,6 +27,7 @@ import 'package:omninest/app/theme/mobile_env_theme.dart';
 import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
@@ -127,6 +128,29 @@ extension FileManagerSectionMeta on FileManagerSection {
       FileManagerSection.offlineDownloads => l10n.filesOfflineDownloads,
       FileManagerSection.externalStorage => l10n.filesExternalStorage,
       FileManagerSection.importTasks => l10n.filesImportTasks,
+    };
+  }
+
+  /// 样例 FeaturePage 承载的四个次级分区：页头给 `.feature-hero` 身份块，
+  /// 而不是 FolderView 的三档分段。
+  bool get isSampleFeaturePage {
+    return switch (this) {
+      FileManagerSection.recent ||
+      FileManagerSection.favorites ||
+      FileManagerSection.sharedWithMe ||
+      FileManagerSection.offlineDownloads => true,
+      _ => false,
+    };
+  }
+
+  /// `.feature-hero-icon` 舱内图标，与样例 featureMeta 各页给的那枚同源。
+  /// 只在 [isSampleFeaturePage] 为真时读取。
+  OmniIconsData get featureHeroIcon {
+    return switch (this) {
+      FileManagerSection.recent => OmniIcons.clock,
+      FileManagerSection.favorites => OmniIcons.heart,
+      FileManagerSection.sharedWithMe => OmniIcons.share,
+      _ => OmniIcons.download,
     };
   }
 
@@ -515,7 +539,9 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                               controller: controller,
                               onBack: widget.onBack,
                             ),
-                            if (_isMobileFolderSection(state.section))
+                            if (state.section.isSampleFeaturePage)
+                              _FeatureSectionHero(section: state.section)
+                            else if (_isMobileFolderSection(state.section))
                               _MobileFolderSegments(state: state)
                             else
                               const SizedBox(height: 8),

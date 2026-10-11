@@ -194,9 +194,10 @@ class _HostedGroupLabel extends StatelessWidget {
         label.toUpperCase(),
         style: TextStyle(
           fontSize: 9, // ignore: font_size_whitelist
+          height: 1.45,
           letterSpacing: 1.4,
           fontWeight: FontWeight.w700,
-          color: context.env.inkFaint,
+          color: context.env.groupLabelInk,
         ),
       ),
     );

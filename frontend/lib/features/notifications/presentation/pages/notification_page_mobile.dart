@@ -205,9 +205,10 @@ class _NotificationMobileViewState
               entry.groupLabel!,
               style: TextStyle(
                 fontSize: 9, // ignore: font_size_whitelist
+                height: 1.45,
                 letterSpacing: 1.5,
                 fontWeight: FontWeight.w700,
-                color: env.inkFaint,
+                color: env.groupLabelInk,
               ),
             ),
           );
@@ -272,9 +273,10 @@ class _NotificationSummaryRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 9, // ignore: font_size_whitelist
+                height: 1.45,
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.w700,
-                color: env.inkFaint,
+                color: env.groupLabelInk,
               ),
             ),
           ),
@@ -386,12 +388,12 @@ class _NotificationMobileRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(13),
-              color: env.accent.withValues(alpha: 0.08),
+              color: env.accentInk.withValues(alpha: 0.08),
             ),
             child: Icon(
               notificationTypeIcon(notification.type),
               size: 19,
-              color: env.accent,
+              color: env.accentInk,
             ),
           ),
           const SizedBox(width: 12),
@@ -550,7 +552,9 @@ class _NotificationActionLink extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           beforeNavigate?.call();
-          context.go(action.route);
+          // push 而不是 go：go 会换掉整条栈，从通知跳进目标页后系统返回
+          // 直接退出应用（与系统通知点击的 push 行为保持一致）。
+          context.push(action.route);
         },
         child: Container(
           constraints: const BoxConstraints(minHeight: 26),
@@ -563,10 +567,10 @@ class _NotificationActionLink extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 9, // ignore: font_size_whitelist
                   fontWeight: FontWeight.w600,
-                  color: env.accent,
+                  color: env.accentInk,
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 14, color: env.accent),
+              Icon(Icons.chevron_right_rounded, size: 14, color: env.accentInk),
             ],
           ),
         ),

@@ -11015,12 +11015,6 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get readerThemeDark;
 
-  /// No description provided for @readerThemeNightGlass.
-  ///
-  /// In en, this message translates to:
-  /// **'Night glass'**
-  String get readerThemeNightGlass;
-
   /// No description provided for @readerThemeGreen.
   ///
   /// In en, this message translates to:
@@ -21574,12 +21568,6 @@ abstract class AppLocalizations {
   /// **'Curated sets and seasons'**
   String get toolsVideoCollectionsDetail;
 
-  /// No description provided for @toolsMusicHistoryDetail.
-  ///
-  /// In en, this message translates to:
-  /// **'Recent plays grouped by day.'**
-  String get toolsMusicHistoryDetail;
-
   /// No description provided for @toolsMusicScanDetail.
   ///
   /// In en, this message translates to:
@@ -21988,11 +21976,29 @@ abstract class AppLocalizations {
   /// **'{city} · LOCAL WEATHER'**
   String weatherSheetLocationEyebrow(String city);
 
-  /// No description provided for @weatherSheetSummary.
+  /// No description provided for @weatherSheetHourRange.
   ///
   /// In en, this message translates to:
-  /// **'Clear skies through the evening. A cooler, quiet night ahead.'**
-  String get weatherSheetSummary;
+  /// **'Between {low}° and {high}° over the next {count} hours.'**
+  String weatherSheetHourRange(int count, int low, int high);
+
+  /// No description provided for @weatherHumidityDry.
+  ///
+  /// In en, this message translates to:
+  /// **'Dry'**
+  String get weatherHumidityDry;
+
+  /// No description provided for @weatherHumidityComfortable.
+  ///
+  /// In en, this message translates to:
+  /// **'Comfortable'**
+  String get weatherHumidityComfortable;
+
+  /// No description provided for @weatherHumidityHumid.
+  ///
+  /// In en, this message translates to:
+  /// **'Humid'**
+  String get weatherHumidityHumid;
 
   /// No description provided for @weatherHourNow.
   ///

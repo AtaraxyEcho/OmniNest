@@ -3,7 +3,7 @@
 // `/video?section=` 只认枚举名。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
@@ -74,16 +74,18 @@ void main() {
     );
 
     expect(find.byType(MobileEnvSectionHeader), findsOneWidget);
-    // 眉标取值来自样例 .section-title：白 43% / 9px / 字距 1.5；
+    // 眉标取值来自样例 .section-title > small：9px / 字距 1.5，浅态第 4 层把它
+    // 与 .notif-group 归到同一档淡墨（rgba(26,29,27,.58)），暗态是主墨 43%。
     // 标题 21，不是卡片区头档的 24。
     final headerTexts = find.descendant(
       of: find.byType(MobileEnvSectionHeader),
       matching: find.byType(Text),
     );
     final eyebrow = tester.widget<Text>(headerTexts.first);
-    expect(eyebrow.style?.color, MobileEnvColors.white43);
+    expect(eyebrow.style?.color, MobileEnvPalette.dark.groupLabelInk);
     expect(eyebrow.style?.fontSize, 9);
     expect(eyebrow.style?.letterSpacing, 1.5);
+    expect(eyebrow.style?.height, 1.45);
     final sectionTitle = tester.widget<Text>(headerTexts.last);
     expect(sectionTitle.style?.fontSize, 21);
     expect(find.byType(MobileFeatureListRow), findsNWidgets(2));

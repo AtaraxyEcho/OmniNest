@@ -12,6 +12,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -25,7 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// - 顶栏无背景：元素直接呈现在环境上，仅搜索 + 头像两个动作；
 /// - 底栏为 0.78 烟熏玻璃胶囊（70 高、左右 12 留边、max(12, inset) 底距），
 ///   选中胶囊为原型 lime 强调色；
-/// - 壳层极性由 resolveMobileEnvPalette 决定：无壁纸随根主题，有壁纸随采样亮度。
+/// - 壳层极性只由外观设置（根主题明暗）决定，壁纸在场也不参与判定。
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -158,16 +159,46 @@ void main() {
     return bands.single;
   }
 
-  /// 底栏四枚空间舱体（约束高 30 的 AnimatedContainer）。
-  Finder bottomCapsules({Color? background}) {
+  /// 底栏四枚空间舱位：48×30 的图标带（原型 `.bottom-nav button > span`）。
+  /// 只认带图标的盒子，选中滑块层与舱位同尺寸但不在计数内。
+  Finder bottomCapsules() {
     return find.descendant(
       of: find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
-      matching: find.byWidgetPredicate(
-        (widget) =>
-            widget is AnimatedContainer &&
-            widget.constraints?.maxHeight == 30 &&
-            (background == null ||
-                (widget.decoration as BoxDecoration?)?.color == background),
+      matching: find.ancestor(
+        of: find.byType(OmniIcon),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is SizedBox && widget.width == 48 && widget.height == 30,
+        ),
+      ),
+    );
+  }
+
+  /// 底栏的选中滑块层（单层胶囊，在四个舱位间滑过）。
+  /// 键在承载对齐动画的 AnimatedAlign 上，它铺满整条带；胶囊本体是里面的
+  /// DecoratedBox，几何断言必须量本体。
+  Finder bottomNavPill() {
+    return find.descendant(
+      of: find.descendant(
+        of: find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
+        matching: find.byKey(const ValueKey('omninest.mobile.bottom-nav-pill')),
+      ),
+      matching: find.byType(DecoratedBox),
+    );
+  }
+
+  Color? bottomNavPillColor(WidgetTester tester) {
+    final box = tester.widget<DecoratedBox>(bottomNavPill());
+    return (box.decoration as BoxDecoration).color;
+  }
+
+  OmniIcon navIconOfType(WidgetTester tester, OmniIconsData icon) {
+    return tester.widget<OmniIcon>(
+      find.descendant(
+        of: find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is OmniIcon && widget.icon == icon,
+        ),
       ),
     );
   }
@@ -209,6 +240,21 @@ void main() {
       ),
     );
     expect(searchIcon.color, MobileEnvColors.ink);
+    // 品牌标记不得低于搜索钮那一档：透明底标记的可视内容只占画布宽约 70%，
+    // 尺寸回落后会在顶栏里读成一个孤立小点。
+    final brandSize = tester.getSize(find.byType(BrandLogo));
+    final searchTargetSize = tester.getSize(
+      find.ancestor(
+        of: find.descendant(
+          of: find.byType(Tooltip),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is OmniIcon && widget.icon == OmniIcons.search,
+          ),
+        ),
+        matching: find.byType(MobilePressable),
+      ),
+    );
+    expect(brandSize.width, greaterThanOrEqualTo(searchTargetSize.width));
     // 顶栏内容行之上没有带颜色背景的装饰盒（透明呈现在环境上）。
     // 基准内容带 64，无障碍字号下由 scaleHeight 自撑，因此只断言下限。
     final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));
@@ -257,45 +303,74 @@ void main() {
   testWidgets('选中胶囊为原型 lime，未选中为弱化前景', (tester) async {
     await pumpShell(tester, initialLocation: '/portal');
     // 原型 `.bottom-nav button > span` 为 min-width:48 + height:30：切换空间时
-    // 只有配色与投影变化，舱体宽度不得参与补间（34→48 会让整排图标抖动）。
-    expect(bottomCapsules(), findsNWidgets(4), reason: '四个空间各一枚舱体');
+    // 只有滑块位置与配色变化，舱位尺寸不得参与补间（34→48 会让整排图标抖动）。
+    expect(bottomCapsules(), findsNWidgets(4), reason: '四个空间各一枚舱位');
     for (var index = 0; index < 4; index++) {
       expect(
         tester.getSize(bottomCapsules().at(index)),
         const Size(48, 30),
-        reason: '选中与未选中同宽',
+        reason: '选中与未选中同尺寸',
       );
     }
+    // 高亮是**单层滑块**，且与选中舱位同心（竖向按目的地列的居中公式折算）。
+    expect(bottomNavPill(), findsOneWidget);
+    expect(bottomNavPillColor(tester), MobileEnvColors.accent);
     expect(
-      bottomCapsules(background: MobileEnvColors.accent),
-      findsOneWidget,
-      reason: '仅当前空间胶囊高亮',
+      tester.getCenter(bottomNavPill()).dx,
+      closeTo(tester.getCenter(bottomCapsules().at(0)).dx, 0.5),
     );
-    // 选中图标为强调色上的深前景。
-    final homeIcon = tester.widget<OmniIcon>(
-      find.descendant(
-        of: bottomCapsules(background: MobileEnvColors.accent),
-        matching: find.byWidgetPredicate(
-          (widget) => widget is OmniIcon && widget.icon == OmniIcons.home,
-        ),
-      ),
+    expect(
+      tester.getCenter(bottomNavPill()).dy,
+      closeTo(tester.getCenter(bottomCapsules().at(0)).dy, 0.5),
+      reason: '标签行高取整会带来 0.1px 级差，滑块仍应与图标带同心',
     );
-    expect(homeIcon.color, MobileEnvColors.onAccent);
+    // 选中图标为强调色上的深前景，未选中仍是弱化前景。
+    expect(
+      navIconOfType(tester, OmniIcons.home).color,
+      MobileEnvColors.onAccent,
+    );
+    expect(
+      navIconOfType(tester, OmniIcons.folder).color,
+      MobileEnvColors.white46,
+    );
 
-    // 切换空间后仍是四枚等宽舱体，高亮唯一地移到新空间。
-    await tapNav(tester, '媒体库');
+    // 切换空间：滑块滑过去，而不是瞬移到新舱位。
+    final startCenter = tester.getCenter(bottomNavPill()).dx;
+    final targetCenter = tester.getCenter(bottomCapsules().at(1)).dx;
+    final nav = find.byKey(const ValueKey('omninest.mobile.bottom-nav'));
+    await tester.tap(find.descendant(of: nav, matching: find.text('媒体库')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final midwayCenter = tester.getCenter(bottomNavPill()).dx;
+    expect(midwayCenter, greaterThan(startCenter + 1));
+    expect(midwayCenter, lessThan(targetCenter - 1));
+
+    await tester.pumpAndSettle();
+    // 落位后仍是四枚等尺寸舱位，高亮唯一且与新舱位同心。
     expect(bottomCapsules(), findsNWidgets(4));
     for (var index = 0; index < 4; index++) {
       expect(
         tester.getSize(bottomCapsules().at(index)),
         const Size(48, 30),
-        reason: '切换过程不改变舱体宽度',
+        reason: '切换过程不改变舱位尺寸',
       );
     }
+    expect(bottomNavPill(), findsOneWidget, reason: '高亮胶囊唯一');
     expect(
-      bottomCapsules(background: MobileEnvColors.accent),
-      findsOneWidget,
-      reason: '高亮舱体唯一',
+      tester.getCenter(bottomNavPill()).dx,
+      closeTo(tester.getCenter(bottomCapsules().at(1)).dx, 0.5),
+    );
+    expect(
+      tester.getCenter(bottomNavPill()).dy,
+      closeTo(tester.getCenter(bottomCapsules().at(1)).dy, 0.5),
+    );
+    expect(
+      navIconOfType(tester, OmniIcons.library).color,
+      MobileEnvColors.onAccent,
+    );
+    expect(
+      navIconOfType(tester, OmniIcons.home).color,
+      MobileEnvColors.white46,
     );
   });
 
@@ -316,7 +391,7 @@ void main() {
       MobileEnvPalette.light.stage,
       reason: '无壁纸的实底壳随根主题翻浅，不再强制暗栈',
     );
-    // 壁纸在场时壳底透明，由环境层绘制底；极性改由采样亮度决定。
+    // 壁纸在场时壳底透明，由环境层绘制底。
     await pumpShell(
       tester,
       initialLocation: '/library',
@@ -326,6 +401,30 @@ void main() {
     expect(
       tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
       Colors.transparent,
+    );
+  });
+
+  testWidgets('设了壁纸也必须照外观设置翻浅（采样不得再接管极性）', (tester) async {
+    await pumpShell(
+      tester,
+      initialLocation: '/library',
+      brightness: Brightness.light,
+      backdropActive: true,
+    );
+
+    final navFill = find.descendant(
+      of: find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox &&
+            (widget.decoration as BoxDecoration?)?.color ==
+                MobileEnvPalette.light.navGlass,
+      ),
+    );
+    expect(
+      navFill,
+      findsOneWidget,
+      reason: '浅外观 + 有壁纸时底栏必须是浅纸实底；壁纸亮度不能把壳层留在暗档',
     );
   });
 

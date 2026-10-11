@@ -40,7 +40,7 @@ void main() {
       find.byKey(const ValueKey('music-lyric-word-fill')),
     );
     expect(singleMask.blendMode, BlendMode.srcIn);
-    expect(
+    await expectLater(
       find.byKey(const ValueKey('music-lyric-word-fill-layered')),
       findsNothing,
     );
@@ -65,7 +65,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('music-lyric-word-fill')), findsNothing);
-    expect(
+    await expectLater(
       find.byKey(const ValueKey('music-lyric-word-fill-layered')),
       findsNothing,
     );
@@ -154,7 +154,7 @@ void main() {
     player.emit(const Duration(milliseconds: 3200));
     await tester.pump();
 
-    expect(
+    await expectLater(
       find.byKey(const ValueKey('music-lyric-word-fill-layered')),
       findsOneWidget,
     );
@@ -233,11 +233,11 @@ void main() {
     await advanceFrames(tester);
 
     // 双层画法逐行挂载：首行沿用基础键，其余行带行号后缀。
-    expect(
+    await expectLater(
       find.byKey(const ValueKey('music-lyric-word-fill-layered')),
       findsOneWidget,
     );
-    expect(
+    await expectLater(
       find.byKey(const ValueKey('music-lyric-word-fill-layered-1')),
       findsOneWidget,
     );
@@ -589,7 +589,7 @@ void main() {
     await tester.pump();
 
     // 渐变在读色使填充进入双层叠加画法：底层非当前句色 + 顶层按边界裁切。
-    expect(
+    await expectLater(
       find.byKey(const ValueKey('music-lyric-word-fill-layered')),
       findsOneWidget,
     );

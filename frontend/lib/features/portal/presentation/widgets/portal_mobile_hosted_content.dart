@@ -12,8 +12,10 @@ class _HostedPortalContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 首页属环境面：极性与壁纸亮度配对，不跟明暗设置（docs/2026-10-08/015 §四）。
+    // 首页在浅态仍是摄影面：样例把 `.home-space` 单独留在照片上
+    //（浅字 + 深玻璃卡 + 墨色压暗渐变），媒体库/阅读/文件才换成纸面画布。
     return MobileEnvironmentScope(
+      photographic: true,
       child: RefreshIndicator(
         color: context.env.accent,
         onRefresh: onRefresh,
@@ -61,7 +63,10 @@ class _HostedPortalContent extends ConsumerWidget {
                               ],
                             )
                             : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              // 必须是 stretch：start 会让时间块按"大时钟墨迹宽度"
+                              // 收缩成自身尺寸再贴左，内部的 center 对齐只是在那条
+                              // 窄带上居中，整块读起来仍是居左。
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 header,
                                 // 样例手机档 time-block 与 home-focus 近乎相连
@@ -163,8 +168,10 @@ class _SpatialEnvironmentHeaderState
     final weather = ref.watch(realtimeWeatherProvider);
     final localizations = MaterialLocalizations.of(context);
     // 原型眉标为「星期 · 短日期」，拉丁文案统一大写。
+    // DateFormat 不传 locale 会走 Intl.defaultLocale（未设置即 en_US），
+    // 中文界面下眉标就会变成英文星期。
     final eyebrow =
-        '${DateFormat('EEEE').format(_now)} · ${localizations.formatShortMonthDay(_now)}';
+        '${DateFormat('EEEE', Localizations.localeOf(context).toLanguageTag()).format(_now)} · ${localizations.formatShortMonthDay(_now)}';
     final timeOfDay = localizations.formatTimeOfDay(
       TimeOfDay.fromDateTime(_now),
       alwaysUse24HourFormat: true,
@@ -189,10 +196,11 @@ class _SpatialEnvironmentHeaderState
             overflow: TextOverflow.ellipsis,
             textAlign: inlineAlignment,
             style: TextStyle(
-              color: context.env.inkFaint,
+              color: context.env.eyebrowInk,
               fontSize: AppTypography.labelMicro,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.65,
+              height: 1.45,
             ),
           ),
           const SizedBox(height: 2),
@@ -218,8 +226,8 @@ class _SpatialEnvironmentHeaderState
                     fontSize: scale,
                     height: 1.0,
                     letterSpacing: -4,
-                    shadows: const [
-                      Shadow(color: Colors.black54, blurRadius: 18),
+                    shadows: [
+                      Shadow(color: context.env.heroGlow, blurRadius: 18),
                     ],
                   ),
                 ),
@@ -234,55 +242,67 @@ class _SpatialEnvironmentHeaderState
               return _WeatherLinePill(
                 onTap: () => showWeatherDetailSheet(context, weather: value),
                 semanticLabel: AppLocalizations.of(context).portalWeatherTitle,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OmniIcon(
-                      icon: OmniIcons.weatherFor(
-                        int.tryParse(value.icon) ?? -1,
-                      ),
-                      size: 19,
-                      color: context.env.white78,
-                    ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        '${value.temp}°',
-                        style: TextStyle(
+                // 样例 `.weather-line` 是 `justify-content:center` 的内容组：
+                // 图标、温度、天况与箭头作为一个整体居中，只有文本在超出时截断。
+                // Row 里放 Flexible 会让整行摊满可用宽度（有可伸缩子项时
+                // mainAxisSize.min 不生效），所以改用带预算的 ConstrainedBox，
+                // 让行按内容收缩后由外层 Column 居中。
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const fixedChrome = 102.0;
+                    final textBudget = (constraints.maxWidth - fixedChrome)
+                        .clamp(60.0, double.infinity);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OmniIcon(
+                          icon: OmniIcons.weatherFor(
+                            int.tryParse(value.icon) ?? -1,
+                          ),
+                          size: 19,
                           color: context.env.white78,
-                          fontSize: AppTypography.bodyMedium,
-                          fontWeight: FontWeight.w600,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      width: 3,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: context.env.white52,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '${value.text}$location',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        const SizedBox(width: 7),
+                        Text(
+                          '${value.temp}°',
+                          style: TextStyle(
+                            color: context.env.white78,
+                            fontSize: AppTypography.bodyMedium,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 3,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: context.env.white52,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: textBudget),
+                          child: Text(
+                            '${value.text}$location',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: context.env.white78,
+                              fontSize: AppTypography.bodyMedium,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        // 箭头随 `.weather-line` 的字色继承（.88），圆点另有 .70。
+                        OmniIcon(
+                          icon: OmniIcons.chevron,
+                          size: 15,
                           color: context.env.white78,
-                          fontSize: AppTypography.bodyMedium,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    OmniIcon(
-                      icon: OmniIcons.chevron,
-                      size: 15,
-                      color: context.env.white52,
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               );
             },
@@ -366,6 +386,11 @@ class _WeatherLinePillState extends State<_WeatherLinePill> {
                       ? Duration.zero
                       : const Duration(milliseconds: 150),
               curve: Curves.easeOut,
+              // 样例 `.weather-line` 是块级 flex：胶囊铺满舞台宽度，内容组
+              // 靠 justify-content:center 聚到中间，所以底色与点击区都是整条。
+              // 只有 width 不够——DecoratedBox 的子项默认贴左上，必须显式居中。
+              width: double.infinity,
+              alignment: Alignment.center,
               constraints: const BoxConstraints(minHeight: 42),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -484,10 +509,11 @@ class _SpatialFocusCard extends ConsumerWidget {
         Text(
           _dayPartEyebrow(l10n).toUpperCase(),
           style: TextStyle(
-            color: context.env.inkFaint,
+            color: context.env.eyebrowInk,
             fontSize: AppTypography.labelMicro,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.65,
+            height: 1.45,
           ),
         ),
         const SizedBox(height: 10),
@@ -600,7 +626,7 @@ class _SpatialFocusTile extends StatelessWidget {
               border: Border.all(color: context.env.line15),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: context.env.cardGlow,
                   blurRadius: 35,
                   offset: const Offset(0, 14),
                 ),
@@ -684,11 +710,16 @@ class _SpatialFocusTile extends StatelessWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: context.env.accent,
+                        // 样例 `.home-space .focus-play` 在摄影面单独给了
+                        // #dce9ae / #18382d，与全站主行动钮同用 actionFill 族
+                        //（暗态两者与 accent 同值，像素不变）。
+                        color: context.env.actionFill,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: context.env.accent.withValues(alpha: 0.35),
+                            color: context.env.actionFill.withValues(
+                              alpha: 0.35,
+                            ),
                             blurRadius: 14,
                           ),
                         ],
@@ -697,7 +728,7 @@ class _SpatialFocusTile extends StatelessWidget {
                         child: OmniIcon(
                           icon: actionIcon,
                           size: 21,
-                          color: context.env.onAccent,
+                          color: context.env.actionFillInk,
                         ),
                       ),
                     ),
@@ -727,10 +758,11 @@ class _SpatialRecentHeading extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: context.env.inkFaint,
+              color: context.env.eyebrowInk,
               fontSize: AppTypography.labelMicro,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.65,
+              height: 1.45,
             ),
           ),
         ),
