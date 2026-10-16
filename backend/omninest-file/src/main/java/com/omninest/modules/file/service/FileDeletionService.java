@@ -229,6 +229,7 @@ public class FileDeletionService {
         fileNodeRepository.save(root);
         fileNodeRepository.assignDeletedDescendantsToPurge(
                 ownerUserId,
+                root.getSpaceType(),
                 subtreePrefix(root),
                 taskId,
                 FilePurgeState.QUEUED,
@@ -316,6 +317,7 @@ public class FileDeletionService {
         fileNodeRepository.saveAll(roots);
         roots.forEach(root -> fileNodeRepository.assignDeletedDescendantsToPurge(
                 ownerUserId,
+                root.getSpaceType(),
                 subtreePrefix(root),
                 taskId,
                 FilePurgeState.QUEUED,
@@ -387,8 +389,9 @@ public class FileDeletionService {
             int pageNumber = 0;
             Page<FileNode> page;
             do {
-                page = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
+                page = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithOrderById(
                         ownerUserId,
+                        root.getSpaceType(),
                         subtreePrefix(root),
                         PageRequest.of(pageNumber, LIFECYCLE_BATCH_SIZE)
                 );

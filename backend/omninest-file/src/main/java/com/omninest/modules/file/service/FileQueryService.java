@@ -162,7 +162,7 @@ public class FileQueryService {
     public FileNodeDto createFolder(UUID ownerUserId, CreateFolderRequest request) {
         String folderName = normalizeNodeName(request.name(), "文件夹名称不合法");
         FileNode parent = resolveParent(ownerUserId, request.parentId());
-        if (sameNameExists(ownerUserId, request.parentId(), folderName)) {
+        if (sameNameExists(ownerUserId, SpaceType.PERSONAL, request.parentId(), folderName)) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件夹");
         }
         FileNode folder = new FileNode();
@@ -186,7 +186,7 @@ public class FileQueryService {
         if (node.getName().equals(newName)) {
             return toDto(node);
         }
-        if (sameNameExists(ownerUserId, node.getParentId(), newName)) {
+        if (sameNameExists(ownerUserId, node.getSpaceType(), node.getParentId(), newName)) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
@@ -194,7 +194,7 @@ public class FileQueryService {
         String newPath = resolveSiblingPath(node, newName);
         node.setName(newName);
         node.setNormalizedPath(newPath);
-        updateActiveDescendantPaths(ownerUserId, oldPath, newPath);
+        updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
         // 更新 Lucene 搜索索引中的文件名
         fileSearchIndexService.indexFile(saved.getId(), ownerUserId, saved.getName(), null);
@@ -217,7 +217,7 @@ public class FileQueryService {
         if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能移动到自身子目录");
         }
-        if (sameNameExists(ownerUserId, targetParentId, node.getName())) {
+        if (sameNameExists(ownerUserId, node.getSpaceType(), targetParentId, node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件");
         }
 
@@ -225,7 +225,7 @@ public class FileQueryService {
         String newPath = resolveChildPath(targetParent, node.getName());
         node.setParentId(targetParentId);
         node.setNormalizedPath(newPath);
-        updateActiveDescendantPaths(ownerUserId, oldPath, newPath);
+        updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return toDto(saved);
@@ -244,6 +244,7 @@ public class FileQueryService {
         while (true) {
             List<UUID> descendantIds = fileNodeRepository.findActiveIdsByPathPrefix(
                             ownerUserId,
+                            node.getSpaceType(),
                             subtreePrefix(node),
                             PageRequest.of(0, LIFECYCLE_BATCH_SIZE)
                     )
@@ -287,13 +288,14 @@ public class FileQueryService {
         }
         fileLifecycleGuard.requireRestorable(ownerUserId, fileId);
         ensureParentAvailable(ownerUserId, node);
-        if (sameNameExists(ownerUserId, node.getParentId(), node.getName())) {
+        if (sameNameExists(ownerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
         markRestored(node);
-        List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+        List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
                 ownerUserId,
+                node.getSpaceType(),
                 subtreePrefix(node)
         );
         descendants.forEach(this::markRestored);
@@ -338,8 +340,8 @@ public class FileQueryService {
             allToSave.add(node);
             allDeletedIds.add(node.getId());
             List<FileNode> descendants = fileNodeRepository
-                    .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                            ownerUserId, subtreePrefix(node));
+                    .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                            ownerUserId, node.getSpaceType(), subtreePrefix(node));
             descendants.forEach(d -> markDeleted(d, ownerUserId, deletedAt));
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(allDeletedIds::add);
@@ -377,7 +379,7 @@ public class FileQueryService {
                 requireManagedNode(node);
                 fileLifecycleGuard.requireRestorable(ownerUserId, node.getId());
                 ensureParentAvailable(ownerUserId, node);
-                if (sameNameExists(ownerUserId, node.getParentId(), node.getName())) {
+                if (sameNameExists(ownerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
                     throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件: " + node.getName());
                 }
             } catch (BusinessException exception) {
@@ -388,8 +390,8 @@ public class FileQueryService {
             allToSave.add(node);
             restoredIds.add(node.getId());
             List<FileNode> descendants = fileNodeRepository
-                    .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
-                            ownerUserId, subtreePrefix(node));
+                    .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                            ownerUserId, node.getSpaceType(), subtreePrefix(node));
             descendants.forEach(this::markRestored);
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(restoredIds::add);
@@ -427,14 +429,14 @@ public class FileQueryService {
                     if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
                         throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能移动到自身子目录: " + node.getName());
                     }
-                    if (sameNameExists(ownerUserId, targetParentId, node.getName())) {
+                    if (sameNameExists(ownerUserId, node.getSpaceType(), targetParentId, node.getName())) {
                         throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件: " + node.getName());
                     }
                     String oldPath = node.getNormalizedPath();
                     String newPath = resolveChildPath(targetParent, node.getName());
                     node.setParentId(targetParentId);
                     node.setNormalizedPath(newPath);
-                    updateActiveDescendantPaths(ownerUserId, oldPath, newPath);
+                    updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
                     fileNodeRepository.save(node);
                     movedCount++;
                 }
@@ -679,11 +681,25 @@ public class FileQueryService {
         resolveParent(ownerUserId, node.getParentId());
     }
 
-    private boolean sameNameExists(UUID ownerUserId, UUID parentId, String name) {
-        if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, name);
+    /**
+     * 判断节点自身空间内的同级同名冲突。
+     *
+     * <p>检查必须限定空间：共享空间节点保留 owner_user_id，若只按 owner 查询，共享空间
+     * 同名根节点会误判为个人空间冲突（个人空间导入会在建目录时被 409 拦下）。</p>
+     */
+    private boolean sameNameExists(UUID ownerUserId, SpaceType spaceType, UUID parentId, String name) {
+        if (spaceType == SpaceType.SHARED) {
+            if (parentId == null) {
+                return fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(spaceType, name);
+            }
+            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(spaceType, parentId, name);
         }
-        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(ownerUserId, parentId, name);
+        if (parentId == null) {
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    ownerUserId, spaceType, name);
+        }
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                ownerUserId, spaceType, parentId, name);
     }
 
     private String normalizeNodeName(String rawName, String errorMessage) {
@@ -719,11 +735,18 @@ public class FileQueryService {
                 || targetParent.getNormalizedPath().startsWith(node.getNormalizedPath() + "/");
     }
 
-    private void updateActiveDescendantPaths(UUID ownerUserId, String oldPath, String newPath) {
-        List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                ownerUserId,
-                subtreePrefix(oldPath)
-        );
+    private void updateActiveDescendantPaths(
+            UUID ownerUserId,
+            SpaceType spaceType,
+            String oldPath,
+            String newPath
+    ) {
+        List<FileNode> descendants = fileNodeRepository
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        ownerUserId,
+                        spaceType,
+                        subtreePrefix(oldPath)
+                );
         for (FileNode descendant : descendants) {
             descendant.setNormalizedPath(newPath + descendant.getNormalizedPath().substring(oldPath.length()));
         }
@@ -785,10 +808,12 @@ public class FileQueryService {
                     ownerUserId, SpaceType.PERSONAL));
         }
         FileNode parent = resolveParent(ownerUserId, parentId);
-        return visibleNodes(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                ownerUserId,
-                subtreePrefix(parent)
-        ));
+        return visibleNodes(fileNodeRepository
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        ownerUserId,
+                        SpaceType.PERSONAL,
+                        subtreePrefix(parent)
+                ));
     }
 
     private List<FileNode> visibleNodes(List<FileNode> nodes) {

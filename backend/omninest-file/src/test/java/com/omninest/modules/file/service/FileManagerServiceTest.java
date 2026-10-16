@@ -26,6 +26,7 @@ import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.ShareLink;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.FileSharePreviewDto;
@@ -486,8 +487,8 @@ class FileManagerServiceTest {
         source.setCurrentObjectId(OBJECT_ID);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
-                OWNER_ID, "report.pdf")).thenReturn(false);
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "report.pdf")).thenReturn(false);
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> {
                     FileNode saved = invocation.getArgument(0);
@@ -508,8 +509,8 @@ class FileManagerServiceTest {
         FileNode source = node("report.pdf", "application/pdf", 2048);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
-                OWNER_ID, "report.pdf")).thenReturn(true);
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "report.pdf")).thenReturn(true);
 
         assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, FILE_ID, null))
                 .isInstanceOf(BusinessException.class)

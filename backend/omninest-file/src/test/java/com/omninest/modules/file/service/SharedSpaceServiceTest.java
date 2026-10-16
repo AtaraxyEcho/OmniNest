@@ -178,7 +178,8 @@ class SharedSpaceServiceTest {
                     .thenReturn(Optional.of(folder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("movies"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(USER_A, "/movies/"))
+            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                    USER_A, SpaceType.PERSONAL, "/movies/"))
                     .thenReturn(List.of(child));
             when(fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(USER_A, FOLDER_ID))
                     .thenReturn(List.of(child));
@@ -189,6 +190,36 @@ class SharedSpaceServiceTest {
             assertThat(child.getSpaceType()).isEqualTo(SpaceType.SHARED);
             assertThat(child.getUploadedBy()).isEqualTo(USER_A);
             assertThat(child.getParentId()).isEqualTo(FOLDER_ID);  // 保留层级结构
+        }
+
+        @Test
+        @DisplayName("嵌套目录移入共享根：子树规范化路径按新父级重写")
+        void moveToSharedSpace_nestedFolder_rewritesDescendantPaths() {
+            stubPermission(USER_A, true, false, false, false, false, true, false, false);
+            FileNode folder = personalFolder(FOLDER_ID, USER_A, "movies");
+            folder.setNormalizedPath("/archive/movies");
+            FileNode child = personalFile(CHILD_FILE_ID, USER_A, "movie.mkv", 1024L);
+            child.setParentId(FOLDER_ID);
+            child.setNormalizedPath("/archive/movies/movie.mkv");
+
+            when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FOLDER_ID, USER_A))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    eq(SpaceType.SHARED), any(), eq("movies"))).thenReturn(false);
+            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                    USER_A, SpaceType.PERSONAL, "/archive/movies/"))
+                    .thenReturn(List.of(child));
+            when(fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, FOLDER_ID))
+                    .thenReturn(List.of(child));
+            // 子树重写读的是目标空间：后代已被 batchMoveChildrenToShared 翻成 SHARED。
+            when(fileNodeRepository.findBySpaceTypeAndNormalizedPathStartingWithOrderById(
+                    eq(SpaceType.SHARED), eq("/archive/movies/"), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(child)));
+
+            service.moveToSharedSpace(FOLDER_ID, USER_A);
+
+            assertThat(folder.getNormalizedPath()).isEqualTo("/movies");
+            assertThat(child.getNormalizedPath()).isEqualTo("/movies/movie.mkv");
         }
 
         @Test
@@ -240,6 +271,24 @@ class SharedSpaceServiceTest {
 
             verify(sharedSpaceQuotaService).decreaseUsage(2048L);
             verify(storageQuotaService).incrementUsage(USER_A, 2048L);
+        }
+
+        @Test
+        @DisplayName("个人根目录已有同名节点时拒绝移回，避免两棵子树共用同一前缀")
+        void moveToPersonalSpace_rejectsWhenPersonalRootHasSameName() {
+            stubPermission(USER_A, true, false, false, false, false, false, true, false);
+            FileNode file = sharedFile(FILE_ID, USER_A, "Reader", 1024L);
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FILE_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(file));
+            when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    USER_A, SpaceType.PERSONAL, "Reader"))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() -> service.moveToPersonalSpace(FILE_ID, USER_A))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.CONFLICT);
+            assertThat(file.getSpaceType()).isEqualTo(SpaceType.SHARED);
         }
 
         @Test
@@ -340,7 +389,8 @@ class SharedSpaceServiceTest {
 
             when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
                     .thenReturn(Optional.of(folder));
-            when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(USER_A, "/movies/"))
+            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                    USER_A, SpaceType.PERSONAL, "/movies/"))
                     .thenReturn(List.of(child));
             when(fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, FOLDER_ID))
                     .thenReturn(List.of(child));

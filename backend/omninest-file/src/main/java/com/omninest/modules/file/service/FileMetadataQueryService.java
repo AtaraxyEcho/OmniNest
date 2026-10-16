@@ -126,17 +126,22 @@ public class FileMetadataQueryService {
     }
 
     /**
-     * 查询用户指定路径前缀下的未删除文件节点。
+     * 查询用户指定空间与路径前缀下的未删除文件节点。
+     *
+     * <p>空间维度不可省略：个人与共享可以存在同名目录，只按 owner + 前缀会把另一空间的
+     * 子树一起交给调用方（影视扫描会据此登记业务引用）。</p>
      *
      * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
      * @param prefix 路径前缀
      * @return 文件描述符列表
      */
     @Transactional(readOnly = true)
-    public List<FileDescriptor> listOwnedActiveByPathPrefix(UUID ownerUserId, String prefix) {
+    public List<FileDescriptor> listOwnedActiveByPathPrefix(
+            UUID ownerUserId, SpaceType spaceType, String prefix) {
         // 入参是字面量路径前缀（跨模块调用方不预先转义），转义只发生在这里一次。
-        return fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                ownerUserId, LikePatterns.escapeSpecials(prefix))
+        return fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                ownerUserId, spaceType, LikePatterns.escapeSpecials(prefix))
                 .stream().map(this::toDescriptor).toList();
     }
 

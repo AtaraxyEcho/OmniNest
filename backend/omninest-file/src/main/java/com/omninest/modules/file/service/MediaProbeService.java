@@ -6,8 +6,12 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.omninest.modules.file.dto.FileMediaInfoDto;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +29,7 @@ import org.springframework.stereotype.Service;
 public class MediaProbeService {
 
     private static final Duration PROCESS_TIMEOUT = Duration.ofSeconds(10);
-    private static final int MAX_OUTPUT_BYTES = 1024 * 1024;
+    static final int MAX_OUTPUT_BYTES = 1024 * 1024;
 
     /** 空结果单例，避免失败路径重复分配。 */
     static final FileMediaInfoDto EMPTY = new FileMediaInfoDto(null, null, null);
@@ -35,6 +39,16 @@ public class MediaProbeService {
             .maximumSize(500)
             .expireAfterWrite(2, TimeUnit.HOURS)
             .build();
+    private final ProcessStarter processStarter;
+
+    public MediaProbeService() {
+        this(MediaProbeService::startFfprobe);
+    }
+
+    /** 隔离系统进程 API 的测试边界，与 video 模块的外部进程执行器同一形态。 */
+    MediaProbeService(ProcessStarter processStarter) {
+        this.processStarter = processStarter;
+    }
 
     /**
      * 探测媒体内容；contentKey 为内容对象唯一键（含版本），用于缓存。
@@ -51,8 +65,13 @@ public class MediaProbeService {
         try {
             String json = runFfprobe(contentUrl);
             return parseProbeJson(json);
-        } catch (IOException | InterruptedException e) {
+        } catch (InterruptedException e) {
+            // 中断位只在真被中断时回填：以前 IOException（工具缺失、超时）也一并置位，
+            // 会把池化线程打上中断标记，后续 JDBC/HTTP 立刻抛 InterruptedException。
             Thread.currentThread().interrupt();
+            log.warn("媒体探测被中断: {}", e.getMessage());
+            return EMPTY;
+        } catch (IOException e) {
             log.warn("媒体探测失败: {}", e.getMessage());
             return EMPTY;
         } catch (RuntimeException e) {
@@ -61,30 +80,71 @@ public class MediaProbeService {
         }
     }
 
-    private String runFfprobe(String contentUrl) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(
-                "ffprobe",
-                "-v", "quiet",
-                "-print_format", "json",
-                "-show_format",
-                "-show_streams",
-                contentUrl)
-                .redirectErrorStream(true)
-                .start();
+    /**
+     * 执行 ffprobe 并取回 JSON 输出。
+     *
+     * <p>输出重定向到临时文件而不是读管道：先 {@code readNBytes} 再 {@code waitFor(timeout)}
+     * 的写法会阻塞在读上，进程挂起时超时根本到不了点；反过来先等再读，未取的管道又可能把
+     * 子进程堵满。落临时文件两边都不占。
+     *
+     * @param contentUrl 可直接访问的内容地址
+     * @return ffprobe 的 JSON 输出（超过上限按上限截断）
+     * @throws IOException        进程启动失败、超时或读输出失败
+     * @throws InterruptedException 等待期间线程被中断
+     */
+    String runFfprobe(String contentUrl) throws IOException, InterruptedException {
+        Path outputFile = Files.createTempFile("omninest-ffprobe-", ".json");
+        Process process = null;
         try {
-            byte[] output;
-            try (var input = process.getInputStream()) {
-                output = input.readNBytes(MAX_OUTPUT_BYTES);
-            }
+            process = processStarter.start(List.of(
+                    "ffprobe",
+                    "-v", "quiet",
+                    "-print_format", "json",
+                    "-show_format",
+                    "-show_streams",
+                    contentUrl), outputFile);
+            // 子进程不读标准输入，但管道要关，否则每次探测都留下一个空闲 fd。
+            process.getOutputStream().close();
             if (!process.waitFor(PROCESS_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.destroyForcibly();
                 throw new IOException("ffprobe 超时");
             }
-            return new String(output, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            process.destroyForcibly();
-            throw e;
+            try (InputStream input = Files.newInputStream(outputFile)) {
+                return new String(input.readNBytes(MAX_OUTPUT_BYTES), StandardCharsets.UTF_8);
+            }
+        } finally {
+            // 进程起不来时也要删掉已经建好的临时文件，否则每次探测都留一个空文件。
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            try {
+                Files.deleteIfExists(outputFile);
+            } catch (IOException e) {
+                log.debug("ffprobe 临时输出清理失败: {}", e.getMessage());
+            }
         }
+    }
+
+    private static Process startFfprobe(List<String> command, Path outputFile) throws IOException {
+        return new ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .redirectOutput(outputFile.toFile())
+                .start();
+    }
+
+    /**
+     * 创建 ffprobe 进程，便于隔离系统进程 API 的测试边界。
+     */
+    @FunctionalInterface
+    interface ProcessStarter {
+        /**
+         * 启动命令，并把合并后的标准输出与错误输出写入 {@code outputFile}。
+         *
+         * @param command 外部命令及参数
+         * @param outputFile 输出落点
+         * @return 已启动的系统进程
+         * @throws IOException 进程启动失败
+         */
+        Process start(List<String> command, Path outputFile) throws IOException;
     }
 
     /**

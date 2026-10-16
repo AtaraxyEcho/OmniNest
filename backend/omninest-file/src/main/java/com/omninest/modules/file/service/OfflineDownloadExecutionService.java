@@ -435,6 +435,7 @@ public class OfflineDownloadExecutionService {
                 .orElse("offline-" + task.getId().toString().substring(0, 8)));
         String availableName = resolveAvailableName(
                 task.getOwnerUserId(),
+                resolveSpaceType(task),
                 targetParent == null ? null : targetParent.getId(),
                 rootName
         );
@@ -492,7 +493,7 @@ public class OfflineDownloadExecutionService {
                 current = cached;
                 continue;
             }
-            String availableName = resolveAvailableName(ownerUserId, current.getId(), folderName);
+            String availableName = resolveAvailableName(ownerUserId, spaceType, current.getId(), folderName);
             FileNode folder = new FileNode();
             folder.setOwnerUserId(ownerUserId);
             folder.setParentId(current.getId());
@@ -523,6 +524,7 @@ public class OfflineDownloadExecutionService {
         String fileName = normalizeFileName(rawFileName);
         String availableName = resolveAvailableName(
                 task.getOwnerUserId(),
+                resolveSpaceType(task),
                 parent == null ? null : parent.getId(),
                 fileName
         );
@@ -723,13 +725,13 @@ public class OfflineDownloadExecutionService {
 
     private static final int MAX_NAME_COLLISION_ITERATIONS = 1000;
 
-    private String resolveAvailableName(UUID ownerUserId, UUID parentId, String requestedName) {
+    private String resolveAvailableName(UUID ownerUserId, SpaceType spaceType, UUID parentId, String requestedName) {
         String name = requestedName;
         int dotIndex = requestedName.lastIndexOf('.');
         String baseName = dotIndex <= 0 ? requestedName : requestedName.substring(0, dotIndex);
         String extension = dotIndex <= 0 ? "" : requestedName.substring(dotIndex);
         int index = 1;
-        while (sameNameExists(ownerUserId, parentId, name)) {
+        while (sameNameExists(ownerUserId, spaceType, parentId, name)) {
             if (index > MAX_NAME_COLLISION_ITERATIONS) {
                 name = baseName + " (" + UUID.randomUUID().toString().substring(0, 8) + ")" + extension;
                 break;
@@ -740,11 +742,19 @@ public class OfflineDownloadExecutionService {
         return name;
     }
 
-    private boolean sameNameExists(UUID ownerUserId, UUID parentId, String name) {
-        if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, name);
+    private boolean sameNameExists(UUID ownerUserId, SpaceType spaceType, UUID parentId, String name) {
+        if (spaceType == SpaceType.SHARED) {
+            if (parentId == null) {
+                return fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(spaceType, name);
+            }
+            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(spaceType, parentId, name);
         }
-        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(ownerUserId, parentId, name);
+        if (parentId == null) {
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    ownerUserId, spaceType, name);
+        }
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                ownerUserId, spaceType, parentId, name);
     }
 
     private String normalizeFileName(String rawName) {

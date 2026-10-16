@@ -97,18 +97,21 @@ public class FileNodeSupport {
     }
 
     /**
-     * 判断同级目录下是否存在同名节点。
+     * 判断同级目录下是否存在同名节点（限定空间）。
      *
      * @param ownerUserId 所有者用户 ID
+     * @param spaceType   节点所属空间
      * @param parentId    父目录 ID，null 表示根目录
      * @param name        节点名称
      * @return 是否存在同名节点
      */
-    public boolean sameNameExists(UUID ownerUserId, UUID parentId, String name) {
+    public boolean sameNameExists(UUID ownerUserId, SpaceType spaceType, UUID parentId, String name) {
         if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, name);
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    ownerUserId, spaceType, name);
         }
-        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(ownerUserId, parentId, name);
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                ownerUserId, spaceType, parentId, name);
     }
 
     /**

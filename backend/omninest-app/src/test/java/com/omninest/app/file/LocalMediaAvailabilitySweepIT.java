@@ -8,6 +8,7 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePurgeState;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.service.LocalMediaAvailabilityService;
 import java.time.Duration;
@@ -215,6 +216,7 @@ class LocalMediaAvailabilitySweepIT {
         var transaction = new TransactionTemplate(transactionManager);
         int updated = transaction.execute(status -> fileNodeRepository.assignDeletedDescendantsToPurge(
                 owner,
+                SpaceType.PERSONAL,
                 LikePatterns.escapeSpecials("/100%_done/"),
                 taskId,
                 FilePurgeState.QUEUED,
@@ -229,6 +231,7 @@ class LocalMediaAvailabilitySweepIT {
         // 兄弟目录的文件被同一 taskId 认领后就会随本任务物理清除。
         int unescaped = transaction.execute(status -> fileNodeRepository.assignDeletedDescendantsToPurge(
                 owner,
+                SpaceType.PERSONAL,
                 "/100%_done/",
                 taskId,
                 FilePurgeState.QUEUED,
@@ -246,8 +249,8 @@ class LocalMediaAvailabilitySweepIT {
         UUID sibling = insertActiveNode(owner, "S01XE01/b.mkv");
 
         List<FileNode> listed = fileNodeRepository
-                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                        owner, LikePatterns.escapeSpecials("/S01_E01/"));
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        owner, SpaceType.PERSONAL, LikePatterns.escapeSpecials("/S01_E01/"));
         assertThat(listed).singleElement().satisfies(node -> {
             assertThat(node.getId()).isEqualTo(inSubtree);
             assertThat(node.getNormalizedPath()).isEqualTo("/S01_E01/a.mkv");
@@ -256,35 +259,79 @@ class LocalMediaAvailabilitySweepIT {
         // 这两个方法原本是 derived finder，改为显式查询后排序必须仍来自查询本身：
         // 调用方传的是不带 Sort 的 PageRequest。
         Page<FileNode> paged = fileNodeRepository
-                .findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
-                        owner, LikePatterns.escapeSpecials("/S01_E01/"), PageRequest.of(0, 10));
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithOrderById(
+                        owner, SpaceType.PERSONAL, LikePatterns.escapeSpecials("/S01_E01/"),
+                        PageRequest.of(0, 10));
         assertThat(paged.getContent()).singleElement()
                 .satisfies(node -> assertThat(node.getId()).isEqualTo(inSubtree));
         assertThat(sibling).isNotNull();
     }
 
+    @Test
+    @DisplayName("同名路径分属两个空间时，子树读写不得跨空间认领")
+    void subtreeQueriesDoNotClaimTheOtherSpace() {
+        // 个人与共享空间允许同名根目录（导入阅读默认目录就会各建一个 /Reader），
+        // 前缀一致时只按 owner 匹配的批量更新会把另一空间的文件挂进本次清理任务并物理删除。
+        UUID owner = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        UUID personalChild = insertDeletedNode(owner, "/Reader/personal.mkv", SpaceType.PERSONAL);
+        UUID sharedChild = insertDeletedNode(owner, "/Reader/shared.mkv", SpaceType.SHARED);
+
+        int updated = new TransactionTemplate(transactionManager).execute(status ->
+                fileNodeRepository.assignDeletedDescendantsToPurge(
+                        owner,
+                        SpaceType.PERSONAL,
+                        LikePatterns.escapeSpecials("/Reader/"),
+                        taskId,
+                        FilePurgeState.QUEUED,
+                        Instant.now()
+                ));
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(purgeTaskOf(personalChild)).isEqualTo(taskId);
+        assertThat(purgeTaskOf(sharedChild)).isNull();
+
+        // 读侧同一口径：软删链路的子树列举也只按空间取活动节点。
+        UUID activePersonal = insertActiveNode(owner, "Reader/in-personal.mkv", SpaceType.PERSONAL);
+        insertActiveNode(owner, "Reader/in-shared.mkv", SpaceType.SHARED);
+        assertThat(fileNodeRepository
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        owner, SpaceType.PERSONAL, LikePatterns.escapeSpecials("/Reader/")))
+                .extracting(FileNode::getId).containsExactly(activePersonal);
+    }
+
     private UUID insertActiveNode(UUID ownerUserId, String relativePath) {
+        return insertActiveNode(ownerUserId, relativePath, SpaceType.PERSONAL);
+    }
+
+    private UUID insertActiveNode(UUID ownerUserId, String relativePath, SpaceType spaceType) {
         UUID nodeId = UUID.randomUUID();
         jdbcTemplate.update(
-                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path) "
-                        + "values (?, ?, 'FILE', ?, ?)",
+                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path, space_type) "
+                        + "values (?, ?, 'FILE', ?, ?, ?)",
                 nodeId,
                 ownerUserId,
                 relativePath.substring(relativePath.lastIndexOf('/') + 1),
-                "/" + relativePath
+                "/" + relativePath,
+                spaceType.getValue()
         );
         return nodeId;
     }
 
     private UUID insertDeletedNode(UUID ownerUserId, String normalizedPath) {
+        return insertDeletedNode(ownerUserId, normalizedPath, SpaceType.PERSONAL);
+    }
+
+    private UUID insertDeletedNode(UUID ownerUserId, String normalizedPath, SpaceType spaceType) {
         UUID nodeId = UUID.randomUUID();
         jdbcTemplate.update(
-                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path, is_deleted) "
-                        + "values (?, ?, 'FILE', ?, ?, true)",
+                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path, "
+                        + "space_type, is_deleted) values (?, ?, 'FILE', ?, ?, ?, true)",
                 nodeId,
                 ownerUserId,
                 normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1),
-                normalizedPath
+                normalizedPath,
+                spaceType.getValue()
         );
         return nodeId;
     }

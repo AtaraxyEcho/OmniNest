@@ -304,8 +304,8 @@ public class FileShareService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅支持文件夹级联共享");
         }
         List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                        ownerUserId, LikePatterns.escapeSpecials(folder.getNormalizedPath()));
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        ownerUserId, folder.getSpaceType(), LikePatterns.escapeSpecials(folder.getNormalizedPath()));
         Instant now = Instant.now();
         for (FileNode node : descendants) {
             node.setShared(shared);

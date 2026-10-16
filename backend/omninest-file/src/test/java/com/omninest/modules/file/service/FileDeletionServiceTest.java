@@ -15,6 +15,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePurgeState;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.event.FilePurgeRequestedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
@@ -74,7 +75,8 @@ class FileDeletionServiceTest {
                 any()
         )).thenReturn(Optional.empty());
         when(participant.findBusinessReferences(any(PurgeContext.class))).thenReturn(List.of());
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithOrderById(
+                any(),
                 any(),
                 any(),
                 any()
@@ -86,8 +88,9 @@ class FileDeletionServiceTest {
     void deletePermanentlyCreatesDurableTaskInsteadOfDeletingObjectSynchronously() {
         FileNode root = deletedRoot();
         when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(root));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
                 OWNER_ID,
+                SpaceType.PERSONAL,
                 "/movie.mkv/"
         )).thenReturn(List.of());
 
@@ -141,8 +144,9 @@ class FileDeletionServiceTest {
         FileNode root = deletedRoot();
         UUID readerItemId = UUID.fromString("30000000-0000-0000-0000-000000000001");
         when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(root));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
                 OWNER_ID,
+                SpaceType.PERSONAL,
                 "/movie.mkv/"
         )).thenReturn(List.of());
         when(participant.findBusinessReferences(any(PurgeContext.class))).thenReturn(List.of(
@@ -175,12 +179,14 @@ class FileDeletionServiceTest {
         )).thenReturn(true);
         when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(firstRoot));
         when(fileNodeRepository.findOwnedForUpdate(SECOND_FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.of(secondRoot));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
                 OWNER_ID,
+                SpaceType.PERSONAL,
                 "/first.jpg/"
         )).thenReturn(List.of());
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
                 OWNER_ID,
+                SpaceType.PERSONAL,
                 "/second.jpg/"
         )).thenReturn(List.of());
 
@@ -224,6 +230,7 @@ class FileDeletionServiceTest {
 
         verify(fileNodeRepository).assignDeletedDescendantsToPurge(
                 eq(OWNER_ID),
+                eq(SpaceType.PERSONAL),
                 eq("/100\\%\\_done/"),
                 any(),
                 eq(FilePurgeState.QUEUED),

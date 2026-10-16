@@ -139,8 +139,8 @@ public class FileUploadSessionService {
                 throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
             }
         } else {
-            checkActiveNameConflict(ownerUserId, request.parentId(), fileName);
-            checkSoftDeletedConflict(ownerUserId, request.parentId(), fileName);
+            checkActiveNameConflict(ownerUserId, spaceType, request.parentId(), fileName);
+            checkSoftDeletedConflict(ownerUserId, spaceType, request.parentId(), fileName);
         }
 
         String mimeType = normalizeMimeType(request.mimeType(), fileName);
@@ -525,9 +525,11 @@ public class FileUploadSessionService {
                     SpaceType.SHARED, parentId, fileName);
         }
         if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, fileName);
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    ownerUserId, spaceType, fileName);
         }
-        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(ownerUserId, parentId, fileName);
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                ownerUserId, spaceType, parentId, fileName);
     }
 
     private boolean bandwidthLimitEnabled() {
@@ -548,8 +550,8 @@ public class FileUploadSessionService {
         return configured;
     }
 
-    private void checkActiveNameConflict(UUID ownerUserId, UUID parentId, String fileName) {
-        fileNodeRepository.findActiveNameConflict(ownerUserId, parentId, fileName)
+    private void checkActiveNameConflict(UUID ownerUserId, SpaceType spaceType, UUID parentId, String fileName) {
+        fileNodeRepository.findActiveNameConflict(ownerUserId, spaceType, parentId, fileName)
                 .ifPresent(node -> {
                     throw new BusinessException(
                             ErrorCode.CONFLICT,
@@ -563,12 +565,14 @@ public class FileUploadSessionService {
      * 检查回收站是否存在同名文件，如果存在则抛出冲突异常。
      * 前端收到 409 + details 后弹窗提示用户确认清理。
      */
-    private void checkSoftDeletedConflict(UUID ownerUserId, UUID parentId, String fileName) {
+    private void checkSoftDeletedConflict(UUID ownerUserId, SpaceType spaceType, UUID parentId, String fileName) {
         Optional<FileNode> conflict;
         if (parentId == null) {
-            conflict = fileNodeRepository.findByOwnerUserIdAndParentIdIsNullAndNameAndDeletedTrue(ownerUserId, fileName);
+            conflict = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedTrue(
+                    ownerUserId, spaceType, fileName);
         } else {
-            conflict = fileNodeRepository.findByOwnerUserIdAndParentIdAndNameAndDeletedTrue(ownerUserId, parentId, fileName);
+            conflict = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedTrue(
+                    ownerUserId, spaceType, parentId, fileName);
         }
         conflict.ifPresent(node -> {
             throw new BusinessException(ErrorCode.CONFLICT, "回收站存在同名文件，请先清理后再上传",

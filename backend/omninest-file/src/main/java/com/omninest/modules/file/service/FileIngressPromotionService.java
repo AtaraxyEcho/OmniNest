@@ -430,9 +430,11 @@ public class FileIngressPromotionService {
                     SpaceType.SHARED, parentId, fileName);
         }
         if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, fileName);
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                    ownerUserId, spaceType, fileName);
         }
-        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(ownerUserId, parentId, fileName);
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                ownerUserId, spaceType, parentId, fileName);
     }
 
     private String resolveChildPath(FileNode parent, String childName) {

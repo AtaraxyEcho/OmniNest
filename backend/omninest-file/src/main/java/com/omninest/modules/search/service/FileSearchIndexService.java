@@ -212,13 +212,22 @@ public class FileSearchIndexService implements Closeable {
             if (reader == null) {
                 return false;
             }
-            IndexSearcher searcher = new IndexSearcher(reader);
-            Query query = new BooleanQuery.Builder()
-                    .add(new TermQuery(new Term(FIELD_FILE_ID, fileNodeId.toString())), BooleanClause.Occur.MUST)
-                    .add(new TermQuery(new Term(FIELD_HAS_CONTENT, HAS_CONTENT_YES)), BooleanClause.Occur.MUST)
-                    .build();
-            return searcher.count(query) > 0;
+            return hasStoredContent(new IndexSearcher(reader), fileNodeId);
         }
+    }
+
+    /**
+     * 判断该文件在索引里是否已有正文文档；searcher 为 null 表示索引尚未建立。
+     */
+    private boolean hasStoredContent(IndexSearcher searcher, UUID fileNodeId) throws IOException {
+        if (searcher == null) {
+            return false;
+        }
+        Query query = new BooleanQuery.Builder()
+                .add(new TermQuery(new Term(FIELD_FILE_ID, fileNodeId.toString())), BooleanClause.Occur.MUST)
+                .add(new TermQuery(new Term(FIELD_HAS_CONTENT, HAS_CONTENT_YES)), BooleanClause.Occur.MUST)
+                .build();
+        return searcher.count(query) > 0;
     }
 
     /**
@@ -268,6 +277,9 @@ public class FileSearchIndexService implements Closeable {
      * 批量索引文件文档，一次 commit 减少 fsync 次数。
      * 每个条目提供 fileNodeId、title、content 与 spaceType；content 可为 null。
      *
+     * <p>与 {@link #indexFile} 同规则：条目不带正文时保留已抽取的正文文档，否则一次目录恢复
+     * 就会把可搜索的全文清成只剩标题。
+     *
      * @param ownerUserId 拥有者用户 ID
      * @param docs 待索引文档集合
      */
@@ -277,16 +289,28 @@ public class FileSearchIndexService implements Closeable {
         }
         try {
             withUserIndexState(ownerUserId, state -> {
-                for (IndexDocumentInput input : docs) {
-                    Document doc = new Document();
-                    doc.add(new StringField(FIELD_FILE_ID, input.fileNodeId().toString(), Field.Store.YES));
-                    doc.add(new TextField(FIELD_TITLE, input.title(), Field.Store.YES));
-                    doc.add(new StringField(FIELD_SPACE_TYPE, input.spaceType(), Field.Store.YES));
-                    if (input.content() != null && !input.content().isBlank()) {
-                        doc.add(new TextField(FIELD_CONTENT, input.content(), Field.Store.NO));
+                try (DirectoryReader reader = openReaderOrNull(state)) {
+                    IndexSearcher searcher = reader == null ? null : new IndexSearcher(reader);
+                    for (IndexDocumentInput input : docs) {
+                        boolean hasContent = input.content() != null && !input.content().isBlank();
+                        if (!hasContent && hasStoredContent(searcher, input.fileNodeId())) {
+                            continue;
+                        }
+                        Document doc = new Document();
+                        doc.add(new StringField(FIELD_FILE_ID, input.fileNodeId().toString(), Field.Store.YES));
+                        doc.add(new TextField(FIELD_TITLE, input.title(), Field.Store.YES));
+                        doc.add(new StringField(FIELD_SPACE_TYPE, input.spaceType(), Field.Store.YES));
+                        doc.add(new StringField(
+                                FIELD_HAS_CONTENT,
+                                hasContent ? HAS_CONTENT_YES : HAS_CONTENT_NO,
+                                Field.Store.YES
+                        ));
+                        if (hasContent) {
+                            doc.add(new TextField(FIELD_CONTENT, input.content(), Field.Store.NO));
+                        }
+                        state.writer.deleteDocuments(new Term(FIELD_FILE_ID, input.fileNodeId().toString()));
+                        state.writer.addDocument(doc);
                     }
-                    state.writer.deleteDocuments(new Term(FIELD_FILE_ID, input.fileNodeId().toString()));
-                    state.writer.addDocument(doc);
                 }
                 state.writer.commit();
                 return null;

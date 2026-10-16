@@ -224,7 +224,7 @@ class FileUploadSessionServiceTest {
     @Test
     void createSessionReturnsReusableActiveConflictDetails() {
         FileNode existingFile = fileNode("photo.jpg", "image/jpeg", 2048L);
-        when(fileNodeRepository.findActiveNameConflict(OWNER_ID, null, "photo.jpg"))
+        when(fileNodeRepository.findActiveNameConflict(OWNER_ID, SpaceType.PERSONAL, null, "photo.jpg"))
                 .thenReturn(Optional.of(existingFile));
 
         assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
@@ -242,6 +242,33 @@ class FileUploadSessionServiceTest {
             assertThat(exception.details()).containsEntry("sizeBytes", 2048L);
             assertThat(exception.details()).containsEntry("mimeType", "image/jpeg");
         });
+    }
+
+    @Test
+    void createSessionIgnoresSameNameNodeFromSharedSpace() {
+        // 共享空间节点同样保留 owner_user_id：个人空间上传只能按个人空间判同名复用，
+        // 否则会把共享节点当成本人目录里的已有文件返回给前端复用。
+        when(fileNodeRepository.findActiveNameConflict(OWNER_ID, SpaceType.PERSONAL, null, "photo.jpg"))
+                .thenReturn(Optional.empty());
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "photo.jpg"))
+                .thenReturn(Optional.empty());
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectStorageClient.createUploadUrl(any(), any())).thenReturn(URI.create("http://minio/direct"));
+
+        var response = service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                null,
+                "photo.jpg",
+                2048L,
+                "image/jpeg",
+                null,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(response.fileName()).isEqualTo("photo.jpg");
+        verify(fileNodeRepository).findActiveNameConflict(OWNER_ID, SpaceType.PERSONAL, null, "photo.jpg");
     }
 
     @Test
@@ -271,7 +298,8 @@ class FileUploadSessionServiceTest {
 
     @Test
     void createSessionReturnsUploadIdAndPartUrls() {
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "video.mp4"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "video.mp4"))
                 .thenReturn(false);
         when(objectStorageClient.initiateMultipartUpload(any(), eq("video/mp4"))).thenReturn("upload-123");
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -306,7 +334,8 @@ class FileUploadSessionServiceTest {
         target.setName("video.mp4");
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, OWNER_ID))
                 .thenReturn(Optional.of(target));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "video.mp4"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "video.mp4"))
                 .thenReturn(true);
         when(objectStorageClient.initiateMultipartUpload(any(), eq("video.mp4"))).thenReturn("upload-123");
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -386,7 +415,8 @@ class FileUploadSessionServiceTest {
         when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
         when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "demo.pdf"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "demo.pdf"))
                 .thenReturn(false);
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(ingressScanTaskService.enqueueScanTask(any(), any(), any(), any())).thenReturn(SCAN_TASK_ID);
@@ -433,7 +463,8 @@ class FileUploadSessionServiceTest {
     void createSession_returnsValidSession() {
         // 验证创建上传会话时返回的元数据正确（文件名、大小、分片数等）
         long sizeBytes = 20L * 1024 * 1024;
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "video.mp4"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "video.mp4"))
                 .thenReturn(false);
         when(objectStorageClient.initiateMultipartUpload(any(), eq("video/mp4"))).thenReturn("upload-456");
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

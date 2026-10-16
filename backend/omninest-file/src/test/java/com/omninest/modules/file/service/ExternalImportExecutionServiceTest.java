@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.messaging.DomainEventPublisher;
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.common.storage.LocalExternalStorageSettings;
 import com.omninest.common.storage.ObjectStorageBuckets;
@@ -48,9 +49,12 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -247,6 +251,125 @@ class ExternalImportExecutionServiceTest {
         } finally {
             Files.deleteIfExists(importRoot);
         }
+    }
+
+    @Test
+    void importPersistsMagicByteMimeTypeInsteadOfTheGuessedOne() throws Exception {
+        stubTransactionPassthrough();
+        when(objectStorageBuckets.userFiles()).thenReturn("files");
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", "0".repeat(64), 8L, "video/mp4"));
+
+        StorageImportTask task = importTask();
+        when(importTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        when(fileObjectRepository.save(any(FileObject.class))).thenAnswer(invocation -> {
+            FileObject object = invocation.getArgument(0);
+            object.setId(UUID.fromString("40000000-0000-0000-0000-000000000002"));
+            return object;
+        });
+        when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Path staged = Files.createTempFile("omni-import-mime-", ".mkv");
+        try {
+            Files.write(staged, "01234567".getBytes());
+            Method importSingleFile = ExternalImportExecutionService.class.getDeclaredMethod(
+                    "importSingleFile",
+                    StorageImportTask.class, UUID.class, String.class, Path.class, long.class, long.class);
+            importSingleFile.setAccessible(true);
+            importSingleFile.invoke(service, task, null, "episode-01.mkv", staged, 8L, 0L);
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+
+        // 外部来源没有客户端申报，入库类型必须取扫描阶段的魔数结果。
+        ArgumentCaptor<FileObject> objectCaptor = ArgumentCaptor.forClass(FileObject.class);
+        verify(fileObjectRepository).save(objectCaptor.capture());
+        assertThat(objectCaptor.getValue().getMimeType()).isEqualTo("video/mp4");
+        ArgumentCaptor<FileNode> nodeCaptor = ArgumentCaptor.forClass(FileNode.class);
+        verify(fileNodeRepository).save(nodeCaptor.capture());
+        assertThat(nodeCaptor.getValue().getMimeType()).isEqualTo("video/mp4");
+        verify(objectStorageClient).copyObject(any(ObjectStorageKey.class), any(ObjectStorageKey.class),
+                eq("video/mp4"));
+    }
+
+    @Test
+    void importKeepsGuessedMimeTypeWhenMagicSniffingHasNoConclusion() throws Exception {
+        Method resolve = ExternalImportExecutionService.class.getDeclaredMethod(
+                "resolveDetectedMimeType", String.class, String.class, String.class);
+        resolve.setAccessible(true);
+
+        assertThat(resolve.invoke(service, "a.mkv", "video/x-matroska", null)).isEqualTo("video/x-matroska");
+        assertThat(resolve.invoke(service, "a.mkv", "video/x-matroska", "video/x-matroska"))
+                .isEqualTo("video/x-matroska");
+        assertThat(resolve.invoke(service, "a.mkv", "video/x-matroska", "video/mp4")).isEqualTo("video/mp4");
+    }
+
+    private StorageImportTask importTask() {
+        StorageImportTask task = new StorageImportTask();
+        task.setId(TASK_ID);
+        task.setOwnerUserId(OWNER_ID);
+        task.setExternalAccountId(ACCOUNT_ID);
+        task.setFileName("episode-01.mkv");
+        task.setSpaceType("PERSONAL");
+        task.setStatus(ImportTaskStatus.QUEUED.getValue());
+        return task;
+    }
+
+    private void stubTransactionPassthrough() {
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        Mockito.doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<TransactionStatus> callback = (Consumer<TransactionStatus>) invocation.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+    }
+
+    private static FileNode uploadedNode() {
+        FileNode node = new FileNode();
+        node.setId(UUID.fromString("40000000-0000-0000-0000-000000000001"));
+        node.setOwnerUserId(OWNER_ID);
+        node.setName("episode-01.mkv");
+        node.setMimeType("video/x-matroska");
+        node.setSizeBytes(10L);
+        return node;
+    }
+
+    private static FileObject uploadedObject() {
+        FileObject object = new FileObject();
+        object.setId(UUID.fromString("40000000-0000-0000-0000-000000000002"));
+        object.setBucketName("files");
+        object.setObjectKey("raw/episode-01.mkv");
+        return object;
+    }
+
+    @Test
+    void uploadEventsArePublishedOnlyAfterCommit() {
+        // 事务闭包内直接投 MQ 会让回滚后的 Worker 收到不存在的节点：
+        // 有事务同步在跑时必须等到提交之后再投。
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.registerUploadEvents(uploadedNode(), uploadedObject());
+
+            verify(domainEventPublisher, Mockito.never()).publishTask(anyString(), any());
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            verify(domainEventPublisher).publishTask(eq(QueueNames.FILE_INDEX_ROUTING_KEY), any());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void uploadEventsArePublishedImmediatelyWithoutTransactionSynchronization() {
+        service.registerUploadEvents(uploadedNode(), uploadedObject());
+
+        verify(domainEventPublisher).publishTask(eq(QueueNames.FILE_INDEX_ROUTING_KEY), any());
     }
 
 }

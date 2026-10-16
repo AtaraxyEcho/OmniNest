@@ -161,16 +161,32 @@ public class SharedSpaceService {
         String newPath = parentPath.isEmpty() ? "/" + newName : parentPath + "/" + newName;
         node.setName(newName);
         node.setNormalizedPath(newPath);
-        // 分页收集后代节点，避免共享空间大文件量时整体加载到内存。
-        // 该前缀驱动共享空间改名的子树重写：只给 LIKE 用转义形式，
-        // 路径改写仍用原始 oldPath.length() 定位，不能让反斜杠进 substring。
+        rewriteSubtreePaths(oldPath, newPath, SpaceType.SHARED);
+        return fileNodeRepository.save(node);
+    }
+
+    /**
+     * 分页重写子树规范化路径。
+     *
+     * <p>驱动两类写入：共享空间改名，以及跨空间移动到根目录。只给 LIKE 用转义形式，
+     * 路径改写仍按原始 oldPath 长度定位，不能让反斜杠进 substring。分页收集后代，
+     * 避免大目录一次加载到内存。</p>
+     *
+     * @param oldPath 移动前的节点路径
+     * @param newPath 移动后的节点路径
+     * @param spaceType 后代所在空间
+     */
+    private void rewriteSubtreePaths(String oldPath, String newPath, SpaceType spaceType) {
+        if (oldPath == null || oldPath.equals(newPath)) {
+            return;
+        }
         String prefix = LikePatterns.escapeSpecials(oldPath + "/");
         int pageNumber = 0;
         final int batchSize = 500;
         Page<FileNode> page;
         do {
             page = fileNodeRepository.findBySpaceTypeAndNormalizedPathStartingWithOrderById(
-                    SpaceType.SHARED,
+                    spaceType,
                     prefix,
                     PageRequest.of(pageNumber, batchSize, Sort.by("id"))
             );
@@ -182,7 +198,6 @@ public class SharedSpaceService {
             fileNodeRepository.saveAll(page.getContent());
             pageNumber++;
         } while (page.hasNext());
-        return fileNodeRepository.save(node);
     }
 
     /**
@@ -204,11 +219,15 @@ public class SharedSpaceService {
         sharedSpaceQuotaService.checkQuota(totalSize);
         node.setSpaceType(SpaceType.SHARED);
         node.setUploadedBy(operatorId);
-        // 移入共享空间根目录
+        // 移入共享空间根目录：规范化路径必须跟着父级重算，否则节点会以旧父级前缀
+        // 落进目标空间的另一棵子树，被那棵子树的批量软删/永久删除按前缀认领。
+        String previousPath = node.getNormalizedPath();
         node.setParentId(null);
+        node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
             batchMoveChildrenToShared(node.getId(), operatorId);
+            rewriteSubtreePaths(previousPath, node.getNormalizedPath(), SpaceType.SHARED);
         }
         if (totalSize > 0) {
             storageQuotaService.decrementUsage(operatorId, totalSize);
@@ -234,15 +253,23 @@ public class SharedSpaceService {
         long totalSize = calculateTotalSize(node);
         // 检查个人配额是否足够
         storageQuotaService.checkQuota(targetUserId, totalSize);
+        // 个人空间根目录同名会复用同一规范化路径前缀，先拦冲突再改空间与路径。
+        if (fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                targetUserId, SpaceType.PERSONAL, node.getName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "个人空间根目录已存在同名节点");
+        }
+        String previousPath = node.getNormalizedPath();
         node.setSpaceType(SpaceType.PERSONAL);
         node.setOwnerUserId(targetUserId);
         // 个人空间文件不需要 uploaded_by
         node.setUploadedBy(null);
-        // 移入个人空间根目录
+        // 移入个人空间根目录，规范化路径按新父级重算，口径与移入共享空间一致。
         node.setParentId(null);
+        node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
             batchMoveChildrenToPersonal(node.getId(), targetUserId);
+            rewriteSubtreePaths(previousPath, node.getNormalizedPath(), SpaceType.PERSONAL);
         }
         if (totalSize > 0) {
             sharedSpaceQuotaService.decreaseUsage(totalSize);
@@ -325,9 +352,11 @@ public class SharedSpaceService {
         if (NodeType.FILE.getValue().equals(node.getNodeType())) {
             return node.getSizeBytes();
         }
-        List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                node.getOwnerUserId(),
-                LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"));
+        List<FileNode> descendants = fileNodeRepository
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        node.getOwnerUserId(),
+                        node.getSpaceType(),
+                        LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"));
         long total = 0;
         for (FileNode descendant : descendants) {
             if (NodeType.FILE.getValue().equals(descendant.getNodeType())) {

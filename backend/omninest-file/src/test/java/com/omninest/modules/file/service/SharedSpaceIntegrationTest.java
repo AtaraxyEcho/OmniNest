@@ -261,7 +261,8 @@ class SharedSpaceIntegrationTest {
                     .thenReturn(Optional.of(folder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("documents"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(USER_A, "/documents/"))
+            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                    USER_A, SpaceType.PERSONAL, "/documents/"))
                     .thenReturn(List.of(child));
             when(fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(USER_A, DOC_FOLDER_ID))
                     .thenReturn(List.of(child));
@@ -376,7 +377,8 @@ class SharedSpaceIntegrationTest {
 
             when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(DOC_FOLDER_ID, SpaceType.SHARED))
                     .thenReturn(Optional.of(folder));
-            when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(USER_A, "/documents/"))
+            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                    USER_A, SpaceType.SHARED, "/documents/"))
                     .thenReturn(List.of(childFile, childFolder, grandchild));
             when(fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, DOC_FOLDER_ID))
                     .thenReturn(List.of(childFile, childFolder));
@@ -463,7 +465,8 @@ class SharedSpaceIntegrationTest {
                     .thenReturn(Optional.of(docFolder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("documents"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(USER_A, "/documents/"))
+            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                    USER_A, SpaceType.PERSONAL, "/documents/"))
                     .thenReturn(List.of(report, imgFolder, photo1, photo2));
             // 第一层子文件
             when(fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(USER_A, DOC_FOLDER_ID))

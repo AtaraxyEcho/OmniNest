@@ -95,48 +95,60 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     List<FileNode> findByOwnerUserIdAndDeletedTrueOrderByDeletedAtDesc(UUID ownerUserId);
 
     /**
-     * 按路径前缀读取活动节点。前缀是真实目录名的字面量，调用方必须转义，本查询声明 {@code escape '\'}。
+     * 按路径前缀读取指定空间内的活动节点。前缀是真实目录名的字面量，调用方必须转义，本查询声明 {@code escape '\'}。
+     *
+     * <p>必须带 spaceType：个人与共享空间允许同名目录（例如两侧都有 {@code /Reader}），
+     * 只按 owner + 前缀会把另一空间的子树一起圈进软删、改名与共享级联。</p>
      *
      * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
      * @param prefix 已转义的路径前缀
      * @return 活动节点列表
      */
     @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
-    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
+    List<FileNode> findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix
     );
 
     /**
-     * 按路径前缀读取已软删除节点，口径同上。
+     * 按路径前缀读取指定空间内的已软删除节点，口径同上。
      *
      * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
      * @param prefix 已转义的路径前缀
      * @return 已软删除节点列表
      */
     @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
-    List<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
+    List<FileNode> findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix
     );
 
     /**
-     * 分页读取指定路径下的全部节点。
+     * 分页读取指定空间与路径下的全部节点。
      *
      * <p>由 derived 方法改为显式查询：派生属性的 {@code StartingWith} 生成的 LIKE 挂不上
      * ESCAPE 子句；排序保留在查询里，因为部分调用方传的是不带 Sort 的 PageRequest。</p>
      *
      * @param ownerUserId 所属用户 ID
+     * @param spaceType 空间类型
      * @param prefix 已转义的路径前缀
      * @param pageable 分页参数
      * @return 文件节点分页
      */
     @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' order by node.id asc")
-    Page<FileNode> findByOwnerUserIdAndNormalizedPathStartingWithOrderById(
+    Page<FileNode> findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithOrderById(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix,
             Pageable pageable
     );
@@ -160,17 +172,20 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
-     * 分页读取指定路径下尚未软删除节点的 ID。
+     * 分页读取指定空间与路径下尚未软删除节点的 ID。
      *
      * @param ownerUserId 所属用户 ID
+     * @param spaceType 空间类型
      * @param prefix 路径前缀
      * @param pageable 分页参数
      * @return 节点 ID 切片
      */
     @Query("select node.id from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false order by node.id")
     Slice<UUID> findActiveIdsByPathPrefix(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix,
             Pageable pageable
     );
@@ -198,9 +213,13 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     Optional<FileNode> findByIdAndOwnerUserIdAndDeletedFalse(UUID id, UUID ownerUserId);
 
     /**
-     * 查询指定目录下的活动同名节点。
+     * 查询指定空间与目录下的活动同名节点。
+     *
+     * <p>必须带 spaceType 过滤：共享空间节点同样保留 owner_user_id，只按 owner 判断会把
+     * 共享空间同名根节点误判为个人空间冲突。</p>
      *
      * @param ownerUserId 所有者用户 ID
+     * @param spaceType 目标空间类型
      * @param parentId 父目录 ID，根目录时为空
      * @param name 节点名称
      * @return 活动同名节点
@@ -209,12 +228,14 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             select node
             from FileNode node
             where node.ownerUserId = :ownerUserId
+              and node.spaceType = :spaceType
               and ((:parentId is null and node.parentId is null) or node.parentId = :parentId)
               and node.name = :name
               and node.deleted = false
             """)
     Optional<FileNode> findActiveNameConflict(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("parentId") UUID parentId,
             @Param("name") String name
     );
@@ -290,13 +311,23 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("sourceType") String sourceType,
             @Param("normalizedPathPrefix") String normalizedPathPrefix);
 
-    boolean existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(UUID ownerUserId, String name);
+    /**
+     * 指定空间内是否存在同名活动节点。
+     *
+     * <p>必须带 spaceType 过滤：共享空间节点同样保留 owner_user_id，只按 owner 判断会把
+     * 共享空间同名根节点误判为个人空间冲突。</p>
+     */
+    boolean existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+            UUID ownerUserId, SpaceType spaceType, String name);
 
-    boolean existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(UUID ownerUserId, UUID parentId, String name);
+    boolean existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+            UUID ownerUserId, SpaceType spaceType, UUID parentId, String name);
 
-    Optional<FileNode> findByOwnerUserIdAndParentIdIsNullAndNameAndDeletedTrue(UUID ownerUserId, String name);
+    Optional<FileNode> findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedTrue(
+            UUID ownerUserId, SpaceType spaceType, String name);
 
-    Optional<FileNode> findByOwnerUserIdAndParentIdAndNameAndDeletedTrue(UUID ownerUserId, UUID parentId, String name);
+    Optional<FileNode> findByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedTrue(
+            UUID ownerUserId, SpaceType spaceType, UUID parentId, String name);
 
     @Query("select n from FileNode n where n.deleted = true and n.deletedAt < :cutoff")
     List<FileNode> findExpiredDeletedNodes(@Param("cutoff") Instant cutoff);
@@ -390,7 +421,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     /**
      * 将已软删除目录后代关联到永久删除任务。
      *
+     * <p>必须带 spaceType：这条 update 直接决定哪些节点会被物理清除，而个人与共享空间
+     * 允许同名目录，另一空间的同名子树不能被子树前缀认领。</p>
+     *
      * @param ownerUserId 所属用户 ID
+     * @param spaceType 空间类型
      * @param prefix 路径前缀
      * @param taskId 任务 ID
      * @param state 生命周期状态
@@ -400,9 +435,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update FileNode node set node.purgeTaskId = :taskId, node.purgeState = :state, "
             + "node.purgeRequestedAt = :requestedAt where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
     int assignDeletedDescendantsToPurge(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix,
             @Param("taskId") UUID taskId,
             @Param("state") FilePurgeState state,

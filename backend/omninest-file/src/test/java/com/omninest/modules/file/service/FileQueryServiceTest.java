@@ -271,7 +271,8 @@ class FileQueryServiceTest {
 
         assertThat(page.getContent()).extracting("name").containsExactly("clip.mkv");
         verify(fileNodeRepository, never())
-                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(OWNER_ID, "/Media/");
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        OWNER_ID, SpaceType.PERSONAL, "/Media/");
     }
 
     @Test
@@ -295,7 +296,8 @@ class FileQueryServiceTest {
 
     @Test
     void createFolderReturnsNormalizedPath() {
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "Docs"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Docs"))
                 .thenReturn(false);
         when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
                 .thenAnswer(invocation -> {
@@ -316,6 +318,31 @@ class FileQueryServiceTest {
     }
 
     @Test
+    void createFolderAllowsNameOwnedBySharedSpaceRootFolder() {
+        // 共享空间节点同样保留 owner_user_id：个人空间建同名根目录必须只按个人空间判冲突，
+        // 否则导入阅读器默认目录会被 409「同级目录下已存在同名文件夹」拦下。
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Reader"))
+                .thenReturn(false);
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                SpaceType.SHARED, "Reader"))
+                .thenReturn(true);
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> {
+                    FileNode node = invocation.getArgument(0);
+                    node.setId(UUID.randomUUID());
+                    return node;
+                });
+
+        var result = fileQueryService.createFolder(OWNER_ID, new CreateFolderRequest(null, "Reader"));
+
+        assertThat(result.normalizedPath()).isEqualTo("/Reader");
+        assertThat(result.spaceType()).isEqualTo(SpaceType.PERSONAL.getValue());
+        verify(fileNodeRepository).existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Reader");
+    }
+
+    @Test
     void renameNodeRejectsPathTraversalName() {
         UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000001");
 
@@ -333,9 +360,11 @@ class FileQueryServiceTest {
         FileNode child = node(OWNER_ID, folderId, "FILE", "a.txt", "/Docs/a.txt");
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
                 .thenReturn(Optional.of(folder));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "Archive"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Archive"))
                 .thenReturn(false);
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(OWNER_ID, "/Docs/"))
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "/Docs/"))
                 .thenReturn(List.of(child));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -357,11 +386,12 @@ class FileQueryServiceTest {
         FileNode child = node(OWNER_ID, folderId, "FILE", "a.txt", "/S01_E01/a.txt");
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
                 .thenReturn(Optional.of(folder));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "Archive"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Archive"))
                 .thenReturn(false);
         // 前缀进 LIKE 必须带转义；未转义时 /S01XE01/ 这类兄弟目录会被一起改名。
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, "/S01\\_E01/"))
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "/S01\\_E01/"))
                 .thenReturn(List.of(child));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -370,8 +400,8 @@ class FileQueryServiceTest {
 
         fileQueryService.renameNode(OWNER_ID, folderId, new RenameFileNodeRequest("Archive"));
 
-        verify(fileNodeRepository).findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, "/S01\\_E01/");
+        verify(fileNodeRepository).findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "/S01\\_E01/");
         // 子节点路径重写仍按原始 oldPath 定位，转义串不得进 substring。
         assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
     }
@@ -406,6 +436,7 @@ class FileQueryServiceTest {
                 .thenReturn(Optional.of(folder));
         when(fileNodeRepository.findActiveIdsByPathPrefix(
                 ArgumentMatchers.eq(OWNER_ID),
+                ArgumentMatchers.eq(SpaceType.PERSONAL),
                 ArgumentMatchers.eq("/Docs/"),
                 ArgumentMatchers.any()
         )).thenReturn(new SliceImpl<>(List.of(childId))).thenReturn(new SliceImpl<>(List.of()));
@@ -431,6 +462,7 @@ class FileQueryServiceTest {
                 .thenReturn(Optional.of(folder));
         when(fileNodeRepository.findActiveIdsByPathPrefix(
                 ArgumentMatchers.eq(OWNER_ID),
+                ArgumentMatchers.eq(SpaceType.PERSONAL),
                 ArgumentMatchers.eq("/Media/"),
                 ArgumentMatchers.any()
         )).thenReturn(new SliceImpl<>(List.of(childId))).thenReturn(new SliceImpl<>(List.of()));
@@ -468,7 +500,8 @@ class FileQueryServiceTest {
         deleted.setId(fileId);
         deleted.setDeleted(true);
         when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID)).thenReturn(Optional.of(deleted));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "old.txt"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "old.txt"))
                 .thenReturn(true);
 
         assertThatThrownBy(() -> fileQueryService.restoreNode(OWNER_ID, fileId))
@@ -582,8 +615,8 @@ class FileQueryServiceTest {
         when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
                 OWNER_ID, List.of(folderId, fileId)))
                 .thenReturn(List.of(folder, standalone));
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, "/Docs/"))
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "/Docs/"))
                 .thenReturn(List.of(child));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -646,11 +679,11 @@ class FileQueryServiceTest {
         child.setDeleted(true);
         when(fileNodeRepository.findByIdAndOwnerUserId(folderId, OWNER_ID))
                 .thenReturn(Optional.of(folder));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
-                OWNER_ID, "Docs"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Docs"))
                 .thenReturn(false);
-        when(fileNodeRepository.findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedTrue(
-                OWNER_ID, "/Docs/"))
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "/Docs/"))
                 .thenReturn(List.of(child));
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -672,8 +705,8 @@ class FileQueryServiceTest {
         file.setDeleted(true);
         when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID))
                 .thenReturn(Optional.of(file));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
-                OWNER_ID, "old.txt"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "old.txt"))
                 .thenReturn(false);
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -695,8 +728,8 @@ class FileQueryServiceTest {
         deleted.setDeleted(true);
         when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID))
                 .thenReturn(Optional.of(deleted));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
-                OWNER_ID, "conflict.txt"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "conflict.txt"))
                 .thenReturn(true);
 
         var conflictResult = fileQueryService.batchRestoreNodes(OWNER_ID, List.of(fileId));
@@ -717,8 +750,8 @@ class FileQueryServiceTest {
         when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
                 OWNER_ID, List.of(fileId)))
                 .thenReturn(List.of(file));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(
-                OWNER_ID, targetFolderId, "doc.pdf"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, targetFolderId, "doc.pdf"))
                 .thenReturn(false);
         when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -763,8 +796,8 @@ class FileQueryServiceTest {
         when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
                 OWNER_ID, List.of(fileId)))
                 .thenReturn(List.of(file));
-        when(fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(
-                OWNER_ID, targetFolderId, "doc.pdf"))
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, targetFolderId, "doc.pdf"))
                 .thenReturn(true);
 
         var nameConflictResult = fileQueryService.batchMoveNodes(OWNER_ID, List.of(fileId), targetFolderId);

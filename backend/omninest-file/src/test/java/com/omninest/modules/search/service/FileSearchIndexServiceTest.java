@@ -224,6 +224,65 @@ class FileSearchIndexServiceTest {
     }
 
     @Test
+    @DisplayName("indexFiles 不带正文时保留已抽取的正文文档")
+    void indexFiles_metadataOnly_preservesExtractedContent() {
+        UUID fileId = UUID.randomUUID();
+        service.indexFileChunks(fileId, USER_A, "网文", List.of("第一章 山洪爆发了", "第二章 抢险记录"), "PERSONAL");
+
+        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
+                fileId, "网文", null, "PERSONAL")));
+
+        assertThat(service.search(USER_A, "山洪", 50))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(fileId);
+        assertThat(service.clearIndex(USER_A)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("indexFiles 带正文时按新内容覆盖旧文档")
+    void indexFiles_withContent_replacesExistingDocuments() {
+        UUID fileId = UUID.randomUUID();
+        service.indexFileChunks(fileId, USER_A, "旧稿", List.of("第一章 山洪爆发了", "第二章 抢险记录"), "PERSONAL");
+
+        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
+                fileId, "新稿", "第三章 晴日", "PERSONAL")));
+
+        assertThat(service.search(USER_A, "山洪", 50)).isEmpty();
+        assertThat(service.search(USER_A, "晴日", 50))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(fileId);
+        assertThat(service.clearIndex(USER_A)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("indexFiles 写入的正文同样受后续元数据批次保护")
+    void indexFiles_contentBecomesProtectedAgainstLaterMetadataOnlyBatch() {
+        UUID fileId = UUID.randomUUID();
+        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
+                fileId, "报告", "第四季度营收", "PERSONAL")));
+
+        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
+                fileId, "报告 (1)", null, "PERSONAL")));
+
+        assertThat(service.search(USER_A, "营收", 50))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(fileId);
+    }
+
+    @Test
+    @DisplayName("indexFiles 对没有正文的文件照常写入元数据")
+    void indexFiles_metadataOnly_indexesFilesWithoutContent() {
+        UUID fileId = UUID.randomUUID();
+
+        service.indexFiles(USER_A, List.of(new FileSearchIndexService.IndexDocumentInput(
+                fileId, "新建文档", null, "PERSONAL")));
+
+        assertThat(service.search(USER_A, "新建文档", 50))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(fileId);
+    }
+
+    @Test
     @DisplayName("用户索引缓存超过容量后关闭旧资源并可从磁盘重新打开")
     void indexCache_exceedsCapacity_evictsAndReopensIndex() throws Exception {
         service.close();

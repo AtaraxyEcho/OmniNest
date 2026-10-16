@@ -54,6 +54,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -235,7 +237,9 @@ public class ExternalImportExecutionService {
             throw exception;
         }
         ingressLifecycleService.markClean(ingressId, inspection.sha256());
-        objectStorageClient.copyObject(quarantineKey, targetKey);
+        String effectiveMimeType = resolveDetectedMimeType(
+                prepResult.availableName, mimeType, inspection.detectedMimeType());
+        objectStorageClient.copyObject(quarantineKey, targetKey, effectiveMimeType);
 
         // 事务内：创建 FileObject、FileNode
         try {
@@ -250,7 +254,7 @@ public class ExternalImportExecutionService {
                 fileObject.setObjectKey(prepResult.targetObjectKey);
                 fileObject.setSha256(inspection.sha256());
                 fileObject.setSizeBytes(size);
-                fileObject.setMimeType(mimeType);
+                fileObject.setMimeType(effectiveMimeType);
                 FileObject savedObject = fileObjectRepository.save(fileObject);
 
                 FileNode fileNode = new FileNode();
@@ -259,7 +263,7 @@ public class ExternalImportExecutionService {
                 fileNode.setNodeType(NodeType.FILE.getValue());
                 fileNode.setName(prepResult.availableName);
                 fileNode.setNormalizedPath(resolveChildPath(prepResult.targetParent, prepResult.availableName));
-                fileNode.setMimeType(mimeType);
+                fileNode.setMimeType(effectiveMimeType);
                 fileNode.setSizeBytes(savedObject.getSizeBytes());
                 fileNode.setCurrentObjectId(savedObject.getId());
                 fileNode.setSourceType(SourceType.RCLONE.getValue());
@@ -269,7 +273,7 @@ public class ExternalImportExecutionService {
                 }
                 FileNode persistedNode = fileNodeRepository.save(fileNode);
 
-                publishFileUploaded(persistedNode, savedObject);
+                registerUploadEvents(persistedNode, savedObject);
                 return persistedNode;
             });
             removeObjectQuietly(quarantineKey);
@@ -874,6 +878,32 @@ public class ExternalImportExecutionService {
         return normalizedRoot + "/" + taskId;
     }
 
+    /**
+     * 登记"提交后再投递索引与后处理任务"。
+     *
+     * <p>RabbitMQ 投递不受数据库事务回滚影响：在事务闭包里直接发，回滚后 Worker 仍会收到
+     * 一个不存在的 FileNode/FileObject，产生幽灵索引与注定失败的任务。AGENTS 要求耗时任务
+     * 先落任务记录、提交后再投递，这里按 {@code FileIngressPromotionService} 同一范式处理。
+     * 没有事务同步在跑时（无事务上下文的调用路径）保持原语义直接投递。
+     *
+     * <p>包内可见只为让单测能分别断言"提交前不投递 / 提交后投递"两条分支。
+     *
+     * @param fileNode 已落库的文件节点
+     * @param object   已落库的文件对象
+     */
+    void registerUploadEvents(FileNode fileNode, FileObject object) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishFileUploaded(fileNode, object);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publishFileUploaded(fileNode, object);
+            }
+        });
+    }
+
     private void publishFileUploaded(FileNode fileNode, FileObject object) {
         FileUploadedEvent event = new FileUploadedEvent(
                 fileNode.getId(),
@@ -994,13 +1024,15 @@ public class ExternalImportExecutionService {
             );
         }
         if (parentId == null) {
-            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
+            return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
                     task.getOwnerUserId(),
+                    SpaceType.PERSONAL,
                     name
             );
         }
-        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(
+        return fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
                 task.getOwnerUserId(),
+                SpaceType.PERSONAL,
                 parentId,
                 name
         );
@@ -1021,6 +1053,10 @@ public class ExternalImportExecutionService {
         return parent.getNormalizedPath() + "/" + childName;
     }
 
+    /**
+     * 只用于隔离上传阶段的 Content-Type 种子：外部来源没有客户端申报，先按扩展名与系统探测给一个候选值，
+     * 真实类型以扫描阶段 {@link FileIngressSafetyService} 的魔数结果为准。
+     */
     private String detectMimeType(Path file) {
         try {
             String mimeType = Files.probeContentType(file);
@@ -1032,6 +1068,20 @@ public class ExternalImportExecutionService {
         }
         return FileUploadSessionService.guessMimeTypeByFileName(
                 file.getFileName().toString());
+    }
+
+    /**
+     * 以魔数结果修正入库 MIME，规则与 {@code FileIngressPromotionService} 的晋升一致：
+     * 探测无结论（null）时保留推断值，否则一律采用探测值。外部来源的文件名与字节经常不一致
+     * （改名、无扩展名、伪装扩展名），错误的 MIME 会让下载与内联播放拿到错的 Content-Type。
+     */
+    private String resolveDetectedMimeType(String fileName, String guessedMimeType, String detectedMimeType) {
+        if (detectedMimeType == null || detectedMimeType.equals(guessedMimeType)) {
+            return guessedMimeType;
+        }
+        log.info("外部导入 MIME 按魔数修正: fileName={}, guessed={}, detected={}",
+                fileName, guessedMimeType, detectedMimeType);
+        return detectedMimeType;
     }
 
     private long fileSize(Path file) {

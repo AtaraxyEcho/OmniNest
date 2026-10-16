@@ -101,7 +101,7 @@ public class FileManagerService {
         if (targetParent != null && source.getSpaceType() != targetParent.getSpaceType()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "不能在不同空间之间复制文件");
         }
-        if (fileNodeSupport.sameNameExists(userId, resolvedParentId, source.getName())) {
+        if (fileNodeSupport.sameNameExists(userId, source.getSpaceType(), resolvedParentId, source.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件");
         }
 
