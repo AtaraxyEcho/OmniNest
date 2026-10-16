@@ -200,9 +200,16 @@ public class ComicEpubParser {
             String xhtml = archive.readSmallText(xhtmlPath);
             if (xhtml == null) continue;
 
-            // 提取主图片路径
-            String imagePath = extractMainImagePath(xhtml, xhtmlPath);
-            if (imagePath == null) continue;
+            // 提取主图片路径，并归一成压缩包里的真实条目名：声明的 href 可能大小写不一致，
+            // 而按需流式解压只认精确条目名，存声明路径会让整本书每页 404。
+            String declaredImagePath = extractMainImagePath(xhtml, xhtmlPath);
+            if (declaredImagePath == null) {
+                continue;
+            }
+            String imagePath = archive.resolveEntryName(declaredImagePath);
+            if (imagePath == null) {
+                continue;
+            }
 
             // 读取图片头部获取宽高（不读取完整图片）
             int width = 0;
@@ -231,7 +238,9 @@ public class ComicEpubParser {
                     fingerprint,
                     entrySize > 0 ? entrySize : 0,
                     null,           // entryIndex (EPUB 无此概念)
-                    spineCatalogKeys.get(xhtmlPath)
+                    // 目录键表按去 fragment 后的 href 建键，这里必须同口径查，
+                    // 否则带 "#id" 的 manifest href 会查不到归属分卷。
+                    spineCatalogKeys.get(stripFragment(xhtmlPath))
             ));
             pageIndex++;
         }
@@ -323,10 +332,13 @@ public class ComicEpubParser {
 
     private Map<String, String> buildSpineCatalogKeys(EpubParseResult parseResult, UUID sourceId) {
         Map<String, String> byHref = new LinkedHashMap<>();
-        appendTocHrefKeys(parseResult.toc(), buildSourceKey(sourceId), byHref);
+        String sourceKey = buildSourceKey(sourceId);
+        appendTocHrefKeys(parseResult.toc(), sourceKey, byHref);
 
         Map<String, String> spineKeys = new LinkedHashMap<>();
-        String currentKey = null;
+        // 初始归属当前分卷的 source 键：无 TOC 的漫画、或排在首个 TOC 锚点之前的页面
+        // 否则拿到 null，混排时这些页在目录里连一个分卷节点都没有。
+        String currentKey = sourceKey;
         for (EpubSpineItem spineItem : parseResult.spine()) {
             EpubManifestItem manifestItem = parseResult.manifest().get(spineItem.idref());
             if (manifestItem == null) {

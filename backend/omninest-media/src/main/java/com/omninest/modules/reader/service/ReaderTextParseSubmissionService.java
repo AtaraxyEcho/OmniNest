@@ -1,6 +1,8 @@
 package com.omninest.modules.reader.service;
 
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.file.dto.FileDescriptor;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.event.ReaderParseTaskEvent;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReaderTextParseSubmissionService {
 
     private final ReaderItemRepository itemRepository;
+    private final FileMetadataQueryService fileMetadataQueryService;
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
 
@@ -40,17 +43,27 @@ public class ReaderTextParseSubmissionService {
         itemRepository.save(item);
 
         UUID taskId = UUID.randomUUID();
+        // 任务记录归条目所有者（取消与任务列表按此过滤），事件里的文件操作用户必须取源文件节点的
+        // 真实所有者：共享空间的书常由成员 A 上传、成员 B 导入，两者混成一个用户会让 Worker 的
+        // 生命周期守卫查不到节点，把合法文件静默判成"已删除或不可处理"。
+        UUID fileOwnerId = item.getFileNodeId() == null
+                ? item.getOwnerUserId()
+                : fileMetadataQueryService.findById(item.getFileNodeId())
+                        .map(FileDescriptor::ownerUserId)
+                        .orElse(item.getOwnerUserId());
         ReaderParseTaskEvent event = new ReaderParseTaskEvent(
                 taskId,
-                item.getOwnerUserId(),
+                fileOwnerId,
                 item.getId(),
                 item.getFileNodeId(),
                 item.getItemType(),
                 item.getContentHash(),
                 retry
         );
+        // fileOwnerId 必须一起落进 payload：心跳超时恢复是从 payload 重建事件的。
         Map<String, Object> payload = Map.of(
                 "ownerUserId", item.getOwnerUserId().toString(),
+                "fileOwnerId", fileOwnerId.toString(),
                 "itemId", item.getId().toString(),
                 "fileNodeId", item.getFileNodeId().toString(),
                 "fileFormat", item.getItemType(),

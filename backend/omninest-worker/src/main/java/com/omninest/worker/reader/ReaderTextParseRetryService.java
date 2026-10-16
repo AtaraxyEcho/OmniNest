@@ -119,9 +119,11 @@ public class ReaderTextParseRetryService {
     }
 
     private ReaderParseTaskEvent eventFromPayload(UUID taskId, Map<String, Object> payload) {
+        // 老任务没有 fileOwnerId 键时退回 ownerUserId，与改动前的重建结果一致。
+        Object fileOwnerRaw = payload.getOrDefault("fileOwnerId", payload.get("ownerUserId"));
         return new ReaderParseTaskEvent(
                 taskId,
-                UUID.fromString(String.valueOf(payload.get("ownerUserId"))),
+                UUID.fromString(String.valueOf(fileOwnerRaw)),
                 UUID.fromString(String.valueOf(payload.get("itemId"))),
                 UUID.fromString(String.valueOf(payload.get("fileNodeId"))),
                 String.valueOf(payload.get("fileFormat")),
@@ -132,7 +134,8 @@ public class ReaderTextParseRetryService {
 
     private void notifyFailure(ReaderParseTaskEvent event, String errorSummary) {
         notificationPublisher.notifyOrLog(
-                event.ownerUserId(),
+                // 事件里的用户是源文件所有者（Worker 所有权守卫要用），通知必须发给发起导入的条目所有者。
+                taskOwnerUserId(event),
                 "TASK_FAILED",
                 "书籍解析失败",
                 "书籍解析多次重试后仍未完成，请检查源文件后重新解析。",
@@ -143,6 +146,24 @@ public class ReaderTextParseRetryService {
                         "errorSummary", errorSummary
                 )
         );
+    }
+
+    /**
+     * 任务记录归属用户（通知收件人）。
+     *
+     * <p>共享空间的书由成员 A 上传、成员 B 导入时，事件里的操作用户是 A，
+     * 而任务与失败通知属于 B；payload 缺键或畸形时退回事件用户。
+     */
+    private UUID taskOwnerUserId(ReaderParseTaskEvent event) {
+        Object raw = taskRecordService.taskPayload(event.taskId()).get("ownerUserId");
+        if (raw == null) {
+            return event.ownerUserId();
+        }
+        try {
+            return UUID.fromString(String.valueOf(raw));
+        } catch (IllegalArgumentException exception) {
+            return event.ownerUserId();
+        }
     }
 
     private Duration retryDelay(int retryCount) {

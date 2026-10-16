@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.PurgeContributionWriter;
 import com.omninest.modules.file.service.PurgeContext;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -66,6 +67,7 @@ class ReaderFileCleanupServiceTest {
             Mockito.mock(ReaderReadingSessionRepository.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final ReaderComicManifestService comicManifestService = Mockito.mock(ReaderComicManifestService.class);
+    private final FileMetadataQueryService fileMetadataQueryService = Mockito.mock(FileMetadataQueryService.class);
     private final ReaderFileCleanupService service = new ReaderFileCleanupService(
             itemRepository,
             itemSourceRepository,
@@ -80,7 +82,8 @@ class ReaderFileCleanupServiceTest {
             bookshelfRepository,
             readingSessionRepository,
             syncEventService,
-            comicManifestService
+            comicManifestService,
+            fileMetadataQueryService
     );
 
     @Test

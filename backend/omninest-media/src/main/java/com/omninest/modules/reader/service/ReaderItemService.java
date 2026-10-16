@@ -53,6 +53,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -270,16 +271,39 @@ public class ReaderItemService {
         if (!cascade || item.getFileNodeId() == null) {
             return deleteLibraryItem(ownerUserId, item);
         }
-        UUID taskId = fileDeletionService.deletePermanently(
-                ownerUserId,
-                item.getFileNodeId(),
-                cascade,
-                new FilePurgeOrigin("READER", itemId),
-                null
-        );
-        log.info("阅读条目永久删除任务已创建: taskId={}, userId={}, itemId={}, fileNodeId={}",
-                taskId, ownerUserId, itemId, item.getFileNodeId());
+        // 多卷漫画的"源文件"是全部卷：只提交主卷会让其余分卷留在网盘，
+        // 清理参与者看到还有分卷存活就只抽走一卷，作品永远删不掉。
+        List<UUID> volumeFileIds = cascadeFileNodeIds(ownerUserId, item);
+        FilePurgeOrigin origin = new FilePurgeOrigin("READER", itemId);
+        UUID taskId = volumeFileIds.size() == 1
+                ? fileDeletionService.deletePermanently(
+                        ownerUserId, volumeFileIds.getFirst(), cascade, origin, null)
+                : fileDeletionService.deletePermanentlyBatch(
+                        ownerUserId, volumeFileIds, cascade, List.of(origin));
+        log.info("阅读条目永久删除任务已创建: taskId={}, userId={}, itemId={}, fileNodeCount={}",
+                taskId, ownerUserId, itemId, volumeFileIds.size());
         return taskId;
+    }
+
+    /**
+     * 收集整本书可以随条目永久删除的源文件节点。
+     *
+     * <p>主文件永远保留在结果里（批量与单节点删除都以它的归属判定权限，行为与改动前一致）；
+     * 其余分卷只收当前用户自己拥有的节点，别人上传的分卷仍由网盘侧管理，塞进同一批会让整本
+     * 删除直接失败。
+     */
+    private List<UUID> cascadeFileNodeIds(UUID ownerUserId, ReaderItem item) {
+        LinkedHashSet<UUID> candidates = new LinkedHashSet<>();
+        candidates.add(item.getFileNodeId());
+        sourceRepository.findByReaderItemId(item.getId()).stream()
+                .map(ReaderItemSource::getFileNodeId)
+                .filter(Objects::nonNull)
+                .filter(fileNodeId -> !fileNodeId.equals(item.getFileNodeId()))
+                .filter(fileNodeId -> fileMetadataQueryService.findById(fileNodeId)
+                        .map(descriptor -> ownerUserId.equals(descriptor.ownerUserId()))
+                        .orElse(false))
+                .forEach(candidates::add);
+        return List.copyOf(candidates);
     }
 
     private UUID deleteLibraryItem(UUID ownerUserId, ReaderItem item) {
@@ -324,6 +348,8 @@ public class ReaderItemService {
         annotationRepository.deleteByReaderItemIdIn(itemIds);
         noteRepository.deleteByReaderItemIdIn(itemIds);
         sessionRepository.deleteByReaderItemIdIn(itemIds);
+        // 与 deleteItemsCompletely 同一顺序：先页面对象再页面，否则残留的资产元数据指向已消失的页面
+        pageAssetRepository.deleteByReaderItemIdIn(itemIds);
         pageRepository.deleteByReaderItemIdIn(itemIds);
         catalogRepository.deleteByReaderItemIdIn(itemIds);
         sourceRepository.deleteByReaderItemIdIn(itemIds);
@@ -628,13 +654,14 @@ public class ReaderItemService {
             file.transferTo(staged);
             photoInputGuard.inspectForDecode(staged, file.getOriginalFilename());
             String extension = getExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
+            // 只放行各端渲染器都能直接解码的位图：TIFF 在此前会被接受，
+            // 存下来后客户端 Image.memory 解不开，封面永远显示成错误占位。
             String mimeType = switch (extension) {
                 case ".jpg", ".jpeg" -> "image/jpeg";
                 case ".png" -> "image/png";
                 case ".webp" -> "image/webp";
                 case ".gif" -> "image/gif";
                 case ".bmp" -> "image/bmp";
-                case ".tif", ".tiff" -> "image/tiff";
                 default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "封面格式不受支持");
             };
             try (InputStream data = Files.newInputStream(staged)) {
@@ -672,8 +699,14 @@ public class ReaderItemService {
     public void setCoverFromFile(UUID ownerUserId, UUID itemId, UUID fileNodeId) {
         ReaderItem item = requireOwnedItem(ownerUserId, itemId);
         FileDescriptor coverFile = fileLifecycleGuard.requireReadable(ownerUserId, fileNodeId);
-        if (coverFile.mimeType() == null || !coverFile.mimeType().toLowerCase().startsWith("image/")) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "封面必须是图片文件");
+        // 与 prepareCoverDownload 同一份白名单：SVG 在这里放行会变成"设封面成功但封面永远 400"，
+        // 因为内联直出只接受位图，避免给同源可执行类型开一条通道。
+        String coverMimeType = coverFile.mimeType();
+        String normalizedType = coverMimeType == null
+                ? ""
+                : coverMimeType.toLowerCase(Locale.ROOT);
+        if (!normalizedType.startsWith("image/") || normalizedType.contains("svg")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "封面仅支持位图类图片");
         }
         UUID previousCoverFileId = unreferencedCoverFileId(item);
         item.setCoverFileId(fileNodeId);

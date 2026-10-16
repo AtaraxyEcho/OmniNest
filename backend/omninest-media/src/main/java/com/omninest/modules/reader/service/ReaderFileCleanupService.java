@@ -2,7 +2,9 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
+import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileBusinessReference;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePurgeParticipant;
 import com.omninest.modules.reader.domain.ReaderPageAsset;
 import com.omninest.modules.reader.domain.ReaderTextChapter;
@@ -67,6 +69,7 @@ public class ReaderFileCleanupService implements
     private final ReaderReadingSessionRepository readingSessionRepository;
     private final MediaSyncEventService syncEventService;
     private final ReaderComicManifestService comicManifestService;
+    private final FileMetadataQueryService fileMetadataQueryService;
 
     /**
      * 查询目标文件作为阅读主来源或附加来源的业务引用。
@@ -122,17 +125,15 @@ public class ReaderFileCleanupService implements
             fullPurgeItemIds.add(item.getId());
         }
 
+        List<UUID> fullPurgeItemIdList = List.copyOf(fullPurgeItemIds);
         List<ReaderItem> fullPurgeItems = items.stream()
-                .filter(item -> fullPurgeItemIds.contains(item.getId()))
+                .filter(item -> fullPurgeItemIdList.contains(item.getId()))
                 .toList();
         writer.addFileNodeIds(fullPurgeItems.stream()
                 .map(ReaderItem::getFileNodeId)
                 .filter(Objects::nonNull)
                 .toList());
-        writer.addFileNodeIds(fullPurgeItems.stream()
-                .map(ReaderItem::getCoverFileId)
-                .filter(Objects::nonNull)
-                .toList());
+        writer.addFileNodeIds(safeCoversToPurge(fullPurgeItems));
         if (!fullPurgeItemIds.isEmpty()) {
             writer.addFileNodeIds(itemSourceRepository.findByReaderItemIdIn(fullPurgeItemIds).stream()
                     .map(ReaderItemSource::getFileNodeId)
@@ -151,6 +152,45 @@ public class ReaderFileCleanupService implements
                     .map(ReaderPageAsset::getFileNodeId)
                     .toList());
         }
+    }
+
+    /**
+     * 选出可以随条目一起粉碎的封面节点。
+     *
+     * <p>封面可能是用户从网盘里挑的普通图片（{@code setCoverFromFile}），它不是阅读派生资产，
+     * 删书不能连带删掉人家网盘里的原图；导入去重后也可能多本共用同一份派生封面，
+     * 只有本次清理集之外没有存活条目引用时才放行。
+     */
+    private List<UUID> safeCoversToPurge(List<ReaderItem> purgedItems) {
+        List<UUID> candidates = purgedItems.stream()
+                .map(ReaderItem::getCoverFileId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> purgedItemIds = purgedItems.stream()
+                .map(ReaderItem::getId)
+                .collect(Collectors.toSet());
+        Set<UUID> referencedBySurviving = itemRepository.findByCoverFileIdIn(candidates).stream()
+                .filter(candidate -> !purgedItemIds.contains(candidate.getId()))
+                .map(ReaderItem::getCoverFileId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return candidates.stream()
+                .filter(coverFileId -> !referencedBySurviving.contains(coverFileId))
+                .filter(this::isDerivedCoverNode)
+                .toList();
+    }
+
+    /**
+     * 节点是否阅读侧派生封面。节点已查不到时按可读处理（后续删除本身也是幂等空操作）。
+     */
+    private boolean isDerivedCoverNode(UUID coverFileId) {
+        return fileMetadataQueryService.findById(coverFileId)
+                .map(node -> DerivedAssetStorageService.SOURCE_TYPE_DERIVED.equals(node.sourceType()))
+                .orElse(true);
     }
 
     /**

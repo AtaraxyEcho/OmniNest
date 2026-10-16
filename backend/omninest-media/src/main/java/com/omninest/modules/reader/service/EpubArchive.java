@@ -192,6 +192,27 @@ public class EpubArchive implements Closeable {
     }
 
     /**
+     * 解析路径在压缩包内的真实条目名（含大小写不敏感回退）。
+     *
+     * <p>OPF/XHTML 里声明的 href 可能与真实条目名大小写不一致，读取侧每个入口都会
+     * 回退匹配一次；但漫画页面是按名字存进库的，按需流式解压只有精确的条目名才命中，
+     * 所以草稿必须存真实条目名而不是声明路径。
+     *
+     * @param entryPath 声明的相对路径
+     * @return 真实条目名；条目不存在时返回 null
+     */
+    public String resolveEntryName(String entryPath) {
+        if (entryPath == null || entryPath.isBlank()) {
+            return null;
+        }
+        ZipEntry entry = zipFile.getEntry(entryPath);
+        if (entry == null) {
+            entry = findEntryIgnoreCase(entryPath);
+        }
+        return entry != null ? entry.getName() : null;
+    }
+
+    /**
      * 大小写不敏感查找条目。
      * EPUB 内部路径可能与 OPF manifest 中声明的 href 大小写不一致。
      */

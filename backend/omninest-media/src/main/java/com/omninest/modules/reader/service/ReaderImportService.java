@@ -821,6 +821,9 @@ public class ReaderImportService {
         taskRecordService.createQueuedTask(taskId, taskOwnerId, "COMIC_PARSE",
                 QueueNames.COMIC_PARSE_ROUTING_KEY, "QUEUED", "FILE_NODE", fileNodeId, Map.of(
                 "ownerUserId", taskOwnerId.toString(),
+                // 心跳超时恢复是从 payload 重建事件的：不落源文件真实所有者，重投后
+                // Worker 的严格所有权守卫又会把共享分卷判成已删除。
+                "fileOwnerId", fileOwnerId.toString(),
                 "itemId", itemId.toString(),
                 "sourceId", sourceId.toString(),
                 "fileNodeId", fileNodeId.toString(),

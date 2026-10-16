@@ -439,8 +439,12 @@ public class ReaderComicManifestService {
         ReaderItem item = itemRepository.findById(itemId).orElse(null);
         int manifestVersion = item != null ? item.getManifestVersion() : 0;
         String importStatus = item != null ? item.getImportStatus() : "READY";
-        ComicParseTaskDto parseTask = ownerUserId == null ? null : taskRecordService
-                .findLatestTaskByPayload(ownerUserId, "COMIC_PARSE", "itemId", itemId)
+        // 解析任务记录恒挂条目所有者；共享成员按请求者自己的 id 查永远查不到进度与失败原因。
+        UUID taskOwnerId = item != null && item.getOwnerUserId() != null
+                ? item.getOwnerUserId()
+                : ownerUserId;
+        ComicParseTaskDto parseTask = taskOwnerId == null ? null : taskRecordService
+                .findLatestTaskByPayload(taskOwnerId, "COMIC_PARSE", "itemId", itemId)
                 .map(this::toParseTaskDto)
                 .orElse(null);
         return new ComicManifestDto(
@@ -711,6 +715,8 @@ public class ReaderComicManifestService {
         taskRecordService.createQueuedTask(taskId, item.getOwnerUserId(), "COMIC_PARSE",
                 QueueNames.COMIC_PARSE_ROUTING_KEY, "QUEUED", "FILE_NODE", source.getFileNodeId(), Map.of(
                         "ownerUserId", item.getOwnerUserId().toString(),
+                        // 心跳超时恢复从 payload 重建事件，不落源文件真实所有者就会把共享分卷判成已删除。
+                        "fileOwnerId", fileOwnerId.toString(),
                         "itemId", item.getId().toString(),
                         "sourceId", source.getId().toString(),
                         "fileNodeId", source.getFileNodeId().toString(),

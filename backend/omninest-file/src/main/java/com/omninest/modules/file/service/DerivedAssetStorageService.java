@@ -66,7 +66,14 @@ public class DerivedAssetStorageService {
     private static final Set<String> LARGE_ASSET_TYPES = Set.of("TRANSCODE", "DOWNLOAD");
     private static final Path PROCESSING_ROOT = Path.of(
             System.getProperty("java.io.tmpdir"), "omninest-derived");
-    private static final String SOURCE_TYPE_DERIVED = "DERIVED";
+    /**
+     * 派生资产节点的来源类型标记。
+     *
+     * <p>公开是为了让业务模块在"能不能物理删这个节点"上共用同一判据：
+     * 用户自己上传进网盘的节点来源类型是 {@code UPLOAD}，不属于派生资产，
+     * 业务侧不能把它当自己的清理对象交进永久删除集。
+     */
+    public static final String SOURCE_TYPE_DERIVED = "DERIVED";
 
     /** 复用 HttpClient 实例，避免每次请求创建新连接池 */
     private final HttpClient httpClient = HttpClient.newBuilder()

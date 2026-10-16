@@ -4,6 +4,7 @@ import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -30,6 +31,7 @@ import com.omninest.modules.reader.domain.ReaderAnnotation;
 import com.omninest.modules.reader.domain.ReaderBookmark;
 import com.omninest.modules.reader.domain.ReaderBookshelf;
 import com.omninest.modules.reader.domain.ReaderItem;
+import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.reader.domain.ReaderNote;
 import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
@@ -57,6 +59,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -374,6 +377,40 @@ class ReaderItemServiceTest {
                 eq(OWNER_ID), eq(FILE_NODE_ID), eq(true), any(FilePurgeOrigin.class), isNull());
     }
 
+    /**
+     * 多卷作品的源文件是全部卷：只提交主卷会让其余分卷留在网盘，清理参与者看到还有分卷存活
+     * 就只抽走一卷并把主文件迁到下一卷，作品删不掉。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void cascadeDeleteSubmitsEveryOwnedVolumeOfAComic() {
+        UUID secondVolumeId = UUID.fromString("20000000-0000-0000-0000-0000000000a1");
+        UUID thirdVolumeId = UUID.fromString("20000000-0000-0000-0000-0000000000a2");
+        UUID foreignVolumeId = UUID.fromString("20000000-0000-0000-0000-0000000000a3");
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "多卷漫画", "CBZ");
+        item.setContentKind("COMIC");
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(sourceRepository.findByReaderItemId(ITEM_ID)).thenReturn(List.of(
+                newSourceItem(secondVolumeId),
+                newSourceItem(thirdVolumeId),
+                newSourceItem(foreignVolumeId)));
+        when(fileMetadataQueryService.findById(secondVolumeId)).thenReturn(Optional.of(
+                newFileDescriptor(secondVolumeId, SpaceType.PERSONAL, "v2.cbz", null)));
+        when(fileMetadataQueryService.findById(thirdVolumeId)).thenReturn(Optional.of(
+                newFileDescriptor(thirdVolumeId, SpaceType.PERSONAL, "v3.cbz", null)));
+        when(fileMetadataQueryService.findById(foreignVolumeId)).thenReturn(Optional.of(
+                newOwnedFileDescriptor(foreignVolumeId, "v4.cbz", OTHER_USER_ID)));
+
+        itemService.deleteItem(OWNER_ID, ITEM_ID, true);
+
+        ArgumentCaptor<List<UUID>> submitted = ArgumentCaptor.forClass(List.class);
+        verify(fileDeletionService).deletePermanentlyBatch(
+                eq(OWNER_ID), submitted.capture(), eq(true), anyList());
+        assertThat(submitted.getValue()).containsExactlyInAnyOrder(FILE_NODE_ID, secondVolumeId, thirdVolumeId);
+        verify(fileDeletionService, never()).deletePermanently(
+                eq(OWNER_ID), any(UUID.class), eq(true), any(FilePurgeOrigin.class), isNull());
+    }
+
     @Test
     void deleteItemRejectsSharedItemOwnedByAnotherUser() {
         when(itemRepository.findByIdAndOwnerUserId(SHARED_ITEM_ID, OWNER_ID)).thenReturn(Optional.empty());
@@ -503,6 +540,37 @@ class ReaderItemServiceTest {
     /** 创建文件节点描述符。 */
     private FileDescriptor newFileDescriptor(UUID id, SpaceType spaceType, String name, UUID currentObjectId) {
         return newFileDescriptor(id, spaceType, name, currentObjectId, 0, "application/octet-stream");
+    }
+
+    /** 创建归属指定用户的文件节点描述符。 */
+    private FileDescriptor newOwnedFileDescriptor(UUID id, String name, UUID ownerUserId) {
+        return new FileDescriptor(
+                id,
+                ownerUserId,
+                null,
+                "FILE",
+                name,
+                "/" + name,
+                "application/octet-stream",
+                0,
+                null,
+                "UPLOAD",
+                false,
+                false,
+                SpaceType.PERSONAL,
+                ownerUserId,
+                null,
+                null
+        );
+    }
+
+    /** 创建漫画分卷来源行。 */
+    private ReaderItemSource newSourceItem(UUID fileNodeId) {
+        ReaderItemSource source = new ReaderItemSource();
+        source.setId(UUID.randomUUID());
+        source.setReaderItemId(ITEM_ID);
+        source.setFileNodeId(fileNodeId);
+        return source;
     }
 
     /** 创建带内容元数据的文件节点描述符。 */

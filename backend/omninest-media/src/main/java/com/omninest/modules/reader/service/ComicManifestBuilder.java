@@ -210,12 +210,23 @@ public class ComicManifestBuilder {
         Map<String, ReaderCatalogNode> keyMap = new HashMap<>();
         List<ReaderCatalogNode> nodes = new ArrayList<>();
 
+        // 只有作品里确实存在解析器写入的目录键时，才替没有键的分卷补 source 级节点。
+        // 全都没有键时保持返回空，让上层继续用带季/卷聚合的 source-aware 构建，
+        // 否则纯 CBZ 多卷系列会连"第一卷/第二卷"这类聚合节点一起丢掉。
+        boolean hasExplicitCatalogKey = pages.stream()
+                .anyMatch(page -> page.getCatalogKey() != null && !page.getCatalogKey().isBlank());
+
         ReaderCatalogNode rootNode = createCatalogNode(itemId, null, null, "ROOT", "全部", "root");
         nodes.add(rootNode);
         keyMap.put("root", rootNode);
 
         for (ReaderPage page : pages) {
             String catalogKey = page.getCatalogKey();
+            if (catalogKey == null || catalogKey.isBlank()) {
+                // 混排作品里 CBZ/ZIP 分卷没有解析键：不补节点它们就整卷挂在隐藏的
+                // ROOT 下，从目录里彻底消失、也跳不过去。
+                catalogKey = hasExplicitCatalogKey ? resolvePageCatalogKey(page, sourceIdToName) : null;
+            }
             if (catalogKey == null || catalogKey.isBlank()) {
                 continue;
             }

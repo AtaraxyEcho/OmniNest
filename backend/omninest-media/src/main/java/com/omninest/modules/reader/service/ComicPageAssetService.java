@@ -351,7 +351,12 @@ public class ComicPageAssetService {
             int currentEntryIndex = -1;
             while ((entry = input.getNextEntry()) != null) {
                 currentEntryIndex++;
-                boolean targetEntry = entry.getName().equals(descriptor.sourcePath())
+                // 按路径定位时允许大小写不敏感回退：EPUB 声明的 href 与真实条目名可能不同大小写，
+                // 精确匹配会让这类书的每一页都 404。带 entryIndex 的 ZIP/CBZ 仍按精确名 + 序号定位。
+                boolean pathMatches = entry.getName().equals(descriptor.sourcePath())
+                        || (descriptor.entryIndex() == null
+                        && entry.getName().equalsIgnoreCase(descriptor.sourcePath()));
+                boolean targetEntry = pathMatches
                         && (descriptor.entryIndex() == null || currentEntryIndex == descriptor.entryIndex());
                 EntryReadGuard guard = session.beginEntry(
                         entry,
