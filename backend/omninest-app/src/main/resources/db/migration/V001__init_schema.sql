@@ -68,7 +68,7 @@ CREATE TABLE "omni"."auth_backup_codes" (
 ;
 COMMENT ON COLUMN "omni"."auth_backup_codes"."id" IS '备份码唯一标识，主键';
 COMMENT ON COLUMN "omni"."auth_backup_codes"."user_id" IS '用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."auth_backup_codes"."code_hash" IS '备份码SHA-256哈希（十六进制，输入为去分隔符大写形式）';
+COMMENT ON COLUMN "omni"."auth_backup_codes"."code_hash" IS '备份码加钥HMAC-SHA256摘要（base64url，输入为去分隔符大写形式）';
 COMMENT ON COLUMN "omni"."auth_backup_codes"."used_at" IS '使用时间，空表示未使用';
 COMMENT ON COLUMN "omni"."auth_backup_codes"."created_at" IS '创建时间';
 COMMENT ON TABLE "omni"."auth_backup_codes" IS '两步验证备份码表，一次性恢复码，启用两步验证时全量重置';
@@ -172,7 +172,7 @@ COMMENT ON TABLE "omni"."auth_session_revocations" IS '会话撤销记录表，�
 CREATE TABLE "omni"."auth_totp_credentials" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "user_id" uuid NOT NULL,
-  "secret" varchar(64) NOT NULL,
+  "secret" varchar(255) NOT NULL,
   "enabled" bool NOT NULL DEFAULT false,
   "confirmed_at" timestamptz(6),
   "last_used_step" int8,
@@ -183,7 +183,7 @@ CREATE TABLE "omni"."auth_totp_credentials" (
 ;
 COMMENT ON COLUMN "omni"."auth_totp_credentials"."id" IS 'TOTP凭据唯一标识，主键';
 COMMENT ON COLUMN "omni"."auth_totp_credentials"."user_id" IS '用户ID，关联auth_users，唯一';
-COMMENT ON COLUMN "omni"."auth_totp_credentials"."secret" IS 'TOTP共享秘钥，Base32编码';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."secret" IS 'TOTP共享秘钥密文，AES-GCM格式 vN:iv:ciphertext';
 COMMENT ON COLUMN "omni"."auth_totp_credentials"."enabled" IS '是否已确认启用';
 COMMENT ON COLUMN "omni"."auth_totp_credentials"."confirmed_at" IS '确认启用时间';
 COMMENT ON COLUMN "omni"."auth_totp_credentials"."last_used_step" IS '最近一次验证成功的时间步（epoch秒/30），用于防重放，仅接受更新的时间步';
@@ -2038,13 +2038,15 @@ CREATE TABLE "omni"."reader_bookmarks" (
   "progress_percent" numeric(8,5) NOT NULL DEFAULT 0,
   "note" varchar(1024),
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "client_operation_id" varchar(120)
+  "client_operation_id" varchar(120),
+  "chapter_id" varchar(128)
 )
 ;
-COMMENT ON COLUMN "omni"."reader_bookmarks"."char_offset" IS '全书绝对字符偏移';
+COMMENT ON COLUMN "omni"."reader_bookmarks"."char_offset" IS '章节内字符偏移，与 chapter_id 共同定位正文';
 COMMENT ON COLUMN "omni"."reader_bookmarks"."progress_percent" IS '书签位置的全书进度（0-1）';
 COMMENT ON COLUMN "omni"."reader_bookmarks"."note" IS '书签备注';
 COMMENT ON COLUMN "omni"."reader_bookmarks"."client_operation_id" IS '客户端离线创建操作号，用于重试幂等';
+COMMENT ON COLUMN "omni"."reader_bookmarks"."chapter_id" IS '书签所属章节标识，缺省时按条目当前进度章节解释';
 COMMENT ON TABLE "omni"."reader_bookmarks" IS '阅读书签表';
 
 CREATE TABLE "omni"."reader_bookshelf" (
@@ -2109,7 +2111,7 @@ CREATE TABLE "omni"."reader_items" (
   "language" varchar(32),
   "release_date" date,
   "rating" numeric(4,2),
-  "genres" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "genres" jsonb NOT NULL DEFAULT '{}'::jsonb,
   "external_ids" jsonb NOT NULL DEFAULT '{}'::jsonb,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
@@ -4118,7 +4120,7 @@ COMMENT ON COLUMN "omni"."reader_items"."publisher" IS '出版方名称';
 COMMENT ON COLUMN "omni"."reader_items"."language" IS '内容语言';
 COMMENT ON COLUMN "omni"."reader_items"."release_date" IS '出版或发行日期';
 COMMENT ON COLUMN "omni"."reader_items"."rating" IS '用户或外部元数据评分';
-COMMENT ON COLUMN "omni"."reader_items"."genres" IS '题材分类集合，JSONB格式';
+COMMENT ON COLUMN "omni"."reader_items"."genres" IS '题材分类集合，JSONB 对象形状 {"items": ["科幻"]}，与影视/音乐的数组列不同';
 COMMENT ON COLUMN "omni"."reader_items"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."reader_items"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."reader_items"."version" IS '乐观锁版本号';
