@@ -35,7 +35,7 @@ public class AuthActiveSession {
     @Column(name = "device_id", length = 128)
     private String deviceId;
 
-    @Column(name = "device_name")
+    @Column(name = "device_name", length = 255)
     private String deviceName;
 
     @Column(name = "ip_address", length = 45)

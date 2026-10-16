@@ -45,7 +45,7 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
      */
     @Override
     public void requireSafeHost(URI uri) {
-        requireSafeHost(uri, false);
+        require(uri, AddressScope.PUBLIC_ONLY);
     }
 
     /**
@@ -59,11 +59,27 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
      */
     @Override
     public void requireSafeHost(URI uri, boolean allowSiteLocal) {
+        require(uri, allowSiteLocal ? AddressScope.SITE_LOCAL_ALLOWED : AddressScope.PUBLIC_ONLY);
+    }
+
+    /**
+     * 验证超级管理员自建的常驻服务端点：环回与内网专用段按部署形态放行，
+     * 任意本地、链路本地（含云元数据 169.254.0.0/16）、多播与受限地址段仍然拒绝。
+     *
+     * @param uri 待验证的 URI
+     * @throws BusinessException 地址解析失败或落在受限段
+     */
+    @Override
+    public void requireSelfHostedSafeHost(URI uri) {
+        require(uri, AddressScope.SELF_HOSTED);
+    }
+
+    private void require(URI uri, AddressScope scope) {
         String host = uri.getHost();
         if (host == null || host.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 缺少主机名");
         }
-        if (isReservedHostName(host)) {
+        if (isReservedHostName(host, scope.allowLoopbackHostName)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
         }
         try {
@@ -72,12 +88,32 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 无法解析");
             }
             for (InetAddress address : addresses) {
-                if (isBlockedAddress(address, allowSiteLocal)) {
+                if (isBlockedAddress(address, scope)) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址");
                 }
             }
         } catch (UnknownHostException exception) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "URL 无法解析");
+        }
+    }
+
+    /**
+     * 允许的地址范围档位。自建端点放行环回与内网专用段；
+     * 任意本地、链路本地、多播与保留段在任何档位都拒绝。
+     */
+    private enum AddressScope {
+        PUBLIC_ONLY(false, false, false),
+        SITE_LOCAL_ALLOWED(true, false, false),
+        SELF_HOSTED(true, true, true);
+
+        private final boolean allowSiteLocal;
+        private final boolean allowLoopback;
+        private final boolean allowLoopbackHostName;
+
+        AddressScope(boolean allowSiteLocal, boolean allowLoopback, boolean allowLoopbackHostName) {
+            this.allowSiteLocal = allowSiteLocal;
+            this.allowLoopback = allowLoopback;
+            this.allowLoopbackHostName = allowLoopbackHostName;
         }
     }
 
@@ -108,39 +144,45 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
         requireSafeHost(uri);
     }
 
-    private static boolean isReservedHostName(String host) {
+    private static boolean isReservedHostName(String host, boolean allowLoopbackHostName) {
         String normalized = host.toLowerCase(Locale.ROOT);
-        return "localhost".equals(normalized)
-                || normalized.endsWith(".localhost")
-                || "metadata.google.internal".equals(normalized)
-                || "metadata".equals(normalized);
+        if ("metadata.google.internal".equals(normalized)
+                || "metadata".equals(normalized)) {
+            return true;
+        }
+        if (allowLoopbackHostName) {
+            return false;
+        }
+        return "localhost".equals(normalized) || normalized.endsWith(".localhost");
     }
 
-    private static boolean isBlockedAddress(InetAddress address, boolean allowSiteLocal) {
+    private static boolean isBlockedAddress(InetAddress address, AddressScope scope) {
         if (address.isAnyLocalAddress()
-                || address.isLoopbackAddress()
                 || address.isLinkLocalAddress()
                 || address.isMulticastAddress()) {
             return true;
         }
+        if (address.isLoopbackAddress()) {
+            return !scope.allowLoopback;
+        }
         if (address.isSiteLocalAddress()) {
-            return !allowSiteLocal;
+            return !scope.allowSiteLocal;
         }
         if (address instanceof Inet6Address inet6Address) {
             byte[] bytes = inet6Address.getAddress();
             byte[] embeddedIpv4 = extractEmbeddedIpv4(bytes);
             if (embeddedIpv4 != null) {
-                return isBlockedIpv4(embeddedIpv4, allowSiteLocal);
+                return isBlockedIpv4(embeddedIpv4, scope);
             }
             int first = bytes[0] & 0xFF;
             // 唯一本地地址 fc00::/7，含 fd00::/8，视作内网专用段
             if ((first & 0xFE) == 0xFC) {
-                return !allowSiteLocal;
+                return !scope.allowSiteLocal;
             }
             return false;
         }
         if (address instanceof Inet4Address inet4Address) {
-            return isBlockedIpv4(inet4Address.getAddress(), allowSiteLocal);
+            return isBlockedIpv4(inet4Address.getAddress(), scope);
         }
         return false;
     }
@@ -180,7 +222,7 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
         return true;
     }
 
-    private static boolean isBlockedIpv4(byte[] bytes, boolean allowSiteLocal) {
+    private static boolean isBlockedIpv4(byte[] bytes, AddressScope scope) {
         int first = bytes[0] & 0xFF;
         int second = bytes[1] & 0xFF;
         int third = bytes[2] & 0xFF;
@@ -188,10 +230,12 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
                 || (first == 172 && second >= 16 && second <= 31)
                 || (first == 192 && second == 168);
         if (siteLocal) {
-            return !allowSiteLocal;
+            return !scope.allowSiteLocal;
+        }
+        if (first == 127) {
+            return !scope.allowLoopback;
         }
         return first == 0
-                || first == 127
                 || (first == 100 && second >= 64 && second <= 127)
                 || (first == 169 && second == 254)
                 || (first == 192 && second == 0 && third == 0)

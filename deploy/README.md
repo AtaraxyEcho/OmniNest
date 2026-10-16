@@ -396,8 +396,8 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
 
 | 密钥 | 环境变量 | 轮换步骤 |
 |------|----------|----------|
-| JWT 签名密钥 | `OMNINEST_SECURITY_JWT_SECRET` | 生成 ≥32 字节随机值（如 `openssl rand -base64 48`）→ 写入 `.env` → 重启 api/worker/scheduler。旧 access/refresh 令牌立即失效，客户端需重新登录。 |
-| 凭据加密 KEK | `OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | `openssl rand -base64 32` → 写入 `.env` → 重启后端。已加密的外部存储凭据需按密钥版本流程重加密后再切换；未配置时保存加密凭据会直接报错。 |
+| JWT 签名密钥 | `OMNINEST_SECURITY_JWT_SECRET` | 生成 ≥32 字节随机值（如 `openssl rand -base64 48`）→ 写入 `.env` → 重启 api/worker/scheduler。旧 access/refresh 令牌立即失效，客户端需重新登录；两步验证备份码的摘要由该密钥派生的 HMAC 计算，轮换后旧备份码失效，需在管理台用户页对该用户执行「重置两步验证」后重新开启。 |
+| 凭据加密 KEK | `OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | `openssl rand -base64 32` → 写入 `.env` → 重启后端。已加密的外部存储凭据需按密钥版本流程重加密后再切换；未配置时保存加密凭据会直接报错。两步验证 TOTP 秘钥也用该 KEK 落库，直接换密钥会使已注册的两步验证不可用，同样在管理台用户页重置后重新开启（等价端点 `DELETE /api/v1/admin/users/{userId}/2fa`）。 |
 | 首次安装令牌 | `OMNINEST_SETUP_TOKEN` | 安装完成后保持 `OMNINEST_SETUP_ENABLED=false`；若需再次安装，生成新 ≥32 字节令牌并同步写入 `.env` 后重启。 |
 | PostgreSQL | `POSTGRES_PASSWORD` | 在 PG 内 `ALTER USER` 后更新 `.env` 与应用连接串，重启后端与 postgres。 |
 | RabbitMQ | `RABBITMQ_DEFAULT_PASS` | 管理台或 `rabbitmqctl change_password` 后更新 `.env`，重启 rabbitmq 与后端。 |

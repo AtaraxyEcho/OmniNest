@@ -26,6 +26,15 @@ public interface SafeUrlValidator {
     void requireSafeHost(URI uri, boolean allowSiteLocal);
 
     /**
+     * 校验超级管理员自建的常驻服务端点：放行环回与内网专用地址段，
+     * 因为 sidecar 与内网反代是这类部署的正常形态；任意本地、链路本地、多播、
+     * 受限地址段与云元数据主机名在任何模式下都拒绝。
+     *
+     * @param uri 待校验的 URI
+     */
+    void requireSelfHostedSafeHost(URI uri);
+
+    /**
      * 校验 HTTP 或 HTTPS URL 是否允许访问。
      *
      * @param url 待校验的 URL

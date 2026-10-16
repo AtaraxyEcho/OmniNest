@@ -7,11 +7,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.security.Roles;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthTotpCredential;
@@ -45,6 +47,7 @@ class AdminUserServiceTest {
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final UserSessionRevocationService userSessionRevocationService =
             mock(UserSessionRevocationService.class);
+    private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
     private final AdminUserService service = new AdminUserService(
             authUserRepository,
             authRoleRepository,
@@ -54,7 +57,8 @@ class AdminUserServiceTest {
             auditLogService,
             currentUserContext,
             storageQuotaService,
-            userSessionRevocationService
+            userSessionRevocationService,
+            twoFactorService
     );
 
     @Test
@@ -214,6 +218,53 @@ class AdminUserServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    @Test
+    void resetTwoFactorClearsCredentialsAndRevokesSessions() {
+        UUID adminId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        UUID targetId = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        AuthUser target = new AuthUser();
+        target.setId(targetId);
+        target.setUsername("alice");
+        when(authUserRepository.findById(targetId)).thenReturn(Optional.of(target));
+        when(currentUserContext.requireCurrentUserId()).thenReturn(adminId);
+
+        service.resetTwoFactor(targetId);
+
+        verify(twoFactorService).resetByAdmin(targetId);
+        verify(userSessionRevocationService).revokeAll(List.of(targetId), "管理员重置两步验证");
+        verify(auditLogService).recordWithMetadata(
+                adminId, "ADMIN_USER_2FA_RESET", "auth_users", targetId, Map.of("username", "alice"));
+    }
+
+    @Test
+    void resetTwoFactorAlsoWorksForSuperAdminTarget() {
+        UUID superAdminId = UUID.fromString("40000000-0000-0000-0000-000000000004");
+        AuthRole superAdminRole = role(
+                UUID.fromString("4e302a1e-3af2-4e23-8702-5475f5448025"), Roles.SUPER_ADMIN);
+        AuthUser target = new AuthUser();
+        target.setId(superAdminId);
+        target.setUsername("root");
+        target.getRoles().add(superAdminRole);
+        when(authUserRepository.findById(superAdminId)).thenReturn(Optional.of(target));
+        when(currentUserContext.requireCurrentUserId()).thenReturn(superAdminId);
+
+        service.resetTwoFactor(superAdminId);
+
+        verify(twoFactorService).resetByAdmin(superAdminId);
+    }
+
+    @Test
+    void resetTwoFactorRejectsMissingUserWithoutSideEffects() {
+        UUID missingId = UUID.fromString("50000000-0000-0000-0000-000000000005");
+        when(authUserRepository.findById(missingId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.resetTwoFactor(missingId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+        verifyNoInteractions(twoFactorService, userSessionRevocationService, auditLogService);
     }
 
     private AuthRole role(UUID id, String code) {

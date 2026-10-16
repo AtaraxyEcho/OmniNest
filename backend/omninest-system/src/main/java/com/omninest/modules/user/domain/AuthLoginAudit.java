@@ -41,7 +41,7 @@ public class AuthLoginAudit {
     @Column(name = "device_id", length = 128)
     private String deviceId;
 
-    @Column(name = "device_name")
+    @Column(name = "device_name", length = 255)
     private String deviceName;
 
     @Column(name = "ip_address", length = 45)
@@ -50,7 +50,7 @@ public class AuthLoginAudit {
     @Column(name = "user_agent", length = 500)
     private String userAgent;
 
-    @Column(name = "failure_reason")
+    @Column(name = "failure_reason", length = 255)
     private String failureReason;
 
     @Column(name = "created_at", nullable = false)

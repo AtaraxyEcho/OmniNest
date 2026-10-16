@@ -16,7 +16,8 @@ import lombok.Setter;
 /**
  * 两步验证 TOTP 凭据，每用户至多一条。
  *
- * <p>秘钥以 Base32 明文存储，与密码哈希同库同险；丢失认证器时可通过删除本表记录恢复密码直登。</p>
+ * <p>秘钥以 AES-GCM 密文存储（{@code vN:iv:ciphertext}），库内泄露不再等于认证器克隆；
+ * 丢失认证器时可通过删除本表记录恢复密码直登。</p>
  *
  * @author OmniNest
  */
@@ -33,7 +34,7 @@ public class AuthTotpCredential {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(nullable = false, length = 64)
+    @Column(nullable = false, length = 255)
     private String secret;
 
     @Column(nullable = false)

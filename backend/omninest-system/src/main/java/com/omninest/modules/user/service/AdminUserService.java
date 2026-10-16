@@ -64,6 +64,7 @@ public class AdminUserService {
     private final CurrentUserContext currentUserContext;
     private final StorageQuotaService storageQuotaService;
     private final UserSessionRevocationService userSessionRevocationService;
+    private final TwoFactorService twoFactorService;
 
     /**
      * 分页查询用户，支持按用户名、展示名、邮箱模糊搜索、角色编码精确过滤
@@ -172,6 +173,27 @@ public class AdminUserService {
                 "ADMIN_USER_STATUS_UPDATE", "auth_users", userId,
                 Map.of("status", saved.status()));
         return saved;
+    }
+
+    /**
+     * 重置用户两步验证：清除 TOTP 凭据与备份码，并撤销该用户全部会话。
+     *
+     * <p>恢复路径用途：认证器丢失，或凭据加密密钥轮换后密文无法解密时，用户完不成两步验证登录，
+     * 只能由管理员清零后重新开启。超级管理员同样可被重置，否则单实例部署会在换密钥后把自己锁在门外；
+     * 重置不等于取得访问——登录仍需要该用户的密码。</p>
+     *
+     * @param userId 用户标识
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void resetTwoFactor(UUID userId) {
+        AuthUser user = authUserRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
+        twoFactorService.resetByAdmin(user.getId());
+        userSessionRevocationService.revokeAll(List.of(user.getId()), "管理员重置两步验证");
+        auditLogService.recordWithMetadata(
+                currentUserContext.requireCurrentUserId(),
+                "ADMIN_USER_2FA_RESET", "auth_users", user.getId(),
+                Map.of("username", user.getUsername()));
     }
 
     /**

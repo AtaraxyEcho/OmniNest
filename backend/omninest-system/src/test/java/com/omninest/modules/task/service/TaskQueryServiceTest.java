@@ -3,11 +3,15 @@ package com.omninest.modules.task.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
@@ -16,6 +20,7 @@ import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.dto.TaskDto;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.repository.TaskRecordRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -52,13 +57,19 @@ class TaskQueryServiceTest {
     @Mock
     private TaskDispatchRepository taskDispatchRepository;
 
+    @Mock
+    private RateLimitService rateLimitService;
+
     private TaskQueryService taskQueryService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class)))
+                .thenReturn(true);
         taskQueryService = new TaskQueryService(
                 taskRecordRepository,
-                new TaskRedispatchService(taskDispatchService, taskDispatchRepository)
+                new TaskRedispatchService(taskDispatchService, taskDispatchRepository),
+                rateLimitService
         );
     }
 
@@ -340,6 +351,24 @@ class TaskQueryServiceTest {
             assertThat(task.getStackSummary()).isNull();
             verify(taskRecordRepository).save(task);
             verify(taskDispatchService).enqueue(eq(taskId), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("重试额度耗尽时拒绝且不查库不投递")
+        void retryOwned_retryBudgetExhausted_throwsRateLimited() {
+            UUID taskId = UUID.randomUUID();
+            when(rateLimitService.tryAcquire(
+                    eq("task:retry:" + OWNER_ID), eq(10), eq(Duration.ofMinutes(5))))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> taskQueryService.retryOwned(OWNER_ID, taskId))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(ex -> {
+                        BusinessException bex = (BusinessException) ex;
+                        assertThat(bex.errorCode()).isEqualTo(ErrorCode.RATE_LIMITED);
+                    });
+            verify(taskRecordRepository, never()).findById(any());
+            verify(taskDispatchService, never()).enqueue(any(), any(), any(), any());
         }
     }
 }

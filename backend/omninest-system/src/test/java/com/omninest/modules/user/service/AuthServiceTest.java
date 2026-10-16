@@ -42,6 +42,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -207,6 +208,30 @@ class AuthServiceTest {
                     any(UUID.class),
                     any(Duration.class)
             );
+        }
+
+        @Test
+        @DisplayName("未认证头部超长时按会话列宽截断，不把登录变成 500")
+        void loginClampsOversizedSessionHeaders() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
+            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+
+            service.login(
+                    new LoginRequest("admin", "correct"),
+                    "web-" + "x".repeat(40),
+                    "d".repeat(200),
+                    "n".repeat(400),
+                    "1".repeat(60),
+                    "Mozilla/5.0");
+
+            ArgumentCaptor<AuthActiveSession> captor = ArgumentCaptor.forClass(AuthActiveSession.class);
+            verify(activeSessionRepository).save(captor.capture());
+            AuthActiveSession session = captor.getValue();
+            assertThat(session.getClientPlatform()).hasSize(32);
+            assertThat(session.getDeviceId()).hasSize(128);
+            assertThat(session.getDeviceName()).hasSize(255);
+            assertThat(session.getIpAddress()).hasSize(45);
         }
 
         @Test

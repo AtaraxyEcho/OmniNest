@@ -25,6 +25,47 @@ class SsrfSafeUrlValidatorTest {
     private final SafeUrlValidator validator = new SsrfSafeUrlValidator();
 
     @Nested
+    @DisplayName("自建端点档位")
+    class SelfHostedScope {
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "http://127.0.0.1:3001/cloudsearch",
+                "http://[::1]:3001/cloudsearch",
+                "http://192.168.1.10:8080/tmdb/3/search/movie",
+                "http://10.0.0.5/api",
+                "http://[fd00::1]:16133/api"
+        })
+        @DisplayName("放行环回与内网专用段：本机 sidecar 与内网反代是正常形态")
+        void allowsLoopbackAndSiteLocal(String url) {
+            assertDoesNotThrow(() -> validator.requireSelfHostedSafeHost(URI.create(url)));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "http://169.254.169.254/latest/meta-data/",
+                "http://[fe80::1]:3001/api",
+                "http://0.0.0.0:3001/api",
+                "http://224.0.0.1:3001/api",
+                "http://100.64.1.1:3001/api",
+                "http://metadata.google.internal/computeMetadata/v1",
+                "http://metadata/"
+        })
+        @DisplayName("任意本地、链路本地、多播、CGNAT 与云元数据主机仍被拒绝")
+        void stillBlocksRestrictedSegments(String url) {
+            assertThatThrownBy(() -> validator.requireSelfHostedSafeHost(URI.create(url)))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("内网地址");
+        }
+
+        @Test
+        @DisplayName("公网地址不受档位影响")
+        void allowsPublicAddress() {
+            assertDoesNotThrow(() -> validator.requireSelfHostedSafeHost(URI.create("https://1.1.1.1/api")));
+        }
+    }
+
+    @Nested
     @DisplayName("内网地址策略开关")
     class SiteLocalPolicySwitch {
 

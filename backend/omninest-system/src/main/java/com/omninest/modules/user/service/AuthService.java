@@ -378,10 +378,10 @@ public class AuthService {
         AuthActiveSession session = new AuthActiveSession();
         session.setId(sessionId);
         session.setUserId(profile.getId());
-        session.setClientPlatform(clientPlatform);
-        session.setDeviceId(deviceId);
-        session.setDeviceName(deviceName);
-        session.setIpAddress(ipAddress);
+        session.setClientPlatform(LoginAuditService.clamped(clientPlatform, LoginAuditService.CLIENT_PLATFORM_MAX));
+        session.setDeviceId(LoginAuditService.clamped(deviceId, LoginAuditService.DEVICE_ID_MAX));
+        session.setDeviceName(LoginAuditService.clamped(deviceName, LoginAuditService.DEVICE_NAME_MAX));
+        session.setIpAddress(LoginAuditService.clamped(ipAddress, LoginAuditService.IP_ADDRESS_MAX));
         session.setIssuedAt(issuedAt);
         session.setExpiresAt(issuedAt.plus(authenticationTokenPolicy.refreshTokenTtl()));
         activeSessionRepository.save(session);

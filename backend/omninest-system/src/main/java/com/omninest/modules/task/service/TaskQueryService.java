@@ -3,10 +3,12 @@ package com.omninest.modules.task.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.dto.TaskDto;
 import com.omninest.modules.task.dto.TaskSummaryDto;
 import com.omninest.modules.task.repository.TaskRecordRepository;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -25,8 +27,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TaskQueryService {
 
+    /** 单用户主动重试的额度：窗口内允许的次数。 */
+    private static final int RETRY_LIMIT = 10;
+    private static final Duration RETRY_LIMIT_WINDOW = Duration.ofMinutes(5);
+    private static final String RETRY_LIMIT_KEY_PREFIX = "task:retry:";
+
     private final TaskRecordRepository taskRecordRepository;
     private final TaskRedispatchService taskRedispatchService;
+    private final RateLimitService rateLimitService;
 
     /**
      * 查询最近任务列表
@@ -166,6 +174,7 @@ public class TaskQueryService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void retryOwned(UUID ownerUserId, UUID taskId) {
+        requireRetryBudget(ownerUserId);
         TaskRecord task = taskRecordRepository.findById(taskId)
                 .filter(record -> ownerUserId.equals(record.getOwnerUserId()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.TASK_NOT_FOUND, "任务不存在"));
@@ -179,5 +188,19 @@ public class TaskQueryService {
         taskRecordRepository.save(task);
         taskRedispatchService.redispatch(task);
         log.info("本人任务重试并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
+    }
+
+    /**
+     * 限制单个用户的主动重试频率。
+     *
+     * <p>重试会把 {@code retryCount} 归零并重新投递，等于绕开"默认最多 3 次重试"的重试阶梯；
+     * 转码/刮削/解析都是高成本任务，没频率闸门就能被无限重放。AGENTS 要求这类入口走
+     * Redis + Lua 限流，额度与登录档同量级。
+     */
+    private void requireRetryBudget(UUID ownerUserId) {
+        if (!rateLimitService.tryAcquire(
+                RETRY_LIMIT_KEY_PREFIX + ownerUserId, RETRY_LIMIT, RETRY_LIMIT_WINDOW)) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "任务重试过于频繁，请稍后再试");
+        }
     }
 }

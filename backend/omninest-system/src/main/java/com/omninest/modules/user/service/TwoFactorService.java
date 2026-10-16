@@ -2,6 +2,8 @@ package com.omninest.modules.user.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.CredentialCipher;
+import com.omninest.common.security.PayloadAuthenticator;
 import com.omninest.modules.user.domain.AuthBackupCode;
 import com.omninest.modules.user.domain.AuthTotpCredential;
 import com.omninest.modules.user.domain.AuthUser;
@@ -10,9 +12,6 @@ import com.omninest.modules.user.repository.AuthBackupCodeRepository;
 import com.omninest.modules.user.repository.AuthTotpCredentialRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.util.TotpUtil;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,6 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 两步验证（TOTP）凭据服务：注册引导、确认启用、关闭与登录验证码校验。
  *
  * <p>登录挑战令牌的签发与消费由 {@link AuthService} 负责，本服务只管理凭据与验证码。</p>
+ *
+ * <p>落库形态：TOTP 秘钥经 {@link CredentialCipher} 加密存储，备份码只存
+ * {@link PayloadAuthenticator} 的加钥摘要。因此轮换凭据加密密钥会使已注册的
+ * 两步验证失效，轮换 JWT 密钥会使已签发的备份码失效，两者都只能重新开启恢复。</p>
  *
  * @author OmniNest
  */
@@ -47,6 +50,8 @@ public class TwoFactorService {
     private final AuthBackupCodeRepository backupCodeRepository;
     private final AuthUserRepository authUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CredentialCipher credentialCipher;
+    private final PayloadAuthenticator payloadAuthenticator;
 
     /**
      * 生成待确认的 TOTP 秘钥，重复调用会覆盖旧的未确认秘钥。
@@ -66,7 +71,7 @@ public class TwoFactorService {
         AuthTotpCredential credential = totpCredentialRepository.findByUserId(userId)
                 .orElseGet(AuthTotpCredential::new);
         credential.setUserId(userId);
-        credential.setSecret(secret);
+        credential.setSecret(credentialCipher.encrypt(secret));
         credential.setEnabled(false);
         credential.setConfirmedAt(null);
         credential.setLastUsedStep(null);
@@ -89,7 +94,8 @@ public class TwoFactorService {
         AuthTotpCredential credential = totpCredentialRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "请先生成两步验证秘钥"));
         long minStep = credential.getLastUsedStep() == null ? Long.MIN_VALUE : credential.getLastUsedStep();
-        long step = TotpUtil.matchingStep(credential.getSecret(), code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
+        String secret = plainSecret(credential);
+        long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
         if (step == TotpUtil.NO_MATCH) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误");
         }
@@ -110,9 +116,29 @@ public class TwoFactorService {
     public void disable(UUID userId, String password) {
         AuthUser user = requireUser(userId);
         requirePassword(user, password);
+        clearCredentials(userId);
+        log.info("两步验证已关闭: userId={}", userId);
+    }
+
+    /**
+     * 管理员重置：清除该用户的两步验证凭据与备份码，不需要密码复核。
+     *
+     * <p>用于认证器丢失，或凭据加密密钥轮换后密文无法解开的恢复场景——这两种情况下
+     * 用户都无法完成两步验证登录，只能由持有 {@code system:user:manage} 的管理员清零后重新开启。
+     * 被重置用户若角色强制两步验证，下次登录会进入注册引导流程。</p>
+     *
+     * @param userId 用户标识
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void resetByAdmin(UUID userId) {
+        requireUser(userId);
+        clearCredentials(userId);
+        log.info("两步验证已被管理员重置: userId={}", userId);
+    }
+
+    private void clearCredentials(UUID userId) {
         totpCredentialRepository.deleteByUserId(userId);
         backupCodeRepository.deleteByUserId(userId);
-        log.info("两步验证已关闭: userId={}", userId);
     }
 
     /**
@@ -148,7 +174,7 @@ public class TwoFactorService {
         AuthTotpCredential credential = totpCredentialRepository.findByUserId(userId)
                 .orElseGet(AuthTotpCredential::new);
         credential.setUserId(userId);
-        credential.setSecret(secret);
+        credential.setSecret(credentialCipher.encrypt(secret));
         credential.setEnabled(true);
         credential.setConfirmedAt(Instant.now());
         credential.setLastUsedStep(step);
@@ -189,7 +215,8 @@ public class TwoFactorService {
         AuthTotpCredential credential = totpCredentialRepository.findByUserIdAndEnabledTrue(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置"));
         long minStep = credential.getLastUsedStep() == null ? Long.MIN_VALUE : credential.getLastUsedStep();
-        long step = TotpUtil.matchingStep(credential.getSecret(), code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
+        String secret = plainSecret(credential);
+        long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
         if (step != TotpUtil.NO_MATCH) {
             credential.setLastUsedStep(step);
             totpCredentialRepository.save(credential);
@@ -206,12 +233,9 @@ public class TwoFactorService {
             return false;
         }
         String compact = code.replace("-", "").replace(" ", "").trim().toUpperCase(Locale.ROOT);
-        String hash = sha256Hex(compact);
         List<AuthBackupCode> candidates = backupCodeRepository.findByUserIdAndUsedAtIsNull(userId);
         for (AuthBackupCode candidate : candidates) {
-            if (MessageDigest.isEqual(
-                    candidate.getCodeHash().getBytes(StandardCharsets.US_ASCII),
-                    hash.getBytes(StandardCharsets.US_ASCII))) {
+            if (payloadAuthenticator.verify(compact, candidate.getCodeHash())) {
                 candidate.setUsedAt(Instant.now());
                 backupCodeRepository.save(candidate);
                 log.info("两步验证备份码已使用: userId={}, remaining={}", userId, candidates.size() - 1);
@@ -234,7 +258,7 @@ public class TwoFactorService {
             plainCodes.add(plain.substring(0, 4) + "-" + plain.substring(4));
             AuthBackupCode entity = new AuthBackupCode();
             entity.setUserId(userId);
-            entity.setCodeHash(sha256Hex(plain));
+            entity.setCodeHash(payloadAuthenticator.sign(plain));
             entities.add(entity);
         }
         backupCodeRepository.saveAll(entities);
@@ -252,18 +276,12 @@ public class TwoFactorService {
         }
     }
 
-    private static String sha256Hex(String value) {
+    private String plainSecret(AuthTotpCredential credential) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder builder = new StringBuilder(bytes.length * 2);
-            for (byte b : bytes) {
-                builder.append(Character.forDigit((b >> 4) & 0xF, 16));
-                builder.append(Character.forDigit(b & 0xF, 16));
-            }
-            return builder.toString();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 不可用", exception);
+            return credentialCipher.decrypt(credential.getSecret());
+        } catch (BusinessException exception) {
+            log.warn("两步验证秘钥解密失败: userId={}, reason={}", credential.getUserId(), exception.getMessage());
+            throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证凭据不可用，需重新开启");
         }
     }
 }

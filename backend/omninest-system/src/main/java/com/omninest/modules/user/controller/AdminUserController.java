@@ -101,4 +101,18 @@ public class AdminUserController {
         adminUserDeletionService.deleteUser(userId);
         return ApiResponse.success(null);
     }
+
+    /**
+     * 重置用户两步验证凭据。
+     *
+     * <p>用于认证器丢失或凭据加密密钥轮换后的恢复：清除该用户的 TOTP 秘钥与备份码并撤销其会话，
+     * 用户随后用密码登录；角色若强制两步验证，会在登录时进入注册引导流程。</p>
+     */
+    @Operation(summary = "重置用户两步验证", description = "清除该用户的 TOTP 凭据与备份码并撤销其会话；用于认证器丢失或凭据加密密钥轮换后的恢复")
+    @DeleteMapping("/api/v1/admin/users/{userId}/2fa")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_USER_MANAGE + "')")
+    ApiResponse<Void> resetUserTwoFactor(@PathVariable UUID userId) {
+        adminUserService.resetTwoFactor(userId);
+        return ApiResponse.success(null);
+    }
 }

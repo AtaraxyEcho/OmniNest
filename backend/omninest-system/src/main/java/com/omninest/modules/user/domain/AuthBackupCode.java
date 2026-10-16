@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * 两步验证一次性备份码，存储去分隔符大写形式的 SHA-256 哈希。
+ * 两步验证一次性备份码，存储去分隔符大写形式的加钥 HMAC-SHA256 摘要。
  *
  * @author OmniNest
  */
