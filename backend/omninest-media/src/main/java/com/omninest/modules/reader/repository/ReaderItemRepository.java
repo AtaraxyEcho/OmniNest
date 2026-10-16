@@ -33,8 +33,6 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
 
     Optional<ReaderItem> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
-    long countByOwnerUserId(UUID ownerUserId);
-
     List<ReaderItem> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
 
     List<ReaderItem> findByOwnerUserIdAndCoverFileIdIn(UUID ownerUserId, Collection<UUID> coverFileIds);

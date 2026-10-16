@@ -9,8 +9,11 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 阅读书架服务：管理书架的添加与移除。
@@ -23,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReaderBookshelfService {
 
     private final ReaderBookshelfRepository bookshelfRepository;
+    private final ReaderItemService readerItemService;
     private final MediaSyncEventService syncEventService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 切换书架状态：已存在则移除，不存在则添加。
@@ -41,13 +46,35 @@ public class ReaderBookshelfService {
             log.info("从书架移除: userId={}, itemId={}", ownerUserId, readerItemId);
             return false;
         }
+        // 书架行按 (owner, item) 落库，不校验条目可读性就会给不存在或无权阅读的条目写出孤儿行。
+        readerItemService.requireItem(ownerUserId, readerItemId);
         ReaderBookshelf entry = new ReaderBookshelf();
         entry.setOwnerUserId(ownerUserId);
         entry.setReaderItemId(readerItemId);
-        bookshelfRepository.save(entry);
+        try {
+            saveInNewTransaction(entry);
+        } catch (DataIntegrityViolationException exception) {
+            if (!bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, readerItemId)) {
+                throw exception;
+            }
+        }
         recordBookshelfEvent(ownerUserId, readerItemId, true);
         log.info("添加到书架: userId={}, itemId={}", ownerUserId, readerItemId);
         return true;
+    }
+
+    /**
+     * 在独立新事务里落这一行。
+     *
+     * <p>PostgreSQL 命中 {@code uniq_reader_bookshelf_owner_item} 后会把当前事务置为 aborted 态，
+     * 同一事务里的后续语句一律报 "current transaction is aborted"；并发双加时的存在性回查必须换
+     * 一个事务，否则本应返回既成事实的分支会变成 500。
+     */
+    private void saveInNewTransaction(ReaderBookshelf entry) {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.execute(status -> bookshelfRepository.saveAndFlush(entry));
     }
 
     /**

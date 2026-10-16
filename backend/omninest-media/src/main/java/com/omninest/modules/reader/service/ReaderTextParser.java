@@ -189,16 +189,17 @@ public class ReaderTextParser {
     private List<TextChapterDraft> buildTxtDrafts(List<TxtCandidate> candidates, long fileEnd) {
         List<TextChapterDraft> chapters = new ArrayList<>();
         if (candidates.isEmpty()) {
-            chapters.add(txtDraft(0, "正文", 0L, fileEnd, 0));
+            chapters.add(txtDraft(0, 0, "正文", 0L, fileEnd, 0));
             return chapters;
         }
 
         Set<Integer> kept = selectMainSequence(candidates, fileEnd);
         int index = 0;
+        int titledOrdinal = 0;
         long firstStart = candidates.getFirst().start();
         if (firstStart > 0L) {
             // 首个标题行之前的书名、作者与分节线保留为单章"正文"，与既有清单口径一致。
-            chapters.add(txtDraft(index++, "正文", 0L, firstStart, 0));
+            chapters.add(txtDraft(index++, 0, "正文", 0L, firstStart, 0));
         }
         for (int position = 0; position < candidates.size(); position++) {
             if (!kept.contains(position)) {
@@ -210,6 +211,7 @@ public class ReaderTextParser {
                     : fileEnd;
             chapters.add(txtDraft(
                     index++,
+                    ++titledOrdinal,
                     candidate.title(),
                     candidate.start(),
                     end,
@@ -241,7 +243,7 @@ public class ReaderTextParser {
         if (lastEnd == null || lastEnd >= fileEnd) {
             return;
         }
-        chapters.add(txtDraft(nextIndex, "正文", lastEnd, fileEnd, 0));
+        chapters.add(txtDraft(nextIndex, 0, "正文", lastEnd, fileEnd, 0));
     }
 
     /**
@@ -590,6 +592,11 @@ public class ReaderTextParser {
      * <p>包内共享：漫画分卷名（第三十一卷）走的是同一套数位-单位累加规则，两处各写一份时
      * 出现过"十一"被算成 -9 的分叉，排序与目录一起错乱。
      *
+     * <p>两条并列写法规则：连续数位按十进制进位（第一〇八章=108，网文与古籍常见），
+     * 单位后只跟一个数位时按口语省略末位单位（第一百一章=110、二百五=250）；
+     * "第一百零一章"里的零只是占位读法，必须算成 101 而不是 110，所以零之后出现过数位就不再
+     * 走省略规则。序号塌陷会让 selectMainSequence 误判整本书从第 107 章回退到第 8 章而切碎清单。
+     *
      * @param token 标记文本
      * @return 数值；文本里没有可识别数字时返回 -1
      */
@@ -597,13 +604,21 @@ public class ReaderTextParser {
         int section = 0;
         int digit = 0;
         boolean seen = false;
+        boolean lastWasNumeral = false;
+        boolean sawZeroAfterUnit = false;
+        int lastUnit = 0;
         for (int offset = 0; offset < token.length();) {
             int codePoint = token.codePointAt(offset);
             offset += Character.charCount(codePoint);
             int value = numeralValue(codePoint);
             if (value >= 0) {
-                digit = value;
+                if (value == 0 && !lastWasNumeral && lastUnit > 0) {
+                    sawZeroAfterUnit = true;
+                    continue;
+                }
+                digit = lastWasNumeral ? (digit * 10 + value) : value;
                 seen = true;
+                lastWasNumeral = true;
                 continue;
             }
             int unit = unitValue(codePoint);
@@ -611,10 +626,19 @@ public class ReaderTextParser {
                 continue;
             }
             seen = true;
+            lastWasNumeral = false;
+            sawZeroAfterUnit = false;
+            lastUnit = unit;
             section += (digit == 0 ? unit : digit * unit);
             digit = 0;
         }
-        return seen ? section + digit : -1;
+        if (!seen) {
+            return -1;
+        }
+        if (digit > 0 && digit < 10 && lastUnit >= 100 && !sawZeroAfterUnit) {
+            return section + digit * (lastUnit / 10);
+        }
+        return section + digit;
     }
 
     private static int numeralValue(int codePoint) {
@@ -653,12 +677,20 @@ public class ReaderTextParser {
     private record NumberToken(String text, int end, int value) {
     }
 
-    private TextChapterDraft txtDraft(int index, String title, long start, long end, int bodyStart) {
+    private TextChapterDraft txtDraft(
+            int index,
+            int titledOrdinal,
+            String title,
+            long start,
+            long end,
+            int bodyStart) {
         long charCount = Math.max(0L, end - start);
+        // 有标题的章节才有目录位次：前置"正文"和尾部补章不参与计数，否则全书归一序号整体 +1。
+        int effectiveOrdinal = titledOrdinal > 0 ? titledOrdinal : index + 1;
         return new TextChapterDraft(
                 index,
                 txtChapterKey(start),
-                clampTitle(normalizeChapterTitle(title, index + 1)),
+                clampTitle(normalizeChapterTitle(title, effectiveOrdinal)),
                 null,
                 start,
                 end,

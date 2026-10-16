@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Reader 批注更新测试。
@@ -27,7 +29,8 @@ class ReaderAnnotationServiceTest {
         return new ReaderAnnotationService(
                 repository,
                 Mockito.mock(MediaSyncEventService.class),
-                Mockito.mock(ReaderItemService.class));
+                Mockito.mock(ReaderItemService.class),
+                new TransactionTemplate(Mockito.mock(PlatformTransactionManager.class)));
     }
 
     private ReaderAnnotation existingAnnotation(UUID ownerUserId, UUID annotationId) {

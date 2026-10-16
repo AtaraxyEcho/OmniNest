@@ -17,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 阅读批注服务：管理高亮批注的创建、查询、更新与删除。
@@ -32,6 +34,7 @@ public class ReaderAnnotationService {
     private final ReaderAnnotationRepository annotationRepository;
     private final MediaSyncEventService syncEventService;
     private final ReaderItemService readerItemService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 列出指定条目的所有批注。
@@ -81,7 +84,7 @@ public class ReaderAnnotationService {
             annotation.setColor(request.color());
         }
         try {
-            ReaderAnnotation saved = annotationRepository.saveAndFlush(annotation);
+            ReaderAnnotation saved = saveInNewTransaction(annotation);
             recordAnnotationEvent(ownerUserId, saved, SyncAction.CREATED);
             log.info(
                     "创建批注: userId={}, itemId={}, startOffset={}, endOffset={}",
@@ -94,6 +97,20 @@ public class ReaderAnnotationService {
         } catch (DataIntegrityViolationException exception) {
             return resolveCreateConflict(ownerUserId, readerItemId, clientOperationId, exception);
         }
+    }
+
+    /**
+     * 在独立新事务里落这一行。
+     *
+     * <p>PostgreSQL 命中唯一约束后会把当前事务置为 aborted 态，同一事务里的后续语句一律报
+     * "current transaction is aborted"；冲突回查必须换一个事务，否则离线队列重放并发撞上同一
+     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。
+     */
+    private ReaderAnnotation saveInNewTransaction(ReaderAnnotation annotation) {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template.execute(status -> annotationRepository.saveAndFlush(annotation));
     }
 
     /**

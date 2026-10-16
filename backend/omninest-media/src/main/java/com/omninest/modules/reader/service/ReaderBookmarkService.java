@@ -17,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 阅读书签服务：管理书签的创建、查询与删除。
@@ -32,6 +34,7 @@ public class ReaderBookmarkService {
     private final ReaderBookmarkRepository bookmarkRepository;
     private final MediaSyncEventService syncEventService;
     private final ReaderItemService readerItemService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 列出指定条目的所有书签。
@@ -82,13 +85,27 @@ public class ReaderBookmarkService {
         bookmark.setProgressPercent(clampedPercent);
         bookmark.setNote(request.note());
         try {
-            ReaderBookmark saved = bookmarkRepository.saveAndFlush(bookmark);
+            ReaderBookmark saved = saveInNewTransaction(bookmark);
             recordBookmarkEvent(ownerUserId, saved, SyncAction.CREATED);
             log.info("创建书签: userId={}, itemId={}, offset={}", ownerUserId, readerItemId, request.charOffset());
             return toDto(saved);
         } catch (DataIntegrityViolationException exception) {
             return resolveCreateConflict(ownerUserId, readerItemId, clientOperationId, exception);
         }
+    }
+
+    /**
+     * 在独立新事务里落这一行。
+     *
+     * <p>PostgreSQL 命中唯一约束后会把当前事务置为 aborted 态，同一事务里的后续语句一律报
+     * "current transaction is aborted"；冲突回查必须换一个事务，否则离线队列重放并发撞上同一
+     * {@code clientOperationId} 时，本应幂等返回已有记录的分支会变成 500。
+     */
+    private ReaderBookmark saveInNewTransaction(ReaderBookmark bookmark) {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template.execute(status -> bookmarkRepository.saveAndFlush(bookmark));
     }
 
     /**

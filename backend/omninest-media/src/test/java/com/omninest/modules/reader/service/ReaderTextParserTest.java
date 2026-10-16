@@ -387,6 +387,10 @@ class ReaderTextParserTest {
                 new Case("第23章 第二十三章 甲", 23, "第23章 甲"),
                 new Case("第一百二十章 甲", 120, "第一百二十章 甲"),
                 new Case("第一千二百三十四章 甲", 1234, "第一千二百三十四章 甲"),
+                new Case("第一〇八章 甲", 108, "第一〇八章 甲"),
+                new Case("第一百一章 甲", 110, "第一百一章 甲"),
+                new Case("第一百零一章 甲", 101, "第一百零一章 甲"),
+                new Case("第二五六章 甲", 256, "第二五六章 甲"),
                 new Case("第2章 2、小标题", 2, "第2章 小标题"),
                 new Case("第1章： 第1章： 天胡开局", 1, "第1章 天胡开局"),
                 new Case("第一章 甲", 1, "第一章 甲"),
@@ -407,6 +411,64 @@ class ReaderTextParserTest {
                     .as("归一必须幂等：%s", item.expected())
                     .isEqualTo(item.expected());
         }
+    }
+
+    /**
+     * 并列中文数位与口语省略末位单位的取值，与前端 chapter_title_normalizer_test.dart 同值。
+     *
+     * <p>连续数位被后一位覆盖时"第一〇八章"算成 8，与上一章的 107 比大小立即判成序号回退，
+     * selectMainSequence 会把整本书从第 107 章起切碎。
+     */
+    @Test
+    void readsPositionalAndColloquialChineseNumerals() {
+        assertThat(ReaderTextParser.chineseNumberValue("第一〇八章")).isEqualTo(108);
+        assertThat(ReaderTextParser.chineseNumberValue("第一一〇章")).isEqualTo(110);
+        assertThat(ReaderTextParser.chineseNumberValue("第二五六章")).isEqualTo(256);
+        assertThat(ReaderTextParser.chineseNumberValue("第一百零一章")).isEqualTo(101);
+        assertThat(ReaderTextParser.chineseNumberValue("第一百一章")).isEqualTo(110);
+        assertThat(ReaderTextParser.chineseNumberValue("第二百五十章")).isEqualTo(250);
+        assertThat(ReaderTextParser.chineseNumberValue("第二百五")).isEqualTo(250);
+        assertThat(ReaderTextParser.chineseNumberValue("第十二")).isEqualTo(12);
+        assertThat(ReaderTextParser.chineseNumberValue("第一百二十")).isEqualTo(120);
+        assertThat(ReaderTextParser.chineseNumberValue("第一千二百三十四")).isEqualTo(1234);
+        assertThat(ReaderTextParser.chineseNumberValue("两千")).isEqualTo(2000);
+        assertThat(ReaderTextParser.chineseNumberValue("第一卷")).isEqualTo(1);
+        assertThat(ReaderTextParser.chineseNumberValue("第章")).isEqualTo(-1);
+    }
+
+    /**
+     * 前置书名导言占掉清单首位时，标题归一的位次基准必须只数有标题的章。
+     *
+     * <p>双序号标题「第3章 第2章 乙」的真实位次是 2：用含导言的清单顺位会得到 3，于是挑走
+     * 第一个标记，客户端对同一首行按 2 归一后与服务端下发的标题比对不上，整本书被判成偏移漂移。
+     */
+    @Test
+    void normalizesTitlesAgainstTitledChapterOrdinalWhenPreambleExists() {
+        String withPreamble = """
+                书名：测试小说
+                作者：测试
+
+                第1章 甲
+                正文一句。
+                第3章 第2章 乙
+                正文二句。
+                """;
+        String withoutPreamble = """
+                第1章 甲
+                正文一句。
+                第3章 第2章 乙
+                正文二句。
+                """;
+
+        List<String> preambleTitles = parseText(withPreamble, StandardCharsets.UTF_8).chapters().stream()
+                .map(ReaderTextParser.TextChapterDraft::title)
+                .toList();
+        List<String> plainTitles = parseText(withoutPreamble, StandardCharsets.UTF_8).chapters().stream()
+                .map(ReaderTextParser.TextChapterDraft::title)
+                .toList();
+
+        assertThat(preambleTitles).containsExactly("正文", "第1章 甲", "第2章 乙");
+        assertThat(plainTitles).containsExactly("第1章 甲", "第2章 乙");
     }
 
     /**

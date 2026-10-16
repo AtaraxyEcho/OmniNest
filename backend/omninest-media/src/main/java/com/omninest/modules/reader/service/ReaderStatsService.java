@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.domain.ReaderReadingSession;
@@ -127,9 +128,33 @@ public class ReaderStatsService {
                 (int) (totalSecondsThisWeek / 60),
                 currentStreak,
                 // "已读数"指读到完成的条目，不是藏书总数
-                (int) progressRepository.countByOwnerUserIdAndProgressPercentGreaterThanEqual(
-                        ownerUserId, BigDecimal.ONE)
+                (int) visibleProgress(ownerUserId).stream()
+                        .filter(progress -> progress.getProgressPercent() != null
+                                && progress.getProgressPercent().compareTo(BigDecimal.ONE) >= 0)
+                        .count()
         );
+    }
+
+    /**
+     * 统计母集：当前用户可见（个人 + 共享空间）且源文件未进回收站的条目，按 ID 索引。
+     *
+     * <p>进度行按用户存、条目可见性按文件节点判，两边不取同一个母集时：读过的共享书会让
+     * "已完成 + 在读" 超过只按个人条目统计的总藏书数，进回收站的书还留在在读列表里。
+     */
+    private Map<UUID, ReaderItem> visibleItemsById(UUID ownerUserId) {
+        return itemRepository.findItemsVisibleToUser(ownerUserId, SpaceType.SHARED).stream()
+                .collect(Collectors.toMap(ReaderItem::getId, item -> item, (first, second) -> first));
+    }
+
+    /**
+     * 只保留可见条目上的进度行。
+     */
+    private List<ReaderProgress> visibleProgress(UUID ownerUserId) {
+        List<UUID> visibleItemIds = List.copyOf(visibleItemsById(ownerUserId).keySet());
+        if (visibleItemIds.isEmpty()) {
+            return List.of();
+        }
+        return progressRepository.findByOwnerUserIdAndReaderItemIdIn(ownerUserId, visibleItemIds);
     }
 
     /**
@@ -193,26 +218,28 @@ public class ReaderStatsService {
                 .map(entry -> new ReaderDailyMinutesDto(entry.getKey(), entry.getValue().intValue()))
                 .toList();
 
-        long completedCount = progressRepository.countByOwnerUserIdAndProgressPercentGreaterThanEqual(
-                ownerUserId, BigDecimal.ONE);
-        List<ReaderProgress> inProgress = progressRepository
-                .findByOwnerUserIdAndProgressPercentGreaterThanAndProgressPercentLessThan(
-                        ownerUserId, BigDecimal.ZERO, BigDecimal.ONE)
-                .stream()
+        Map<UUID, ReaderItem> visibleItems = visibleItemsById(ownerUserId);
+        List<ReaderProgress> visibleProgressRows = visibleItems.isEmpty()
+                ? List.of()
+                : progressRepository.findByOwnerUserIdAndReaderItemIdIn(
+                        ownerUserId, List.copyOf(visibleItems.keySet()));
+        long completedCount = visibleProgressRows.stream()
+                .filter(progress -> progress.getProgressPercent() != null
+                        && progress.getProgressPercent().compareTo(BigDecimal.ONE) >= 0)
+                .count();
+        List<ReaderProgress> inProgress = visibleProgressRows.stream()
+                .filter(progress -> progress.getProgressPercent() != null
+                        && progress.getProgressPercent().compareTo(BigDecimal.ZERO) > 0
+                        && progress.getProgressPercent().compareTo(BigDecimal.ONE) < 0)
                 .sorted(Comparator.comparing(
                         ReaderProgress::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
         Map<UUID, ReaderProgress> progressMap = inProgress.stream()
-                .collect(Collectors.toMap(ReaderProgress::getReaderItemId, p -> p));
-        List<UUID> inProgressIds = inProgress.stream()
-                .map(ReaderProgress::getReaderItemId)
-                .limit(12)
-                .toList();
-        Map<UUID, ReaderItem> itemsById = itemRepository.findAllById(inProgressIds).stream()
-                .collect(Collectors.toMap(ReaderItem::getId, item -> item));
-        List<ReaderItemDto> inProgressItems = inProgressIds.stream()
-                .map(itemsById::get)
+                .collect(Collectors.toMap(ReaderProgress::getReaderItemId, p -> p, (first, second) -> first));
+        List<ReaderItemDto> inProgressItems = inProgress.stream()
+                .map(progress -> visibleItems.get(progress.getReaderItemId()))
                 .filter(Objects::nonNull)
+                .limit(12)
                 .map(item -> itemService.toDto(item, false, null, progressMap))
                 .toList();
 
@@ -220,7 +247,8 @@ public class ReaderStatsService {
                 dailyMinutes,
                 completedCount,
                 inProgress.size(),
-                itemRepository.countByOwnerUserId(ownerUserId),
+                // 三个口径共用同一个母集，否则读过的共享书会让"已完成 + 在读"超过总藏书数
+                visibleItems.size(),
                 inProgressItems
         );
     }
