@@ -425,6 +425,7 @@
   "filesSharedWithMeEmptyMessage": "其他用户定向分享后，文件会列在这里并可直接预览。",
   "filesOfflineEmptyTitle": "还没有离线下载任务",
   "filesOfflineEmptyMessage": "用「新建离线下载」粘贴 HTTP、BT 或磁力链接开始。",
+  "filesOfflineFilterEmpty": "该状态下没有任务",
   "filesExternalEmptyTitle": "还没有挂载存储",
   "filesExternalEmptyMessage": "添加 OneDrive、WebDAV 等来源后，可在这里浏览并导入文件。",
   "filesExternalCredentialsMissing": "未配置凭据",
@@ -603,6 +604,7 @@
   "filesRecycleBinEmpty": "回收站为空",
   "filesCameraTakePhoto": "拍照上传",
   "filesCameraRecordVideo": "录像上传",
+  "filesCameraCaptureFailed": "无法使用相机：{error}",
   "filesUploadFile": "上传文件",
   "@filesLoadMore": {
     "placeholders": {
@@ -1463,6 +1465,8 @@
   "adminUserEnableConfirmMessage": "确定启用 {name}？启用后该账号可重新登录。",
   "adminDeleteUser": "删除用户",
   "adminDeleteUserConfirmMessage": "永久删除 {name}。仅未持有任何内容归属的空账户可删除；请键入该用户名确认。",
+  "adminResetTwoFactor": "重置两步验证",
+  "adminResetTwoFactorConfirmMessage": "清除 {name} 的动态口令秘钥与备份码，并退出其全部会话。用于认证器丢失或凭据加密密钥轮换后的恢复；该用户之后可用密码登录并重新开启两步验证。",
   "adminEditRolesHint": "可多选分配系统角色。变更角色将立即调整该用户的权限策略与可见菜单。",
   "adminCreateRole": "新增自定义角色",
   "adminRoleCode": "角色编码",
@@ -2352,6 +2356,9 @@
   "readerNavLibrary": "书库",
   "readerNavStats": "统计",
   "readerNavManage": "管理",
+  "readerAdminModuleTitle": "阅读管理",
+  "readerAdminModuleSubtitle": "导入、待导入文件与元数据管理",
+  "toolsReaderAdminDetail": "导入队列与元数据管理",
   "readerShelfEmpty": "书架为空，请在书库中添加书籍。",
   "readerShelfEmptyHint": "去书库挑选喜欢的书加入书架吧。",
   "readerStatsActivity": "阅读记录",
@@ -2405,6 +2412,8 @@
   "readerTheme": "主题",
   "readerImmersiveMode": "沉浸模式",
   "readerVolumeKeyPaging": "音量键翻页",
+  "readerFollowBookTypesetting": "跟随原书排版",
+  "readerFollowBookTypesettingHint": "打开后采用这本书的首行缩进、段间留白与对齐方式；字号、字体与行距始终按你的设置。",
   "readerPreviousPage": "上一页",
   "readerNextPage": "下一页",
   "readerPreviousChapter": "上一章",
@@ -2585,6 +2594,18 @@
       "count": {}
     }
   },
+  "readerChapterPosition": "第 {current}/{total} 章",
+  "@readerChapterPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerNowReading": "正在阅读",
   "readerDeleteCollection": "删除合集",
   "readerCollectionCount": "{count} 本",
   "@readerCollectionCount": {
@@ -2920,6 +2941,14 @@
   "readerRemoveAnnotation": "取消批注",
   "readerCopy": "复制",
   "readerAnnotations": "批注",
+  "readerAnnotationCount": "{count, plural, =0{暂无批注} other{共 {count} 条批注}}",
+  "@readerAnnotationCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "readerNoAnnotations": "暂无批注",
   "readerEditAnnotation": "编辑批注",
   "readerDeleteAnnotation": "删除批注",
@@ -3925,6 +3954,8 @@
   "musicLyricsClear": "清空歌词",
   "musicLyricsFile": "歌词文件",
   "musicLyricsPick": "选择歌词文件（LRC / TXT / SRT / VTT）",
+  "musicCoverReadFailed": "无法读取所选封面图片",
+  "musicLyricsReadFailed": "无法读取所选歌词文件",
   "musicAddToPlaylistSuccess": "已加入「{name}」",
   "@musicAddToPlaylistSuccess": {
     "placeholders": {
@@ -5131,11 +5162,11 @@
   "mobileSpaceReaderSubtitle": "更安静的空间",
   "mobileSpaceFilesSubtitle": "你的数字工作区",
   "toolsEntryLabel": "工作区工具",
-  "toolsEntrySub": "全部路由与工具页",
+  "toolsEntrySub": "低频管理入口",
   "toolsTitle": "工作区工具",
-  "toolsSubtitle": "每条路由都在熟悉的地方",
-  "toolsIntroEyebrow": "完整清单",
-  "toolsIntroTitle": "每样东西都有一个家。",
+  "toolsSubtitle": "模块内没有一级入口的页面，都收在这里",
+  "toolsIntroEyebrow": "补充清单",
+  "toolsIntroTitle": "不常用的入口，收在一处。",
   "toolsIntroBody": "在不离开这套界面语言的前提下，管理文件、影视、音乐与这台服务器。",
   "toolsGroupFiles": "文件",
   "toolsGroupMedia": "影视与音乐",
@@ -5244,6 +5275,9 @@
   "weatherDayTomorrow": "明天",
   "weatherSheetEnvironmentNote": "视觉环境正跟随本地光线与天气。",
   "bookDetailInLibrary": "在你的书库",
+  "bookDetailHeader": "书籍详情",
+  "readerDetailActionMetadataDesc": "标题、作者、封面与简介",
+  "readerDetailActionReparseDesc": "重解封面、元数据与章节",
   "bookDetailMeta": "{type} · {year} 年添加",
   "@bookDetailMeta": {"placeholders": {"type": {"type": "String"}, "year": {"type": "int"}}},
   "bookDetailContinue": "继续阅读",

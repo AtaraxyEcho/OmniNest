@@ -14,7 +14,8 @@ import 'package:omninest/core/widgets/omni_icons.dart';
 /// 四张分区卡与三枚工具快捷、音乐岛的播放历史都已各自可达，重复列在这里
 /// 只会让同一页有两个入口；留下来的都是除深链外无处可去的页。
 ///
-/// 行内一律 push：go 会换掉整条栈，从工具页进目标后系统返回直接退出应用。
+/// 行内默认 push：go 会换掉整条栈，从工具页进目标后系统返回直接退出应用。
+/// 壳层分支路由（`/files`）是例外，见该行的注释。
 class WorkspaceToolsPage extends StatelessWidget {
   const WorkspaceToolsPage({super.key});
 
@@ -30,7 +31,11 @@ class WorkspaceToolsPage extends StatelessWidget {
             icon: OmniIcons.share,
             title: l10n.filesMyShares,
             detail: l10n.filesMySharesDesc,
-            onTap: () => context.push('/files?section=myShares'),
+            // go 而不是 push：`/files` 是壳层分支路由，从壳外的根级页 push 它
+            // 会让 go_router 再压入第二个壳层页面，Navigator 在
+            // `_debugCheckDuplicatedPageKeys` 上断言重复 page key 并失去整棵内容
+            // 树。四空间是同级目标，按导航规程走 go。
+            onTap: () => context.go('/files?section=myShares'),
           ),
         ],
       ),
@@ -72,6 +77,12 @@ class WorkspaceToolsPage extends StatelessWidget {
             detail: l10n.photosGroupsSubtitle,
             onTap: () => context.push('/photos/groups'),
           ),
+          _WorkspaceToolRow(
+            icon: OmniIcons.book,
+            title: l10n.readerAdminModuleTitle,
+            detail: l10n.toolsReaderAdminDetail,
+            onTap: () => context.push('/reader/admin'),
+          ),
         ],
       ),
     ];
@@ -97,7 +108,7 @@ class WorkspaceToolsPage extends StatelessWidget {
                     child: Text(
                       group.label.toUpperCase(),
                       style: TextStyle(
-                        fontSize: 9, // ignore: font_size_whitelist
+                        fontSize: AppTypography.labelMicro,
                         height: 1.45,
                         letterSpacing: 1.5,
                         fontWeight: FontWeight.w700,

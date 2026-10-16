@@ -17,7 +17,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 /// 表内全部行，按分组顺序。
-const _rows = <String>['我的分享', '合集', '观看历史', '本地资源', '影片管理', '年·月'];
+const _rows = <String>['我的分享', '合集', '观看历史', '本地资源', '影片管理', '年·月', '阅读管理'];
 
 void main() {
   Future<void> pumpTools(
@@ -75,6 +75,12 @@ void main() {
               (context, state) =>
                   const Scaffold(body: Center(child: Text('music-scan'))),
         ),
+        GoRoute(
+          path: '/reader/admin',
+          builder:
+              (context, state) =>
+                  const Scaffold(body: Center(child: Text('reader-admin'))),
+        ),
       ],
     );
     addTearDown(router.dispose);
@@ -111,11 +117,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('目录只列模块内无处可去的页面，三个分组六行', (tester) async {
+  testWidgets('目录只列模块内无处可去的页面，三个分组七行', (tester) async {
     await pumpTools(tester);
 
-    expect(find.text('完整清单'), findsOneWidget);
-    expect(find.text('每样东西都有一个家。'), findsOneWidget);
+    expect(find.text('补充清单'), findsOneWidget);
+    expect(find.text('不常用的入口，收在一处。'), findsOneWidget);
     expect(find.text('文件'), findsOneWidget);
     expect(find.text('影视与音乐'), findsOneWidget);
     expect(find.text('相册与阅读'), findsOneWidget);
@@ -178,6 +184,12 @@ void main() {
     await tester.tap(find.text('年·月'));
     await tester.pumpAndSettle();
     expect(find.text('photo-groups'), findsOneWidget);
+
+    await pumpTools(tester);
+    await reveal(tester, '阅读管理');
+    await tester.tap(find.text('阅读管理'));
+    await tester.pumpAndSettle();
+    expect(find.text('reader-admin'), findsOneWidget);
   });
 
   testWidgets('页面不带 Scaffold，也不得继承兜底正文样式', (tester) async {
@@ -187,8 +199,8 @@ void main() {
     // MaterialApp 的兜底 DefaultTextStyle 是 monospace + 48px + 黄色双下划线：
     // 字重字号会被各自行样式盖掉，只有下划线留下来，看起来就是字底下多两道线。
     for (final label in <String>[
-      '完整清单',
-      '每样东西都有一个家。',
+      '补充清单',
+      '不常用的入口，收在一处。',
       '文件',
       '我的分享',
       '年·月',
@@ -208,7 +220,7 @@ void main() {
     await pumpTools(tester, textScale: 1.6);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('每样东西都有一个家。'), findsOneWidget);
+    expect(find.text('不常用的入口，收在一处。'), findsOneWidget);
     await reveal(tester, '影片管理');
     expect(find.text('影片管理'), findsOneWidget);
   });
@@ -225,7 +237,7 @@ void main() {
             .color!;
 
     expect(inkOf('文件'), MobileEnvPalette.light.groupLabelInk, reason: '分组眉标');
-    expect(inkOf('每样东西都有一个家。'), MobileEnvPalette.light.ink, reason: '衬线标题');
+    expect(inkOf('不常用的入口，收在一处。'), MobileEnvPalette.light.ink, reason: '衬线标题');
     expect(inkOf('本地资源'), MobileEnvPalette.light.ink, reason: '行标题');
     expect(inkOf('本地资源'), isNot(MobileEnvPalette.dark.ink));
   });

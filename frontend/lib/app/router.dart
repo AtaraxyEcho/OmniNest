@@ -157,12 +157,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               _readerRoute('/reader/stats', (state) => const ReaderStatsPage()),
               _readerRoute('/reader/admin', (state) => const ReaderAdminPage()),
-              _readerRoute(
-                '/reader/items/:itemId',
-                (state) => ReaderItemDetailPage(
-                  itemId: state.pathParameters['itemId']!,
-                ),
-              ),
             ],
           ),
           StatefulShellBranch(
@@ -342,12 +336,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      // 书本详情是全屏覆盖层（样例 `.module-overlay`/`.book-detail` 都是
+      // position: fixed; inset: 0），所以和章节阅读页一样挂在壳层之外：挂在
+      // /reader 分支里时它只能盖住内容区，壳层顶栏与底栏那两条环境带会留在
+      // 纸面之上，从阅读页返回就露出接缝。MobileHostedRoute 补托管 scope。
+      _readerRoute(
+        '/reader/items/:itemId',
+        (state) => MobileHostedRoute(
+          child: ReaderItemDetailPage(itemId: state.pathParameters['itemId']!),
+        ),
+      ),
       _animatedRoute(
         '/reader/items/:itemId/chapters/:chapterId',
         (state) => ReaderViewPage(
           itemId: state.pathParameters['itemId']!,
           chapterId: state.pathParameters['chapterId']!,
           entry: state.uri.queryParameters['entry'],
+          initialCharOffset: int.tryParse(
+            state.uri.queryParameters['offset'] ?? '',
+          ),
         ),
       ),
       _animatedRoute(
@@ -444,7 +451,13 @@ GoRoute _readerRoute(
   return GoRoute(
     path: path,
     pageBuilder: (context, state) {
-      return NoTransitionPage<void>(key: state.pageKey, child: builder(state));
+      // 表面与场景档必须在这里挂上：书本详情是从首页 push 进来的分支路由，
+      // 壳层仍停在来源空间，没有这一层就没人把阅读档（focus）注册进背景场景，
+      // 页面底就还是首页的环境档。壳层自有路径由 _routeSurface 自行跳过。
+      return NoTransitionPage<void>(
+        key: state.pageKey,
+        child: _routeSurface(path, builder(state)),
+      );
     },
   );
 }

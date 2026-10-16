@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/app_min_width_guard.dart';
+import 'package:omninest/app/browser_theme_color_binding.dart';
 import 'package:omninest/app/appearance/application/composed_scaler.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
@@ -20,6 +21,7 @@ import 'package:omninest/app/router.dart';
 import 'package:omninest/app/scoped_search_registration.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/offline_banner.dart';
 import 'package:omninest/core/widgets/top_bar_search_focus.dart';
 import 'package:omninest/app/session/session_reset_coordinator.dart';
 import 'package:omninest/app/app_scroll_behavior.dart';
@@ -140,7 +142,9 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
                     isAuthenticated: false,
                     path: router.routerDelegate.currentConfiguration.uri.path,
                   ),
-          child: _buildRouterContent(context, child, fontScalePreset),
+          child: BrowserThemeColorBinding(
+            child: _buildRouterContent(context, child, fontScalePreset),
+          ),
         );
       },
     );
@@ -197,16 +201,20 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
     // 设备例外，让它们直接走模块窄屏布局。
     final hoverCapable = PlatformCapabilities.current().supportsHoverPointer;
-    return FontScaleScope(
-      // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
-      // 会与实际渲染字号在超大无障碍档位下分叉。
-      systemScaler: ComposedScaler(systemScaler, 1),
-      child: NotificationForegroundToast(
-        child: DeviceFormFactorListener(
-          child: DesktopFormMinWidth(
-            mobileForm: mobileForm,
-            hoverCapable: hoverCapable,
-            child: content,
+    // 离线横幅放在最小宽度护栏之外：护栏会让内容横向滚动，横幅要始终铺满可见
+    // 视口，否则窄窗下它会跟着内容一起滚出屏幕。
+    return OfflineBannerLayer(
+      child: FontScaleScope(
+        // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
+        // 会与实际渲染字号在超大无障碍档位下分叉。
+        systemScaler: ComposedScaler(systemScaler, 1),
+        child: NotificationForegroundToast(
+          child: DeviceFormFactorListener(
+            child: DesktopFormMinWidth(
+              mobileForm: mobileForm,
+              hoverCapable: hoverCapable,
+              child: content,
+            ),
           ),
         ),
       ),

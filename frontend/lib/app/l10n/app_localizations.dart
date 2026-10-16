@@ -2402,6 +2402,12 @@ abstract class AppLocalizations {
   /// **'Use New offline download and paste an HTTP, BT or magnet link to start.'**
   String get filesOfflineEmptyMessage;
 
+  /// No description provided for @filesOfflineFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks in this state'**
+  String get filesOfflineFilterEmpty;
+
   /// No description provided for @filesExternalEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -3259,6 +3265,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Record Video & Upload'**
   String get filesCameraRecordVideo;
+
+  /// No description provided for @filesCameraCaptureFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera unavailable: {error}'**
+  String filesCameraCaptureFailed(Object error);
 
   /// No description provided for @filesUploadFile.
   ///
@@ -6960,6 +6972,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Permanently delete {name}. Only empty accounts with no content ownership can be deleted; type the username to confirm.'**
   String adminDeleteUserConfirmMessage(Object name);
+
+  /// No description provided for @adminResetTwoFactor.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset two-factor'**
+  String get adminResetTwoFactor;
+
+  /// No description provided for @adminResetTwoFactorConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear {name}\'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.'**
+  String adminResetTwoFactorConfirmMessage(Object name);
 
   /// No description provided for @adminEditRolesHint.
   ///
@@ -10781,6 +10805,24 @@ abstract class AppLocalizations {
   /// **'Manage'**
   String get readerNavManage;
 
+  /// No description provided for @readerAdminModuleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader management'**
+  String get readerAdminModuleTitle;
+
+  /// No description provided for @readerAdminModuleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Imports, pending files and metadata'**
+  String get readerAdminModuleSubtitle;
+
+  /// No description provided for @toolsReaderAdminDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Import queue and metadata management'**
+  String get toolsReaderAdminDetail;
+
   /// No description provided for @readerShelfEmpty.
   ///
   /// In en, this message translates to:
@@ -11098,6 +11140,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Volume keys turn pages'**
   String get readerVolumeKeyPaging;
+
+  /// No description provided for @readerFollowBookTypesetting.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the book\'s typography'**
+  String get readerFollowBookTypesetting;
+
+  /// No description provided for @readerFollowBookTypesettingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes this book\'s first-line indent, paragraph spacing and alignment. Font size, typeface and line spacing always follow your settings.'**
+  String get readerFollowBookTypesettingHint;
 
   /// No description provided for @readerPreviousPage.
   ///
@@ -11620,6 +11674,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} chapters total'**
   String readerTotalChapters(Object count);
+
+  /// No description provided for @readerChapterPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Ch. {current}/{total}'**
+  String readerChapterPosition(int current, int total);
+
+  /// No description provided for @readerNowReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading now'**
+  String get readerNowReading;
 
   /// No description provided for @readerDeleteCollection.
   ///
@@ -12610,6 +12676,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Annotations'**
   String get readerAnnotations;
+
+  /// No description provided for @readerAnnotationCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No annotations} other{{count} annotations}}'**
+  String readerAnnotationCount(int count);
 
   /// No description provided for @readerNoAnnotations.
   ///
@@ -16822,6 +16894,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select Lyrics File (LRC / TXT / SRT / VTT)'**
   String get musicLyricsPick;
+
+  /// No description provided for @musicCoverReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the selected cover image'**
+  String get musicCoverReadFailed;
+
+  /// No description provided for @musicLyricsReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the selected lyrics file'**
+  String get musicLyricsReadFailed;
 
   /// No description provided for @musicAddToPlaylistSuccess.
   ///
@@ -21511,7 +21595,7 @@ abstract class AppLocalizations {
   /// No description provided for @toolsEntrySub.
   ///
   /// In en, this message translates to:
-  /// **'All routes and tool pages'**
+  /// **'Low-frequency management pages'**
   String get toolsEntrySub;
 
   /// No description provided for @toolsTitle.
@@ -21523,19 +21607,19 @@ abstract class AppLocalizations {
   /// No description provided for @toolsSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Every route, in one calm place'**
+  /// **'Pages that have no first-level entry inside their module'**
   String get toolsSubtitle;
 
   /// No description provided for @toolsIntroEyebrow.
   ///
   /// In en, this message translates to:
-  /// **'Complete list'**
+  /// **'Supplementary list'**
   String get toolsIntroEyebrow;
 
   /// No description provided for @toolsIntroTitle.
   ///
   /// In en, this message translates to:
-  /// **'Everything has a home.'**
+  /// **'The less-used entries, in one place.'**
   String get toolsIntroTitle;
 
   /// No description provided for @toolsIntroBody.
@@ -22065,6 +22149,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'IN YOUR LIBRARY'**
   String get bookDetailInLibrary;
+
+  /// No description provided for @bookDetailHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Book details'**
+  String get bookDetailHeader;
+
+  /// No description provided for @readerDetailActionMetadataDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Title, author, cover and summary'**
+  String get readerDetailActionMetadataDesc;
+
+  /// No description provided for @readerDetailActionReparseDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild cover, metadata and chapters'**
+  String get readerDetailActionReparseDesc;
 
   /// No description provided for @bookDetailMeta.
   ///

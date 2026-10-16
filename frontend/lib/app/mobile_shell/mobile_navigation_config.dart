@@ -39,7 +39,28 @@ class MobileNavigationConfig {
       portalBranch => AppBackdropPolicy.portalMobile,
       libraryBranch => AppBackdropPolicy.ambientMedia,
       readerBranch => AppBackdropPolicy.focusReading,
-      _ => AppBackdropPolicy.utilitySurface,
+      filesBranch => AppBackdropPolicy.utilitySurface,
+      _ => undeclaredBranch(
+        branch,
+        'backdropPolicyForBranch',
+        AppBackdropPolicy.utilitySurface,
+      ),
     };
+  }
+
+  /// 未登记的分支编号：调试构建当场抛错，发布构建按调用点给定的兜底值继续。
+  ///
+  /// 壳层按分支做的三类决策（顶栏与底部 tab 让位、多选占用、背景策略）都要求
+  /// 逐条分支显式表态。新增一级分支却漏登记时，静默取兜底值不会有任何报错，
+  /// 表现是「自带页头的整屏层叠在壳层顶栏下、出现两套页头」这类看得见却查不出
+  /// 的错配，因此把默认路径改成调试期硬失败。
+  static T undeclaredBranch<T>(int branch, String decision, T fallback) {
+    assert(() {
+      throw StateError(
+        '分支 $branch 未在 $decision 声明策略：新增移动一级分支时必须逐条'
+        '表态（兜底值 $fallback 只在发布构建生效）。',
+      );
+    }());
+    return fallback;
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 
 void main() {
   testWidgets('移动端分段控件在窄屏下保持稳定并响应选择', (tester) async {
@@ -74,7 +76,7 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('移动端状态视图支持 1.3 倍文字缩放', (tester) async {
+  testWidgets('移动空态族支持 1.3 倍文字缩放', (tester) async {
     await tester.binding.setSurfaceSize(const Size(360, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -83,8 +85,9 @@ void main() {
         home: MediaQuery(
           data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
           child: Scaffold(
-            body: MobileInlineState(
-              icon: Icons.cloud_off_outlined,
+            body: EnvEmptyState(
+              icon: OmniIcons.library,
+              title: '还没有内容',
               message: '网络暂时不可用，恢复连接后可以继续同步当前内容。',
               actionLabel: '重新加载',
               onAction: () {},

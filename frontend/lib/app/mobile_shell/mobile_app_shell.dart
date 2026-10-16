@@ -74,6 +74,9 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     final selectionActive = ref.watch(
       mobileShellSelectionActiveProvider(branch),
     );
+    // 子页态（如 Files 的最近使用/我的收藏/与我共享/离线下载）由页面自带
+    // 90 高页头，壳层顶栏与底部 tab 让位；离线横幅不在此列，它只在壳层出一次。
+    final subpageActive = ref.watch(mobileShellSubpageActiveProvider(branch));
     final offline = ref.watch(appOnlineStatusProvider).asData?.value == false;
     final backdropActive = ref.watch(mobileShellLocalBackdropActiveProvider);
     // 极性在这里决定并注册：外观设置就是极性源，壁纸不参与判定。
@@ -96,6 +99,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
           body: _buildBottomNavigationLayout(
             context,
             selectionActive: selectionActive,
+            subpageActive: subpageActive,
             offline: offline,
           ),
         ),
@@ -111,15 +115,17 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
   Widget _buildBottomNavigationLayout(
     BuildContext context, {
     required bool selectionActive,
+    required bool subpageActive,
     required bool offline,
   }) {
     return Column(
       children: [
-        _MobileTopBar(branch: widget.navigationShell.currentIndex),
+        if (!subpageActive)
+          _MobileTopBar(branch: widget.navigationShell.currentIndex),
         if (offline)
           _MobileSystemBanner(branch: widget.navigationShell.currentIndex),
         Expanded(child: _moduleContent()),
-        if (!selectionActive) ...[
+        if (!selectionActive && !subpageActive) ...[
           MusicMobileMiniPlayerSlot(onOpenPlayer: _openNowPlaying),
           _MobileBottomNavigation(
             branch: widget.navigationShell.currentIndex,

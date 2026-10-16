@@ -66,7 +66,7 @@ void main() {
     expect(find.text('管理账户'), findsOneWidget);
     // 工作区工具入口行（原型账户表 Workspace tools）。
     expect(find.text('工作区工具'), findsOneWidget);
-    expect(find.text('全部路由与工具页'), findsOneWidget);
+    expect(find.text('低频管理入口'), findsOneWidget);
   });
 
   testWidgets('大字号（1.6x）无溢出', (tester) async {

@@ -7,9 +7,9 @@ import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
+import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -43,6 +43,7 @@ void main() {
     required String initialLocation,
     Brightness brightness = Brightness.dark,
     bool backdropActive = false,
+    bool filesSubpageActive = false,
   }) {
     final router = GoRouter(
       initialLocation: initialLocation,
@@ -82,6 +83,11 @@ void main() {
         ),
         unreadCountProvider.overrideWith(_ZeroUnreadCount.new),
         mobileShellSelectionActiveProvider.overrideWith((ref, branch) => false),
+        mobileShellSubpageActiveProvider.overrideWith(
+          (ref, branch) =>
+              filesSubpageActive &&
+              branch == MobileNavigationConfig.filesBranch,
+        ),
         musicAudioPlaybackProvider.overrideWith(
           (ref) => const _SilentMusicAudioPlayback(),
         ),
@@ -104,6 +110,7 @@ void main() {
     required String initialLocation,
     Brightness brightness = Brightness.dark,
     bool backdropActive = false,
+    bool filesSubpageActive = false,
     Size surface = const Size(360, 860),
     double textScale = 1.0,
   }) async {
@@ -120,6 +127,7 @@ void main() {
         initialLocation: initialLocation,
         brightness: brightness,
         backdropActive: backdropActive,
+        filesSubpageActive: filesSubpageActive,
       ),
     );
     await tester.pumpAndSettle();
@@ -209,6 +217,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('横屏手机（844×390）不锁方向的前提：壳层仍是移动形态且不吃满高度', (tester) async {
+    for (final location in const ['/portal', '/library', '/reader', '/files']) {
+      await pumpShell(
+        tester,
+        initialLocation: location,
+        surface: const Size(844, 390),
+      );
+      expect(tester.takeException(), isNull, reason: '$location 横屏渲染不应抛异常或溢出');
+      final nav = find.byKey(const ValueKey('omninest.mobile.bottom-nav'));
+      final topBar = find.byKey(const ValueKey('omninest.mobile.top-bar'));
+      expect(nav, findsOneWidget, reason: '$location 横屏仍走移动壳层');
+      final navRect = tester.getRect(nav);
+      final topRect = tester.getRect(topBar);
+      expect(navRect.bottom, lessThanOrEqualTo(390));
+      expect(
+        390 - topRect.height - navRect.height,
+        greaterThan(120),
+        reason: '$location 横屏留给内容的高度不能薄到不可用',
+      );
+    }
+  });
+
   testWidgets('一级导航顺序为 首页·媒体库·阅读·文件', (tester) async {
     await pumpShell(tester, initialLocation: '/portal');
     final labels = <String>['首页', '媒体库', '阅读', '文件'];
@@ -239,7 +269,7 @@ void main() {
         ),
       ),
     );
-    expect(searchIcon.color, MobileEnvColors.ink);
+    expect(searchIcon.color, MobileEnvPalette.dark.ink);
     // 品牌标记不得低于搜索钮那一档：透明底标记的可视内容只占画布宽约 70%，
     // 尺寸回落后会在顶栏里读成一个孤立小点。
     final brandSize = tester.getSize(find.byType(BrandLogo));
@@ -314,7 +344,7 @@ void main() {
     }
     // 高亮是**单层滑块**，且与选中舱位同心（竖向按目的地列的居中公式折算）。
     expect(bottomNavPill(), findsOneWidget);
-    expect(bottomNavPillColor(tester), MobileEnvColors.accent);
+    expect(bottomNavPillColor(tester), MobileEnvPalette.dark.accent);
     expect(
       tester.getCenter(bottomNavPill()).dx,
       closeTo(tester.getCenter(bottomCapsules().at(0)).dx, 0.5),
@@ -327,11 +357,11 @@ void main() {
     // 选中图标为强调色上的深前景，未选中仍是弱化前景。
     expect(
       navIconOfType(tester, OmniIcons.home).color,
-      MobileEnvColors.onAccent,
+      MobileEnvPalette.dark.onAccent,
     );
     expect(
       navIconOfType(tester, OmniIcons.folder).color,
-      MobileEnvColors.white46,
+      MobileEnvPalette.dark.white46,
     );
 
     // 切换空间：滑块滑过去，而不是瞬移到新舱位。
@@ -366,11 +396,11 @@ void main() {
     );
     expect(
       navIconOfType(tester, OmniIcons.library).color,
-      MobileEnvColors.onAccent,
+      MobileEnvPalette.dark.onAccent,
     );
     expect(
       navIconOfType(tester, OmniIcons.home).color,
-      MobileEnvColors.white46,
+      MobileEnvPalette.dark.white46,
     );
   });
 
@@ -434,6 +464,42 @@ void main() {
     expect(find.text('你的媒体，都在这里'), findsOneWidget);
     await tapNav(tester, '文件');
     expect(find.text('你的数字工作区'), findsOneWidget);
+  });
+
+  // 样例 FeaturePage 是 `.module-overlay { inset: 0; z-index: 100 }`：整屏层
+  // 自带 90 高页头与返回钮，壳层顶栏与 tab 组都要让位，否则四页读起来仍是
+  // 「文件空间里的一块面板」而不是独立页面。照片/音乐/影视走根级路由，
+  // 文件分区在 branch 内，只能由壳层显式收起。
+  testWidgets('文件子页态：顶栏与底栏让位', (tester) async {
+    await pumpShell(
+      tester,
+      initialLocation: '/files',
+      filesSubpageActive: true,
+    );
+    // 分支页在场，证明是壳层收起了 chrome，而不是整棵树没挂上。
+    expect(find.byKey(const Key('branch-files')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.top-bar')),
+      findsNothing,
+      reason: '子页态不叠壳层顶栏',
+    );
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
+      findsNothing,
+      reason: '子页态整屏接管，tab 组一并收起',
+    );
+  });
+
+  testWidgets('文件模块首页仍用壳层 chrome', (tester) async {
+    await pumpShell(tester, initialLocation: '/files');
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.top-bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.bottom-nav')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('搜索入口进入全局搜索覆盖层而非第二条导航', (tester) async {

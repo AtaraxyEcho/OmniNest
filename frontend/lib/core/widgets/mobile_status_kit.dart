@@ -9,13 +9,15 @@ enum MobileStatusTone { calm, warning, danger }
 
 /// 传输页三档色调的具体取值。
 ///
-/// calm 档走强调色的"墨"角色（文字与其软填充同一角色），warning/danger 是彩性色，
-/// 两极性保持原值。
+/// calm 档走强调色的"墨"角色（文字与其软填充同一角色）。warning/danger 的
+/// 前景取自极性表：样例浅态把这两档写成了与暗态同值的浅字，压在纸面上不足
+/// 1.6:1，所以浅态换成深琥珀与深红，暗态维持样例值（见 `statusWarning` 注释）。
+/// 两档的软填充仍是样例的 12% 同色相底，它只做色相提示、不承载对比度。
 Color _statusForeground(MobileEnvPalette env, MobileStatusTone tone) {
   return switch (tone) {
     MobileStatusTone.calm => env.accentInk,
-    MobileStatusTone.warning => const Color(0xFFE9BD7C),
-    MobileStatusTone.danger => const Color(0xFFE69696),
+    MobileStatusTone.warning => env.statusWarning,
+    MobileStatusTone.danger => env.statusDanger,
   };
 }
 
@@ -51,7 +53,9 @@ class MobileStatusPill extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
-          fontSize: 7, // ignore: font_size_whitelist
+          // 样例的 7px 是给拉丁大写短词的，中文在这个尺寸上笔画粘连不可读，
+          // 短标签一律走 labelMicro 下限。
+          fontSize: AppTypography.labelMicro,
           letterSpacing: 0.7,
           fontWeight: FontWeight.w800,
           color: _statusForeground(context.env, tone),
@@ -106,7 +110,7 @@ class MobileTransferRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: AppTypography.labelSmall,
                     fontWeight: FontWeight.w600,
                     color: context.env.ink,
                   ),
@@ -117,7 +121,7 @@ class MobileTransferRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 9, // ignore: font_size_whitelist
+                    fontSize: AppTypography.labelMicro,
                     color: context.env.inkMuted,
                   ),
                 ),
@@ -218,7 +222,7 @@ class _SummaryCell extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 7, // ignore: font_size_whitelist
+              fontSize: AppTypography.labelMicro,
               letterSpacing: 1,
               color: context.env.inkMuted,
             ),
@@ -279,18 +283,18 @@ class MobileDisabledCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: AppTypography.labelMicro,
                     fontWeight: FontWeight.w600,
                     color: context.env.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
+                  // 这张卡的全部用途就是解释"为什么不能操作"，说明句不得截断；
+                  // 样例的 8px 只够放拉丁短语，放中文整句读不下来。
                   message,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 8, // ignore: font_size_whitelist
+                    fontSize: AppTypography.labelSmall,
                     height: 1.4,
                     color: context.env.inkMuted,
                   ),
@@ -314,7 +318,7 @@ class MobileDisabledCard extends StatelessWidget {
                 child: Text(
                   actionLabel!,
                   style: TextStyle(
-                    fontSize: 9, // ignore: font_size_whitelist
+                    fontSize: AppTypography.labelMicro,
                     color: context.env.ink,
                   ),
                 ),
@@ -346,19 +350,21 @@ class MobileOfflineBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const OmniIcon(
+          OmniIcon(
             icon: OmniIcons.cloud,
             size: 16,
-            color: Color(0xFFE9BD7C),
+            color: context.env.statusWarning,
           ),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                fontSize: 9, // ignore: font_size_whitelist
+              style: TextStyle(
+                // 这是全壳层唯一的系统级提示，中文整句按句子档取，不走样例给
+                // 拉丁短词的 9px。
+                fontSize: AppTypography.labelSmall,
                 height: 1.4,
-                color: Color(0xFFE9BD7C),
+                color: context.env.statusWarning,
               ),
             ),
           ),

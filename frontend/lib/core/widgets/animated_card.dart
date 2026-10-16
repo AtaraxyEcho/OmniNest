@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 /// 播放一次淡入和上移动画的内容容器。
 class AnimatedCard extends StatefulWidget {
@@ -8,7 +9,7 @@ class AnimatedCard extends StatefulWidget {
     super.key,
     required this.child,
     this.delay = Duration.zero,
-    this.duration = const Duration(milliseconds: 500),
+    this.duration = MotionToken.normal,
     this.enabled = true,
   });
 

@@ -34,6 +34,7 @@ class MobileSlidingSegmentRow extends StatelessWidget {
     this.labelPadding = 14,
     this.labelSize = 12,
     this.cornerRadius = 12,
+    this.equalSegmentWidth,
     super.key,
   });
 
@@ -66,16 +67,49 @@ class MobileSlidingSegmentRow extends StatelessWidget {
   final double labelSize;
   final double cornerRadius;
 
+  /// 等分档：给定时六段一律取该宽度，不再按标签内容自定。
+  ///
+  /// 样例 `.segmented` 是 `width: max-content` + `min-width: 66`，手机上段数一多
+  /// 就放不下（照片六段实测需要 431dp，可用只有 350dp），此时按内容带等分，
+  /// 段宽低于样例的 66。只在调用点确认放不下之后才传值。
+  final double? equalSegmentWidth;
+
+  /// 该行按样例内容自适应时的固有宽度，供调用点判断要不要转等分档。
+  static double naturalExtent({
+    required BuildContext context,
+    required List<String> labels,
+    double gap = 4,
+    double containerPadding = 4,
+    double minimumSegmentWidth = 66,
+    double labelPadding = 14,
+    double labelSize = 12,
+  }) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    var extent = containerPadding * 2 + gap * (labels.length - 1);
+    for (final label in labels) {
+      extent += math.max(
+        minimumSegmentWidth,
+        _labelExtent(context, label, textScaler, labelSize).ceilToDouble() +
+            labelPadding * 2,
+      );
+    }
+    return extent;
+  }
+
   @override
   Widget build(BuildContext context) {
     final textScaler = MediaQuery.textScalerOf(context);
+    final forced = equalSegmentWidth;
     final widths = <double>[
-      for (final label in labels)
-        math.max(
-          minimumSegmentWidth,
-          _labelExtent(context, label, textScaler).ceilToDouble() +
-              labelPadding * 2,
-        ),
+      if (forced != null)
+        for (final _ in labels) forced
+      else
+        for (final label in labels)
+          math.max(
+            minimumSegmentWidth,
+            _labelExtent(context, label, textScaler, labelSize).ceilToDouble() +
+                labelPadding * 2,
+          ),
     ];
 
     final lefts = <double>[];
@@ -177,10 +211,11 @@ class MobileSlidingSegmentRow extends StatelessWidget {
 
   /// 用 TextPainter 量标签占位，与段内 Text 用同一套字号与字重（粗体），
   /// 量出来的宽度即段宽，滑块边界因此与真实排布一致。
-  double _labelExtent(
+  static double _labelExtent(
     BuildContext context,
     String label,
     TextScaler textScaler,
+    double labelSize,
   ) {
     final painter = TextPainter(
       text: TextSpan(

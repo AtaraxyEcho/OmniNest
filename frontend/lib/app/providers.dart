@@ -147,7 +147,9 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
     database: db,
     userId: userId,
   );
-  ReaderLocalProgress.init(DatabaseReaderLocalProgressStore(db));
+  ReaderLocalProgress.init(
+    DatabaseReaderLocalProgressStore(db, userId: userId),
+  );
   ReaderSyncQueue.init(
     db,
     textCipher: ref.watch(offlineColumnCipherProvider),

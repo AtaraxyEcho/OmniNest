@@ -70,6 +70,46 @@ void main() {
     expect(decoration.borderRadius, BorderRadius.circular(8));
   });
 
+  testWidgets('中文文案守住可读下限：短标签 10、句子 11，说明句不得截断', (tester) async {
+    // 样例的 7-9px 是给拉丁大写短词的；这几件承载的是中文整句，字号一旦被抄回
+    // 样例值就没人会注意，所以按数值下限钉死，不引用 AppTypography（那会自证）。
+    double fontOf(String text) =>
+        tester.widget<Text>(find.text(text)).style!.fontSize!;
+
+    await _pumpSlot(
+      tester,
+      Column(
+        children: <Widget>[
+          const MobileStatusPill(label: '已分享', tone: MobileStatusTone.calm),
+          const MobileTransferSummary(
+            entries: <MobileTransferSummaryEntry>[
+              MobileTransferSummaryEntry(value: '3', label: '进行中'),
+            ],
+          ),
+          const MobileOfflineBanner(message: '当前处于离线状态，部分操作暂不可用'),
+          MobileDisabledCard(
+            icon: OmniIcons.cloud,
+            title: '蜂窝网络下已暂停',
+            message: '连上 Wi-Fi，或在设置里允许使用计量网络传输。',
+            actionLabel: '设置',
+            onAction: () {},
+          ),
+        ],
+      ),
+    );
+
+    expect(fontOf('已分享'), greaterThanOrEqualTo(10));
+    expect(fontOf('进行中'), greaterThanOrEqualTo(10));
+    expect(fontOf('设置'), greaterThanOrEqualTo(10));
+    expect(fontOf('蜂窝网络下已暂停'), greaterThanOrEqualTo(10));
+    expect(fontOf('当前处于离线状态，部分操作暂不可用'), greaterThanOrEqualTo(11));
+
+    final message = tester.widget<Text>(find.text('连上 Wi-Fi，或在设置里允许使用计量网络传输。'));
+    expect(message.style!.fontSize, greaterThanOrEqualTo(11));
+    // 这张卡的全部用途就是解释为什么不能操作，截断等于没解释。
+    expect(message.maxLines, isNull);
+  });
+
   testWidgets('传输行 78 高并画 3px 进度与状态丸', (tester) async {
     await _pumpSlot(
       tester,

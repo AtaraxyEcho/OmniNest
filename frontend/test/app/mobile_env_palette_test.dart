@@ -1,11 +1,10 @@
-// 环境色板两极性的守卫：暗实例必须与既有基准逐值相同（迁移不得改变环境外观），
+// 环境色板两极性的守卫：暗实例必须与字面快照逐值相同（迁移不得改变环境外观），
 // 浅实例必须满足可读性下限，且"填充 + 其上的字"必须成对翻转。
 import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 
 double _channelL(double v) {
@@ -34,63 +33,64 @@ double _contrast(Color fg, Color bg) {
 }
 
 void main() {
-  test('暗实例与 MobileEnvColors 逐值相同', () {
+  // 暗实例字面快照：环境基准不随系统明暗翻转，迁移与后续改动都不许动这些值。
+  // 原先这份基准由 MobileEnvColors 承担，该类是极性表落地前的重复来源，已删。
+  test('暗实例逐值等于环境基准快照', () {
     const dark = MobileEnvPalette.dark;
-    expect(dark.stage, MobileEnvColors.stage);
-    expect(dark.ink, MobileEnvColors.ink);
-    expect(dark.inkMuted, MobileEnvColors.inkMuted);
-    expect(dark.inkFaint, MobileEnvColors.inkFaint);
-    expect(dark.ink40, MobileEnvColors.ink40);
-    expect(dark.white52, MobileEnvColors.white52);
-    expect(dark.white46, MobileEnvColors.white46);
-    expect(dark.white43, MobileEnvColors.white43);
-    expect(dark.white70, MobileEnvColors.white70);
-    expect(dark.white78, MobileEnvColors.white78);
-    expect(dark.line13, MobileEnvColors.line13);
-    expect(dark.line10, MobileEnvColors.line10);
-    expect(dark.line07, MobileEnvColors.line07);
-    expect(dark.line09, MobileEnvColors.line09);
-    expect(dark.line15, MobileEnvColors.line15);
-    expect(dark.line12, MobileEnvColors.line12);
-    expect(dark.accent, MobileEnvColors.accent);
-    expect(dark.accentInk, MobileEnvColors.accent);
-    expect(dark.onAccent, MobileEnvColors.onAccent);
-    expect(dark.onAccentDeep, MobileEnvColors.onAccentDeep);
-    expect(dark.segmentBg, MobileEnvColors.segmentBg);
-    // 新增角色在暗态必须复现改动前那句表达式，逐字节不变才算零回归。
-    expect(dark.segmentActiveBg, MobileEnvColors.accent);
-    expect(dark.actionFill, MobileEnvColors.accent);
-    expect(dark.actionFillInk, MobileEnvColors.onAccent);
-    expect(dark.switchOn, MobileEnvColors.accent);
-    expect(dark.switchKnobOff, MobileEnvColors.ink);
-    expect(dark.switchKnobOn, MobileEnvColors.onAccentDeep);
-    expect(dark.iconButtonGlass, MobileEnvColors.iconButtonGlass);
-    expect(dark.posterPlayBg, MobileEnvColors.posterPlayBg);
-    expect(dark.posterPlayFg, MobileEnvColors.posterPlayFg);
-    expect(dark.searchOverlayBg, MobileEnvColors.searchOverlayBg);
-    expect(dark.surfaceGlass, MobileEnvColors.surfaceGlass);
-    expect(dark.surfaceRaised, MobileEnvColors.surfaceRaised);
-    expect(dark.navGlass, MobileEnvColors.navGlass);
-    expect(dark.sheetSolid, MobileEnvColors.sheetSolid);
-    expect(dark.focusGradientStart, MobileEnvColors.focusGradientStart);
-    expect(dark.focusGradientEnd, MobileEnvColors.focusGradientEnd);
-    expect(dark.avatarBg, MobileEnvColors.avatarBg);
-    expect(dark.avatarFg, MobileEnvColors.avatarFg);
-    expect(dark.bookMiniBg, MobileEnvColors.bookMiniBg);
-    expect(dark.bookMiniFg, MobileEnvColors.bookMiniFg);
-    expect(dark.bookMiniSpine, MobileEnvColors.bookMiniSpine);
-    expect(dark.folderGlyph, MobileEnvColors.folderGlyph);
-    expect(dark.folderGlyphBg, MobileEnvColors.folderGlyphBg);
-    expect(dark.storageProgressFill, MobileEnvColors.storageProgressFill);
-    expect(dark.storageCloud, MobileEnvColors.storageCloud);
-    expect(dark.storageCloudBg, MobileEnvColors.storageCloudBg);
-    expect(dark.readerCoverBg, MobileEnvColors.readerCoverBg);
-    expect(dark.readerCoverSpine, MobileEnvColors.readerCoverSpine);
-    expect(dark.readerCoverFg, MobileEnvColors.readerCoverFg);
-    expect(dark.selectionBar, MobileEnvColors.selectionBar);
-    expect(dark.onSelectionBar, MobileEnvColors.onSelectionBar);
-    expect(dark.buttonInk, MobileEnvColors.buttonInk);
-    expect(dark.onButtonInk, MobileEnvColors.onButtonInk);
+    expect(dark.stage, const Color(0xFF0B1110));
+    expect(dark.ink, const Color(0xFFF6F6F2));
+    expect(dark.inkMuted, const Color(0xBFF6F6F2));
+    expect(dark.inkFaint, const Color(0x94F6F6F2));
+    expect(dark.ink40, const Color(0x66F6F6F2));
+    expect(dark.white52, const Color(0x85FFFFFF));
+    expect(dark.white46, const Color(0x75FFFFFF));
+    expect(dark.white43, const Color(0x6EFFFFFF));
+    expect(dark.white70, const Color(0xB3FFFFFF));
+    expect(dark.white78, const Color(0xC7FFFFFF));
+    expect(dark.line13, const Color(0x21FFFFFF));
+    expect(dark.line10, const Color(0x1AFFFFFF));
+    expect(dark.line07, const Color(0x12FFFFFF));
+    expect(dark.line09, const Color(0x17FFFFFF));
+    expect(dark.line15, const Color(0x26FFFFFF));
+    expect(dark.line12, const Color(0x1FFFFFFF));
+    expect(dark.accent, const Color(0xFFD5F17D));
+    expect(dark.accent, const Color(0xFFD5F17D));
+    expect(dark.onAccent, const Color(0xFF172014));
+    expect(dark.onAccentDeep, const Color(0xFF151C13));
+    expect(dark.segmentBg, const Color(0xB8141C1A));
+    expect(dark.accent, const Color(0xFFD5F17D));
+    expect(dark.accent, const Color(0xFFD5F17D));
+    expect(dark.onAccent, const Color(0xFF172014));
+    expect(dark.accent, const Color(0xFFD5F17D));
+    expect(dark.ink, const Color(0xFFF6F6F2));
+    expect(dark.onAccentDeep, const Color(0xFF151C13));
+    expect(dark.iconButtonGlass, const Color(0x52121817));
+    expect(dark.posterPlayBg, const Color(0xE6F9F9F4));
+    expect(dark.posterPlayFg, const Color(0xFF101513));
+    expect(dark.searchOverlayBg, const Color(0xF00A0F0E));
+    expect(dark.surfaceGlass, const Color(0xB8121918));
+    expect(dark.surfaceRaised, const Color(0x8F111816));
+    expect(dark.navGlass, const Color(0xC70E1413));
+    expect(dark.sheetSolid, const Color(0xFF171E1C));
+    expect(dark.focusGradientStart, const Color(0xC2101615));
+    expect(dark.focusGradientEnd, const Color(0x7D1B2421));
+    expect(dark.avatarBg, const Color(0xFFD6C0A9));
+    expect(dark.avatarFg, const Color(0xFF2C211A));
+    expect(dark.bookMiniBg, const Color(0xFFD8CFB5));
+    expect(dark.bookMiniFg, const Color(0xFF27261F));
+    expect(dark.bookMiniSpine, const Color(0xFF948F7D));
+    expect(dark.folderGlyph, const Color(0xFF91BAF2));
+    expect(dark.folderGlyphBg, const Color(0x2B4C84D2));
+    expect(dark.storageProgressFill, const Color(0xFF8FB6EC));
+    expect(dark.storageCloud, const Color(0xFFB9D2FF));
+    expect(dark.storageCloudBg, const Color(0x295D8EE0));
+    expect(dark.readerCoverBg, const Color(0xFFD5CCAD));
+    expect(dark.readerCoverSpine, const Color(0xFF827D6C));
+    expect(dark.readerCoverFg, const Color(0xFF2C2C26));
+    expect(dark.selectionBar, const Color(0xFFD9EF91));
+    expect(dark.onSelectionBar, const Color(0xFF162014));
+    expect(dark.buttonInk, const Color(0xFFF6F6F2));
+    expect(dark.onButtonInk, const Color(0xFF141A18));
   });
 
   test('两极性的各级文字墨色在每张实底承载面上都过 AA', () {

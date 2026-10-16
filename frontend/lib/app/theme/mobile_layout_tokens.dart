@@ -3,7 +3,11 @@ import 'package:omninest/app/theme/global_theme_colors.dart';
 
 /// 移动端工作台使用的尺寸与动效令牌。
 abstract final class MobileLayoutTokens {
-  static const double horizontalPadding = 16;
+  /// 页面左右留白取样例的**主内容**档：`.content-scroll`、`.module-overlay > main`、
+  /// `.search-overlay main`、`.book-detail-scroll`、`.weather-sheet > main` 都是 20。
+  /// 样例的 16 属于底部抽屉（`.glass-sheet`/`.account-sheet`/`.notif-settings`
+  /// 的 `10px 16px`），不是页面；顶栏本来就写死 20，取 16 会让正文左缘与顶栏差 4px。
+  static const double horizontalPadding = 20;
   static const double tabletHorizontalPadding = 24;
   static const double sectionGap = 24;
   static const double itemGap = 12;

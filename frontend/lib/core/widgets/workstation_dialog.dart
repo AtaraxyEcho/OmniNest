@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsRole;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -11,7 +12,9 @@ import 'package:omninest/core/widgets/workstation_mobile_sheet.dart';
 /// 建筑极简主义弹窗入口（工位公共实现）。
 ///
 /// 统一承担规范要求的交互状态机：
-/// - Esc 逐层退栈：复用路由栈天然 LIFO，每层弹窗独立路由；
+/// - Esc 逐层退栈：`ModalRoute` 自带的 `DismissIntent` 处理，按
+///   `barrierDismissible` 决定是否 pop，因此 `dismissible: false` 的高危
+///   面板天然不响应 Esc；桌面弹窗与移动面板两条分支都一样，勿再自行绑键；
 /// - Tab 焦点陷阱：[WorkstationFocusTrap] 将键盘遍历锁定在弹窗内循环；
 /// - 焦点记忆还原：关闭后焦点精确回到触发控件；
 /// - 背景滚动锁定：遮罩吸收指针事件，背景不可滚动。
@@ -77,23 +80,32 @@ Future<T?> showWorkstationDialog<T>({
 /// 透明命中测试是硬约束——遮罩一旦吃掉指针，路由屏障的
 /// “点击遮罩关闭”就会失灵。
 class WorkstationBlurScrim extends StatelessWidget {
-  const WorkstationBlurScrim({this.color, super.key});
+  const WorkstationBlurScrim({this.color, this.animation, super.key});
 
   /// 叠加在模糊之上的着色；缺省 black/45。
   final Color? color;
 
+  /// 可选的路由淡入淡出；缺省不淡入（弹窗路由的屏障自己负责显隐）。
+  ///
+  /// 动画层必须在 [Positioned.fill] **之内**：Positioned 把 StackParentData
+  /// 写给最近的 RenderObject 祖先，中间隔一个 FadeTransition 的 RenderOpacity
+  /// 就会抛 Incorrect use of ParentDataWidget，遮罩也就脱离 Stack。
+  final Animation<double>? animation;
+
   @override
   Widget build(BuildContext context) {
+    final surface = ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: ColoredBox(color: color ?? Colors.black.withValues(alpha: 0.45)),
+      ),
+    );
     return Positioned.fill(
       child: IgnorePointer(
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: ColoredBox(
-              color: color ?? Colors.black.withValues(alpha: 0.45),
-            ),
-          ),
-        ),
+        child:
+            animation == null
+                ? surface
+                : FadeTransition(opacity: animation!, child: surface),
       ),
     );
   }
@@ -106,6 +118,9 @@ class WorkstationBlurScrim extends StatelessWidget {
 /// [pageBuilder] 自行定位（Align/Positioned），过渡动画由
 /// [transitionsBuilder] 原样保留；模糊遮罩独立于面板动画，
 /// 以路由动画同步淡入淡出，行为对齐原生 barrier。
+/// 模态语义（dialog role）由本入口统一补齐，调用方不必自绘 `Semantics`；
+/// `dismissible: false` 时与其他模态一样，Escape 由 `ModalRoute` 按
+/// `barrierDismissible` 拦下。
 Future<T?> showWorkstationGeneralDialog<T>({
   required BuildContext context,
   required RoutePageBuilder pageBuilder,
@@ -138,13 +153,18 @@ Future<T?> showWorkstationGeneralDialog<T>({
           );
       return Stack(
         children: [
-          IgnorePointer(
-            child: FadeTransition(
-              opacity: animation,
-              child: WorkstationBlurScrim(color: barrierColor),
-            ),
+          // 淡入与命中透明都收进 scrim 内部，Positioned 才能继续做 Stack
+          // 的直接子级（见 [WorkstationBlurScrim.animation]）。
+          WorkstationBlurScrim(color: barrierColor, animation: animation),
+          // 面板子树补一条模态语义：这里的内容由调用方自绘（右缘抽屉、
+          // 底部锚定面板、侧滑导航），不经过 [WorkstationDialogFrame]，
+          // 因此拿不到弹窗那层的 dialog role。
+          Semantics(
+            scopesRoute: true,
+            explicitChildNodes: true,
+            role: SemanticsRole.dialog,
+            child: panel,
           ),
-          panel,
         ],
       );
     },
@@ -543,28 +563,29 @@ class WorkstationDialogFrame extends StatelessWidget {
     );
     // 移动面板形态：面板容器已提供底色、圆角与把手，框架退化为无边框
     // 分区结构；[width] 与直角边框仅桌面居中弹窗使用。
-    if (WorkstationSheetAmbient.isActive(context)) {
-      return Semantics(
-        scopesRoute: true,
-        explicitChildNodes: true,
-        child: Material(color: Colors.transparent, child: column),
-      );
-    }
+    final surface =
+        WorkstationSheetAmbient.isActive(context)
+            ? Material(color: Colors.transparent, child: column)
+            : Material(
+              color: scheme.surfaceContainer,
+              child: Container(
+                width: width,
+                // 上限跟随请求宽度：宽详情弹窗（如 620）在小屏由父级约束自然收窄。
+                constraints: BoxConstraints(maxWidth: width),
+                decoration: BoxDecoration(
+                  border: Border.all(color: scheme.outline, width: 1),
+                ),
+                child: column,
+              ),
+            );
     return Semantics(
       scopesRoute: true,
       explicitChildNodes: true,
-      child: Material(
-        color: scheme.surfaceContainer,
-        child: Container(
-          width: width,
-          // 上限跟随请求宽度：宽详情弹窗（如 620）在小屏由父级约束自然收窄。
-          constraints: BoxConstraints(maxWidth: width),
-          decoration: BoxDecoration(
-            border: Border.all(color: scheme.outline, width: 1),
-          ),
-          child: column,
-        ),
-      ),
+      // 框架不会给自绘弹窗补模态语义：读屏的“对话框”播报与 Web 侧
+      // aria-modal 均取自该 role，而 showWorkstationDestructiveConfirm
+      // 的文档已承诺 alertdialog 语义。
+      role: destructive ? SemanticsRole.alertDialog : SemanticsRole.dialog,
+      child: surface,
     );
   }
 }

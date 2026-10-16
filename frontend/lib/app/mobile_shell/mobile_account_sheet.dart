@@ -13,6 +13,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_controller.d
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 顶栏账户头像：点击打开承载低频系统能力的账户面板。
 class MobileAccountAvatar extends ConsumerWidget {
@@ -110,7 +111,8 @@ Future<void> showOmniAccountSheet(BuildContext ownerContext) {
         MotionToken.prefersReduced(ownerContext)
             ? AnimationStyle.noAnimation
             : null,
-    builder: (context) => const _OmniAccountSheet(),
+    builder:
+        (context) => MobileSheetSemantics(child: const _OmniAccountSheet()),
   );
 }
 

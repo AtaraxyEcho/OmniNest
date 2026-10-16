@@ -8,7 +8,7 @@ import 'package:omninest/core/widgets/omni_icons.dart';
 /// living-glass 空态族：描边图标 + 衬线标题 + 引导句 + 可选行动。
 ///
 /// 移动壳层各空间（Library/Files/搜索）共用；标题用 Instrument Serif，
-/// 描述与行动用环境色阶，区别于工位 MobileInlineState。
+/// 描述与行动用环境色阶。
 class EnvEmptyState extends StatelessWidget {
   const EnvEmptyState({
     required this.icon,
@@ -82,14 +82,15 @@ class EnvEmptyState extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: context.env.inkMuted,
-                  fontSize: 9, // ignore: font_size_whitelist
+                  // 空态引导句是整句中文，取句子档；样例的 9px 只服务拉丁短标签。
+                  fontSize: AppTypography.labelSmall,
                   height: 1.55,
                 ),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 13),
-              // 原型是酸绿实底小钮（9px 深墨字），不是纯文本链接。
+              // 原型是酸绿实底小钮，不是纯文本链接；钮上文案按短标签下限取。
               MobilePressable(
                 semanticLabel: actionLabel!,
                 onTap: onAction,
@@ -104,7 +105,7 @@ class EnvEmptyState extends StatelessWidget {
                   child: Text(
                     actionLabel!,
                     style: TextStyle(
-                      fontSize: 9, // ignore: font_size_whitelist
+                      fontSize: AppTypography.labelMicro,
                       fontWeight: FontWeight.w700,
                       color: context.env.actionFillInk,
                     ),

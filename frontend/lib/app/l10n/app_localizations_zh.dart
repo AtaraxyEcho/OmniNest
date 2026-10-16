@@ -1191,6 +1191,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesOfflineEmptyMessage => '用「新建离线下载」粘贴 HTTP、BT 或磁力链接开始。';
 
   @override
+  String get filesOfflineFilterEmpty => '该状态下没有任务';
+
+  @override
   String get filesExternalEmptyTitle => '还没有挂载存储';
 
   @override
@@ -1639,6 +1642,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesCameraRecordVideo => '录像上传';
+
+  @override
+  String filesCameraCaptureFailed(Object error) {
+    return '无法使用相机：$error';
+  }
 
   @override
   String get filesUploadFile => '上传文件';
@@ -3651,6 +3659,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String adminDeleteUserConfirmMessage(Object name) {
     return '永久删除 $name。仅未持有任何内容归属的空账户可删除；请键入该用户名确认。';
+  }
+
+  @override
+  String get adminResetTwoFactor => '重置两步验证';
+
+  @override
+  String adminResetTwoFactorConfirmMessage(Object name) {
+    return '清除 $name 的动态口令秘钥与备份码，并退出其全部会话。用于认证器丢失或凭据加密密钥轮换后的恢复；该用户之后可用密码登录并重新开启两步验证。';
   }
 
   @override
@@ -5688,6 +5704,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNavManage => '管理';
 
   @override
+  String get readerAdminModuleTitle => '阅读管理';
+
+  @override
+  String get readerAdminModuleSubtitle => '导入、待导入文件与元数据管理';
+
+  @override
+  String get toolsReaderAdminDetail => '导入队列与元数据管理';
+
+  @override
   String get readerShelfEmpty => '书架为空，请在书库中添加书籍。';
 
   @override
@@ -5845,6 +5870,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerVolumeKeyPaging => '音量键翻页';
+
+  @override
+  String get readerFollowBookTypesetting => '跟随原书排版';
+
+  @override
+  String get readerFollowBookTypesettingHint =>
+      '打开后采用这本书的首行缩进、段间留白与对齐方式；字号、字体与行距始终按你的设置。';
 
   @override
   String get readerPreviousPage => '上一页';
@@ -6139,6 +6171,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String readerTotalChapters(Object count) {
     return '共 $count 章';
   }
+
+  @override
+  String readerChapterPosition(int current, int total) {
+    return '第 $current/$total 章';
+  }
+
+  @override
+  String get readerNowReading => '正在阅读';
 
   @override
   String get readerDeleteCollection => '删除合集';
@@ -6702,6 +6742,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerAnnotations => '批注';
+
+  @override
+  String readerAnnotationCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '共 $count 条批注',
+      zero: '暂无批注',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get readerNoAnnotations => '暂无批注';
@@ -8930,6 +8981,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicLyricsPick => '选择歌词文件（LRC / TXT / SRT / VTT）';
+
+  @override
+  String get musicCoverReadFailed => '无法读取所选封面图片';
+
+  @override
+  String get musicLyricsReadFailed => '无法读取所选歌词文件';
 
   @override
   String musicAddToPlaylistSuccess(Object name) {
@@ -11440,19 +11497,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolsEntryLabel => '工作区工具';
 
   @override
-  String get toolsEntrySub => '全部路由与工具页';
+  String get toolsEntrySub => '低频管理入口';
 
   @override
   String get toolsTitle => '工作区工具';
 
   @override
-  String get toolsSubtitle => '每条路由都在熟悉的地方';
+  String get toolsSubtitle => '模块内没有一级入口的页面，都收在这里';
 
   @override
-  String get toolsIntroEyebrow => '完整清单';
+  String get toolsIntroEyebrow => '补充清单';
 
   @override
-  String get toolsIntroTitle => '每样东西都有一个家。';
+  String get toolsIntroTitle => '不常用的入口，收在一处。';
 
   @override
   String get toolsIntroBody => '在不离开这套界面语言的前提下，管理文件、影视、音乐与这台服务器。';
@@ -11743,6 +11800,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookDetailInLibrary => '在你的书库';
+
+  @override
+  String get bookDetailHeader => '书籍详情';
+
+  @override
+  String get readerDetailActionMetadataDesc => '标题、作者、封面与简介';
+
+  @override
+  String get readerDetailActionReparseDesc => '重解封面、元数据与章节';
 
   @override
   String bookDetailMeta(String type, int year) {

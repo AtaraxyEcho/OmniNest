@@ -1,8 +1,9 @@
 /* 引擎首帧前的底色：与移动端启动屏/舞台底色一致，避免冷启动闪白。
-   取设计基准 .boot-screen 的 #09100f（应用内舞台为 #0b1110）。 */
+   取设计基准 .boot-screen 的 #09100f（应用内舞台为 #0b1110）。
+   浅色极性由 index.html 的首帧脚本改写 --omninest-boot-bg，缺省仍保持深色。 */
 html, body {
   margin: 0;
   padding: 0;
-  background-color: #09100f;
+  background-color: var(--omninest-boot-bg, #09100f);
   height: 100%;
 }

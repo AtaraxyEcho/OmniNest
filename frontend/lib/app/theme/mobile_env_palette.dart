@@ -4,8 +4,14 @@ import 'package:flutter/material.dart';
 ///
 /// [MobileEnvPalette.dark] 逐值等于 `MobileEnvColors`（环境基准不变，迁移期两处并存）；
 /// [MobileEnvPalette.light] 是同一批角色的纸面同位物，一手数值取自
-/// `UI Design/优化浅色模式适配/src/light-theme.css` 的**最终生效层**（1-982 机械反相段
-/// 与 986-1064 语义段的后者）。
+/// `UI Design/Refine Light Mode Design/src/light-theme.css` 的**最终生效层**。
+///
+/// 该文件按层叠加，后写覆盖前写，读中段会读到已被推翻的值：`--surface` 在
+/// 986-1090 的语义段是 `rgba(250,252,246,.82)` 且 `.bottom-nav`/`.mini-player`/
+/// `.glass-sheet` 一度归入该组，但 1493-1506 又把这三族整体改写成不透明纸面并
+/// 显式 `backdrop-filter: none`。底栏、迷你播放条与各 sheet 的浅态因此是实底，
+/// 只有 `.focus-feature`/`.music-hero` 停在 90% 半透。取值一律以
+/// `tool/light_mode_sample_values.txt` 为准，不要按中段规则反推。
 ///
 /// 取值规则只有两条，避免再自创换算：
 /// ① 样例在最终生效层给了字面量的角色一律照抄（含 α 与色族——样例自己混用两族
@@ -50,6 +56,8 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     required this.accentInk,
     required this.onAccent,
     required this.onAccentDeep,
+    required this.statusWarning,
+    required this.statusDanger,
     required this.segmentBg,
     required this.actionFill,
     required this.actionFillInk,
@@ -161,6 +169,17 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
   final Color accentInk;
   final Color onAccent;
   final Color onAccentDeep;
+
+  /// 状态丸/条件条的警示前景。样例把浅态这两档写成了与暗态**完全相同**的字面量
+  /// （`light-theme.css:877-878`，机械反相段，语义段未再覆盖），压在纸面上实测只有
+  /// 1.44-1.58:1，等于看不见。这里按 `inkMuted`、`groupLabelInk` 的同一先例做
+  /// **有意的偏离**：浅态取 #7a5200（丸自身 12% 琥珀底上 5.73，桌面 token
+  /// `warning #9A6700` 只有 4.03 不过线），暗态维持样例值（实测 8.81-10.92）。
+  final Color statusWarning;
+
+  /// 状态丸/条件条的危险前景。浅态取 #ba1a1a，与 `AppThemePalette.light.error`
+  /// 同一档（丸自身 12% 红底上 5.35），暗态维持样例值（实测 6.71-8.32）。
+  final Color statusDanger;
   final Color segmentBg;
 
   /// 主行动钮的填充与字色。样例的 CTA 族（`.login-enter`、`.accent-square-btn`、
@@ -241,10 +260,11 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
   final Color artworkGlow;
   final Color navGlass;
 
-  /// 迷你播放条底：与底栏同为玻璃面（样例两处的 `--surface` 同一档）。
+  /// 迷你播放条底：浅态与底栏同为不透明纸面 `#f2f5ee` 且样例显式
+  /// `backdrop-filter: none`（见类注释的分层读法），暗态才与底栏同档玻璃。
   final Color miniPlayer;
 
-  /// 贴底抽屉与覆盖层的底（样例 `--surface` 在浅态是半透明白，暗态是深色实底）。
+  /// 贴底抽屉与覆盖层的底：浅态是样例 1504 行的不透明 `#f1f4ed`，暗态是深色实底。
   final Color sheetSolid;
 
   /// 贴底抽屉往上抛的那团阴影：暗态是 54% 黑，浅态换成极淡的绿相阴影，
@@ -315,6 +335,8 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     accentInk: Color(0xFFD5F17D),
     onAccent: Color(0xFF172014),
     onAccentDeep: Color(0xFF151C13),
+    statusWarning: Color(0xFFE9BD7C),
+    statusDanger: Color(0xFFE69696),
     segmentBg: Color(0xB8141C1A),
     actionFill: Color(0xFFD5F17D),
     actionFillInk: Color(0xFF172014),
@@ -417,6 +439,9 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     // `.focus-play`、`.login-enter` 的标签字面量是 #1a1d1b。
     onAccent: Color(0xFF17231E),
     onAccentDeep: Color(0xFF17231E),
+    // 样例浅态这两档与暗态同值，纸面上 1.44-1.58:1；此处为记账过的偏离。
+    statusWarning: Color(0xFF7A5200),
+    statusDanger: Color(0xFFBA1A1A),
     segmentBg: Color(0x121F3E32),
     actionFill: Color(0xFF1E5949),
     actionFillInk: Color(0xFFF8FAEF),
@@ -437,8 +462,16 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     posterPlayFg: Color(0xFF17231E),
     searchOverlayBg: Color(0xFFEDF1E9),
     modalScrim: Color(0x47192821),
-    // --surface 在语义段是 rgba(255,255,255,.82)：底栏、迷你播放条、分段与各
-    // sheet 共用同一档玻璃面，模糊层保留（样例仍写着 backdrop-filter）。
+    // 反查结论（2026-10-14）：**没有冲突，先前那条"疑似取在中段"的怀疑是误读。**
+    // 本角色取的是 CSS 令牌 `--surface`（`light-theme.css:1073`
+    // = rgba(250,252,246,.82)），`roles.json` 里标 `.glass-sheet` 只表示"该令牌
+    // 由这族元素消费"；而 `sheetSolid` 读的是 `.glass-sheet` 的**最终背景声明**
+    //（`1499-1506` 把抽屉族整体改成不透明 #f1f4ed）。一个读变量、一个读计算后
+    // 的背景，不是同一条声明，所以两者可以并存，本值也不是被推翻的旧值。
+    // 消费面：门户首页一处 + reader/files 重绑的 surfaceContainerHigh。
+    // 另记：`.focus-feature`/`.music-hero` 的浅态最终值是 rgba(244,247,240,.9)
+    //（`1144-1156`，最后一层没动它们），若将来要给"半透浮起卡"单开角色，
+    // 用那个值，别复用本令牌。
     surfaceGlass: Color(0xD1FAFCF6),
     surfaceRaised: Color(0x8FF8FAF4),
     surfaceTint: Color(0x0D243E33),
@@ -454,8 +487,11 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     sheetGlow: Color(0x1F2D4639),
     focusGradientStart: Color(0xEBECEFE6),
     focusGradientEnd: Color(0x7DECEFE6),
+    // 浅档原先两端同值 14%，壁纸带到尾部不收敛，图片直接铺到时间行上。
+    // 收口到面板纸面（样例 .glass-sheet 的 #f1f4ed，即 light.sheetSolid），
+    // 与暗档那条 5%→全不透明的尾 veil 同构。
     sceneVeilTop: Color(0x240F2119),
-    sceneVeilBottom: Color(0x240F2119),
+    sceneVeilBottom: Color(0xFFF1F4ED),
     heroGlow: Color(0x75FFFFFF),
     featureHeroStart: Color(0x1AD5F17D),
     featureHeroEnd: Color(0x0A1A1D1B),
@@ -469,10 +505,16 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     bookMiniBg: Color(0xFFD8CFB5),
     bookMiniFg: Color(0xFF17231E),
     bookMiniSpine: Color(0xFF948F7D),
-    folderGlyph: Color(0xFF91BAF2),
+    // 这三档是**功能前景**，不是插画色：暗档那批粉彩被逐字抄进浅实例后，
+    // 压在纸面上只有 1.38-1.88:1，Files 首页的存储云图标、分区入口图标与
+    // 存储进度条在浅色模式下几乎看不见。按保持色相、压明度重推到纸面 ≥4.5，
+    // 并保留样例「进度填充比图标深一档」的关系。色舱底沿用暗档的 16-17% wash。
+    // folderGlyph 的纸面值同理，但它当前唯一的落点在首页摄影面上，
+    // 由 lightPhotographic 覆盖回粉彩，见那张表的注释。
+    folderGlyph: Color(0xFF175EBF),
     folderGlyphBg: Color(0x2B4C84D2),
-    storageProgressFill: Color(0xFF8FB6EC),
-    storageCloud: Color(0xFFB9D2FF),
+    storageProgressFill: Color(0xFF0054EC),
+    storageCloud: Color(0xFF175EBF),
     storageCloudBg: Color(0x295D8EE0),
     readerCoverBg: Color(0xFFD5CCAD),
     readerCoverSpine: Color(0xFF827D6C),
@@ -512,6 +554,8 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     Color? accentInk,
     Color? onAccent,
     Color? onAccentDeep,
+    Color? statusWarning,
+    Color? statusDanger,
     Color? segmentBg,
     Color? actionFill,
     Color? actionFillInk,
@@ -597,6 +641,8 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
       accentInk: accentInk ?? this.accentInk,
       onAccent: onAccent ?? this.onAccent,
       onAccentDeep: onAccentDeep ?? this.onAccentDeep,
+      statusWarning: statusWarning ?? this.statusWarning,
+      statusDanger: statusDanger ?? this.statusDanger,
       segmentBg: segmentBg ?? this.segmentBg,
       actionFill: actionFill ?? this.actionFill,
       actionFillInk: actionFillInk ?? this.actionFillInk,
@@ -693,6 +739,13 @@ class MobileEnvPalette extends ThemeExtension<MobileEnvPalette> {
     cardGlow: Color(0x24050D0A),
     actionFill: Color(0xFFDCE9AE),
     actionFillInk: Color(0xFF18382D),
+    // 摄影档整棵子树压在深玻璃上，警示/危险必须回到暗档那两笔浅字；
+    // 沿用浅态的 #7a5200/#ba1a1a 会在 rgba(13,28,22,.74) 上掉到 2 以下。
+    statusWarning: Color(0xFFE9BD7C),
+    statusDanger: Color(0xFFE69696),
+    // 同一理由：文件夹色舱图标的唯一落点是首页「最近条目」卡（摄影面子树），
+    // 纸面推出来的 #175EBF 压在 17% 蓝舱底上只有 2.3:1，必须留暗档粉彩（7.1:1）。
+    folderGlyph: Color(0xFF91BAF2),
     heroGlow: Color(0x57050D0A),
   );
 

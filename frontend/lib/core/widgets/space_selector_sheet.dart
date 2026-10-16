@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 空间选择结果。
 enum SpaceSelection { personal, shared }
@@ -26,7 +27,8 @@ Future<SpaceSelection?> showSpaceSelectorSheet(
     return showModalBottomSheet<SpaceSelection>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _SpaceSelectorContent(),
+      builder:
+          (_) => MobileSheetSemantics(child: const _SpaceSelectorContent()),
     );
   }
   return showWorkstationDialog<SpaceSelection>(

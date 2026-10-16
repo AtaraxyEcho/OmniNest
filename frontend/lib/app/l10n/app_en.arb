@@ -425,6 +425,7 @@
   "filesSharedWithMeEmptyMessage": "Files others share with your account are listed here and open straight into preview.",
   "filesOfflineEmptyTitle": "No offline download tasks",
   "filesOfflineEmptyMessage": "Use New offline download and paste an HTTP, BT or magnet link to start.",
+  "filesOfflineFilterEmpty": "No tasks in this state",
   "filesExternalEmptyTitle": "No storage mounted",
   "filesExternalEmptyMessage": "Add a OneDrive, WebDAV or other source to browse and import files here.",
   "filesExternalCredentialsMissing": "Credentials missing",
@@ -603,6 +604,12 @@
   "filesRecycleBinEmpty": "Recycle bin is empty",
   "filesCameraTakePhoto": "Take Photo & Upload",
   "filesCameraRecordVideo": "Record Video & Upload",
+  "filesCameraCaptureFailed": "Camera unavailable: {error}",
+  "@filesCameraCaptureFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "filesUploadFile": "Upload File",
   "@filesLoadMore": {
     "placeholders": {
@@ -1589,6 +1596,8 @@
   "adminUserEnableConfirmMessage": "Enable {name}? The account will be allowed to sign in again.",
   "adminDeleteUser": "Delete user",
   "adminDeleteUserConfirmMessage": "Permanently delete {name}. Only empty accounts with no content ownership can be deleted; type the username to confirm.",
+  "adminResetTwoFactor": "Reset two-factor",
+  "adminResetTwoFactorConfirmMessage": "Clear {name}'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.",
   "adminEditRolesHint": "Assign one or more system roles. Changing roles immediately updates the user's permissions and visible menus.",
   "adminCreateRole": "New custom role",
   "adminRoleCode": "Role code",
@@ -2478,6 +2487,9 @@
   "readerNavLibrary": "Library",
   "readerNavStats": "Stats",
   "readerNavManage": "Manage",
+  "readerAdminModuleTitle": "Reader management",
+  "readerAdminModuleSubtitle": "Imports, pending files and metadata",
+  "toolsReaderAdminDetail": "Import queue and metadata management",
   "readerShelfEmpty": "Your shelf is empty. Add books from the library.",
   "readerShelfEmptyHint": "Browse the library and add books to your shelf.",
   "readerStatsActivity": "Reading Activity",
@@ -2531,6 +2543,8 @@
   "readerTheme": "Theme",
   "readerImmersiveMode": "Immersive mode",
   "readerVolumeKeyPaging": "Volume keys turn pages",
+  "readerFollowBookTypesetting": "Follow the book's typography",
+  "readerFollowBookTypesettingHint": "Takes this book's first-line indent, paragraph spacing and alignment. Font size, typeface and line spacing always follow your settings.",
   "readerPreviousPage": "Previous page",
   "readerNextPage": "Next page",
   "readerPreviousChapter": "Previous chapter",
@@ -2711,6 +2725,18 @@
       "count": {}
     }
   },
+  "readerChapterPosition": "Ch. {current}/{total}",
+  "@readerChapterPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerNowReading": "Reading now",
   "readerDeleteCollection": "Delete Collection",
   "readerCollectionCount": "{count} items",
   "@readerCollectionCount": {
@@ -3046,6 +3072,14 @@
   "readerRemoveAnnotation": "Remove annotation",
   "readerCopy": "Copy",
   "readerAnnotations": "Annotations",
+  "readerAnnotationCount": "{count, plural, =0{No annotations} other{{count} annotations}}",
+  "@readerAnnotationCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "readerNoAnnotations": "No annotations yet",
   "readerEditAnnotation": "Edit annotation",
   "readerDeleteAnnotation": "Delete annotation",
@@ -4051,6 +4085,8 @@
   "musicLyricsClear": "Clear Lyrics",
   "musicLyricsFile": "Lyrics File",
   "musicLyricsPick": "Select Lyrics File (LRC / TXT / SRT / VTT)",
+  "musicCoverReadFailed": "Could not read the selected cover image",
+  "musicLyricsReadFailed": "Could not read the selected lyrics file",
   "musicAddToPlaylistSuccess": "Added to \"{name}\"",
   "@musicAddToPlaylistSuccess": {
     "placeholders": {
@@ -5258,11 +5294,11 @@
   "mobileSpaceReaderSubtitle": "A quieter space",
   "mobileSpaceFilesSubtitle": "Your digital workspace",
   "toolsEntryLabel": "Workspace tools",
-  "toolsEntrySub": "All routes and tool pages",
+  "toolsEntrySub": "Low-frequency management pages",
   "toolsTitle": "Workspace tools",
-  "toolsSubtitle": "Every route, in one calm place",
-  "toolsIntroEyebrow": "Complete list",
-  "toolsIntroTitle": "Everything has a home.",
+  "toolsSubtitle": "Pages that have no first-level entry inside their module",
+  "toolsIntroEyebrow": "Supplementary list",
+  "toolsIntroTitle": "The less-used entries, in one place.",
   "toolsIntroBody":
       "Manage files, films, music and this server without leaving the interface you already know.",
   "toolsGroupFiles": "Files",
@@ -5371,6 +5407,9 @@
   "weatherDayTomorrow": "Tomorrow",
   "weatherSheetEnvironmentNote": "Your visual environment is following local light and weather.",
   "bookDetailInLibrary": "IN YOUR LIBRARY",
+  "bookDetailHeader": "Book details",
+  "readerDetailActionMetadataDesc": "Title, author, cover and summary",
+  "readerDetailActionReparseDesc": "Rebuild cover, metadata and chapters",
   "bookDetailMeta": "{type} · added {year}",
   "@bookDetailMeta": {"placeholders": {"type": {"type": "String"}, "year": {"type": "int"}}},
   "bookDetailContinue": "Continue reading",

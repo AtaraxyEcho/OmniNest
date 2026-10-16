@@ -112,6 +112,12 @@ abstract final class OmniIcons {
     paths: ['m18 5-10 7 10 7zM6 5v14'],
   );
   static const OmniIconsData chevron = OmniIconsData(paths: ['m9 5 7 7-7 7']);
+
+  /// 样例返回钮用的是左尖括号（原形 `m15 18-6-6 6-6`），不是带杆的箭头；
+  /// 这里按本仓 24 格与 [chevron] 镜像同尺寸。
+  static const OmniIconsData chevronLeft = OmniIconsData(
+    paths: ['m15 5-7 7 7 7'],
+  );
   static const OmniIconsData more = OmniIconsData(
     circles: [
       OmniIconCircle(5, 12, 1),

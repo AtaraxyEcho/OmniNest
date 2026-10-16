@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 移动端页面的半透明内容表面。
 class MobilePageSurface extends StatelessWidget {
@@ -60,84 +61,6 @@ class MobilePageSurface extends StatelessWidget {
 /// polarity-stable：危险红底上的白字两极性同值（红底白字 4.35:1），不随极性翻转。
 const Color _dangerForeground = Color(0xFFFFFFFF);
 
-/// 移动端区块标题及可选尾部操作。
-class MobileSectionHeader extends StatelessWidget {
-  const MobileSectionHeader({
-    required this.title,
-    this.subtitle,
-    this.action,
-    super.key,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: context.mobileColors.textPrimary,
-                  fontSize: AppTypography.titleLarge,
-                  fontWeight: FontWeight.w700,
-                  height: 1.25,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.mobileColors.textSecondary,
-                    fontSize: AppTypography.bodySmall,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (action != null) ...[const SizedBox(width: 12), action!],
-      ],
-    );
-  }
-}
-
-/// 移动端模块子页面使用的统一返回控件。
-class MobileSubpageBackButton extends StatelessWidget {
-  const MobileSubpageBackButton({required this.onPressed, super.key});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: MobileLayoutTokens.minimumTarget,
-      child: IconButton(
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        onPressed: onPressed,
-        icon: Icon(Icons.arrow_back_rounded, size: 22),
-        style: IconButton.styleFrom(
-          foregroundColor: context.mobileColors.textPrimary,
-          minimumSize: const Size.square(MobileLayoutTokens.minimumTarget),
-        ),
-      ),
-    );
-  }
-}
-
 /// 移动端模块内的一级分段导航。
 class MobileSegmentedControl<T> extends StatelessWidget {
   const MobileSegmentedControl({
@@ -145,6 +68,7 @@ class MobileSegmentedControl<T> extends StatelessWidget {
     required this.selected,
     required this.labelBuilder,
     required this.onSelected,
+    this.shrinkToFit = false,
     super.key,
   });
 
@@ -153,45 +77,84 @@ class MobileSegmentedControl<T> extends StatelessWidget {
   final String Function(T value) labelBuilder;
   final ValueChanged<T> onSelected;
 
+  /// 放不下时转等分档：段数多到样例的 `max-content + min-width:66` 超出内容带，
+  /// 就让六段等分吃掉整条内容带，全部可见而不靠横向滚动。
+  ///
+  /// 这是对样例 `.segmented` 的记账式偏离（照片页裁定口径）：等分档下段宽
+  /// (390 - 2×20 - 2×4 - 5×4) / 6 ≈ 53.7dp，低于样例的 66；只在按标签实测
+  /// 装不下的时候才生效，段数少时仍是样例的自适应宽度。
+  final bool shrinkToFit;
+
   @override
   Widget build(BuildContext context) {
     // 样例 .segmented：紧凑胶囊容器（r16·内衬 4·白 9% 描边），选中段是
     // 酸绿实心 + 墨绿深字 + 投影的单层滑块，切换时滑过去而不是就地换色。
-    // 段数超出可用宽度时横向滚动：样例在 390 宽下让六档分段溢出滚动，
-    // 整体等比缩放会把按钮缩到小于其它模块（照片页实测 66×40 → 54×33）。
+    // 段数超出可用宽度时默认横向滚动（样例同口径）；照片页六段实测要 431dp，
+    // 而内容带只有 350dp，于是按 shrinkToFit 转等分档。
     final selectedIndex = values.indexOf(selected);
-    return Semantics(
-      container: true,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.env.segmentBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.env.segmentBorder),
-          ),
-          child: MobileSlidingSegmentRow(
-            labels: [for (final value in values) labelBuilder(value)],
-            selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-            onTap: (index) => onSelected(values[index]),
-            activeInk: context.env.segmentActiveInk,
-            idleInk: context.env.inkMuted,
-            // 样例 `.segmented button.active`：暗态黑 18%、浅态
-            // rgba(26,29,27,.06) 的投影都取自 pillGlow，随极性换档。
-            pill: BoxDecoration(
-              color: context.env.segmentActiveBg,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: context.env.pillGlow,
-                  offset: const Offset(0, 3),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
+    final labels = [for (final value in values) labelBuilder(value)];
+
+    Widget capsule(double? equalSegmentWidth) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.env.segmentBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.env.segmentBorder),
+        ),
+        child: MobileSlidingSegmentRow(
+          labels: labels,
+          selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+          onTap: (index) => onSelected(values[index]),
+          activeInk: context.env.segmentActiveInk,
+          idleInk: context.env.inkMuted,
+          equalSegmentWidth: equalSegmentWidth,
+          // 样例 `.segmented button.active`：暗态黑 18%、浅态
+          // rgba(26,29,27,.06) 的投影都取自 pillGlow，随极性换档。
+          pill: BoxDecoration(
+            color: context.env.segmentActiveBg,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: context.env.pillGlow,
+                offset: const Offset(0, 3),
+                blurRadius: 10,
+              ),
+            ],
           ),
         ),
-      ),
+      );
+    }
+
+    Widget scrollable(double? equalSegmentWidth) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: capsule(equalSegmentWidth),
+      );
+    }
+
+    return Semantics(
+      container: true,
+      child:
+          shrinkToFit
+              ? LayoutBuilder(
+                builder: (context, constraints) {
+                  if (!constraints.hasBoundedWidth) {
+                    return scrollable(null);
+                  }
+                  final natural = MobileSlidingSegmentRow.naturalExtent(
+                    context: context,
+                    labels: labels,
+                  );
+                  if (natural <= constraints.maxWidth) {
+                    return scrollable(null);
+                  }
+                  final chrome = 4 * 2 + 4 * (labels.length - 1);
+                  return scrollable(
+                    (constraints.maxWidth - chrome) / labels.length,
+                  );
+                },
+              )
+              : scrollable(null),
     );
   }
 }
@@ -251,9 +214,16 @@ class _MobilePressableState extends State<MobilePressable> {
   }
 }
 
-/// 移动端加载占位：保留请求尺寸的空盒 + 居中指示器。
+/// 移动端加载占位规则（本文件两个件共同构成）：
 ///
-/// 主流方案用指示器替代骨架块，避免占位与最终内容形状错位。
+/// - 一屏之内的**动画指示至多一处**：整页/整区首屏用 [AppLoading] 或
+///   [MobileLoadingLine]，页面内某个子块在已有内容旁边等数据时用
+///   [MobileSkeletonBlock]（静态，不产生第二个动画）。
+/// - [MobileSkeletonBlock] 早期版本在盒内塞一个 24px 转圈：同屏放两块就是
+///   两个转圈，放进 16px 高的槽位还会溢出，故改为静态占位。
+///
+/// 静态占位块：等一块内容就绪时保持版面稳定，不模拟最终形状（只是一条
+/// 圆角弱底），因此不会与真实内容形状错位。
 class MobileSkeletonBlock extends StatelessWidget {
   const MobileSkeletonBlock({
     required this.height,
@@ -266,61 +236,44 @@ class MobileSkeletonBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return SizedBox(
       width: width,
       height: height,
-      child: const Center(
-        child: SizedBox.square(
-          dimension: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: onSurface.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: onSurface.withValues(alpha: 0.05)),
         ),
       ),
     );
   }
 }
 
-/// 移动端列表内的空状态或错误状态。
-class MobileInlineState extends StatelessWidget {
-  const MobileInlineState({
-    required this.icon,
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-    this.error = false,
-    super.key,
-  });
+/// 区级不定量细进度线：一屏只放一处，用于"整区正在取数、但已有内容要保留"
+/// 的场景（首屏整页加载仍用 [AppLoading] 的居中环）。
+class MobileLoadingLine extends StatelessWidget {
+  const MobileLoadingLine({this.top = false, super.key});
 
-  final IconData icon;
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  final bool error;
+  /// true 时贴区域顶部（不带上下留白），否则自带 12 上下间距。
+  final bool top;
 
   @override
   Widget build(BuildContext context) {
-    final accent =
-        error ? context.mobileColors.danger : context.mobileColors.musicAccent;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: accent, size: 28),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: context.mobileColors.textSecondary,
-              fontSize: AppTypography.bodyLarge,
-              height: 1.45,
-            ),
+      padding: EdgeInsets.symmetric(vertical: top ? 0 : 12, horizontal: 2),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: SizedBox(
+          height: 2,
+          child: LinearProgressIndicator(
+            minHeight: 2,
+            backgroundColor: scheme.onSurface.withValues(alpha: 0.07),
+            valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
           ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 16),
-            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -347,7 +300,7 @@ class MobileSettingsGroup extends StatelessWidget {
           child: Text(
             title,
             style: TextStyle(
-              color: context.mobileColors.textSecondary,
+              color: context.env.inkMuted,
               fontSize: AppTypography.bodyMedium,
               fontWeight: FontWeight.w700,
               height: 1.3,
@@ -401,10 +354,7 @@ class MobileSettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground =
-        destructive
-            ? context.mobileColors.danger
-            : context.mobileColors.textPrimary;
+    final foreground = destructive ? context.env.statusDanger : context.env.ink;
     return Semantics(
       button: onTap != null,
       label: title,
@@ -461,7 +411,7 @@ class MobileSettingsTile extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: context.mobileColors.textSecondary,
+                              color: context.env.inkMuted,
                               fontSize: AppTypography.bodySmall,
                               height: 1.35,
                             ),
@@ -477,7 +427,7 @@ class MobileSettingsTile extends StatelessWidget {
                           : Icon(
                             Icons.chevron_right_rounded,
                             size: 20,
-                            color: context.mobileColors.textSecondary,
+                            color: context.env.inkMuted,
                           )),
                 ],
               ),
@@ -509,28 +459,35 @@ class MobileEnvBlur extends StatelessWidget {
 }
 
 /// 模块全屏页的玻璃圆动作钮（样例 .icon-button：48px 圆、深绿玻璃底、
-/// 白 10% 细描边）。
+/// 白 10% 细描边）。图标可给 Material [IconData] 或样例同源矢量
+/// [OmniIconsData]，二者取其一。
 class MobileGlassIconButton extends StatelessWidget {
   const MobileGlassIconButton({
     required this.tooltip,
-    required this.icon,
+    this.icon,
+    this.vector,
     required this.onPressed,
     super.key,
-  });
+  }) : assert(icon != null || vector != null, '图标二选一');
 
   final String tooltip;
-  final IconData icon;
+  final IconData? icon;
+  final OmniIconsData? vector;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final glyph =
+        vector != null
+            ? OmniIcon(icon: vector!, size: 20, color: context.env.ink)
+            : Icon(icon, size: 20, color: context.env.ink);
     return SizedBox.square(
       dimension: 48,
       child: Tooltip(
         message: tooltip,
         child: IconButton(
           onPressed: onPressed,
-          icon: Icon(icon, size: 20, color: context.env.ink),
+          icon: glyph,
           style: IconButton.styleFrom(
             backgroundColor: context.env.iconButtonGlass,
             foregroundColor: context.env.ink,
@@ -608,7 +565,7 @@ class MobileModuleHeader extends StatelessWidget {
                 tooltip:
                     backTooltip ??
                     MaterialLocalizations.of(context).backButtonTooltip,
-                icon: Icons.arrow_back_rounded,
+                vector: OmniIcons.chevronLeft,
                 onPressed: onBack,
               ),
               const SizedBox(width: 8),
@@ -642,6 +599,9 @@ class MobileModuleHeader extends StatelessWidget {
                 const SizedBox(width: 8),
                 action,
               ],
+              // 样例页头是 [48 返回][中列][48 动作] 三列网格；无动作的页面
+              // 缺右列会把中列整体右移 28px，补等宽占位保持标题居中。
+              if (actions.isEmpty) const SizedBox(width: 48),
             ],
           ),
         ),
@@ -672,86 +632,88 @@ Future<bool> showMobileConfirmSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (sheetContext) {
-      return SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color:
-                      destructive
-                          ? const Color(0x1FDA5050)
-                          : context.env.accentInk.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(17),
-                ),
-                child: OmniIcon(
-                  icon: destructive ? OmniIcons.close : OmniIcons.check,
-                  size: 22,
-                  color:
-                      destructive
-                          ? const Color(0xFFE69696)
-                          : context.env.accentInk,
-                ),
-              ),
-              const SizedBox(height: 13),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTypography.serifFamily,
-                  fontFamilyFallback: AppTypography.serifFamilyFallback,
-                  // ignore: font_size_whitelist
-                  fontSize: 23,
-                  height: 1.0,
-                  fontWeight: FontWeight.w400,
-                  color: context.env.ink,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 9, // ignore: font_size_whitelist
-                  height: 1.55,
-                  color: context.env.inkMuted,
-                ),
-              ),
-              const SizedBox(height: 17),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MobileConfirmButton(
-                      label: cancelLabel ?? l10n.cancelButtonLabel,
-                      background: context.env.line07,
-                      foreground: context.env.ink,
-                      onTap: () => Navigator.of(sheetContext).pop(false),
-                    ),
+      return MobileSheetSemantics(
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color:
+                        destructive
+                            ? const Color(0x1FDA5050)
+                            : context.env.accentInk.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(17),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _MobileConfirmButton(
-                      label: confirmLabel ?? l10n.okButtonLabel,
-                      background:
-                          destructive
-                              ? const Color(0xFFB95F5F)
-                              : context.env.actionFill,
-                      foreground:
-                          destructive
-                              ? _dangerForeground
-                              : context.env.actionFillInk,
-                      onTap: () => Navigator.of(sheetContext).pop(true),
-                    ),
+                  child: OmniIcon(
+                    icon: destructive ? OmniIcons.close : OmniIcons.check,
+                    size: 22,
+                    color:
+                        destructive
+                            ? context.env.statusDanger
+                            : context.env.accentInk,
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 13),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTypography.serifFamily,
+                    fontFamilyFallback: AppTypography.serifFamilyFallback,
+                    // ignore: font_size_whitelist
+                    fontSize: 23,
+                    height: 1.0,
+                    fontWeight: FontWeight.w400,
+                    color: context.env.ink,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9, // ignore: font_size_whitelist
+                    height: 1.55,
+                    color: context.env.inkMuted,
+                  ),
+                ),
+                const SizedBox(height: 17),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MobileConfirmButton(
+                        label: cancelLabel ?? l10n.cancelButtonLabel,
+                        background: context.env.line07,
+                        foreground: context.env.ink,
+                        onTap: () => Navigator.of(sheetContext).pop(false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _MobileConfirmButton(
+                        label: confirmLabel ?? l10n.okButtonLabel,
+                        background:
+                            destructive
+                                ? const Color(0xFFB95F5F)
+                                : context.env.actionFill,
+                        foreground:
+                            destructive
+                                ? _dangerForeground
+                                : context.env.actionFillInk,
+                        onTap: () => Navigator.of(sheetContext).pop(true),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       );

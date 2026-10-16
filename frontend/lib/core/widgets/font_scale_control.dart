@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 顶栏字体档位快捷入口。
 ///
@@ -100,7 +101,9 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
       context: context,
       // 面板底色与壳层其余抽屉同源，不跟桌面主题的容器色。
       backgroundColor: context.env.sheetSolid,
-      builder: (sheetContext) => _FontScaleSheet(current: preset),
+      builder:
+          (sheetContext) =>
+              MobileSheetSemantics(child: _FontScaleSheet(current: preset)),
     );
     if (selected == null || !mounted) {
       return;

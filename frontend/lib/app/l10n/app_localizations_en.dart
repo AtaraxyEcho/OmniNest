@@ -1252,6 +1252,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use New offline download and paste an HTTP, BT or magnet link to start.';
 
   @override
+  String get filesOfflineFilterEmpty => 'No tasks in this state';
+
+  @override
   String get filesExternalEmptyTitle => 'No storage mounted';
 
   @override
@@ -1707,6 +1710,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesCameraRecordVideo => 'Record Video & Upload';
+
+  @override
+  String filesCameraCaptureFailed(Object error) {
+    return 'Camera unavailable: $error';
+  }
 
   @override
   String get filesUploadFile => 'Upload File';
@@ -3760,6 +3768,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String adminDeleteUserConfirmMessage(Object name) {
     return 'Permanently delete $name. Only empty accounts with no content ownership can be deleted; type the username to confirm.';
+  }
+
+  @override
+  String get adminResetTwoFactor => 'Reset two-factor';
+
+  @override
+  String adminResetTwoFactorConfirmMessage(Object name) {
+    return 'Clear $name\'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.';
   }
 
   @override
@@ -5877,6 +5893,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNavManage => 'Manage';
 
   @override
+  String get readerAdminModuleTitle => 'Reader management';
+
+  @override
+  String get readerAdminModuleSubtitle => 'Imports, pending files and metadata';
+
+  @override
+  String get toolsReaderAdminDetail => 'Import queue and metadata management';
+
+  @override
   String get readerShelfEmpty =>
       'Your shelf is empty. Add books from the library.';
 
@@ -6037,6 +6062,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerVolumeKeyPaging => 'Volume keys turn pages';
+
+  @override
+  String get readerFollowBookTypesetting => 'Follow the book\'s typography';
+
+  @override
+  String get readerFollowBookTypesettingHint =>
+      'Takes this book\'s first-line indent, paragraph spacing and alignment. Font size, typeface and line spacing always follow your settings.';
 
   @override
   String get readerPreviousPage => 'Previous page';
@@ -6338,6 +6370,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String readerTotalChapters(Object count) {
     return '$count chapters total';
   }
+
+  @override
+  String readerChapterPosition(int current, int total) {
+    return 'Ch. $current/$total';
+  }
+
+  @override
+  String get readerNowReading => 'Reading now';
 
   @override
   String get readerDeleteCollection => 'Delete Collection';
@@ -6919,6 +6959,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerAnnotations => 'Annotations';
+
+  @override
+  String readerAnnotationCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count annotations',
+      zero: 'No annotations',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get readerNoAnnotations => 'No annotations yet';
@@ -9200,6 +9251,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicLyricsPick => 'Select Lyrics File (LRC / TXT / SRT / VTT)';
+
+  @override
+  String get musicCoverReadFailed => 'Could not read the selected cover image';
+
+  @override
+  String get musicLyricsReadFailed => 'Could not read the selected lyrics file';
 
   @override
   String musicAddToPlaylistSuccess(Object name) {
@@ -11825,19 +11882,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolsEntryLabel => 'Workspace tools';
 
   @override
-  String get toolsEntrySub => 'All routes and tool pages';
+  String get toolsEntrySub => 'Low-frequency management pages';
 
   @override
   String get toolsTitle => 'Workspace tools';
 
   @override
-  String get toolsSubtitle => 'Every route, in one calm place';
+  String get toolsSubtitle =>
+      'Pages that have no first-level entry inside their module';
 
   @override
-  String get toolsIntroEyebrow => 'Complete list';
+  String get toolsIntroEyebrow => 'Supplementary list';
 
   @override
-  String get toolsIntroTitle => 'Everything has a home.';
+  String get toolsIntroTitle => 'The less-used entries, in one place.';
 
   @override
   String get toolsIntroBody =>
@@ -12130,6 +12188,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookDetailInLibrary => 'IN YOUR LIBRARY';
+
+  @override
+  String get bookDetailHeader => 'Book details';
+
+  @override
+  String get readerDetailActionMetadataDesc =>
+      'Title, author, cover and summary';
+
+  @override
+  String get readerDetailActionReparseDesc =>
+      'Rebuild cover, metadata and chapters';
 
   @override
   String bookDetailMeta(String type, int year) {
