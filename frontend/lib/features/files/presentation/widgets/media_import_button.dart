@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:omninest/platform/file_pick.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
@@ -15,6 +15,7 @@ import 'package:omninest/features/files/application/media_import_file_picker.dar
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 导入按钮样式。
 enum ImportButtonStyle { textButton, iconButton, filledButton, outlinedButton }
@@ -221,21 +222,23 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       final source = await showModalBottomSheet<String>(
         context: context,
         builder: (sheetContext) {
-          return SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: Text(l10n.importFiles),
-                  onTap: () => Navigator.of(sheetContext).pop('files'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
-                  title: Text(l10n.filesCameraTakePhoto),
-                  onTap: () => Navigator.of(sheetContext).pop('camera'),
-                ),
-              ],
+          return MobileSheetSemantics(
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.photo_library_outlined),
+                    title: Text(l10n.importFiles),
+                    onTap: () => Navigator.of(sheetContext).pop('files'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: Text(l10n.filesCameraTakePhoto),
+                    onTap: () => Navigator.of(sheetContext).pop('camera'),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -245,10 +248,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       }
       if (source == 'camera') {
         try {
-          final shot = await ImagePicker().pickImage(
-            source: ImageSource.camera,
-            maxWidth: 4096,
-          );
+          final shot = await FilePick.pickCameraPhoto(maxWidth: 4096);
           return shot == null ? const <XFile>[] : <XFile>[shot];
         } on Exception {
           return const <XFile>[];
@@ -289,15 +289,17 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       isDismissible: false,
       enableDrag: false,
       builder:
-          (sheetContext) => _ImportProgressContent(
-            importService: importService,
-            files: files,
-            subsystemDirectory: widget.subsystemDirectory,
-            spaceType: spaceType,
-            reuseExistingFiles: widget.reuseExistingFiles,
-            l10n: l10n,
-            onComplete: (result) => _completeImport(sheetContext, result),
-            onClose: () => _closeProgressRoute(sheetContext),
+          (sheetContext) => MobileSheetSemantics(
+            child: _ImportProgressContent(
+              importService: importService,
+              files: files,
+              subsystemDirectory: widget.subsystemDirectory,
+              spaceType: spaceType,
+              reuseExistingFiles: widget.reuseExistingFiles,
+              l10n: l10n,
+              onComplete: (result) => _completeImport(sheetContext, result),
+              onClose: () => _closeProgressRoute(sheetContext),
+            ),
           ),
     );
     await _handleImportComplete(result, l10n);

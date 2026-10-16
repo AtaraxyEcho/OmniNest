@@ -152,7 +152,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   }
 
   Widget _buildBody() {
-    if (_loading) return const AppLoading.detail();
+    if (_loading) return const AppLoading();
 
     if (_error != null) {
       return _buildErrorView(

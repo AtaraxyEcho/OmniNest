@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsRole;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +38,9 @@ import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
+import 'package:omninest/platform/file_pick.dart';
+
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
@@ -316,12 +319,22 @@ class FileBrowserPage extends ConsumerStatefulWidget {
 }
 
 class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
-  bool _initialSectionApplied = false;
+  /// 已处理过的深链分区：同一分区不再重复进入，否则用户从子页返回模块首页后
+  /// 会被 build 再次弹回子页（「退不出去」）。widget.initialSection 变化时复位。
+  FileManagerSection? _handledInitialSection;
+
+  /// 深链进来的那一帧：state 还没换成目标分区，先按子页渲染，
+  /// 否则顶栏与底部 tab 会在家页面闪一帧再收起。回首页时清除。
+  bool _deepLinkedSubpage = false;
   final List<FileManagerSection> _sectionHistory = [];
   FileManagerSection? _lastSection;
 
-  /// 移动首页态：true 时显示位置/分区卡首页，点卡进入列表态。
-  bool _mobileHomeOpen = true;
+  /// 移动首页态：true 时显示位置/分区卡首页。状态源是
+  /// [FileBrowserState.mobileSubpage]——壳层要据此收起顶栏与底部 tab，
+  /// 留在 Widget 里壳层就读不到。
+  bool get _mobileHomeOpen =>
+      ref.read(fileBrowserControllerProvider).asData?.value.mobileSubpage !=
+      true;
 
   void _onSectionChanged(FileManagerSection section) {
     if (_lastSection != null && _lastSection != section) {
@@ -332,34 +345,44 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   }
 
   void _onBack() {
-    // 托管窄屏：列表态优先回首页，首页态走原有返回链（section 历史栈 → 门户）。
+    // 托管窄屏：先逐级回目录，再回模块首页，最后才走 section 历史栈 → 门户。
     final hosted = MobileShellScope.isHosted(context);
     final narrow = MediaQuery.sizeOf(context).width < 1100;
-    if (hosted && narrow && !_mobileHomeOpen) {
+    final current = ref.read(fileBrowserControllerProvider).asData?.value;
+    // 目录层级只在「全部文件」里成立：切到最近/收藏/共享/离线时 breadcrumbs
+    // 不会清空，拿它回退会把用户强切回全部文件（进不去也退不出的观感）。
+    // 根是空列表不是根节点：一级目录 = length 1，必须一并处理，否则一级目录下
+    // 返回会直接离站，再按一次就是分支首路由的 bubble → 引擎退出应用。
+    // 多选是最内一层，先于目录与页面层级：一次侧滑只退出多选，
+    // 不把「清选中」和「离开子页」压在同一次手势里。
+    // 多选是最内一层，先于目录与页面层级：一次侧滑只退出多选，
+    // 不把「清选中」和「离开子页」压在同一次手势里。
+    if (hosted && current != null && current.hasSelection) {
       ref.read(fileBrowserControllerProvider.notifier).clearSelection();
-      // 目录逐级回退：子目录内先回上一级，根目录才回模块首页。
-      final crumbs =
-          ref.read(fileBrowserControllerProvider).asData?.value.breadcrumbs ??
-          const <FileNode>[];
+      return;
+    }
+    if (hosted &&
+        current != null &&
+        current.section == FileManagerSection.allFiles &&
+        current.breadcrumbs.isNotEmpty) {
+      final crumbs = current.breadcrumbs;
       if (crumbs.length > 1) {
         unawaited(
           ref
               .read(fileBrowserControllerProvider.notifier)
               .goToBreadcrumb(crumbs.length - 2),
         );
-        return;
-      }
-      // 回到首页即回到导航根：清空分区历史栈，首页态的返回直接离站，
-      // 否则历史栈残留会让返回做一次不可见的分区回退（返回键失灵观感）。
-      // 目录态回首页需同时回根列表，否则首页内联列表残留子目录内容。
-      _sectionHistory.clear();
-      final rootState = ref.read(fileBrowserControllerProvider).asData?.value;
-      if (rootState != null &&
-          rootState.section == FileManagerSection.allFiles &&
-          rootState.breadcrumbs.isNotEmpty) {
+      } else {
         unawaited(ref.read(fileBrowserControllerProvider.notifier).goToRoot());
       }
-      setState(() => _mobileHomeOpen = true);
+      return;
+    }
+    if (hosted && narrow && !_mobileHomeOpen) {
+      // 回到首页即回到导航根：清空分区历史栈，首页态的返回直接离站，
+      // 否则历史栈残留会让返回做一次不可见的分区回退（返回键失灵观感）。
+      _sectionHistory.clear();
+      ref.read(fileBrowserControllerProvider.notifier).setMobileSubpage(false);
+      _deepLinkedSubpage = false;
       return;
     }
     if (_sectionHistory.isNotEmpty) {
@@ -374,33 +397,49 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   /// 从首页打开分区：进入列表态。
   void _openMobileSection(FileManagerSection section) {
     _onSectionChanged(section);
-    if (!_mobileHomeOpen) {
-      return;
-    }
-    setState(() => _mobileHomeOpen = false);
+    ref.read(fileBrowserControllerProvider.notifier).setMobileSubpage(true);
   }
 
   /// 从首页内联列表直接进入工作区（不切换分区，保留当前列表态）。
   void _enterMobileWorkspace() {
-    if (!_mobileHomeOpen) {
-      return;
+    ref.read(fileBrowserControllerProvider.notifier).setMobileSubpage(true);
+  }
+
+  @override
+  void didUpdateWidget(covariant FileBrowserPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSection != oldWidget.initialSection) {
+      // 深链再次指向别的分区：闩锁必须复位，否则第二次进入是静默空操作
+      // （go_router 的 page key 只认路径，`?section=` 变化走的是原地更新）。
+      _handledInitialSection = null;
     }
-    setState(() => _mobileHomeOpen = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final filesState = ref.watch(fileBrowserControllerProvider);
-    if (widget.initialSection != null && !_initialSectionApplied) {
+    final target = widget.initialSection;
+    if (target != null && _handledInitialSection != target) {
       final data = filesState.asData?.value;
-      if (data != null && data.section != widget.initialSection) {
-        _initialSectionApplied = true;
-        _mobileHomeOpen = false;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref
-              .read(fileBrowserControllerProvider.notifier)
-              .loadSection(widget.initialSection!);
-        });
+      if (data != null) {
+        // 认领即消费：同一分区只处理一次，否则用户从子页返回模块首页后
+        // build 会再次把它弹回子页（退不出去）。
+        _handledInitialSection = target;
+        if (data.section != target) {
+          _deepLinkedSubpage = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final controller = ref.read(fileBrowserControllerProvider.notifier);
+            controller.setMobileSubpage(true);
+            controller.loadSection(target);
+          });
+        } else if (!data.mobileSubpage) {
+          // 已是目标分区但停在模块首页（回首页后再点同一入口）：直接进子页。
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref
+                .read(fileBrowserControllerProvider.notifier)
+                .setMobileSubpage(true);
+          });
+        }
       }
     }
     return ModuleEntryRefreshListener(
@@ -418,7 +457,7 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
             state: state,
             onBack: _onBack,
             onSectionChanged: _onSectionChanged,
-            mobileHomeOpen: _mobileHomeOpen,
+            mobileHomeOpen: !(state.mobileSubpage || _deepLinkedSubpage),
             onOpenMobileSection: _openMobileSection,
             onEnterMobileWorkspace: _enterMobileWorkspace,
           );
@@ -662,9 +701,15 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
                                         ? context.env.accent
                                         : context.filesColors.onSurfaceVariant,
                                 onRefresh: () async {
+                                  // 下拉刷新走原地（background）路径：正文若切到
+                                  // loading 占位，就会和下拉弧同时出现，同一件事
+                                  // 两个动画。已有内容原地换新即可。
                                   await _runFileAction(
                                     context,
-                                    () => controller.loadSection(state.section),
+                                    () => controller.loadSection(
+                                      state.section,
+                                      background: true,
+                                    ),
                                   );
                                   await Future<void>.delayed(
                                     MotionToken.pageSwitch,
@@ -773,56 +818,66 @@ class _FileManagerShellState extends ConsumerState<_FileManagerShell> {
               : null,
       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
       builder: (sheetContext) {
-        return ambience.wrap(
-          Consumer(
-            builder: (context, sheetRef, _) {
-              final state =
-                  sheetRef.watch(fileBrowserControllerProvider).asData?.value;
-              final node = state?.inspectedNode;
-              if (node == null) {
-                return const SizedBox.shrink();
-              }
-              final favorites = state!.section == FileManagerSection.favorites;
-              final actions = _buildFileNodeActions(
-                context,
-                sheetRef,
-                sheetRef.read(fileBrowserControllerProvider.notifier),
-                recycle: state.section == FileManagerSection.recycleBin,
-                favorites: favorites,
-              );
-              return Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-                ),
-                margin: EdgeInsets.only(
-                  bottom: MediaQuery.viewInsetsOf(context).bottom,
-                ),
-                decoration: BoxDecoration(
-                  // 托管态环境重绑后的 surfaceContainer 是玻璃半透明，
-                  // 贴底抽屉需实底（样例 glass-sheet #171E1C）。
-                  color:
-                      MobileShellScope.isHosted(context)
-                          ? context.env.sheetSolid
-                          : context.filesColors.surfaceContainer,
-                  border: Border(
-                    top: BorderSide(color: context.filesColors.selectedBorder),
+        return MobileSheetSemantics(
+          child: ambience.wrap(
+            Consumer(
+              builder: (context, sheetRef, _) {
+                final state =
+                    sheetRef.watch(fileBrowserControllerProvider).asData?.value;
+                final node = state?.inspectedNode;
+                if (node == null) {
+                  return const SizedBox.shrink();
+                }
+                final favorites =
+                    state!.section == FileManagerSection.favorites;
+                final actions = _buildFileNodeActions(
+                  context,
+                  sheetRef,
+                  sheetRef.read(fileBrowserControllerProvider.notifier),
+                  recycle: state.section == FileManagerSection.recycleBin,
+                  favorites: favorites,
+                );
+                return Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.85,
                   ),
-                ),
-                child: FileInspectorPanel(
-                  file: node,
-                  actions: actions,
-                  onClose:
-                      () =>
-                          sheetRef
-                              .read(fileBrowserControllerProvider.notifier)
-                              .clearInspection(),
-                ),
-              );
-            },
+                  margin: EdgeInsets.only(
+                    bottom: MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  decoration: BoxDecoration(
+                    // 托管态环境重绑后的 surfaceContainer 是玻璃半透明，
+                    // 贴底抽屉需实底（样例 glass-sheet #171E1C）。
+                    color:
+                        MobileShellScope.isHosted(context)
+                            ? context.env.sheetSolid
+                            : context.filesColors.surfaceContainer,
+                    border: Border(
+                      top: BorderSide(
+                        color: context.filesColors.selectedBorder,
+                      ),
+                    ),
+                  ),
+                  child: FileInspectorPanel(
+                    file: node,
+                    actions: actions,
+                    onClose:
+                        () =>
+                            sheetRef
+                                .read(fileBrowserControllerProvider.notifier)
+                                .clearInspection(),
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
     ).whenComplete(() {
+      // 抽屉退场动画期间页面可能被弹掉或切走：此处既写 State 字段又读 ref，
+      // 未挂载时访问会抛 ref-after-unmount（同文件 _closeInspectorSheet 同判据）。
+      if (!mounted) {
+        return;
+      }
       _inspectorSheetOpen = false;
       final current = ref.read(fileBrowserControllerProvider).asData?.value;
       if (current?.inspectedFileId != null) {

@@ -57,12 +57,14 @@ class _SharedWithMeWorkspaceState
       final meta = widget.state.sharedWithMeMeta;
       return _HostedSharedWithMe(
         state: widget.state,
-        loadedCount: math.min(meta.totalElements, (meta.page + 1) * meta.size),
+        // 「已加载」取真实在列条数：续载是追加语义，按页窗推算会虚报。
+        loadedCount: widget.state.sharedWithMe.length,
         totalCount: meta.totalElements,
         onLoadNext:
-            () => ref
-                .read(fileBrowserControllerProvider.notifier)
-                .showSharedWithMe(page: meta.page + 1),
+            () =>
+                ref
+                    .read(fileBrowserControllerProvider.notifier)
+                    .loadMoreSharedWithMe(),
       );
     }
     final l10n = AppLocalizations.of(context);
@@ -345,7 +347,7 @@ class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
               label: l10n.filesMetricActiveShares,
               value: counts['ACTIVE'].toString(),
               detail: l10n.filesCurrentView,
-              color: FilesWorkstationPalette.emerald,
+              color: context.filesColors.success,
             ),
             _MetricCard(
               label: l10n.filesMetricExpiredShares,
@@ -553,7 +555,7 @@ class _ShareStateText extends StatelessWidget {
         share.expiresAt == null
             ? l10n.filesSharePermanent
             : DateFormat('MM-dd', locale).format(share.expiresAt!),
-        FilesWorkstationPalette.emerald,
+        context.filesColors.success,
       ),
     };
     return Text(

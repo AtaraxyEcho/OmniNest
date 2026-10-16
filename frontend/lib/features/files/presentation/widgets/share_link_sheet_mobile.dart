@@ -134,10 +134,11 @@ class _HostedCreateSection extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '${l10n.filesCreateFailed}：$errorMessage',
-            style: const TextStyle(
-              fontSize: 9, // ignore: font_size_whitelist
+            style: TextStyle(
+              // 失败摘要含后端返回的中文句子，按句子档取，不用样例的 9px 短标签。
+              fontSize: AppTypography.labelSmall,
               height: 1.5,
-              color: Color(0xFFE69696),
+              color: context.env.statusDanger,
             ),
           ),
         ],

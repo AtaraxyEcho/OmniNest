@@ -10,7 +10,6 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
-import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// 高密数据表格视图：勾选 / 名称 / 路径 / 上传者 / 大小 / 修改时间 / 格式 /
@@ -665,7 +664,7 @@ class _TableRowState extends State<_TableRow> {
                                           : Icons.star_border_rounded,
                                   color:
                                       widget.favoriteIds.contains(file.id)
-                                          ? FilesWorkstationPalette.amber
+                                          ? context.filesColors.warning
                                           : null,
                                   onTap: () => actions.onToggleFavorite!(file),
                                 ),

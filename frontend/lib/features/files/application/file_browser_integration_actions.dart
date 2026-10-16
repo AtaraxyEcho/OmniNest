@@ -215,6 +215,54 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     }
   }
 
+  /// 外部存储浏览滚动续载：同目录下一页按路径去重后追加。与
+  /// `_loadExternalDirectory` 不同，续载不清空已列条目、不进 loading 态，
+  /// 只借用同一代际号丢弃被目录切换作废的回包。
+  Future<void> loadMoreExternalBrowse() async {
+    final current = _currentState;
+    if (current == null ||
+        current.isBusy ||
+        current.externalFiles.length >= current.externalMeta.totalElements ||
+        current.externalBrowseAccountId == null) {
+      return;
+    }
+    final accountId = current.externalBrowseAccountId!;
+    final path = current.externalBrowsePath ?? '/';
+    final meta = current.externalMeta;
+    final requestGeneration = ++_externalBrowseRequestGeneration;
+    await _runAction(FileOperation.browseRemoteDirectory, () async {
+      final result = await _repository
+          .browseExternalStoragePage(
+            accountId,
+            path,
+            page: meta.page + 1,
+            size: meta.size,
+          )
+          .timeout(_externalBrowseTimeout);
+      if (requestGeneration != _externalBrowseRequestGeneration) {
+        return;
+      }
+      final latest = _currentState;
+      if (latest == null ||
+          latest.externalBrowseAccountId != accountId ||
+          latest.externalBrowsePath != path ||
+          latest.externalMeta.page != meta.page) {
+        return;
+      }
+      final loaded = latest.externalFiles;
+      final seen = loaded.map((item) => item.path).toSet();
+      _emitState(
+        latest.copyWith(
+          externalFiles: <ExternalFileItem>[
+            ...loaded,
+            ...result.items.where((item) => seen.add(item.path)),
+          ],
+          externalMeta: result.meta,
+        ),
+      );
+    });
+  }
+
   Future<ExternalSpaceUsage?> _loadExternalSpaceSafely(String accountId) async {
     try {
       return await _repository
@@ -259,22 +307,21 @@ extension FileBrowserIntegrationActions on FileBrowserController {
         targetParentId: isShared ? null : current?.parentId,
         spaceType: spaceType ?? 'PERSONAL',
       );
-      if (current != null) {
-        _emitState(
-          current.copyWith(
-            importTasks: [
-              task,
-              ...current.importTasks.where((item) => item.id != task.id),
-            ],
-            section: FileManagerSection.importTasks,
-          ),
-        );
-      }
+      final live = _liveOr(current);
+      _emitState(
+        live.copyWith(
+          importTasks: [
+            task,
+            ...live.importTasks.where((item) => item.id != task.id),
+          ],
+        ),
+      );
     });
     await showImportTasks();
   }
 
   Future<void> showImportTasks({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.importTasks);
     await _runAction(FileOperation.loadImportTasks, () async {
       final current = _currentState;
       final meta = current?.importMeta ?? const FilesSubPageMeta();
@@ -283,7 +330,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
         size: size ?? meta.size,
       );
       _emitState(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           importTasks: result.items,
           importMeta: FilesSubPageMeta(
             page: result.page,
@@ -291,7 +338,44 @@ extension FileBrowserIntegrationActions on FileBrowserController {
             totalElements: result.totalElements,
             totalPages: result.totalPages,
           ),
-          section: FileManagerSection.importTasks,
+        ),
+      );
+    });
+    _startImportTaskPolling();
+  }
+
+  /// 导入任务滚动续载：下一页按任务 id 去重后追加，续载后继续轮询进度。
+  Future<void> loadMoreImportTasks() async {
+    final current = _currentState;
+    if (current == null ||
+        current.isBusy ||
+        current.importTasks.length >= current.importMeta.totalElements) {
+      return;
+    }
+    final meta = current.importMeta;
+    await _runAction(FileOperation.loadImportTasks, () async {
+      final result = await _repository.listImportTasksPage(
+        page: meta.page + 1,
+        size: meta.size,
+      );
+      final latest = _currentState;
+      if (latest == null || latest.importMeta.page != meta.page) {
+        return;
+      }
+      final loaded = latest.importTasks;
+      final seen = loaded.map((task) => task.id).toSet();
+      _emitState(
+        latest.copyWith(
+          importTasks: <ImportTask>[
+            ...loaded,
+            ...result.items.where((task) => seen.add(task.id)),
+          ],
+          importMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
         ),
       );
     });
@@ -304,7 +388,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
       return false;
     }
     final tasks = await _repository.listImportTasks();
-    _emitState(current.copyWith(importTasks: tasks));
+    _emitState(_liveOr(current).copyWith(importTasks: tasks));
     _startImportTaskPolling();
     return true;
   }
@@ -434,7 +518,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     }
     try {
       final uploadQueue = await _repository.listUploadQueue();
-      _emitState(current.copyWith(uploadQueue: uploadQueue));
+      _emitState(_liveOr(current).copyWith(uploadQueue: uploadQueue));
     } on Exception {
       // 轮询失败不中断流程
     }

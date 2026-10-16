@@ -350,12 +350,9 @@ Future<void> _pickPhotoFromCamera(
   BuildContext context,
   FileBrowserController controller,
 ) async {
-  final failureText = AppLocalizations.of(context).filesUploadDone;
+  final l10n = AppLocalizations.of(context);
   try {
-    final shot = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      maxWidth: 4096,
-    );
+    final shot = await FilePick.pickCameraPhoto(maxWidth: 4096);
     if (shot == null || !context.mounted) {
       return;
     }
@@ -364,7 +361,7 @@ Future<void> _pickPhotoFromCamera(
     if (context.mounted) {
       showOmniFeedback(
         context,
-        '$failureText: ${error.code}',
+        l10n.filesCameraCaptureFailed(error.code),
         severity: OmniFeedbackSeverity.error,
       );
     }
@@ -376,9 +373,9 @@ Future<void> _pickVideoFromCamera(
   BuildContext context,
   FileBrowserController controller,
 ) async {
-  final failureText = AppLocalizations.of(context).filesUploadDone;
+  final l10n = AppLocalizations.of(context);
   try {
-    final shot = await ImagePicker().pickVideo(source: ImageSource.camera);
+    final shot = await FilePick.pickCameraVideo();
     if (shot == null || !context.mounted) {
       return;
     }
@@ -387,7 +384,7 @@ Future<void> _pickVideoFromCamera(
     if (context.mounted) {
       showOmniFeedback(
         context,
-        '$failureText: ${error.code}',
+        l10n.filesCameraCaptureFailed(error.code),
         severity: OmniFeedbackSeverity.error,
       );
     }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsRole;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -318,6 +319,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: '预览 Esc 关闭无异常');
     expect(find.byType(FilePreviewPage), findsNothing);
+  });
+
+  testWidgets('预览弹窗自带对话框语义角色（不走 Dialog，框架不会补）', (tester) async {
+    final handle = tester.ensureSemantics();
+    await pumpDesktop(tester);
+
+    await tester.tap(find.byIcon(Icons.visibility_outlined).first);
+    // 行上注册了双击识别器，单击需 300ms 消歧后才触达预览动作。
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    final previewRoot = find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString() == '_FilePreviewDialog',
+    );
+    final dialogSemantics = find.descendant(
+      of: previewRoot,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.role == SemanticsRole.dialog,
+      ),
+    );
+    expect(
+      dialogSemantics,
+      findsOneWidget,
+      reason: '读屏的「对话框」播报与 Web 侧 aria-modal 都取自该 role',
+    );
+    expect(
+      tester.getSemantics(dialogSemantics).role,
+      SemanticsRole.dialog,
+      reason: 'role 必须落在实际发布的语义节点上，而不是相邻节点',
+    );
+    handle.dispose();
   });
 
   testWidgets('Inspector dock 自适应：1280 隐藏改贴底抽屉，1500 常驻', (tester) async {

@@ -58,14 +58,32 @@ class FileList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 托管态的下拉刷新依赖子树里的 Scrollable：短/空内容在 Android 的
+    // Clamping 物理下不产生过滚动，正文就没有手动刷新入口，故给弹性物理。
+    // 工位分支没有下拉弧，物理保持平台默认，不改鼠标滚轮的过滚动观感。
+    final hosted = MobileShellScope.isHosted(context);
     if (files.isEmpty && draftFolderName == null) {
-      return FileNodeEmptyState(showingRecycleBin: showingRecycleBin);
+      if (!hosted) {
+        return FileNodeEmptyState(showingRecycleBin: showingRecycleBin);
+      }
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        children: [FileNodeEmptyState(showingRecycleBin: showingRecycleBin)],
+      );
     }
     final mobile =
         Theme.of(context).platform == TargetPlatform.android ||
         Theme.of(context).platform == TargetPlatform.iOS;
     final colors = context.filesColors;
     return ListView.builder(
+      physics:
+          hosted
+              ? const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              )
+              : null,
       itemCount: files.length + (draftFolderName == null ? 0 : 1),
       itemBuilder: (context, index) {
         if (draftFolderName != null && index == 0) {

@@ -446,13 +446,16 @@ class _HomeStorageStrip extends StatelessWidget {
     final c = context.filesColors;
     final l10n = AppLocalizations.of(context);
     final value = stats;
-    final line =
-        value == null
-            ? l10n.filesWaitingStats
-            : l10n.filesStorageQuotaLine(
-              formatFileSize(value.usedBytes),
-              formatFileSize(value.quotaBytes),
-            );
+    // 配额哨兵值 quotaBytes < 0 表示不限额，必须走专用文案：存储统计页早就
+    // 有这个分支，首页卡片漏了，于是把 -1 直接格式化成「共 -1 B」给用户看。
+    final line = switch (value) {
+      null => l10n.filesWaitingStats,
+      _ when value.isQuotaUnlimited => l10n.filesStorageQuotaUnlimited,
+      _ => l10n.filesStorageQuotaLine(
+        formatFileSize(value.usedBytes),
+        formatFileSize(value.quotaBytes),
+      ),
+    };
     return Material(
       color: c.surfaceContainerLow,
       shape: RoundedRectangleBorder(
@@ -637,40 +640,42 @@ void showFileMoreSectionsSheet(
     backgroundColor:
         MobileShellScope.isHosted(context) ? context.env.sheetSolid : null,
     builder:
-        (sheetContext) => SafeArea(
-          top: false,
-          // 小屏/大字号下分组列表可能超出 sheet 可用高，滚动兜底。
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final entry in groups.entries) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
-                    child: Text(
-                      entry.key.labelOf(l10n),
-                      style: TextStyle(
-                        fontSize: 9, // ignore: font_size_whitelist
-                        height: 1.45,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w700,
-                        color: context.env.groupLabelInk,
+        (sheetContext) => MobileSheetSemantics(
+          child: SafeArea(
+            top: false,
+            // 小屏/大字号下分组列表可能超出 sheet 可用高，滚动兜底。
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final entry in groups.entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
+                      child: Text(
+                        entry.key.labelOf(l10n),
+                        style: TextStyle(
+                          fontSize: 9, // ignore: font_size_whitelist
+                          height: 1.45,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w700,
+                          color: context.env.groupLabelInk,
+                        ),
                       ),
                     ),
-                  ),
-                  for (final item in entry.value)
-                    _MoreSheetRow(
-                      icon: item.icon,
-                      label: item.labelOf(l10n),
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        onOpen(item);
-                      },
-                    ),
-                  const SizedBox(height: 8),
+                    for (final item in entry.value)
+                      _MoreSheetRow(
+                        icon: item.icon,
+                        label: item.labelOf(l10n),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          onOpen(item);
+                        },
+                      ),
+                    const SizedBox(height: 8),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

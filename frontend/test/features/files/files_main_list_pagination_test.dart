@@ -308,15 +308,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 分区与假体 section 一致时保持首页态：经「最近使用」分类卡进入列表态。
-    await tester.tap(find.text('最近使用'));
-    await tester.pumpAndSettle();
+    // 深链 `?section=recent` 必须真的落到该分区：直接是子页（不再先停在模块
+    // 首页等用户再点一次——那正是设备上「点进去没反应」的口径）。子页里分区名
+    // 会出现两次：页头标题（12px）+ 样例 hero（24 衬线）。
+    expect(find.text('最近使用'), findsNWidgets(2));
 
     // 无感续载：不再渲染「加载更多」按钮，滚动近底自动触发下一页。
     expect(find.text('加载更多'), findsNothing);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -900));
     await tester.pumpAndSettle();
-    expect(visitedPages, contains(1), reason: '滚动近底 = 自动跳到第 2 页');
+    expect(visitedPages, contains(1), reason: '滚动近底 = 自动追加第 2 页');
     expect(tester.takeException(), isNull);
   });
 }
@@ -424,6 +425,12 @@ class _RecentSectionController extends FileBrowserController {
   @override
   Future<void> showRecentFiles({int? page, int? size}) async {
     visitedPages.add(page ?? 0);
+  }
+
+  @override
+  Future<void> loadMoreRecentFiles() async {
+    // 托管态滚动续载走追加语义：记录将要并入的页码。
+    visitedPages.add((state.asData?.value.recentMeta.page ?? 0) + 1);
   }
 }
 

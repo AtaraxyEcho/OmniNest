@@ -61,7 +61,7 @@ class _UploadQueueWorkspace extends ConsumerWidget {
               label: l10n.filesMetricUploading,
               value: localActive.toString(),
               detail: l10n.filesCurrentView,
-              color: FilesWorkstationPalette.emerald,
+              color: context.filesColors.success,
             ),
             _MetricCard(
               label: l10n.filesMetricQueued,
@@ -334,7 +334,7 @@ class _UploadProgressCell extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: value,
                 minHeight: 2,
-                color: FilesWorkstationPalette.emerald,
+                color: colors.success,
                 backgroundColor: colors.surfaceContainerHighest,
               ),
             ),
@@ -370,6 +370,30 @@ _BadgeTone _uploadStatusTone(String status) {
 
 // ───────────────────────── 离线下载（09） ─────────────────────────
 
+/// 新建离线下载：先选空间再填下载链接；桌面页按钮与托管页头圆钮共用。
+Future<void> showNewOfflineDownloadSheet(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final controller = ref.read(fileBrowserControllerProvider.notifier);
+  final spaceSelection = await showSpaceSelectorSheet(context);
+  if (spaceSelection == null || !context.mounted) {
+    return;
+  }
+  final spaceType =
+      spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
+  await _showNameDialog(
+    context: context,
+    title: l10n.filesNewOfflineDownload,
+    actionLabel: l10n.filesCreate,
+    labelText: l10n.filesDownloadLink,
+    hintText: l10n.filesOfflineDownloadHint,
+    onSubmit:
+        (uri) => controller.createOfflineDownload(uri, spaceType: spaceType),
+  );
+}
+
 class _OfflineDownloadWorkspace extends ConsumerStatefulWidget {
   const _OfflineDownloadWorkspace({required this.state});
 
@@ -382,27 +406,8 @@ class _OfflineDownloadWorkspace extends ConsumerStatefulWidget {
 
 class _OfflineDownloadWorkspaceState
     extends ConsumerState<_OfflineDownloadWorkspace> {
-  String _filter = 'ALL';
-
-  Future<void> _createOfflineDownloadWithSpace(BuildContext context) async {
-    final l10n = AppLocalizations.of(context);
-    final controller = ref.read(fileBrowserControllerProvider.notifier);
-    final spaceSelection = await showSpaceSelectorSheet(context);
-    if (spaceSelection == null || !context.mounted) {
-      return;
-    }
-    final spaceType =
-        spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
-    await _showNameDialog(
-      context: context,
-      title: l10n.filesNewOfflineDownload,
-      actionLabel: l10n.filesCreate,
-      labelText: l10n.filesDownloadLink,
-      hintText: l10n.filesOfflineDownloadHint,
-      onSubmit:
-          (uri) => controller.createOfflineDownload(uri, spaceType: spaceType),
-    );
-  }
+  /// 状态筛选档；null = 全部。归档与托管分段共用 [_offlineBucketOf]。
+  _OfflineBucket? _filter;
 
   @override
   Widget build(BuildContext context) {
@@ -410,14 +415,14 @@ class _OfflineDownloadWorkspaceState
       final meta = widget.state.offlineMeta;
       return _HostedOfflineDownloads(
         state: widget.state,
-        onCreate: () => unawaited(_createOfflineDownloadWithSpace(context)),
-        loadedCount: math.min(meta.totalElements, (meta.page + 1) * meta.size),
+        // 「已加载」取真实在列条数：续载是追加语义，按页窗推算会虚报。
+        loadedCount: widget.state.offlineTasks.length,
         totalCount: meta.totalElements,
         onLoadNext:
             () => unawaited(
               ref
                   .read(fileBrowserControllerProvider.notifier)
-                  .showOfflineDownloads(page: meta.page + 1),
+                  .loadMoreOfflineDownloads(),
             ),
       );
     }
@@ -431,9 +436,13 @@ class _OfflineDownloadWorkspaceState
     final running = countOf('RUNNING') + countOf('DOWNLOADING');
     final completed = countOf('COMPLETED');
     final failed = countOf('FAILED');
+    // 归档口径与托管分段一致：DOWNLOADING/QUEUED/RETRY_WAIT 都算进行中。
     final filtered =
         tasks
-            .where((t) => _filter == 'ALL' || t.status.toUpperCase() == _filter)
+            .where(
+              (task) =>
+                  _filter == null || _offlineBucketOf(task.status) == _filter,
+            )
             .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -449,7 +458,7 @@ class _OfflineDownloadWorkspaceState
               onPressed:
                   enabled
                       ? () =>
-                          unawaited(_createOfflineDownloadWithSpace(context))
+                          unawaited(showNewOfflineDownloadSheet(context, ref))
                       : null,
             ),
           ],
@@ -461,7 +470,7 @@ class _OfflineDownloadWorkspaceState
               label: l10n.filesMetricUploading,
               value: running.toString(),
               detail: l10n.filesCurrentView,
-              color: FilesWorkstationPalette.emerald,
+              color: context.filesColors.success,
             ),
             _MetricCard(
               label: l10n.filesMetricQueued,
@@ -488,23 +497,23 @@ class _OfflineDownloadWorkspaceState
           chips: [
             _SubChip(
               label: '${l10n.filesStatusFilterAll} (${tasks.length})',
-              active: _filter == 'ALL',
-              onTap: () => setState(() => _filter = 'ALL'),
+              active: _filter == null,
+              onTap: () => setState(() => _filter = null),
             ),
             _SubChip(
               label: l10n.filesStatusDownloading,
-              active: _filter == 'RUNNING',
-              onTap: () => setState(() => _filter = 'RUNNING'),
+              active: _filter == _OfflineBucket.active,
+              onTap: () => setState(() => _filter = _OfflineBucket.active),
             ),
             _SubChip(
               label: l10n.filesStatusCompleted,
-              active: _filter == 'COMPLETED',
-              onTap: () => setState(() => _filter = 'COMPLETED'),
+              active: _filter == _OfflineBucket.completed,
+              onTap: () => setState(() => _filter = _OfflineBucket.completed),
             ),
             _SubChip(
               label: l10n.filesStatusFailed,
-              active: _filter == 'FAILED',
-              onTap: () => setState(() => _filter = 'FAILED'),
+              active: _filter == _OfflineBucket.failed,
+              onTap: () => setState(() => _filter = _OfflineBucket.failed),
             ),
           ],
         ),
@@ -681,14 +690,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
             (item) => unawaited(
               _importExternalBrowseItem(context, controller, accountId, item),
             ),
-        onLoadNext:
-            () => unawaited(
-              controller.browseExternalStorage(
-                accountId,
-                path: browsePath,
-                page: state.externalMeta.page + 1,
-              ),
-            ),
+        onLoadNext: () => unawaited(controller.loadMoreExternalBrowse()),
         onRetry:
             () => unawaited(
               _runFileAction(
@@ -751,7 +753,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
               label: l10n.filesMetricReady,
               value: ready.toString(),
               detail: l10n.filesCurrentView,
-              color: FilesWorkstationPalette.emerald,
+              color: context.filesColors.success,
             ),
             _MetricCard(
               label: l10n.filesMetricAbnormal,
@@ -978,13 +980,14 @@ class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
       final meta = widget.state.importMeta;
       return _HostedImportTasks(
         state: widget.state,
-        loadedCount: math.min(meta.totalElements, (meta.page + 1) * meta.size),
+        // 「已加载」取真实在列条数：续载是追加语义，按页窗推算会虚报。
+        loadedCount: widget.state.importTasks.length,
         totalCount: meta.totalElements,
         onLoadNext:
             () => unawaited(
               ref
                   .read(fileBrowserControllerProvider.notifier)
-                  .showImportTasks(page: meta.page + 1),
+                  .loadMoreImportTasks(),
             ),
       );
     }
@@ -1016,7 +1019,7 @@ class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
               label: l10n.filesMetricUploading,
               value: running.toString(),
               detail: l10n.filesCurrentView,
-              color: FilesWorkstationPalette.emerald,
+              color: context.filesColors.success,
             ),
             _MetricCard(
               label: l10n.filesMetricQueued,

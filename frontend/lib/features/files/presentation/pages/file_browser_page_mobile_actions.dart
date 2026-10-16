@@ -62,94 +62,99 @@ Future<void> _showFileCreateActions(
     // 裁到不可达；改为可滚动并按屏高上限封顶。
     isScrollControlled: true,
     builder:
-        (sheetContext) => ambience.wrap(
-          SafeArea(
-            top: false,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8,
-              ),
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const _MobileSheetHandle(),
-                      const SizedBox(height: 8),
-                      _MobileCreateActionRow(
-                        icon: Icons.upload_file_rounded,
-                        label: l10n.filesUploadFile,
-                        enabled: canWrite,
-                        onTap:
-                            canWrite
-                                ? () {
-                                  Navigator.of(sheetContext).pop();
-                                  _pickAndUploadFiles(context, controller);
-                                }
-                                : null,
-                      ),
-                      _MobileCreateActionRow(
-                        icon: Icons.photo_camera_rounded,
-                        label: l10n.filesCameraTakePhoto,
-                        enabled: canWrite,
-                        onTap:
-                            canWrite
-                                ? () {
-                                  Navigator.of(sheetContext).pop();
-                                  unawaited(
-                                    _pickPhotoFromCamera(context, controller),
-                                  );
-                                }
-                                : null,
-                      ),
-                      _MobileCreateActionRow(
-                        icon: Icons.videocam_rounded,
-                        label: l10n.filesCameraRecordVideo,
-                        enabled: canWrite,
-                        onTap:
-                            canWrite
-                                ? () {
-                                  Navigator.of(sheetContext).pop();
-                                  unawaited(
-                                    _pickVideoFromCamera(context, controller),
-                                  );
-                                }
-                                : null,
-                      ),
-                      _MobileCreateActionRow(
-                        icon: Icons.create_new_folder_outlined,
-                        label: l10n.filesNewFolder,
-                        enabled: canWrite,
-                        onTap:
-                            canWrite
-                                ? () {
-                                  Navigator.of(sheetContext).pop();
-                                  controller.beginFolderCreation(
-                                    dedupeFolderName(
-                                      l10n.filesNewFolderDefault,
-                                      state.files,
-                                    ),
-                                  );
-                                }
-                                : null,
-                      ),
-                      _MobileCreateActionRow(
-                        icon: Icons.refresh_rounded,
-                        label: l10n.filesRefresh,
-                        enabled: true,
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          unawaited(
-                            _runFileAction(
-                              context,
-                              () => controller.loadSection(state.section),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+        (sheetContext) => MobileSheetSemantics(
+          child: ambience.wrap(
+            SafeArea(
+              top: false,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8,
+                ),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _MobileSheetHandle(),
+                        const SizedBox(height: 8),
+                        _MobileCreateActionRow(
+                          icon: Icons.upload_file_rounded,
+                          label: l10n.filesUploadFile,
+                          enabled: canWrite,
+                          onTap:
+                              canWrite
+                                  ? () {
+                                    Navigator.of(sheetContext).pop();
+                                    _pickAndUploadFiles(context, controller);
+                                  }
+                                  : null,
+                        ),
+                        _MobileCreateActionRow(
+                          icon: Icons.photo_camera_rounded,
+                          label: l10n.filesCameraTakePhoto,
+                          enabled: canWrite,
+                          onTap:
+                              canWrite
+                                  ? () {
+                                    Navigator.of(sheetContext).pop();
+                                    unawaited(
+                                      _pickPhotoFromCamera(context, controller),
+                                    );
+                                  }
+                                  : null,
+                        ),
+                        _MobileCreateActionRow(
+                          icon: Icons.videocam_rounded,
+                          label: l10n.filesCameraRecordVideo,
+                          enabled: canWrite,
+                          onTap:
+                              canWrite
+                                  ? () {
+                                    Navigator.of(sheetContext).pop();
+                                    unawaited(
+                                      _pickVideoFromCamera(context, controller),
+                                    );
+                                  }
+                                  : null,
+                        ),
+                        _MobileCreateActionRow(
+                          icon: Icons.create_new_folder_outlined,
+                          label: l10n.filesNewFolder,
+                          enabled: canWrite,
+                          onTap:
+                              canWrite
+                                  ? () {
+                                    Navigator.of(sheetContext).pop();
+                                    // 首页内联列表不渲染工位草稿行，原先只写
+                                    // draftFolderName 等于没有反应；改走可见输入框。
+                                    unawaited(
+                                      showNewFolderNameDialog(
+                                        context,
+                                        controller,
+                                        state,
+                                      ),
+                                    );
+                                  }
+                                  : null,
+                        ),
+                        _MobileCreateActionRow(
+                          icon: Icons.refresh_rounded,
+                          label: l10n.filesRefresh,
+                          enabled: true,
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            unawaited(
+                              _runFileAction(
+                                context,
+                                () => controller.loadSection(state.section),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

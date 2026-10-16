@@ -19,6 +19,7 @@ import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 part 'share_link_sheet_mobile.dart';
 
@@ -96,8 +97,10 @@ class ShareLinkSheet extends ConsumerStatefulWidget {
               )
               : null,
       builder:
-          (_) => ambience.wrap(
-            ShareLinkSheet(file: file, existingShare: existingShare),
+          (_) => MobileSheetSemantics(
+            child: ambience.wrap(
+              ShareLinkSheet(file: file, existingShare: existingShare),
+            ),
           ),
     );
   }

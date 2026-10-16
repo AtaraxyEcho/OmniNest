@@ -420,7 +420,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
       final current = _currentState;
       if (current != null) {
         final myShares = await _repository.listMyShares();
-        _emitState(current.copyWith(myShares: myShares));
+        _emitState(_liveOr(current).copyWith(myShares: myShares));
       }
       return share;
     });

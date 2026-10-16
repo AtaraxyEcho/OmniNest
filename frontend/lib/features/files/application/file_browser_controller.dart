@@ -24,6 +24,7 @@ export 'package:omninest/features/files/application/file_browser_models.dart';
 part 'file_browser_selection_actions.dart';
 part 'file_browser_upload_actions.dart';
 part 'file_browser_integration_actions.dart';
+part 'file_browser_page_mappers.dart';
 
 final fileBrowserControllerProvider =
     AsyncNotifierProvider<FileBrowserController, FileBrowserState>(
@@ -36,8 +37,6 @@ final fileStorageStatsProvider = FutureProvider<FileStorageStats>((ref) {
   return ref.watch(fileApiProvider).storageStats();
 });
 
-enum _UploadFileResult { completed, conflict, failed, paused, cancelled }
-
 class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   FileRepository get _repository => ref.read(fileRepositoryProvider);
 
@@ -47,6 +46,40 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   void _emitState(FileBrowserState nextState) {
     state = AsyncData(nextState);
   }
+
+  /// 取数或远端动作完成后的回写基准。
+  ///
+  /// 完成回调不得拿 `await` 之前抓的快照整份发布：那段窗口里发生的写入（移动端子页态、
+  /// 多选、视图模式、分页窗口）会被旧快照无声覆盖，真机表现为点分区卡后闪一下又弹回
+  /// 模块首页。优先取发布时刻的实况；仅在状态尚未就绪（首帧取数、错误态）时退回快照。
+  /// 新增同类回写点由 `test/architecture/async_state_publish_ratchet_test.dart` 拦住。
+  FileBrowserState _liveOr(FileBrowserState? captured) =>
+      state.asData?.value ??
+      captured ??
+      const FileBrowserState(files: [], recycleBin: []);
+
+  /// 导航世代号：分区切换、进入/回退目录与空间切换共用一条序号。发起方在取数前领取
+  /// 自己的世代号，回包时若已被后来的导航超过就直接丢弃，否则晚到的旧回包会把用户
+  /// 已经离开的层级重新压回页面（连点两张分区卡时表现为停在先点的那一页）。
+  int _beginNavigation() => ++_navigationGeneration;
+
+  bool _isStaleNavigation(int navigation) =>
+      navigation != _navigationGeneration;
+
+  /// 分区乐观写：切换分区时先落 `section` 并清搜索词，取数回包不再碰这两项，
+  /// 于是「子页 chrome 已收起、正文仍是上一分区」的中间帧与旧回包拖回上一页的
+  /// 竞态都只由这一处发起。同分区重复取数（实时刷新、下拉刷新）不产出新状态。
+  void _applySectionOptimistically(FileManagerSection section) {
+    final live = state.asData?.value;
+    if (live == null || live.section == section) {
+      return;
+    }
+    _beginNavigation();
+    state = AsyncData(live.copyWith(section: section, searchQuery: ''));
+  }
+
+  /// 导航世代计数，见 `_beginNavigation`。
+  int _navigationGeneration = 0;
 
   final Map<String, _UploadRuntime> _uploadRuntimes = {};
   final Map<
@@ -112,6 +145,15 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     state = AsyncData(current.copyWith(clearLastActionError: true));
+  }
+
+  /// 切换移动端子页态：由壳层读取，决定收起还是露出顶栏与底部 tab。
+  void setMobileSubpage(bool subpage) {
+    final current = state.asData?.value;
+    if (current == null || current.mobileSubpage == subpage) {
+      return;
+    }
+    state = AsyncData(current.copyWith(mobileSubpage: subpage));
   }
 
   /// 异步任务提交成功后刷新全局任务摘要徽标。
@@ -225,9 +267,12 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
-  /// 刷新文件列表数据，保留当前分区、目录、筛选条件与当前页窗；只拉
-  /// 目标页（跳页不再 0..N 串行重放，列表与分页条范围一一对应），
-  /// 目标页越界（他端删尽末页）时回退到新的末页。
+  /// 刷新文件列表数据，保留当前分区、目录、筛选条件与页窗。
+  ///
+  /// 未续载过时只拉当前页（跳页与分页条范围一一对应，目标页越界回退到新的
+  /// 末页）；托管态滚动续载后列表已跨多页，再按单页重取会把手上的前几页
+  /// 挤掉，因此按已载入条数整窗重取一次。跳页与改每页条数都会先把
+  /// `filePage` 归位，不会误判成续载态。
   Future<void> refreshFiles() async {
     await _runAction(FileOperation.refresh, () async {
       final current = state.asData?.value;
@@ -235,8 +280,13 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
       final isShared = current?.spaceType == 'SHARED';
       final spaceType = isShared ? 'SHARED' : 'PERSONAL';
-      final pageSize = current?.filePageSize ?? 10;
-      final targetPage = current?.filePage ?? 0;
+      final accumulated =
+          current != null &&
+          current.filePage > 0 &&
+          current.files.length > current.filePageSize;
+      final pageSize =
+          accumulated ? current.files.length : (current?.filePageSize ?? 10);
+      final targetPage = accumulated ? 0 : (current?.filePage ?? 0);
 
       final result = await _fetchSectionPage(
         (page, size) => _listFilePageForSpace(
@@ -259,7 +309,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       }
 
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           files: result.items,
           fileCategory: category,
           filePage: result.page,
@@ -272,60 +322,73 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   /// 按当前分区刷新文件节点列表，不改变导航分区。最近/收藏/回收站
-  /// 与主列表一样走分页接口并同步 meta，避免列表与分页条元数据发散。
+  /// 与主列表一样走分页接口并同步 meta，避免列表与分页条元数据发散；
+  /// 滚动续载过的分区整窗重取，不把已经看到的前几页挤掉。
   Future<void> refreshFileNodesForCurrentSection() async {
-    final section = _currentState?.section;
-    switch (section) {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    switch (current.section) {
       case FileManagerSection.recent:
-        final meta = _currentState?.recentMeta ?? const FilesSubPageMeta();
+        final window = _reloadWindow(
+          loadedCount: current.recentFiles.length,
+          meta: current.recentMeta,
+        );
         final result = await _fetchSectionPage(
           (page, size) =>
               _repository.listRecentFilesPage(page: page, size: size),
-          page: meta.page,
-          size: meta.size,
+          page: window.page,
+          size: window.size,
         );
-        final current = _currentState;
-        if (current != null) {
+        final latest = _currentState;
+        if (latest != null) {
           _emitState(
-            current.copyWith(
+            latest.copyWith(
               recentFiles: result.items,
               recentMeta: _metaOfNodePage(result),
             ),
           );
         }
       case FileManagerSection.favorites:
-        final meta = _currentState?.favoritesMeta ?? const FilesSubPageMeta();
+        final window = _reloadWindow(
+          loadedCount: current.favoriteFiles.length,
+          meta: current.favoritesMeta,
+        );
         final result = await _fetchSectionPage(
           (page, size) =>
               _repository.listFavoriteFilesPage(page: page, size: size),
-          page: meta.page,
-          size: meta.size,
+          page: window.page,
+          size: window.size,
         );
-        final current = _currentState;
-        if (current != null) {
+        final latest = _currentState;
+        if (latest != null) {
           _emitState(
-            current.copyWith(
+            latest.copyWith(
               favoriteFiles: result.items,
               favoritesMeta: _metaOfNodePage(result),
             ),
           );
         }
       case FileManagerSection.recycleBin:
-        final meta = _currentState?.recycleMeta ?? const FilesSubPageMeta();
-        final spaceType = _currentState?.spaceType ?? 'PERSONAL';
+        final window = _reloadWindow(
+          loadedCount: current.recycleBin.length,
+          meta: current.recycleMeta,
+        );
+        final spaceType = current.spaceType;
         final result = await _fetchSectionPage(
           (page, size) => _repository.listRecycleBinPage(
             spaceType: spaceType,
             page: page,
             size: size,
           ),
-          page: meta.page,
-          size: meta.size,
+          page: window.page,
+          size: window.size,
         );
-        final current = _currentState;
-        if (current != null) {
+        final latest = _currentState;
+        if (latest != null) {
           _emitState(
-            current.copyWith(
+            latest.copyWith(
               recycleBin: result.items,
               recycleMeta: _metaOfNodePage(result),
             ),
@@ -361,10 +424,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showFiles() async {
-    final current = _currentState;
-    if (current != null) {
-      _emitState(current.copyWith(section: FileManagerSection.allFiles));
-    }
+    _applySectionOptimistically(FileManagerSection.allFiles);
     await refreshFiles();
   }
 
@@ -372,6 +432,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> switchSpace(String newSpaceType) async {
     _clearSelection();
     _clearInspection();
+    final navigation = _beginNavigation();
     await _runAction(FileOperation.switchSpace, () async {
       final current = state.asData?.value;
       if (current == null) return;
@@ -388,8 +449,11 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         filesPage = await _repository.listFilesPage(size: current.filePageSize);
       }
 
+      if (_isStaleNavigation(navigation)) {
+        return;
+      }
       state = AsyncData(
-        current.copyWith(
+        _liveOr(current).copyWith(
           files: filesPage.items,
           parentId: null,
           breadcrumbs: [],
@@ -454,6 +518,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showRecentFiles({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.recent);
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadRecent, () async {
@@ -464,17 +529,16 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           recentFiles: result.items,
           recentMeta: _metaOfNodePage(result),
-          section: FileManagerSection.recent,
-          searchQuery: '',
         ),
       );
     });
   }
 
   Future<void> showFavoriteFiles({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.favorites);
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadFavorites, () async {
@@ -485,17 +549,16 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           favoriteFiles: result.items,
           favoritesMeta: _metaOfNodePage(result),
-          section: FileManagerSection.favorites,
-          searchQuery: '',
         ),
       );
     });
   }
 
   Future<void> showRecycleBin({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.recycleBin);
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadRecycleBin, () async {
@@ -508,26 +571,186 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           recycleBin: result.items,
           recycleMeta: _metaOfNodePage(result),
-          section: FileManagerSection.recycleBin,
-          searchQuery: '',
         ),
       );
     });
   }
 
-  FilesSubPageMeta _metaOfNodePage(FileNodePage page) {
-    return FilesSubPageMeta(
-      page: page.page,
-      size: page.size,
-      totalElements: page.totalElements,
-      totalPages: page.totalPages,
+  /// 节点型次分区的滚动续载：取当前页的下一页追加到已载入集合尾部，按节点
+  /// id 去重；与主列表 [loadMoreFiles] 同语义。页翻转仍由 `show*` 系列供桌面
+  /// 分页条跳页，两种语义并存不互相替换。
+  Future<void> _loadMoreNodePage({
+    required FileOperation operation,
+    required FileManagerSection section,
+    required FilesSubPageMeta Function(FileBrowserState state) metaOf,
+    required List<FileNode> Function(FileBrowserState state) listOf,
+    required Future<FileNodePage> Function(int page, int size) fetch,
+    required FileBrowserState Function(
+      FileBrowserState state,
+      List<FileNode> items,
+      FilesSubPageMeta meta,
+    )
+    emit,
+  }) async {
+    final current = state.asData?.value;
+    if (current == null || current.isBusy || current.section != section) {
+      return;
+    }
+    final meta = metaOf(current);
+    // 续载守卫按「已载入条数 < 总数」判定，不用 meta.hasMore：后端
+    // 最近/收藏/离线这类列表整表返回却按请求 size 折算 totalPages，
+    // hasMore 在数据已取全时仍然为真。
+    if (listOf(current).length >= meta.totalElements) {
+      return;
+    }
+    await _runAction(operation, () async {
+      final result = await fetch(meta.page + 1, meta.size);
+      final latest = state.asData?.value;
+      if (latest == null ||
+          latest.section != section ||
+          metaOf(latest).page != meta.page) {
+        return;
+      }
+      final loaded = listOf(latest);
+      final seen = loaded.map((node) => node.id).toSet();
+      state = AsyncData(
+        emit(latest, <FileNode>[
+          ...loaded,
+          ...result.items.where((node) => seen.add(node.id)),
+        ], _metaOfNodePage(result)),
+      );
+    });
+  }
+
+  /// 最近使用滚动续载。
+  Future<void> loadMoreRecentFiles() => _loadMoreNodePage(
+    operation: FileOperation.loadRecent,
+    section: FileManagerSection.recent,
+    metaOf: (state) => state.recentMeta,
+    listOf: (state) => state.recentFiles,
+    fetch:
+        (page, size) => _repository.listRecentFilesPage(page: page, size: size),
+    emit:
+        (state, items, meta) =>
+            state.copyWith(recentFiles: items, recentMeta: meta),
+  );
+
+  /// 我的收藏滚动续载。
+  Future<void> loadMoreFavoriteFiles() => _loadMoreNodePage(
+    operation: FileOperation.loadFavorites,
+    section: FileManagerSection.favorites,
+    metaOf: (state) => state.favoritesMeta,
+    listOf: (state) => state.favoriteFiles,
+    fetch:
+        (page, size) =>
+            _repository.listFavoriteFilesPage(page: page, size: size),
+    emit:
+        (state, items, meta) =>
+            state.copyWith(favoriteFiles: items, favoritesMeta: meta),
+  );
+
+  /// 回收站滚动续载：沿用当前空间类型，不跨空间续页。
+  Future<void> loadMoreRecycleBin() async {
+    final spaceType = state.asData?.value.spaceType ?? 'PERSONAL';
+    await _loadMoreNodePage(
+      operation: FileOperation.loadRecycleBin,
+      section: FileManagerSection.recycleBin,
+      metaOf: (state) => state.recycleMeta,
+      listOf: (state) => state.recycleBin,
+      fetch:
+          (page, size) => _repository.listRecycleBinPage(
+            spaceType: spaceType,
+            page: page,
+            size: size,
+          ),
+      emit:
+          (state, items, meta) =>
+              state.copyWith(recycleBin: items, recycleMeta: meta),
     );
   }
 
+  /// 与我共享滚动续载：下一页按 shareId 去重后追加。
+  Future<void> loadMoreSharedWithMe() async {
+    final current = state.asData?.value;
+    if (current == null ||
+        current.isBusy ||
+        current.sharedWithMe.length >= current.sharedWithMeMeta.totalElements) {
+      return;
+    }
+    final meta = current.sharedWithMeMeta;
+    await _runAction(FileOperation.loadShared, () async {
+      final result = await _repository.listSharedWithMePage(
+        page: meta.page + 1,
+        size: meta.size,
+      );
+      final latest = state.asData?.value;
+      if (latest == null || latest.sharedWithMeMeta.page != meta.page) {
+        return;
+      }
+      final loaded = latest.sharedWithMe;
+      final seen = loaded.map((item) => item.shareId).toSet();
+      state = AsyncData(
+        latest.copyWith(
+          sharedWithMe: <SharedFileItem>[
+            ...loaded,
+            ...result.items.where((item) => seen.add(item.shareId)),
+          ],
+          sharedWithMeMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
+        ),
+      );
+    });
+  }
+
+  /// 离线下载滚动续载：下一页按任务 id 去重后追加，续载后继续轮询进度。
+  Future<void> loadMoreOfflineDownloads() async {
+    final current = state.asData?.value;
+    // 后端离线任务列表当前整表返回（page/size 不参与切片），条目取全后
+    // 不再发续页请求；守卫统一按已载入条数判定。
+    if (current == null ||
+        current.isBusy ||
+        current.offlineTasks.length >= current.offlineMeta.totalElements) {
+      return;
+    }
+    final meta = current.offlineMeta;
+    await _runAction(FileOperation.loadOfflineDownloads, () async {
+      final result = await _repository.listOfflineDownloadsPage(
+        page: meta.page + 1,
+        size: meta.size,
+      );
+      final latest = state.asData?.value;
+      if (latest == null || latest.offlineMeta.page != meta.page) {
+        return;
+      }
+      final loaded = latest.offlineTasks;
+      final seen = loaded.map((task) => task.id).toSet();
+      state = AsyncData(
+        latest.copyWith(
+          offlineTasks: <OfflineDownloadTask>[
+            ...loaded,
+            ...result.items.where((task) => seen.add(task.id)),
+          ],
+          offlineMeta: FilesSubPageMeta(
+            page: result.page,
+            size: result.size,
+            totalElements: result.totalElements,
+            totalPages: result.totalPages,
+          ),
+        ),
+      );
+    });
+    _startOfflineTaskPolling();
+  }
+
   Future<void> showSharedWithMe({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.sharedWithMe);
     await _runAction(FileOperation.loadShared, () async {
       final current = state.asData?.value;
       final meta = current?.sharedWithMeMeta ?? const FilesSubPageMeta();
@@ -536,7 +759,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           sharedWithMe: result.items,
           sharedWithMeMeta: FilesSubPageMeta(
             page: result.page,
@@ -544,25 +767,22 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
             totalElements: result.totalElements,
             totalPages: result.totalPages,
           ),
-          section: FileManagerSection.sharedWithMe,
         ),
       );
     });
   }
 
   Future<void> showSharedSpace() async {
+    _applySectionOptimistically(FileManagerSection.sharedSpace);
     _clearSelection();
     _clearInspection();
     await _runAction(FileOperation.loadSharedSpace, () async {
       final current = state.asData?.value;
       final usage = await _repository.getSharedSpaceUsage();
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceUsage: usage,
-          sharedSpaceBreadcrumbs: [],
-          section: FileManagerSection.sharedSpace,
-          searchQuery: '',
-        ),
+        _liveOr(
+          current,
+        ).copyWith(sharedSpaceUsage: usage, sharedSpaceBreadcrumbs: []),
       );
     });
   }
@@ -574,9 +794,9 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       final current = state.asData?.value;
       final currentBreadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceBreadcrumbs: [...currentBreadcrumbs, folder],
-        ),
+        _liveOr(
+          current,
+        ).copyWith(sharedSpaceBreadcrumbs: [...currentBreadcrumbs, folder]),
       );
     });
   }
@@ -590,9 +810,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     final targetBreadcrumbs = breadcrumbs.sublist(0, index);
     await _runAction(FileOperation.navigateSharedUp, () async {
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceBreadcrumbs: targetBreadcrumbs,
-        ),
+        _liveOr(current).copyWith(sharedSpaceBreadcrumbs: targetBreadcrumbs),
       );
     });
   }
@@ -611,35 +829,17 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
-  Future<void> createSharedFolder(String name) async {
-    await _runAction(FileOperation.createSharedFolder, () async {
-      final current = state.asData?.value;
-      final parentId =
-          current?.sharedSpaceBreadcrumbs.isEmpty ?? true
-              ? null
-              : current!.sharedSpaceBreadcrumbs.last.id;
-      await _repository.createSharedFolder(parentId: parentId, name: name);
-      state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: []))
-            .copyWith(),
-      );
-    });
-  }
-
   Future<void> deleteSharedFile(FileNode file) async {
     await _runAction(FileOperation.deleteSharedFile, () async {
       await _repository.deleteSharedFile(file.id);
       final current = state.asData?.value;
       final usage = await _repository.getSharedSpaceUsage();
-      state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          sharedSpaceUsage: usage,
-        ),
-      );
+      state = AsyncData(_liveOr(current).copyWith(sharedSpaceUsage: usage));
     });
   }
 
   Future<void> showMyShares({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.myShares);
     await _runAction(FileOperation.loadMyShares, () async {
       final current = state.asData?.value;
       final meta = current?.sharesMeta ?? const FilesSubPageMeta();
@@ -648,7 +848,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           myShares: result.items,
           sharesMeta: FilesSubPageMeta(
             page: result.page,
@@ -656,7 +856,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
             totalElements: result.totalElements,
             totalPages: result.totalPages,
           ),
-          section: FileManagerSection.myShares,
           shareScopeAll: false,
         ),
       );
@@ -666,6 +865,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   /// 合并分享页的“全部链接”作用域：与我的分享同页共存，
   /// 只切数据域不切 section，避免页面跳转闪烁。
   Future<void> showShareLinks({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.myShares);
     await _runAction(FileOperation.loadShareLinks, () async {
       final current = state.asData?.value;
       final meta = current?.sharesMeta ?? const FilesSubPageMeta();
@@ -675,7 +875,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           shareLinks: result.items,
           sharesMeta: FilesSubPageMeta(
             page: result.page,
@@ -683,7 +883,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
             totalElements: result.totalElements,
             totalPages: result.totalPages,
           ),
-          section: FileManagerSection.myShares,
           shareScopeAll: true,
         ),
       );
@@ -691,19 +890,16 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showStorageStats() async {
+    _applySectionOptimistically(FileManagerSection.storageStats);
     await _runAction(FileOperation.loadStorageStats, () async {
       final current = state.asData?.value;
       final stats = await _repository.storageStats();
-      state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          storageStats: stats,
-          section: FileManagerSection.storageStats,
-        ),
-      );
+      state = AsyncData(_liveOr(current).copyWith(storageStats: stats));
     });
   }
 
   Future<void> showUploadQueue({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.uploadQueue);
     await _runAction(FileOperation.loadUploadQueue, () async {
       final current = state.asData?.value;
       final meta = current?.uploadQueueMeta ?? const FilesSubPageMeta();
@@ -712,7 +908,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           uploadQueue: result.items,
           uploadQueueMeta: FilesSubPageMeta(
             page: result.page,
@@ -720,13 +916,13 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
             totalElements: result.totalElements,
             totalPages: result.totalPages,
           ),
-          section: FileManagerSection.uploadQueue,
         ),
       );
     });
   }
 
   Future<void> showOfflineDownloads({int? page, int? size}) async {
+    _applySectionOptimistically(FileManagerSection.offlineDownloads);
     await _runAction(FileOperation.loadOfflineDownloads, () async {
       final current = state.asData?.value;
       final meta = current?.offlineMeta ?? const FilesSubPageMeta();
@@ -735,7 +931,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         size: size ?? meta.size,
       );
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           offlineTasks: result.items,
           offlineMeta: FilesSubPageMeta(
             page: result.page,
@@ -743,7 +939,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
             totalElements: result.totalElements,
             totalPages: result.totalPages,
           ),
-          section: FileManagerSection.offlineDownloads,
         ),
       );
     });
@@ -751,14 +946,12 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showExternalStorage() async {
+    _applySectionOptimistically(FileManagerSection.externalStorage);
     await _runAction(FileOperation.loadExternalStorage, () async {
       final current = state.asData?.value;
       final externalAccounts = await _repository.listExternalStorages();
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          externalAccounts: externalAccounts,
-          section: FileManagerSection.externalStorage,
-        ),
+        _liveOr(current).copyWith(externalAccounts: externalAccounts),
       );
     });
   }
@@ -769,6 +962,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
     _clearSelection();
     _clearInspection();
+    final navigation = _beginNavigation();
     await _runAction(FileOperation.openFolder, () async {
       final current = state.asData?.value;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
@@ -778,8 +972,11 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         category: category,
         size: current?.filePageSize ?? 10,
       );
+      if (_isStaleNavigation(navigation)) {
+        return;
+      }
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           files: filesPage.items,
           parentId: folder.id,
           breadcrumbs: [...?current?.breadcrumbs, folder],
@@ -798,6 +995,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> goToRoot() async {
     _clearSelection();
     _clearInspection();
+    final navigation = _beginNavigation();
     await _runAction(FileOperation.navigateToRoot, () async {
       final current = state.asData?.value;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
@@ -806,8 +1004,11 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         category: category,
         size: current?.filePageSize ?? 10,
       );
+      if (_isStaleNavigation(navigation)) {
+        return;
+      }
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           files: filesPage.items,
           parentId: null,
           breadcrumbs: const [],
@@ -842,6 +1043,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
     _clearSelection();
     _clearInspection();
+    final navigation = _beginNavigation();
     await _runAction(FileOperation.changeDirectory, () async {
       final currentState = state.asData?.value;
       if (currentState == null ||
@@ -856,8 +1058,11 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         category: currentState.fileCategory,
         size: currentState.filePageSize,
       );
+      if (_isStaleNavigation(navigation)) {
+        return;
+      }
       state = AsyncData(
-        currentState.copyWith(
+        _liveOr(currentState).copyWith(
           files: filesPage.items,
           parentId: target.id,
           breadcrumbs: currentState.breadcrumbs.take(index + 1).toList(),
@@ -875,6 +1080,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> setFileCategory(FileBrowserFileCategory category) async {
     _clearSelection();
     _clearInspection();
+    final navigation = _beginNavigation();
     await _runAction(FileOperation.filterFileType, () async {
       final current = state.asData?.value;
       final categoryForRequest = category;
@@ -884,8 +1090,11 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         category: categoryForRequest,
         size: current?.filePageSize ?? 10,
       );
+      if (_isStaleNavigation(navigation)) {
+        return;
+      }
       state = AsyncData(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
+        _liveOr(current).copyWith(
           files: filesPage.items,
           section: FileManagerSection.allFiles,
           fileCategory: category,
@@ -978,37 +1187,5 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
     state = AsyncData(current.copyWith(filePageSize: size, filePage: 0));
     await refreshFiles();
-  }
-}
-
-class _UploadRuntime {
-  _UploadRuntime({
-    required this.file,
-    required this.session,
-    this.asVersionOfFileId,
-  });
-
-  final XFile file;
-  final FileUploadSession session;
-
-  /// 非空时完成上传后保存为目标文件的新版本，不新建文件节点。
-  final String? asVersionOfFileId;
-  final Set<int> completedPartNumbers = <int>{};
-  bool pauseRequested = false;
-  bool removed = false;
-  bool running = false;
-  bool completed = false;
-  FileUploadCancellationToken? activeCancellation;
-  DateTime lastProgressAt = DateTime.fromMillisecondsSinceEpoch(0);
-  int lastReportedBytes = 0;
-
-  int get uploadedBytes {
-    if (session.isDirectUpload && completed) {
-      return session.sizeBytes;
-    }
-    return session.parts
-        .where((part) => completedPartNumbers.contains(part.partNumber))
-        .fold<int>(0, (total, part) => total + part.sizeBytes)
-        .clamp(0, session.sizeBytes);
   }
 }

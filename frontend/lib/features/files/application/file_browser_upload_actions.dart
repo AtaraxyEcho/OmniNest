@@ -1,5 +1,42 @@
 part of 'file_browser_controller.dart';
 
+/// 上传动作的私有类型：`_UploadFileResult` 是单文件上传的结局，
+/// `_UploadRuntime` 是分片上传的运行时状态。二者只服务上传流程，
+/// 随上传动作一起放在本分片，控制器主文件只保留状态编排。
+enum _UploadFileResult { completed, conflict, failed, paused, cancelled }
+
+class _UploadRuntime {
+  _UploadRuntime({
+    required this.file,
+    required this.session,
+    this.asVersionOfFileId,
+  });
+
+  final XFile file;
+  final FileUploadSession session;
+
+  /// 非空时完成上传后保存为目标文件的新版本，不新建文件节点。
+  final String? asVersionOfFileId;
+  final Set<int> completedPartNumbers = <int>{};
+  bool pauseRequested = false;
+  bool removed = false;
+  bool running = false;
+  bool completed = false;
+  FileUploadCancellationToken? activeCancellation;
+  DateTime lastProgressAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int lastReportedBytes = 0;
+
+  int get uploadedBytes {
+    if (session.isDirectUpload && completed) {
+      return session.sizeBytes;
+    }
+    return session.parts
+        .where((part) => completedPartNumbers.contains(part.partNumber))
+        .fold<int>(0, (total, part) => total + part.sizeBytes)
+        .clamp(0, session.sizeBytes);
+  }
+}
+
 extension FileBrowserUploadActions on FileBrowserController {
   Future<FileUploadSession> createUploadSession({
     required String fileName,
@@ -23,10 +60,9 @@ extension FileBrowserUploadActions on FileBrowserController {
         spaceType: isShared ? 'SHARED' : null,
         asVersionOfFileId: asVersionOfFileId,
       );
+      final live = _liveOr(current);
       _emitState(
-        (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          uploadSessions: [session, ...?current?.uploadSessions],
-        ),
+        live.copyWith(uploadSessions: [session, ...live.uploadSessions]),
       );
       return session;
     });

@@ -10,7 +10,6 @@ import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
-import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// 卡片网格视图：纯平直角卡片 + 1px hairline 边框 + ✔ 文本复选框。
@@ -378,9 +377,7 @@ class _GridFavoriteStarState extends State<_GridFavoriteStar> {
               widget.favorited ? Icons.star_rounded : Icons.star_border_rounded,
               size: 16,
               color:
-                  widget.favorited
-                      ? FilesWorkstationPalette.amber
-                      : colors.onSurfaceVariant,
+                  widget.favorited ? colors.warning : colors.onSurfaceVariant,
             ),
           ),
         ),

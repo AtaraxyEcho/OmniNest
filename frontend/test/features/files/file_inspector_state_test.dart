@@ -120,4 +120,24 @@ void main() {
     expect(inspector, contains('width: state.inspectorOpen ? 320 : 0'));
     expect(inspector, contains('MotionToken.pageSwitch'));
   });
+
+  // 抽屉收尾回调在页面被弹掉/切空间之后仍会执行：那里既写 State 字段又 ref.read，
+  // 未挂载时访问是 AGENTS 明列的必崩形状（_closeInspectorSheet 同判据）。
+  // 该页无法在 widget 用例里挂载（需整套 controller/repository 覆写），按源码契约锁。
+  test('检视抽屉 whenComplete 先判 mounted 再动 ref 与状态', () {
+    final page =
+        File(
+          'lib/features/files/presentation/pages/file_browser_page.dart',
+        ).readAsStringSync();
+    final at = page.indexOf('    ).whenComplete(() {');
+    expect(at, greaterThan(-1), reason: '收尾回调形状变了，需要重新核对守卫位置');
+    final body = page.substring(at, at + 420);
+    final guard = body.indexOf('if (!mounted)');
+    expect(guard, greaterThan(-1), reason: '收尾回调缺 mounted 守卫');
+    expect(
+      body.indexOf('ref.read('),
+      greaterThan(guard),
+      reason: '守卫必须在任何 ref.read 之前，否则形同没写',
+    );
+  });
 }

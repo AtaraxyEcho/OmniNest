@@ -31,3 +31,19 @@ final fileRecentEntriesProvider = FutureProvider<List<FileNode>>((ref) async {
     return const <FileNode>[];
   }
 });
+
+/// 跨 Feature 只读查询：按业务分类列出个人空间已托管的文件节点。
+///
+/// 分类过滤在后端数据库完成，`category` 取 `image`/`video`/`audio`/`novel`
+/// 等编码，null 表示不筛选。阅读器封面候选走这一条：导入候选接口按
+/// `isReaderFile` 过滤只返回书籍类型，永远列不出图片。
+Future<List<FileNode>> listHostedFileNodes(
+  Ref ref, {
+  String? category,
+  int size = 200,
+}) async {
+  final page = await ref
+      .read(fileRepositoryProvider)
+      .listFilesPage(category: category, size: size);
+  return page.items;
+}

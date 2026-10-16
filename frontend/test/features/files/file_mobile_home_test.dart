@@ -8,6 +8,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 
 /// 文件模块移动首页（方案一：位置/分区卡）行为测试。
 void main() {
@@ -87,6 +88,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('分区列表懒建：整页累积的条目不一次性全部构建', (tester) async {
+    // 分页续载是追加语义。ListView(children:) 会即时构建已加载的每一行，
+    // 300 条就是 300 个行 Widget；懒建后视口 + 缓存梯度只构建其中一小部分。
+    container = ProviderContainer(
+      overrides: [
+        fileBrowserControllerProvider.overrideWith(
+          () => _FakeFileBrowserController(_stateWithManyFiles(300)),
+        ),
+      ],
+    );
+    addTearDown(() => container.dispose());
+    await pumpHost(tester);
+
+    final built = tester.widgetList(find.byType(FileEnvRow)).length;
+    expect(built, greaterThan(0), reason: '列表确实渲染了行');
+    expect(built, lessThan(300), reason: '行必须由 builder 懒建');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('首页工作区工具三行入口进入列表态', (tester) async {
     await pumpHost(tester);
 
@@ -157,6 +177,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('portal-destination')), findsOneWidget);
   });
+}
+
+FileBrowserState _stateWithManyFiles(int count) {
+  return FileBrowserState(
+    files: List<FileNode>.generate(
+      count,
+      (index) => FileNode(
+        id: 'folder-$index',
+        parentId: null,
+        name: 'Folder $index',
+        isFolder: true,
+        nodeType: 'FOLDER',
+        normalizedPath: '/Folder $index',
+        sizeBytes: 0,
+        updatedAt: null,
+      ),
+    ),
+    recycleBin: const <FileNode>[],
+  );
 }
 
 FileBrowserState _stateWithFiles() {

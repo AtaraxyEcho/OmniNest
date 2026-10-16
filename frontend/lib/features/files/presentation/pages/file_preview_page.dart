@@ -122,7 +122,7 @@ class _ImagePreview extends ConsumerWidget {
                 max: 8192,
                 scale: 5,
               ),
-              placeholder: (context, url) => const AppLoading.simple(),
+              placeholder: (context, url) => const AppLoading(),
               errorWidget:
                   (context, url, error) => Center(
                     child: Text(
@@ -133,7 +133,7 @@ class _ImagePreview extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const AppLoading.simple(),
+      loading: () => const AppLoading(),
       error:
           (e, st) => Center(
             child: Text(AppLocalizations.of(context).filesCannotGetImageUrl),
@@ -161,7 +161,7 @@ class _VideoPreview extends ConsumerWidget {
         }
         return _VideoPlayerBody(key: ValueKey(url), url: url);
       },
-      loading: () => const AppLoading.simple(),
+      loading: () => const AppLoading(),
       error:
           (e, st) => Center(
             child: Text(AppLocalizations.of(context).filesCannotGetVideoUrl),
@@ -213,7 +213,7 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
   @override
   Widget build(BuildContext context) {
     return switch (_loadController.state) {
-      MediaPreviewLoadState.loading => const AppLoading.simple(),
+      MediaPreviewLoadState.loading => const AppLoading(),
       MediaPreviewLoadState.failed => _MediaPreviewFailure(
         message: AppLocalizations.of(context).filesCannotLoadVideo,
         onRetry: () => unawaited(_loadController.retry()),
@@ -244,7 +244,7 @@ class _AudioPreview extends ConsumerWidget {
         }
         return _AudioPlayerBody(key: ValueKey(url), file: file, url: url);
       },
-      loading: () => const AppLoading.simple(),
+      loading: () => const AppLoading(),
       error:
           (e, st) => Center(
             child: Text(AppLocalizations.of(context).filesCannotGetAudioUrl),
@@ -313,7 +313,7 @@ class _AudioPlayerBodyState extends State<_AudioPlayerBody> {
   @override
   Widget build(BuildContext context) {
     return switch (_loadController.state) {
-      MediaPreviewLoadState.loading => const AppLoading.simple(),
+      MediaPreviewLoadState.loading => const AppLoading(),
       MediaPreviewLoadState.failed => _MediaPreviewFailure(
         message: AppLocalizations.of(context).filesCannotLoadAudio,
         onRetry: () => unawaited(_loadController.retry()),
@@ -533,7 +533,7 @@ class _TextPreview extends ConsumerWidget {
               ),
             ),
           ),
-      loading: () => const AppLoading.simple(),
+      loading: () => const AppLoading(),
       error:
           (error, stackTrace) => Center(
             child: Text(

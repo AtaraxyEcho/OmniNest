@@ -342,26 +342,29 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final filesColors = context.filesColors;
+    // 前景走 filesColors 的语义档：暗档是那三枚亮彩，浅档是同名 Deep 值。
+    // 之前这里把暗档字面量抄死，浅底上只剩 1.82-3.19:1。
     final (fg, bg, border) = switch (tone) {
       _BadgeTone.good => (
-        FilesWorkstationPalette.emerald,
+        filesColors.success,
         FilesWorkstationPalette.emeraldBgDark,
-        Color(0xFF047857),
+        FilesWorkstationPalette.emeraldDeep,
       ),
       _BadgeTone.warn => (
-        FilesWorkstationPalette.amber,
+        filesColors.warning,
         FilesWorkstationPalette.amberBgDark,
-        Color(0xFFB45309),
+        FilesWorkstationPalette.amberDeep,
       ),
       _BadgeTone.bad => (
-        FilesWorkstationPalette.rose,
+        filesColors.error,
         FilesWorkstationPalette.roseBgDark,
-        Color(0xFFB91C1C),
+        FilesWorkstationPalette.roseBorderDark,
       ),
       _BadgeTone.neutral => (
-        context.filesColors.onSurfaceVariant,
-        context.filesColors.surfaceContainerHigh,
-        context.filesColors.outlineVariant,
+        filesColors.onSurfaceVariant,
+        filesColors.surfaceContainerHigh,
+        filesColors.outlineVariant,
       ),
     };
     return Container(
@@ -430,10 +433,7 @@ class _SubNameCell extends StatelessWidget {
         Icon(
           isFolder ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
           size: 16,
-          color:
-              isFolder
-                  ? FilesWorkstationPalette.amber
-                  : colors.onSurfaceVariant,
+          color: isFolder ? colors.warning : colors.onSurfaceVariant,
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -499,7 +499,7 @@ class _SubProgressCell extends StatelessWidget {
             child: LinearProgressIndicator(
               value: value,
               minHeight: 2,
-              color: FilesWorkstationPalette.emerald,
+              color: colors.success,
               backgroundColor: colors.surfaceContainerHighest,
             ),
           ),

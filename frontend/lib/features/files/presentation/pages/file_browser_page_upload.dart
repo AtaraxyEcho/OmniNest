@@ -397,75 +397,81 @@ class _FileFilterButton extends ConsumerWidget {
       context: context,
       showDragHandle: true,
       builder:
-          (sheetContext) => SafeArea(
-            top: false,
-            child: Consumer(
-              builder: (context, sheetRef, _) {
-                final current =
-                    sheetRef.watch(fileBrowserControllerProvider).asData?.value;
-                if (current == null) {
-                  return const SizedBox.shrink();
-                }
-                final enabled = !current.isBusy;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                      child: Text(
-                        l10n.filesFilterSort,
-                        style: Theme.of(context).textTheme.titleSmall,
+          (sheetContext) => MobileSheetSemantics(
+            child: SafeArea(
+              top: false,
+              child: Consumer(
+                builder: (context, sheetRef, _) {
+                  final current =
+                      sheetRef
+                          .watch(fileBrowserControllerProvider)
+                          .asData
+                          ?.value;
+                  if (current == null) {
+                    return const SizedBox.shrink();
+                  }
+                  final enabled = !current.isBusy;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                        child: Text(
+                          l10n.filesFilterSort,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final entry in sorts.entries)
-                            _CategoryCapsule(
-                              label: entry.value,
-                              icon: Icons.sort_rounded,
-                              isActive: current.sortBy == entry.key,
-                              enabled: enabled,
-                              onTap: () async {
-                                controller.setSortBy(entry.key);
-                              },
-                            ),
-                        ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final entry in sorts.entries)
+                              _CategoryCapsule(
+                                label: entry.value,
+                                icon: Icons.sort_rounded,
+                                isActive: current.sortBy == entry.key,
+                                enabled: enabled,
+                                onTap: () async {
+                                  controller.setSortBy(entry.key);
+                                },
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final category in categories)
-                            _CategoryCapsule(
-                              label: category.labelOf(l10n),
-                              icon: category.icon,
-                              isActive: current.fileCategory == category,
-                              enabled: enabled,
-                              onTap:
-                                  () => unawaited(
-                                    _runFileAction(
-                                      sheetContext,
-                                      () =>
-                                          controller.setFileCategory(category),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final category in categories)
+                              _CategoryCapsule(
+                                label: category.labelOf(l10n),
+                                icon: category.icon,
+                                isActive: current.fileCategory == category,
+                                enabled: enabled,
+                                onTap:
+                                    () => unawaited(
+                                      _runFileAction(
+                                        sheetContext,
+                                        () => controller.setFileCategory(
+                                          category,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                            ),
-                        ],
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                );
-              },
+                      const SizedBox(height: 16),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
     );

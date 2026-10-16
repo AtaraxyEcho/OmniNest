@@ -93,7 +93,9 @@ class _FileNodeWorkspace extends ConsumerWidget {
                         ),
                   ),
                 ],
-                if (hostedNarrow)
+                // 样例 FeaturePage 四页（最近/收藏）的计数在页头副题，正文
+                // 不再挂工位计数眉标条；目录与回收站等分区保留计数条。
+                if (hostedNarrow && !state.section.isSampleFeaturePage)
                   Builder(
                     builder: (context) {
                       final total = _sectionTotalCount(state);
@@ -543,6 +545,16 @@ class _FileViewSwitcher extends ConsumerWidget {
     WidgetRef ref,
     FileBrowserController controller,
   ) {
+    // 最近使用与我的收藏是样例里的 FeaturePage：正文只有 `.feature-list` 一种行。
+    // 工位列表带勾选框、工具行与分页条，稿子里没有这些，托管态一律换样例行。
+    if (narrow &&
+        MobileShellScope.isHosted(context) &&
+        state.section.isSampleFeaturePage) {
+      return _HostedFeatureFileList(
+        state: state,
+        actionsEnabled: actionsEnabled,
+      );
+    }
     final favorites = state.section == FileManagerSection.favorites;
     final actions = _buildFileNodeActions(
       context,
@@ -631,7 +643,9 @@ class _FileViewSwitcher extends ConsumerWidget {
     // 三分区各自携带分页元数据；跳页即按目标页重拉当前分区。分页条
     // 与子页/Admin 一致常驻渲染：单页时仅导航钮禁用，总数与每页条数
     // 始终可见。各分区默认与候选统一为组件默认（10/20/50/100）。
-    final (meta, onPage, onPageSize) = switch (state.section) {
+    // 第四项是已载入条数：托管态续载守卫只认它，不认 totalPages——后端
+    // 最近/收藏列表整表返回却按 size 折算页数，totalPages 会虚高。
+    final (meta, onPage, onPageSize, loadedCount) = switch (state.section) {
       FileManagerSection.allFiles || FileManagerSection.sharedSpace => (
         FilesSubPageMeta(
           page: state.filePage,
@@ -641,51 +655,54 @@ class _FileViewSwitcher extends ConsumerWidget {
         ),
         (int page) => controller.goToFilePage(page),
         (int size) => controller.setFilePageSize(size),
+        state.files.length,
       ),
       FileManagerSection.recent => (
         state.recentMeta,
         (int page) => controller.showRecentFiles(page: page),
         (int size) => controller.showRecentFiles(page: 0, size: size),
+        state.recentFiles.length,
       ),
       FileManagerSection.favorites => (
         state.favoritesMeta,
         (int page) => controller.showFavoriteFiles(page: page),
         (int size) => controller.showFavoriteFiles(page: 0, size: size),
+        state.favoriteFiles.length,
       ),
       FileManagerSection.recycleBin => (
         state.recycleMeta,
         (int page) => controller.showRecycleBin(page: page),
         (int size) => controller.showRecycleBin(page: 0, size: size),
+        state.recycleBin.length,
       ),
-      _ => (null, null, null),
+      _ => (null, null, null, 0),
     };
     if (meta == null) {
       return child;
     }
-    // 移动壳层：无感续载——滚动近底自动追加下一页，不再渲染「加载更
-    // 多」按钮；主列表走追加语义，次分区沿用页翻转。桌面端保持工位分页条。
+    // 移动壳层：无感续载——滚动近底自动追加下一页，不渲染「加载更多」按钮。
+    // 主列表与次分区统一走 loadMore* 追加语义（此前的次分区页翻转会把手上
+    // 正在看的条目整页换掉）；页翻转只留给桌面工位分页条的跳页。
     if (MobileShellScope.isHosted(context)) {
-      final mainList =
-          state.section == FileManagerSection.allFiles ||
-          state.section == FileManagerSection.sharedSpace;
+      final Future<void> Function() loadNextPage = switch (state.section) {
+        FileManagerSection.allFiles ||
+        FileManagerSection.sharedSpace => () => controller.loadMoreFiles(),
+        FileManagerSection.recent => () => controller.loadMoreRecentFiles(),
+        FileManagerSection.favorites =>
+          () => controller.loadMoreFavoriteFiles(),
+        _ => () => controller.loadMoreRecycleBin(),
+      };
       return NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (notification.depth != 0 ||
               notification.metrics.axis != Axis.vertical ||
               notification.metrics.extentAfter >= 420 ||
-              meta.page + 1 >= meta.totalPages ||
+              loadedCount >= meta.totalElements ||
               state.isBusy) {
             return false;
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            unawaited(
-              _runFileAction(
-                context,
-                mainList
-                    ? () => controller.loadMoreFiles()
-                    : () => onPage!(meta.page + 1),
-              ),
-            );
+            unawaited(_runFileAction(context, loadNextPage));
           });
           return false;
         },
@@ -940,94 +957,102 @@ class _FilePreviewDialogState extends State<_FilePreviewDialog> {
     final width = _expanded ? size.width : size.width * 0.86;
     final height = _expanded ? size.height : size.height * 0.88;
     final colors = context.filesColors;
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape):
-            () => Navigator.of(context).pop(),
-      },
-      child: Focus(
-        autofocus: true,
-        child: Material(
-          color: colors.surfaceContainer,
-          child: AnimatedContainer(
-            duration: MotionToken.fast,
-            width: width,
-            height: height,
-            decoration: BoxDecoration(
-              border:
-                  _expanded ? null : Border.all(color: colors.selectedBorder),
-            ),
-            child: Column(
-              children: [
-                // 紧凑头部：名称+大小居左，全屏与关闭钮居右，36px 高，
-                // 取代旧 AppBar（返回钮过大/标题过大/大小与悬浮钮重叠）。
-                Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: colors.outlineVariant),
+    return Semantics(
+      scopesRoute: true,
+      explicitChildNodes: true,
+      // 该弹窗不走 Dialog/AlertDialog，框架不会补模态语义；读屏的「对话框」
+      // 播报与 Web 侧 aria-modal 均取自这里的 role。
+      role: SemanticsRole.dialog,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape):
+              () => Navigator.of(context).pop(),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Material(
+            color: colors.surfaceContainer,
+            child: AnimatedContainer(
+              duration: MotionToken.fast,
+              width: width,
+              height: height,
+              decoration: BoxDecoration(
+                border:
+                    _expanded ? null : Border.all(color: colors.selectedBorder),
+              ),
+              child: Column(
+                children: [
+                  // 紧凑头部：名称+大小居左，全屏与关闭钮居右，36px 高，
+                  // 取代旧 AppBar（返回钮过大/标题过大/大小与悬浮钮重叠）。
+                  Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: colors.outlineVariant),
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                widget.file.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: AppTypography.bodyMedium,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.onSurface,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  widget.file.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.bodyMedium,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.onSurface,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              formatFileSize(widget.file.sizeBytes),
-                              style: TextStyle(
-                                fontFamily: AppTypography.monoFamily,
-                                fontFamilyFallback:
-                                    AppTypography.monoFamilyFallback,
-                                fontSize: AppTypography.labelSmall,
-                                color: colors.onSurfaceVariant,
+                              const SizedBox(width: 8),
+                              Text(
+                                formatFileSize(widget.file.sizeBytes),
+                                style: TextStyle(
+                                  fontFamily: AppTypography.monoFamily,
+                                  fontFamilyFallback:
+                                      AppTypography.monoFamilyFallback,
+                                  fontSize: AppTypography.labelSmall,
+                                  color: colors.onSurfaceVariant,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      FilesToolbarIconButton(
-                        tooltip:
-                            _expanded
-                                ? l10n.filesPreviewExitFullscreen
-                                : l10n.filesPreviewFullscreen,
-                        icon:
-                            _expanded
-                                ? Icons.fullscreen_exit_rounded
-                                : Icons.open_in_full_rounded,
-                        onPressed: () => setState(() => _expanded = !_expanded),
-                      ),
-                      FilesToolbarIconButton(
-                        tooltip:
-                            MaterialLocalizations.of(
-                              context,
-                            ).closeButtonTooltip,
-                        icon: Icons.close_rounded,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
+                        FilesToolbarIconButton(
+                          tooltip:
+                              _expanded
+                                  ? l10n.filesPreviewExitFullscreen
+                                  : l10n.filesPreviewFullscreen,
+                          icon:
+                              _expanded
+                                  ? Icons.fullscreen_exit_rounded
+                                  : Icons.open_in_full_rounded,
+                          onPressed:
+                              () => setState(() => _expanded = !_expanded),
+                        ),
+                        FilesToolbarIconButton(
+                          tooltip:
+                              MaterialLocalizations.of(
+                                context,
+                              ).closeButtonTooltip,
+                          icon: Icons.close_rounded,
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: ClipRect(
-                    child: FilePreviewPage(file: widget.file, embedded: true),
+                  Expanded(
+                    child: ClipRect(
+                      child: FilePreviewPage(file: widget.file, embedded: true),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -189,6 +189,7 @@ class FileBrowserState {
     this.activeOperation,
     this.lastActionError,
     this.backgroundRefresh = false,
+    this.mobileSubpage = false,
   });
 
   final List<FileNode> files;
@@ -264,6 +265,11 @@ class FileBrowserState {
 
   /// 后台（实时同步触发）刷新中：不切换 loading 占位符，内容原地换新。
   final bool backgroundRefresh;
+
+  /// 移动端子页态：true 表示已进入分区/目录子页而非模块首页。
+  /// 壳层据此收起顶栏与底部 tab，使子页成为样例 `.module-overlay`
+  /// 那样自带页头的独立页面。
+  final bool mobileSubpage;
 
   static const Set<String> _terminalUploadStatuses = {
     'COMPLETED',
@@ -428,6 +434,7 @@ class FileBrowserState {
     bool clearActiveOperationLabel = false,
     FileBrowserActionError? lastActionError,
     bool? backgroundRefresh,
+    bool? mobileSubpage,
     bool clearLastActionError = false,
   }) {
     return FileBrowserState(
@@ -512,6 +519,7 @@ class FileBrowserState {
       lastActionError:
           clearLastActionError ? null : lastActionError ?? this.lastActionError,
       backgroundRefresh: backgroundRefresh ?? this.backgroundRefresh,
+      mobileSubpage: mobileSubpage ?? this.mobileSubpage,
     );
   }
 
