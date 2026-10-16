@@ -52,7 +52,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 26;
 
   Future<bool> _tableExists(Migrator migrator, String tableName) async {
     final rows =
@@ -295,6 +295,129 @@ class LocalDatabase extends _$LocalDatabase {
             );
             await migrator.database.customStatement(
               'ALTER TABLE app_backdrop_assets ADD COLUMN web_playable INTEGER NOT NULL DEFAULT 1',
+            );
+          }
+        }
+        // Schema v23：样式表改为书级池 + 章节次序引用，不再逐章重复携带正文里的那份
+        // `<style>` 载体。旧行留默认值即可读：章节正文自带样式表时解析侧的内联通路
+        // 照样生效，重解析后写入新形态。
+        if (from < 23) {
+          if (await _tableExists(migrator, 'cached_reader_books') &&
+              !await _columnExists(
+                migrator,
+                'cached_reader_books',
+                'stylesheet_pool_json',
+              )) {
+            await migrator.database.customStatement(
+              "ALTER TABLE cached_reader_books ADD COLUMN stylesheet_pool_json TEXT NOT NULL DEFAULT '{}'",
+            );
+          }
+          if (await _tableExists(migrator, 'cached_reader_chapters') &&
+              !await _columnExists(
+                migrator,
+                'cached_reader_chapters',
+                'stylesheet_refs_json',
+              )) {
+            await migrator.database.customStatement(
+              "ALTER TABLE cached_reader_chapters ADD COLUMN stylesheet_refs_json TEXT NOT NULL DEFAULT '[]'",
+            );
+          }
+        }
+        // Schema v24：进度行补全书比例，并把账号归属纳入主键；书签/批注/笔记与
+        // 同步队列补归属列。SQLite 不能原地改主键，进度表按重命名-建新表-回填搬迁；
+        // 旧行没有归属可判，原样搬入并保持空归属，由后续写入自然覆盖。
+        if (from < 24) {
+          if (await _tableExists(migrator, 'cached_reader_progress')) {
+            await migrator.database.customStatement(
+              'ALTER TABLE cached_reader_progress '
+              'RENAME TO cached_reader_progress_v23',
+            );
+            await migrator.createTable(cachedReaderProgress);
+            await migrator.database.customStatement(
+              'INSERT INTO cached_reader_progress '
+              '(user_id, item_id, chapter_id, char_offset, chapter_progress, '
+              ' book_progress, mode, page_id, page_index, page_fingerprint, '
+              ' source_id, source_page_index, catalog_key, manifest_version, '
+              ' intra_page_offset, updated_at) '
+              "SELECT '', item_id, chapter_id, char_offset, chapter_progress, "
+              ' NULL, mode, page_id, page_index, page_fingerprint, '
+              ' source_id, source_page_index, catalog_key, manifest_version, '
+              ' intra_page_offset, updated_at '
+              'FROM cached_reader_progress_v23',
+            );
+            await migrator.database.customStatement(
+              'DROP TABLE cached_reader_progress_v23',
+            );
+          }
+          for (final tableName in const [
+            'cached_reader_bookmarks',
+            'cached_reader_annotations',
+            'cached_reader_notes',
+            'sync_operations',
+          ]) {
+            if (await _tableExists(migrator, tableName) &&
+                !await _columnExists(migrator, tableName, 'user_id')) {
+              await migrator.database.customStatement(
+                "ALTER TABLE $tableName ADD COLUMN user_id TEXT NOT NULL DEFAULT ''",
+              );
+            }
+          }
+        }
+        // Schema v25：书签补章节归属。偏移是章内的，缺归属时详情页只能跳回
+        // 当前进度章；旧行无从判断归属，保持 NULL 由跳转侧按偏移退化处理。
+        if (from < 25) {
+          if (await _tableExists(migrator, 'cached_reader_bookmarks') &&
+              !await _columnExists(
+                migrator,
+                'cached_reader_bookmarks',
+                'chapter_id',
+              )) {
+            await migrator.database.customStatement(
+              'ALTER TABLE cached_reader_bookmarks ADD COLUMN chapter_id TEXT',
+            );
+          }
+        }
+        // Schema v26：书籍元数据与章节切片缓存把归属账号纳入主键。这两张表的正文、
+        // 样式表池与次序用当前登录用户的密钥加密，共享书籍在不同账号下复用同一个
+        // itemId，不归户就会让换号后的账号命中上一个账号的密文并解密失败。
+        // SQLite 不能原地改主键，按重命名-建新表-回填搬迁；旧行没有归属可判，
+        // 原样搬入并保持空归属，由后续写入自然覆盖。
+        if (from < 26) {
+          if (await _tableExists(migrator, 'cached_reader_books')) {
+            await migrator.database.customStatement(
+              'ALTER TABLE cached_reader_books RENAME TO cached_reader_books_v25',
+            );
+            await migrator.createTable(cachedReaderBooks);
+            await migrator.database.customStatement(
+              'INSERT INTO cached_reader_books '
+              '(user_id, item_id, title, author, description, publisher, '
+              ' language, chapters_json, stylesheet_pool_json, total_chars, '
+              ' item_type, cache_version, cached_at) '
+              "SELECT '', item_id, title, author, description, publisher, "
+              ' language, chapters_json, stylesheet_pool_json, total_chars, '
+              ' item_type, cache_version, cached_at '
+              'FROM cached_reader_books_v25',
+            );
+            await migrator.database.customStatement(
+              'DROP TABLE cached_reader_books_v25',
+            );
+          }
+          if (await _tableExists(migrator, 'cached_reader_chapters')) {
+            await migrator.database.customStatement(
+              'ALTER TABLE cached_reader_chapters '
+              'RENAME TO cached_reader_chapters_v25',
+            );
+            await migrator.createTable(cachedReaderChapters);
+            await migrator.database.customStatement(
+              'INSERT INTO cached_reader_chapters '
+              '(user_id, item_id, content_path, title, chapter_number, '
+              ' char_count, processed_html, stylesheet_refs_json, cached_at) '
+              "SELECT '', item_id, content_path, title, chapter_number, "
+              ' char_count, processed_html, stylesheet_refs_json, cached_at '
+              'FROM cached_reader_chapters_v25',
+            );
+            await migrator.database.customStatement(
+              'DROP TABLE cached_reader_chapters_v25',
             );
           }
         }

@@ -4,3 +4,5 @@ Dockerfile* text eol=lf
 *.env.example text eol=lf
 *.env.*.example text eol=lf
 deploy/**/*.yml text eol=lf
+# 手工复制进仓库的 Web 产物：必须按字节还原，checkout 不得改写行尾。
+frontend/web/drift_worker.js -text

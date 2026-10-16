@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/storage/local_database.dart';
+import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
@@ -455,4 +456,75 @@ void main() {
           ..where((table) => table.id.equals('annotation-2'))).getSingle();
     expect(current.chapterId, 'chapter_2');
   });
+
+  test(
+    'schema v23 adds the pool and the per-chapter refs, old rows still read',
+    () async {
+      await db.close();
+      dbOpen = false;
+      final rawDatabase = sqlite.sqlite3.openInMemory();
+      rawDatabase.execute('''
+      CREATE TABLE cached_reader_books (
+        item_id TEXT NOT NULL,
+        title TEXT,
+        author TEXT,
+        description TEXT,
+        publisher TEXT,
+        language TEXT,
+        chapters_json TEXT NOT NULL DEFAULT '[]',
+        total_chars INTEGER NOT NULL DEFAULT 0,
+        item_type TEXT NOT NULL DEFAULT 'EPUB',
+        cache_version TEXT NOT NULL DEFAULT '',
+        cached_at INTEGER NOT NULL,
+        PRIMARY KEY (item_id)
+      )
+    ''');
+      rawDatabase.execute('''
+      CREATE TABLE cached_reader_chapters (
+        item_id TEXT NOT NULL,
+        content_path TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        chapter_number INTEGER NOT NULL DEFAULT 0,
+        char_count INTEGER NOT NULL DEFAULT 0,
+        processed_html TEXT NOT NULL,
+        cached_at INTEGER NOT NULL,
+        PRIMARY KEY (item_id, content_path)
+      )
+    ''');
+      // 旧行带着样式表载体（插在 body 末尾的那份 <style>）。
+      rawDatabase.execute('''
+      INSERT INTO cached_reader_books (item_id, title, cached_at)
+      VALUES ('book-1', '旧书', 1)
+    ''');
+      rawDatabase.execute('''
+      INSERT INTO cached_reader_chapters
+      (item_id, content_path, processed_html, cached_at) VALUES
+      ('book-1', 'OEBPS/chapter1.xhtml',
+       '<p>正文</p><style>p { text-indent: 2em }</style>', 1)
+    ''');
+      rawDatabase.execute('PRAGMA user_version = 22');
+      final migrated = LocalDatabase(NativeDatabase.opened(rawDatabase));
+      addTearDown(migrated.close);
+
+      final store = ReaderLocalStorage(migrated);
+      final chapter = await store.loadChapterContent(
+        itemId: 'book-1',
+        contentPath: 'OEBPS/chapter1.xhtml',
+      );
+      expect(chapter?.html, contains('<style>'), reason: '迁移不得动旧行正文');
+      expect(chapter?.refs, isEmpty, reason: '旧行没有次序列，读回空表而不是抛错');
+      expect(await store.loadStylesheetPool('book-1'), isEmpty);
+      // 升级后池仍然写得进：单列更新落在同一行上，不会连带重写元数据。
+      expect(
+        await store.saveStylesheetPool(
+          itemId: 'book-1',
+          pool: const {'OEBPS/a.css': 'p { margin-bottom: 1em }'},
+        ),
+        isTrue,
+      );
+      expect((await store.loadStylesheetPool('book-1')).keys, ['OEBPS/a.css']);
+      final meta = await store.loadBookMeta('book-1');
+      expect(meta?['title'], '旧书');
+    },
+  );
 }

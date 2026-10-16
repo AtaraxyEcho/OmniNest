@@ -4,8 +4,14 @@ import 'package:drift/drift.dart';
 ///
 /// 存储 EPUB/TXT 解析后的元数据和章节目录，
 /// 避免每次打开书籍都重新解析。
+///
+/// [userId] 是缓存归属账号并进入主键：`stylesheet_pool_json` 与章节切片按当前
+/// 登录用户的密钥加密，共享书籍在不同账号下复用同一个 itemId，不归户就会让
+/// 换号后的账号命中上一个账号的密文并解密失败。
 class CachedReaderBooks extends Table {
-  /// 书籍条目 ID（主键）
+  TextColumn get userId => text().withDefault(const Constant(''))();
+
+  /// 书籍条目 ID
   TextColumn get itemId => text()();
 
   /// 书籍标题
@@ -26,6 +32,14 @@ class CachedReaderBooks extends Table {
   /// 章节列表 JSON（List<Map>，含 number/title/charCount/contentPath）
   TextColumn get chaptersJson => text().withDefault(const Constant('[]'))();
 
+  /// 这本书声明的样式表池 JSON（归档内路径 → CSS 文本，按 manifest 顺序）。
+  ///
+  /// 一本书一份，随首次章节 ingest 写入；章节行只带自己那份次序引用
+  /// （`cached_reader_chapters.stylesheet_refs_json`）。旧行为 `'{}'`：那类章节正文
+  /// 里自带 `<style>` 载体，解析侧的内联通路照样读得到，不需要兼容写法。
+  TextColumn get stylesheetPoolJson =>
+      text().withDefault(const Constant('{}'))();
+
   /// 总字符数
   IntColumn get totalChars => integer().withDefault(const Constant(0))();
 
@@ -42,5 +56,5 @@ class CachedReaderBooks extends Table {
   DateTimeColumn get cachedAt => dateTime()();
 
   @override
-  Set<Column> get primaryKey => {itemId};
+  Set<Column> get primaryKey => {userId, itemId};
 }

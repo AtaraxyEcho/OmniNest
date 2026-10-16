@@ -504,6 +504,16 @@ class $SyncOperationsTable extends SyncOperations
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _typeMeta = const VerificationMeta('type');
   @override
   late final GeneratedColumn<String> type = GeneratedColumn<String>(
@@ -571,6 +581,7 @@ class $SyncOperationsTable extends SyncOperations
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     type,
     payload,
     status,
@@ -592,6 +603,12 @@ class $SyncOperationsTable extends SyncOperations
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
     }
     if (data.containsKey('type')) {
       context.handle(
@@ -649,6 +666,11 @@ class $SyncOperationsTable extends SyncOperations
             DriftSqlType.int,
             data['${effectivePrefix}id'],
           )!,
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       type:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -689,6 +711,7 @@ class $SyncOperationsTable extends SyncOperations
 
 class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   final int id;
+  final String userId;
   final String type;
   final String payload;
   final String status;
@@ -697,6 +720,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   final DateTime? syncedAt;
   const SyncOperation({
     required this.id,
+    required this.userId,
     required this.type,
     required this.payload,
     required this.status,
@@ -708,6 +732,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['user_id'] = Variable<String>(userId);
     map['type'] = Variable<String>(type);
     map['payload'] = Variable<String>(payload);
     map['status'] = Variable<String>(status);
@@ -722,6 +747,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   SyncOperationsCompanion toCompanion(bool nullToAbsent) {
     return SyncOperationsCompanion(
       id: Value(id),
+      userId: Value(userId),
       type: Value(type),
       payload: Value(payload),
       status: Value(status),
@@ -741,6 +767,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return SyncOperation(
       id: serializer.fromJson<int>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
       type: serializer.fromJson<String>(json['type']),
       payload: serializer.fromJson<String>(json['payload']),
       status: serializer.fromJson<String>(json['status']),
@@ -754,6 +781,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'userId': serializer.toJson<String>(userId),
       'type': serializer.toJson<String>(type),
       'payload': serializer.toJson<String>(payload),
       'status': serializer.toJson<String>(status),
@@ -765,6 +793,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
 
   SyncOperation copyWith({
     int? id,
+    String? userId,
     String? type,
     String? payload,
     String? status,
@@ -773,6 +802,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
     Value<DateTime?> syncedAt = const Value.absent(),
   }) => SyncOperation(
     id: id ?? this.id,
+    userId: userId ?? this.userId,
     type: type ?? this.type,
     payload: payload ?? this.payload,
     status: status ?? this.status,
@@ -783,6 +813,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   SyncOperation copyWithCompanion(SyncOperationsCompanion data) {
     return SyncOperation(
       id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
       type: data.type.present ? data.type.value : this.type,
       payload: data.payload.present ? data.payload.value : this.payload,
       status: data.status.present ? data.status.value : this.status,
@@ -797,6 +828,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   String toString() {
     return (StringBuffer('SyncOperation(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('type: $type, ')
           ..write('payload: $payload, ')
           ..write('status: $status, ')
@@ -808,13 +840,22 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, type, payload, status, retryCount, createdAt, syncedAt);
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    type,
+    payload,
+    status,
+    retryCount,
+    createdAt,
+    syncedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is SyncOperation &&
           other.id == this.id &&
+          other.userId == this.userId &&
           other.type == this.type &&
           other.payload == this.payload &&
           other.status == this.status &&
@@ -825,6 +866,7 @@ class SyncOperation extends DataClass implements Insertable<SyncOperation> {
 
 class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
   final Value<int> id;
+  final Value<String> userId;
   final Value<String> type;
   final Value<String> payload;
   final Value<String> status;
@@ -833,6 +875,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
   final Value<DateTime?> syncedAt;
   const SyncOperationsCompanion({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     this.type = const Value.absent(),
     this.payload = const Value.absent(),
     this.status = const Value.absent(),
@@ -842,6 +885,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
   });
   SyncOperationsCompanion.insert({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     required String type,
     required String payload,
     this.status = const Value.absent(),
@@ -853,6 +897,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
        createdAt = Value(createdAt);
   static Insertable<SyncOperation> custom({
     Expression<int>? id,
+    Expression<String>? userId,
     Expression<String>? type,
     Expression<String>? payload,
     Expression<String>? status,
@@ -862,6 +907,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
       if (type != null) 'type': type,
       if (payload != null) 'payload': payload,
       if (status != null) 'status': status,
@@ -873,6 +919,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
 
   SyncOperationsCompanion copyWith({
     Value<int>? id,
+    Value<String>? userId,
     Value<String>? type,
     Value<String>? payload,
     Value<String>? status,
@@ -882,6 +929,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
   }) {
     return SyncOperationsCompanion(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       type: type ?? this.type,
       payload: payload ?? this.payload,
       status: status ?? this.status,
@@ -896,6 +944,9 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
     }
     if (type.present) {
       map['type'] = Variable<String>(type.value);
@@ -922,6 +973,7 @@ class SyncOperationsCompanion extends UpdateCompanion<SyncOperation> {
   String toString() {
     return (StringBuffer('SyncOperationsCompanion(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('type: $type, ')
           ..write('payload: $payload, ')
           ..write('status: $status, ')
@@ -1389,6 +1441,16 @@ class $CachedReaderProgressTable extends CachedReaderProgress
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $CachedReaderProgressTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
   @override
   late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
@@ -1433,6 +1495,17 @@ class $CachedReaderProgressTable extends CachedReaderProgress
     type: DriftSqlType.double,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _bookProgressMeta = const VerificationMeta(
+    'bookProgress',
+  );
+  @override
+  late final GeneratedColumn<double> bookProgress = GeneratedColumn<double>(
+    'book_progress',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _modeMeta = const VerificationMeta('mode');
   @override
@@ -1543,10 +1616,12 @@ class $CachedReaderProgressTable extends CachedReaderProgress
   );
   @override
   List<GeneratedColumn> get $columns => [
+    userId,
     itemId,
     chapterId,
     charOffset,
     chapterProgress,
+    bookProgress,
     mode,
     pageId,
     pageIndex,
@@ -1570,6 +1645,12 @@ class $CachedReaderProgressTable extends CachedReaderProgress
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
     if (data.containsKey('item_id')) {
       context.handle(
         _itemIdMeta,
@@ -1596,6 +1677,15 @@ class $CachedReaderProgressTable extends CachedReaderProgress
         chapterProgress.isAcceptableOrUnknown(
           data['chapter_progress']!,
           _chapterProgressMeta,
+        ),
+      );
+    }
+    if (data.containsKey('book_progress')) {
+      context.handle(
+        _bookProgressMeta,
+        bookProgress.isAcceptableOrUnknown(
+          data['book_progress']!,
+          _bookProgressMeta,
         ),
       );
     }
@@ -1677,7 +1767,7 @@ class $CachedReaderProgressTable extends CachedReaderProgress
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {itemId, chapterId};
+  Set<GeneratedColumn> get $primaryKey => {userId, itemId, chapterId};
   @override
   CachedReaderProgressData map(
     Map<String, dynamic> data, {
@@ -1685,6 +1775,11 @@ class $CachedReaderProgressTable extends CachedReaderProgress
   }) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return CachedReaderProgressData(
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       itemId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -1705,6 +1800,10 @@ class $CachedReaderProgressTable extends CachedReaderProgress
             DriftSqlType.double,
             data['${effectivePrefix}chapter_progress'],
           )!,
+      bookProgress: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}book_progress'],
+      ),
       mode:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -1758,10 +1857,17 @@ class $CachedReaderProgressTable extends CachedReaderProgress
 
 class CachedReaderProgressData extends DataClass
     implements Insertable<CachedReaderProgressData> {
+  final String userId;
   final String itemId;
   final String chapterId;
   final int charOffset;
   final double chapterProgress;
+
+  /// 全书进度（0-1）；null 表示落盘时清单口径尚不可用。
+  ///
+  /// 缺这一列时停在非首章章首（charOffset 与章内比例都是 0）的本地快照
+  /// 会被判成"没有可读进度"，对账时被服务端旧章位置覆盖。
+  final double? bookProgress;
   final String mode;
   final String? pageId;
   final int? pageIndex;
@@ -1773,10 +1879,12 @@ class CachedReaderProgressData extends DataClass
   final double? intraPageOffset;
   final DateTime updatedAt;
   const CachedReaderProgressData({
+    required this.userId,
     required this.itemId,
     required this.chapterId,
     required this.charOffset,
     required this.chapterProgress,
+    this.bookProgress,
     required this.mode,
     this.pageId,
     this.pageIndex,
@@ -1791,10 +1899,14 @@ class CachedReaderProgressData extends DataClass
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
     map['item_id'] = Variable<String>(itemId);
     map['chapter_id'] = Variable<String>(chapterId);
     map['char_offset'] = Variable<int>(charOffset);
     map['chapter_progress'] = Variable<double>(chapterProgress);
+    if (!nullToAbsent || bookProgress != null) {
+      map['book_progress'] = Variable<double>(bookProgress);
+    }
     map['mode'] = Variable<String>(mode);
     if (!nullToAbsent || pageId != null) {
       map['page_id'] = Variable<String>(pageId);
@@ -1826,10 +1938,15 @@ class CachedReaderProgressData extends DataClass
 
   CachedReaderProgressCompanion toCompanion(bool nullToAbsent) {
     return CachedReaderProgressCompanion(
+      userId: Value(userId),
       itemId: Value(itemId),
       chapterId: Value(chapterId),
       charOffset: Value(charOffset),
       chapterProgress: Value(chapterProgress),
+      bookProgress:
+          bookProgress == null && nullToAbsent
+              ? const Value.absent()
+              : Value(bookProgress),
       mode: Value(mode),
       pageId:
           pageId == null && nullToAbsent ? const Value.absent() : Value(pageId),
@@ -1871,10 +1988,12 @@ class CachedReaderProgressData extends DataClass
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedReaderProgressData(
+      userId: serializer.fromJson<String>(json['userId']),
       itemId: serializer.fromJson<String>(json['itemId']),
       chapterId: serializer.fromJson<String>(json['chapterId']),
       charOffset: serializer.fromJson<int>(json['charOffset']),
       chapterProgress: serializer.fromJson<double>(json['chapterProgress']),
+      bookProgress: serializer.fromJson<double?>(json['bookProgress']),
       mode: serializer.fromJson<String>(json['mode']),
       pageId: serializer.fromJson<String?>(json['pageId']),
       pageIndex: serializer.fromJson<int?>(json['pageIndex']),
@@ -1891,10 +2010,12 @@ class CachedReaderProgressData extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
       'itemId': serializer.toJson<String>(itemId),
       'chapterId': serializer.toJson<String>(chapterId),
       'charOffset': serializer.toJson<int>(charOffset),
       'chapterProgress': serializer.toJson<double>(chapterProgress),
+      'bookProgress': serializer.toJson<double?>(bookProgress),
       'mode': serializer.toJson<String>(mode),
       'pageId': serializer.toJson<String?>(pageId),
       'pageIndex': serializer.toJson<int?>(pageIndex),
@@ -1909,10 +2030,12 @@ class CachedReaderProgressData extends DataClass
   }
 
   CachedReaderProgressData copyWith({
+    String? userId,
     String? itemId,
     String? chapterId,
     int? charOffset,
     double? chapterProgress,
+    Value<double?> bookProgress = const Value.absent(),
     String? mode,
     Value<String?> pageId = const Value.absent(),
     Value<int?> pageIndex = const Value.absent(),
@@ -1924,10 +2047,12 @@ class CachedReaderProgressData extends DataClass
     Value<double?> intraPageOffset = const Value.absent(),
     DateTime? updatedAt,
   }) => CachedReaderProgressData(
+    userId: userId ?? this.userId,
     itemId: itemId ?? this.itemId,
     chapterId: chapterId ?? this.chapterId,
     charOffset: charOffset ?? this.charOffset,
     chapterProgress: chapterProgress ?? this.chapterProgress,
+    bookProgress: bookProgress.present ? bookProgress.value : this.bookProgress,
     mode: mode ?? this.mode,
     pageId: pageId.present ? pageId.value : this.pageId,
     pageIndex: pageIndex.present ? pageIndex.value : this.pageIndex,
@@ -1947,6 +2072,7 @@ class CachedReaderProgressData extends DataClass
     CachedReaderProgressCompanion data,
   ) {
     return CachedReaderProgressData(
+      userId: data.userId.present ? data.userId.value : this.userId,
       itemId: data.itemId.present ? data.itemId.value : this.itemId,
       chapterId: data.chapterId.present ? data.chapterId.value : this.chapterId,
       charOffset:
@@ -1955,6 +2081,10 @@ class CachedReaderProgressData extends DataClass
           data.chapterProgress.present
               ? data.chapterProgress.value
               : this.chapterProgress,
+      bookProgress:
+          data.bookProgress.present
+              ? data.bookProgress.value
+              : this.bookProgress,
       mode: data.mode.present ? data.mode.value : this.mode,
       pageId: data.pageId.present ? data.pageId.value : this.pageId,
       pageIndex: data.pageIndex.present ? data.pageIndex.value : this.pageIndex,
@@ -1984,10 +2114,12 @@ class CachedReaderProgressData extends DataClass
   @override
   String toString() {
     return (StringBuffer('CachedReaderProgressData(')
+          ..write('userId: $userId, ')
           ..write('itemId: $itemId, ')
           ..write('chapterId: $chapterId, ')
           ..write('charOffset: $charOffset, ')
           ..write('chapterProgress: $chapterProgress, ')
+          ..write('bookProgress: $bookProgress, ')
           ..write('mode: $mode, ')
           ..write('pageId: $pageId, ')
           ..write('pageIndex: $pageIndex, ')
@@ -2004,10 +2136,12 @@ class CachedReaderProgressData extends DataClass
 
   @override
   int get hashCode => Object.hash(
+    userId,
     itemId,
     chapterId,
     charOffset,
     chapterProgress,
+    bookProgress,
     mode,
     pageId,
     pageIndex,
@@ -2023,10 +2157,12 @@ class CachedReaderProgressData extends DataClass
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CachedReaderProgressData &&
+          other.userId == this.userId &&
           other.itemId == this.itemId &&
           other.chapterId == this.chapterId &&
           other.charOffset == this.charOffset &&
           other.chapterProgress == this.chapterProgress &&
+          other.bookProgress == this.bookProgress &&
           other.mode == this.mode &&
           other.pageId == this.pageId &&
           other.pageIndex == this.pageIndex &&
@@ -2041,10 +2177,12 @@ class CachedReaderProgressData extends DataClass
 
 class CachedReaderProgressCompanion
     extends UpdateCompanion<CachedReaderProgressData> {
+  final Value<String> userId;
   final Value<String> itemId;
   final Value<String> chapterId;
   final Value<int> charOffset;
   final Value<double> chapterProgress;
+  final Value<double?> bookProgress;
   final Value<String> mode;
   final Value<String?> pageId;
   final Value<int?> pageIndex;
@@ -2057,10 +2195,12 @@ class CachedReaderProgressCompanion
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
   const CachedReaderProgressCompanion({
+    this.userId = const Value.absent(),
     this.itemId = const Value.absent(),
     this.chapterId = const Value.absent(),
     this.charOffset = const Value.absent(),
     this.chapterProgress = const Value.absent(),
+    this.bookProgress = const Value.absent(),
     this.mode = const Value.absent(),
     this.pageId = const Value.absent(),
     this.pageIndex = const Value.absent(),
@@ -2074,10 +2214,12 @@ class CachedReaderProgressCompanion
     this.rowid = const Value.absent(),
   });
   CachedReaderProgressCompanion.insert({
+    this.userId = const Value.absent(),
     required String itemId,
     this.chapterId = const Value.absent(),
     this.charOffset = const Value.absent(),
     this.chapterProgress = const Value.absent(),
+    this.bookProgress = const Value.absent(),
     this.mode = const Value.absent(),
     this.pageId = const Value.absent(),
     this.pageIndex = const Value.absent(),
@@ -2092,10 +2234,12 @@ class CachedReaderProgressCompanion
   }) : itemId = Value(itemId),
        updatedAt = Value(updatedAt);
   static Insertable<CachedReaderProgressData> custom({
+    Expression<String>? userId,
     Expression<String>? itemId,
     Expression<String>? chapterId,
     Expression<int>? charOffset,
     Expression<double>? chapterProgress,
+    Expression<double>? bookProgress,
     Expression<String>? mode,
     Expression<String>? pageId,
     Expression<int>? pageIndex,
@@ -2109,10 +2253,12 @@ class CachedReaderProgressCompanion
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
       if (itemId != null) 'item_id': itemId,
       if (chapterId != null) 'chapter_id': chapterId,
       if (charOffset != null) 'char_offset': charOffset,
       if (chapterProgress != null) 'chapter_progress': chapterProgress,
+      if (bookProgress != null) 'book_progress': bookProgress,
       if (mode != null) 'mode': mode,
       if (pageId != null) 'page_id': pageId,
       if (pageIndex != null) 'page_index': pageIndex,
@@ -2128,10 +2274,12 @@ class CachedReaderProgressCompanion
   }
 
   CachedReaderProgressCompanion copyWith({
+    Value<String>? userId,
     Value<String>? itemId,
     Value<String>? chapterId,
     Value<int>? charOffset,
     Value<double>? chapterProgress,
+    Value<double?>? bookProgress,
     Value<String>? mode,
     Value<String?>? pageId,
     Value<int?>? pageIndex,
@@ -2145,10 +2293,12 @@ class CachedReaderProgressCompanion
     Value<int>? rowid,
   }) {
     return CachedReaderProgressCompanion(
+      userId: userId ?? this.userId,
       itemId: itemId ?? this.itemId,
       chapterId: chapterId ?? this.chapterId,
       charOffset: charOffset ?? this.charOffset,
       chapterProgress: chapterProgress ?? this.chapterProgress,
+      bookProgress: bookProgress ?? this.bookProgress,
       mode: mode ?? this.mode,
       pageId: pageId ?? this.pageId,
       pageIndex: pageIndex ?? this.pageIndex,
@@ -2166,6 +2316,9 @@ class CachedReaderProgressCompanion
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (itemId.present) {
       map['item_id'] = Variable<String>(itemId.value);
     }
@@ -2177,6 +2330,9 @@ class CachedReaderProgressCompanion
     }
     if (chapterProgress.present) {
       map['chapter_progress'] = Variable<double>(chapterProgress.value);
+    }
+    if (bookProgress.present) {
+      map['book_progress'] = Variable<double>(bookProgress.value);
     }
     if (mode.present) {
       map['mode'] = Variable<String>(mode.value);
@@ -2217,10 +2373,12 @@ class CachedReaderProgressCompanion
   @override
   String toString() {
     return (StringBuffer('CachedReaderProgressCompanion(')
+          ..write('userId: $userId, ')
           ..write('itemId: $itemId, ')
           ..write('chapterId: $chapterId, ')
           ..write('charOffset: $charOffset, ')
           ..write('chapterProgress: $chapterProgress, ')
+          ..write('bookProgress: $bookProgress, ')
           ..write('mode: $mode, ')
           ..write('pageId: $pageId, ')
           ..write('pageIndex: $pageIndex, ')
@@ -2252,6 +2410,16 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _readerItemIdMeta = const VerificationMeta(
     'readerItemId',
   );
@@ -2262,6 +2430,17 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIdMeta = const VerificationMeta(
+    'chapterId',
+  );
+  @override
+  late final GeneratedColumn<String> chapterId = GeneratedColumn<String>(
+    'chapter_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _charOffsetMeta = const VerificationMeta(
     'charOffset',
@@ -2310,7 +2489,9 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     readerItemId,
+    chapterId,
     charOffset,
     progressPercent,
     note,
@@ -2333,6 +2514,12 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
     } else if (isInserting) {
       context.missing(_idMeta);
     }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
     if (data.containsKey('reader_item_id')) {
       context.handle(
         _readerItemIdMeta,
@@ -2343,6 +2530,12 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
       );
     } else if (isInserting) {
       context.missing(_readerItemIdMeta);
+    }
+    if (data.containsKey('chapter_id')) {
+      context.handle(
+        _chapterIdMeta,
+        chapterId.isAcceptableOrUnknown(data['chapter_id']!, _chapterIdMeta),
+      );
     }
     if (data.containsKey('char_offset')) {
       context.handle(
@@ -2387,11 +2580,20 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
             DriftSqlType.string,
             data['${effectivePrefix}id'],
           )!,
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       readerItemId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
             data['${effectivePrefix}reader_item_id'],
           )!,
+      chapterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}chapter_id'],
+      ),
       charOffset:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
@@ -2423,14 +2625,22 @@ class $CachedReaderBookmarksTable extends CachedReaderBookmarks
 class CachedReaderBookmark extends DataClass
     implements Insertable<CachedReaderBookmark> {
   final String id;
+  final String userId;
   final String readerItemId;
+
+  /// 书签所属章节标识。
+  ///
+  /// `char_offset` 是章内局部偏移，没有归属章节时详情页只能跳回当前进度章。
+  final String? chapterId;
   final int charOffset;
   final double progressPercent;
   final String? note;
   final DateTime createdAt;
   const CachedReaderBookmark({
     required this.id,
+    required this.userId,
     required this.readerItemId,
+    this.chapterId,
     required this.charOffset,
     required this.progressPercent,
     this.note,
@@ -2440,7 +2650,11 @@ class CachedReaderBookmark extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
     map['reader_item_id'] = Variable<String>(readerItemId);
+    if (!nullToAbsent || chapterId != null) {
+      map['chapter_id'] = Variable<String>(chapterId);
+    }
     map['char_offset'] = Variable<int>(charOffset);
     map['progress_percent'] = Variable<double>(progressPercent);
     if (!nullToAbsent || note != null) {
@@ -2453,7 +2667,12 @@ class CachedReaderBookmark extends DataClass
   CachedReaderBookmarksCompanion toCompanion(bool nullToAbsent) {
     return CachedReaderBookmarksCompanion(
       id: Value(id),
+      userId: Value(userId),
       readerItemId: Value(readerItemId),
+      chapterId:
+          chapterId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(chapterId),
       charOffset: Value(charOffset),
       progressPercent: Value(progressPercent),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
@@ -2468,7 +2687,9 @@ class CachedReaderBookmark extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedReaderBookmark(
       id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
       readerItemId: serializer.fromJson<String>(json['readerItemId']),
+      chapterId: serializer.fromJson<String?>(json['chapterId']),
       charOffset: serializer.fromJson<int>(json['charOffset']),
       progressPercent: serializer.fromJson<double>(json['progressPercent']),
       note: serializer.fromJson<String?>(json['note']),
@@ -2480,7 +2701,9 @@ class CachedReaderBookmark extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
       'readerItemId': serializer.toJson<String>(readerItemId),
+      'chapterId': serializer.toJson<String?>(chapterId),
       'charOffset': serializer.toJson<int>(charOffset),
       'progressPercent': serializer.toJson<double>(progressPercent),
       'note': serializer.toJson<String?>(note),
@@ -2490,14 +2713,18 @@ class CachedReaderBookmark extends DataClass
 
   CachedReaderBookmark copyWith({
     String? id,
+    String? userId,
     String? readerItemId,
+    Value<String?> chapterId = const Value.absent(),
     int? charOffset,
     double? progressPercent,
     Value<String?> note = const Value.absent(),
     DateTime? createdAt,
   }) => CachedReaderBookmark(
     id: id ?? this.id,
+    userId: userId ?? this.userId,
     readerItemId: readerItemId ?? this.readerItemId,
+    chapterId: chapterId.present ? chapterId.value : this.chapterId,
     charOffset: charOffset ?? this.charOffset,
     progressPercent: progressPercent ?? this.progressPercent,
     note: note.present ? note.value : this.note,
@@ -2506,10 +2733,12 @@ class CachedReaderBookmark extends DataClass
   CachedReaderBookmark copyWithCompanion(CachedReaderBookmarksCompanion data) {
     return CachedReaderBookmark(
       id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
       readerItemId:
           data.readerItemId.present
               ? data.readerItemId.value
               : this.readerItemId,
+      chapterId: data.chapterId.present ? data.chapterId.value : this.chapterId,
       charOffset:
           data.charOffset.present ? data.charOffset.value : this.charOffset,
       progressPercent:
@@ -2525,7 +2754,9 @@ class CachedReaderBookmark extends DataClass
   String toString() {
     return (StringBuffer('CachedReaderBookmark(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('readerItemId: $readerItemId, ')
+          ..write('chapterId: $chapterId, ')
           ..write('charOffset: $charOffset, ')
           ..write('progressPercent: $progressPercent, ')
           ..write('note: $note, ')
@@ -2537,7 +2768,9 @@ class CachedReaderBookmark extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    userId,
     readerItemId,
+    chapterId,
     charOffset,
     progressPercent,
     note,
@@ -2548,7 +2781,9 @@ class CachedReaderBookmark extends DataClass
       identical(this, other) ||
       (other is CachedReaderBookmark &&
           other.id == this.id &&
+          other.userId == this.userId &&
           other.readerItemId == this.readerItemId &&
+          other.chapterId == this.chapterId &&
           other.charOffset == this.charOffset &&
           other.progressPercent == this.progressPercent &&
           other.note == this.note &&
@@ -2558,7 +2793,9 @@ class CachedReaderBookmark extends DataClass
 class CachedReaderBookmarksCompanion
     extends UpdateCompanion<CachedReaderBookmark> {
   final Value<String> id;
+  final Value<String> userId;
   final Value<String> readerItemId;
+  final Value<String?> chapterId;
   final Value<int> charOffset;
   final Value<double> progressPercent;
   final Value<String?> note;
@@ -2566,7 +2803,9 @@ class CachedReaderBookmarksCompanion
   final Value<int> rowid;
   const CachedReaderBookmarksCompanion({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     this.readerItemId = const Value.absent(),
+    this.chapterId = const Value.absent(),
     this.charOffset = const Value.absent(),
     this.progressPercent = const Value.absent(),
     this.note = const Value.absent(),
@@ -2575,7 +2814,9 @@ class CachedReaderBookmarksCompanion
   });
   CachedReaderBookmarksCompanion.insert({
     required String id,
+    this.userId = const Value.absent(),
     required String readerItemId,
+    this.chapterId = const Value.absent(),
     this.charOffset = const Value.absent(),
     this.progressPercent = const Value.absent(),
     this.note = const Value.absent(),
@@ -2586,7 +2827,9 @@ class CachedReaderBookmarksCompanion
        createdAt = Value(createdAt);
   static Insertable<CachedReaderBookmark> custom({
     Expression<String>? id,
+    Expression<String>? userId,
     Expression<String>? readerItemId,
+    Expression<String>? chapterId,
     Expression<int>? charOffset,
     Expression<double>? progressPercent,
     Expression<String>? note,
@@ -2595,7 +2838,9 @@ class CachedReaderBookmarksCompanion
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
       if (readerItemId != null) 'reader_item_id': readerItemId,
+      if (chapterId != null) 'chapter_id': chapterId,
       if (charOffset != null) 'char_offset': charOffset,
       if (progressPercent != null) 'progress_percent': progressPercent,
       if (note != null) 'note': note,
@@ -2606,7 +2851,9 @@ class CachedReaderBookmarksCompanion
 
   CachedReaderBookmarksCompanion copyWith({
     Value<String>? id,
+    Value<String>? userId,
     Value<String>? readerItemId,
+    Value<String?>? chapterId,
     Value<int>? charOffset,
     Value<double>? progressPercent,
     Value<String?>? note,
@@ -2615,7 +2862,9 @@ class CachedReaderBookmarksCompanion
   }) {
     return CachedReaderBookmarksCompanion(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       readerItemId: readerItemId ?? this.readerItemId,
+      chapterId: chapterId ?? this.chapterId,
       charOffset: charOffset ?? this.charOffset,
       progressPercent: progressPercent ?? this.progressPercent,
       note: note ?? this.note,
@@ -2630,8 +2879,14 @@ class CachedReaderBookmarksCompanion
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (readerItemId.present) {
       map['reader_item_id'] = Variable<String>(readerItemId.value);
+    }
+    if (chapterId.present) {
+      map['chapter_id'] = Variable<String>(chapterId.value);
     }
     if (charOffset.present) {
       map['char_offset'] = Variable<int>(charOffset.value);
@@ -2655,7 +2910,9 @@ class CachedReaderBookmarksCompanion
   String toString() {
     return (StringBuffer('CachedReaderBookmarksCompanion(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('readerItemId: $readerItemId, ')
+          ..write('chapterId: $chapterId, ')
           ..write('charOffset: $charOffset, ')
           ..write('progressPercent: $progressPercent, ')
           ..write('note: $note, ')
@@ -2680,6 +2937,16 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _readerItemIdMeta = const VerificationMeta(
     'readerItemId',
@@ -2769,6 +3036,7 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     readerItemId,
     chapterId,
     startOffset,
@@ -2794,6 +3062,12 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
     }
     if (data.containsKey('reader_item_id')) {
       context.handle(
@@ -2874,6 +3148,11 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
             DriftSqlType.string,
             data['${effectivePrefix}id'],
           )!,
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       readerItemId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -2923,6 +3202,7 @@ class $CachedReaderAnnotationsTable extends CachedReaderAnnotations
 class CachedReaderAnnotation extends DataClass
     implements Insertable<CachedReaderAnnotation> {
   final String id;
+  final String userId;
   final String readerItemId;
   final String? chapterId;
   final int startOffset;
@@ -2933,6 +3213,7 @@ class CachedReaderAnnotation extends DataClass
   final DateTime createdAt;
   const CachedReaderAnnotation({
     required this.id,
+    required this.userId,
     required this.readerItemId,
     this.chapterId,
     required this.startOffset,
@@ -2946,6 +3227,7 @@ class CachedReaderAnnotation extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
     map['reader_item_id'] = Variable<String>(readerItemId);
     if (!nullToAbsent || chapterId != null) {
       map['chapter_id'] = Variable<String>(chapterId);
@@ -2966,6 +3248,7 @@ class CachedReaderAnnotation extends DataClass
   CachedReaderAnnotationsCompanion toCompanion(bool nullToAbsent) {
     return CachedReaderAnnotationsCompanion(
       id: Value(id),
+      userId: Value(userId),
       readerItemId: Value(readerItemId),
       chapterId:
           chapterId == null && nullToAbsent
@@ -2990,6 +3273,7 @@ class CachedReaderAnnotation extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedReaderAnnotation(
       id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
       readerItemId: serializer.fromJson<String>(json['readerItemId']),
       chapterId: serializer.fromJson<String?>(json['chapterId']),
       startOffset: serializer.fromJson<int>(json['startOffset']),
@@ -3005,6 +3289,7 @@ class CachedReaderAnnotation extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
       'readerItemId': serializer.toJson<String>(readerItemId),
       'chapterId': serializer.toJson<String?>(chapterId),
       'startOffset': serializer.toJson<int>(startOffset),
@@ -3018,6 +3303,7 @@ class CachedReaderAnnotation extends DataClass
 
   CachedReaderAnnotation copyWith({
     String? id,
+    String? userId,
     String? readerItemId,
     Value<String?> chapterId = const Value.absent(),
     int? startOffset,
@@ -3028,6 +3314,7 @@ class CachedReaderAnnotation extends DataClass
     DateTime? createdAt,
   }) => CachedReaderAnnotation(
     id: id ?? this.id,
+    userId: userId ?? this.userId,
     readerItemId: readerItemId ?? this.readerItemId,
     chapterId: chapterId.present ? chapterId.value : this.chapterId,
     startOffset: startOffset ?? this.startOffset,
@@ -3043,6 +3330,7 @@ class CachedReaderAnnotation extends DataClass
   ) {
     return CachedReaderAnnotation(
       id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
       readerItemId:
           data.readerItemId.present
               ? data.readerItemId.value
@@ -3065,6 +3353,7 @@ class CachedReaderAnnotation extends DataClass
   String toString() {
     return (StringBuffer('CachedReaderAnnotation(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('readerItemId: $readerItemId, ')
           ..write('chapterId: $chapterId, ')
           ..write('startOffset: $startOffset, ')
@@ -3080,6 +3369,7 @@ class CachedReaderAnnotation extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    userId,
     readerItemId,
     chapterId,
     startOffset,
@@ -3094,6 +3384,7 @@ class CachedReaderAnnotation extends DataClass
       identical(this, other) ||
       (other is CachedReaderAnnotation &&
           other.id == this.id &&
+          other.userId == this.userId &&
           other.readerItemId == this.readerItemId &&
           other.chapterId == this.chapterId &&
           other.startOffset == this.startOffset &&
@@ -3107,6 +3398,7 @@ class CachedReaderAnnotation extends DataClass
 class CachedReaderAnnotationsCompanion
     extends UpdateCompanion<CachedReaderAnnotation> {
   final Value<String> id;
+  final Value<String> userId;
   final Value<String> readerItemId;
   final Value<String?> chapterId;
   final Value<int> startOffset;
@@ -3118,6 +3410,7 @@ class CachedReaderAnnotationsCompanion
   final Value<int> rowid;
   const CachedReaderAnnotationsCompanion({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     this.readerItemId = const Value.absent(),
     this.chapterId = const Value.absent(),
     this.startOffset = const Value.absent(),
@@ -3130,6 +3423,7 @@ class CachedReaderAnnotationsCompanion
   });
   CachedReaderAnnotationsCompanion.insert({
     required String id,
+    this.userId = const Value.absent(),
     required String readerItemId,
     this.chapterId = const Value.absent(),
     required int startOffset,
@@ -3146,6 +3440,7 @@ class CachedReaderAnnotationsCompanion
        createdAt = Value(createdAt);
   static Insertable<CachedReaderAnnotation> custom({
     Expression<String>? id,
+    Expression<String>? userId,
     Expression<String>? readerItemId,
     Expression<String>? chapterId,
     Expression<int>? startOffset,
@@ -3158,6 +3453,7 @@ class CachedReaderAnnotationsCompanion
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
       if (readerItemId != null) 'reader_item_id': readerItemId,
       if (chapterId != null) 'chapter_id': chapterId,
       if (startOffset != null) 'start_offset': startOffset,
@@ -3172,6 +3468,7 @@ class CachedReaderAnnotationsCompanion
 
   CachedReaderAnnotationsCompanion copyWith({
     Value<String>? id,
+    Value<String>? userId,
     Value<String>? readerItemId,
     Value<String?>? chapterId,
     Value<int>? startOffset,
@@ -3184,6 +3481,7 @@ class CachedReaderAnnotationsCompanion
   }) {
     return CachedReaderAnnotationsCompanion(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       readerItemId: readerItemId ?? this.readerItemId,
       chapterId: chapterId ?? this.chapterId,
       startOffset: startOffset ?? this.startOffset,
@@ -3201,6 +3499,9 @@ class CachedReaderAnnotationsCompanion
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
     }
     if (readerItemId.present) {
       map['reader_item_id'] = Variable<String>(readerItemId.value);
@@ -3236,6 +3537,7 @@ class CachedReaderAnnotationsCompanion
   String toString() {
     return (StringBuffer('CachedReaderAnnotationsCompanion(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('readerItemId: $readerItemId, ')
           ..write('chapterId: $chapterId, ')
           ..write('startOffset: $startOffset, ')
@@ -3264,6 +3566,16 @@ class $CachedReaderNotesTable extends CachedReaderNotes
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _readerItemIdMeta = const VerificationMeta(
     'readerItemId',
@@ -3321,6 +3633,7 @@ class $CachedReaderNotesTable extends CachedReaderNotes
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     readerItemId,
     charOffset,
     title,
@@ -3343,6 +3656,12 @@ class $CachedReaderNotesTable extends CachedReaderNotes
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
     }
     if (data.containsKey('reader_item_id')) {
       context.handle(
@@ -3397,6 +3716,11 @@ class $CachedReaderNotesTable extends CachedReaderNotes
             DriftSqlType.string,
             data['${effectivePrefix}id'],
           )!,
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       readerItemId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -3432,6 +3756,7 @@ class $CachedReaderNotesTable extends CachedReaderNotes
 class CachedReaderNote extends DataClass
     implements Insertable<CachedReaderNote> {
   final String id;
+  final String userId;
   final String readerItemId;
   final int? charOffset;
   final String? title;
@@ -3439,6 +3764,7 @@ class CachedReaderNote extends DataClass
   final DateTime createdAt;
   const CachedReaderNote({
     required this.id,
+    required this.userId,
     required this.readerItemId,
     this.charOffset,
     this.title,
@@ -3449,6 +3775,7 @@ class CachedReaderNote extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
     map['reader_item_id'] = Variable<String>(readerItemId);
     if (!nullToAbsent || charOffset != null) {
       map['char_offset'] = Variable<int>(charOffset);
@@ -3464,6 +3791,7 @@ class CachedReaderNote extends DataClass
   CachedReaderNotesCompanion toCompanion(bool nullToAbsent) {
     return CachedReaderNotesCompanion(
       id: Value(id),
+      userId: Value(userId),
       readerItemId: Value(readerItemId),
       charOffset:
           charOffset == null && nullToAbsent
@@ -3483,6 +3811,7 @@ class CachedReaderNote extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedReaderNote(
       id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
       readerItemId: serializer.fromJson<String>(json['readerItemId']),
       charOffset: serializer.fromJson<int?>(json['charOffset']),
       title: serializer.fromJson<String?>(json['title']),
@@ -3495,6 +3824,7 @@ class CachedReaderNote extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
       'readerItemId': serializer.toJson<String>(readerItemId),
       'charOffset': serializer.toJson<int?>(charOffset),
       'title': serializer.toJson<String?>(title),
@@ -3505,6 +3835,7 @@ class CachedReaderNote extends DataClass
 
   CachedReaderNote copyWith({
     String? id,
+    String? userId,
     String? readerItemId,
     Value<int?> charOffset = const Value.absent(),
     Value<String?> title = const Value.absent(),
@@ -3512,6 +3843,7 @@ class CachedReaderNote extends DataClass
     DateTime? createdAt,
   }) => CachedReaderNote(
     id: id ?? this.id,
+    userId: userId ?? this.userId,
     readerItemId: readerItemId ?? this.readerItemId,
     charOffset: charOffset.present ? charOffset.value : this.charOffset,
     title: title.present ? title.value : this.title,
@@ -3521,6 +3853,7 @@ class CachedReaderNote extends DataClass
   CachedReaderNote copyWithCompanion(CachedReaderNotesCompanion data) {
     return CachedReaderNote(
       id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
       readerItemId:
           data.readerItemId.present
               ? data.readerItemId.value
@@ -3537,6 +3870,7 @@ class CachedReaderNote extends DataClass
   String toString() {
     return (StringBuffer('CachedReaderNote(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('readerItemId: $readerItemId, ')
           ..write('charOffset: $charOffset, ')
           ..write('title: $title, ')
@@ -3547,13 +3881,21 @@ class CachedReaderNote extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, readerItemId, charOffset, title, content, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    readerItemId,
+    charOffset,
+    title,
+    content,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CachedReaderNote &&
           other.id == this.id &&
+          other.userId == this.userId &&
           other.readerItemId == this.readerItemId &&
           other.charOffset == this.charOffset &&
           other.title == this.title &&
@@ -3563,6 +3905,7 @@ class CachedReaderNote extends DataClass
 
 class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   final Value<String> id;
+  final Value<String> userId;
   final Value<String> readerItemId;
   final Value<int?> charOffset;
   final Value<String?> title;
@@ -3571,6 +3914,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   final Value<int> rowid;
   const CachedReaderNotesCompanion({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     this.readerItemId = const Value.absent(),
     this.charOffset = const Value.absent(),
     this.title = const Value.absent(),
@@ -3580,6 +3924,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   });
   CachedReaderNotesCompanion.insert({
     required String id,
+    this.userId = const Value.absent(),
     required String readerItemId,
     this.charOffset = const Value.absent(),
     this.title = const Value.absent(),
@@ -3592,6 +3937,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
        createdAt = Value(createdAt);
   static Insertable<CachedReaderNote> custom({
     Expression<String>? id,
+    Expression<String>? userId,
     Expression<String>? readerItemId,
     Expression<int>? charOffset,
     Expression<String>? title,
@@ -3601,6 +3947,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
       if (readerItemId != null) 'reader_item_id': readerItemId,
       if (charOffset != null) 'char_offset': charOffset,
       if (title != null) 'title': title,
@@ -3612,6 +3959,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
 
   CachedReaderNotesCompanion copyWith({
     Value<String>? id,
+    Value<String>? userId,
     Value<String>? readerItemId,
     Value<int?>? charOffset,
     Value<String?>? title,
@@ -3621,6 +3969,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   }) {
     return CachedReaderNotesCompanion(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       readerItemId: readerItemId ?? this.readerItemId,
       charOffset: charOffset ?? this.charOffset,
       title: title ?? this.title,
@@ -3635,6 +3984,9 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
     }
     if (readerItemId.present) {
       map['reader_item_id'] = Variable<String>(readerItemId.value);
@@ -3661,6 +4013,7 @@ class CachedReaderNotesCompanion extends UpdateCompanion<CachedReaderNote> {
   String toString() {
     return (StringBuffer('CachedReaderNotesCompanion(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('readerItemId: $readerItemId, ')
           ..write('charOffset: $charOffset, ')
           ..write('title: $title, ')
@@ -3678,6 +4031,16 @@ class $CachedReaderBooksTable extends CachedReaderBooks
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $CachedReaderBooksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
   @override
   late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
@@ -3750,6 +4113,18 @@ class $CachedReaderBooksTable extends CachedReaderBooks
     requiredDuringInsert: false,
     defaultValue: const Constant('[]'),
   );
+  static const VerificationMeta _stylesheetPoolJsonMeta =
+      const VerificationMeta('stylesheetPoolJson');
+  @override
+  late final GeneratedColumn<String> stylesheetPoolJson =
+      GeneratedColumn<String>(
+        'stylesheet_pool_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('{}'),
+      );
   static const VerificationMeta _totalCharsMeta = const VerificationMeta(
     'totalChars',
   );
@@ -3799,6 +4174,7 @@ class $CachedReaderBooksTable extends CachedReaderBooks
   );
   @override
   List<GeneratedColumn> get $columns => [
+    userId,
     itemId,
     title,
     author,
@@ -3806,6 +4182,7 @@ class $CachedReaderBooksTable extends CachedReaderBooks
     publisher,
     language,
     chaptersJson,
+    stylesheetPoolJson,
     totalChars,
     itemType,
     cacheVersion,
@@ -3823,6 +4200,12 @@ class $CachedReaderBooksTable extends CachedReaderBooks
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
     if (data.containsKey('item_id')) {
       context.handle(
         _itemIdMeta,
@@ -3873,6 +4256,15 @@ class $CachedReaderBooksTable extends CachedReaderBooks
         ),
       );
     }
+    if (data.containsKey('stylesheet_pool_json')) {
+      context.handle(
+        _stylesheetPoolJsonMeta,
+        stylesheetPoolJson.isAcceptableOrUnknown(
+          data['stylesheet_pool_json']!,
+          _stylesheetPoolJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('total_chars')) {
       context.handle(
         _totalCharsMeta,
@@ -3906,11 +4298,16 @@ class $CachedReaderBooksTable extends CachedReaderBooks
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {itemId};
+  Set<GeneratedColumn> get $primaryKey => {userId, itemId};
   @override
   CachedReaderBook map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return CachedReaderBook(
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       itemId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -3940,6 +4337,11 @@ class $CachedReaderBooksTable extends CachedReaderBooks
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
             data['${effectivePrefix}chapters_json'],
+          )!,
+      stylesheetPoolJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}stylesheet_pool_json'],
           )!,
       totalChars:
           attachedDatabase.typeMapping.read(
@@ -3972,7 +4374,9 @@ class $CachedReaderBooksTable extends CachedReaderBooks
 
 class CachedReaderBook extends DataClass
     implements Insertable<CachedReaderBook> {
-  /// 书籍条目 ID（主键）
+  final String userId;
+
+  /// 书籍条目 ID
   final String itemId;
 
   /// 书籍标题
@@ -3993,6 +4397,13 @@ class CachedReaderBook extends DataClass
   /// 章节列表 JSON（List<Map>，含 number/title/charCount/contentPath）
   final String chaptersJson;
 
+  /// 这本书声明的样式表池 JSON（归档内路径 → CSS 文本，按 manifest 顺序）。
+  ///
+  /// 一本书一份，随首次章节 ingest 写入；章节行只带自己那份次序引用
+  /// （`cached_reader_chapters.stylesheet_refs_json`）。旧行为 `'{}'`：那类章节正文
+  /// 里自带 `<style>` 载体，解析侧的内联通路照样读得到，不需要兼容写法。
+  final String stylesheetPoolJson;
+
   /// 总字符数
   final int totalChars;
 
@@ -4008,6 +4419,7 @@ class CachedReaderBook extends DataClass
   /// 缓存创建时间
   final DateTime cachedAt;
   const CachedReaderBook({
+    required this.userId,
     required this.itemId,
     this.title,
     this.author,
@@ -4015,6 +4427,7 @@ class CachedReaderBook extends DataClass
     this.publisher,
     this.language,
     required this.chaptersJson,
+    required this.stylesheetPoolJson,
     required this.totalChars,
     required this.itemType,
     required this.cacheVersion,
@@ -4023,6 +4436,7 @@ class CachedReaderBook extends DataClass
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
     map['item_id'] = Variable<String>(itemId);
     if (!nullToAbsent || title != null) {
       map['title'] = Variable<String>(title);
@@ -4040,6 +4454,7 @@ class CachedReaderBook extends DataClass
       map['language'] = Variable<String>(language);
     }
     map['chapters_json'] = Variable<String>(chaptersJson);
+    map['stylesheet_pool_json'] = Variable<String>(stylesheetPoolJson);
     map['total_chars'] = Variable<int>(totalChars);
     map['item_type'] = Variable<String>(itemType);
     map['cache_version'] = Variable<String>(cacheVersion);
@@ -4049,6 +4464,7 @@ class CachedReaderBook extends DataClass
 
   CachedReaderBooksCompanion toCompanion(bool nullToAbsent) {
     return CachedReaderBooksCompanion(
+      userId: Value(userId),
       itemId: Value(itemId),
       title:
           title == null && nullToAbsent ? const Value.absent() : Value(title),
@@ -4067,6 +4483,7 @@ class CachedReaderBook extends DataClass
               ? const Value.absent()
               : Value(language),
       chaptersJson: Value(chaptersJson),
+      stylesheetPoolJson: Value(stylesheetPoolJson),
       totalChars: Value(totalChars),
       itemType: Value(itemType),
       cacheVersion: Value(cacheVersion),
@@ -4080,6 +4497,7 @@ class CachedReaderBook extends DataClass
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedReaderBook(
+      userId: serializer.fromJson<String>(json['userId']),
       itemId: serializer.fromJson<String>(json['itemId']),
       title: serializer.fromJson<String?>(json['title']),
       author: serializer.fromJson<String?>(json['author']),
@@ -4087,6 +4505,9 @@ class CachedReaderBook extends DataClass
       publisher: serializer.fromJson<String?>(json['publisher']),
       language: serializer.fromJson<String?>(json['language']),
       chaptersJson: serializer.fromJson<String>(json['chaptersJson']),
+      stylesheetPoolJson: serializer.fromJson<String>(
+        json['stylesheetPoolJson'],
+      ),
       totalChars: serializer.fromJson<int>(json['totalChars']),
       itemType: serializer.fromJson<String>(json['itemType']),
       cacheVersion: serializer.fromJson<String>(json['cacheVersion']),
@@ -4097,6 +4518,7 @@ class CachedReaderBook extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
       'itemId': serializer.toJson<String>(itemId),
       'title': serializer.toJson<String?>(title),
       'author': serializer.toJson<String?>(author),
@@ -4104,6 +4526,7 @@ class CachedReaderBook extends DataClass
       'publisher': serializer.toJson<String?>(publisher),
       'language': serializer.toJson<String?>(language),
       'chaptersJson': serializer.toJson<String>(chaptersJson),
+      'stylesheetPoolJson': serializer.toJson<String>(stylesheetPoolJson),
       'totalChars': serializer.toJson<int>(totalChars),
       'itemType': serializer.toJson<String>(itemType),
       'cacheVersion': serializer.toJson<String>(cacheVersion),
@@ -4112,6 +4535,7 @@ class CachedReaderBook extends DataClass
   }
 
   CachedReaderBook copyWith({
+    String? userId,
     String? itemId,
     Value<String?> title = const Value.absent(),
     Value<String?> author = const Value.absent(),
@@ -4119,11 +4543,13 @@ class CachedReaderBook extends DataClass
     Value<String?> publisher = const Value.absent(),
     Value<String?> language = const Value.absent(),
     String? chaptersJson,
+    String? stylesheetPoolJson,
     int? totalChars,
     String? itemType,
     String? cacheVersion,
     DateTime? cachedAt,
   }) => CachedReaderBook(
+    userId: userId ?? this.userId,
     itemId: itemId ?? this.itemId,
     title: title.present ? title.value : this.title,
     author: author.present ? author.value : this.author,
@@ -4131,6 +4557,7 @@ class CachedReaderBook extends DataClass
     publisher: publisher.present ? publisher.value : this.publisher,
     language: language.present ? language.value : this.language,
     chaptersJson: chaptersJson ?? this.chaptersJson,
+    stylesheetPoolJson: stylesheetPoolJson ?? this.stylesheetPoolJson,
     totalChars: totalChars ?? this.totalChars,
     itemType: itemType ?? this.itemType,
     cacheVersion: cacheVersion ?? this.cacheVersion,
@@ -4138,6 +4565,7 @@ class CachedReaderBook extends DataClass
   );
   CachedReaderBook copyWithCompanion(CachedReaderBooksCompanion data) {
     return CachedReaderBook(
+      userId: data.userId.present ? data.userId.value : this.userId,
       itemId: data.itemId.present ? data.itemId.value : this.itemId,
       title: data.title.present ? data.title.value : this.title,
       author: data.author.present ? data.author.value : this.author,
@@ -4149,6 +4577,10 @@ class CachedReaderBook extends DataClass
           data.chaptersJson.present
               ? data.chaptersJson.value
               : this.chaptersJson,
+      stylesheetPoolJson:
+          data.stylesheetPoolJson.present
+              ? data.stylesheetPoolJson.value
+              : this.stylesheetPoolJson,
       totalChars:
           data.totalChars.present ? data.totalChars.value : this.totalChars,
       itemType: data.itemType.present ? data.itemType.value : this.itemType,
@@ -4163,6 +4595,7 @@ class CachedReaderBook extends DataClass
   @override
   String toString() {
     return (StringBuffer('CachedReaderBook(')
+          ..write('userId: $userId, ')
           ..write('itemId: $itemId, ')
           ..write('title: $title, ')
           ..write('author: $author, ')
@@ -4170,6 +4603,7 @@ class CachedReaderBook extends DataClass
           ..write('publisher: $publisher, ')
           ..write('language: $language, ')
           ..write('chaptersJson: $chaptersJson, ')
+          ..write('stylesheetPoolJson: $stylesheetPoolJson, ')
           ..write('totalChars: $totalChars, ')
           ..write('itemType: $itemType, ')
           ..write('cacheVersion: $cacheVersion, ')
@@ -4180,6 +4614,7 @@ class CachedReaderBook extends DataClass
 
   @override
   int get hashCode => Object.hash(
+    userId,
     itemId,
     title,
     author,
@@ -4187,6 +4622,7 @@ class CachedReaderBook extends DataClass
     publisher,
     language,
     chaptersJson,
+    stylesheetPoolJson,
     totalChars,
     itemType,
     cacheVersion,
@@ -4196,6 +4632,7 @@ class CachedReaderBook extends DataClass
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CachedReaderBook &&
+          other.userId == this.userId &&
           other.itemId == this.itemId &&
           other.title == this.title &&
           other.author == this.author &&
@@ -4203,6 +4640,7 @@ class CachedReaderBook extends DataClass
           other.publisher == this.publisher &&
           other.language == this.language &&
           other.chaptersJson == this.chaptersJson &&
+          other.stylesheetPoolJson == this.stylesheetPoolJson &&
           other.totalChars == this.totalChars &&
           other.itemType == this.itemType &&
           other.cacheVersion == this.cacheVersion &&
@@ -4210,6 +4648,7 @@ class CachedReaderBook extends DataClass
 }
 
 class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
+  final Value<String> userId;
   final Value<String> itemId;
   final Value<String?> title;
   final Value<String?> author;
@@ -4217,12 +4656,14 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
   final Value<String?> publisher;
   final Value<String?> language;
   final Value<String> chaptersJson;
+  final Value<String> stylesheetPoolJson;
   final Value<int> totalChars;
   final Value<String> itemType;
   final Value<String> cacheVersion;
   final Value<DateTime> cachedAt;
   final Value<int> rowid;
   const CachedReaderBooksCompanion({
+    this.userId = const Value.absent(),
     this.itemId = const Value.absent(),
     this.title = const Value.absent(),
     this.author = const Value.absent(),
@@ -4230,6 +4671,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     this.publisher = const Value.absent(),
     this.language = const Value.absent(),
     this.chaptersJson = const Value.absent(),
+    this.stylesheetPoolJson = const Value.absent(),
     this.totalChars = const Value.absent(),
     this.itemType = const Value.absent(),
     this.cacheVersion = const Value.absent(),
@@ -4237,6 +4679,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     this.rowid = const Value.absent(),
   });
   CachedReaderBooksCompanion.insert({
+    this.userId = const Value.absent(),
     required String itemId,
     this.title = const Value.absent(),
     this.author = const Value.absent(),
@@ -4244,6 +4687,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     this.publisher = const Value.absent(),
     this.language = const Value.absent(),
     this.chaptersJson = const Value.absent(),
+    this.stylesheetPoolJson = const Value.absent(),
     this.totalChars = const Value.absent(),
     this.itemType = const Value.absent(),
     this.cacheVersion = const Value.absent(),
@@ -4252,6 +4696,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
   }) : itemId = Value(itemId),
        cachedAt = Value(cachedAt);
   static Insertable<CachedReaderBook> custom({
+    Expression<String>? userId,
     Expression<String>? itemId,
     Expression<String>? title,
     Expression<String>? author,
@@ -4259,6 +4704,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     Expression<String>? publisher,
     Expression<String>? language,
     Expression<String>? chaptersJson,
+    Expression<String>? stylesheetPoolJson,
     Expression<int>? totalChars,
     Expression<String>? itemType,
     Expression<String>? cacheVersion,
@@ -4266,6 +4712,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
       if (itemId != null) 'item_id': itemId,
       if (title != null) 'title': title,
       if (author != null) 'author': author,
@@ -4273,6 +4720,8 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
       if (publisher != null) 'publisher': publisher,
       if (language != null) 'language': language,
       if (chaptersJson != null) 'chapters_json': chaptersJson,
+      if (stylesheetPoolJson != null)
+        'stylesheet_pool_json': stylesheetPoolJson,
       if (totalChars != null) 'total_chars': totalChars,
       if (itemType != null) 'item_type': itemType,
       if (cacheVersion != null) 'cache_version': cacheVersion,
@@ -4282,6 +4731,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
   }
 
   CachedReaderBooksCompanion copyWith({
+    Value<String>? userId,
     Value<String>? itemId,
     Value<String?>? title,
     Value<String?>? author,
@@ -4289,6 +4739,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     Value<String?>? publisher,
     Value<String?>? language,
     Value<String>? chaptersJson,
+    Value<String>? stylesheetPoolJson,
     Value<int>? totalChars,
     Value<String>? itemType,
     Value<String>? cacheVersion,
@@ -4296,6 +4747,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     Value<int>? rowid,
   }) {
     return CachedReaderBooksCompanion(
+      userId: userId ?? this.userId,
       itemId: itemId ?? this.itemId,
       title: title ?? this.title,
       author: author ?? this.author,
@@ -4303,6 +4755,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
       publisher: publisher ?? this.publisher,
       language: language ?? this.language,
       chaptersJson: chaptersJson ?? this.chaptersJson,
+      stylesheetPoolJson: stylesheetPoolJson ?? this.stylesheetPoolJson,
       totalChars: totalChars ?? this.totalChars,
       itemType: itemType ?? this.itemType,
       cacheVersion: cacheVersion ?? this.cacheVersion,
@@ -4314,6 +4767,9 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (itemId.present) {
       map['item_id'] = Variable<String>(itemId.value);
     }
@@ -4334,6 +4790,9 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
     }
     if (chaptersJson.present) {
       map['chapters_json'] = Variable<String>(chaptersJson.value);
+    }
+    if (stylesheetPoolJson.present) {
+      map['stylesheet_pool_json'] = Variable<String>(stylesheetPoolJson.value);
     }
     if (totalChars.present) {
       map['total_chars'] = Variable<int>(totalChars.value);
@@ -4356,6 +4815,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
   @override
   String toString() {
     return (StringBuffer('CachedReaderBooksCompanion(')
+          ..write('userId: $userId, ')
           ..write('itemId: $itemId, ')
           ..write('title: $title, ')
           ..write('author: $author, ')
@@ -4363,6 +4823,7 @@ class CachedReaderBooksCompanion extends UpdateCompanion<CachedReaderBook> {
           ..write('publisher: $publisher, ')
           ..write('language: $language, ')
           ..write('chaptersJson: $chaptersJson, ')
+          ..write('stylesheetPoolJson: $stylesheetPoolJson, ')
           ..write('totalChars: $totalChars, ')
           ..write('itemType: $itemType, ')
           ..write('cacheVersion: $cacheVersion, ')
@@ -4379,6 +4840,16 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $CachedReaderChaptersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
   @override
   late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
@@ -4444,6 +4915,18 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _stylesheetRefsJsonMeta =
+      const VerificationMeta('stylesheetRefsJson');
+  @override
+  late final GeneratedColumn<String> stylesheetRefsJson =
+      GeneratedColumn<String>(
+        'stylesheet_refs_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('[]'),
+      );
   static const VerificationMeta _cachedAtMeta = const VerificationMeta(
     'cachedAt',
   );
@@ -4457,12 +4940,14 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
   );
   @override
   List<GeneratedColumn> get $columns => [
+    userId,
     itemId,
     contentPath,
     title,
     chapterNumber,
     charCount,
     processedHtml,
+    stylesheetRefsJson,
     cachedAt,
   ];
   @override
@@ -4477,6 +4962,12 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
     if (data.containsKey('item_id')) {
       context.handle(
         _itemIdMeta,
@@ -4528,6 +5019,15 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
     } else if (isInserting) {
       context.missing(_processedHtmlMeta);
     }
+    if (data.containsKey('stylesheet_refs_json')) {
+      context.handle(
+        _stylesheetRefsJsonMeta,
+        stylesheetRefsJson.isAcceptableOrUnknown(
+          data['stylesheet_refs_json']!,
+          _stylesheetRefsJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('cached_at')) {
       context.handle(
         _cachedAtMeta,
@@ -4540,11 +5040,16 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {itemId, contentPath};
+  Set<GeneratedColumn> get $primaryKey => {userId, itemId, contentPath};
   @override
   CachedReaderChapter map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return CachedReaderChapter(
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       itemId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -4575,6 +5080,11 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
             DriftSqlType.string,
             data['${effectivePrefix}processed_html'],
           )!,
+      stylesheetRefsJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}stylesheet_refs_json'],
+          )!,
       cachedAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -4591,6 +5101,8 @@ class $CachedReaderChaptersTable extends CachedReaderChapters
 
 class CachedReaderChapter extends DataClass
     implements Insertable<CachedReaderChapter> {
+  final String userId;
+
   /// 书籍条目 ID
   final String itemId;
 
@@ -4609,38 +5121,51 @@ class CachedReaderChapter extends DataClass
   /// 预处理后的 HTML 内容（已提取 body、图片已转 base64）
   final String processedHtml;
 
+  /// 本章生效的样式表次序 JSON（归档内路径列表，指向书级池的键）。
+  ///
+  /// 次序取自本章 head 里 `<link>` 的书写顺序，link 没提到的表按 manifest 序补在
+  /// 后面；EPUB 的层叠胜负依赖它，所以必须按章存而不是整本书共用一份次序。
+  /// 空列表表示本章没有样式表可生效。
+  final String stylesheetRefsJson;
+
   /// 缓存创建时间
   final DateTime cachedAt;
   const CachedReaderChapter({
+    required this.userId,
     required this.itemId,
     required this.contentPath,
     required this.title,
     required this.chapterNumber,
     required this.charCount,
     required this.processedHtml,
+    required this.stylesheetRefsJson,
     required this.cachedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
     map['item_id'] = Variable<String>(itemId);
     map['content_path'] = Variable<String>(contentPath);
     map['title'] = Variable<String>(title);
     map['chapter_number'] = Variable<int>(chapterNumber);
     map['char_count'] = Variable<int>(charCount);
     map['processed_html'] = Variable<String>(processedHtml);
+    map['stylesheet_refs_json'] = Variable<String>(stylesheetRefsJson);
     map['cached_at'] = Variable<DateTime>(cachedAt);
     return map;
   }
 
   CachedReaderChaptersCompanion toCompanion(bool nullToAbsent) {
     return CachedReaderChaptersCompanion(
+      userId: Value(userId),
       itemId: Value(itemId),
       contentPath: Value(contentPath),
       title: Value(title),
       chapterNumber: Value(chapterNumber),
       charCount: Value(charCount),
       processedHtml: Value(processedHtml),
+      stylesheetRefsJson: Value(stylesheetRefsJson),
       cachedAt: Value(cachedAt),
     );
   }
@@ -4651,12 +5176,16 @@ class CachedReaderChapter extends DataClass
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedReaderChapter(
+      userId: serializer.fromJson<String>(json['userId']),
       itemId: serializer.fromJson<String>(json['itemId']),
       contentPath: serializer.fromJson<String>(json['contentPath']),
       title: serializer.fromJson<String>(json['title']),
       chapterNumber: serializer.fromJson<int>(json['chapterNumber']),
       charCount: serializer.fromJson<int>(json['charCount']),
       processedHtml: serializer.fromJson<String>(json['processedHtml']),
+      stylesheetRefsJson: serializer.fromJson<String>(
+        json['stylesheetRefsJson'],
+      ),
       cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
     );
   }
@@ -4664,35 +5193,42 @@ class CachedReaderChapter extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
       'itemId': serializer.toJson<String>(itemId),
       'contentPath': serializer.toJson<String>(contentPath),
       'title': serializer.toJson<String>(title),
       'chapterNumber': serializer.toJson<int>(chapterNumber),
       'charCount': serializer.toJson<int>(charCount),
       'processedHtml': serializer.toJson<String>(processedHtml),
+      'stylesheetRefsJson': serializer.toJson<String>(stylesheetRefsJson),
       'cachedAt': serializer.toJson<DateTime>(cachedAt),
     };
   }
 
   CachedReaderChapter copyWith({
+    String? userId,
     String? itemId,
     String? contentPath,
     String? title,
     int? chapterNumber,
     int? charCount,
     String? processedHtml,
+    String? stylesheetRefsJson,
     DateTime? cachedAt,
   }) => CachedReaderChapter(
+    userId: userId ?? this.userId,
     itemId: itemId ?? this.itemId,
     contentPath: contentPath ?? this.contentPath,
     title: title ?? this.title,
     chapterNumber: chapterNumber ?? this.chapterNumber,
     charCount: charCount ?? this.charCount,
     processedHtml: processedHtml ?? this.processedHtml,
+    stylesheetRefsJson: stylesheetRefsJson ?? this.stylesheetRefsJson,
     cachedAt: cachedAt ?? this.cachedAt,
   );
   CachedReaderChapter copyWithCompanion(CachedReaderChaptersCompanion data) {
     return CachedReaderChapter(
+      userId: data.userId.present ? data.userId.value : this.userId,
       itemId: data.itemId.present ? data.itemId.value : this.itemId,
       contentPath:
           data.contentPath.present ? data.contentPath.value : this.contentPath,
@@ -4706,6 +5242,10 @@ class CachedReaderChapter extends DataClass
           data.processedHtml.present
               ? data.processedHtml.value
               : this.processedHtml,
+      stylesheetRefsJson:
+          data.stylesheetRefsJson.present
+              ? data.stylesheetRefsJson.value
+              : this.stylesheetRefsJson,
       cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
     );
   }
@@ -4713,12 +5253,14 @@ class CachedReaderChapter extends DataClass
   @override
   String toString() {
     return (StringBuffer('CachedReaderChapter(')
+          ..write('userId: $userId, ')
           ..write('itemId: $itemId, ')
           ..write('contentPath: $contentPath, ')
           ..write('title: $title, ')
           ..write('chapterNumber: $chapterNumber, ')
           ..write('charCount: $charCount, ')
           ..write('processedHtml: $processedHtml, ')
+          ..write('stylesheetRefsJson: $stylesheetRefsJson, ')
           ..write('cachedAt: $cachedAt')
           ..write(')'))
         .toString();
@@ -4726,54 +5268,64 @@ class CachedReaderChapter extends DataClass
 
   @override
   int get hashCode => Object.hash(
+    userId,
     itemId,
     contentPath,
     title,
     chapterNumber,
     charCount,
     processedHtml,
+    stylesheetRefsJson,
     cachedAt,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CachedReaderChapter &&
+          other.userId == this.userId &&
           other.itemId == this.itemId &&
           other.contentPath == this.contentPath &&
           other.title == this.title &&
           other.chapterNumber == this.chapterNumber &&
           other.charCount == this.charCount &&
           other.processedHtml == this.processedHtml &&
+          other.stylesheetRefsJson == this.stylesheetRefsJson &&
           other.cachedAt == this.cachedAt);
 }
 
 class CachedReaderChaptersCompanion
     extends UpdateCompanion<CachedReaderChapter> {
+  final Value<String> userId;
   final Value<String> itemId;
   final Value<String> contentPath;
   final Value<String> title;
   final Value<int> chapterNumber;
   final Value<int> charCount;
   final Value<String> processedHtml;
+  final Value<String> stylesheetRefsJson;
   final Value<DateTime> cachedAt;
   final Value<int> rowid;
   const CachedReaderChaptersCompanion({
+    this.userId = const Value.absent(),
     this.itemId = const Value.absent(),
     this.contentPath = const Value.absent(),
     this.title = const Value.absent(),
     this.chapterNumber = const Value.absent(),
     this.charCount = const Value.absent(),
     this.processedHtml = const Value.absent(),
+    this.stylesheetRefsJson = const Value.absent(),
     this.cachedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CachedReaderChaptersCompanion.insert({
+    this.userId = const Value.absent(),
     required String itemId,
     required String contentPath,
     this.title = const Value.absent(),
     this.chapterNumber = const Value.absent(),
     this.charCount = const Value.absent(),
     required String processedHtml,
+    this.stylesheetRefsJson = const Value.absent(),
     required DateTime cachedAt,
     this.rowid = const Value.absent(),
   }) : itemId = Value(itemId),
@@ -4781,44 +5333,53 @@ class CachedReaderChaptersCompanion
        processedHtml = Value(processedHtml),
        cachedAt = Value(cachedAt);
   static Insertable<CachedReaderChapter> custom({
+    Expression<String>? userId,
     Expression<String>? itemId,
     Expression<String>? contentPath,
     Expression<String>? title,
     Expression<int>? chapterNumber,
     Expression<int>? charCount,
     Expression<String>? processedHtml,
+    Expression<String>? stylesheetRefsJson,
     Expression<DateTime>? cachedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
       if (itemId != null) 'item_id': itemId,
       if (contentPath != null) 'content_path': contentPath,
       if (title != null) 'title': title,
       if (chapterNumber != null) 'chapter_number': chapterNumber,
       if (charCount != null) 'char_count': charCount,
       if (processedHtml != null) 'processed_html': processedHtml,
+      if (stylesheetRefsJson != null)
+        'stylesheet_refs_json': stylesheetRefsJson,
       if (cachedAt != null) 'cached_at': cachedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   CachedReaderChaptersCompanion copyWith({
+    Value<String>? userId,
     Value<String>? itemId,
     Value<String>? contentPath,
     Value<String>? title,
     Value<int>? chapterNumber,
     Value<int>? charCount,
     Value<String>? processedHtml,
+    Value<String>? stylesheetRefsJson,
     Value<DateTime>? cachedAt,
     Value<int>? rowid,
   }) {
     return CachedReaderChaptersCompanion(
+      userId: userId ?? this.userId,
       itemId: itemId ?? this.itemId,
       contentPath: contentPath ?? this.contentPath,
       title: title ?? this.title,
       chapterNumber: chapterNumber ?? this.chapterNumber,
       charCount: charCount ?? this.charCount,
       processedHtml: processedHtml ?? this.processedHtml,
+      stylesheetRefsJson: stylesheetRefsJson ?? this.stylesheetRefsJson,
       cachedAt: cachedAt ?? this.cachedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -4827,6 +5388,9 @@ class CachedReaderChaptersCompanion
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (itemId.present) {
       map['item_id'] = Variable<String>(itemId.value);
     }
@@ -4845,6 +5409,9 @@ class CachedReaderChaptersCompanion
     if (processedHtml.present) {
       map['processed_html'] = Variable<String>(processedHtml.value);
     }
+    if (stylesheetRefsJson.present) {
+      map['stylesheet_refs_json'] = Variable<String>(stylesheetRefsJson.value);
+    }
     if (cachedAt.present) {
       map['cached_at'] = Variable<DateTime>(cachedAt.value);
     }
@@ -4857,12 +5424,14 @@ class CachedReaderChaptersCompanion
   @override
   String toString() {
     return (StringBuffer('CachedReaderChaptersCompanion(')
+          ..write('userId: $userId, ')
           ..write('itemId: $itemId, ')
           ..write('contentPath: $contentPath, ')
           ..write('title: $title, ')
           ..write('chapterNumber: $chapterNumber, ')
           ..write('charCount: $charCount, ')
           ..write('processedHtml: $processedHtml, ')
+          ..write('stylesheetRefsJson: $stylesheetRefsJson, ')
           ..write('cachedAt: $cachedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -9167,8 +9736,12 @@ class $$CachedFilesTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<$CachedFilesTable, CachedFile>(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedFilesTable,
+                            CachedFile
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -9197,6 +9770,7 @@ typedef $$CachedFilesTableProcessedTableManager =
 typedef $$SyncOperationsTableCreateCompanionBuilder =
     SyncOperationsCompanion Function({
       Value<int> id,
+      Value<String> userId,
       required String type,
       required String payload,
       Value<String> status,
@@ -9207,6 +9781,7 @@ typedef $$SyncOperationsTableCreateCompanionBuilder =
 typedef $$SyncOperationsTableUpdateCompanionBuilder =
     SyncOperationsCompanion Function({
       Value<int> id,
+      Value<String> userId,
       Value<String> type,
       Value<String> payload,
       Value<String> status,
@@ -9226,6 +9801,11 @@ class $$SyncOperationsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9274,6 +9854,11 @@ class $$SyncOperationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get type => $composableBuilder(
     column: $table.type,
     builder: (column) => ColumnOrderings(column),
@@ -9316,6 +9901,9 @@ class $$SyncOperationsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<String> get type =>
       $composableBuilder(column: $table.type, builder: (column) => column);
@@ -9380,6 +9968,7 @@ class $$SyncOperationsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
                 Value<String> type = const Value.absent(),
                 Value<String> payload = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -9388,6 +9977,7 @@ class $$SyncOperationsTableTableManager
                 Value<DateTime?> syncedAt = const Value.absent(),
               }) => SyncOperationsCompanion(
                 id: id,
+                userId: userId,
                 type: type,
                 payload: payload,
                 status: status,
@@ -9398,6 +9988,7 @@ class $$SyncOperationsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
                 required String type,
                 required String payload,
                 Value<String> status = const Value.absent(),
@@ -9406,6 +9997,7 @@ class $$SyncOperationsTableTableManager
                 Value<DateTime?> syncedAt = const Value.absent(),
               }) => SyncOperationsCompanion.insert(
                 id: id,
+                userId: userId,
                 type: type,
                 payload: payload,
                 status: status,
@@ -9418,8 +10010,14 @@ class $$SyncOperationsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<$SyncOperationsTable, SyncOperation>(
+                            table,
+                          ),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $SyncOperationsTable,
+                            SyncOperation
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -9665,8 +10263,15 @@ class $$CachedMediaProgressTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedMediaProgressTable,
+                            CachedMediaProgressData
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedMediaProgressTable,
+                            CachedMediaProgressData
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -9698,10 +10303,12 @@ typedef $$CachedMediaProgressTableProcessedTableManager =
     >;
 typedef $$CachedReaderProgressTableCreateCompanionBuilder =
     CachedReaderProgressCompanion Function({
+      Value<String> userId,
       required String itemId,
       Value<String> chapterId,
       Value<int> charOffset,
       Value<double> chapterProgress,
+      Value<double?> bookProgress,
       Value<String> mode,
       Value<String?> pageId,
       Value<int?> pageIndex,
@@ -9716,10 +10323,12 @@ typedef $$CachedReaderProgressTableCreateCompanionBuilder =
     });
 typedef $$CachedReaderProgressTableUpdateCompanionBuilder =
     CachedReaderProgressCompanion Function({
+      Value<String> userId,
       Value<String> itemId,
       Value<String> chapterId,
       Value<int> charOffset,
       Value<double> chapterProgress,
+      Value<double?> bookProgress,
       Value<String> mode,
       Value<String?> pageId,
       Value<int?> pageIndex,
@@ -9742,6 +10351,11 @@ class $$CachedReaderProgressTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get itemId => $composableBuilder(
     column: $table.itemId,
     builder: (column) => ColumnFilters(column),
@@ -9759,6 +10373,11 @@ class $$CachedReaderProgressTableFilterComposer
 
   ColumnFilters<double> get chapterProgress => $composableBuilder(
     column: $table.chapterProgress,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get bookProgress => $composableBuilder(
+    column: $table.bookProgress,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9822,6 +10441,11 @@ class $$CachedReaderProgressTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get itemId => $composableBuilder(
     column: $table.itemId,
     builder: (column) => ColumnOrderings(column),
@@ -9839,6 +10463,11 @@ class $$CachedReaderProgressTableOrderingComposer
 
   ColumnOrderings<double> get chapterProgress => $composableBuilder(
     column: $table.chapterProgress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get bookProgress => $composableBuilder(
+    column: $table.bookProgress,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9902,6 +10531,9 @@ class $$CachedReaderProgressTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
   GeneratedColumn<String> get itemId =>
       $composableBuilder(column: $table.itemId, builder: (column) => column);
 
@@ -9915,6 +10547,11 @@ class $$CachedReaderProgressTableAnnotationComposer
 
   GeneratedColumn<double> get chapterProgress => $composableBuilder(
     column: $table.chapterProgress,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get bookProgress => $composableBuilder(
+    column: $table.bookProgress,
     builder: (column) => column,
   );
 
@@ -10005,10 +10642,12 @@ class $$CachedReaderProgressTableTableManager
               ),
           updateCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 Value<String> itemId = const Value.absent(),
                 Value<String> chapterId = const Value.absent(),
                 Value<int> charOffset = const Value.absent(),
                 Value<double> chapterProgress = const Value.absent(),
+                Value<double?> bookProgress = const Value.absent(),
                 Value<String> mode = const Value.absent(),
                 Value<String?> pageId = const Value.absent(),
                 Value<int?> pageIndex = const Value.absent(),
@@ -10021,10 +10660,12 @@ class $$CachedReaderProgressTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderProgressCompanion(
+                userId: userId,
                 itemId: itemId,
                 chapterId: chapterId,
                 charOffset: charOffset,
                 chapterProgress: chapterProgress,
+                bookProgress: bookProgress,
                 mode: mode,
                 pageId: pageId,
                 pageIndex: pageIndex,
@@ -10039,10 +10680,12 @@ class $$CachedReaderProgressTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 required String itemId,
                 Value<String> chapterId = const Value.absent(),
                 Value<int> charOffset = const Value.absent(),
                 Value<double> chapterProgress = const Value.absent(),
+                Value<double?> bookProgress = const Value.absent(),
                 Value<String> mode = const Value.absent(),
                 Value<String?> pageId = const Value.absent(),
                 Value<int?> pageIndex = const Value.absent(),
@@ -10055,10 +10698,12 @@ class $$CachedReaderProgressTableTableManager
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderProgressCompanion.insert(
+                userId: userId,
                 itemId: itemId,
                 chapterId: chapterId,
                 charOffset: charOffset,
                 chapterProgress: chapterProgress,
+                bookProgress: bookProgress,
                 mode: mode,
                 pageId: pageId,
                 pageIndex: pageIndex,
@@ -10076,8 +10721,15 @@ class $$CachedReaderProgressTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderProgressTable,
+                            CachedReaderProgressData
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderProgressTable,
+                            CachedReaderProgressData
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -10110,7 +10762,9 @@ typedef $$CachedReaderProgressTableProcessedTableManager =
 typedef $$CachedReaderBookmarksTableCreateCompanionBuilder =
     CachedReaderBookmarksCompanion Function({
       required String id,
+      Value<String> userId,
       required String readerItemId,
+      Value<String?> chapterId,
       Value<int> charOffset,
       Value<double> progressPercent,
       Value<String?> note,
@@ -10120,7 +10774,9 @@ typedef $$CachedReaderBookmarksTableCreateCompanionBuilder =
 typedef $$CachedReaderBookmarksTableUpdateCompanionBuilder =
     CachedReaderBookmarksCompanion Function({
       Value<String> id,
+      Value<String> userId,
       Value<String> readerItemId,
+      Value<String?> chapterId,
       Value<int> charOffset,
       Value<double> progressPercent,
       Value<String?> note,
@@ -10142,8 +10798,18 @@ class $$CachedReaderBookmarksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10182,8 +10848,18 @@ class $$CachedReaderBookmarksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10220,10 +10896,16 @@ class $$CachedReaderBookmarksTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
   GeneratedColumn<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get chapterId =>
+      $composableBuilder(column: $table.chapterId, builder: (column) => column);
 
   GeneratedColumn<int> get charOffset => $composableBuilder(
     column: $table.charOffset,
@@ -10289,7 +10971,9 @@ class $$CachedReaderBookmarksTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
                 Value<String> readerItemId = const Value.absent(),
+                Value<String?> chapterId = const Value.absent(),
                 Value<int> charOffset = const Value.absent(),
                 Value<double> progressPercent = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -10297,7 +10981,9 @@ class $$CachedReaderBookmarksTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderBookmarksCompanion(
                 id: id,
+                userId: userId,
                 readerItemId: readerItemId,
+                chapterId: chapterId,
                 charOffset: charOffset,
                 progressPercent: progressPercent,
                 note: note,
@@ -10307,7 +10993,9 @@ class $$CachedReaderBookmarksTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String> userId = const Value.absent(),
                 required String readerItemId,
+                Value<String?> chapterId = const Value.absent(),
                 Value<int> charOffset = const Value.absent(),
                 Value<double> progressPercent = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -10315,7 +11003,9 @@ class $$CachedReaderBookmarksTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderBookmarksCompanion.insert(
                 id: id,
+                userId: userId,
                 readerItemId: readerItemId,
+                chapterId: chapterId,
                 charOffset: charOffset,
                 progressPercent: progressPercent,
                 note: note,
@@ -10327,8 +11017,15 @@ class $$CachedReaderBookmarksTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderBookmarksTable,
+                            CachedReaderBookmark
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderBookmarksTable,
+                            CachedReaderBookmark
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -10361,6 +11058,7 @@ typedef $$CachedReaderBookmarksTableProcessedTableManager =
 typedef $$CachedReaderAnnotationsTableCreateCompanionBuilder =
     CachedReaderAnnotationsCompanion Function({
       required String id,
+      Value<String> userId,
       required String readerItemId,
       Value<String?> chapterId,
       required int startOffset,
@@ -10374,6 +11072,7 @@ typedef $$CachedReaderAnnotationsTableCreateCompanionBuilder =
 typedef $$CachedReaderAnnotationsTableUpdateCompanionBuilder =
     CachedReaderAnnotationsCompanion Function({
       Value<String> id,
+      Value<String> userId,
       Value<String> readerItemId,
       Value<String?> chapterId,
       Value<int> startOffset,
@@ -10396,6 +11095,11 @@ class $$CachedReaderAnnotationsTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10454,6 +11158,11 @@ class $$CachedReaderAnnotationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
     builder: (column) => ColumnOrderings(column),
@@ -10506,6 +11215,9 @@ class $$CachedReaderAnnotationsTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
@@ -10585,6 +11297,7 @@ class $$CachedReaderAnnotationsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
                 Value<String> readerItemId = const Value.absent(),
                 Value<String?> chapterId = const Value.absent(),
                 Value<int> startOffset = const Value.absent(),
@@ -10596,6 +11309,7 @@ class $$CachedReaderAnnotationsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderAnnotationsCompanion(
                 id: id,
+                userId: userId,
                 readerItemId: readerItemId,
                 chapterId: chapterId,
                 startOffset: startOffset,
@@ -10609,6 +11323,7 @@ class $$CachedReaderAnnotationsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String> userId = const Value.absent(),
                 required String readerItemId,
                 Value<String?> chapterId = const Value.absent(),
                 required int startOffset,
@@ -10620,6 +11335,7 @@ class $$CachedReaderAnnotationsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderAnnotationsCompanion.insert(
                 id: id,
+                userId: userId,
                 readerItemId: readerItemId,
                 chapterId: chapterId,
                 startOffset: startOffset,
@@ -10635,8 +11351,15 @@ class $$CachedReaderAnnotationsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderAnnotationsTable,
+                            CachedReaderAnnotation
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderAnnotationsTable,
+                            CachedReaderAnnotation
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -10669,6 +11392,7 @@ typedef $$CachedReaderAnnotationsTableProcessedTableManager =
 typedef $$CachedReaderNotesTableCreateCompanionBuilder =
     CachedReaderNotesCompanion Function({
       required String id,
+      Value<String> userId,
       required String readerItemId,
       Value<int?> charOffset,
       Value<String?> title,
@@ -10679,6 +11403,7 @@ typedef $$CachedReaderNotesTableCreateCompanionBuilder =
 typedef $$CachedReaderNotesTableUpdateCompanionBuilder =
     CachedReaderNotesCompanion Function({
       Value<String> id,
+      Value<String> userId,
       Value<String> readerItemId,
       Value<int?> charOffset,
       Value<String?> title,
@@ -10698,6 +11423,11 @@ class $$CachedReaderNotesTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10741,6 +11471,11 @@ class $$CachedReaderNotesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
     builder: (column) => ColumnOrderings(column),
@@ -10778,6 +11513,9 @@ class $$CachedReaderNotesTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<String> get readerItemId => $composableBuilder(
     column: $table.readerItemId,
@@ -10846,6 +11584,7 @@ class $$CachedReaderNotesTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
                 Value<String> readerItemId = const Value.absent(),
                 Value<int?> charOffset = const Value.absent(),
                 Value<String?> title = const Value.absent(),
@@ -10854,6 +11593,7 @@ class $$CachedReaderNotesTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderNotesCompanion(
                 id: id,
+                userId: userId,
                 readerItemId: readerItemId,
                 charOffset: charOffset,
                 title: title,
@@ -10864,6 +11604,7 @@ class $$CachedReaderNotesTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String> userId = const Value.absent(),
                 required String readerItemId,
                 Value<int?> charOffset = const Value.absent(),
                 Value<String?> title = const Value.absent(),
@@ -10872,6 +11613,7 @@ class $$CachedReaderNotesTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderNotesCompanion.insert(
                 id: id,
+                userId: userId,
                 readerItemId: readerItemId,
                 charOffset: charOffset,
                 title: title,
@@ -10884,8 +11626,15 @@ class $$CachedReaderNotesTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderNotesTable,
+                            CachedReaderNote
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderNotesTable,
+                            CachedReaderNote
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -10917,6 +11666,7 @@ typedef $$CachedReaderNotesTableProcessedTableManager =
     >;
 typedef $$CachedReaderBooksTableCreateCompanionBuilder =
     CachedReaderBooksCompanion Function({
+      Value<String> userId,
       required String itemId,
       Value<String?> title,
       Value<String?> author,
@@ -10924,6 +11674,7 @@ typedef $$CachedReaderBooksTableCreateCompanionBuilder =
       Value<String?> publisher,
       Value<String?> language,
       Value<String> chaptersJson,
+      Value<String> stylesheetPoolJson,
       Value<int> totalChars,
       Value<String> itemType,
       Value<String> cacheVersion,
@@ -10932,6 +11683,7 @@ typedef $$CachedReaderBooksTableCreateCompanionBuilder =
     });
 typedef $$CachedReaderBooksTableUpdateCompanionBuilder =
     CachedReaderBooksCompanion Function({
+      Value<String> userId,
       Value<String> itemId,
       Value<String?> title,
       Value<String?> author,
@@ -10939,6 +11691,7 @@ typedef $$CachedReaderBooksTableUpdateCompanionBuilder =
       Value<String?> publisher,
       Value<String?> language,
       Value<String> chaptersJson,
+      Value<String> stylesheetPoolJson,
       Value<int> totalChars,
       Value<String> itemType,
       Value<String> cacheVersion,
@@ -10955,6 +11708,11 @@ class $$CachedReaderBooksTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get itemId => $composableBuilder(
     column: $table.itemId,
     builder: (column) => ColumnFilters(column),
@@ -10990,6 +11748,11 @@ class $$CachedReaderBooksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get stylesheetPoolJson => $composableBuilder(
+    column: $table.stylesheetPoolJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get totalChars => $composableBuilder(
     column: $table.totalChars,
     builder: (column) => ColumnFilters(column),
@@ -11020,6 +11783,11 @@ class $$CachedReaderBooksTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get itemId => $composableBuilder(
     column: $table.itemId,
     builder: (column) => ColumnOrderings(column),
@@ -11055,6 +11823,11 @@ class $$CachedReaderBooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get stylesheetPoolJson => $composableBuilder(
+    column: $table.stylesheetPoolJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get totalChars => $composableBuilder(
     column: $table.totalChars,
     builder: (column) => ColumnOrderings(column),
@@ -11085,6 +11858,9 @@ class $$CachedReaderBooksTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
   GeneratedColumn<String> get itemId =>
       $composableBuilder(column: $table.itemId, builder: (column) => column);
 
@@ -11107,6 +11883,11 @@ class $$CachedReaderBooksTableAnnotationComposer
 
   GeneratedColumn<String> get chaptersJson => $composableBuilder(
     column: $table.chaptersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stylesheetPoolJson => $composableBuilder(
+    column: $table.stylesheetPoolJson,
     builder: (column) => column,
   );
 
@@ -11173,6 +11954,7 @@ class $$CachedReaderBooksTableTableManager
               ),
           updateCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 Value<String> itemId = const Value.absent(),
                 Value<String?> title = const Value.absent(),
                 Value<String?> author = const Value.absent(),
@@ -11180,12 +11962,14 @@ class $$CachedReaderBooksTableTableManager
                 Value<String?> publisher = const Value.absent(),
                 Value<String?> language = const Value.absent(),
                 Value<String> chaptersJson = const Value.absent(),
+                Value<String> stylesheetPoolJson = const Value.absent(),
                 Value<int> totalChars = const Value.absent(),
                 Value<String> itemType = const Value.absent(),
                 Value<String> cacheVersion = const Value.absent(),
                 Value<DateTime> cachedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderBooksCompanion(
+                userId: userId,
                 itemId: itemId,
                 title: title,
                 author: author,
@@ -11193,6 +11977,7 @@ class $$CachedReaderBooksTableTableManager
                 publisher: publisher,
                 language: language,
                 chaptersJson: chaptersJson,
+                stylesheetPoolJson: stylesheetPoolJson,
                 totalChars: totalChars,
                 itemType: itemType,
                 cacheVersion: cacheVersion,
@@ -11201,6 +11986,7 @@ class $$CachedReaderBooksTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 required String itemId,
                 Value<String?> title = const Value.absent(),
                 Value<String?> author = const Value.absent(),
@@ -11208,12 +11994,14 @@ class $$CachedReaderBooksTableTableManager
                 Value<String?> publisher = const Value.absent(),
                 Value<String?> language = const Value.absent(),
                 Value<String> chaptersJson = const Value.absent(),
+                Value<String> stylesheetPoolJson = const Value.absent(),
                 Value<int> totalChars = const Value.absent(),
                 Value<String> itemType = const Value.absent(),
                 Value<String> cacheVersion = const Value.absent(),
                 required DateTime cachedAt,
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderBooksCompanion.insert(
+                userId: userId,
                 itemId: itemId,
                 title: title,
                 author: author,
@@ -11221,6 +12009,7 @@ class $$CachedReaderBooksTableTableManager
                 publisher: publisher,
                 language: language,
                 chaptersJson: chaptersJson,
+                stylesheetPoolJson: stylesheetPoolJson,
                 totalChars: totalChars,
                 itemType: itemType,
                 cacheVersion: cacheVersion,
@@ -11232,8 +12021,15 @@ class $$CachedReaderBooksTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderBooksTable,
+                            CachedReaderBook
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderBooksTable,
+                            CachedReaderBook
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -11265,23 +12061,27 @@ typedef $$CachedReaderBooksTableProcessedTableManager =
     >;
 typedef $$CachedReaderChaptersTableCreateCompanionBuilder =
     CachedReaderChaptersCompanion Function({
+      Value<String> userId,
       required String itemId,
       required String contentPath,
       Value<String> title,
       Value<int> chapterNumber,
       Value<int> charCount,
       required String processedHtml,
+      Value<String> stylesheetRefsJson,
       required DateTime cachedAt,
       Value<int> rowid,
     });
 typedef $$CachedReaderChaptersTableUpdateCompanionBuilder =
     CachedReaderChaptersCompanion Function({
+      Value<String> userId,
       Value<String> itemId,
       Value<String> contentPath,
       Value<String> title,
       Value<int> chapterNumber,
       Value<int> charCount,
       Value<String> processedHtml,
+      Value<String> stylesheetRefsJson,
       Value<DateTime> cachedAt,
       Value<int> rowid,
     });
@@ -11295,6 +12095,11 @@ class $$CachedReaderChaptersTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get itemId => $composableBuilder(
     column: $table.itemId,
     builder: (column) => ColumnFilters(column),
@@ -11325,6 +12130,11 @@ class $$CachedReaderChaptersTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get stylesheetRefsJson => $composableBuilder(
+    column: $table.stylesheetRefsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get cachedAt => $composableBuilder(
     column: $table.cachedAt,
     builder: (column) => ColumnFilters(column),
@@ -11340,6 +12150,11 @@ class $$CachedReaderChaptersTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get itemId => $composableBuilder(
     column: $table.itemId,
     builder: (column) => ColumnOrderings(column),
@@ -11370,6 +12185,11 @@ class $$CachedReaderChaptersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get stylesheetRefsJson => $composableBuilder(
+    column: $table.stylesheetRefsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
     column: $table.cachedAt,
     builder: (column) => ColumnOrderings(column),
@@ -11385,6 +12205,9 @@ class $$CachedReaderChaptersTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
   GeneratedColumn<String> get itemId =>
       $composableBuilder(column: $table.itemId, builder: (column) => column);
 
@@ -11406,6 +12229,11 @@ class $$CachedReaderChaptersTableAnnotationComposer
 
   GeneratedColumn<String> get processedHtml => $composableBuilder(
     column: $table.processedHtml,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stylesheetRefsJson => $composableBuilder(
+    column: $table.stylesheetRefsJson,
     builder: (column) => column,
   );
 
@@ -11459,41 +12287,49 @@ class $$CachedReaderChaptersTableTableManager
               ),
           updateCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 Value<String> itemId = const Value.absent(),
                 Value<String> contentPath = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<int> chapterNumber = const Value.absent(),
                 Value<int> charCount = const Value.absent(),
                 Value<String> processedHtml = const Value.absent(),
+                Value<String> stylesheetRefsJson = const Value.absent(),
                 Value<DateTime> cachedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderChaptersCompanion(
+                userId: userId,
                 itemId: itemId,
                 contentPath: contentPath,
                 title: title,
                 chapterNumber: chapterNumber,
                 charCount: charCount,
                 processedHtml: processedHtml,
+                stylesheetRefsJson: stylesheetRefsJson,
                 cachedAt: cachedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 required String itemId,
                 required String contentPath,
                 Value<String> title = const Value.absent(),
                 Value<int> chapterNumber = const Value.absent(),
                 Value<int> charCount = const Value.absent(),
                 required String processedHtml,
+                Value<String> stylesheetRefsJson = const Value.absent(),
                 required DateTime cachedAt,
                 Value<int> rowid = const Value.absent(),
               }) => CachedReaderChaptersCompanion.insert(
+                userId: userId,
                 itemId: itemId,
                 contentPath: contentPath,
                 title: title,
                 chapterNumber: chapterNumber,
                 charCount: charCount,
                 processedHtml: processedHtml,
+                stylesheetRefsJson: stylesheetRefsJson,
                 cachedAt: cachedAt,
                 rowid: rowid,
               ),
@@ -11502,8 +12338,15 @@ class $$CachedReaderChaptersTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderChaptersTable,
+                            CachedReaderChapter
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderChaptersTable,
+                            CachedReaderChapter
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -11692,8 +12535,15 @@ class $$CachedReaderBookDetailsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderBookDetailsTable,
+                            CachedReaderBookDetail
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderBookDetailsTable,
+                            CachedReaderBookDetail
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -12000,8 +12850,15 @@ class $$CachedReaderImagesTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $CachedReaderImagesTable,
+                            CachedReaderImage
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $CachedReaderImagesTable,
+                            CachedReaderImage
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -12487,8 +13344,15 @@ class $$AppBackdropAssetsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $AppBackdropAssetsTable,
+                            AppBackdropAssetRow
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $AppBackdropAssetsTable,
+                            AppBackdropAssetRow
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -12858,8 +13722,15 @@ class $$AppBackdropSettingsTableTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $AppBackdropSettingsTableTable,
+                            AppBackdropSettingRow
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $AppBackdropSettingsTableTable,
+                            AppBackdropSettingRow
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -13086,8 +13957,14 @@ class $$SyncClientStatesTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<$SyncClientStatesTable, SyncClientState>(
+                            table,
+                          ),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $SyncClientStatesTable,
+                            SyncClientState
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -13375,8 +14252,15 @@ class $$SyncPendingInvalidationsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $SyncPendingInvalidationsTable,
+                            SyncPendingInvalidation
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $SyncPendingInvalidationsTable,
+                            SyncPendingInvalidation
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -13605,8 +14489,15 @@ class $$SyncProcessedEventsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $SyncProcessedEventsTable,
+                            SyncProcessedEvent
+                          >(table),
+                          BaseReferences<
+                            _$LocalDatabase,
+                            $SyncProcessedEventsTable,
+                            SyncProcessedEvent
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
