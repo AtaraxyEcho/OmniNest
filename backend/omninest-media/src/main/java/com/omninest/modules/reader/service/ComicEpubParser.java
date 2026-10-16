@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -137,7 +139,8 @@ public class ComicEpubParser {
 
             // reading direction
             String readingDirection = null;
-            Element spineElement = (Element) opfDoc.getElementsByTagName("spine").item(0);
+            NodeList spineNodes = opfDoc.getElementsByTagNameNS("*", "spine");
+            Element spineElement = spineNodes.getLength() > 0 ? (Element) spineNodes.item(0) : null;
             if (spineElement != null) {
                 readingDirection = spineElement.getAttribute("page-progression-direction");
                 if (readingDirection.isEmpty()) readingDirection = null;
@@ -405,7 +408,7 @@ public class ComicEpubParser {
 
     private String parseContainerXml(String xml) {
         Document doc = parseXml(xml);
-        NodeList rootfiles = doc.getElementsByTagName("rootfile");
+        NodeList rootfiles = doc.getElementsByTagNameNS("*", "rootfile");
         if (rootfiles.getLength() > 0) {
             return ((Element) rootfiles.item(0)).getAttribute("full-path");
         }
@@ -697,28 +700,35 @@ public class ComicEpubParser {
         }
     }
 
+    private static final Pattern HTML_COMMENT_PATTERN = Pattern.compile("<!--[\\s\\S]*?-->");
+    private static final Pattern IMG_TAG_PATTERN = Pattern.compile("<img\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SVG_IMAGE_TAG_PATTERN = Pattern.compile("<image\\b[^>]*>", Pattern.CASE_INSENSITIVE);
+
     /**
      * 从 XHTML 中提取主图片路径。
-     * 支持：<img src="">、SVG <image href="">、<picture><source>
+     * 支持：<img src="">、SVG <image href="">
+     *
+     * <p>属性只能在标签自身的闭合 {@code >} 之内取：从 {@code <img} 一直截到文末时，
+     * 一张没有 src 的图会把后文别的元素的 src 抓来当主图。注释里的排版留痕
+     * （{@code <!-- <img src="old.jpg"> -->}）同理必须整段剥掉，否则被注释掉的旧图成为封面。
      */
     private String extractMainImagePath(String xhtml, String xhtmlPath) {
-        // 1. <img src="...">
-        int imgIdx = xhtml.indexOf("<img");
-        if (imgIdx >= 0) {
-            String after = xhtml.substring(imgIdx);
-            String src = extractAttribute(after, "src");
+        String cleaned = HTML_COMMENT_PATTERN.matcher(xhtml).replaceAll("");
+
+        Matcher imgMatcher = IMG_TAG_PATTERN.matcher(cleaned);
+        while (imgMatcher.find()) {
+            String src = extractAttribute(imgMatcher.group(), "src");
             if (src != null && !src.isEmpty()) {
                 return resolveRelativePath(src, xhtmlPath);
             }
         }
 
-        // 2. SVG <image href="..."> 或 <image xlink:href="...">
-        int imageIdx = xhtml.indexOf("<image");
-        if (imageIdx >= 0) {
-            String after = xhtml.substring(imageIdx);
-            String href = extractAttribute(after, "href");
+        Matcher svgMatcher = SVG_IMAGE_TAG_PATTERN.matcher(cleaned);
+        while (svgMatcher.find()) {
+            String tag = svgMatcher.group();
+            String href = extractAttribute(tag, "href");
             if (href == null || href.isEmpty()) {
-                href = extractAttribute(after, "xlink:href");
+                href = extractAttribute(tag, "xlink:href");
             }
             if (href != null && !href.isEmpty()) {
                 return resolveRelativePath(href, xhtmlPath);
@@ -728,24 +738,44 @@ public class ComicEpubParser {
         return null;
     }
 
+    /**
+     * 在单个标签内取属性值。
+     *
+     * <p>HTML 的属性名不区分大小写（{@code <IMG SRC="...">} 与 {@code <img src="...">} 同义），
+     * 按字面量匹配会让大写写法的漫画页一张主图都取不到。属性名还必须以空白起头，
+     * 否则 {@code data-src} 会被当成 {@code src} 命中，把懒加载占位当真图抓走。
+     */
     private String extractAttribute(String tag, String attrName) {
-        String search = attrName + "=\"";
-        int idx = tag.indexOf(search);
-        if (idx >= 0) {
-            int start = idx + search.length();
-            int end = tag.indexOf('"', start);
-            if (end > start) {
-                return tag.substring(start, end);
+        String normalized = tag.toLowerCase(Locale.ROOT);
+        String needle = attrName.toLowerCase(Locale.ROOT) + "=";
+        int idx = normalized.indexOf(needle);
+        while (idx >= 0) {
+            int valueStart = idx + needle.length();
+            if (idx > 0 && !Character.isWhitespace(tag.charAt(idx - 1))) {
+                idx = normalized.indexOf(needle, valueStart);
+                continue;
             }
-        }
-        search = attrName + "='";
-        idx = tag.indexOf(search);
-        if (idx >= 0) {
-            int start = idx + search.length();
-            int end = tag.indexOf('\'', start);
-            if (end > start) {
-                return tag.substring(start, end);
+            if (valueStart >= tag.length()) {
+                break;
             }
+            char quote = tag.charAt(valueStart);
+            if (quote == '"' || quote == '\'') {
+                int end = tag.indexOf(quote, valueStart + 1);
+                if (end > valueStart) {
+                    return tag.substring(valueStart + 1, end);
+                }
+            } else {
+                int end = valueStart;
+                while (end < tag.length()
+                        && !Character.isWhitespace(tag.charAt(end))
+                        && tag.charAt(end) != '>') {
+                    end++;
+                }
+                if (end > valueStart) {
+                    return tag.substring(valueStart, end);
+                }
+            }
+            idx = normalized.indexOf(needle, valueStart);
         }
         return null;
     }
@@ -778,14 +808,17 @@ public class ComicEpubParser {
 
     /**
      * 规范化路径：处理 ../、./、重复斜杠。
+     *
+     * <p>百分号解码只在 resolvePath / resolveRelativePath 做一次，这里不再解码：同一串解码两遍会把
+     * 文件名里字面量的 {@code %252D} 之类读成 {@code %2D}，归档条目随即找不到。
      */
     private String normalizePath(String path) {
         if (path == null) {
             return "";
         }
-        String decodedPath = urlDecode(path).replace('\\', '/');
+        String normalizedInput = path.replace('\\', '/');
         Deque<String> segments = new ArrayDeque<>();
-        for (String segment : decodedPath.split("/+")) {
+        for (String segment : normalizedInput.split("/+")) {
             if (segment.isEmpty() || ".".equals(segment)) {
                 continue;
             }
@@ -800,12 +833,19 @@ public class ComicEpubParser {
         return String.join("/", segments);
     }
 
+    /**
+     * 按 URI 百分号编码解码路径。
+     *
+     * <p>{@link URLDecoder} 是表单解码器，会把字面量 {@code +} 变成空格；EPUB 的 href 是 URI 路径，
+     * 文件名里的加号必须先转义再解，否则 "C++/001.xhtml" 会变成 "C++ /001.xhtml"（客户端那份宽容解码
+     * 同样只解百分号、不动加号）。
+     */
     private String urlDecode(String s) {
         if (s == null) {
             return "";
         }
         try {
-            return URLDecoder.decode(s, StandardCharsets.UTF_8.name());
+            return URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8.name());
         } catch (Exception e) {
             return s;
         }
@@ -831,73 +871,22 @@ public class ComicEpubParser {
         return ReaderXmlSafety.parse(xml);
     }
 
+    /**
+     * 页面图宽高嗅探统一走 {@link ComicPageAssetService} 的那一份实现。
+     *
+     * <p>两处各写一份时，同一张 WebP 在归档解析与页面资产落库两条路径上会得出不同结论：
+     * 一边记成有尺寸、另一边记成 0x0，清单与装页就按两套高度走。
+     */
     private int[] readImageDimensions(byte[] data) {
-        if (data == null || data.length < 24) {
-            return new int[]{0, 0};
-        }
-
-        // PNG
-        if (data[0] == (byte) 0x89 && data[1] == (byte) 0x50 && data.length >= 24) {
-            int w = ((data[16] & 0xFF) << 24) | ((data[17] & 0xFF) << 16)
-                    | ((data[18] & 0xFF) << 8) | (data[19] & 0xFF);
-            int h = ((data[20] & 0xFF) << 24) | ((data[21] & 0xFF) << 16)
-                    | ((data[22] & 0xFF) << 8) | (data[23] & 0xFF);
-            return new int[]{w, h};
-        }
-
-        // GIF
-        if (data[0] == 'G' && data[1] == 'I' && data[2] == 'F' && data.length >= 10) {
-            int w = (data[6] & 0xFF) | ((data[7] & 0xFF) << 8);
-            int h = (data[8] & 0xFF) | ((data[9] & 0xFF) << 8);
-            return new int[]{w, h};
-        }
-
-        // JPEG: scan for SOF
-        if (data[0] == (byte) 0xFF && data[1] == (byte) 0xD8) {
-            int limit = Math.min(data.length, 65536);
-            int i = 2;
-            while (i < limit - 9) {
-                if (data[i] != (byte) 0xFF) {
-                    i++;
-                    continue;
-                }
-                int marker = data[i + 1] & 0xFF;
-                if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
-                    int h = ((data[i + 5] & 0xFF) << 8) | (data[i + 6] & 0xFF);
-                    int w = ((data[i + 7] & 0xFF) << 8) | (data[i + 8] & 0xFF);
-                    return new int[]{w, h};
-                }
-                if (marker >= 0xD0 && marker <= 0xD9) {
-                    i += 2;
-                    continue;
-                }
-                if (i + 3 >= limit) {
-                    break;
-                }
-                int len = ((data[i + 2] & 0xFF) << 8) | (data[i + 3] & 0xFF);
-                i += 2 + len;
-            }
-        }
-
-        // WebP
-        if (data.length >= 30 && data[0] == 'R' && data[8] == 'W'
-                && data[12] == 'V' && data[13] == 'P') {
-            if (data[15] == ' ') {
-                int w = ((data[26] & 0xFF) | ((data[27] & 0xFF) << 8)) & 0x3FFF;
-                int h = ((data[28] & 0xFF) | ((data[29] & 0xFF) << 8)) & 0x3FFF;
-                return new int[]{w, h};
-            }
-        }
-
-        return new int[]{0, 0};
+        return ComicPageAssetService.readImageDimensions(data);
     }
 
     /**
-     * 从 OPF manifest 中查找 nav 文档路径（properties 含 "nav"）。
+     * 从 OPF manifest 中查找 nav 文档路径（properties 词元含 "nav"）。
      */
     private String findNavPath(Map<String, EpubManifestItem> manifest) {
         for (EpubManifestItem item : manifest.values()) {
-            if (item.properties() != null && item.properties().contains("nav")) {
+            if (hasProperty(item.properties(), "nav")) {
                 return item.href();
             }
         }

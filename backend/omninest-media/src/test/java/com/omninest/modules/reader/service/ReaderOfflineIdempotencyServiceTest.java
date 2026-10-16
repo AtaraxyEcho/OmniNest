@@ -35,7 +35,8 @@ class ReaderOfflineIdempotencyServiceTest {
     void createBookmarkShouldReturnExistingWhenClientOperationIdExists() {
         ReaderBookmarkRepository repository = Mockito.mock(ReaderBookmarkRepository.class);
         MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
-        ReaderBookmarkService service = new ReaderBookmarkService(repository, syncEventService);
+        ReaderBookmarkService service = new ReaderBookmarkService(
+                repository, syncEventService, Mockito.mock(ReaderItemService.class));
         UUID ownerUserId = UUID.randomUUID();
         UUID readerItemId = UUID.randomUUID();
         ReaderBookmark existing = buildBookmark(ownerUserId, readerItemId);
@@ -47,6 +48,7 @@ class ReaderOfflineIdempotencyServiceTest {
         )).thenReturn(Optional.of(existing));
 
         CreateBookmarkRequest request = new CreateBookmarkRequest(
+                "chapter_3",
                 120L,
                 BigDecimal.valueOf(0.12),
                 "note",
@@ -62,7 +64,8 @@ class ReaderOfflineIdempotencyServiceTest {
     void createAnnotationShouldReturnExistingWhenClientOperationIdExists() {
         ReaderAnnotationRepository repository = Mockito.mock(ReaderAnnotationRepository.class);
         MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
-        ReaderAnnotationService service = new ReaderAnnotationService(repository, syncEventService);
+        ReaderAnnotationService service = new ReaderAnnotationService(
+                repository, syncEventService, Mockito.mock(ReaderItemService.class));
         UUID ownerUserId = UUID.randomUUID();
         UUID readerItemId = UUID.randomUUID();
         ReaderAnnotation existing = buildAnnotation(ownerUserId, readerItemId);
@@ -92,7 +95,8 @@ class ReaderOfflineIdempotencyServiceTest {
     void createAnnotationShouldPersistNormalizedChapterId() {
         ReaderAnnotationRepository repository = Mockito.mock(ReaderAnnotationRepository.class);
         MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
-        ReaderAnnotationService service = new ReaderAnnotationService(repository, syncEventService);
+        ReaderAnnotationService service = new ReaderAnnotationService(
+                repository, syncEventService, Mockito.mock(ReaderItemService.class));
         UUID ownerUserId = UUID.randomUUID();
         UUID readerItemId = UUID.randomUUID();
         Mockito.when(repository.saveAndFlush(Mockito.any(ReaderAnnotation.class))).thenAnswer(invocation -> {
@@ -125,7 +129,8 @@ class ReaderOfflineIdempotencyServiceTest {
     void createNoteShouldReturnExistingWhenClientOperationIdExists() {
         ReaderNoteRepository repository = Mockito.mock(ReaderNoteRepository.class);
         MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
-        ReaderNoteService service = new ReaderNoteService(repository, syncEventService);
+        ReaderNoteService service = new ReaderNoteService(
+                repository, syncEventService, Mockito.mock(ReaderItemService.class));
         UUID ownerUserId = UUID.randomUUID();
         UUID readerItemId = UUID.randomUUID();
         ReaderNote existing = buildNote(ownerUserId, readerItemId);
@@ -141,6 +146,38 @@ class ReaderOfflineIdempotencyServiceTest {
 
         Assertions.assertThat(result.id()).isEqualTo(existing.getId());
         Mockito.verify(repository, Mockito.never()).saveAndFlush(Mockito.any(ReaderNote.class));
+    }
+
+    @Test
+    void createBookmarkPersistsChapterIdentityAndValidatesItemAccess() {
+        ReaderBookmarkRepository repository = Mockito.mock(ReaderBookmarkRepository.class);
+        MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
+        ReaderItemService itemService = Mockito.mock(ReaderItemService.class);
+        ReaderBookmarkService service = new ReaderBookmarkService(repository, syncEventService, itemService);
+        UUID ownerUserId = UUID.randomUUID();
+        UUID readerItemId = UUID.randomUUID();
+        Mockito.when(repository.saveAndFlush(Mockito.any(ReaderBookmark.class))).thenAnswer(invocation -> {
+            ReaderBookmark bookmark = invocation.getArgument(0);
+            bookmark.setId(UUID.randomUUID());
+            bookmark.setCreatedAt(Instant.now());
+            return bookmark;
+        });
+
+        CreateBookmarkRequest request = new CreateBookmarkRequest(
+                "t1280",
+                24L,
+                BigDecimal.valueOf(0.2),
+                null,
+                null
+        );
+        ReaderBookmarkDto result = service.createBookmark(ownerUserId, readerItemId, request);
+
+        // 客户端偏移是章节内的，没有 chapterId 就无法从详情页跳回原位
+        Assertions.assertThat(result.chapterId()).isEqualTo("t1280");
+        Mockito.verify(repository).saveAndFlush(Mockito.argThat(
+                bookmark -> "t1280".equals(bookmark.getChapterId())
+        ));
+        Mockito.verify(itemService).requireItem(ownerUserId, readerItemId);
     }
 
     /**

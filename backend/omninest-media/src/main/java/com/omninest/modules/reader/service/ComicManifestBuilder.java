@@ -43,6 +43,19 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ComicManifestBuilder {
 
+    /**
+     * 来源规范顺序：季、卷、话起号、附加序号、排序键。
+     *
+     * <p>清单重排与"主来源迁移后取剩余首个来源"必须用同一把尺，否则删除主卷后条目主文件会跳到
+     * 一个与阅读顺序无关的分卷上。
+     */
+    static final Comparator<ReaderItemSource> SOURCE_ORDER = Comparator
+            .comparingInt((ReaderItemSource s) -> s.getSeasonNo() != null ? s.getSeasonNo() : Integer.MAX_VALUE)
+            .thenComparingInt(s -> s.getVolumeNo() != null ? s.getVolumeNo() : Integer.MAX_VALUE)
+            .thenComparingInt(s -> s.getChapterStart() != null ? s.getChapterStart() : Integer.MAX_VALUE)
+            .thenComparingInt(s -> s.getExtraOrder() != null ? s.getExtraOrder() : Integer.MAX_VALUE)
+            .thenComparing(s -> s.getSourceSortKey() != null ? s.getSourceSortKey() : "");
+
     private final ReaderItemRepository itemRepository;
     private final ReaderItemSourceRepository sourceRepository;
     private final ReaderCatalogNodeRepository catalogRepository;
@@ -116,12 +129,7 @@ public class ComicManifestBuilder {
     public void rebuildComicManifest(UUID itemId, List<ComicCatalogDraftNode> catalogDrafts) {
         // 1. 按结构化排序字段排序所有来源
         List<ReaderItemSource> sources = new ArrayList<>(sourceRepository.findByReaderItemId(itemId));
-        sources.sort(Comparator
-                .comparingInt((ReaderItemSource s) -> s.getSeasonNo() != null ? s.getSeasonNo() : Integer.MAX_VALUE)
-                .thenComparingInt(s -> s.getVolumeNo() != null ? s.getVolumeNo() : Integer.MAX_VALUE)
-                .thenComparingInt(s -> s.getChapterStart() != null ? s.getChapterStart() : Integer.MAX_VALUE)
-                .thenComparingInt(s -> s.getExtraOrder() != null ? s.getExtraOrder() : Integer.MAX_VALUE)
-                .thenComparing(s -> s.getSourceSortKey() != null ? s.getSourceSortKey() : ""));
+        sources.sort(SOURCE_ORDER);
 
         // 2. 按来源顺序 + sourcePageIndex 重排全局 pageIndex
         List<ReaderPage> allPages = new ArrayList<>();
@@ -150,7 +158,7 @@ public class ComicManifestBuilder {
             catalogNodes = buildDraftCatalog(catalogDrafts, itemId);
         }
         if (catalogNodes.isEmpty()) {
-            catalogNodes = buildSourceAwareCatalog(allPages, itemId, sourceIdToName);
+            catalogNodes = buildSourceAwareCatalog(allPages, itemId, sources);
         }
         Instant catalogCreatedAt = Instant.now();
         for (ReaderCatalogNode node : catalogNodes) {
@@ -392,219 +400,171 @@ public class ComicManifestBuilder {
 
     /**
      * 构建 source-aware 目录树。
-     * 使用 sourceId + normalizedPath 作为唯一键，避免多源同名目录冲突。
-     * 优先从 source 元数据（season/volume/chapter）构建聚合目录。
+     *
+     * <p>键只有一套规则：聚合节点 {@code season:S/volume:V}（无季号时为 {@code volume:V}）、
+     * 来源叶子 {@code source:{sourceId}}、压缩包内部目录 {@code source:{sourceId}/path:{dir}}。
+     * 页面归属由 {@link #resolvePageCatalogKey} 生成同形状的键；两边规则不一致时页面会全部回退到
+     * ROOT，目录节点看着在、页数却是 0，跳章也就落不到位置。
+     *
+     * @param pages 全部页面
+     * @param itemId 漫画作品 ID
+     * @param sources 已按清单顺序排序的来源
+     * @return 目录节点
      */
     private List<ReaderCatalogNode> buildSourceAwareCatalog(
-            List<ReaderPage> pages, UUID itemId, Map<UUID, String> sourceIdToName) {
+            List<ReaderPage> pages, UUID itemId, List<ReaderItemSource> sources) {
 
         List<ReaderCatalogNode> nodes = new ArrayList<>();
-
-        // 创建 ROOT 节点
-        ReaderCatalogNode rootNode = new ReaderCatalogNode();
-        rootNode.setId(UUID.randomUUID());
-        rootNode.setReaderItemId(itemId);
-        rootNode.setNodeType("ROOT");
-        rootNode.setTitle("全部");
-        rootNode.setSortIndex(0);
-        rootNode.setCatalogKey("root");
+        Map<String, ReaderCatalogNode> keyMap = new HashMap<>();
+        ReaderCatalogNode rootNode = createCatalogNode(itemId, null, null, "ROOT", "全部", "root");
         nodes.add(rootNode);
+        keyMap.put("root", rootNode);
 
-        // 检查是否有 source 可以从文件名推断季/卷/话结构
-        boolean hasStructuredSources = sourceIdToName.entrySet().stream()
-                .anyMatch(e -> !"ROOT".equals(detectNodeType(stripExtension(e.getValue()))));
-
-        if (hasStructuredSources) {
-            // 从 source 元数据构建聚合目录
-            buildAggregatedCatalog(nodes, itemId, sourceIdToName, pages);
-        } else {
-            // 检查页面是否有内部目录结构
-            boolean hasInternalDirs = pages.stream()
-                    .anyMatch(p -> p.getSourcePath() != null && p.getSourcePath().contains("/"));
-
-            if (hasInternalDirs) {
-                // 从页面路径构建 source-aware 内部目录
-                buildInternalCatalog(nodes, itemId, pages, sourceIdToName);
-            } else {
-                // 扁平结构：每个 source 一个章节节点
-                buildFlatSourceCatalog(nodes, itemId, sourceIdToName);
-            }
+        // sortIndex 由深度优先按插入顺序分配，所以这里必须沿用清单顺序
+        List<SourceMeta> metas = new ArrayList<>();
+        for (ReaderItemSource source : sources) {
+            metas.add(parseSourceMeta(source.getId(), source.getSourceName()));
         }
 
-        // 按深度优先分配 sortIndex
+        boolean hasStructuredSources = sources.size() > 1
+                || metas.stream().anyMatch(meta -> ComicVolumeParser.hasPartSignal(meta.sourceName));
+        if (hasStructuredSources) {
+            appendAggregateNodes(nodes, keyMap, itemId, metas);
+        }
+        appendSourceNodes(nodes, keyMap, itemId, metas);
+        appendInternalDirNodes(nodes, keyMap, itemId, pages);
+
         assignSortIndices(nodes);
         return nodes;
     }
 
     /**
-     * 从 source 文件名元数据构建聚合目录（季→卷→话）。
-     * 多个 source 可以挂到同一季/卷下，叶子节点保留各自 sourceId。
+     * 按季→卷建聚合节点。
      */
-    private void buildAggregatedCatalog(
-            List<ReaderCatalogNode> nodes, UUID itemId,
-            Map<UUID, String> sourceIdToName, List<ReaderPage> pages) {
+    private void appendAggregateNodes(
+            List<ReaderCatalogNode> nodes,
+            Map<String, ReaderCatalogNode> keyMap,
+            UUID itemId,
+            List<SourceMeta> metas) {
 
-        // 收集每个 source 的元数据
-        Map<UUID, SourceMeta> metaMap = new HashMap<>();
-        for (Map.Entry<UUID, String> entry : sourceIdToName.entrySet()) {
-            String name = stripExtension(entry.getValue());
-            SourceMeta meta = parseSourceMeta(entry.getKey(), name);
-            metaMap.put(entry.getKey(), meta);
-        }
-
-        // 构建聚合节点：season:N, season:N/volume:N
-        Map<String, ReaderCatalogNode> keyMap = new HashMap<>();
-        for (SourceMeta meta : metaMap.values()) {
+        for (SourceMeta meta : metas) {
             if (meta.seasonNo != null) {
                 String seasonKey = "season:" + meta.seasonNo;
                 if (!keyMap.containsKey(seasonKey)) {
-                    ReaderCatalogNode seasonNode = new ReaderCatalogNode();
-                    seasonNode.setId(UUID.randomUUID());
-                    seasonNode.setReaderItemId(itemId);
-                    seasonNode.setParentId(nodes.get(0).getId());
-                    seasonNode.setNodeType("SEASON");
-                    seasonNode.setTitle("第" + meta.seasonNo + "季");
-                    seasonNode.setCatalogKey(seasonKey);
+                    ReaderCatalogNode seasonNode = createCatalogNode(
+                            itemId, nodes.get(0).getId(), null, "SEASON", "第" + meta.seasonNo + "季", seasonKey);
                     nodes.add(seasonNode);
                     keyMap.put(seasonKey, seasonNode);
                 }
-
-                if (meta.volumeNo != null) {
-                    String volKey = seasonKey + "/volume:" + meta.volumeNo;
-                    if (!keyMap.containsKey(volKey)) {
-                        ReaderCatalogNode volNode = new ReaderCatalogNode();
-                        volNode.setId(UUID.randomUUID());
-                        volNode.setReaderItemId(itemId);
-                        volNode.setParentId(keyMap.get(seasonKey).getId());
-                        volNode.setNodeType("VOLUME");
-                        volNode.setTitle("第" + meta.volumeNo + "卷");
-                        volNode.setCatalogKey(volKey);
-                        nodes.add(volNode);
-                        keyMap.put(volKey, volNode);
-                    }
+            }
+            if (meta.volumeNo != null) {
+                // 没有季号也要能单独成卷：过去卷节点只在季号分支里创建，"Vol.1"这类命名既没有卷节点，
+                // 叶子键又带上不存在的父前缀，整个来源的页面只能回退到根。
+                String volumeKey = volumeKey(meta);
+                UUID volumeParentId = meta.seasonNo == null
+                        ? nodes.get(0).getId()
+                        : keyMap.get("season:" + meta.seasonNo).getId();
+                if (!keyMap.containsKey(volumeKey)) {
+                    ReaderCatalogNode volumeNode = createCatalogNode(
+                            itemId, volumeParentId, null, "VOLUME", "第" + meta.volumeNo + "卷", volumeKey);
+                    nodes.add(volumeNode);
+                    keyMap.put(volumeKey, volumeNode);
                 }
             }
         }
+    }
 
-        // 为每个 source 创建叶子节点
-        for (SourceMeta meta : metaMap.values()) {
-            String leafKey = buildLeafCatalogKey(meta);
-            if (keyMap.containsKey(leafKey)) continue;
+    /**
+     * 为每个来源建叶子节点，挂在最深的聚合节点之下。
+     */
+    private void appendSourceNodes(
+            List<ReaderCatalogNode> nodes,
+            Map<String, ReaderCatalogNode> keyMap,
+            UUID itemId,
+            List<SourceMeta> metas) {
 
-            ReaderCatalogNode leafNode = new ReaderCatalogNode();
-            leafNode.setId(UUID.randomUUID());
-            leafNode.setReaderItemId(itemId);
-            leafNode.setSourceId(meta.sourceId);
-            leafNode.setNodeType(detectNodeType(stripExtension(meta.sourceName)));
-            leafNode.setTitle(stripExtension(meta.sourceName));
-            leafNode.setCatalogKey(leafKey);
-
-            // 确定父节点
-            String parentKey = buildParentCatalogKey(meta);
-            if (parentKey != null && keyMap.containsKey(parentKey)) {
-                leafNode.setParentId(keyMap.get(parentKey).getId());
-            } else {
-                leafNode.setParentId(nodes.get(0).getId());
+        for (SourceMeta meta : metas) {
+            String leafKey = "source:" + meta.sourceId;
+            if (keyMap.containsKey(leafKey)) {
+                continue;
             }
-
+            ReaderCatalogNode parent = resolveAggregateParent(keyMap, meta);
+            ReaderCatalogNode leafNode = createCatalogNode(
+                    itemId,
+                    parent.getId(),
+                    meta.sourceId,
+                    detectNodeType(meta.sourceName),
+                    meta.sourceName.isBlank() ? "漫画来源" : meta.sourceName,
+                    leafKey);
             nodes.add(leafNode);
             keyMap.put(leafKey, leafNode);
         }
-
-        // 将页面分配到叶子节点的 catalogKey
-        // （在 rebuildComicManifest 中通过 resolvePageCatalogKey 完成）
     }
 
     /**
-     * 从页面路径构建 source-aware 内部目录。
-     * 使用 sourceId + normalizedPath 作为唯一键。
+     * 把压缩包内部的子目录逐级挂在所属来源节点之下。
      */
-    private void buildInternalCatalog(
-            List<ReaderCatalogNode> nodes, UUID itemId,
-            List<ReaderPage> pages, Map<UUID, String> sourceIdToName) {
-
-        // 收集所有 sourceId + 目录路径的唯一组合
-        Map<String, ReaderCatalogNode> keyMap = new HashMap<>();
+    private void appendInternalDirNodes(
+            List<ReaderCatalogNode> nodes,
+            Map<String, ReaderCatalogNode> keyMap,
+            UUID itemId,
+            List<ReaderPage> pages) {
 
         for (ReaderPage page : pages) {
             String parentDir = getParentDir(page.getSourcePath());
-            if (parentDir == null || parentDir.isEmpty()) continue;
-
-            // 逐级构建目录节点
-            String[] segments = parentDir.split("/");
+            if (parentDir == null || parentDir.isEmpty()) {
+                continue;
+            }
+            String sourceKey = "source:" + page.getSourceId();
+            ReaderCatalogNode parent = keyMap.getOrDefault(sourceKey, keyMap.get("root"));
             StringBuilder currentPath = new StringBuilder();
-            for (int i = 0; i < segments.length; i++) {
-                if (i > 0) currentPath.append('/');
-                currentPath.append(segments[i]);
-
-                // source-aware key: source:{sourceId}/path:{normalizedPath}
-                String catalogKey = "source:" + page.getSourceId() + "/path:" + currentPath;
-
-                if (!keyMap.containsKey(catalogKey)) {
-                    String dirName = segments[i];
-                    String nodeType = detectNodeType(dirName);
-
-                    ReaderCatalogNode node = new ReaderCatalogNode();
-                    node.setId(UUID.randomUUID());
-                    node.setReaderItemId(itemId);
-                    node.setNodeType(nodeType);
-                    node.setTitle(dirName);
-                    node.setCatalogKey(catalogKey);
-                    node.setSourceId(page.getSourceId());
-
-                    // 确定父节点
-                    if (i == 0) {
-                        // 检查是否有对应的 source 叶子节点
-                        String sourceLeafKey = "source:" + page.getSourceId();
-                        ReaderCatalogNode sourceLeaf = keyMap.get(sourceLeafKey);
-                        if (sourceLeaf != null) {
-                            node.setParentId(sourceLeaf.getId());
-                        } else {
-                            node.setParentId(nodes.get(0).getId());
-                        }
-                    } else {
-                        String parentCatalogKey = "source:" + page.getSourceId() + "/path:" + currentPath.substring(0, currentPath.length() - segments[i].length() - 1);
-                        ReaderCatalogNode parent = keyMap.get(parentCatalogKey);
-                        if (parent != null) {
-                            node.setParentId(parent.getId());
-                        } else {
-                            node.setParentId(nodes.get(0).getId());
-                        }
-                    }
-
-                    nodes.add(node);
-                    keyMap.put(catalogKey, node);
+            for (String segment : parentDir.split("/")) {
+                if (segment.isEmpty()) {
+                    continue;
                 }
+                if (currentPath.length() > 0) {
+                    currentPath.append('/');
+                }
+                currentPath.append(segment);
+                String dirKey = sourceKey + "/path:" + currentPath;
+                ReaderCatalogNode dirNode = keyMap.get(dirKey);
+                if (dirNode == null) {
+                    dirNode = createCatalogNode(
+                            itemId, parent.getId(), page.getSourceId(), detectNodeType(segment), segment, dirKey);
+                    nodes.add(dirNode);
+                    keyMap.put(dirKey, dirNode);
+                }
+                parent = dirNode;
             }
         }
     }
 
     /**
-     * 扁平结构：每个 source 创建一个章节节点。
+     * 来源叶子节点的父节点：卷优先于季，都没有时回到根。
      */
-    private void buildFlatSourceCatalog(
-            List<ReaderCatalogNode> nodes, UUID itemId, Map<UUID, String> sourceIdToName) {
-
-        int sortIndex = 1;
-        for (Map.Entry<UUID, String> entry : sourceIdToName.entrySet()) {
-            UUID sourceId = entry.getKey();
-            String sourceName = entry.getValue();
-            String stripped = stripExtension(sourceName);
-            String nodeType = detectNodeType(stripped);
-
-            if ("ROOT".equals(nodeType)) continue;
-
-            ReaderCatalogNode sourceNode = new ReaderCatalogNode();
-            sourceNode.setId(UUID.randomUUID());
-            sourceNode.setReaderItemId(itemId);
-            sourceNode.setParentId(nodes.get(0).getId());
-            sourceNode.setSourceId(sourceId);
-            sourceNode.setNodeType(nodeType);
-            sourceNode.setTitle(stripped);
-            sourceNode.setSortIndex(sortIndex++);
-            sourceNode.setCatalogKey("source:" + sourceId);
-            nodes.add(sourceNode);
+    private ReaderCatalogNode resolveAggregateParent(Map<String, ReaderCatalogNode> keyMap, SourceMeta meta) {
+        if (meta.volumeNo != null) {
+            ReaderCatalogNode volume = keyMap.get(volumeKey(meta));
+            if (volume != null) {
+                return volume;
+            }
         }
+        if (meta.seasonNo != null) {
+            ReaderCatalogNode season = keyMap.get("season:" + meta.seasonNo);
+            if (season != null) {
+                return season;
+            }
+        }
+        return keyMap.get("root");
+    }
+
+    /**
+     * 卷节点的键：有季号时带季前缀，没有时独立成卷。
+     */
+    private static String volumeKey(SourceMeta meta) {
+        return meta.seasonNo == null
+                ? "volume:" + meta.volumeNo
+                : "season:" + meta.seasonNo + "/volume:" + meta.volumeNo;
     }
 
     /**
@@ -684,12 +644,18 @@ public class ComicManifestBuilder {
         Integer extraOrder;
     }
 
-    private SourceMeta parseSourceMeta(UUID sourceId, String name) {
+    /**
+     * 解析来源文件名里的季/卷/话结构。
+     *
+     * <p>入参必须带扩展名：分卷号常写成 "Vol.1"，把 ".1" 当扩展名削掉后就再也认不出卷号，
+     * 卷节点与页面归属会一起落空。
+     */
+    private SourceMeta parseSourceMeta(UUID sourceId, String rawName) {
         SourceMeta meta = new SourceMeta();
         meta.sourceId = sourceId;
-        meta.sourceName = name;
-        if (name == null) return meta;
-        String lower = name.toLowerCase().replaceAll("\\.[^.]+$", "");
+        meta.sourceName = stripExtension(rawName);
+        if (rawName == null || rawName.isBlank()) return meta;
+        String lower = rawName.toLowerCase();
 
         Matcher season = Pattern.compile("s(\\d+)|season\\s*(\\d+)|第(\\d+)季").matcher(lower);
         if (season.find()) {
@@ -704,7 +670,7 @@ public class ComicManifestBuilder {
         }
 
         // 话/章区间：兼容 ch/chapter/第X话章 及日式"話001-010"
-        ComicVolumeParser.PartInfo part = ComicVolumeParser.parse(name);
+        ComicVolumeParser.PartInfo part = ComicVolumeParser.parse(rawName);
         if (part.matched() && part.partNo() != null
                 && ("EPISODE".equals(part.partKind()) || "CHAPTER".equals(part.partKind()))) {
             meta.chapterStart = part.partNo();
@@ -731,25 +697,6 @@ public class ComicManifestBuilder {
         }
 
         return meta;
-    }
-
-    private String buildLeafCatalogKey(SourceMeta meta) {
-        StringBuilder key = new StringBuilder();
-        if (meta.seasonNo != null) key.append("season:").append(meta.seasonNo);
-        if (meta.volumeNo != null) key.append("/volume:").append(meta.volumeNo);
-        if (key.length() > 0) key.append('/');
-        key.append("source:").append(meta.sourceId);
-        return key.toString();
-    }
-
-    private String buildParentCatalogKey(SourceMeta meta) {
-        if (meta.seasonNo != null && meta.volumeNo != null) {
-            return "season:" + meta.seasonNo + "/volume:" + meta.volumeNo;
-        }
-        if (meta.seasonNo != null) {
-            return "season:" + meta.seasonNo;
-        }
-        return null;
     }
 
     /**

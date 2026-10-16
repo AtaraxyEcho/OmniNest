@@ -457,6 +457,10 @@ public class ReaderLibraryController {
         if ("COMIC".equalsIgnoreCase(item.getContentKind())) {
             comicManifestService.enqueueManifestReparse(itemId);
             item = readerItemService.requireOwnedItem(ownerUserId, itemId);
+        } else if ("PDF".equalsIgnoreCase(item.getItemType())) {
+            // PDF 没有文本章节清单，投给文本解析引擎只会把它写成 FAILED
+            readerImportService.reparsePdfItem(ownerUserId, item);
+            item = readerItemService.requireOwnedItem(ownerUserId, itemId);
         } else {
             textParseSubmissionService.submit(item, true);
             item = readerItemService.requireOwnedItem(ownerUserId, itemId);
@@ -497,14 +501,14 @@ public class ReaderLibraryController {
     /**
      * 重试失败的漫画来源解析。
      */
-    @Operation(summary = "重试漫画来源解析", description = "重新解析失败的漫画来源文件")
+    @Operation(summary = "重试漫画来源解析", description = "重新解析失败的漫画来源文件，共享漫画成员可重试自己可读条目的失败分卷")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     @PostMapping("/api/v1/reader/items/{itemId}/comic/sources/{sourceId}/retry")
     ApiResponse<Void> retryComicSource(
             @PathVariable UUID itemId,
             @PathVariable UUID sourceId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        readerItemService.requireOwnedItem(ownerUserId, itemId);
+        readerItemService.requireItem(ownerUserId, itemId);
         comicManifestService.publishRetryTask(itemId, sourceId);
         return ApiResponse.success(null);
     }
@@ -512,15 +516,14 @@ public class ReaderLibraryController {
     /**
      * 删除漫画来源及其页面。
      */
-    @Operation(summary = "删除漫画来源", description = "删除指定漫画来源及其页面")
+    @Operation(summary = "删除漫画来源", description = "删除指定漫画来源及其页面，条目所有者与该分卷上传者均可执行")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     @DeleteMapping("/api/v1/reader/items/{itemId}/comic/sources/{sourceId}")
     ApiResponse<Void> deleteComicSource(
             @PathVariable UUID itemId,
             @PathVariable UUID sourceId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        readerItemService.requireOwnedItem(ownerUserId, itemId);
-        comicManifestService.deleteSource(itemId, sourceId);
+        comicManifestService.deleteSourceAuthorized(ownerUserId, itemId, sourceId);
         return ApiResponse.success(null);
     }
 

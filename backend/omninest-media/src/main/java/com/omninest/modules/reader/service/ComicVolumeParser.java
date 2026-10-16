@@ -61,7 +61,9 @@ public final class ComicVolumeParser {
         if (fileName == null || fileName.isBlank()) {
             return new PartInfo(null, null, null, false);
         }
-        String name = fileName.replaceFirst("\\.[^.]+$", "");
+        // 只剥真正的扩展名：以点加数字结尾（"Vol.1"、"第2期.3"）是分卷编号的一部分，
+        // 无条件去掉最后一段会把 "Vol.1" 削成 "Vol"，卷号与合并信号一起丢失。
+        String name = fileName.replaceFirst("\\.[A-Za-z][A-Za-z0-9]{0,9}$", "");
 
         // 季集：S01E02 优先级最高
         Matcher se = SEASON_EP.matcher(name);
@@ -162,61 +164,24 @@ public final class ComicVolumeParser {
         return "CHAPTER";
     }
 
-    /** 阿拉伯或中文数字转阿拉伯数字；不支持时返回 null。 */
+    /**
+     * 阿拉伯或中文数字转阿拉伯数字；不支持时返回 null。
+     *
+     * <p>中文数字统一走 {@link ReaderTextParser#chineseNumberValue}：这里曾有另一份实现，
+     * 把"十一"算成 -9、"二十"算成 -8，分卷排序与目录跟着一起错。
+     */
     private static Integer parseNumber(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         if (value.matches("\\d+")) {
-            return Integer.parseInt(value);
-        }
-        // 中文数字：一~十/百
-        char[] cnDigits = {'零', '一', '二', '三', '四', '五', '六', '七', '八', '九'};
-        if (value.length() == 1) {
-            for (int i = 0; i < cnDigits.length; i++) {
-                if (cnDigits[i] == value.charAt(0)) {
-                    return i;
-                }
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException exception) {
+                return null;
             }
-            return switch (value) {
-                case "十" -> 10;
-                case "兩", "两" -> 2;
-                default -> null;
-            };
         }
-        // 简单处理 X十Y / 十Y 形态
-        try {
-            int total = 0;
-            boolean inTen = false;
-            for (int i = 0; i < value.length(); i++) {
-                char c = value.charAt(i);
-                int digit = digitValue(c);
-                if (c == '十') {
-                    total += (inTen || digit == 0) ? 10 : digit * 10;
-                    inTen = true;
-                } else if (digit >= 0) {
-                    total += digit;
-                }
-            }
-            return total;
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
-    private static int digitValue(char c) {
-        return switch (c) {
-            case '零' -> 0;
-            case '一', '壹' -> 1;
-            case '二', '兩', '两', '贰', '貳' -> 2;
-            case '三', '叁' -> 3;
-            case '四', '肆' -> 4;
-            case '五', '伍' -> 5;
-            case '六', '陆', '陸' -> 6;
-            case '七', '柒' -> 7;
-            case '八', '捌' -> 8;
-            case '九', '玖' -> 9;
-            default -> -1;
-        };
+        int parsed = ReaderTextParser.chineseNumberValue(value);
+        return parsed < 0 ? null : parsed;
     }
 }

@@ -164,6 +164,45 @@ class ReaderDashboardServiceTest {
         assertThat(dashboard.continueReading()).isEmpty();
     }
 
+    /**
+     * 继续阅读按最近阅读时间排序。
+     *
+     * <p>上报进度只写 {@code reader_progress.updated_at}，不推进 {@code reader_items.updated_at}；
+     * 按条目时间排序等于按导入时间排序，读了新书列表顺序也不变。
+     */
+    @Test
+    @DisplayName("继续阅读按进度记录的更新时间排序，而不是条目导入时间")
+    void should_sort_continue_reading_by_progress_updated_at() {
+        // Given: 先导入的书最近才被读，后导入的书已经很久没碰
+        ReaderItem importedFirstReadRecently = createItem(ITEM_IN_PROGRESS, Instant.parse("2026-01-01T00:00:00Z"));
+        ReaderItem importedLaterReadLongAgo = createItem(ITEM_COMPLETED, Instant.parse("2026-06-01T00:00:00Z"));
+
+        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
+            .thenReturn(List.of(importedLaterReadLongAgo, importedFirstReadRecently));
+        ReaderProgress recentlyRead = createProgress(ITEM_IN_PROGRESS, new BigDecimal("0.4"));
+        recentlyRead.setUpdatedAt(Instant.parse("2026-09-09T00:00:00Z"));
+        ReaderProgress stale = createProgress(ITEM_COMPLETED, new BigDecimal("0.6"));
+        stale.setUpdatedAt(Instant.parse("2026-02-02T00:00:00Z"));
+        when(progressRepository.findByOwnerUserIdAndReaderItemIdIn(eq(OWNER_ID), anyList()))
+            .thenReturn(List.of(stale, recentlyRead));
+        when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(eq(OWNER_ID), anyList()))
+            .thenReturn(Collections.emptyList());
+        when(fileMetadataQueryService.findAllByIds(anyList()))
+            .thenReturn(Collections.emptyList());
+        when(itemService.toDto(eq(importedFirstReadRecently), eq(false), anyMap(), anyMap()))
+            .thenReturn(createMockDto(ITEM_IN_PROGRESS));
+        when(itemService.toDto(eq(importedLaterReadLongAgo), eq(false), anyMap(), anyMap()))
+            .thenReturn(createMockDto(ITEM_COMPLETED));
+
+        // When
+        ReaderDashboardDto dashboard = dashboardService.getDashboard(OWNER_ID);
+
+        // Then
+        assertThat(dashboard.continueReading())
+            .extracting(ReaderItemDto::id)
+            .containsExactly(ITEM_IN_PROGRESS, ITEM_COMPLETED);
+    }
+
     private ReaderItem createItem(UUID id, Instant updatedAt) {
         ReaderItem item = new ReaderItem();
         item.setId(id);
@@ -185,8 +224,8 @@ class ReaderDashboardServiceTest {
     private ReaderItemDto createMockDto(UUID id) {
         return new ReaderItemDto(
             id, null, "EPUB", "TEXT", "Test Book", null, null, null, null,
-            null, null, Instant.now(), Instant.now(), false, null, "PERSONAL", 0,
-            "READY", null, null
+            null, null, null, null, null, null, Instant.now(), Instant.now(), false, null,
+            "PERSONAL", 0, "READY", null, null
         );
     }
 }

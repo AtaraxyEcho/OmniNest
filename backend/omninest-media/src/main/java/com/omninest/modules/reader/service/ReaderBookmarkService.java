@@ -31,6 +31,7 @@ public class ReaderBookmarkService {
 
     private final ReaderBookmarkRepository bookmarkRepository;
     private final MediaSyncEventService syncEventService;
+    private final ReaderItemService readerItemService;
 
     /**
      * 列出指定条目的所有书签。
@@ -60,6 +61,8 @@ public class ReaderBookmarkService {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "书签请求参数不能为空");
         }
+        // 书签归属按 (owner, item) 落库，不校验条目可读性就会给不存在或无权阅读的条目写出孤儿行。
+        readerItemService.requireItem(ownerUserId, readerItemId);
         String clientOperationId = normalizeClientOperationId(request.clientOperationId());
         ReaderBookmark existing = findExistingByClientOperationId(ownerUserId, readerItemId, clientOperationId);
         if (existing != null) {
@@ -69,6 +72,7 @@ public class ReaderBookmarkService {
         ReaderBookmark bookmark = new ReaderBookmark();
         bookmark.setOwnerUserId(ownerUserId);
         bookmark.setReaderItemId(readerItemId);
+        bookmark.setChapterId(normalizeChapterId(request.chapterId()));
         bookmark.setClientOperationId(clientOperationId);
         bookmark.setCharOffset(request.charOffset());
         // 进度百分比夹紧到 [0, 1]，全程 BigDecimal 运算，禁止转 double（阿里 Java 手册规范）
@@ -110,11 +114,22 @@ public class ReaderBookmarkService {
         return new ReaderBookmarkDto(
                 bookmark.getId(),
                 bookmark.getReaderItemId(),
+                bookmark.getChapterId(),
                 bookmark.getCharOffset(),
                 bookmark.getProgressPercent(),
                 bookmark.getNote(),
                 bookmark.getCreatedAt()
         );
+    }
+
+    /**
+     * 规范化章节标识。
+     */
+    private String normalizeChapterId(String chapterId) {
+        if (chapterId == null || chapterId.isBlank()) {
+            return null;
+        }
+        return chapterId.trim();
     }
 
     /**

@@ -81,7 +81,9 @@ public class ReaderDashboardService {
                         file -> file.spaceType().getValue()
                 ));
 
-        // 继续阅读：进度 > 0 且 < 100%，按 updatedAt 降序
+        // 继续阅读：进度 > 0 且 < 100%，按最近阅读时间降序。
+        // 排序键取进度记录的 updatedAt：上报进度只写 reader_progress，不会推进
+        // reader_items.updated_at，按条目时间排序等于按导入时间排序。
         List<ReaderItemDto> continueReading = allItems.stream()
                 .filter(item -> {
                     ReaderProgress progress = progressMap.get(item.getId());
@@ -91,7 +93,15 @@ public class ReaderDashboardService {
                     BigDecimal percent = progress.getProgressPercent();
                     return percent.compareTo(BigDecimal.ZERO) > 0 && percent.compareTo(BigDecimal.ONE) < 0;
                 })
-                .sorted(Comparator.comparing(ReaderItem::getUpdatedAt).reversed())
+                .sorted(Comparator.comparing(
+                        (ReaderItem item) -> {
+                            ReaderProgress progress = progressMap.get(item.getId());
+                            return progress != null && progress.getUpdatedAt() != null
+                                    ? progress.getUpdatedAt()
+                                    : item.getUpdatedAt();
+                        },
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
                 .limit(12)
                 .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
                 .toList();

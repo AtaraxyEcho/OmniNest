@@ -696,9 +696,18 @@ public class ReaderComicManifestService {
 
     /**
      * 创建漫画解析任务记录并在当前事务内写入 Outbox 投递行。
+     *
+     * <p>任务记录归条目所有者（取消与任务列表按此过滤），事件里的文件操作用户是源文件节点的真实所有者：
+     * 共享漫画的分卷可能由不同成员上传，两者混成一个用户会让 Worker 的生命周期守卫查不到节点，
+     * 把合法分卷静默判成已删除。
      */
     private void enqueueParseTask(ReaderItem item, ReaderItemSource source, boolean retry) {
         UUID taskId = UUID.randomUUID();
+        UUID fileOwnerId = source.getFileNodeId() == null
+                ? item.getOwnerUserId()
+                : fileMetadataQueryService.findById(source.getFileNodeId())
+                        .map(FileDescriptor::ownerUserId)
+                        .orElse(item.getOwnerUserId());
         taskRecordService.createQueuedTask(taskId, item.getOwnerUserId(), "COMIC_PARSE",
                 QueueNames.COMIC_PARSE_ROUTING_KEY, "QUEUED", "FILE_NODE", source.getFileNodeId(), Map.of(
                         "ownerUserId", item.getOwnerUserId().toString(),
@@ -716,7 +725,7 @@ public class ReaderComicManifestService {
                 QueueNames.COMIC_PARSE_ROUTING_KEY,
                 new ComicParseTaskEvent(
                         taskId,
-                        item.getOwnerUserId(),
+                        fileOwnerId,
                         item.getId(),
                         source.getId(),
                         source.getFileNodeId(),
@@ -857,6 +866,36 @@ public class ReaderComicManifestService {
     }
 
     /**
+     * 按请求者身份删除来源及其页面，然后重建清单。
+     *
+     * <p>共享漫画的分卷由成员各自上传：条目所有者可以删任何来源，分卷上传者只能删自己那份，
+     * 否则成员永远无法撤下自己误传的私有分卷。
+     *
+     * @param requesterId 当前用户 ID
+     * @param itemId      漫画作品 ID
+     * @param sourceId    来源 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteSourceAuthorized(UUID requesterId, UUID itemId, UUID sourceId) {
+        ReaderItem item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "阅读条目不存在"));
+        ReaderItemSource source = sourceRepository.findById(sourceId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "来源不存在"));
+        if (!source.getReaderItemId().equals(itemId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "来源不属于该作品");
+        }
+        boolean isItemOwner = requesterId.equals(item.getOwnerUserId());
+        boolean isSourceUploader = source.getFileNodeId() != null
+                && fileMetadataQueryService.findById(source.getFileNodeId())
+                        .map(node -> requesterId.equals(node.ownerUserId()))
+                        .orElse(false);
+        if (!isItemOwner && !isSourceUploader) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除此漫画来源");
+        }
+        deleteSource(itemId, sourceId);
+    }
+
+    /**
      * 删除来源及其页面，然后重建清单。
      *
      * @param itemId   漫画作品 ID
@@ -864,7 +903,7 @@ public class ReaderComicManifestService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteSource(UUID itemId, UUID sourceId) {
-        itemRepository.findByIdForUpdate(itemId)
+        ReaderItem item = itemRepository.findByIdForUpdate(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "阅读条目不存在"));
         ReaderItemSource source = sourceRepository.findById(sourceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "来源不存在"));
@@ -879,6 +918,18 @@ public class ReaderComicManifestService {
         pageRepository.deleteBySourceId(source.getId());
         // 删除来源
         sourceRepository.delete(source);
+        sourceRepository.flush();
+        // 条目主文件指向的必须是一个仍然存在的来源，否则清单重建后主文件悬空、鉴权与封面都会失效。
+        if (source.getFileNodeId() != null && source.getFileNodeId().equals(item.getFileNodeId())) {
+            List<ReaderItemSource> remaining = new ArrayList<>(sourceRepository.findByReaderItemId(itemId));
+            if (!remaining.isEmpty()) {
+                remaining.sort(ComicManifestBuilder.SOURCE_ORDER);
+                ReaderItemSource nextPrimary = remaining.getFirst();
+                item.setFileNodeId(nextPrimary.getFileNodeId());
+                item.setContentHash(nextPrimary.getContentHash());
+                itemRepository.save(item);
+            }
+        }
         // 重建清单
         rebuildComicManifest(itemId);
         refreshItemImportStatus(itemId);

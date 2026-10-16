@@ -46,6 +46,7 @@ public class ComicParseTaskService {
         if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
             log.info("漫画来源文件已删除或正在永久删除，取消解析任务: taskId={}, fileNodeId={}",
                     event.taskId(), event.fileNodeId());
+            markSourceUnprocessable(event);
             markCancelled(event);
             return;
         }
@@ -82,6 +83,7 @@ public class ComicParseTaskService {
             if (isLifecycleCancellation(exception)) {
                 log.info("漫画来源文件在解析期间进入永久删除流程，取消任务: taskId={}, fileNodeId={}",
                         event.taskId(), event.fileNodeId());
+                markSourceUnprocessable(event);
                 markCancelled(event);
                 return;
             }
@@ -188,6 +190,23 @@ public class ComicParseTaskService {
             source.setStatus(ReaderSourceStatus.FAILED);
             source.setErrorCode("IMPORT_CANCELLED");
             source.setErrorMessage("用户已取消导入");
+            sourceRepository.save(source);
+        }
+        comicManifestService.refreshItemImportStatus(event.itemId());
+    }
+
+    /**
+     * 源文件已删除或正在永久删除时把来源标记成不可处理。
+     *
+     * <p>只取消任务不回写业务状态，条目会永远停在 PARSING：这条路径没有用户可点的取消入口，
+     * 也没有重试按钮能认出它是死的。
+     */
+    private void markSourceUnprocessable(ComicParseTaskEvent event) {
+        ReaderItemSource source = sourceRepository.findById(event.sourceId()).orElse(null);
+        if (source != null) {
+            source.setStatus(ReaderSourceStatus.FAILED);
+            source.setErrorCode("FILE_NOT_PROCESSABLE");
+            source.setErrorMessage("来源文件已删除或正在永久删除");
             sourceRepository.save(source);
         }
         comicManifestService.refreshItemImportStatus(event.itemId());

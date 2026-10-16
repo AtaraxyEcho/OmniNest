@@ -36,6 +36,14 @@ public final class ReaderDtos {
             String publisher,
             String language,
             BigDecimal rating,
+            /** 出版日期，编辑页写入 reader_items.release_date */
+            LocalDate releaseDate,
+            /** 分类标签，来自 reader_items.genres 的 items 数组 */
+            List<String> genres,
+            /** 连载状态，存 reader_items.external_ids 的 serialStatus 键 */
+            String serialStatus,
+            /** ISBN，存 reader_items.external_ids 的 isbn 键 */
+            String isbn,
             Instant createdAt,
             Instant updatedAt,
             boolean addedToBookshelf,
@@ -82,6 +90,8 @@ public final class ReaderDtos {
     public record ReaderBookmarkDto(
             UUID id,
             UUID readerItemId,
+            /** 书签所属章节标识；客户端偏移是章节内的，缺实时只能回到当前进度章 */
+            String chapterId,
             long charOffset,
             BigDecimal progressPercent,
             String note,
@@ -194,6 +204,8 @@ public final class ReaderDtos {
 
     /** 创建书签请求。 */
     public record CreateBookmarkRequest(
+            @Size(max = 128, message = "chapterId 长度不能超过 128")
+            String chapterId,
             @Min(value = 0, message = "charOffset 不能为负数")
             long charOffset,
             // progressPercent 为必填：service 端直接 .max(BigDecimal.ZERO)，
@@ -263,7 +275,17 @@ public final class ReaderDtos {
             @Size(max = 300, message = "publisher 长度不能超过 300")
             String publisher,
             @Size(max = 50, message = "language 长度不能超过 50")
-            String language
+            String language,
+            LocalDate releaseDate,
+            @DecimalMin(value = "0.0", message = "rating 不能小于 0")
+            @DecimalMax(value = "10.0", message = "rating 不能大于 10")
+            BigDecimal rating,
+            @Size(max = 20, message = "genres 数量不能超过 20")
+            List<String> genres,
+            @Size(max = 50, message = "serialStatus 长度不能超过 50")
+            String serialStatus,
+            @Size(max = 64, message = "isbn 长度不能超过 64")
+            String isbn
     ) {
     }
 

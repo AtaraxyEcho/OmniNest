@@ -42,6 +42,7 @@ public class ReaderProgressService {
     private final ReaderPageRepository pageRepository;
     private final ReaderProgressRepository progressRepository;
     private final MediaSyncEventService syncEventService;
+    private final ReaderItemService readerItemService;
 
     /**
      * 获取指定条目的阅读进度。
@@ -72,8 +73,7 @@ public class ReaderProgressService {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "进度请求参数不能为空");
         }
-        ReaderItem item = itemRepository.findByIdAndOwnerUserId(readerItemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN, "无权更新该阅读条目进度"));
+        ReaderItem item = readerItemService.requireItem(ownerUserId, readerItemId);
         String readingMode = normalizeReadingMode(request.readingMode());
         validateComicAnchor(item, request);
         String chapterId = (request.chapterId() != null) ? request.chapterId() : "";

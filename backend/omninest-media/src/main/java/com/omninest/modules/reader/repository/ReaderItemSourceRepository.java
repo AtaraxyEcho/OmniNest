@@ -1,5 +1,7 @@
 package com.omninest.modules.reader.repository;
 
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderItemSource;
 import java.util.Collection;
 import java.util.List;
@@ -35,17 +37,55 @@ public interface ReaderItemSourceRepository extends JpaRepository<ReaderItemSour
     /** 按文件节点批量查询来源文件。 */
     List<ReaderItemSource> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
 
-    /** 批量查询当前用户已作为漫画来源使用的文件节点。 */
+    /**
+     * 批量查询已作为来源使用的文件节点，范围含当前用户自己的条目与共享空间条目。
+     *
+     * <p>多卷漫画并入共享作品后，分卷文件不再属于任何一个用户的个人清单；只按条目创建者过滤
+     * 会让其他成员看到重复的"待导入"候选。
+     */
     @Query("""
-            select distinct source.fileNodeId from ReaderItemSource source, ReaderItem item
-            where source.readerItemId = item.id
-              and item.ownerUserId = :ownerUserId
+            select distinct source.fileNodeId
+            from ReaderItemSource source
+            join ReaderItem item on source.readerItemId = item.id
+            join FileNode f on item.fileNodeId = f.id
+            where f.deleted = false
+              and (item.ownerUserId = :ownerUserId or f.spaceType = :sharedType)
               and source.fileNodeId in :fileNodeIds
             """)
     List<UUID> findImportedFileNodeIds(
             @Param("ownerUserId") UUID ownerUserId,
-            @Param("fileNodeIds") Collection<UUID> fileNodeIds
+            @Param("fileNodeIds") Collection<UUID> fileNodeIds,
+            @Param("sharedType") SpaceType sharedType
     );
+
+    /**
+     * 查询可见条目下所有来源的内容哈希，用于识别已并入共享漫画的分卷重复上传。
+     */
+    @Query("""
+            select distinct source.contentHash
+            from ReaderItemSource source
+            join ReaderItem item on source.readerItemId = item.id
+            join FileNode f on item.fileNodeId = f.id
+            where f.deleted = false
+              and source.contentHash is not null
+              and (item.ownerUserId = :ownerUserId or f.spaceType = :sharedType)
+            """)
+    List<String> findVisibleSourceContentHashes(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("sharedType") SpaceType sharedType
+    );
+
+    /**
+     * 按来源内容哈希查找所属条目，供分卷二次上传时定位已有的多源作品。
+     */
+    @Query("""
+            select item
+            from ReaderItemSource source
+            join ReaderItem item on source.readerItemId = item.id
+            where source.contentHash = :contentHash
+            order by item.updatedAt desc
+            """)
+    List<ReaderItem> findItemsBySourceContentHash(@Param("contentHash") String contentHash);
 
     /** 按阅读条目 ID 删除所有来源文件。 */
     void deleteByReaderItemId(UUID readerItemId);

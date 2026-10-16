@@ -40,6 +40,7 @@ public class ReaderTextManifestService {
     private final TaskRecordService taskRecordService;
     private final MediaSyncEventService syncEventService;
     private final ReaderCoverExtractionService coverExtractionService;
+    private final ReaderItemService readerItemService;
 
     /**
      * 原子替换文本书籍解析结果。
@@ -105,8 +106,7 @@ public class ReaderTextManifestService {
      */
     @Transactional(readOnly = true)
     public TextManifestDto getManifest(UUID ownerUserId, UUID itemId) {
-        ReaderItem item = itemRepository.findByIdAndOwnerUserId(itemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在或无权访问"));
+        ReaderItem item = readerItemService.requireItem(ownerUserId, itemId);
         if (!"TEXT".equalsIgnoreCase(item.getContentKind())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "当前条目不是文本书籍");
         }
@@ -123,8 +123,9 @@ public class ReaderTextManifestService {
                         chapter.getBodyStartOffset()
                 ))
                 .toList();
+        // 解析任务记录归条目所有者，共享成员查自己的用户 id 永远查不到进度与失败原因。
         TextParseTaskDto parseTask = taskRecordService
-                .findLatestTaskByPayload(ownerUserId, "READER_PARSE", "itemId", itemId)
+                .findLatestTaskByPayload(item.getOwnerUserId(), "READER_PARSE", "itemId", itemId)
                 .map(this::toParseTaskDto)
                 .orElse(null);
         return new TextManifestDto(

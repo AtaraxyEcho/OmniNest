@@ -60,8 +60,7 @@ public class ReaderStatsService {
         if (request.durationSeconds() <= 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "会话时长必须大于 0");
         }
-        itemRepository.findByIdAndOwnerUserId(readerItemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
+        itemService.requireItem(ownerUserId, readerItemId);
 
         String clientSessionId = normalizeClientSessionId(request.clientSessionId());
         if (clientSessionId != null
@@ -127,12 +126,17 @@ public class ReaderStatsService {
                 (int) (totalSecondsToday / 60),
                 (int) (totalSecondsThisWeek / 60),
                 currentStreak,
-                (int) itemRepository.countByOwnerUserId(ownerUserId)
+                // "已读数"指读到完成的条目，不是藏书总数
+                (int) progressRepository.countByOwnerUserIdAndProgressPercentGreaterThanEqual(
+                        ownerUserId, BigDecimal.ONE)
         );
     }
 
     /**
-     * 计算连续阅读天数（从今天往回数，连续有阅读记录的天数）。
+     * 计算连续阅读天数（从最近一次有记录的那天往回数）。
+     *
+     * <p>锚点必须是最近记录日而不是"今天"：清晨打开统计页时今天还没有满 10 秒的会话，
+     * 从今天起算会让连续读了几十天的用户看到 0 天。
      */
     private int calculateStreak(UUID ownerUserId) {
         Instant ninetyDaysAgo = Instant.now().minusSeconds(90L * 24 * 3600);
@@ -144,8 +148,12 @@ public class ReaderStatsService {
             return 0;
         }
         LocalDate today = LocalDate.now(zone);
+        LocalDate latestDay = readingDays.getFirst();
+        if (!latestDay.equals(today) && !latestDay.equals(today.minusDays(1))) {
+            return 0;
+        }
         int streak = 0;
-        LocalDate expected = today;
+        LocalDate expected = latestDay;
         for (LocalDate day : readingDays) {
             if (day.equals(expected)) {
                 streak++;

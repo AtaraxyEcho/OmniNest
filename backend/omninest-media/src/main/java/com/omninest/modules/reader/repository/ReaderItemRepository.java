@@ -31,17 +31,11 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
 
     List<ReaderItem> findByOwnerUserIdAndItemTypeOrderByUpdatedAtDesc(UUID ownerUserId, String itemType);
 
-    List<ReaderItem> findByOwnerUserIdAndContentKindOrderByUpdatedAtDesc(UUID ownerUserId, String contentKind);
-
     Optional<ReaderItem> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
-
-    Optional<ReaderItem> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
 
     long countByOwnerUserId(UUID ownerUserId);
 
     List<ReaderItem> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
-
-    List<ReaderItem> findByOwnerUserIdAndFileNodeIdIn(UUID ownerUserId, Collection<UUID> fileNodeIds);
 
     List<ReaderItem> findByOwnerUserIdAndCoverFileIdIn(UUID ownerUserId, Collection<UUID> coverFileIds);
 
@@ -60,10 +54,6 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
 
     Optional<ReaderItem> findFirstByOwnerUserIdAndContentHashOrderByUpdatedAtDesc(
             UUID ownerUserId, String contentHash);
-
-    @Query("select distinct item.contentHash from ReaderItem item "
-            + "where item.ownerUserId = :ownerUserId and item.contentHash is not null")
-    List<String> findContentHashesByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     /**
      * 对用户与内容摘要加事务级数据库锁，串行化并发重复导入。
@@ -86,4 +76,98 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             ORDER BY ri.updatedAt DESC
             """)
     List<ReaderItem> findItemsVisibleToUser(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 按主文件节点查找对当前用户可见的已有条目，共享空间的同一文件对其他用户同样算已导入。
+     */
+    @Query("""
+            SELECT ri FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE ri.fileNodeId = :fileNodeId
+              AND f.deleted = false
+              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+            ORDER BY ri.updatedAt DESC
+            """)
+    List<ReaderItem> findAccessibleByFileNodeId(
+            @Param("userId") UUID userId,
+            @Param("fileNodeId") UUID fileNodeId,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 查询共享空间漫画条目作为分卷合并候选。
+     *
+     * <p>共享漫画的成员来自不同用户，候选不能按条目创建者过滤；空间归属由主文件节点决定。
+     */
+    @Query("""
+            SELECT ri FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND f.spaceType = :sharedType
+              AND ri.contentKind = :contentKind
+            ORDER BY ri.updatedAt DESC
+            """)
+    List<ReaderItem> findSharedComicCandidates(
+            @Param("sharedType") SpaceType sharedType,
+            @Param("contentKind") String contentKind);
+
+    /**
+     * 查询当前用户个人空间的漫画条目作为分卷合并候选。
+     *
+     * <p>私有分卷只并入本人拥有且主文件仍在个人空间的条目，避免把私密文件挂进共享作品。
+     */
+    @Query("""
+            SELECT ri FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND f.spaceType = :personalType
+              AND ri.ownerUserId = :ownerUserId
+              AND ri.contentKind = :contentKind
+            ORDER BY ri.updatedAt DESC
+            """)
+    List<ReaderItem> findPersonalComicCandidates(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("personalType") SpaceType personalType,
+            @Param("contentKind") String contentKind);
+
+    /**
+     * 查询用户可见条目（个人空间 + 共享空间）的全部非空内容哈希，用于候选列表去重。
+     */
+    @Query("""
+            SELECT DISTINCT ri.contentHash FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND ri.contentHash IS NOT NULL
+              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+            """)
+    List<String> findVisibleContentHashes(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 在给定文件节点中筛出已作为可见条目主文件导入的节点，一次查询完成候选去重。
+     */
+    @Query("""
+            SELECT ri.fileNodeId FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND ri.fileNodeId IN :fileNodeIds
+            """)
+    List<UUID> findVisibleMainFileNodeIds(
+            @Param("userId") UUID userId,
+            @Param("fileNodeIds") Collection<UUID> fileNodeIds,
+            @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 对空间作用域与规范化系列名加事务级咨询锁，串行化同一系列并发分卷导入。
+     *
+     * <p>不同分卷的内容哈希必然不同，{@link #lockContentHash} 挡不住两个人同时把第 1 卷和第 2 卷
+     * 各自建条目，只能在系列名维度加锁。
+     */
+    @Query(value = """
+            SELECT pg_advisory_xact_lock(
+                hashtextextended(:lockScope || ':' || lower(:seriesName), 0)
+            )
+            """, nativeQuery = true)
+    void lockComicSeries(@Param("lockScope") String lockScope, @Param("seriesName") String seriesName);
 }

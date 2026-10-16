@@ -123,6 +123,23 @@ class ReaderProgressUpsertFenceIT {
         assertThat(readCharOffset(owner, item)).isEqualTo(800L);
     }
 
+    /**
+     * 请求不带上报时间时必须写入服务端接收时刻。
+     *
+     * <p>三值逻辑下 {@code NULL >= timestamp} 为 UNKNOWN，直接绑空值会让已存有上报时间的
+     * 记录从此永久拒写：客户端只要有一次没带时间戳，之后的进度全部丢失。
+     */
+    @Test
+    @DisplayName("缺上报时间的请求按服务端当前时间写入，不拒写已存记录")
+    void missingReportStampStillWritesStoredRecord() {
+        UUID owner = UUID.randomUUID();
+        UUID item = UUID.randomUUID();
+
+        assertThat(upsert(owner, item, 1_000, Instant.now().minus(30, ChronoUnit.MINUTES))).isEqualTo(1);
+        assertThat(upsert(owner, item, 2_500, null)).isEqualTo(1);
+        assertThat(readCharOffset(owner, item)).isEqualTo(2_500L);
+    }
+
     private int upsert(UUID owner, UUID item, long charOffset, Instant reportedAt) {
         return progressRepository.upsertProgress(
                 owner,

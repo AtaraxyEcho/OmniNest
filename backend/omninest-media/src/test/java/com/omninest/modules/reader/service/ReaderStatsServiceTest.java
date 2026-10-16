@@ -15,6 +15,7 @@ import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.domain.ReaderReadingSession;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
+import com.omninest.modules.reader.dto.ReaderDtos.ReaderReadingStatsDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderStatsOverviewDto;
 import com.omninest.modules.reader.dto.ReaderDtos.RecordSessionRequest;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
@@ -48,7 +49,7 @@ class ReaderStatsServiceTest {
         item.setOwnerUserId(OWNER_ID);
         item.setTitle("测试书籍");
         item.setItemType("EPUB");
-        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(itemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         when(sessionRepository.existsByOwnerUserIdAndClientSessionId(OWNER_ID, "session-1"))
                 .thenReturn(false, true);
         when(sessionRepository.saveAndFlush(any(ReaderReadingSession.class)))
@@ -72,7 +73,7 @@ class ReaderStatsServiceTest {
         item.setOwnerUserId(OWNER_ID);
         item.setTitle("测试书籍");
         item.setItemType("EPUB");
-        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(itemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         when(sessionRepository.existsByOwnerUserIdAndClientSessionId(OWNER_ID, "session-1")).thenReturn(false);
         when(sessionRepository.saveAndFlush(any(ReaderReadingSession.class)))
                 .thenThrow(new DataIntegrityViolationException("other constraint"));
@@ -112,7 +113,8 @@ class ReaderStatsServiceTest {
         when(itemRepository.findAllById(any())).thenReturn(List.of(item));
         ReaderItemDto dto = new ReaderItemDto(
                 ITEM_ID, null, "EPUB", "TEXT", "测试书籍", null, null, null, null,
-                null, null, Instant.now(), Instant.now(), false, null, "PERSONAL", 0, "READY", null, null
+                null, null, null, null, null, null, Instant.now(), Instant.now(), false, null,
+                "PERSONAL", 0, "READY", null, null
         );
         when(itemService.toDto(eq(item), eq(false), isNull(), anyMap())).thenReturn(dto);
 
@@ -140,6 +142,31 @@ class ReaderStatsServiceTest {
 
         assertThat(readerStatsService.getStatsOverview(OWNER_ID, 999).dailyMinutes()).hasSize(30);
         assertThat(readerStatsService.getStatsOverview(OWNER_ID, 1).dailyMinutes()).hasSize(7);
+    }
+
+    @Test
+    void getStatsAnchorsStreakOnTheLatestReadingDay() {
+        // 清晨打开统计页时今天还没有会话：从今天起算会把连读几十天的用户显示成 0 天，
+        // 而 totalBooksRead 也不能是藏书总数，否则"读完几本"永远虚高。
+        LocalDate today = LocalDate.now();
+        when(sessionRepository.distinctReadingDaysSince(eq(OWNER_ID), any(Instant.class), any()))
+                .thenReturn(List.of(today.minusDays(1), today.minusDays(2), today.minusDays(3)));
+        when(progressRepository.countByOwnerUserIdAndProgressPercentGreaterThanEqual(OWNER_ID, BigDecimal.ONE))
+                .thenReturn(2L);
+
+        ReaderReadingStatsDto stats = readerStatsService.getStats(OWNER_ID);
+
+        assertThat(stats.currentStreak()).isEqualTo(3);
+        assertThat(stats.totalBooksRead()).isEqualTo(2);
+    }
+
+    @Test
+    void getStatsDropsStreakOnceTheChainIsBroken() {
+        LocalDate today = LocalDate.now();
+        when(sessionRepository.distinctReadingDaysSince(eq(OWNER_ID), any(Instant.class), any()))
+                .thenReturn(List.of(today.minusDays(5), today.minusDays(6)));
+
+        assertThat(readerStatsService.getStats(OWNER_ID).currentStreak()).isZero();
     }
 
     private ReaderReadingSessionRepository.DailyMinutesView dailyView(LocalDate day, long minutes) {

@@ -41,6 +41,8 @@ public class ReaderTextParseTaskService {
             return;
         }
         if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
+            // 源文件已经没了：不回写条目状态的话，列表里会永远显示"解析中"，而任务早已取消。
+            manifestService.markFailed(event.itemId(), "FILE_NOT_PROCESSABLE", "阅读源文件已删除或不可处理");
             taskRecordService.markCancelled(event.taskId());
             return;
         }
@@ -76,6 +78,7 @@ public class ReaderTextParseTaskService {
             log.info("文本书籍解析任务已按用户请求中断: taskId={}, itemId={}", event.taskId(), event.itemId());
         } catch (BusinessException exception) {
             if (isLifecycleCancellation(exception)) {
+                manifestService.markFailed(event.itemId(), "FILE_NOT_PROCESSABLE", "阅读源文件已删除或不可处理");
                 taskRecordService.markCancelled(event.taskId());
                 return;
             }

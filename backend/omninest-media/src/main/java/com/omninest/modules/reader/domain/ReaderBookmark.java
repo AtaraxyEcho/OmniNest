@@ -29,6 +29,12 @@ public class ReaderBookmark {
     @Column(name = "reader_item_id", nullable = false)
     private UUID readerItemId;
 
+    /**
+     * 书签所属章节标识。客户端的 char_offset 是章节内偏移，没有这个字段就无法定位到具体章节。
+     */
+    @Column(name = "chapter_id", length = 128)
+    private String chapterId;
+
     @Column(name = "client_operation_id", length = 120)
     private String clientOperationId;
 

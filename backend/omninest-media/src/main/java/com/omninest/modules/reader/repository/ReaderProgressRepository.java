@@ -46,6 +46,9 @@ public interface ReaderProgressRepository extends JpaRepository<ReaderProgress, 
      * 生效，离线排队的旧上报因此不会覆盖其他设备刚写入的位置。已存记录缺少上报时间时
      * 视为无信息并放行，避免围栏把首次写入永久挡在门外。
      *
+     * <p>请求没有带上报时间时按服务端接收时刻写入：三值逻辑下 {@code NULL >= timestamp}
+     * 为 UNKNOWN，直接绑空值会让已存有上报时间的记录永久拒写。
+     *
      * @return 受影响行数；0 表示本次上报被更新的记录拒绝
      */
     @Modifying
@@ -59,7 +62,7 @@ public interface ReaderProgressRepository extends JpaRepository<ReaderProgress, 
                 (gen_random_uuid(), :ownerUserId, :readerItemId, :charOffset, :progressPercent,
                  :readingMode, :chapterId, :pageId, :pageIndex, :pageFingerprint,
                  :sourceId, :sourcePageIndex, :catalogKey, :manifestVersion, :intraPageOffset,
-                 :clientUpdatedAt, now(), 1)
+                 COALESCE(:clientUpdatedAt, now()), now(), 1)
             ON CONFLICT (owner_user_id, reader_item_id)
             DO UPDATE SET char_offset         = EXCLUDED.char_offset,
                           progress_percent    = EXCLUDED.progress_percent,

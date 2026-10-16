@@ -1,5 +1,6 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.reader.domain.ReaderItem;
@@ -47,13 +48,16 @@ class ReaderProgressServiceTest {
     private ReaderProgressRepository progressRepository;
     @Mock
     private MediaSyncEventService syncEventService;
+    @Mock
+    private ReaderItemService readerItemService;
 
     @InjectMocks
     private ReaderProgressService service;
 
     @Test
     void updateProgressRejectsItemNotOwnedByUser() {
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.empty());
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID))
+                .thenThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"));
 
         Assertions.assertThatThrownBy(() -> service.updateProgress(OWNER_ID, ITEM_ID, request(null, null)))
                 .isInstanceOf(BusinessException.class);
@@ -62,11 +66,25 @@ class ReaderProgressServiceTest {
     }
 
     @Test
+    void updateProgressAcceptsSharedItemVisibleToMember() {
+        // 共享条目的进度按 (请求者, 条目) 落库：非创建者也要能记位置
+        ReaderItem item = item();
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
+        stubUpsert(1);
+
+        service.updateProgress(OWNER_ID, ITEM_ID, requestWithMode("scroll", null, null));
+
+        Mockito.verify(progressRepository).upsertProgress(Mockito.any(), Mockito.any(), Mockito.anyLong(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
     void updateProgressRejectsComicPageFromAnotherItem() {
         ReaderItem item = item();
         ReaderPage page = page(UUID.fromString("20000000-0000-0000-0000-000000000002"), SOURCE_ID);
 
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         Mockito.when(pageRepository.findById(PAGE_ID)).thenReturn(Optional.of(page));
 
         Assertions.assertThatThrownBy(() -> service.updateProgress(OWNER_ID, ITEM_ID, request(PAGE_ID, SOURCE_ID)))
@@ -81,7 +99,7 @@ class ReaderProgressServiceTest {
         ReaderPage page = page(ITEM_ID, SOURCE_ID);
         ReaderItemSource source = source(UUID.fromString("20000000-0000-0000-0000-000000000003"));
 
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         Mockito.when(pageRepository.findById(PAGE_ID)).thenReturn(Optional.of(page));
         Mockito.when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
 
@@ -95,7 +113,7 @@ class ReaderProgressServiceTest {
     void updateProgressRejectsUnsupportedReadingMode() {
         ReaderItem item = item();
 
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
 
         Assertions.assertThatThrownBy(() -> service.updateProgress(OWNER_ID, ITEM_ID, requestWithMode("comic")))
                 .isInstanceOf(BusinessException.class);
@@ -106,7 +124,7 @@ class ReaderProgressServiceTest {
     @Test
     void updateProgressRecordsSyncEventWhenWriteApplied() {
         ReaderItem item = item();
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         stubUpsert(1);
 
         service.updateProgress(OWNER_ID, ITEM_ID, requestWithMode("scroll", null, null));
@@ -119,7 +137,7 @@ class ReaderProgressServiceTest {
     @Test
     void updateProgressSkipsSyncEventWhenReportIsStalerThanStored() {
         ReaderItem item = item();
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         // 围栏在 SQL 的 WHERE 上：0 行受影响即表示本次上报被更新的记录拒绝。
         stubUpsert(0);
 
@@ -132,7 +150,7 @@ class ReaderProgressServiceTest {
     void updateProgressUsesServerTimeWhenClientStampMissing() {
         ReaderItem item = item();
         Instant before = Instant.now();
-        Mockito.when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        Mockito.when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         stubUpsert(1);
 
         service.updateProgress(OWNER_ID, ITEM_ID, requestWithoutClientStamp());

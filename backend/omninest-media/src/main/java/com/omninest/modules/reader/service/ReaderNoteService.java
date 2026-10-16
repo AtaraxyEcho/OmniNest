@@ -31,6 +31,7 @@ public class ReaderNoteService {
 
     private final ReaderNoteRepository noteRepository;
     private final MediaSyncEventService syncEventService;
+    private final ReaderItemService readerItemService;
 
     /**
      * 列出指定条目的所有笔记。
@@ -60,6 +61,7 @@ public class ReaderNoteService {
         if (request == null || request.content() == null || request.content().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "笔记内容不能为空");
         }
+        readerItemService.requireItem(ownerUserId, readerItemId);
         String clientOperationId = normalizeClientOperationId(request.clientOperationId());
         ReaderNote existing = findExistingByClientOperationId(ownerUserId, readerItemId, clientOperationId);
         if (existing != null) {

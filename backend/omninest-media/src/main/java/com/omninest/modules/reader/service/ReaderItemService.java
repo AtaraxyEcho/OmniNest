@@ -51,6 +51,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -80,6 +82,14 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class ReaderItemService {
 
+    /** reader_items.genres 里存放标签列表的键 */
+    private static final String GENRES_ITEMS_KEY = "items";
+
+    /** reader_items.external_ids 里存放连载状态的键 */
+    private static final String SERIAL_STATUS_KEY = "serialStatus";
+
+    /** reader_items.external_ids 里存放 ISBN 的键 */
+    private static final String ISBN_KEY = "isbn";
 
 
     private final MediaProcessingLimitsProperties processingLimits;
@@ -144,11 +154,13 @@ public class ReaderItemService {
                     .toList();
         }
 
-        // 按关键词过滤
+        // 按关键词过滤：书名与作者都要匹配。书库搜索下沉服务端分页后，这里少一个字段
+        // 就等于把原先客户端在已加载窗口里做的匹配能力缩小。
         if (query != null && !query.isBlank()) {
             String lowerQuery = query.toLowerCase();
             items = items.stream()
-                    .filter(item -> item.getTitle() != null && item.getTitle().toLowerCase().contains(lowerQuery))
+                    .filter(item -> containsIgnoreCase(item.getTitle(), lowerQuery)
+                            || containsIgnoreCase(item.getAuthorName(), lowerQuery))
                     .toList();
         }
 
@@ -273,6 +285,8 @@ public class ReaderItemService {
     private UUID deleteLibraryItem(UUID ownerUserId, ReaderItem item) {
         UUID itemId = item.getId();
         List<UUID> itemIds = List.of(itemId);
+        // 删除条目时封面必须一起清：派生封面不在网盘里，任何清理任务都不会再枚举它。
+        UUID coverFileId = unreferencedCoverFileId(item);
         List<ReaderItemSource> sources = sourceRepository.findByReaderItemId(itemId);
         List<UUID> sourceFileIds = new ArrayList<>();
         if (item.getFileNodeId() != null) {
@@ -286,6 +300,14 @@ public class ReaderItemService {
                 ownerUserId,
                 "FILE_NODE",
                 sourceFileIds.stream().distinct().toList(),
+                List.of("QUEUED", "RUNNING", "RETRY_WAIT"),
+                "FILE_PURGE"
+        );
+        // 文本书籍的解析任务挂在 READER_ITEM 资源上，只按 FILE_NODE 取消会留下无人认领的在途任务。
+        taskRecordService.cancelActiveResourceTasks(
+                ownerUserId,
+                "READER_ITEM",
+                itemIds,
                 List.of("QUEUED", "RUNNING", "RETRY_WAIT"),
                 "FILE_PURGE"
         );
@@ -322,8 +344,71 @@ public class ReaderItemService {
         syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
         registerPageAssetCleanupAfterCommit(pageAssets);
         registerChapterAssetCleanupAfterCommit(chapterAssetIds);
+        registerCoverCleanupAfterCommit(coverFileId, null);
         log.info("阅读条目已删除并保留源文件: userId={}, itemId={}", ownerUserId, itemId);
         return taskId;
+    }
+
+    /**
+     * 取可以随条目一起清理的封面节点。
+     *
+     * <p>导入去重后不同条目会共用同一份派生封面：删一本就把共用的封面清掉，
+     * 另一本会永久破图，因此只有"没有别的条目引用"时才放行清理。
+     *
+     * @param item 即将删除或替换封面的条目
+     * @return 可清理的封面节点 ID；为空表示没有封面或仍被引用
+     */
+    private UUID unreferencedCoverFileId(ReaderItem item) {
+        UUID coverFileId = item.getCoverFileId();
+        if (coverFileId == null) {
+            return null;
+        }
+        long referencingOthers = itemRepository.findByCoverFileIdIn(List.of(coverFileId)).stream()
+                .filter(candidate -> !candidate.getId().equals(item.getId()))
+                .count();
+        if (referencingOthers > 0) {
+            log.info("派生封面仍被其他阅读条目引用，跳过清理: coverFileId={}, others={}",
+                    coverFileId, referencingOthers);
+            return null;
+        }
+        return coverFileId;
+    }
+
+    /**
+     * 事务提交后删除被替换或被随条目移除的派生封面节点。
+     *
+     * <p>对象删除必须在提交之后：提交失败回滚时条目仍指向旧封面，先把对象删掉
+     * 就只剩一个指向空对象的节点。同一路径的派生存储会原地复用同一个 FileNode，
+     * 因此"新旧同一个节点"时绝不能清——那会把刚写好的封面一起删掉。
+     * 删除失败只记日志，不能把已经成功的写入回报为失败。
+     *
+     * @param previousCoverFileId 被替换或被随条目移除的封面节点 ID
+     * @param currentCoverFileId 条目现在指向的封面节点 ID；null 表示条目已删除
+     */
+    private void registerCoverCleanupAfterCommit(
+            UUID previousCoverFileId,
+            UUID currentCoverFileId) {
+        if (previousCoverFileId == null || previousCoverFileId.equals(currentCoverFileId)) {
+            return;
+        }
+        Runnable cleanup = () -> {
+            try {
+                derivedAssetStorageService.deleteDerivedFileNode(previousCoverFileId);
+            } catch (RuntimeException exception) {
+                log.warn("阅读派生封面清理失败: coverFileId={}, errorType={}",
+                        previousCoverFileId, exception.getClass().getSimpleName());
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            cleanup.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                cleanup.run();
+            }
+        });
     }
 
     private void registerPageAssetCleanupAfterCommit(List<ReaderPageAsset> assets) {
@@ -437,6 +522,9 @@ public class ReaderItemService {
 
     /**
      * 将元数据更新请求应用到条目实体。
+     *
+     * <p>分类标签写在 reader_items.genres 的 items 键，连载状态与 ISBN 写在 external_ids，
+     * 与影视/音乐模块同一套 JSONB 形状；这些字段必须同时能被读回，否则编辑页保存成功、字段却静默丢弃。
      */
     private void applyMetadataUpdate(ReaderItem item, UpdateItemMetadataRequest request) {
         if (request.title() != null && !request.title().isBlank()) {
@@ -454,6 +542,67 @@ public class ReaderItemService {
         if (request.language() != null) {
             item.setLanguage(request.language());
         }
+        if (request.releaseDate() != null) {
+            item.setReleaseDate(request.releaseDate());
+        }
+        if (request.rating() != null) {
+            item.setRating(request.rating());
+        }
+        if (request.genres() != null) {
+            Map<String, Object> genres = item.getGenres() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(item.getGenres());
+            genres.put(GENRES_ITEMS_KEY, request.genres().stream()
+                    .filter(Objects::nonNull)
+                    .map(value -> value.trim())
+                    .filter(value -> !value.isEmpty())
+                    .toList());
+            item.setGenres(genres);
+        }
+        if (request.serialStatus() != null || request.isbn() != null) {
+            Map<String, Object> externalIds = item.getExternalIds() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(item.getExternalIds());
+            if (request.serialStatus() != null) {
+                externalIds.put(SERIAL_STATUS_KEY, request.serialStatus().trim());
+            }
+            if (request.isbn() != null) {
+                externalIds.put(ISBN_KEY, request.isbn().trim());
+            }
+            item.setExternalIds(externalIds);
+        }
+    }
+
+    /**
+     * 关键词命中判定：值为空按不命中处理，入参已是小写。
+     */
+    private boolean containsIgnoreCase(String value, String lowerQuery) {
+        return value != null && value.toLowerCase().contains(lowerQuery);
+    }
+
+    /**
+     * 从 genres JSONB 中取出标签列表，形状不符时按空列表处理而不是抛出。
+     */
+    private List<String> extractGenres(ReaderItem item) {
+        if (item.getGenres() == null) {
+            return List.of();
+        }
+        Object raw = item.getGenres().get(GENRES_ITEMS_KEY);
+        if (!(raw instanceof Collection<?> values)) {
+            return List.of();
+        }
+        return values.stream().filter(Objects::nonNull).map(String::valueOf).toList();
+    }
+
+    /**
+     * 从 external_ids JSONB 中取出字符串值。
+     */
+    private String extractExternalString(ReaderItem item, String key) {
+        if (item.getExternalIds() == null) {
+            return null;
+        }
+        Object value = item.getExternalIds().get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     /**
@@ -472,6 +621,7 @@ public class ReaderItemService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件大小超出限制");
         }
         ReaderItem item = requireOwnedItem(ownerUserId, itemId);
+        UUID previousCoverFileId = unreferencedCoverFileId(item);
         Path staged = null;
         try {
             staged = Files.createTempFile("omninest-reader-cover-", ".upload");
@@ -495,6 +645,7 @@ public class ReaderItemService {
                 item.setCoverFileId(coverFileId);
                 itemRepository.save(item);
                 recordItemEvent(ownerUserId, item, SyncAction.UPDATED);
+                registerCoverCleanupAfterCommit(previousCoverFileId, coverFileId);
                 log.info("上传封面: userId={}, itemId={}", ownerUserId, itemId);
             }
         } catch (IOException ex) {
@@ -524,9 +675,11 @@ public class ReaderItemService {
         if (coverFile.mimeType() == null || !coverFile.mimeType().toLowerCase().startsWith("image/")) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面必须是图片文件");
         }
+        UUID previousCoverFileId = unreferencedCoverFileId(item);
         item.setCoverFileId(fileNodeId);
         itemRepository.save(item);
         recordItemEvent(ownerUserId, item, SyncAction.UPDATED);
+        registerCoverCleanupAfterCommit(previousCoverFileId, fileNodeId);
         log.info("从文件节点设置封面: userId={}, itemId={}, fileNodeId={}", ownerUserId, itemId, fileNodeId);
     }
 
@@ -668,6 +821,10 @@ public class ReaderItemService {
                 item.getPublisher(),
                 item.getLanguage(),
                 item.getRating(),
+                item.getReleaseDate(),
+                extractGenres(item),
+                extractExternalString(item, SERIAL_STATUS_KEY),
+                extractExternalString(item, ISBN_KEY),
                 item.getCreatedAt(),
                 item.getUpdatedAt(),
                 addedToBookshelf,

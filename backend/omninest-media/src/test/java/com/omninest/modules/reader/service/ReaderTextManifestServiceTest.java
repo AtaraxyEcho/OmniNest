@@ -50,12 +50,16 @@ class ReaderTextManifestServiceTest {
     @Mock
     private ReaderCoverExtractionService coverExtractionService;
 
+    @Mock
+    private ReaderItemService readerItemService;
+
     private ReaderTextManifestService service;
 
     @BeforeEach
     void setUp() {
         service = new ReaderTextManifestService(
-                itemRepository, chapterRepository, taskRecordService, syncEventService, coverExtractionService);
+                itemRepository, chapterRepository, taskRecordService, syncEventService,
+                coverExtractionService, readerItemService);
     }
 
     @Test
@@ -143,7 +147,7 @@ class ReaderTextManifestServiceTest {
         chapter.setChapterKey("chapter_0");
         chapter.setTitle("正文");
         chapter.setCharCount(18);
-        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         when(chapterRepository.findByReaderItemIdOrderByChapterIndex(ITEM_ID)).thenReturn(List.of(chapter));
 
         ReaderTextManifestService.TextManifestDto manifest = service.getManifest(OWNER_ID, ITEM_ID);
@@ -168,7 +172,7 @@ class ReaderTextManifestServiceTest {
         task.setStatus("RUNNING");
         task.setPhase("PARSING_METADATA");
         task.setProgress(60);
-        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(readerItemService.requireItem(OWNER_ID, ITEM_ID)).thenReturn(item);
         when(chapterRepository.findByReaderItemIdOrderByChapterIndex(ITEM_ID)).thenReturn(List.of(chapter));
         when(taskRecordService.findLatestTaskByPayload(OWNER_ID, "READER_PARSE", "itemId", ITEM_ID))
                 .thenReturn(Optional.of(task));
@@ -178,6 +182,28 @@ class ReaderTextManifestServiceTest {
         assertThat(manifest.parseTask()).isNotNull();
         assertThat(manifest.parseTask().status()).isEqualTo("RUNNING");
         assertThat(manifest.parseTask().progress()).isEqualTo(60);
+    }
+
+    @Test
+    void sharedMemberGetsManifestAndTheOwnerTaskProgress() {
+        // 共享成员鉴权看请求者，解析任务记录归条目所有者：按请求者查任务会让失败原因与进度永远为空
+        UUID requesterId = UUID.fromString("50000000-0000-0000-0000-000000000009");
+        ReaderItem item = textItem();
+        TaskRecord task = new TaskRecord();
+        task.setId(UUID.fromString("40000000-0000-0000-0000-000000000002"));
+        task.setStatus("RUNNING");
+        task.setPhase("PARSING_METADATA");
+        task.setProgress(40);
+        when(readerItemService.requireItem(requesterId, ITEM_ID)).thenReturn(item);
+        when(chapterRepository.findByReaderItemIdOrderByChapterIndex(ITEM_ID)).thenReturn(List.of());
+        when(taskRecordService.findLatestTaskByPayload(OWNER_ID, "READER_PARSE", "itemId", ITEM_ID))
+                .thenReturn(Optional.of(task));
+
+        ReaderTextManifestService.TextManifestDto manifest = service.getManifest(requesterId, ITEM_ID);
+
+        assertThat(manifest.chapters()).isEmpty();
+        assertThat(manifest.parseTask()).isNotNull();
+        assertThat(manifest.parseTask().progress()).isEqualTo(40);
     }
 
     private ReaderItem textItem() {

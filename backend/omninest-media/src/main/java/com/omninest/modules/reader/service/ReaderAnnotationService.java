@@ -31,6 +31,7 @@ public class ReaderAnnotationService {
 
     private final ReaderAnnotationRepository annotationRepository;
     private final MediaSyncEventService syncEventService;
+    private final ReaderItemService readerItemService;
 
     /**
      * 列出指定条目的所有批注。
@@ -60,6 +61,7 @@ public class ReaderAnnotationService {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "批注请求参数不能为空");
         }
+        readerItemService.requireItem(ownerUserId, readerItemId);
         String clientOperationId = normalizeClientOperationId(request.clientOperationId());
         ReaderAnnotation existing = findExistingByClientOperationId(ownerUserId, readerItemId, clientOperationId);
         if (existing != null) {
@@ -108,8 +110,9 @@ public class ReaderAnnotationService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "批注更新请求参数不能为空");
         }
         ReaderAnnotation annotation = requireAnnotation(ownerUserId, annotationId);
+        // null 表示本次不改备注；空串是用户把备注清空，保留高亮本体。
         if (request.note() != null) {
-            annotation.setNote(request.note());
+            annotation.setNote(request.note().isBlank() ? null : request.note());
         }
         if (request.color() != null && !request.color().isBlank()) {
             annotation.setColor(request.color());

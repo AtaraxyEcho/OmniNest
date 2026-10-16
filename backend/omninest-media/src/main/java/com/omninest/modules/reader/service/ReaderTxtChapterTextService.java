@@ -35,8 +35,11 @@ import org.springframework.stereotype.Service;
  * 整本书。这里在解析任务内用与章节清单同源的 {@link TxtContentDecoder} 做一次流式遍历，
  * 把每章正文写成独立的 UTF-8 派生文件，读取端只需打开对应文件节点。
  *
- * <p>写入字符数必须逐章等于清单里的 {@code sourceEndOffset - sourceStartOffset}，
- * 不一致说明源文件与清单已经错位，直接失败而不是产出偏移错误的正文。
+ * <p>章节区间不要求首尾相接：{@link ReaderTextParser} 会把抓取站放在文件头尾的预览副本整段
+ * 丢弃，被丢弃的字符不属于任何一章，本服务按清单起点跳读并把空洞留在原地，所以清单也可能
+ * 不覆盖文件末尾。跳空只记日志，不判失败：真正的检视点是每章写入字符数必须逐章等于清单里的
+ * {@code sourceEndOffset - sourceStartOffset}，且本章起点必须正好落在行首，
+ * 两者不一致说明源文件与清单已经错位，直接失败而不是产出偏移错误的正文。
  *
  * @author OmniNest
  */
@@ -69,6 +72,7 @@ public class ReaderTxtChapterTextService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final TempStagingPort tempStagingPort;
     private final MediaProcessingLimitsProperties processingLimits;
+    private final ReaderItemService readerItemService;
 
     /**
      * 读取一章服务端解码后的 UTF-8 正文。
@@ -83,8 +87,7 @@ public class ReaderTxtChapterTextService {
      * @return 单章正文
      */
     public ChapterTextDto readChapterText(UUID ownerUserId, UUID itemId, int chapterIndex) {
-        ReaderItem item = itemRepository.findByIdAndOwnerUserId(itemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在或无权访问"));
+        ReaderItem item = readerItemService.requireItem(ownerUserId, itemId);
         if (!"TXT".equalsIgnoreCase(item.getItemType())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "当前条目不是 TXT 书籍");
         }
@@ -95,7 +98,9 @@ public class ReaderTxtChapterTextService {
             throw new BusinessException(ErrorCode.CHAPTER_TEXT_UNAVAILABLE, "本章正文尚未就绪");
         }
         long maxBytes = processingLimits.getMaxReaderChapterTextBytes();
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(ownerUserId, contentFileNodeId)) {
+        // 派生章节文件写在条目所有者名下，请求者的可读性已由 requireItem 判定，这里按节点真实所有者开流。
+        try (FileContentStream content = fileQueryService.openOwnedFileContent(
+                item.getOwnerUserId(), contentFileNodeId)) {
             if (content.sizeBytes() > maxBytes) {
                 throw new BusinessException(ErrorCode.CHAPTER_TEXT_UNAVAILABLE, "本章正文超过单章返回上限");
             }
@@ -165,17 +170,34 @@ public class ReaderTxtChapterTextService {
         Charset charset = txtContentDecoder.detectCharset(fileNode);
         int lastReported = reportBodyProgress(progressReporter, PROGRESS_BODY_START, PROGRESS_BODY_START);
         TxtLine lookahead = null;
+        long previousEnd = 0L;
+        long skippedChars = 0L;
+        int skippedRegions = 0;
         try (TxtLineCursor cursor = txtContentDecoder.openCursor(fileNode, charset)) {
             for (int index = 0; index < chapters.size(); index++) {
                 ReaderTextChapter chapter = chapters.get(index);
-                requireContiguous(chapter, index == 0 ? 0L : chapters.get(index - 1).getSourceEndOffset());
+                requireOrdered(chapter, previousEnd);
+                long start = chapter.getSourceStartOffset();
+                if (start > previousEnd) {
+                    skippedRegions++;
+                    skippedChars += start - previousEnd;
+                }
+                lookahead = skipToChapterStart(cursor, lookahead, start);
                 lookahead = writeChapter(item, chapter, cursor, lookahead);
+                previousEnd = chapter.getSourceEndOffset();
                 lastReported = reportBodyProgress(
                         progressReporter, bodyProgress(index + 1, chapters.size()), lastReported);
             }
-        }
-        if (lookahead != null) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "TXT 章节清单未覆盖源文件末尾内容");
+            if (lookahead != null) {
+                skippedRegions++;
+                skippedChars += drainToTextEnd(cursor, lookahead) - previousEnd;
+                log.warn("TXT 章节清单未覆盖文件末尾，尾部内容已跳过: itemId={}, lastChapterEnd={}, "
+                        + "regions={}, skippedChars={}, sourceChars={}",
+                        itemId, previousEnd, skippedRegions, skippedChars, cursor.offset());
+            } else if (skippedRegions > 0) {
+                log.info("TXT 清单跳空区间已跳过: itemId={}, regions={}, skippedChars={}",
+                        itemId, skippedRegions, skippedChars);
+            }
         }
         sweepObsoleteFileNodes(itemId, obsoleteFileNodeIds);
         log.info("TXT 每章正文派生完成: itemId={}, chapterCount={}, manifestVersion={}, sweptAssets={}",
@@ -300,6 +322,52 @@ public class ReaderTxtChapterTextService {
         return new ChapterWriteResult(written, line);
     }
 
+    /**
+     * 丢弃本章起点之前的行。
+     *
+     * <p>被丢弃的预览副本不属于任何一章，这些行连同各自的行终止符一起跳过；起点落进空洞后
+     * 那个终止符留在原地，不写进本章文件。起点没有正好落在行首时清单与源文件已不是同一份内容：
+     * 逐章字符数校验同样会拦下来，但那时已经丢过行、报的是长度不符，这里先停并把原因点名。
+     *
+     * @param cursor 行游标
+     * @param lookahead 上一章交接的首行，可能已经在本章起点之后
+     * @param start 本章起点偏移
+     * @return 起点等于 start 的首行；已到文末时为 null
+     */
+    private TxtLine skipToChapterStart(TxtLineCursor cursor, TxtLine lookahead, long start) {
+        TxtLine line = lookahead;
+        // 首章没有上一章交接的行：不先取一行，循环根本不会启动，游标停在文件开头，
+        // 于是被丢弃的开头预览副本会被当作本章正文写出去。
+        if (line == null && cursor.offset() < start) {
+            line = cursor.next();
+        }
+        while (line != null && line.offset() < start) {
+            line = cursor.next();
+        }
+        if (line != null && line.offset() > start) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "TXT 章节起点不在行边界");
+        }
+        return line;
+    }
+
+    /**
+     * 读完末章之后剩余的行，返回解码文本的总字符数。
+     *
+     * <p>清单不覆盖文件末尾时用它把未覆盖量计入日志；末行没有终止符，所以读到文末为止的
+     * 游标偏移就是整本字符数，与 {@link ReaderTextParser} 划定末章终点用的是同一个值。
+     *
+     * @param cursor 行游标
+     * @param lookahead 尚未写出的首行
+     * @return 解码文本总字符数
+     */
+    private long drainToTextEnd(TxtLineCursor cursor, TxtLine lookahead) {
+        TxtLine line = lookahead;
+        while (line != null) {
+            line = cursor.next();
+        }
+        return cursor.offset();
+    }
+
     private long sizeOf(Path path) {
         try {
             return Files.size(path);
@@ -308,9 +376,21 @@ public class ReaderTxtChapterTextService {
         }
     }
 
-    private void requireContiguous(ReaderTextChapter chapter, long previousEnd) {
-        if (chapter.getSourceStartOffset() != previousEnd) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "TXT 章节偏移不连续");
+    /**
+     * 校验本章区间与已经读到的位置同向。
+     *
+     * <p>预览副本被整段丢弃后章节不再首尾相接，因此只要求起点不早于上一章终点；起点晚于终点才是
+     * 清单自身畸形。首章起点可以大于 0：抓取站放在文件开头的预览副本从第 0 字符起，被整段丢弃后
+     * 首章自然从副本之后开始，这与"没有候选时用整本长度建单章正文"是两种都合法的形状。
+     *
+     * @param chapter 待校验章节
+     * @param previousEnd 上一章终点，首章传 0
+     */
+    private void requireOrdered(ReaderTextChapter chapter, long previousEnd) {
+        long start = chapter.getSourceStartOffset();
+        long end = chapter.getSourceEndOffset();
+        if (start < previousEnd || start > end) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "TXT 章节区间顺序异常");
         }
     }
 

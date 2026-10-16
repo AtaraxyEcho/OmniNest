@@ -14,6 +14,7 @@ import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,6 +83,65 @@ class ReaderCoverExtractionServiceTest {
                 any(), any(), any(), any(), any(), any(), any(InputStream.class));
     }
 
+    @Test
+    void overwriteReplacesCoverAndDeletesPreviousNode() {
+        // 重新解析会换封面格式：派生存储按逻辑路径原地复用同一个 FileNode 时不会新增节点，
+        // 换了扩展名就多出第二个节点，而旧节点从此没有任何清理任务会再枚举它。
+        UUID previousCoverId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        ReaderItem item = item();
+        item.setCoverFileId(previousCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(InputStream.class)
+        )).thenReturn(COVER_ID);
+        when(itemRepository.findByCoverFileIdIn(List.of(previousCoverId)))
+                .thenReturn(List.of(item));
+
+        boolean stored = service.store(ITEM_ID, new ReaderCoverDraft(jpegBytes(), "image/jpeg", "cover.jpg"), true);
+
+        assertThat(stored).isTrue();
+        assertThat(item.getCoverFileId()).isEqualTo(COVER_ID);
+        verify(derivedAssetStorageService).deleteDerivedFileNode(previousCoverId);
+    }
+
+    @Test
+    void keepsReplacedCoverWhileAnotherItemReferencesIt() {
+        // 导入去重后两本条目共用一份派生封面：只删自己那条引用，另一本会永久破图。
+        UUID previousCoverId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        ReaderItem item = item();
+        item.setCoverFileId(previousCoverId);
+        ReaderItem sibling = new ReaderItem();
+        sibling.setId(UUID.fromString("20000000-0000-0000-0000-000000000009"));
+        sibling.setOwnerUserId(OWNER_ID);
+        sibling.setCoverFileId(previousCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(InputStream.class)
+        )).thenReturn(COVER_ID);
+        when(itemRepository.findByCoverFileIdIn(List.of(previousCoverId)))
+                .thenReturn(List.of(item, sibling));
+
+        assertThat(service.store(ITEM_ID, new ReaderCoverDraft(jpegBytes(), "image/jpeg", "cover.jpg"), true)).isTrue();
+
+        verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
+    }
+
+    @Test
+    void doesNotDeleteCoverWhenStoreReusesSameNode() {
+        UUID sameCoverId = UUID.fromString("40000000-0000-0000-0000-000000000003");
+        ReaderItem item = item();
+        item.setCoverFileId(sameCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(InputStream.class)
+        )).thenReturn(sameCoverId);
+
+        assertThat(service.store(ITEM_ID, new ReaderCoverDraft(jpegBytes(), "image/jpeg", "cover.jpg"), true)).isTrue();
+
+        verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
+        verify(itemRepository, never()).findByCoverFileIdIn(any());
+    }
+
     private ReaderItem item() {
         ReaderItem item = new ReaderItem();
         item.setId(ITEM_ID);
@@ -98,5 +158,9 @@ class ReaderCoverExtractionServiceTest {
                 0x0D, 0x0A, 0x1A, 0x0A,
                 0, 0, 0, 0
         };
+    }
+
+    private byte[] jpegBytes() {
+        return new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
     }
 }

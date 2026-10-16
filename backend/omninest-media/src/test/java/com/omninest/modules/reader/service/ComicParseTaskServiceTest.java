@@ -61,12 +61,37 @@ class ComicParseTaskServiceTest {
 
     @Test
     void processCancelsTaskWhenSourceFileIsPurging() {
+        // 守卫取消必须同时回写来源状态：只取消任务会让条目永远停在 PARSING，
+        // 而这条路径没有用户可点的取消入口，也没有重试能认出它已经死了。
+        ReaderItemSource source = sourceWithStatus(ReaderSourceStatus.PENDING);
+        Mockito.when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
         Mockito.when(fileLifecycleGuard.isOwnedProcessable(OWNER_ID, FILE_NODE_ID)).thenReturn(false);
 
         taskService.process(event());
 
         Mockito.verify(taskRecordService).markCancelled(TASK_ID);
-        Mockito.verifyNoInteractions(sourceRepository, comicManifestService);
+        Assertions.assertThat(source.getStatus()).isEqualTo(ReaderSourceStatus.FAILED);
+        Assertions.assertThat(source.getErrorCode()).isEqualTo("FILE_NOT_PROCESSABLE");
+        Mockito.verify(sourceRepository).save(source);
+        Mockito.verify(comicManifestService).refreshItemImportStatus(ITEM_ID);
+    }
+
+    @Test
+    void processMarksSourceUnprocessableWhenItVanishesMidParse() {
+        ReaderItemSource source = sourceWithStatus(ReaderSourceStatus.PARSING);
+        Mockito.when(sourceRepository.findById(SOURCE_ID))
+                .thenReturn(Optional.of(source)).thenReturn(Optional.of(source));
+        Mockito.doThrow(new BusinessException(ErrorCode.FILE_LIFECYCLE_CONFLICT, "文件正在执行永久删除任务"))
+                .when(comicManifestService)
+                .parseExistingSource(Mockito.eq(ITEM_ID), Mockito.eq(SOURCE_ID), Mockito.any());
+
+        taskService.process(event());
+
+        Mockito.verify(taskRecordService).markCancelled(TASK_ID);
+        Assertions.assertThat(source.getErrorCode()).isEqualTo("FILE_NOT_PROCESSABLE");
+        Mockito.verify(comicManifestService).refreshItemImportStatus(ITEM_ID);
+        Mockito.verify(taskRecordService, Mockito.never()).markFailed(
+                Mockito.eq(TASK_ID), Mockito.any(), Mockito.any());
     }
 
     @Test

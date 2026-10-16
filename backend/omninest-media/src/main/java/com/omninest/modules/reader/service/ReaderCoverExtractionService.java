@@ -11,6 +11,7 @@ import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 阅读条目自动封面持久化服务。
@@ -67,7 +70,8 @@ public class ReaderCoverExtractionService {
 
         ReaderItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
-        if (item.getCoverFileId() != null && !overwrite) {
+        UUID previousCoverFileId = item.getCoverFileId();
+        if (previousCoverFileId != null && !overwrite) {
             return false;
         }
 
@@ -87,6 +91,7 @@ public class ReaderCoverExtractionService {
             item.setCoverFileId(coverFileId);
             itemRepository.saveAndFlush(item);
             syncEventService.invalidate(item.getOwnerUserId(), SyncScope.READER, "READER_LIBRARY", Map.of());
+            registerReplacedCoverCleanup(previousCoverFileId, coverFileId, item);
             log.info("自动提取阅读封面完成: itemId={}, overwrite={}", itemId, overwrite);
             return true;
         } catch (RuntimeException exception) {
@@ -100,6 +105,53 @@ public class ReaderCoverExtractionService {
             }
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "封面图片保存失败");
         }
+    }
+
+    /**
+     * 事务提交后删除被本次覆盖替换掉的旧派生封面。
+     *
+     * <p>三条约束决定时机与范围：同一路径的派生存储会原地复用同一个 FileNode，新旧同节点时
+     * 删除等于把刚写好的封面清掉；去重后的另一条目可能仍引用它；提交失败回滚时条目还指向
+     * 旧封面，先删对象就只剩一个指向空对象的节点。
+     *
+     * @param previousCoverFileId 被替换的旧封面节点 ID
+     * @param coverFileId 条目现在指向的封面节点 ID
+     * @param item 当前条目
+     */
+    private void registerReplacedCoverCleanup(
+            UUID previousCoverFileId,
+            UUID coverFileId,
+            ReaderItem item) {
+        if (previousCoverFileId == null || previousCoverFileId.equals(coverFileId)) {
+            return;
+        }
+        long referencingOthers = itemRepository
+                .findByCoverFileIdIn(List.of(previousCoverFileId)).stream()
+                .filter(candidate -> !candidate.getId().equals(item.getId()))
+                .count();
+        if (referencingOthers > 0) {
+            log.info("派生封面仍被其他阅读条目引用，跳过清理: coverFileId={}, others={}",
+                    previousCoverFileId, referencingOthers);
+            return;
+        }
+        Runnable cleanup = () -> {
+            try {
+                derivedAssetStorageService.deleteDerivedFileNode(previousCoverFileId);
+            } catch (RuntimeException exception) {
+                log.warn("旧派生封面清理失败: coverFileId={}, errorType={}",
+                        previousCoverFileId, exception.getClass().getSimpleName());
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            cleanup.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                cleanup.run();
+            }
+        });
     }
 
     private CoverFormat detectFormat(byte[] content) {

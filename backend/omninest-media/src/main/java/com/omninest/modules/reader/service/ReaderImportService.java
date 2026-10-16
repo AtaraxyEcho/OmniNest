@@ -21,6 +21,7 @@ import com.omninest.modules.reader.event.ComicParseTaskEvent;
 import com.omninest.modules.reader.repository.ReaderBookshelfRepository;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderItemSourceRepository;
+import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import java.io.IOException;
@@ -38,11 +39,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 阅读导入服务，负责创建阅读条目、加入书架和触发漫画异步解析。
@@ -105,7 +107,11 @@ public class ReaderImportService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的阅读文件类型");
         }
 
-        Optional<ReaderItem> existingByFile = itemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId);
+        Optional<ReaderItem> existingByFile = itemRepository
+                .findAccessibleByFileNodeId(ownerUserId, fileNodeId, SpaceType.SHARED)
+                .stream()
+                .filter(candidate -> isSameSpaceScope(ownerUserId, candidate, fileNode.spaceType()))
+                .findFirst();
         if (existingByFile.isPresent()) {
             ReaderItem existing = applyExplicitComicOverride(
                     ownerUserId,
@@ -122,12 +128,24 @@ public class ReaderImportService {
             return existing;
         }
 
+        // 该文件已作为别人的多卷漫画分卷并入共享作品时，再次点击导入应回到同一作品而不是新建条目。
+        for (ReaderItemSource attached : sourceRepository.findByFileNodeIdIn(List.of(fileNodeId))) {
+            ReaderItem parent = itemRepository.findById(attached.getReaderItemId()).orElse(null);
+            if (parent != null && isSameSpaceScope(ownerUserId, parent, fileNode.spaceType())) {
+                ensureOnBookshelf(ownerUserId, parent.getId());
+                syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
+                log.info("文件已作为漫画分卷并入作品，加入书架: userId={}, fileNodeId={}, itemId={}",
+                        ownerUserId, fileNodeId, parent.getId());
+                return parent;
+            }
+        }
+
         String contentHash = computeSha256Stream(fileNode);
         String contentKind = resolveContentKind(fileNode, fileType, contentKindOverride);
         itemRepository.lockContentHash(ownerUserId, contentHash);
 
         if (!forceImport) {
-            ReaderItem duplicate = findDuplicate(ownerUserId, contentHash);
+            ReaderItem duplicate = findDuplicate(ownerUserId, contentHash, fileNode.spaceType());
             if (duplicate != null) {
                 syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
                 return duplicate;
@@ -167,6 +185,7 @@ public class ReaderImportService {
             if (pendingSource.created()) {
                 publishComicParseAfterCommit(
                         ownerUserId,
+                        fileNode.ownerUserId(),
                         saved.getId(),
                         pendingSource.source().getId(),
                         fileNodeId,
@@ -240,6 +259,7 @@ public class ReaderImportService {
         if (pendingSource.created()) {
             publishComicParseAfterCommit(
                     ownerUserId,
+                    fileNode.ownerUserId(),
                     saved.getId(),
                     pendingSource.source().getId(),
                     fileNodeId,
@@ -304,7 +324,9 @@ public class ReaderImportService {
 
         Set<UUID> importedFileNodeIds = importedFileNodeIds(ownerUserId, allFileNodeIds);
         Set<String> importedContentHashes = new HashSet<>(
-                itemRepository.findContentHashesByOwnerUserId(ownerUserId));
+                itemRepository.findVisibleContentHashes(ownerUserId, SpaceType.SHARED));
+        importedContentHashes.addAll(
+                sourceRepository.findVisibleSourceContentHashes(ownerUserId, SpaceType.SHARED));
         Map<UUID, String> contentHashes = fileMetadataQueryService
                 .findContentSha256ByFileNodeIds(allFileNodeIds);
 
@@ -359,6 +381,14 @@ public class ReaderImportService {
                 ownerUserId,
                 "FILE_NODE",
                 fileNodeIds.stream().distinct().toList(),
+                List.of("QUEUED", "RUNNING", "RETRY_WAIT"),
+                "FILE_PURGE"
+        );
+        // 文本解析任务挂在 READER_ITEM 资源上，漏掉它会让取消后的任务继续跑完并覆盖失败状态。
+        taskRecordService.cancelActiveResourceTasks(
+                ownerUserId,
+                "READER_ITEM",
+                List.of(itemId),
                 List.of("QUEUED", "RUNNING", "RETRY_WAIT"),
                 "FILE_PURGE"
         );
@@ -466,48 +496,59 @@ public class ReaderImportService {
         if (candidateFileNodeIds.isEmpty()) {
             return Set.of();
         }
-        Set<UUID> imported = itemRepository.findByOwnerUserIdAndFileNodeIdIn(ownerUserId, candidateFileNodeIds)
-                .stream()
-                .map(ReaderItem::getFileNodeId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        imported.addAll(sourceRepository.findImportedFileNodeIds(ownerUserId, candidateFileNodeIds));
+        Set<UUID> imported = new HashSet<>(itemRepository.findVisibleMainFileNodeIds(
+                ownerUserId, candidateFileNodeIds, SpaceType.SHARED));
+        imported.addAll(sourceRepository.findImportedFileNodeIds(
+                ownerUserId, candidateFileNodeIds, SpaceType.SHARED));
         return imported;
     }
 
     /**
-     * 按用户和内容摘要复用已存在条目。个人空间重复上传与共享空间重复内容使用同一规则。
+     * 按内容摘要复用同空间的已有条目。个人内容与共享内容分属两套可见范围，不得跨空间互相复用。
      */
-    private ReaderItem findDuplicate(UUID ownerUserId, String contentHash) {
-        ReaderItem owned = itemRepository
-                .findFirstByOwnerUserIdAndContentHashOrderByUpdatedAtDesc(ownerUserId, contentHash)
-                .orElse(null);
-        if (owned != null) {
-            ensureOnBookshelf(ownerUserId, owned.getId());
-            log.info("个人空间存在相同阅读内容，复用原条目: userId={}, itemId={}", ownerUserId, owned.getId());
-            return owned;
-        }
-        List<ReaderItem> duplicates = itemRepository.findByContentHash(contentHash);
-        for (ReaderItem duplicate : duplicates) {
-            if (duplicate.getFileNodeId() == null) {
+    private ReaderItem findDuplicate(UUID ownerUserId, String contentHash, SpaceType targetSpace) {
+        List<ReaderItem> candidates = new ArrayList<>();
+        itemRepository.findFirstByOwnerUserIdAndContentHashOrderByUpdatedAtDesc(ownerUserId, contentHash)
+                .ifPresent(candidates::add);
+        candidates.addAll(itemRepository.findByContentHash(contentHash));
+        // 已并入多卷漫画的分卷只存在于来源表里，二次上传同一分卷要能回到所属作品。
+        candidates.addAll(sourceRepository.findItemsBySourceContentHash(contentHash));
+
+        Set<UUID> visited = new HashSet<>();
+        for (ReaderItem candidate : candidates) {
+            if (!visited.add(candidate.getId())) {
                 continue;
             }
-            FileDescriptor duplicateFile = fileMetadataQueryService.findById(duplicate.getFileNodeId()).orElse(null);
-            if (duplicateFile == null) {
+            if (!isSameSpaceScope(ownerUserId, candidate, targetSpace)) {
                 continue;
             }
-            if (duplicateFile.spaceType() == SpaceType.SHARED && !duplicateFile.deleted()) {
-                ensureOnBookshelf(ownerUserId, duplicate.getId());
-                log.info("共享空间存在相同阅读条目，加入书架: userId={}, existingItemId={}",
-                        ownerUserId, duplicate.getId());
-                return duplicate;
-            }
+            ensureOnBookshelf(ownerUserId, candidate.getId());
+            log.info("存在相同空间与内容的阅读条目，直接复用: userId={}, itemId={}, space={}",
+                    ownerUserId, candidate.getId(), targetSpace);
+            return candidate;
         }
         return null;
     }
 
     /**
+     * 判断条目是否落在请求者可访问的同一空间内。
+     */
+    private boolean isSameSpaceScope(UUID requesterId, ReaderItem item, SpaceType targetSpace) {
+        if (item.getFileNodeId() == null) {
+            return false;
+        }
+        FileDescriptor mainFile = fileMetadataQueryService.findById(item.getFileNodeId()).orElse(null);
+        if (mainFile == null || mainFile.deleted() || mainFile.spaceType() != targetSpace) {
+            return false;
+        }
+        return targetSpace == SpaceType.SHARED || requesterId.equals(item.getOwnerUserId());
+    }
+
+    /**
      * 按规范化标题将漫画分包合并到已有作品。
+     *
+     * <p>合并严格限制在同一空间：共享分卷可以并入任何人在共享空间建的同系列作品，私有分卷只并入
+     * 本人主文件仍在个人空间的作品。跨空间混并会让共享成员读到别人私有分卷的页面时 403。
      */
     private ReaderItem tryMergeComicSource(
             UUID ownerUserId,
@@ -515,24 +556,33 @@ public class ReaderImportService {
             FileDescriptor fileNode,
             String fileType,
             String contentHash) {
-        String baseName = normalizeComicTitle(stripExtension(fileNode.name()));
+        String strippedName = stripExtension(fileNode.name());
+        String baseName = normalizeComicTitle(strippedName);
         if (baseName == null || baseName.isBlank()) {
             return null;
         }
-        if (!hasComicPartSignal(stripExtension(fileNode.name()))) {
+        if (!hasComicPartSignal(strippedName)) {
             return null;
         }
 
-        List<ReaderItem> existingComics = itemRepository
-                .findByOwnerUserIdAndContentKindOrderByUpdatedAtDesc(ownerUserId, CONTENT_KIND_COMIC);
+        boolean sharedSpace = fileNode.spaceType() == SpaceType.SHARED;
+        itemRepository.lockComicSeries(
+                sharedSpace ? "SHARED" : "PERSONAL:" + ownerUserId,
+                baseName);
+
+        List<ReaderItem> existingComics = sharedSpace
+                ? itemRepository.findSharedComicCandidates(SpaceType.SHARED, CONTENT_KIND_COMIC)
+                : itemRepository.findPersonalComicCandidates(
+                        ownerUserId, SpaceType.PERSONAL, CONTENT_KIND_COMIC);
         for (ReaderItem existing : existingComics) {
             String existingBase = normalizeComicTitle(existing.getTitle());
             if (!baseName.equalsIgnoreCase(existingBase)) {
                 continue;
             }
 
-            log.info("漫画分包合并: userId={}, existingItemId={}, newFile={}",
-                    ownerUserId, existing.getId(), fileNode.name());
+            log.info("漫画分包合并: userId={}, existingItemId={}, itemOwner={}, space={}, newFile={}",
+                    ownerUserId, existing.getId(), existing.getOwnerUserId(),
+                    fileNode.spaceType(), fileNode.name());
             ReaderItem lockedItem = itemRepository.findByIdForUpdate(existing.getId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "条目不存在"));
             ensureOnBookshelf(ownerUserId, lockedItem.getId());
@@ -548,13 +598,19 @@ public class ReaderImportService {
             lockedItem.setImportStatus("PARSING");
             itemRepository.save(lockedItem);
             publishComicParseAfterCommit(
-                    ownerUserId,
+                    lockedItem.getOwnerUserId(),
+                    fileNode.ownerUserId(),
                     lockedItem.getId(),
                     pendingSource.source().getId(),
                     fileNodeId,
                     fileType,
                     contentHash,
                     false);
+            if (!ownerUserId.equals(lockedItem.getOwnerUserId())) {
+                // 合并改变的是别人创建的作品，创建者的书库列表也要重新拉取。
+                syncEventService.invalidate(
+                        lockedItem.getOwnerUserId(), SyncScope.READER, "READER_LIBRARY", Map.of());
+            }
             return lockedItem;
         }
         return null;
@@ -587,29 +643,69 @@ public class ReaderImportService {
         }
         var cover = metadata.toCoverDraft();
         if (cover != null) {
-            coverExtractionService.store(item.getId(), cover, overwriteCover);
+            persistPdfCoverAfterCommit(item.getId(), cover, overwriteCover);
         }
-        boolean existing = sourceRepository
+        ReaderItemSource source = sourceRepository
                 .findByReaderItemIdAndFileNodeId(item.getId(), fileNode.id())
-                .isPresent();
-        if (existing) {
-            sourceRepository
-                    .findByReaderItemIdAndFileNodeId(item.getId(), fileNode.id())
-                    .ifPresent(source -> {
-                        source.setPageCount(Math.max(0, metadata.pageCount()));
-                        sourceRepository.save(source);
-                    });
-        } else {
-            ReaderItemSource source = new ReaderItemSource();
+                .orElseGet(ReaderItemSource::new);
+        source.setPageCount(Math.max(0, metadata.pageCount()));
+        if (source.getReaderItemId() == null) {
             source.setReaderItemId(item.getId());
             source.setFileNodeId(fileNode.id());
             source.setContentHash(item.getContentHash() != null ? item.getContentHash() : "");
-            source.setFileFormat("PDF");
+            source.setFileFormat(FILE_TYPE_PDF);
             source.setSourceName(fileNode.name());
             source.setStatus(ReaderSourceStatus.READY);
-            source.setPageCount(Math.max(0, metadata.pageCount()));
-            sourceRepository.save(source);
         }
+        sourceRepository.save(source);
+    }
+
+    /**
+     * 重新提取 PDF 条目的页数与封面。
+     *
+     * <p>PDF 由客户端渲染，没有文本章节清单，绝不能投给文本解析引擎：那条链只认 EPUB 与 TXT，
+     * 结果是把一份可读的条目写成 FAILED。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void reparsePdfItem(UUID ownerUserId, ReaderItem item) {
+        if (item.getFileNodeId() == null) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "阅读条目未关联源文件");
+        }
+        FileDescriptor fileNode = loadReadableFileNode(ownerUserId, item.getFileNodeId());
+        item.setImportStatus("READY");
+        item.setParseErrorCode(null);
+        item.setParseErrorMessage(null);
+        item.setParsedAt(Instant.now());
+        itemRepository.save(item);
+        enrichPdfMetadata(item, fileNode, true);
+        syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
+    }
+
+    /**
+     * 在事务提交后保存 PDF 封面。
+     *
+     * <p>封面服务开了 REQUIRES_NEW 独立事务，首次导入时条目还没提交，那个事务查不到行就会抛
+     * BOOK_NOT_FOUND 并把整个导入一起回滚。
+     */
+    private void persistPdfCoverAfterCommit(UUID itemId, ReaderCoverDraft cover, boolean overwrite) {
+        Runnable persistCover = () -> {
+            try {
+                coverExtractionService.store(itemId, cover, overwrite);
+            } catch (RuntimeException exception) {
+                log.warn("PDF 封面自动保存失败: itemId={}, errorType={}",
+                        itemId, exception.getClass().getSimpleName());
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            persistCover.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                persistCover.run();
+            }
+        });
     }
 
     private String computeSha256Stream(FileDescriptor fileNode) {
@@ -707,9 +803,14 @@ public class ReaderImportService {
 
     /**
      * 创建漫画解析任务并通过 Outbox 可靠投递。
+     *
+     * <p>任务记录归属条目所有者，取消与任务列表都按此过滤；事件里的文件操作用户是源文件节点的真实
+     * 所有者。共享空间的漫画分卷可能由成员各自上传，若两处都用同一个人，Worker 的生命周期守卫会
+     * 把合法分卷判成"文件不存在"并静默取消任务。
      */
     private void publishComicParseAfterCommit(
-            UUID ownerUserId,
+            UUID taskOwnerId,
+            UUID fileOwnerId,
             UUID itemId,
             UUID sourceId,
             UUID fileNodeId,
@@ -717,9 +818,9 @@ public class ReaderImportService {
             String contentHash,
             boolean retry) {
         UUID taskId = UUID.randomUUID();
-        taskRecordService.createQueuedTask(taskId, ownerUserId, "COMIC_PARSE",
+        taskRecordService.createQueuedTask(taskId, taskOwnerId, "COMIC_PARSE",
                 QueueNames.COMIC_PARSE_ROUTING_KEY, "QUEUED", "FILE_NODE", fileNodeId, Map.of(
-                "ownerUserId", ownerUserId.toString(),
+                "ownerUserId", taskOwnerId.toString(),
                 "itemId", itemId.toString(),
                 "sourceId", sourceId.toString(),
                 "fileNodeId", fileNodeId.toString(),
@@ -731,7 +832,7 @@ public class ReaderImportService {
                 taskId,
                 QueueNames.TASK_EXCHANGE,
                 QueueNames.COMIC_PARSE_ROUTING_KEY,
-                new ComicParseTaskEvent(taskId, ownerUserId, itemId,
+                new ComicParseTaskEvent(taskId, fileOwnerId, itemId,
                         sourceId, fileNodeId, fileType, contentHash, retry)
         );
     }

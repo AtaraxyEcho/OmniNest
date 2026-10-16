@@ -1,7 +1,9 @@
 package com.omninest.modules.reader.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -214,6 +216,109 @@ class ComicManifestBuilderTest {
                 .filteredOn(node -> "COLLECTION".equals(node.getNodeType()))
                 .extracting(ReaderCatalogNode::getPageCount)
                 .containsExactlyInAnyOrder(2, 3);
+    }
+
+    @Test
+    @DisplayName("压缩包没有解析器目录键时按卷与来源归页")
+    void rebuildComicManifest_mountsPagesOnVolumeAndSourceNodesWithoutParserKeys() {
+        // 过去叶子键写成 "/volume:1/source:{id}"，页面问的是 "source:{id}"，
+        // 两边永远对不上：卷与来源节点都建了出来，页数全是 0，页面一律回退到根。
+        UUID itemId = UUID.fromString("20000000-0000-0000-0000-000000000021");
+        UUID firstSourceId = UUID.fromString("30000000-0000-0000-0000-000000000021");
+        UUID secondSourceId = UUID.fromString("30000000-0000-0000-0000-000000000022");
+        ReaderItemSource firstSource = source(firstSourceId, itemId, "葬送的芙莉莲 Vol.1.cbz", 1);
+        ReaderItemSource secondSource = source(secondSourceId, itemId, "葬送的芙莉莲 Vol.2.cbz", 2);
+        List<ReaderPage> firstPages = flatPages(itemId, firstSourceId, 2);
+        List<ReaderPage> secondPages = flatPages(itemId, secondSourceId, 3);
+
+        when(sourceRepository.findByReaderItemId(itemId)).thenReturn(List.of(firstSource, secondSource));
+        when(pageRepository.findBySourceId(firstSourceId)).thenReturn(firstPages);
+        when(pageRepository.findBySourceId(secondSourceId)).thenReturn(secondPages);
+        when(pageRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(catalogRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+
+        builder.rebuildComicManifest(itemId);
+
+        List<ReaderCatalogNode> savedNodes = capturedCatalogNodes();
+        ReaderCatalogNode firstLeaf = nodeForKey(savedNodes, "source:" + firstSourceId);
+        ReaderCatalogNode secondLeaf = nodeForKey(savedNodes, "source:" + secondSourceId);
+        assertThat(savedNodes)
+                .filteredOn(node -> "VOLUME".equals(node.getNodeType()))
+                .extracting(ReaderCatalogNode::getTitle, ReaderCatalogNode::getPageCount)
+                .containsExactly(tuple("第1卷", 2), tuple("第2卷", 3));
+        assertThat(firstLeaf.getPageCount()).isEqualTo(2);
+        assertThat(secondLeaf.getPageCount()).isEqualTo(3);
+        assertThat(firstLeaf.getParentId()).isEqualTo(nodeForKey(savedNodes, "volume:1").getId());
+        assertThat(secondLeaf.getParentId()).isEqualTo(nodeForKey(savedNodes, "volume:2").getId());
+        assertThat(firstPages).allSatisfy(page ->
+                assertThat(page.getCatalogNodeId()).isEqualTo(firstLeaf.getId()));
+        assertThat(secondPages).allSatisfy(page ->
+                assertThat(page.getCatalogNodeId()).isEqualTo(secondLeaf.getId()));
+        assertThat(nodeForKey(savedNodes, "root").getPageCount()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("压缩包内子目录挂在各自的来源节点之下")
+    void rebuildComicManifest_mountsArchiveSubdirectoriesUnderTheirSource() {
+        UUID itemId = UUID.fromString("20000000-0000-0000-0000-000000000022");
+        UUID sourceId = UUID.fromString("30000000-0000-0000-0000-000000000023");
+        ReaderItemSource archive = source(sourceId, itemId, "合订本.cbz", 1);
+        List<ReaderPage> pages = new ArrayList<>(List.of(
+                pageAt(itemId, sourceId, 0, "ch01/001.jpg"),
+                pageAt(itemId, sourceId, 1, "ch01/002.jpg"),
+                pageAt(itemId, sourceId, 2, "ch02/001.jpg")));
+
+        when(sourceRepository.findByReaderItemId(itemId)).thenReturn(List.of(archive));
+        when(pageRepository.findBySourceId(sourceId)).thenReturn(pages);
+        when(pageRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(catalogRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+
+        builder.rebuildComicManifest(itemId);
+
+        List<ReaderCatalogNode> savedNodes = capturedCatalogNodes();
+        ReaderCatalogNode sourceLeaf = nodeForKey(savedNodes, "source:" + sourceId);
+        ReaderCatalogNode firstChapter = nodeForKey(savedNodes, "source:" + sourceId + "/path:ch01");
+        ReaderCatalogNode secondChapter = nodeForKey(savedNodes, "source:" + sourceId + "/path:ch02");
+        assertThat(firstChapter.getParentId()).isEqualTo(sourceLeaf.getId());
+        assertThat(secondChapter.getParentId()).isEqualTo(sourceLeaf.getId());
+        assertThat(firstChapter.getPageCount()).isEqualTo(2);
+        assertThat(secondChapter.getPageCount()).isEqualTo(1);
+        assertThat(pages.get(0).getCatalogNodeId()).isEqualTo(firstChapter.getId());
+        assertThat(pages.get(2).getCatalogNodeId()).isEqualTo(secondChapter.getId());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ReaderCatalogNode> capturedCatalogNodes() {
+        ArgumentCaptor<List<ReaderCatalogNode>> nodes = ArgumentCaptor.forClass(List.class);
+        verify(catalogRepository, atLeastOnce()).saveAll(nodes.capture());
+        return nodes.getAllValues().getLast();
+    }
+
+    private ReaderCatalogNode nodeForKey(List<ReaderCatalogNode> nodes, String catalogKey) {
+        return nodes.stream()
+                .filter(node -> catalogKey.equals(node.getCatalogKey()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("缺少目录节点: " + catalogKey));
+    }
+
+    private List<ReaderPage> flatPages(UUID itemId, UUID sourceId, int count) {
+        List<ReaderPage> pages = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            pages.add(pageAt(itemId, sourceId, index, String.format("%03d.jpg", index + 1)));
+        }
+        return pages;
+    }
+
+    private ReaderPage pageAt(UUID itemId, UUID sourceId, int sourcePageIndex, String sourcePath) {
+        ReaderPage page = new ReaderPage();
+        page.setId(UUID.randomUUID());
+        page.setReaderItemId(itemId);
+        page.setSourceId(sourceId);
+        page.setSourcePageIndex(sourcePageIndex);
+        page.setSourcePath(sourcePath);
+        return page;
     }
 
     private ReaderItemSource source(UUID sourceId, UUID itemId, String name, int chapterStart) {

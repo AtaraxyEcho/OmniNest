@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,15 +49,19 @@ import com.omninest.modules.reader.repository.ReaderTextChapterRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 阅读条目服务单元测试：验证共享空间可见性、权限校验与级联删除。
@@ -124,6 +129,124 @@ class ReaderItemServiceTest {
 
     @InjectMocks
     private ReaderItemService itemService;
+
+    @Test
+    @DisplayName("元数据编辑写入并读回出版日期、评分、标签、连载状态与 ISBN")
+    void updateMetadataPersistsAndReturnsEveryEditableField() {
+        // 编辑页有五个字段后端 DTO 根本不接收：保存提示成功，字段静默丢弃，重载又变回去
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "书名", "EPUB");
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(itemRepository.save(item)).thenReturn(item);
+
+        itemService.updateMetadata(OWNER_ID, ITEM_ID, new UpdateItemMetadataRequest(
+                "书名二",
+                "作者",
+                "简介",
+                "出版社",
+                "zh-CN",
+                LocalDate.of(2024, 5, 1),
+                new BigDecimal("8.50"),
+                List.of(" 科幻 ", "漫画", " "),
+                "SERIALIZING",
+                "978-7-000-0000-0"));
+
+        assertThat(item.getTitle()).isEqualTo("书名二");
+        assertThat(item.getReleaseDate()).isEqualTo(LocalDate.of(2024, 5, 1));
+        assertThat(item.getRating()).isEqualByComparingTo("8.50");
+        assertThat(item.getGenres()).containsEntry("items", List.of("科幻", "漫画"));
+        assertThat(item.getExternalIds())
+                .containsEntry("serialStatus", "SERIALIZING")
+                .containsEntry("isbn", "978-7-000-0000-0");
+
+        ReaderItemDto dto = itemService.toDto(item, false);
+        assertThat(dto.releaseDate()).isEqualTo(LocalDate.of(2024, 5, 1));
+        assertThat(dto.rating()).isEqualByComparingTo("8.50");
+        assertThat(dto.genres()).containsExactly("科幻", "漫画");
+        assertThat(dto.serialStatus()).isEqualTo("SERIALIZING");
+        assertThat(dto.isbn()).isEqualTo("978-7-000-0000-0");
+    }
+
+    @Test
+    void deleteItemCleansItsOwnDerivedCover() {
+        // 派生封面不在网盘里，任何清理任务都不会再枚举它：随条目删除时必须一起走，
+        // 否则每次删书都在数据库与对象存储里留一个孤儿节点。
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Book With Cover", "TXT");
+        item.setCoverFileId(COVER_FILE_NODE_ID);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(sourceRepository.findByReaderItemId(ITEM_ID)).thenReturn(List.of());
+        when(pageAssetRepository.findByReaderItemIdIn(List.of(ITEM_ID))).thenReturn(List.of());
+        when(itemRepository.findByCoverFileIdIn(List.of(COVER_FILE_NODE_ID))).thenReturn(List.of(item));
+
+        itemService.deleteItem(OWNER_ID, ITEM_ID);
+
+        verify(derivedAssetStorageService).deleteDerivedFileNode(COVER_FILE_NODE_ID);
+    }
+
+    @Test
+    void deleteItemKeepsCoverThatAnotherItemStillReferences() {
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Duplicated Book", "TXT");
+        item.setCoverFileId(COVER_FILE_NODE_ID);
+        ReaderItem sibling = newItem(
+                UUID.fromString("20000000-0000-0000-0000-000000000009"),
+                OWNER_ID,
+                FILE_NODE_ID,
+                "Same Content",
+                "TXT"
+        );
+        sibling.setCoverFileId(COVER_FILE_NODE_ID);
+        when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(sourceRepository.findByReaderItemId(ITEM_ID)).thenReturn(List.of());
+        when(pageAssetRepository.findByReaderItemIdIn(List.of(ITEM_ID))).thenReturn(List.of());
+        when(itemRepository.findByCoverFileIdIn(List.of(COVER_FILE_NODE_ID)))
+                .thenReturn(List.of(item, sibling));
+
+        itemService.deleteItem(OWNER_ID, ITEM_ID);
+
+        verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
+    }
+
+    @Test
+    void uploadCoverDeletesReplacedDerivedCover() {
+        UUID previousCoverId = UUID.fromString("30000000-0000-0000-0000-000000000005");
+        UUID newCoverId = UUID.fromString("30000000-0000-0000-0000-000000000006");
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Covered Book", "EPUB");
+        item.setCoverFileId(previousCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(java.io.InputStream.class)
+        )).thenReturn(newCoverId);
+        when(itemRepository.findByCoverFileIdIn(List.of(previousCoverId))).thenReturn(List.of(item));
+
+        itemService.uploadCover(OWNER_ID, ITEM_ID, pngUpload("封面.png"));
+
+        assertThat(item.getCoverFileId()).isEqualTo(newCoverId);
+        verify(derivedAssetStorageService).deleteDerivedFileNode(previousCoverId);
+    }
+
+    @Test
+    void uploadCoverKeepsNodeWhenDerivedStorageReusesIt() {
+        // 同一路径的派生存储会原地复用同一个 FileNode：把"被替换的旧封面"删掉，
+        // 等于把刚写好的那张一起删，条目只剩指向空对象的节点。
+        UUID sameCoverId = UUID.fromString("30000000-0000-0000-0000-000000000007");
+        ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Covered Book", "EPUB");
+        item.setCoverFileId(sameCoverId);
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(derivedAssetStorageService.store(
+                any(), any(), any(), any(), any(), any(), any(java.io.InputStream.class)
+        )).thenReturn(sameCoverId);
+
+        itemService.uploadCover(OWNER_ID, ITEM_ID, pngUpload("封面.png"));
+
+        verify(derivedAssetStorageService, never()).deleteDerivedFileNode(any());
+    }
+
+    private MultipartFile pngUpload(String fileName) {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getSize()).thenReturn(64L);
+        when(file.getOriginalFilename()).thenReturn(fileName);
+        return file;
+    }
 
     @Test
     void listItemsIncludesSharedSpaceItems() {
@@ -206,6 +329,11 @@ class ReaderItemServiceTest {
         when(itemRepository.findById(SHARED_ITEM_ID)).thenReturn(Optional.of(sharedItem));
         UpdateItemMetadataRequest request = new UpdateItemMetadataRequest(
                 "Changed",
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -428,5 +556,39 @@ class ReaderItemServiceTest {
         assertThat(second.getTotalElements()).isEqualTo(3);
         assertThat(overflow.getContent()).isEmpty();
         assertThat(overflow.getTotalElements()).isEqualTo(3);
+    }
+
+    @Test
+    void listItemsFiltersByContentKindAndMatchesAuthorInQuery() {
+        ReaderItem book = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "三体", "TXT");
+        book.setAuthorName("刘慈欣");
+        ReaderItem comic = newItem(
+                SHARED_ITEM_ID,
+                OWNER_ID,
+                SHARED_FILE_NODE_ID,
+                "One Piece",
+                "CBZ");
+        comic.setAuthorName("尾田荣一郎");
+        comic.setContentKind("COMIC");
+        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
+                .thenReturn(List.of(book, comic));
+        when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
+                .thenReturn(List.of());
+
+        // 分段下沉服务端：书库切到漫画时只回 COMIC。
+        assertThat(itemService.listItems(OWNER_ID, null, "COMIC", null))
+                .extracting(ReaderItemDto::title)
+                .containsExactly("One Piece");
+        assertThat(itemService.listItems(OWNER_ID, null, "TEXT", null))
+                .extracting(ReaderItemDto::title)
+                .containsExactly("三体");
+        // 关键词必须同时命中书名与作者：前端把搜索下沉服务端后，只匹配书名会缩小原有能力。
+        assertThat(itemService.listItems(OWNER_ID, null, null, "刘慈欣"))
+                .extracting(ReaderItemDto::title)
+                .containsExactly("三体");
+        assertThat(itemService.listItems(OWNER_ID, null, null, "尾田"))
+                .extracting(ReaderItemDto::title)
+                .containsExactly("One Piece");
+        assertThat(itemService.listItems(OWNER_ID, null, null, "不存在")).isEmpty();
     }
 }
