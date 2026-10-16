@@ -668,6 +668,7 @@ public class ComicManifestBuilder {
         if (rawName == null || rawName.isBlank()) return meta;
         String lower = rawName.toLowerCase();
 
+        // 卷/季：先按窄正则填，再由 ComicVolumeParser 补齐它认得而这里认不出的写法
         Matcher season = Pattern.compile("s(\\d+)|season\\s*(\\d+)|第(\\d+)季").matcher(lower);
         if (season.find()) {
             String num = season.group(1) != null ? season.group(1) : season.group(2) != null ? season.group(2) : season.group(3);
@@ -681,12 +682,32 @@ public class ComicManifestBuilder {
         }
 
         // 话/章区间：兼容 ch/chapter/第X话章 及日式"話001-010"
+        // 分卷判据必须与 `ReaderComicManifestService.applySourceSortMetadata` 同源：那里已经用
+        // ComicVolumeParser 认出"第三卷"（中文数字）、"卷01"/"巻01"（前缀式）与 S01E02 并落库，
+        // 这里只认 EPISODE/CHAPTER 时排序认得出卷号、目录却生不出"第X卷"聚合节点。
         ComicVolumeParser.PartInfo part = ComicVolumeParser.parse(rawName);
-        if (part.matched() && part.partNo() != null
-                && ("EPISODE".equals(part.partKind()) || "CHAPTER".equals(part.partKind()))) {
-            meta.chapterStart = part.partNo();
-            meta.chapterEnd = part.rangeEnd() != null ? part.rangeEnd() : part.partNo();
-        } else {
+        boolean chapterFromParser = false;
+        if (part.matched() && part.partNo() != null) {
+            switch (part.partKind()) {
+                case "VOL" -> meta.volumeNo = part.partNo();
+                case "SEASON" -> meta.seasonNo = part.partNo();
+                case "SEASON_EP" -> {
+                    meta.seasonNo = part.partNo();
+                    meta.chapterStart = part.rangeEnd();
+                    meta.chapterEnd = part.rangeEnd();
+                    chapterFromParser = part.rangeEnd() != null;
+                }
+                case "EPISODE", "CHAPTER" -> {
+                    meta.chapterStart = part.partNo();
+                    meta.chapterEnd = part.rangeEnd() != null ? part.rangeEnd() : part.partNo();
+                    chapterFromParser = true;
+                }
+                default -> {
+                }
+            }
+        }
+
+        if (!chapterFromParser) {
             Matcher range = Pattern.compile(
                     "(?:ch\\.?\\s*|chapter\\s*|第)(\\d{1,4})\\s*[-~]\\s*(\\d{1,4})(?:话|章)?").matcher(lower);
             if (range.find()) {

@@ -82,6 +82,9 @@ public class ReaderTextManifestService {
     /**
      * 标记文本书籍解析失败。
      *
+     * <p>只认文本条目：用户把 EPUB 显式升级为漫画时会取消在途的文本解析任务，被取消的
+     * 任务同样走到这里，按文本口径写失败会把已经切成 COMIC 的条目覆写成 FAILED。
+     *
      * @param itemId 阅读条目 ID
      * @param errorCode 稳定错误码
      * @param message 错误摘要
@@ -89,6 +92,9 @@ public class ReaderTextManifestService {
     @Transactional(rollbackFor = Exception.class)
     public void markFailed(UUID itemId, String errorCode, String message) {
         itemRepository.findById(itemId).ifPresent(item -> {
+            if (!"TEXT".equalsIgnoreCase(item.getContentKind())) {
+                return;
+            }
             item.setImportStatus("FAILED");
             item.setParseErrorCode(errorCode);
             item.setParseErrorMessage(message);

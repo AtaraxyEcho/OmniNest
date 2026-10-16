@@ -1,7 +1,10 @@
 package com.omninest.modules.reader.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.reader.domain.ReaderItem;
@@ -204,6 +207,35 @@ class ReaderTextManifestServiceTest {
         assertThat(manifest.chapters()).isEmpty();
         assertThat(manifest.parseTask()).isNotNull();
         assertThat(manifest.parseTask().progress()).isEqualTo(40);
+    }
+
+    /// 显式升级为漫画会取消在途的文本解析任务，被取消的任务同样回写 markFailed。
+    ///
+    /// 不加 contentKind 守卫的话，刚切成 COMIC 的条目会被文本口径覆写成 FAILED。
+    @Test
+    void markFailedSkipsComicItem() {
+        ReaderItem comic = textItem();
+        comic.setContentKind("COMIC");
+        comic.setImportStatus("PARSING");
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(comic));
+
+        service.markFailed(ITEM_ID, "IMPORT_CANCELLED", "用户已取消导入");
+
+        verify(itemRepository, never()).save(any(ReaderItem.class));
+        verifyNoInteractions(syncEventService);
+        assertThat(comic.getImportStatus()).isEqualTo("PARSING");
+    }
+
+    @Test
+    void markFailedStillRecordsFailureOnTextItem() {
+        ReaderItem item = textItem();
+        when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+
+        service.markFailed(ITEM_ID, "PARSE_FAILED", "编码无法识别");
+
+        assertThat(item.getImportStatus()).isEqualTo("FAILED");
+        assertThat(item.getParseErrorCode()).isEqualTo("PARSE_FAILED");
+        verify(itemRepository).save(item);
     }
 
     private ReaderItem textItem() {

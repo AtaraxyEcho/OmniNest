@@ -250,6 +250,17 @@ public class ReaderImportService {
         lockedItem.setParseErrorMessage(null);
         ReaderItem saved = itemRepository.save(lockedItem);
 
+        // 升级前这本书可能已经按 TEXT 提交了在途解析任务：放任它跑完，回写会把刚切成
+        // COMIC 的条目覆写成 FAILED（文本清单写入被漫画守卫拒绝后仍会 markFailed）。
+        // 只排除漫画任务本身，其余挂在条目上的活动任务都作废。
+        taskRecordService.cancelActiveResourceTasks(
+                saved.getOwnerUserId(),
+                "READER_ITEM",
+                List.of(saved.getId()),
+                List.of("QUEUED", "RUNNING", "RETRY_WAIT"),
+                "COMIC_PARSE"
+        );
+
         PendingComicSource pendingSource = findOrCreatePendingComicSource(
                 saved.getId(),
                 fileNodeId,
@@ -828,7 +839,8 @@ public class ReaderImportService {
                 "sourceId", sourceId.toString(),
                 "fileNodeId", fileNodeId.toString(),
                 "fileFormat", fileType,
-                "contentHash", contentHash,
+                // Map.of 不收 null：与漫画任务入队侧同口径，缺哈希按空串落 payload。
+                "contentHash", contentHash == null ? "" : contentHash,
                 "isRetry", retry
         ));
         taskDispatchService.enqueue(

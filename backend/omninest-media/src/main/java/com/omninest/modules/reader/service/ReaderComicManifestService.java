@@ -721,7 +721,9 @@ public class ReaderComicManifestService {
                         "sourceId", source.getId().toString(),
                         "fileNodeId", source.getFileNodeId().toString(),
                         "fileFormat", source.getFileFormat(),
-                        "contentHash", source.getContentHash(),
+                        // Map.of 不接受 null 值：缺哈希的历史来源会在入队时直接 NPE，
+                        // 与文本解析提交侧同样按空串落 payload。
+                        "contentHash", source.getContentHash() == null ? "" : source.getContentHash(),
                         "isRetry", retry
                 ));
         // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。

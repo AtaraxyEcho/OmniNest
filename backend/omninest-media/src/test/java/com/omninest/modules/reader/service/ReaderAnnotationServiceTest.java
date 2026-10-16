@@ -1,7 +1,9 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.reader.domain.ReaderAnnotation;
+import com.omninest.modules.reader.dto.ReaderDtos.CreateAnnotationRequest;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderAnnotationDto;
 import com.omninest.modules.reader.dto.ReaderDtos.UpdateAnnotationRequest;
 import com.omninest.modules.reader.repository.ReaderAnnotationRepository;
@@ -44,6 +46,24 @@ class ReaderAnnotationServiceTest {
         annotation.setNote("旧备注");
         annotation.setColor("#FFEB3B");
         return annotation;
+    }
+
+    /// 倒挂区间会被原样落库：高亮绘制与跳转都按 start<=end 计算长度与定位。
+    @Test
+    void createAnnotationRejectsReversedOffsets() {
+        ReaderAnnotationRepository repository = Mockito.mock(ReaderAnnotationRepository.class);
+        UUID ownerUserId = UUID.randomUUID();
+        ReaderAnnotationService service = createService(repository);
+
+        Assertions.assertThatThrownBy(() -> service.createAnnotation(
+                        ownerUserId,
+                        UUID.randomUUID(),
+                        new CreateAnnotationRequest(
+                                "chapter_1", 40L, 20L, "高亮", null, "#FFEB3B", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("批注结束偏移不能小于起始偏移");
+
+        Mockito.verifyNoInteractions(repository);
     }
 
     @Test

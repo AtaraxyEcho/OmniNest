@@ -64,6 +64,10 @@ public class ReaderAnnotationService {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "批注请求参数不能为空");
         }
+        if (request.endOffset() < request.startOffset()) {
+            // 倒挂的区间会被原样落库：高亮绘制与跳转都要按 start<=end 前提算长度与位置。
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "批注结束偏移不能小于起始偏移");
+        }
         readerItemService.requireItem(ownerUserId, readerItemId);
         String clientOperationId = normalizeClientOperationId(request.clientOperationId());
         ReaderAnnotation existing = findExistingByClientOperationId(ownerUserId, readerItemId, clientOperationId);

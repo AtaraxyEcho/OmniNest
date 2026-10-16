@@ -16,6 +16,7 @@ import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderItemSourceRepository;
 import com.omninest.modules.reader.repository.ReaderPageRepository;
 import com.omninest.modules.reader.service.model.ComicManifestDraft.ComicCatalogDraftNode;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,7 @@ class ComicManifestBuilderTest {
 
     private Method detectNodeTypeMethod;
     private Method buildDraftCatalogMethod;
+    private Method parseSourceMetaMethod;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -61,6 +63,57 @@ class ComicManifestBuilderTest {
         buildDraftCatalogMethod = ComicManifestBuilder.class
                 .getDeclaredMethod("buildDraftCatalog", List.class, UUID.class);
         buildDraftCatalogMethod.setAccessible(true);
+
+        parseSourceMetaMethod = ComicManifestBuilder.class
+                .getDeclaredMethod("parseSourceMeta", UUID.class, String.class);
+        parseSourceMetaMethod.setAccessible(true);
+    }
+
+    // ==================== parseSourceMeta ====================
+
+    /// 目录构建的分卷识别必须与 `applySourceSortMetadata` 落库时用的 ComicVolumeParser 同源。
+    ///
+    /// 各写一份时"第三卷"（中文数字）、"卷01"/"巻01"（前缀式）在排序里认得出卷号，
+    /// 生成目录树却拿不到 volumeNo，整卷没有"第X卷"聚合节点。
+    @Nested
+    @DisplayName("parseSourceMeta 与 ComicVolumeParser 同口径")
+    class ParseSourceMetaTests {
+
+        @Test
+        @DisplayName("中文数字卷 → volumeNo")
+        void chineseVolume_detected() throws Exception {
+            assertThat(metaInt("葬送的芙莉莲 第三卷.cbz", "volumeNo")).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("前缀式卷号（简体与日文异体）→ volumeNo")
+        void prefixedVolume_detected() throws Exception {
+            assertThat(metaInt("[Kmoe][Frieren][01].cbz", "volumeNo")).isNull();
+            assertThat(metaInt("卷01.cbz", "volumeNo")).isEqualTo(1);
+            assertThat(metaInt("巻01.cbz", "volumeNo")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("季集 S01E02 → seasonNo 与话号同时落")
+        void seasonEpisode_detected() throws Exception {
+            assertThat(metaInt("S01E02.cbz", "seasonNo")).isEqualTo(1);
+            assertThat(metaInt("S01E02.cbz", "chapterStart")).isEqualTo(2);
+            assertThat(metaInt("S01E02.cbz", "chapterEnd")).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("话区间仍按 parser 结果，不被窄正则二次覆写")
+        void episodeRange_detected() throws Exception {
+            assertThat(metaInt("話001-010.cbz", "chapterStart")).isEqualTo(1);
+            assertThat(metaInt("話001-010.cbz", "chapterEnd")).isEqualTo(10);
+        }
+    }
+
+    private Integer metaInt(String rawName, String fieldName) throws Exception {
+        Object meta = parseSourceMetaMethod.invoke(builder, UUID.randomUUID(), rawName);
+        Field field = meta.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return (Integer) field.get(meta);
     }
 
     // ==================== detectNodeType ====================

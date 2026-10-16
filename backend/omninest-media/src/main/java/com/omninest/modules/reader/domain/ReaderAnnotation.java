@@ -48,7 +48,7 @@ public class ReaderAnnotation {
     @Column(columnDefinition = "text")
     private String note;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 16)
     private String color = "#FFEB3B";
 
     @Column(name = "created_at", nullable = false)

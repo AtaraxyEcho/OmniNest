@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -224,6 +225,14 @@ class ReaderImportServiceTest {
         assertThat(result.getImportStatus()).isEqualTo("PARSING");
         verify(sourceRepository).save(any(ReaderItemSource.class));
         verify(taskDispatchService).enqueue(any(), any(), any(), any());
+        // 在途的文本解析任务必须一起作废：它跑完会按文本口径回写状态，把漫画条目覆写成 FAILED
+        verify(taskRecordService).cancelActiveResourceTasks(
+                eq(OWNER_ID),
+                eq("READER_ITEM"),
+                eq(List.of(EXISTING_ITEM_ID)),
+                anyList(),
+                eq("COMIC_PARSE")
+        );
     }
 
     @Test

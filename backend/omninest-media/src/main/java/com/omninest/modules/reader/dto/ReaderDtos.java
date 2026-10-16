@@ -233,7 +233,7 @@ public final class ReaderDtos {
             String highlightText,
             @Size(max = 2000, message = "note 长度不能超过 2000")
             String note,
-            @Size(max = 20, message = "color 长度不能超过 20")
+            @Size(max = 16, message = "color 长度不能超过 16")
             String color,
             @Size(max = 120, message = "clientOperationId 长度不能超过 120")
             String clientOperationId
@@ -242,7 +242,9 @@ public final class ReaderDtos {
 
     /** 更新批注请求。 */
     public record UpdateAnnotationRequest(
+            @Size(max = 2000, message = "note 长度不能超过 2000")
             String note,
+            @Size(max = 16, message = "color 长度不能超过 16")
             String color
     ) {
     }
@@ -250,6 +252,7 @@ public final class ReaderDtos {
     /** 创建笔记请求。 */
     public record CreateNoteRequest(
             Long charOffset,
+            @Size(max = 500, message = "title 长度不能超过 500")
             String title,
             @NotBlank String content,
             @Size(max = 120, message = "clientOperationId 长度不能超过 120")
@@ -259,6 +262,7 @@ public final class ReaderDtos {
 
     /** 更新笔记请求。 */
     public record UpdateNoteRequest(
+            @Size(max = 500, message = "title 长度不能超过 500")
             String title,
             @NotBlank String content
     ) {
