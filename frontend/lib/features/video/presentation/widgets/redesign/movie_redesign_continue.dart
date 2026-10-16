@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
@@ -179,7 +180,7 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                   fit: StackFit.expand,
                   children: [
                     AnimatedScale(
-                      duration: const Duration(milliseconds: 500),
+                      duration: MotionToken.normal,
                       curve: Curves.easeOut,
                       scale: _hovered ? 1.05 : 1.0,
                       child: _ContinueImage(

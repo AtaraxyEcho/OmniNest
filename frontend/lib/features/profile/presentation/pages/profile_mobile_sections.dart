@@ -6,11 +6,39 @@
 part of 'profile_page.dart';
 
 /// 安全：修改密码行（对话框）+ 设备与会话列表。
-class _PmSecuritySection extends ConsumerWidget {
+class _PmSecuritySection extends ConsumerStatefulWidget {
   const _PmSecuritySection();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PmSecuritySection> createState() => _PmSecuritySectionState();
+}
+
+class _PmSecuritySectionState extends ConsumerState<_PmSecuritySection> {
+  /// 撤销是网络写操作：列表回写与反馈都要先确认本页仍在，
+  /// 不在 Element 已停用后触碰 ref 与 ScaffoldMessenger。
+  Future<void> _revoke(String sessionId) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(profileCommandServiceProvider).revokeSession(sessionId);
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(userSessionsProvider);
+      showOmniFeedback(context, l10n.profileSessionRevoked);
+    } on Exception {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        l10n.profileSessionRevokeFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final sessions = ref.watch(userSessionsProvider);
     final sessionList = sessions.asData?.value ?? const <UserSession>[];
@@ -27,14 +55,10 @@ class _PmSecuritySection extends ConsumerWidget {
         _PmTwoFactorRow(),
         _PmGroupLabel(l10n.profileRowSessions),
         if (sessions.isLoading)
+          // 行内子块等自己的 provider 时不再各画转圈：整屏动画至多一处。
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-              child: SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: MobileSkeletonBlock(height: 40),
           )
         else if (sessionList.isEmpty)
           Padding(
@@ -54,16 +78,7 @@ class _PmSecuritySection extends ConsumerWidget {
             _PmSessionRow(
               session: session,
               onRevoke:
-                  session.current
-                      ? null
-                      : () => unawaited(
-                        ref
-                            .read(profileCommandServiceProvider)
-                            .revokeSession(session.id)
-                            .whenComplete(
-                              () => ref.invalidate(userSessionsProvider),
-                            ),
-                      ),
+                  session.current ? null : () => unawaited(_revoke(session.id)),
             ),
       ],
     );
@@ -72,23 +87,36 @@ class _PmSecuritySection extends ConsumerWidget {
 
 /// 两步验证行：状态副题 + 启用开关（开启走向导：密码→扫码→备份码；
 /// 关闭走密码复核）；服务器强制必需时展示「必需」徽标不可关。
-class _PmTwoFactorRow extends ConsumerWidget {
+class _PmTwoFactorRow extends ConsumerStatefulWidget {
   const _PmTwoFactorRow();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PmTwoFactorRow> createState() => _PmTwoFactorRowState();
+}
+
+class _PmTwoFactorRowState extends ConsumerState<_PmTwoFactorRow> {
+  /// 向导是模态流程：结束后先确认本页仍在，再回写 Element 绑定的 ref。
+  Future<void> _runWizard(bool enabled) async {
+    if (enabled) {
+      await ProfileTwoFactorCard.showDisableWizard(context);
+    } else {
+      await ProfileTwoFactorCard.showEnableWizard(context);
+    }
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(profileTwoFactorStatusProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final status = ref.watch(profileTwoFactorStatusProvider);
     return status.when(
       loading:
           () => const Padding(
             padding: EdgeInsets.symmetric(vertical: 14),
-            child: Center(
-              child: SizedBox.square(
-                dimension: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+            child: MobileSkeletonBlock(height: 44),
           ),
       error:
           (_, _) => _PmRow(
@@ -130,14 +158,7 @@ class _PmTwoFactorRow extends ConsumerWidget {
                   )
                   : MobileEnvSwitch(
                     value: value.enabled,
-                    onChanged: (_) async {
-                      if (value.enabled) {
-                        await ProfileTwoFactorCard.showDisableWizard(context);
-                      } else {
-                        await ProfileTwoFactorCard.showEnableWizard(context);
-                      }
-                      ref.invalidate(profileTwoFactorStatusProvider);
-                    },
+                    onChanged: (_) => unawaited(_runWizard(value.enabled)),
                   ),
         );
       },
@@ -244,7 +265,7 @@ class _PmSessionRow extends StatelessWidget {
               TextButton(
                 onPressed: onRevoke,
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFE2A1A1),
+                  foregroundColor: context.env.statusDanger,
                   minimumSize: const Size(0, 34),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                 ),
@@ -264,19 +285,36 @@ class _PmSessionRow extends StatelessWidget {
 }
 
 /// 通知偏好：总开关 + 声音/预览 + 类型开关（复用既有偏好控制器）。
-class _PmNotificationsSection extends ConsumerWidget {
+class _PmNotificationsSection extends ConsumerStatefulWidget {
   const _PmNotificationsSection();
 
-  Future<void> _save(WidgetRef ref, NotificationPreferences next) async {
+  @override
+  ConsumerState<_PmNotificationsSection> createState() =>
+      _PmNotificationsSectionState();
+}
+
+class _PmNotificationsSectionState
+    extends ConsumerState<_PmNotificationsSection> {
+  /// 控制器在失败时已把 state 回滚，这里只补失败反馈；
+  /// 反馈要落回 ScaffoldMessenger，因此必须先确认本页仍在。
+  Future<void> _save(NotificationPreferences next) async {
+    final l10n = AppLocalizations.of(context);
     try {
       await ref.read(notificationPreferencesProvider.notifier).save(next);
     } on Exception {
-      ref.invalidate(notificationPreferencesProvider);
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        l10n.profileNotificationSaveFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final preferences = ref.watch(notificationPreferencesProvider);
     final types = ref.watch(notificationTypesProvider);
@@ -307,8 +345,7 @@ class _PmNotificationsSection extends ConsumerWidget {
               trailing: _PmSwitch(
                 value: prefs.enabled,
                 onChanged:
-                    (value) =>
-                        unawaited(_save(ref, prefs.copyWith(enabled: value))),
+                    (value) => unawaited(_save(prefs.copyWith(enabled: value))),
               ),
             ),
             _PmRow(
@@ -318,8 +355,7 @@ class _PmNotificationsSection extends ConsumerWidget {
               trailing: _PmSwitch(
                 value: prefs.sound,
                 onChanged:
-                    (value) =>
-                        unawaited(_save(ref, prefs.copyWith(sound: value))),
+                    (value) => unawaited(_save(prefs.copyWith(sound: value))),
               ),
             ),
             _PmRow(
@@ -329,9 +365,8 @@ class _PmNotificationsSection extends ConsumerWidget {
               trailing: _PmSwitch(
                 value: prefs.showPreview,
                 onChanged:
-                    (value) => unawaited(
-                      _save(ref, prefs.copyWith(showPreview: value)),
-                    ),
+                    (value) =>
+                        unawaited(_save(prefs.copyWith(showPreview: value))),
               ),
             ),
             _PmGroupLabel(l10n.profileRowNotifications),
@@ -372,7 +407,6 @@ class _PmNotificationsSection extends ConsumerWidget {
                           onChanged:
                               (value) => unawaited(
                                 _save(
-                                  ref,
                                   prefs.copyWith(
                                     types: {
                                       ...prefs.types,

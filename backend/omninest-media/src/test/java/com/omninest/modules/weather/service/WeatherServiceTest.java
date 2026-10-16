@@ -1,9 +1,11 @@
 package com.omninest.modules.weather.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,7 +19,14 @@ import com.nimbusds.jose.util.Base64URL;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.omninest.common.config.ConfigValueProvider;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.weather.dto.WeatherDto;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
@@ -29,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,6 +52,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 验证天气聚合、位置解析和 JWT 签名行为。
@@ -57,13 +68,80 @@ class WeatherServiceTest {
     private WeatherCacheStore weatherCacheStore;
     @Mock
     private RestTemplate restTemplate;
+    @Mock
+    private SafeUrlValidator safeUrlValidator;
 
     private WeatherService weatherService;
 
     @BeforeEach
     void setUp() {
-        weatherService = new WeatherService(configValueProvider, weatherCacheStore);
+        weatherService = new WeatherService(configValueProvider, weatherCacheStore, safeUrlValidator);
         ReflectionTestUtils.setField(weatherService, "restTemplate", restTemplate);
+    }
+
+    @Test
+    @DisplayName("出站地址：元数据服务基址在请求前被拒绝")
+    void apiUriRejectsMetadataBaseUrl() {
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                weatherService, "apiUri", "http://169.254.169.254", "/v7/weather/now"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("元数据服务");
+    }
+
+    @Test
+    @DisplayName("出站地址：管理员配置的内网代理仍可请求")
+    void apiUriKeepsConfiguredProxyOrigin() {
+        URI uri = ReflectionTestUtils.invokeMethod(
+                weatherService, "apiUri", "http://weather-proxy.lan:8080", "/v7/weather/now?location=1");
+
+        assertThat(uri).isEqualTo(URI.create("http://weather-proxy.lan:8080/v7/weather/now?location=1"));
+    }
+
+    @Test
+    @DisplayName("出站地址：基址解析到受限地址段时拒绝")
+    void apiUriRejectsOriginResolvingToRestrictedSegment() {
+        doThrow(new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址"))
+                .when(safeUrlValidator)
+                .requireSelfHostedSafeHost(any(URI.class));
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                weatherService, "apiUri", "http://weather-cache.internal", "/v7/weather/now"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("内网地址");
+    }
+
+    @Test
+    @DisplayName("HTTP GET 不跟随跳转：Bearer JWT 不会随 3xx 送出")
+    void httpGetDoesNotFollowRedirects() throws IOException {
+        AtomicReference<String> leakedPath = new AtomicReference<>("");
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        int port = server.getAddress().getPort();
+        server.createContext("/now", exchange -> {
+            exchange.getResponseHeaders().set("Location", "http://127.0.0.1:" + port + "/leak");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        server.createContext("/leak", exchange -> {
+            leakedPath.set(exchange.getRequestURI().getPath());
+            byte[] body = "{\"code\":\"200\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        server.start();
+        try {
+            WeatherService localService = new WeatherService(configValueProvider, weatherCacheStore, safeUrlValidator);
+
+            JsonNode result = ReflectionTestUtils.invokeMethod(
+                    localService, "httpGet", URI.create("http://127.0.0.1:" + port + "/now"), "jwt");
+
+            assertThat(result).isNull();
+            assertThat(leakedPath.get()).isEmpty();
+        } finally {
+            server.stop(0);
+        }
     }
 
     private Map<String, String> baseConfigs() {

@@ -1,6 +1,8 @@
 package com.omninest.modules.music.service;
 
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -9,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -19,14 +22,17 @@ import tools.jackson.databind.JsonNode;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class LrclibLyricsService {
     private static final String BASE_URL = "https://lrclib.net/api";
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final String USER_AGENT = "OmniNest/0.1.0 (https://github.com/omninest)";
 
+    private final SafeUrlValidator safeUrlValidator;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     /**
@@ -101,8 +107,15 @@ public class LrclibLyricsService {
         return new LyricsResult(plainLyrics, syncedLyrics, trackName, artistName, albumName);
     }
 
+    /**
+     * 拼出请求地址并按内置公网服务校验；基址是编译期常量，仍逐次复核以拒绝任何解析到受限地址的结果。
+     */
+    private URI safeUri(String path) {
+        return OutboundEndpointRules.requirePublicEndpoint(URI.create(BASE_URL + path), safeUrlValidator);
+    }
+
     private JsonNode get(String path) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(BASE_URL + path))
+        HttpRequest request = HttpRequest.newBuilder(safeUri(path))
                 .timeout(TIMEOUT)
                 .header("User-Agent", USER_AGENT)
                 .header("Accept", "application/json")
@@ -120,7 +133,7 @@ public class LrclibLyricsService {
     }
 
     private JsonNode getArray(String path) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(BASE_URL + path))
+        HttpRequest request = HttpRequest.newBuilder(safeUri(path))
                 .timeout(TIMEOUT)
                 .header("User-Agent", USER_AGENT)
                 .header("Accept", "application/json")

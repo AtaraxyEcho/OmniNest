@@ -13,7 +13,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/core/network/api_client.dart';
@@ -191,7 +191,7 @@ Future<void> _pumpHero(
       home: MobileShellScope(
         hosted: true,
         child: Scaffold(
-          backgroundColor: MobileEnvColors.stage,
+          backgroundColor: MobileEnvPalette.dark.stage,
           body: SingleChildScrollView(
             child: MovieMobileCinemaHero(
               title: 'Mirage',
@@ -319,7 +319,7 @@ void main() {
       final secondary = _buttonMaterial(tester, '详情');
       final secondaryShape = secondary.shape as RoundedRectangleBorder;
 
-      expect(primary.color, MobileEnvColors.buttonInk);
+      expect(primary.color, MobileEnvPalette.dark.buttonInk);
       expect(secondary.color, const Color(0x8C121817));
       expect(secondaryShape.side.color, const Color(0x38FFFFFF));
       expect(tester.takeException(), isNull);
@@ -335,7 +335,7 @@ void main() {
 
       final title = tester.widget<Text>(find.text('Mirage'));
       expect(title.style?.fontFamily, AppTypography.serifFamily);
-      expect(title.style?.color, MobileEnvColors.ink);
+      expect(title.style?.color, MobileEnvPalette.dark.ink);
       expect(find.textContaining('· 40% ·'), findsOneWidget);
       expect(find.text('8.1 · 2024 · 剧情'), findsOneWidget);
       expect(find.text('4K · HDR'), findsOneWidget);

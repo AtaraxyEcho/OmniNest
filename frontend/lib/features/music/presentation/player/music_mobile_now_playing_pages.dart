@@ -495,7 +495,7 @@ class _MobileTransportRow extends StatelessWidget {
         children: [
           _MobileModeButton(
             tooltip: l10n.musicShuffle,
-            icon: Icons.shuffle_rounded,
+            vector: OmniIcons.shuffle,
             active: shuffling,
             onPressed:
                 enabled
@@ -513,7 +513,7 @@ class _MobileTransportRow extends StatelessWidget {
               foregroundColor: context.env.ink,
               minimumSize: const Size.square(48),
             ),
-            icon: const Icon(Icons.skip_previous_rounded, size: 30),
+            icon: const OmniIcon(icon: OmniIcons.previous, size: 30),
           ),
           MusicPlaybackButton(
             isPlaying: isPlaying,
@@ -533,11 +533,13 @@ class _MobileTransportRow extends StatelessWidget {
               foregroundColor: context.env.ink,
               minimumSize: const Size.square(48),
             ),
-            icon: const Icon(Icons.skip_next_rounded, size: 30),
+            icon: const OmniIcon(icon: OmniIcons.next, size: 30),
           ),
           _MobileModeButton(
             tooltip: l10n.musicRepeatOne,
-            icon: repeating ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+            // 样例只画了一枚 repeat 图元；单循环与顺序循环靠强调色与
+            // tooltip 区分，不再另找 Material 变体字形。
+            vector: OmniIcons.repeat,
             active: repeating,
             onPressed:
                 enabled
@@ -558,13 +560,13 @@ class _MobileTransportRow extends StatelessWidget {
 class _MobileModeButton extends StatelessWidget {
   const _MobileModeButton({
     required this.tooltip,
-    required this.icon,
+    required this.vector,
     required this.active,
     required this.onPressed,
   });
 
   final String tooltip;
-  final IconData icon;
+  final OmniIconsData vector;
   final bool active;
   final VoidCallback? onPressed;
 
@@ -580,7 +582,7 @@ class _MobileModeButton extends StatelessWidget {
           foregroundColor: active ? context.env.accent : context.env.inkMuted,
           minimumSize: const Size.square(48),
         ),
-        icon: Icon(icon, size: 20),
+        icon: OmniIcon(icon: vector, size: 22),
       ),
     );
   }
@@ -612,7 +614,7 @@ class _MobileUtilityRow extends StatelessWidget {
           IconButton(
             tooltip: l10n.musicPlaybackSettings,
             onPressed: onOpenSettings,
-            icon: const Icon(Icons.equalizer_rounded, size: 20),
+            icon: const OmniIcon(icon: OmniIcons.settings, size: 19),
             style: IconButton.styleFrom(
               foregroundColor: context.env.white46,
               minimumSize: const Size(44, 40),
@@ -621,7 +623,7 @@ class _MobileUtilityRow extends StatelessWidget {
           IconButton(
             tooltip: l10n.musicQueueTitle,
             onPressed: onOpenQueue,
-            icon: const Icon(Icons.queue_music_rounded, size: 21),
+            icon: const OmniIcon(icon: OmniIcons.queue, size: 20),
             style: IconButton.styleFrom(
               foregroundColor: context.env.white46,
               minimumSize: const Size(44, 40),
@@ -634,15 +636,18 @@ class _MobileUtilityRow extends StatelessWidget {
 }
 
 /// 头部玻璃圆钮（样例 `.icon-button` 48×48）：返回与 ⋯ 同一档位。
+///
+/// 图标恒用样例同源矢量：稿子里这两枚都是 `arrow` / `more` 描边图元，
+/// 不留 Material 字形。
 class _MobileHeaderButton extends StatelessWidget {
   const _MobileHeaderButton({
     required this.tooltip,
-    required this.icon,
+    required this.vector,
     required this.onPressed,
   });
 
   final String tooltip;
-  final IconData icon;
+  final OmniIconsData vector;
   final VoidCallback onPressed;
 
   @override
@@ -657,7 +662,7 @@ class _MobileHeaderButton extends StatelessWidget {
         minimumSize: const Size(48, 48),
         maximumSize: const Size(48, 48),
       ),
-      icon: Icon(icon, size: 22),
+      icon: OmniIcon(icon: vector, size: 22, color: context.env.ink),
     );
   }
 }

@@ -255,5 +255,23 @@ void main() {
         ),
       );
     });
+
+    test('resetTwoFactor 调后端重置并刷新当前页，保留选择集', () async {
+      when(() => api.resetTwoFactor(any())).thenAnswer((_) async {});
+      final container = buildContainer();
+      final controller = container.read(adminUserControllerProvider.notifier);
+      await container.read(adminUserControllerProvider.future);
+      controller.toggleSelection('user-1');
+
+      await controller.resetTwoFactor('user-1');
+
+      verify(() => api.resetTwoFactor('user-1')).called(1);
+      final state = container.read(adminUserControllerProvider).value!;
+      expect(
+        state.selectedIds,
+        contains('user-1'),
+        reason: '重置两步验证不是删除用户，批量选择不应被清空',
+      );
+    });
   });
 }

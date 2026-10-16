@@ -30,6 +30,7 @@ import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/theme/admin_workstation_theme.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 part 'admin_shell_navigation.dart';
 
@@ -587,7 +588,10 @@ class _AdminTopBar extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _MobileAdminSectionSheet(selected: section),
+      builder:
+          (context) => MobileSheetSemantics(
+            child: _MobileAdminSectionSheet(selected: section),
+          ),
     );
   }
 }

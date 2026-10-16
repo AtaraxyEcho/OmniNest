@@ -7,6 +7,7 @@ import 'package:omninest/features/music/application/music_local_preferences_cont
 import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 弹出播放设置底部抽屉：定时关闭、播放倍速与在线音质。
 Future<void> showMusicPlaybackSettingsDialog(
@@ -17,7 +18,9 @@ Future<void> showMusicPlaybackSettingsDialog(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => const MusicPlaybackSettingsSheet(),
+    builder:
+        (context) =>
+            const MobileSheetSemantics(child: MusicPlaybackSettingsSheet()),
   );
 }
 

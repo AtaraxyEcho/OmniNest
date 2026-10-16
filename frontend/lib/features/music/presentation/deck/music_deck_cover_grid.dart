@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// Music Deck 封面内容模型。
 class MusicDeckCoverItem {
@@ -358,50 +359,52 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
       backgroundColor: context.musicColors.surfaceContainer,
       showDragHandle: true,
       builder:
-          (sheetContext) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
-                    child: Text(
-                      widget.item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.musicColors.onSurface,
-                        fontSize: AppTypography.titleMedium,
-                        fontWeight: FontWeight.w700,
+          (sheetContext) => MobileSheetSemantics(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
+                      child: Text(
+                        widget.item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.musicColors.onSurface,
+                          fontSize: AppTypography.titleMedium,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  for (final action in widget.item.actions)
-                    ListTile(
-                      leading: Icon(
-                        action.icon,
-                        color:
-                            action.destructive
-                                ? MusicChromeColors.redSoft
-                                : context.musicColors.onSurface,
-                      ),
-                      title: Text(
-                        action.label,
-                        style: TextStyle(
+                    for (final action in widget.item.actions)
+                      ListTile(
+                        leading: Icon(
+                          action.icon,
                           color:
                               action.destructive
                                   ? MusicChromeColors.redSoft
                                   : context.musicColors.onSurface,
                         ),
+                        title: Text(
+                          action.label,
+                          style: TextStyle(
+                            color:
+                                action.destructive
+                                    ? MusicChromeColors.redSoft
+                                    : context.musicColors.onSurface,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          action.onSelected();
+                        },
                       ),
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        action.onSelected();
-                      },
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

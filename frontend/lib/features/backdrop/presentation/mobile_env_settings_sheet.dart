@@ -4,9 +4,11 @@ import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 视觉环境移动端设置（样例 EnvSettings）：根级全覆盖贴底抽屉——
 /// 当前环境大卡 + 图库网格（选中打勾 + 上传瓦片）+ 行为开关。
@@ -35,7 +37,9 @@ Future<void> showMobileEnvSettingsSheet(BuildContext context) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder:
-        (_) => const _MobileEnvPaletteScope(child: _MobileEnvSettingsSheet()),
+        (_) => MobileSheetSemantics(
+          child: const _MobileEnvPaletteScope(child: _MobileEnvSettingsSheet()),
+        ),
   );
 }
 
@@ -145,15 +149,13 @@ class _MobileEnvSettingsSheetState
                       ],
                     ),
                   ),
-                  IconButton(
+                  // 样例 `.sheet-head` 的关闭位是 48 玻璃圆钮（`.icon-button`）+
+                  // 同源 close 矢量；裸 IconButton 只有命中区没有控件本体。
+                  MobileGlassIconButton(
                     tooltip:
                         MaterialLocalizations.of(context).closeButtonTooltip,
+                    vector: OmniIcons.close,
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(
-                      Icons.close_rounded,
-                      size: 20,
-                      color: context.env.ink,
-                    ),
                   ),
                 ],
               ),
@@ -240,11 +242,15 @@ class _MobileEnvSettingsSheetState
                       child: TextButton(
                         onPressed: () => controller.clearBackdrops(),
                         style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFFE2A1A1),
+                          foregroundColor: context.env.statusDanger,
                           minimumSize: const Size.fromHeight(44),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(13),
-                            side: const BorderSide(color: Color(0x38E2A1A1)),
+                            side: BorderSide(
+                              color: context.env.statusDanger.withValues(
+                                alpha: 0.22,
+                              ),
+                            ),
                           ),
                         ),
                         child: Text(

@@ -4,6 +4,8 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/widgets/mobile_segment_pager.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
@@ -54,12 +56,9 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
   }
 
   void _selectSegment(LibrarySegment segment) {
+    // 落页动画由分页器给出（外部改选 → animateToPage 280ms easeOutCubic），
+    // 本页不再自己调一次，否则同一目标被排两次动画。
     setState(() => _segment = segment);
-    _pageController.animateToPage(
-      segment.index,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-    );
   }
 
   /// 回到 Library 分支时节流刷新各媒体仪表盘。
@@ -84,6 +83,12 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     final albums = ref.watch(photoAlbumsProvider);
     final movies = ref.watch(movieDashboardProvider);
     final musicCenter = ref.watch(musicCenterControllerProvider);
+    // 整屏唯一动画：各轨的加载占位是静态块，不再各自画转圈。
+    final anySectionLoading =
+        photos.isLoading ||
+        albums.isLoading ||
+        movies.isLoading ||
+        musicCenter.isLoading;
     final tier = LibrarySpaceTier.resolve(context);
     final padding = tier.horizontalPadding;
 
@@ -110,7 +115,10 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
                   padding,
                   28,
                 ),
-                children: children,
+                children: [
+                  if (anySectionLoading) const MobileLoadingLine(top: true),
+                  ...children,
+                ],
               ),
             ),
           ),
@@ -118,96 +126,114 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
       );
     }
 
+    // 四段内容：顺序必须与 LibrarySegment 声明次序一致，分页器按该次序排页。
+    Widget pageFor(LibrarySegment segment) => switch (segment) {
+      LibrarySegment.all => page([
+        _buildBanner(l10n, albums, photos),
+        const SizedBox(height: 20),
+        _buildPhotosSection(l10n, photos),
+        const SizedBox(height: MobileLayoutTokens.sectionGap),
+        _buildMoviesSection(l10n, movies),
+        const SizedBox(height: MobileLayoutTokens.sectionGap),
+        _buildMusicSection(l10n, musicCenter),
+      ]),
+      LibrarySegment.photos => page([
+        _buildBanner(l10n, albums, photos),
+        const SizedBox(height: 20),
+        _buildPhotosSection(l10n, photos),
+        const SizedBox(height: MobileLayoutTokens.sectionGap),
+        _buildAlbumsRail(l10n, albums),
+      ]),
+      LibrarySegment.movies => page([
+        _buildMoviesSection(l10n, movies),
+        const SizedBox(height: MobileLayoutTokens.sectionGap),
+        _buildRecentlyAddedRail(l10n, movies),
+      ]),
+      LibrarySegment.music => page([
+        _buildNowPlayingCard(l10n, musicCenter),
+        const SizedBox(height: 20),
+        _buildMusicSection(l10n, musicCenter),
+        const SizedBox(height: MobileLayoutTokens.sectionGap),
+        _buildRecentTrackRows(l10n, musicCenter),
+      ]),
+    };
+
     return ModuleEntryRefreshListener(
       modulePath: '/library',
       onRefresh: _refreshOnEntry,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            // 原生 PageView：手指跟手的丝滑横滑，分段点选带动画落页。
-            Positioned.fill(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged:
-                    (index) =>
-                        setState(() => _segment = LibrarySegment.values[index]),
-                children: [
-                  page([
-                    _buildBanner(l10n, albums, photos),
-                    const SizedBox(height: 20),
-                    _buildPhotosSection(l10n, photos),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    _buildMoviesSection(l10n, movies),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    _buildMusicSection(l10n, musicCenter),
-                  ]),
-                  page([
-                    _buildBanner(l10n, albums, photos),
-                    const SizedBox(height: 20),
-                    _buildPhotosSection(l10n, photos),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    _buildAlbumsRail(l10n, albums),
-                  ]),
-                  page([
-                    _buildMoviesSection(l10n, movies),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    _buildRecentlyAddedRail(l10n, movies),
-                  ]),
-                  page([
-                    _buildNowPlayingCard(l10n, musicCenter),
-                    const SizedBox(height: 20),
-                    _buildMusicSection(l10n, musicCenter),
-                    const SizedBox(height: MobileLayoutTokens.sectionGap),
-                    _buildRecentTrackRows(l10n, musicCenter),
-                  ]),
-                ],
+      // 阶梯：分段页不是路由，先回「全部」段；已在全部段才回门户。媒体库是
+      // 分支里的唯一路由，没有 PopScope 时一次侧滑就被引擎当成无路由可退，
+      // 直接结束 Activity（观感是「在媒体库侧滑→回到桌面」）。
+      child: PopScope(
+        canPop: !MobileShellScope.isHosted(context),
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          if (_segment != LibrarySegment.all) {
+            _selectSegment(LibrarySegment.all);
+            return;
+          }
+          context.go('/portal');
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // 原生 PageView：手指跟手的丝滑横滑，分段点选带动画落页。
+              // 控制器由本页持有——分段滑块要读连续页码，见下方 ListenableBuilder。
+              Positioned.fill(
+                child: MobileSegmentPager<LibrarySegment>(
+                  sections: LibrarySegment.values,
+                  current: _segment,
+                  controller: _pageController,
+                  onChanged: (segment) => setState(() => _segment = segment),
+                  pageBuilder: (context, segment) => pageFor(segment),
+                ),
               ),
-            ),
-            // 分段条吸顶浮在内容之上：原型 .segmented 为 position: sticky +
-            // blur(22)，列表滚动时从条下方穿过而不是被推走。吸顶层与内容盒
-            // 共用同一限宽，平板宽窗下不会出现条比内容更宽的两套边界。
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: Align(
-                // 样例 `.segmented` 是 width:max-content 靠左，不居中。
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      padding,
-                      _librarySegmentTopInset,
-                      padding,
-                      0,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                        child: ListenableBuilder(
-                          // 滑块跟手：PageView 每帧通知，页码是连续值，段标签
-                          // 仍在 onPageChanged 落定时才换，避免中途双高亮。
-                          listenable: _pageController,
-                          builder:
-                              (context, _) => LibrarySegmentBar(
-                                segment: _segment,
-                                page:
-                                    _pageController.hasClients
-                                        ? _pageController.page
-                                        : null,
-                                onChanged: _selectSegment,
-                              ),
+              // 分段条吸顶浮在内容之上：原型 .segmented 为 position: sticky +
+              // blur(22)，列表滚动时从条下方穿过而不是被推走。吸顶层与内容盒
+              // 共用同一限宽，平板宽窗下不会出现条比内容更宽的两套边界。
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: Align(
+                  // 样例 `.segmented` 是 width:max-content 靠左，不居中。
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: tier.contentMaxWidth),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        padding,
+                        _librarySegmentTopInset,
+                        padding,
+                        0,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                          child: ListenableBuilder(
+                            // 滑块跟手：PageView 每帧通知，页码是连续值，段标签
+                            // 仍在 onPageChanged 落定时才换，避免中途双高亮。
+                            listenable: _pageController,
+                            builder:
+                                (context, _) => LibrarySegmentBar(
+                                  segment: _segment,
+                                  page:
+                                      _pageController.hasClients
+                                          ? _pageController.page
+                                          : null,
+                                  onChanged: _selectSegment,
+                                ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

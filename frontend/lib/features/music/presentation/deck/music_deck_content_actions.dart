@@ -109,23 +109,27 @@ class _MusicBatchActionBar extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final playlists = center.playlists;
-        return SafeArea(
-          child: Material(
-            color: Theme.of(sheetContext).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                for (final playlist in playlists)
-                  ListTile(
-                    title: Text(playlist.name),
-                    onTap: () {
-                      selected = playlist;
-                      Navigator.of(sheetContext).pop();
-                    },
-                  ),
-              ],
+        return MobileSheetSemantics(
+          child: SafeArea(
+            child: Material(
+              color: Theme.of(sheetContext).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  for (final playlist in playlists)
+                    ListTile(
+                      title: Text(playlist.name),
+                      onTap: () {
+                        selected = playlist;
+                        Navigator.of(sheetContext).pop();
+                      },
+                    ),
+                ],
+              ),
             ),
           ),
         );

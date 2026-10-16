@@ -275,12 +275,14 @@ class _WeatherLoading extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        const Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+        // 天气卡等数时不画第二个转圈：整屏唯一动画在壳层顶部。
+        Container(
+          height: 10,
+          width: 120,
+          alignment: Alignment.centerLeft,
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.06),
         ),
       ],
     );

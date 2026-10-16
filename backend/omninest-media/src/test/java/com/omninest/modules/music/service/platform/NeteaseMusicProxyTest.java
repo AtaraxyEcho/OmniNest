@@ -2,8 +2,10 @@ package com.omninest.modules.music.service.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,6 +15,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlatformUserInfo;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.music.service.MusicPlatformCredentialService;
 import com.omninest.modules.music.service.MusicRuntimeConfigService;
 import com.sun.net.httpserver.HttpExchange;
@@ -20,7 +23,10 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -39,7 +45,8 @@ import org.junit.jupiter.api.Test;
 class NeteaseMusicProxyTest {
     private final NeteaseMusicProxy proxy = new NeteaseMusicProxy(
             mock(MusicRuntimeConfigService.class),
-            mock(MusicPlatformCredentialService.class)
+            mock(MusicPlatformCredentialService.class),
+            mock(SafeUrlValidator.class)
     );
 
     @Test
@@ -159,7 +166,7 @@ class NeteaseMusicProxyTest {
             when(credentialService.find(ownerUserId, MusicPlatform.NETEASE)).thenReturn(
                     Optional.of(credential("expired-user"))
             );
-            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService);
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService, mock(SafeUrlValidator.class));
 
             assertThatThrownBy(() -> localProxy.dailyRecommendedTracks(ownerUserId))
                     .isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -192,7 +199,7 @@ class NeteaseMusicProxyTest {
             when(credentialService.find(ownerUserId, MusicPlatform.NETEASE)).thenReturn(
                     Optional.of(credential("active-user"))
             );
-            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService);
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService, mock(SafeUrlValidator.class));
 
             assertThatThrownBy(() -> localProxy.dailyRecommendedTracks(ownerUserId))
                     .isInstanceOfSatisfying(BusinessException.class, exception ->
@@ -279,7 +286,8 @@ class NeteaseMusicProxyTest {
         try {
             NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
                     lyricConfigService(server),
-                    mock(MusicPlatformCredentialService.class)
+                    mock(MusicPlatformCredentialService.class),
+                    mock(SafeUrlValidator.class)
             );
 
             var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
@@ -301,7 +309,8 @@ class NeteaseMusicProxyTest {
         try {
             NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
                     lyricConfigService(server),
-                    mock(MusicPlatformCredentialService.class)
+                    mock(MusicPlatformCredentialService.class),
+                    mock(SafeUrlValidator.class)
             );
 
             var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
@@ -322,7 +331,8 @@ class NeteaseMusicProxyTest {
         try {
             NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
                     lyricConfigService(server),
-                    mock(MusicPlatformCredentialService.class)
+                    mock(MusicPlatformCredentialService.class),
+                    mock(SafeUrlValidator.class)
             );
 
             var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
@@ -344,7 +354,8 @@ class NeteaseMusicProxyTest {
         try {
             NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
                     lyricConfigService(server),
-                    mock(MusicPlatformCredentialService.class)
+                    mock(MusicPlatformCredentialService.class),
+                    mock(SafeUrlValidator.class)
             );
 
             var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
@@ -364,7 +375,8 @@ class NeteaseMusicProxyTest {
         try {
             NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
                     lyricConfigService(server),
-                    mock(MusicPlatformCredentialService.class)
+                    mock(MusicPlatformCredentialService.class),
+                    mock(SafeUrlValidator.class)
             );
 
             var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
@@ -415,7 +427,7 @@ class NeteaseMusicProxyTest {
             when(configService.neteaseBaseUrl()).thenReturn(
                     "http://127.0.0.1:" + server.getAddress().getPort()
             );
-            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService);
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService, mock(SafeUrlValidator.class));
             UUID ownerUserId = UUID.randomUUID();
 
             var status = localProxy.checkQrLogin(ownerUserId, "login-key");
@@ -454,7 +466,7 @@ class NeteaseMusicProxyTest {
             when(configService.neteaseBaseUrl()).thenReturn(
                     "http://127.0.0.1:" + server.getAddress().getPort()
             );
-            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService);
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService, mock(SafeUrlValidator.class));
             UUID ownerUserId = UUID.randomUUID();
 
             var status = localProxy.checkQrLogin(ownerUserId, "login-key");
@@ -470,6 +482,98 @@ class NeteaseMusicProxyTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    /**
+     * 请求带着用户 Cookie：跟随跳转会把 Cookie 交给跳转目标，因此 3xx 只能按失败处理。
+     */
+    @Test
+    void requestDoesNotFollowRedirectsOutOfConfiguredBase() throws IOException {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
+        AtomicReference<String> leakedPath = new AtomicReference<>("");
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        int port = server.getAddress().getPort();
+        server.createContext("/cloudsearch", exchange -> {
+            exchange.getResponseHeaders().set("Location", "http://127.0.0.1:" + port + "/leak");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        server.createContext("/leak", exchange -> {
+            leakedPath.set(exchange.getRequestURI().getPath());
+            writeJson(exchange, "{\"code\":200,\"result\":{\"songs\":[]}}");
+        });
+        server.start();
+        try {
+            when(configService.onlineEnabled()).thenReturn(true);
+            when(configService.neteaseEnabled()).thenReturn(true);
+            when(configService.neteaseBaseUrl()).thenReturn("http://127.0.0.1:" + port);
+            when(credentialService.find(UUID.randomUUID(), MusicPlatform.NETEASE)).thenReturn(Optional.empty());
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService, mock(SafeUrlValidator.class));
+
+            assertThat(localProxy.search(UUID.randomUUID(), "关键词", 5)).isEmpty();
+            assertThat(leakedPath.get()).isEmpty();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void requestUriRejectsMetadataServiceBaseUrl() throws Exception {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        when(configService.neteaseBaseUrl()).thenReturn("http://169.254.169.254");
+        NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                configService,
+                mock(MusicPlatformCredentialService.class),
+                mock(SafeUrlValidator.class)
+        );
+        Method method = NeteaseMusicProxy.class.getDeclaredMethod("requestUri", String.class);
+        method.setAccessible(true);
+
+        assertThatThrownBy(() -> method.invoke(localProxy, "/cloudsearch?keywords=a"))
+                .isInstanceOf(InvocationTargetException.class)
+                .cause()
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("元数据服务");
+    }
+
+    @Test
+    void requestUriRejectsOriginResolvingToRestrictedSegment() throws Exception {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        SafeUrlValidator safeUrlValidator = mock(SafeUrlValidator.class);
+        when(configService.neteaseBaseUrl()).thenReturn("http://netease-proxy.internal:3001");
+        doThrow(new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址"))
+                .when(safeUrlValidator)
+                .requireSelfHostedSafeHost(any());
+        NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                configService,
+                mock(MusicPlatformCredentialService.class),
+                safeUrlValidator
+        );
+        Method method = NeteaseMusicProxy.class.getDeclaredMethod("requestUri", String.class);
+        method.setAccessible(true);
+
+        assertThatThrownBy(() -> method.invoke(localProxy, "/cloudsearch?keywords=a"))
+                .isInstanceOf(InvocationTargetException.class)
+                .cause()
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("内网地址");
+    }
+
+    @Test
+    void requestUriKeepsConfiguredSidecarOrigin() throws Exception {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        when(configService.neteaseBaseUrl()).thenReturn("http://localhost:3001/");
+        NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                configService,
+                mock(MusicPlatformCredentialService.class),
+                mock(SafeUrlValidator.class)
+        );
+        Method method = NeteaseMusicProxy.class.getDeclaredMethod("requestUri", String.class);
+        method.setAccessible(true);
+
+        assertThat(((URI) method.invoke(localProxy, "/cloudsearch?keywords=a")).toString())
+                .isEqualTo("http://localhost:3001/cloudsearch?keywords=a");
     }
 
     private static void writeJson(HttpExchange exchange, String response) throws IOException {
@@ -569,7 +673,7 @@ class NeteaseMusicProxyTest {
             when(credentialService.find(ownerUserId, MusicPlatform.NETEASE)).thenReturn(
                     Optional.of(credential("42"))
             );
-            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService);
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(configService, credentialService, mock(SafeUrlValidator.class));
 
             var tracks = localProxy.likedTracks(ownerUserId);
 

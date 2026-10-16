@@ -55,16 +55,8 @@ extension _PhotoPeriodPageHosted on _PhotoPeriodPageState {
       );
     }
     if (state.isInitialLoading) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          children: [
-            MobileSkeletonBlock(height: 32),
-            SizedBox(height: 14),
-            MobileSkeletonBlock(height: 320),
-          ],
-        ),
-      );
+      // 整页首屏只留一处动画指示（此前两块占位各带一个转圈）。
+      return const AppLoading();
     }
     if (state.photos.isEmpty) {
       return ListView(
@@ -131,7 +123,7 @@ extension _PhotoPeriodPageHosted on _PhotoPeriodPageState {
                     state.photos.length,
                     state.totalElements,
                   ),
-                  minHeight: 30,
+                  minHeight: 35,
                   radius: 10,
                   iconSize: 15,
                   onTap:

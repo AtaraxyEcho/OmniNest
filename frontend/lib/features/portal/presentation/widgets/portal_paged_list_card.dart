@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 
 /// Portal 分页列表卡：卡片头点击进入模块，卡体为有界内滚动列表——
@@ -110,11 +111,20 @@ class _PortalPagedListCardState<T>
             ),
           ),
           state.when(
+            // 卡内首屏不画转圈：整屏唯一动画由壳层顶部的 MobileLoadingLine
+            // 承担（其判定已含本页两张分页卡），这里只保持版面稳定。
             loading:
                 () => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MobileSkeletonBlock(height: 44),
+                      SizedBox(height: 8),
+                      MobileSkeletonBlock(height: 44),
+                      SizedBox(height: 8),
+                      MobileSkeletonBlock(height: 44),
+                    ],
                   ),
                 ),
             error:

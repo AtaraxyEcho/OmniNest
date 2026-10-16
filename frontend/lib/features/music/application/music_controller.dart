@@ -111,6 +111,15 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     state = AsyncData(value);
   }
 
+  /// 取数或远端动作完成后的回写基准。
+  ///
+  /// 完成回调不得把 `await` 之前抓的 `MusicCenterState` 快照整份发布：那段窗口里发生的
+  /// 写入（播放队列、分页窗口、选中详情、加载标记）会被旧快照无声覆盖。发布基准取发布
+  /// 时刻的实况，仅在实况尚未就绪（首帧取数、错误态）时退回快照。
+  /// 调用方保留各自的快照判空提前返回，本助手不构造默认状态。
+  MusicCenterState _liveOr(MusicCenterState captured) =>
+      _currentState ?? captured;
+
   /// 平台登录/断开后的后台刷新：账号资料 + 曲库全量失效。
   ///
   /// 由 application 层持有完整流程，不随登录面板关闭而丢失——此前

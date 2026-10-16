@@ -52,7 +52,7 @@ Future<ProviderContainer> _pump(
                     body: MovieShell(
                       section: MovieSection.movies,
                       childOwnsScroll: true,
-                      child: const SizedBox(height: 240),
+                      childFor: (section) => const SizedBox(height: 240),
                     ),
                   ),
                 ),

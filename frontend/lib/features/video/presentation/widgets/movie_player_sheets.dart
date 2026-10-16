@@ -11,6 +11,7 @@ import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/video/domain/movie_models.dart'
     hide SubtitleTrack;
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 显示字幕选择面板。
 void showSubtitleSheet({
@@ -399,7 +400,8 @@ Future<void> _showPlayerPanel({
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: builder,
+      builder:
+          (panelContext) => MobileSheetSemantics(child: builder(panelContext)),
     );
     return;
   }

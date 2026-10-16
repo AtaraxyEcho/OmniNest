@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -66,84 +69,108 @@ class _NotificationMobileViewState
     }
   }
 
+  /// 进入通知分支时重拉当前筛选页与未读数。
+  ///
+  /// 用 `refreshForRealtime` 而不是 `load(page: 0)`：前者保留用户已翻页的
+  /// 阅读位置，只把已有页重取，后者会把人弹回第一页。
+  Future<void> _refreshOnEntry() async {
+    await ref
+        .read(notificationControllerProvider.notifier)
+        .refreshForRealtime(size: _pageSize);
+    await ref.read(unreadCountProvider.notifier).refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(notificationControllerProvider);
     final unreadCount = ref.watch(unreadCountProvider);
     final canManage = ref.watch(userCapabilitiesProvider).canManageOwnActivity;
-    return MobilePageSurface(
-      exposeBackdrop: true,
-      backdropOpacity: 0.92,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          bottom: false,
-          // 平板宽度内容列按壳层 chrome 同宽封顶居中（与音乐甲板同语言）。
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 650),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  MobileModuleHeader(
-                    title: l10n.notificationCenterTitle,
-                    subtitle:
-                        unreadCount > 0
-                            ? l10n.notificationUnreadCount(unreadCount)
-                            : l10n.notificationSubtitleAllRead,
-                    onBack: () => context.pop(),
-                    actions: [
-                      MobileGlassIconButton(
-                        tooltip: l10n.profileNotificationSettings,
-                        icon: Icons.settings_outlined,
-                        onPressed: () => context.go('/profile/notifications'),
-                      ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: MobileSegmentedControl<NotificationFilter>(
-                      values: const [
-                        NotificationFilter.all,
-                        NotificationFilter.unread,
+    // 重进通知分支时节流刷新列表与未读数：此前该面既无下拉刷新也无
+    // 进入刷新，通知只靠实时推送更新，从其他端产生的新通知要等下次全量拉取。
+    return ModuleEntryRefreshListener(
+      modulePath: '/notifications',
+      onRefresh: () => unawaited(_refreshOnEntry()),
+      child: MobilePageSurface(
+        exposeBackdrop: true,
+        backdropOpacity: 0.92,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
+            bottom: false,
+            // 平板宽度内容列按壳层 chrome 同宽封顶居中（与音乐甲板同语言）。
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 650),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MobileModuleHeader(
+                      title: l10n.notificationCenterTitle,
+                      subtitle:
+                          unreadCount > 0
+                              ? l10n.notificationUnreadCount(unreadCount)
+                              : l10n.notificationSubtitleAllRead,
+                      onBack: () => context.pop(),
+                      actions: [
+                        MobileGlassIconButton(
+                          tooltip: l10n.profileNotificationSettings,
+                          icon: Icons.settings_outlined,
+                          // push 而非 go：`/profile/notifications` 只是重定向入口，
+                          // 用 go 会换掉整条栈，之后侧滑没有可弹层直接结束 Activity。
+                          onPressed:
+                              () => unawaited(
+                                context.push('/profile/notifications'),
+                              ),
+                        ),
                       ],
-                      selected: state.filter,
-                      labelBuilder:
-                          (filter) => switch (filter) {
-                            NotificationFilter.all =>
-                              AppLocalizations.of(
-                                context,
-                              ).notificationFilterAllLabel,
-                            NotificationFilter.unread =>
-                              AppLocalizations.of(
-                                context,
-                              ).notificationFilterUnreadLabel,
-                          },
-                      onSelected: (filter) {
-                        ref
-                            .read(notificationControllerProvider.notifier)
-                            .setFilter(filter, size: _pageSize);
-                      },
                     ),
-                  ),
-                  if (canManage && unreadCount > 0)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
-                      child: _NotificationSummaryRow(
-                        unreadLabel: l10n.notificationUnreadCount(unreadCount),
-                        onMarkAllRead:
-                            () =>
-                                ref
-                                    .read(
-                                      notificationControllerProvider.notifier,
-                                    )
-                                    .markAllRead(),
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                      child: MobileSegmentedControl<NotificationFilter>(
+                        values: const [
+                          NotificationFilter.all,
+                          NotificationFilter.unread,
+                        ],
+                        selected: state.filter,
+                        labelBuilder:
+                            (filter) => switch (filter) {
+                              NotificationFilter.all =>
+                                AppLocalizations.of(
+                                  context,
+                                ).notificationFilterAllLabel,
+                              NotificationFilter.unread =>
+                                AppLocalizations.of(
+                                  context,
+                                ).notificationFilterUnreadLabel,
+                            },
+                        onSelected: (filter) {
+                          ref
+                              .read(notificationControllerProvider.notifier)
+                              .setFilter(filter, size: _pageSize);
+                        },
                       ),
                     ),
-                  Expanded(child: _buildBody(context, state, canManage)),
-                ],
+                    if (canManage && unreadCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                        child: _NotificationSummaryRow(
+                          unreadLabel: l10n.notificationUnreadCount(
+                            unreadCount,
+                          ),
+                          onMarkAllRead:
+                              () =>
+                                  ref
+                                      .read(
+                                        notificationControllerProvider.notifier,
+                                      )
+                                      .markAllRead(),
+                        ),
+                      ),
+                    Expanded(child: _buildBody(context, state, canManage)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -483,7 +510,7 @@ class _NotificationMobileRow extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: Color(0x1FE2A1A1),
+          color: env.statusDanger.withValues(alpha: 0.12),
           border: Border(
             top: BorderSide(color: env.line09),
             bottom: BorderSide(color: env.line07),
@@ -492,18 +519,18 @@ class _NotificationMobileRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.delete_outline_rounded,
               size: 19,
-              color: Color(0xFFE2A1A1),
+              color: env.statusDanger,
             ),
             const SizedBox(width: 7),
             Text(
               AppLocalizations.of(context).notificationDelete,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11, // ignore: font_size_whitelist
                 fontWeight: FontWeight.w700,
-                color: Color(0xFFE2A1A1),
+                color: env.statusDanger,
               ),
             ),
           ],
@@ -552,12 +579,14 @@ class _NotificationActionLink extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           beforeNavigate?.call();
-          // push 而不是 go：go 会换掉整条栈，从通知跳进目标页后系统返回
-          // 直接退出应用（与系统通知点击的 push 行为保持一致）。
-          context.push(action.route);
+          // 方式判定收在 helper 里：三个通知类型的目标是 /files（壳层分支路由），
+          // 从壳外的通知页 push 分支路由会让 go_router 再压入第二个壳层页面并触发
+          // Navigator 的重复 page key 断言；根级目标（/video、/profile）继续 push，
+          // 系统返回才落得回通知中心。
+          navigateNotificationAction(context, action.route);
         },
         child: Container(
-          constraints: const BoxConstraints(minHeight: 26),
+          constraints: const BoxConstraints(minHeight: 35),
           alignment: Alignment.centerLeft,
           child: Row(
             mainAxisSize: MainAxisSize.min,

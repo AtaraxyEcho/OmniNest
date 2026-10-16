@@ -2,21 +2,33 @@ package com.omninest.modules.music.service;
 
 import org.junit.jupiter.api.Disabled;
 import com.sun.net.httpserver.HttpServer;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.music.dto.MusicDtos.MusicScrapeCandidateDto;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.music.domain.MusicTrack;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class MusicBrainzMetadataProviderTest {
     private final MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+    private final SafeUrlValidator safeUrlValidator = mock(SafeUrlValidator.class);
     private HttpServer server;
 
     @AfterEach
@@ -24,6 +36,46 @@ class MusicBrainzMetadataProviderTest {
         if (server != null) {
             server.stop(0);
         }
+    }
+
+    @Test
+    void sharedClientNeverFollowsRedirects() throws Exception {
+        Field field = MusicBrainzMetadataProvider.class.getDeclaredField("httpClient");
+        field.setAccessible(true);
+        HttpClient client = (HttpClient) field.get(new MusicBrainzMetadataProvider(configService, safeUrlValidator));
+
+        assertThat(client.followRedirects()).isEqualTo(HttpClient.Redirect.NEVER);
+    }
+
+    @Test
+    void requestUriRejectsMetadataServiceBaseUrl() throws Exception {
+        when(configService.musicBrainzBaseUrl()).thenReturn("http://169.254.169.254/ws/2");
+        Method method = MusicBrainzMetadataProvider.class.getDeclaredMethod("uri", String.class, Map.class);
+        method.setAccessible(true);
+
+        assertThatThrownBy(() -> method.invoke(
+                new MusicBrainzMetadataProvider(configService, safeUrlValidator), "/release", Map.of()))
+                .isInstanceOf(InvocationTargetException.class)
+                .cause()
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("元数据服务");
+    }
+
+    @Test
+    void requestUriRejectsOriginResolvingToRestrictedSegment() throws Exception {
+        when(configService.musicBrainzBaseUrl()).thenReturn("https://musicbrainz.example/ws/2");
+        doThrow(new BusinessException(ErrorCode.BAD_REQUEST, "URL 不能指向本地或内网地址"))
+                .when(safeUrlValidator)
+                .requireSelfHostedSafeHost(any());
+        MusicBrainzMetadataProvider provider = new MusicBrainzMetadataProvider(configService, safeUrlValidator);
+        Method method = MusicBrainzMetadataProvider.class.getDeclaredMethod("uri", String.class, Map.class);
+        method.setAccessible(true);
+
+        assertThatThrownBy(() -> method.invoke(provider, "/release", Map.of()))
+                .isInstanceOf(InvocationTargetException.class)
+                .cause()
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("内网地址");
     }
 
     @Test
@@ -57,7 +109,7 @@ class MusicBrainzMetadataProviderTest {
         when(configService.musicBrainzRequestDelayMs()).thenReturn(0L);
         when(configService.musicBrainzCoverBaseUrl()).thenReturn("https://coverartarchive.org/release");
 
-        MusicBrainzMetadataProvider provider = new MusicBrainzMetadataProvider(configService);
+        MusicBrainzMetadataProvider provider = new MusicBrainzMetadataProvider(configService, safeUrlValidator);
         MusicTrack track = new MusicTrack();
         track.setId(UUID.fromString("10000000-0000-0000-0000-000000000001"));
         track.setTitle("Night Drive");
@@ -98,7 +150,7 @@ class MusicBrainzMetadataProviderTest {
         when(configService.musicBrainzUserAgent()).thenReturn("OmniNestTest/1.0 (test@example.com)");
         when(configService.musicBrainzRequestDelayMs()).thenReturn(1100L);
 
-        MusicBrainzMetadataProvider provider = new MusicBrainzMetadataProvider(configService);
+        MusicBrainzMetadataProvider provider = new MusicBrainzMetadataProvider(configService, safeUrlValidator);
 
         // 场景1：无标签文件（当前行为：title=文件名, artist=Unknown）
         MusicTrack trackNoTags = new MusicTrack();

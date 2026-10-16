@@ -576,6 +576,12 @@ class _UserManagementPanel extends ConsumerWidget {
         icon: user.isActive ? Icons.block_outlined : Icons.check_circle_outline,
         onTap: () => _confirmToggleStatus(context, ref, user),
       ),
+      if (user.twoFactorEnabled)
+        AdminRowIconAction(
+          tooltip: l10n.adminResetTwoFactor,
+          icon: Icons.lock_reset_outlined,
+          onTap: () => _confirmResetTwoFactor(context, ref, user),
+        ),
       AdminRowIconAction(
         tooltip: l10n.adminDeleteUser,
         icon: Icons.delete_outline,
@@ -583,6 +589,37 @@ class _UserManagementPanel extends ConsumerWidget {
         onTap: () => _confirmDeleteUser(context, ref, user),
       ),
     ];
+  }
+
+  Future<void> _confirmResetTwoFactor(
+    BuildContext context,
+    WidgetRef ref,
+    AdminUser user,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showWorkstationConfirmDialog(
+      context,
+      title: l10n.adminResetTwoFactor,
+      message: l10n.adminResetTwoFactorConfirmMessage(user.title),
+      confirmLabel: l10n.adminResetTwoFactor,
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(adminUserControllerProvider.notifier)
+          .resetTwoFactor(user.id);
+    } catch (error) {
+      if (context.mounted) {
+        showOmniFeedback(
+          context,
+          describeUserFacingError(error, l10n: l10n).message,
+          severity: OmniFeedbackSeverity.error,
+        );
+      }
+    }
   }
 
   Future<void> _confirmToggleStatus(

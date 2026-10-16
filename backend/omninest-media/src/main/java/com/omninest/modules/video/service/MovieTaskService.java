@@ -254,7 +254,8 @@ public class MovieTaskService {
             return List.of(root);
         }
         String prefix = root.normalizedPath() == null ? "" : root.normalizedPath();
-        return fileMetadataQueryService.listOwnedActiveByPathPrefix(ownerUserId, prefix);
+        return fileMetadataQueryService.listOwnedActiveByPathPrefix(
+                ownerUserId, root.spaceType(), prefix);
     }
 
     private String normalizeTaskType(String taskType) {

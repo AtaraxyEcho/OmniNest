@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -34,6 +33,8 @@ import 'package:omninest/features/video/presentation/widgets/subtitle_file_decod
 import 'package:omninest/features/video/presentation/widgets/subtitle_parser.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/utils/text_file_decoder.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 part 'movie_player_page_interactions.dart';
 part 'movie_player_page_tracks.dart';
@@ -319,7 +320,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                   onRetry: _invalidatePlaybackPlan,
                 );
               },
-              loading: () => const AppLoading.simple(),
+              loading: () => const AppLoading(),
             ),
           ),
           if (plan is AsyncLoading<PlaybackPlan> ||
@@ -702,8 +703,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
   Future<void> _importSubtitle() async {
     final l10n = AppLocalizations.of(context);
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
+      final result = await FilePick.pickFiles(
         allowedExtensions: const ['srt', 'ass', 'ssa', 'vtt'],
       );
       if (result.isEmpty || !mounted) {
@@ -722,7 +722,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
         );
         return;
       }
-      final bytes = await file.readAsBytes();
+      final bytes = await file.readBytes();
       if (!mounted) {
         return;
       }
@@ -734,7 +734,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
         );
         return;
       }
-      final content = decodeSubtitleFile(bytes);
+      final content = decodeTextFileBytes(bytes);
       final cues = parseSubtitleContent(content);
       if (cues.isEmpty) {
         showMovieFeedback(context, l10n.videoSubtitleNoCues, isError: true);

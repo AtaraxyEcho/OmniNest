@@ -35,9 +35,11 @@ class _HostedSeriesBodyState extends ConsumerState<_HostedSeriesBody> {
           parent: BouncingScrollPhysics(),
         ),
         slivers: [
-          // 样例 `.chip-row` 外边距 2px 0 14px。
+          // 样例 `.chip-row` 外边距 2px 0 14px，同样坐在 main 的 20px 页边距里。
+          // 样例只给 Films/Series 两档画了这行，动漫档是稿子的空洞：
+          // 排序与状态筛选在动漫档同样可用，保留而不按空洞删。
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(0, 2, 0, 14),
+            padding: const EdgeInsets.fromLTRB(20, 2, 20, 14),
             sliver: SliverToBoxAdapter(
               child: MovieRedesignMobileChips(
                 sortBy: centerState.sortBy,

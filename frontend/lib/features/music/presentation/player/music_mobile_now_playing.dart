@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -129,7 +130,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                               MaterialLocalizations.of(
                                 context,
                               ).backButtonTooltip,
-                          icon: Icons.keyboard_arrow_down_rounded,
+                          vector: OmniIcons.chevronLeft,
                           onPressed: widget.onClose,
                         ),
                         Expanded(
@@ -166,7 +167,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                         ),
                         _MobileHeaderButton(
                           tooltip: l10n.musicNowPlayingMoreActions,
-                          icon: Icons.more_horiz_rounded,
+                          vector: OmniIcons.more,
                           onPressed:
                               () => _openActionsSheet(
                                 visual: visual,
@@ -292,54 +293,59 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
       backgroundColor: Colors.transparent,
       barrierColor: context.env.modalScrim,
       builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-                child: Material(
-                  color: MusicChromeColors.panelBackground,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 10),
-                      Center(
-                        child: Container(
-                          width: 36,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: context.env.line25,
-                            borderRadius: BorderRadius.circular(3),
+        return MobileSheetSemantics(
+          child: SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  child: Material(
+                    color: MusicChromeColors.panelBackground,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: context.env.line25,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
                           ),
                         ),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.tune_rounded, size: 20),
-                        title: Text(l10n.musicVisualizerLyricStyle),
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          _openLyricStyle(
-                            visual: visual,
-                            lyricScrollMode: lyricScrollMode,
-                          );
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.equalizer_rounded, size: 20),
-                        title: Text(l10n.musicPlaybackSettings),
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          showMusicPlaybackSettingsDialog(context, ref);
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                    ],
+                        ListTile(
+                          leading: const Icon(Icons.tune_rounded, size: 20),
+                          title: Text(l10n.musicVisualizerLyricStyle),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _openLyricStyle(
+                              visual: visual,
+                              lyricScrollMode: lyricScrollMode,
+                            );
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(
+                            Icons.equalizer_rounded,
+                            size: 20,
+                          ),
+                          title: Text(l10n.musicPlaybackSettings),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            showMusicPlaybackSettingsDialog(context, ref);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -361,34 +367,36 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
-          (sheetContext) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-            ),
-            child: FractionallySizedBox(
-              heightFactor: 0.78,
-              child: MusicVisualEditorPanel(
-                key: const ValueKey('music-mobile-lyric-style'),
-                palette: MusicImmersivePalette.digital,
-                source: visual,
-                sections: const <MusicVisualEditorSection>{
-                  MusicVisualEditorSection.mobileLyrics,
-                },
-                lyricScrollMode: lyricScrollMode,
-                onLyricScrollModeChanged:
-                    (enabled) => ref
-                        .read(musicLyricScrollModeProvider.notifier)
-                        .setScrollMode(enabled),
-                onChanged: (next) => setState(() => _previewVisual = next),
-                onSave: (next) async {
-                  await ref
-                      .read(musicVisualizerPreferencesProvider.notifier)
-                      .saveVisual(next);
-                  if (sheetContext.mounted) {
-                    Navigator.of(sheetContext).pop(true);
-                  }
-                },
-                onClose: () => Navigator.of(sheetContext).pop(false),
+          (sheetContext) => MobileSheetSemantics(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
+              child: FractionallySizedBox(
+                heightFactor: 0.78,
+                child: MusicVisualEditorPanel(
+                  key: const ValueKey('music-mobile-lyric-style'),
+                  palette: MusicImmersivePalette.digital,
+                  source: visual,
+                  sections: const <MusicVisualEditorSection>{
+                    MusicVisualEditorSection.mobileLyrics,
+                  },
+                  lyricScrollMode: lyricScrollMode,
+                  onLyricScrollModeChanged:
+                      (enabled) => ref
+                          .read(musicLyricScrollModeProvider.notifier)
+                          .setScrollMode(enabled),
+                  onChanged: (next) => setState(() => _previewVisual = next),
+                  onSave: (next) async {
+                    await ref
+                        .read(musicVisualizerPreferencesProvider.notifier)
+                        .saveVisual(next);
+                    if (sheetContext.mounted) {
+                      Navigator.of(sheetContext).pop(true);
+                    }
+                  },
+                  onClose: () => Navigator.of(sheetContext).pop(false),
+                ),
               ),
             ),
           ),

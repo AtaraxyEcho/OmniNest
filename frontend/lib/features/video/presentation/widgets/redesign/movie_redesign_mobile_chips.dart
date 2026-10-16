@@ -4,6 +4,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 托管 Films/Series 段的排序 chip 行（样例 `.chip-row` 胶囊）：
 /// 最新 / 评分 / 年份 + 收藏过滤 + 尾部状态筛选溢出入口
@@ -85,8 +86,10 @@ class MovieRedesignMobileChips extends StatelessWidget {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    // 样例 `.chip`：r11、9px 字、白 5% 底 + 白 9% 描边、inkMuted 前景；
+    // 样例 `.chip`：r11、白 5% 底 + 白 9% 描边、inkMuted 前景；
     // 选中态换成酸绿 10% 底 + 38% 描边 + ink 前景。
+    // 字号取短标签档 10 而不是样例的 9px：样例 9px 是大写拉丁短词，
+    // 中文两字词压到 9px 即回到 S1 那一类不可读。
     // 行高取 38 与同排的筛选钮对齐：样例 32 的命中区落在次级控件
     // 35-45 档之下，扩命中必然撑行，故按行高档落地。
     final accent = env.accentInk;
@@ -110,7 +113,7 @@ class MovieRedesignMobileChips extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 9, // ignore: font_size_whitelist
+              fontSize: AppTypography.labelMicro,
               height: 1.2,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: selected ? env.ink : env.inkMuted,
@@ -165,15 +168,17 @@ class _StatusFilterEntry extends StatelessWidget {
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.45),
       builder:
-          (sheetContext) => ambience.wrap(
-            _StatusFilterSheet(
-              filter: filter,
-              options: options,
-              title: l10n.videoMobileStatusFilter,
-              onSelected: (value) {
-                Navigator.of(sheetContext).pop();
-                onFilter(value);
-              },
+          (sheetContext) => MobileSheetSemantics(
+            child: ambience.wrap(
+              _StatusFilterSheet(
+                filter: filter,
+                options: options,
+                title: l10n.videoMobileStatusFilter,
+                onSelected: (value) {
+                  Navigator.of(sheetContext).pop();
+                  onFilter(value);
+                },
+              ),
             ),
           ),
     );

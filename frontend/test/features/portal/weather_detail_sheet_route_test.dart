@@ -111,6 +111,21 @@ Finder _omniIcon(OmniIconsData icon) {
   );
 }
 
+/// 逐时轨底必须是不透明面板底：从横向滚动条往上找到带发丝边框那一层 Container。
+bool _hourlyRailSurfaceIsOpaque(WidgetTester tester) {
+  for (final element
+      in find
+          .ancestor(of: _horizontalScroller(), matching: find.byType(Container))
+          .evaluate()) {
+    final decoration = (element.widget as Container).decoration;
+    if (decoration is BoxDecoration && decoration.border != null) {
+      final color = decoration.color;
+      return color != null && color.a == 1.0;
+    }
+  }
+  return false;
+}
+
 Finder _horizontalScroller() {
   return find.byWidgetPredicate(
     (widget) =>
@@ -142,17 +157,18 @@ void main() {
     expect(find.text('HANGZHOU · LOCAL WEATHER'), findsNothing);
   });
 
-  testWidgets('天气面板逐值对齐样例：头部内缩 19、48 圆钮、整幅逐时轨、三行预报', (tester) async {
+  testWidgets('天气面板逐值对齐样例：头部内缩 19、无重复关闭钮、整幅逐时轨、三行预报', (tester) async {
     await _pumpSheet(tester, _sampleWeather(hourlyCount: 5, dailyCount: 5));
 
-    // 样例 .weather-sheet>header：padding 24px 19px 8px，右沿距面板 19。
-    final closeFinder = find.byTooltip('Close');
-    expect(closeFinder, findsOneWidget);
-    expect(tester.getSize(closeFinder), const Size(48, 48));
+    // 样例 .weather-sheet>header：padding 24px 19px 8px，左沿距面板 19。
+    // 眉标是头部第一行文字，它的左沿就是那 19 内缩。
     expect(
-      tester.getRect(closeFinder).right,
-      moreOrLessEquals(371, epsilon: 0.6),
+      tester.getTopLeft(find.text('HANGZHOU · LOCAL WEATHER')).dx,
+      moreOrLessEquals(19, epsilon: 0.6),
     );
+    // 头部不再放关闭钮：点遮罩、系统返回/侧滑、下拉甩动已覆盖退出，
+    // 第四颗属重复控制（2026-10-15 定）。
+    expect(find.byTooltip('Close'), findsNothing);
 
     // 样例 .hourly-weather：margin 0 -20px 抵消主区 20 内边距，
     // 轨道内沿只留面板自身的 20，发丝线整幅通铺。
@@ -161,6 +177,10 @@ void main() {
     final railRect = tester.getRect(railFinder);
     expect(railRect.left, moreOrLessEquals(20, epsilon: 0.6));
     expect(railRect.width, moreOrLessEquals(350, epsilon: 0.6));
+
+    // 逐时轨必须坐在不透明的面板底上：壁纸带是钉在面板顶部的定高 Positioned，
+    // 行随内容滚动，任何时刻滑进带内都不能透出图片。
+    expect(_hourlyRailSurfaceIsOpaque(tester), isTrue);
 
     // 样例 days 固定 3 条：第四、五天不得出现在树里。
     // 夹具日期从 2026-10-05（周一）起，首行按样例换成 Tomorrow，

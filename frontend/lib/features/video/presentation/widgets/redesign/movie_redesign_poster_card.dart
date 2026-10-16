@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/appearance/application/composed_scaler.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -175,7 +176,7 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                   fit: StackFit.expand,
                   children: [
                     AnimatedScale(
-                      duration: const Duration(milliseconds: 500),
+                      duration: MotionToken.normal,
                       curve: Curves.easeOut,
                       scale: _hovered ? 1.05 : 1.0,
                       child: _PosterImage(

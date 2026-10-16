@@ -12,7 +12,7 @@ const List<MovieSection> _movieMobileBottomSections = [
 class _MovieMobileShell extends ConsumerStatefulWidget {
   const _MovieMobileShell({
     required this.section,
-    required this.child,
+    required this.childFor,
     required this.canManage,
     required this.childOwnsScroll,
     this.counts = const {},
@@ -22,7 +22,9 @@ class _MovieMobileShell extends ConsumerStatefulWidget {
   });
 
   final MovieSection section;
-  final Widget child;
+
+  /// 按分区构建内容：跟手横滑要能提前画出邻位，内容不能只按当前分区算一次。
+  final Widget Function(MovieSection section) childFor;
   final bool canManage;
   final Map<MovieSection, int> counts;
   final bool childOwnsScroll;
@@ -30,8 +32,8 @@ class _MovieMobileShell extends ConsumerStatefulWidget {
   final Future<void> Function()? onRefresh;
   final VoidCallback? onBack;
 
-  /// 托管四段次序（For you/Films/Series/Anime），滑动切换依据。
-  static const List<MovieSection> _hostedSections = [
+  /// 托管四段次序（For you/Films/Series/Anime），横滑切换依据。
+  static const List<MovieSection> hostedSections = [
     MovieSection.continueWatching,
     MovieSection.movies,
     MovieSection.tvShows,
@@ -45,9 +47,9 @@ class _MovieMobileShell extends ConsumerStatefulWidget {
 class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
   /// 当前生效分段（不在四段内的管理分区按首段计）。
   MovieSection get effectiveSection =>
-      _MovieMobileShell._hostedSections.contains(widget.section)
+      _MovieMobileShell.hostedSections.contains(widget.section)
           ? widget.section
-          : _MovieMobileShell._hostedSections.first;
+          : _MovieMobileShell.hostedSections.first;
 
   /// 搜索统一进全局覆盖层并预选影视档：页内不再自建过滤条，
   /// 页内条只能过滤已加载分页，覆盖层走服务端关键词覆盖全库。
@@ -91,7 +93,7 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
     final navIndex = _selectedIndex;
     final isMore = navIndex == _movieMobileBottomSections.length;
 
-    final pageContent =
+    Widget pageContentFor(MovieSection section) =>
         isMore && !hosted
             ? const SizedBox.shrink()
             : widget.childOwnsScroll
@@ -112,15 +114,19 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
                             ? context.env.ink
                             : context.movieRedesign.primary,
                     onRefresh: widget.onRefresh ?? () async {},
-                    child: MovieSectionTransition(
-                      section: widget.section,
-                      slideDistance: 0.024,
-                      // 分区自带 20 样例页边距，托管态不再叠 12 工位内衬。
-                      child: Padding(
-                        padding: EdgeInsets.all(hosted ? 0 : 12),
-                        child: widget.child,
-                      ),
-                    ),
+                    // 托管态的位移由分页器给出，再叠方向感切换就是两次动画；
+                    // 分区自带 20 样例页边距，所以托管态也不叠 12 工位内衬。
+                    child:
+                        hosted
+                            ? widget.childFor(section)
+                            : MovieSectionTransition(
+                              section: section,
+                              slideDistance: 0.024,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: widget.childFor(section),
+                              ),
+                            ),
                   ),
                 ),
               ],
@@ -149,7 +155,7 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
                       titleSpacing: 0,
                       automaticallyImplyLeading: false,
                       title: _MovieMobileTopBar(
-                        section: widget.section,
+                        section: section,
                         canManage: widget.canManage,
                         counts: widget.counts,
                         onRefresh: widget.onRefresh,
@@ -160,9 +166,9 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                     sliver: SliverToBoxAdapter(
                       child: MovieSectionTransition(
-                        section: widget.section,
+                        section: section,
                         slideDistance: 0.024,
-                        child: widget.child,
+                        child: widget.childFor(section),
                       ),
                     ),
                   ),
@@ -209,19 +215,36 @@ class _MovieMobileShellState extends ConsumerState<_MovieMobileShell> {
                     onSectionSelected: widget.onSectionSelected,
                   ),
                 Expanded(
-                  child: MobileSectionSwipe(
-                    onSwipe: (toNext) {
-                      final target = adjacentSection(
-                        _MovieMobileShell._hostedSections,
-                        effectiveSection,
-                        toNext,
-                      );
-                      if (target != null) {
-                        widget.onSectionSelected?.call(target);
-                      }
-                    },
-                    child: pageContent,
-                  ),
+                  child:
+                      hosted &&
+                              _MovieMobileShell.hostedSections.contains(
+                                widget.section,
+                              )
+                          ? MobileSegmentPager<MovieSection>(
+                            sections: _MovieMobileShell.hostedSections,
+                            current: widget.section,
+                            onChanged:
+                                (section) =>
+                                    widget.onSectionSelected?.call(section),
+                            pageBuilder:
+                                (context, section) => pageContentFor(section),
+                          )
+                          // 工位窄窗与管理分区保持原样：前者的顶栏在内容内部，
+                          // 分页会把顶栏画成两份；后者不在四段次序里，没有邻位内容
+                          // 可画（用分页就会显示首段内容），但横滑仍该把它切回四段。
+                          : MobileSectionSwipe(
+                            onSwipe: (toNext) {
+                              final target = adjacentSection(
+                                _MovieMobileShell.hostedSections,
+                                effectiveSection,
+                                toNext,
+                              );
+                              if (target != null) {
+                                widget.onSectionSelected?.call(target);
+                              }
+                            },
+                            child: pageContentFor(widget.section),
+                          ),
                 ),
               ],
             );

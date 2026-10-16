@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/theme/workstation_scope.dart';
 import 'package:omninest/core/utils/color_value.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
@@ -26,8 +29,6 @@ class NotificationSettingsPage extends ConsumerStatefulWidget {
 
 class _NotificationSettingsPageState
     extends ConsumerState<NotificationSettingsPage> {
-  NotificationPreferences? _prefs;
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -52,10 +53,7 @@ class _NotificationSettingsPageState
                     error:
                         (e, _) =>
                             Center(child: Text(l10n.filesLoadFailed('$e'))),
-                    data: (prefs) {
-                      _prefs ??= prefs;
-                      return _buildBody(context, typesAsync);
-                    },
+                    data: (prefs) => _buildBody(context, typesAsync, prefs),
                   ),
                 ),
               ],
@@ -69,9 +67,9 @@ class _NotificationSettingsPageState
   Widget _buildBody(
     BuildContext context,
     AsyncValue<List<NotificationTypeConfig>> typesAsync,
+    NotificationPreferences prefs,
   ) {
     final l10n = AppLocalizations.of(context);
-    final prefs = _prefs!;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
       child: Column(
@@ -83,7 +81,8 @@ class _NotificationSettingsPageState
               title: l10n.profileNotificationMasterSwitch,
               subtitle: l10n.profileNotificationMasterSwitchHint,
               value: prefs.enabled,
-              onChanged: (v) => _updatePrefs(prefs.copyWith(enabled: v)),
+              onChanged:
+                  (v) => unawaited(_updatePrefs(prefs.copyWith(enabled: v))),
             ),
           ),
           const SizedBox(height: 12),
@@ -130,7 +129,11 @@ class _NotificationSettingsPageState
                                     prefs.types,
                                   );
                                   newTypes[type.typeCode] = v;
-                                  _updatePrefs(prefs.copyWith(types: newTypes));
+                                  unawaited(
+                                    _updatePrefs(
+                                      prefs.copyWith(types: newTypes),
+                                    ),
+                                  );
                                 }
                                 : null,
                       ),
@@ -148,7 +151,8 @@ class _NotificationSettingsPageState
                   title: l10n.profileNotificationSound,
                   subtitle: l10n.profileNotificationSoundHint,
                   value: prefs.sound,
-                  onChanged: (v) => _updatePrefs(prefs.copyWith(sound: v)),
+                  onChanged:
+                      (v) => unawaited(_updatePrefs(prefs.copyWith(sound: v))),
                 ),
                 _SettingsDivider(),
                 _SettingsSwitchRow(
@@ -157,7 +161,9 @@ class _NotificationSettingsPageState
                   subtitle: l10n.profileNotificationPreviewHint,
                   value: prefs.showPreview,
                   onChanged:
-                      (v) => _updatePrefs(prefs.copyWith(showPreview: v)),
+                      (v) => unawaited(
+                        _updatePrefs(prefs.copyWith(showPreview: v)),
+                      ),
                 ),
               ],
             ),
@@ -167,9 +173,22 @@ class _NotificationSettingsPageState
     );
   }
 
+  /// 偏好控制器在 save 失败时已把 state 回滚，页面不再自持副本；
+  /// 这里只补失败反馈，并在回写前确认页面仍在挂载。
   Future<void> _updatePrefs(NotificationPreferences newPrefs) async {
-    setState(() => _prefs = newPrefs);
-    await ref.read(notificationPreferencesProvider.notifier).save(newPrefs);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(notificationPreferencesProvider.notifier).save(newPrefs);
+    } on Exception {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        l10n.profileNotificationSaveFailed,
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
   }
 
   Color _parseColor(String? hex, BuildContext context) {

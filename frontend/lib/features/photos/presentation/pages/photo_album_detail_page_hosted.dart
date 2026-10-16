@@ -135,7 +135,7 @@ extension _PhotoAlbumDetailHostedBuild on _AlbumDetailBodyState {
       child: PhotoHostedPillButton(
         icon: Icons.refresh_rounded,
         label: l10n.coreRetry,
-        minHeight: 30,
+        minHeight: 35,
         radius: 10,
         iconSize: 15,
         onTap: () => unawaited(_loadMorePhotos()),
@@ -152,16 +152,8 @@ class _HostedAlbumLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MobilePageSurface(
       backdropOpacity: 0.92,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          children: [
-            MobileSkeletonBlock(height: 90),
-            SizedBox(height: 14),
-            MobileSkeletonBlock(height: 320),
-          ],
-        ),
-      ),
+      // 整页首屏只留一处动画指示（此前两块占位各带一个转圈）。
+      child: AppLoading(),
     );
   }
 }

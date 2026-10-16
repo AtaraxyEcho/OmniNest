@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gbk_codec/gbk_codec.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/data/music_api.dart';
@@ -8,6 +11,8 @@ import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/widgets/music_metadata_edit_dialog.dart';
+
+import '../../support/fake_file_pick.dart';
 
 const MusicTrack _track = MusicTrack(
   id: 'track-1',
@@ -243,6 +248,63 @@ void main() {
     expect(api.trackDetailRequests, isEmpty);
     expect(find.text('已有歌词（可替换）'), findsOneWidget);
     expect(find.textContaining('[00:01.00] Existing line'), findsWidgets);
+  });
+
+  testWidgets('选择 GBK 歌词文件后按字节容错解码进入待保存预览', (tester) async {
+    final guard = installFilePick(
+      files: [
+        FakePickedPlatformFile(
+          name: '夜空中最亮的星.lrc',
+          bytes: Uint8List.fromList(gbk_bytes.encode('[02:02.15]夜空中最亮的星')),
+        ),
+      ],
+    );
+    addTearDown(guard.restore);
+    final api = _StubMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await _pumpEditor(tester, container: container);
+
+    final pickButton = find.text('选择歌词文件（LRC / TXT / SRT / VTT）');
+    await tester.ensureVisible(pickButton);
+    await tester.tap(pickButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('夜空中最亮的星.lrc'), findsOneWidget);
+    expect(find.text('[02:02.15]夜空中最亮的星'), findsOneWidget);
+    expect(find.text('无法读取所选歌词文件'), findsNothing);
+  });
+
+  testWidgets('歌词读取抛异常时内联回报而不是漏给全局 Zone', (tester) async {
+    final guard = installFilePick(error: StateError('盘已断开'));
+    addTearDown(guard.restore);
+    final api = _StubMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await _pumpEditor(tester, container: container);
+
+    final pickButton = find.text('选择歌词文件（LRC / TXT / SRT / VTT）');
+    await tester.ensureVisible(pickButton);
+    await tester.tap(pickButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('无法读取所选歌词文件'), findsOneWidget);
   });
 }
 

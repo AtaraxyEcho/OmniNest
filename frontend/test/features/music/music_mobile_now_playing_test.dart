@@ -15,6 +15,12 @@ import 'package:omninest/features/music/presentation/deck/music_deck_primitives.
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
+
+/// 样例同源矢量的判定：手机控件换成描边图元后，不能再按 Material IconData 找。
+Finder omniIcon(OmniIconsData icon) => find.byWidgetPredicate(
+  (widget) => widget is OmniIcon && widget.icon == icon,
+);
 
 void main() {
   testWidgets('移动端播放详情默认封面页，横滑到整屏歌词（含短横屏适配）', (tester) async {
@@ -42,19 +48,19 @@ void main() {
     expect(find.text('Current lyric'), findsNothing);
 
     // 五控制行：随机与循环各一枚开关钮，不再共用桌面 Dock 的轮换单钮。
-    expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
-    expect(find.byIcon(Icons.skip_previous_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
+    // 字形已换成样例同源矢量（OmniIcons），断言随之改按矢量判定。
+    expect(omniIcon(OmniIcons.shuffle), findsOneWidget);
+    expect(omniIcon(OmniIcons.repeat), findsOneWidget);
+    expect(omniIcon(OmniIcons.previous), findsOneWidget);
+    expect(omniIcon(OmniIcons.next), findsOneWidget);
     expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
 
     // 头部只剩 返回/标题/⋯：队列只在底部工具行出现一枚，歌词没有第二入口钮，
     // 页码点与封面频谱条、歌词预览块都已删除。
-    expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.queue_music_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.equalizer_rounded), findsOneWidget);
+    expect(omniIcon(OmniIcons.chevronLeft), findsOneWidget);
+    expect(omniIcon(OmniIcons.more), findsOneWidget);
+    expect(omniIcon(OmniIcons.queue), findsOneWidget);
+    expect(omniIcon(OmniIcons.settings), findsOneWidget);
     expect(find.byType(MusicPlayingBars), findsNothing);
     expect(find.text('实时歌词'), findsNothing);
 
@@ -106,7 +112,7 @@ void main() {
 
     // 歌词样式入口收敛进头部 ⋯ 动作面板：面板只含歌词分区，
     // 不暴露封面/播放器视觉编辑。
-    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.tap(omniIcon(OmniIcons.more));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.tune_rounded));
     await tester.pumpAndSettle();

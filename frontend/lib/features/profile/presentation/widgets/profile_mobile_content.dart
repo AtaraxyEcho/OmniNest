@@ -17,6 +17,7 @@ import 'package:omninest/features/profile/presentation/widgets/change_password_d
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_two_factor_card.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 个人中心在移动端使用的单列信息架构。
 /// 深链分区锚定键：与桌面 rail 的 section id 对应（notifications 无
@@ -86,6 +87,9 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
       final target = _sectionKeys[section]?.currentContext;
       if (target != null) {
         Scrollable.ensureVisible(
@@ -281,38 +285,40 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       context: context,
       showDragHandle: true,
       builder:
-          (sheetContext) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ChoiceTile(
-                  icon: Icons.brightness_auto_rounded,
-                  label: l10n.settingsThemeSystem,
-                  selected: widget.themeMode == ThemeMode.system,
-                  onTap: () {
-                    widget.onThemeChanged(ThemeMode.system);
-                    Navigator.pop(sheetContext);
-                  },
-                ),
-                _ChoiceTile(
-                  icon: Icons.light_mode_rounded,
-                  label: l10n.settingsThemeLight,
-                  selected: widget.themeMode == ThemeMode.light,
-                  onTap: () {
-                    widget.onThemeChanged(ThemeMode.light);
-                    Navigator.pop(sheetContext);
-                  },
-                ),
-                _ChoiceTile(
-                  icon: Icons.dark_mode_rounded,
-                  label: l10n.settingsThemeDark,
-                  selected: widget.themeMode == ThemeMode.dark,
-                  onTap: () {
-                    widget.onThemeChanged(ThemeMode.dark);
-                    Navigator.pop(sheetContext);
-                  },
-                ),
-              ],
+          (sheetContext) => MobileSheetSemantics(
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ChoiceTile(
+                    icon: Icons.brightness_auto_rounded,
+                    label: l10n.settingsThemeSystem,
+                    selected: widget.themeMode == ThemeMode.system,
+                    onTap: () {
+                      widget.onThemeChanged(ThemeMode.system);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _ChoiceTile(
+                    icon: Icons.light_mode_rounded,
+                    label: l10n.settingsThemeLight,
+                    selected: widget.themeMode == ThemeMode.light,
+                    onTap: () {
+                      widget.onThemeChanged(ThemeMode.light);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _ChoiceTile(
+                    icon: Icons.dark_mode_rounded,
+                    label: l10n.settingsThemeDark,
+                    selected: widget.themeMode == ThemeMode.dark,
+                    onTap: () {
+                      widget.onThemeChanged(ThemeMode.dark);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
     );
@@ -324,25 +330,27 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       context: context,
       showDragHandle: true,
       builder:
-          (sheetContext) => SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final preset in FontScalePreset.values)
-                    _ChoiceTile(
-                      icon:
-                          preset == FontScalePreset.followSystem
-                              ? Icons.brightness_auto_rounded
-                              : Icons.format_size_rounded,
-                      label: _presetLabel(preset, l10n),
-                      selected: widget.fontScalePreset == preset,
-                      onTap: () {
-                        widget.onFontScaleChanged(preset);
-                        Navigator.pop(sheetContext);
-                      },
-                    ),
-                ],
+          (sheetContext) => MobileSheetSemantics(
+            child: SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final preset in FontScalePreset.values)
+                      _ChoiceTile(
+                        icon:
+                            preset == FontScalePreset.followSystem
+                                ? Icons.brightness_auto_rounded
+                                : Icons.format_size_rounded,
+                        label: _presetLabel(preset, l10n),
+                        selected: widget.fontScalePreset == preset,
+                        onTap: () {
+                          widget.onFontScaleChanged(preset);
+                          Navigator.pop(sheetContext);
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -369,29 +377,31 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       context: context,
       showDragHandle: true,
       builder:
-          (sheetContext) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ChoiceTile(
-                  icon: Icons.translate_rounded,
-                  label: l10n.settingsLanguageChinese,
-                  selected: widget.languageCode == 'zh',
-                  onTap: () {
-                    widget.onLanguageChanged('zh');
-                    Navigator.pop(sheetContext);
-                  },
-                ),
-                _ChoiceTile(
-                  icon: Icons.language_rounded,
-                  label: l10n.settingsLanguageEnglish,
-                  selected: widget.languageCode == 'en',
-                  onTap: () {
-                    widget.onLanguageChanged('en');
-                    Navigator.pop(sheetContext);
-                  },
-                ),
-              ],
+          (sheetContext) => MobileSheetSemantics(
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ChoiceTile(
+                    icon: Icons.translate_rounded,
+                    label: l10n.settingsLanguageChinese,
+                    selected: widget.languageCode == 'zh',
+                    onTap: () {
+                      widget.onLanguageChanged('zh');
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                  _ChoiceTile(
+                    icon: Icons.language_rounded,
+                    label: l10n.settingsLanguageEnglish,
+                    selected: widget.languageCode == 'en',
+                    onTap: () {
+                      widget.onLanguageChanged('en');
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
     );
@@ -413,11 +423,13 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       backgroundColor: context.mobileColors.surface,
       showDragHandle: true,
       builder:
-          (context) => SafeArea(
-            child: SizedBox(
-              height: height,
-              child: const SingleChildScrollView(
-                child: ProfileSessionManagementPanel(framed: false),
+          (context) => MobileSheetSemantics(
+            child: SafeArea(
+              child: SizedBox(
+                height: height,
+                child: const SingleChildScrollView(
+                  child: ProfileSessionManagementPanel(framed: false),
+                ),
               ),
             ),
           ),
@@ -433,11 +445,13 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       backgroundColor: context.mobileColors.surface,
       showDragHandle: true,
       builder:
-          (context) => SafeArea(
-            child: SizedBox(
-              height: height,
-              child: const SingleChildScrollView(
-                child: ProfileTwoFactorCard(framed: false),
+          (context) => MobileSheetSemantics(
+            child: SafeArea(
+              child: SizedBox(
+                height: height,
+                child: const SingleChildScrollView(
+                  child: ProfileTwoFactorCard(framed: false),
+                ),
               ),
             ),
           ),
@@ -451,10 +465,12 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
       backgroundColor: context.mobileColors.surface,
       showDragHandle: true,
       builder:
-          (context) => const SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: ProfileServerPanel(),
+          (context) => MobileSheetSemantics(
+            child: const SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
+                child: ProfileServerPanel(),
+              ),
             ),
           ),
     );

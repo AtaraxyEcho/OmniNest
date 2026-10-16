@@ -52,15 +52,18 @@ class SearchResultTile extends StatelessWidget {
   void _navigate(BuildContext context) {
     switch (result.type) {
       case 'file':
+        // 分支路由用 go 切换空间是预期语义（同级目的地，不留幽灵栈）。
         context.go('/files');
       case 'book':
-        context.go('/reader/items/${result.id}');
+        // 其余都是壳层之外的根级路由：`go` 会换掉整条导航栈，之后侧滑没有
+        // 可弹层，Android 直接结束 Activity（观感是「搜一下就退出」）。
+        context.push('/reader/items/${result.id}');
       case 'video':
-        context.go('/video/${result.id}');
+        context.push('/video/${result.id}');
       case 'photo':
-        context.go('/photos/${result.id}');
+        context.push('/photos/${result.id}');
       case 'music':
-        context.go('/music');
+        context.push('/music');
       default:
         break;
     }

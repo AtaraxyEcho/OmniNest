@@ -1,6 +1,8 @@
 package com.omninest.modules.video.service;
 
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.video.dto.MovieDtos.CastMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.CrewMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
@@ -36,8 +38,24 @@ public class TmdbMetadataProvider implements MetadataProvider {
     private static final String DEFAULT_BASE_URL = "https://api.themoviedb.org/3";
     private static final String SEARCH_STRATEGY_NORMALIZED_ONLY = "NORMALIZED_ONLY";
     private static final String SEARCH_STRATEGY_RAW_ONLY = "RAW_ONLY";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
 
     private final MediaRuntimeConfigService configService;
+    private final SafeUrlValidator safeUrlValidator;
+
+    /**
+     * 共享的 HTTP 客户端。
+     *
+     * <p>原先每次请求 {@code HttpClient.newBuilder()} 新建一个，用完不关：JDK 的 HttpClient 自带
+     * 选择器线程与连接池，刮削一轮下来会留下成倍泄漏的连接。连接超时因此不再跟随配置浮动
+     * （要跟随就只能每次新建），请求级超时仍按 {@code tmdbTimeoutSeconds()} 生效。
+     * 重定向策略固定为 NEVER：接口路径实测不产生跳转，一旦上游返回 3xx 说明目标已不在
+     * 配置的基址内，交给调用方按请求失败处理，避免带着 API 凭据被带到别的主机。
+     */
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(CONNECT_TIMEOUT)
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
 
     @Override
     public String providerName() {
@@ -112,10 +130,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
             boolean includeYear,
             boolean tv
     ) {
-        URI uri = searchUri(guess, credential, queryText, includeYear, tv);
         try {
+            URI uri = searchUri(guess, credential, queryText, includeYear, tv);
             HttpRequest request = requestBuilder(uri, credential).GET().build();
-            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.warn("TMDB 请求失败: status={}, type={}",
                         response.statusCode(), tv ? "TV" : "MOVIE");
@@ -148,7 +166,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
         if (includeYear && guess.year() != null) {
             query.append(tv ? "&first_air_date_year=" : "&primary_release_year=").append(guess.year());
         }
-        return URI.create(normalizedApiBaseUrl(configService.tmdbBaseUrl()) + path + "?" + query);
+        return apiUri(path, query);
     }
 
     /** 清除中文/西方季集标记的正则 */
@@ -250,9 +268,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 query.append("api_key=").append(url(credential.apiKey())).append("&");
             }
             query.append("language=").append(url(language()));
-            URI uri = URI.create(normalizedApiBaseUrl(configService.tmdbBaseUrl()) + path + "?" + query);
+            URI uri = apiUri(path, query);
             HttpRequest request = requestBuilder(uri, credential).GET().build();
-            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 String body = response.body();
                 JsonNode detail = JsonSupport.readTree(body);
@@ -331,10 +349,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
             query.append("api_key=").append(url(credential.apiKey())).append("&");
         }
         query.append("language=").append(url(language()));
-        URI uri = URI.create(normalizedApiBaseUrl(configService.tmdbBaseUrl()) + path + "?" + query);
         try {
+            URI uri = apiUri(path, query);
             HttpRequest request = requestBuilder(uri, credential).GET().build();
-            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.warn("TMDB 演职员请求失败: status={}, externalId={}", response.statusCode(), externalId);
                 return new CreditsResult(List.of(), List.of());
@@ -385,10 +403,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
         if (!credential.useBearer()) {
             query.append("api_key=").append(url(credential.apiKey())).append("&");
         }
-        URI uri = URI.create(normalizedApiBaseUrl(configService.tmdbBaseUrl()) + path + "?" + query);
         try {
+            URI uri = apiUri(path, query);
             HttpRequest request = requestBuilder(uri, credential).GET().build();
-            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 return null;
             }
@@ -497,9 +515,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
             }
             query.append("include_image_language=")
                     .append(url(imageLanguages()));
-            URI uri = URI.create(normalizedApiBaseUrl(configService.tmdbBaseUrl()) + path + "?" + query);
+            URI uri = apiUri(path, query);
             HttpRequest request = requestBuilder(uri, credential).GET().build();
-            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.warn("TMDB 图片请求失败: status={}, externalId={}", response.statusCode(), top.externalId());
                 return new ImageFallback(top.posterUrl(), top.backdropUrl());
@@ -576,12 +594,6 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return builder;
     }
 
-    private HttpClient httpClient() {
-        return HttpClient.newBuilder()
-                .connectTimeout(requestTimeout())
-                .build();
-    }
-
     private Duration requestTimeout() {
         int seconds = configService.tmdbTimeoutSeconds();
         if (seconds < 3) {
@@ -639,6 +651,12 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return version;
     }
 
+    private URI apiUri(String path, CharSequence query) {
+        String base = normalizedApiBaseUrl(configService.tmdbBaseUrl());
+        return OutboundEndpointRules.requireConfiguredEndpoint(base, URI.create(base + path + "?" + query),
+                safeUrlValidator);
+    }
+
     private String normalizedApiBaseUrl(String value) {
         String base = trimTrailingSlash(value);
         Matcher matcher = Pattern.compile("/(3|4)(?:/|$)").matcher(base);
@@ -687,9 +705,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
             }
             query.append("include_image_language=")
                     .append(url(imageLanguages()));
-            URI uri = URI.create(normalizedApiBaseUrl(configService.tmdbBaseUrl()) + path + "?" + query);
+            URI uri = apiUri(path, query);
             HttpRequest request = requestBuilder(uri, credential).GET().build();
-            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.warn("TMDB 剧照请求失败: status={}, externalId={}", response.statusCode(), externalId);
                 return List.of();

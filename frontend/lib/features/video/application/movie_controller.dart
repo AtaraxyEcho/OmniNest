@@ -491,6 +491,14 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
 
   Ref get centerRef => ref;
 
+  /// 取数或远端动作完成后的回写基准。
+  ///
+  /// 完成回调不得拿 `await` 之前抓的快照整份发布：那段窗口里发生的写入（分区、视图模式、
+  /// 筛选、分页窗口、加载标记）会被旧快照无声覆盖。优先取发布时刻的实况；实况尚未就绪
+  /// （错误态、首帧取数）时退回快照，快照缺失由调用点按原有方式兜底。
+  MovieCenterState _liveOr(MovieCenterState captured) =>
+      state.asData?.value ?? captured;
+
   int _refreshGeneration = 0;
   int _moviePageGeneration = 0;
   int _episodePageGeneration = 0;
@@ -566,46 +574,49 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     // （或托管首栏 For you）静默退回电影。
     final liveSection =
         state.asData?.value.section ?? current?.section ?? next.section;
+    // 回写基准同样以发布时刻的实况为准：`_loadState` 期间页面可能已切视图模式、
+    // 改筛选或续页，整份发布 current 会把这些写入打回。
     state = AsyncData(
-      (current ??
-              MovieCenterState(
-                dashboard: MovieDashboard.empty(),
-                movies: const [],
-                recentItems: const [],
-                continueWatching: const [],
-                favoriteItems: const [],
-                watchHistory: const [],
-                collections: const [],
-                tasks: const [],
-              ))
-          .copyWith(
-            section: liveSection,
-            dashboard: next.dashboard,
-            movies: next.movies,
-            // 实时刷新时 seriesByType 失败会得到空列表；已有数据时保留旧值，
-            // 避免刮削后网络/序列化异常把剧集/动漫分区清空。
-            tvSeries:
-                next.tvSeries.isNotEmpty
-                    ? next.tvSeries
-                    : current?.tvSeries ?? next.tvSeries,
-            animeSeries:
-                next.animeSeries.isNotEmpty
-                    ? next.animeSeries
-                    : current?.animeSeries ?? next.animeSeries,
-            recentItems: next.recentItems,
-            continueWatching: next.continueWatching,
-            // 懒加载分区列表（收藏/历史/合集/任务）保留刷新前旧值：
-            // loadedSections 仍重置，重进分区时重新拉取；避免 realtime
-            // 高频刷新把未在展示的分区清成空列表。
-            moviePage: next.moviePage,
-            movieHasMore: next.movieHasMore,
-            movieLoadingMore: false,
-            episodePage: next.episodePage,
-            episodeHasMore: next.episodeHasMore,
-            episodeLoadingMore: false,
-            loadedSections: next.loadedSections,
-            loadingSections: const {},
-          ),
+      _liveOr(
+        current ??
+            MovieCenterState(
+              dashboard: MovieDashboard.empty(),
+              movies: const [],
+              recentItems: const [],
+              continueWatching: const [],
+              favoriteItems: const [],
+              watchHistory: const [],
+              collections: const [],
+              tasks: const [],
+            ),
+      ).copyWith(
+        section: liveSection,
+        dashboard: next.dashboard,
+        movies: next.movies,
+        // 实时刷新时 seriesByType 失败会得到空列表；已有数据时保留旧值，
+        // 避免刮削后网络/序列化异常把剧集/动漫分区清空。
+        tvSeries:
+            next.tvSeries.isNotEmpty
+                ? next.tvSeries
+                : current?.tvSeries ?? next.tvSeries,
+        animeSeries:
+            next.animeSeries.isNotEmpty
+                ? next.animeSeries
+                : current?.animeSeries ?? next.animeSeries,
+        recentItems: next.recentItems,
+        continueWatching: next.continueWatching,
+        // 懒加载分区列表（收藏/历史/合集/任务）保留刷新前旧值：
+        // loadedSections 仍重置，重进分区时重新拉取；避免 realtime
+        // 高频刷新把未在展示的分区清成空列表。
+        moviePage: next.moviePage,
+        movieHasMore: next.movieHasMore,
+        movieLoadingMore: false,
+        episodePage: next.episodePage,
+        episodeHasMore: next.episodeHasMore,
+        episodeLoadingMore: false,
+        loadedSections: next.loadedSections,
+        loadingSections: const {},
+      ),
     );
   }
 

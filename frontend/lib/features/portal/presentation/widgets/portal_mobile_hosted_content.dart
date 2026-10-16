@@ -28,6 +28,16 @@ class _HostedPortalContent extends ConsumerWidget {
             // 不再使用固定高度盒子沉底（会在眉标上方堆出大片死空间）。
             final headerTop = (viewport * 0.05).clamp(20.0, 48.0);
             final horizontal = tier.homeHorizontalPadding;
+            // 首屏各槽位都在等数时给一条区级线：槽位占位是静态块，若不补
+            // 这条线，整屏在首屏没有任何加载反馈（一屏至多一处加载动画，
+            // 这里就是那一处）。
+            final anySlotLoading =
+                ref.watch(realtimeWeatherProvider).isLoading ||
+                ref.watch(portalMusicSnapshotProvider).isLoading ||
+                ref.watch(portalReaderDashboardProvider).isLoading ||
+                ref.watch(portalMovieDashboardProvider).isLoading ||
+                ref.watch(portalPhotoDashboardProvider).isLoading ||
+                ref.watch(fileRecentEntriesProvider).isLoading;
             final header = _SpatialEnvironmentHeader(
               topPadding: headerTop,
               leftAligned: tier.twoColumnHome,
@@ -47,6 +57,13 @@ class _HostedPortalContent extends ConsumerWidget {
                 parent: BouncingScrollPhysics(),
               ),
               slivers: [
+                if (anySlotLoading)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: horizontal),
+                      child: const MobileLoadingLine(top: true),
+                    ),
+                  ),
                 SliverPadding(
                   padding: EdgeInsets.symmetric(horizontal: horizontal),
                   sliver: SliverToBoxAdapter(

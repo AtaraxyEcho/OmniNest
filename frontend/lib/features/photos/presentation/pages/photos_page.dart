@@ -14,8 +14,8 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
+import 'package:omninest/core/widgets/mobile_segment_pager.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/mobile_section_swipe.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
@@ -289,7 +289,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
             ).localizeUserFacing(describeUserFacingError(error)),
             onRetry: () => ref.invalidate(photoCenterControllerProvider),
           ),
-      loading: () => const AppLoading.grid(),
+      loading: () => const AppLoading(),
     );
   }
 
@@ -302,8 +302,8 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       data: (data) {
         final notifier = ref.read(photoCenterControllerProvider.notifier);
         final l10n = AppLocalizations.of(context);
-        final content = _FrameViewContent(
-          state: data,
+        Widget contentFor(FrameView view) => _FrameViewContent(
+          state: data.copyWith(frameView: view),
           compact: true,
           onOpenPhoto: (photo) => context.push('/photos/${photo.id}'),
           onOpenAlbum: (album) => context.push('/photos/albums/${album.id}'),
@@ -360,19 +360,22 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                     onSelectView: notifier.setFrameView,
                   ),
                 Expanded(
-                  child: MobileSectionSwipe(
-                    onSwipe: (toNext) {
-                      final target = adjacentSection(
-                        _PhotosViewTabBar.hostedViews,
-                        data.frameView,
-                        toNext,
-                      );
-                      if (target != null) {
-                        notifier.setFrameView(target);
-                      }
-                    },
-                    child: content,
-                  ),
+                  // Tags 只保留在桌面/非托管：视图不在托管六段次序里时没有邻位
+                  // 内容可画，分页会把它画成首段，所以这种视图不横滑——与旧检测器
+                  // adjacentSection 返回 null 的口径一致。
+                  child:
+                      _PhotosViewTabBar.hostedViews.contains(data.frameView)
+                          ? MobileSegmentPager<FrameView>(
+                            sections: _PhotosViewTabBar.hostedViews,
+                            current: data.frameView,
+                            // 选择模式下页签行已隐藏，多选进行中一次误划就悄悄换掉
+                            // 视图，用户无从察觉换到了哪。关掉横滑只换分页物理：
+                            // 页内纵向滚动与滚动位置都不受影响，退出后跟手立刻回来。
+                            interactionEnabled: !data.isSelectionMode,
+                            onChanged: notifier.setFrameView,
+                            pageBuilder: (context, view) => contentFor(view),
+                          )
+                          : contentFor(data.frameView),
                 ),
                 if (data.isSelectionMode && data.selectedPhotoIds.isNotEmpty)
                   _buildAnimatedBatchBar(data),
@@ -391,7 +394,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
               showBack: true,
               showImport: !data.isSelectionMode,
             ),
-            Expanded(child: content),
+            Expanded(child: contentFor(data.frameView)),
             if (bottomNav != null) bottomNav,
             if (data.isSelectionMode && data.selectedPhotoIds.isNotEmpty)
               _buildAnimatedBatchBar(data),
@@ -408,17 +411,9 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       loading:
           () =>
               hosted
-                  ? const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        MobileSkeletonBlock(height: 220),
-                        SizedBox(height: 16),
-                        MobileSkeletonBlock(height: 180),
-                      ],
-                    ),
-                  )
-                  : const AppLoading.grid(),
+                  // 整页首屏只留一处动画指示：此前是两块占位各塞一个转圈。
+                  ? const AppLoading()
+                  : const AppLoading(),
     );
   }
 
@@ -648,6 +643,9 @@ class _PhotosViewTabBar extends StatelessWidget {
             selected: views.contains(activeView) ? activeView : views.first,
             labelBuilder: (view) => frameViewLabel(l10n, view),
             onSelected: onSelectView,
+            // 样例六段在 390 宽放不下（实测 431dp 对 350dp 内容带），
+            // 这里按等分档让六段全部可见，而不是照样例横向滚动。
+            shrinkToFit: true,
           ),
         ),
       );

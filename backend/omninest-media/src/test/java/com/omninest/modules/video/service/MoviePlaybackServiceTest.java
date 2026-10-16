@@ -24,6 +24,7 @@ import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
@@ -211,5 +213,25 @@ class MoviePlaybackServiceTest {
         playbackService.playbackPlan(OWNER_ID, MOVIE_ID);
 
         verify(movieTaskService, never()).createTranscodeTask(any(), any(), anyBoolean());
+    }
+
+    /**
+     * 字幕流式写出不许再回到事务里：内嵌字幕未提取过时要现场跑 ffmpeg，
+     * {@code VideoTranscodeService} 对 ffmpeg 的超时上限是 180 分钟，
+     * 只读事务会在整段时间里占住一个连接池连接，并发几条即耗尽连接池。
+     */
+    @Test
+    void subtitleStreamingMethodsAreNotTransactional() throws Exception {
+        Method direct = MoviePlaybackService.class.getMethod(
+                "writeSubtitleContent", UUID.class, UUID.class, java.io.OutputStream.class);
+        Method byToken = MoviePlaybackService.class.getMethod(
+                "writeSubtitleContentByToken",
+                String.class,
+                UUID.class,
+                UUID.class,
+                java.io.OutputStream.class);
+
+        assertThat(direct.isAnnotationPresent(Transactional.class)).isFalse();
+        assertThat(byToken.isAnnotationPresent(Transactional.class)).isFalse();
     }
 }

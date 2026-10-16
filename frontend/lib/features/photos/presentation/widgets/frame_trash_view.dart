@@ -10,6 +10,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 import 'package:omninest/app/theme/severity_colors.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// Frame 回收站视图：衬线标题 + 计数说明 + 清空按钮 + 暗化瀑布流。
 ///
@@ -300,34 +301,36 @@ class _TrashTileState extends State<_TrashTile> {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.restore_rounded),
-                title: Text(l10n.photosRestore),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  widget.onRestore();
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: SeverityColors.danger,
+        return MobileSheetSemantics(
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.restore_rounded),
+                  title: Text(l10n.photosRestore),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.onRestore();
+                  },
                 ),
-                title: Text(
-                  l10n.photosDeletePermanently,
-                  style: const TextStyle(color: SeverityColors.danger),
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: SeverityColors.danger,
+                  ),
+                  title: Text(
+                    l10n.photosDeletePermanently,
+                    style: const TextStyle(color: SeverityColors.danger),
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.onDeleteForever();
+                  },
                 ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  widget.onDeleteForever();
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

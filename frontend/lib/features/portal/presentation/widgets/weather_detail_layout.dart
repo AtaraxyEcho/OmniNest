@@ -110,6 +110,9 @@ class WeatherDetailLayoutMetrics {
     // 样例 clamp(4rem, 12vw, 6rem)，以面板宽近似。
     final tempFontSize = (dialogWidth * 0.12).clamp(64.0, 96.0);
 
+    // 样例的 32/36 两档。移动端「返回/关闭类逃生控件 ≥48dp」的下限经裁定不适用于本弹窗
+    // （2026-10-15），改回或再抬都需先问，不要拿规则自行套用。
+    // 托管天气抽屉自身的 48dp 关闭钮早于该裁定，保持不动。
     final closeButtonSize = tight ? 32.0 : 36.0;
     const cornerRadius = 24.0;
     const innerRadius = 16.0;

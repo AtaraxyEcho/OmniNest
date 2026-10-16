@@ -10,6 +10,7 @@ import 'package:omninest/features/music/presentation/deck/music_deck_create_play
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 弹出歌单选择抽屉，把曲目加入所选歌单或先新建歌单。
 Future<void> showMusicAddToPlaylistSheet(
@@ -22,9 +23,11 @@ Future<void> showMusicAddToPlaylistSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder:
-        (sheetContext) => MusicDeckAddToPlaylistSheet(
-          item: item,
-          onDismissed: () => Navigator.of(sheetContext).maybePop(),
+        (sheetContext) => MobileSheetSemantics(
+          child: MusicDeckAddToPlaylistSheet(
+            item: item,
+            onDismissed: () => Navigator.of(sheetContext).maybePop(),
+          ),
         ),
   );
 }

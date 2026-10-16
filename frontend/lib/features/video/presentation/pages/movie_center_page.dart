@@ -150,7 +150,10 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
                       .read(movieCenterControllerProvider.notifier)
                       .refresh();
                 },
-                child: _MovieContent(state: visibleState),
+                childFor:
+                    (section) => _MovieContent(
+                      state: visibleState.copyWith(section: section),
+                    ),
               ),
             ),
           ],
@@ -165,10 +168,7 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
             ),
           ),
       loading:
-          () => Scaffold(
-            backgroundColor: pageBackground,
-            body: AppLoading.grid(gridAspectRatio: 0.62),
-          ),
+          () => Scaffold(backgroundColor: pageBackground, body: AppLoading()),
     );
   }
 }
@@ -260,10 +260,7 @@ class _MovieContent extends ConsumerWidget {
     }
     if (state.loadingSections.contains(state.section) &&
         !state.loadedSections.contains(state.section)) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: AppLoading.grid(gridAspectRatio: 0.62),
-      );
+      return Padding(padding: const EdgeInsets.all(16), child: AppLoading());
     }
     // 无 activity:write 的角色隐藏删历史入口，只保留浏览；托管与工位共用
     // 同一组回调，避免两处能力判断漂移。
@@ -576,10 +573,13 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
             ),
           ),
         SliverPadding(
-          // 样例 `.chip-row` 外边距 2px 0 14px；工位排序条保持原内衬。
+          // 样例 `.chip-row` 外边距 2px 0 14px，且整行坐在
+          // `.module-overlay > main` 的 20px 页边距内（index.css:490）：
+          // 此前只给上下，首枚胶囊贴住屏幕左缘、状态筛选钮贴住右缘。
+          // 工位排序条保持原内衬。
           padding:
               hosted
-                  ? const EdgeInsets.fromLTRB(0, 2, 0, 14)
+                  ? const EdgeInsets.fromLTRB(20, 2, 20, 14)
                   : const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child:

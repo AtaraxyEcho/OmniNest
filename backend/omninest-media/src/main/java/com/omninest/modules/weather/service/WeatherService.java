@@ -13,10 +13,14 @@ import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.weather.dto.WeatherDto;
 import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLocation;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -80,6 +84,7 @@ public class WeatherService {
 
     private final ConfigValueProvider configValueProvider;
     private final WeatherCacheStore weatherCacheStore;
+    private final SafeUrlValidator safeUrlValidator;
     private final RestTemplate restTemplate = createRestTemplate();
 
     /** 天气 API 专用线程池（虚拟线程） */
@@ -322,7 +327,7 @@ public class WeatherService {
             String jwt = generateJwt(config);
             String baseUrl = config.get("weather.qweather.url");
             String encoded = URLEncoder.encode(cityName, StandardCharsets.UTF_8);
-            URI uri = URI.create(baseUrl + "/geo/v2/city/lookup?location=" + encoded);
+            URI uri = apiUri(baseUrl, "/geo/v2/city/lookup?location=" + encoded);
             JsonNode result = httpGet(uri, jwt);
 
             if (result == null || !"200".equals(result.path("code").asString(null))) {
@@ -381,10 +386,18 @@ public class WeatherService {
         return latLon + ":" + lang;
     }
 
+    /**
+     * 拼装并校验出站地址：基址由超级管理员配置，但协议、用户信息段与目标主机必须仍落在基址同源内。
+     */
+    private URI apiUri(String baseUrl, String relativePath) {
+        return OutboundEndpointRules.requireConfiguredEndpoint(baseUrl, URI.create(baseUrl + relativePath),
+                safeUrlValidator);
+    }
+
     private JsonNode fetchApi(String baseUrl, String path, String location, String jwt, String lang) {
         try {
             String encoded = URLEncoder.encode(location, StandardCharsets.UTF_8);
-            URI uri = URI.create(baseUrl + path + "?location=" + encoded + "&lang=" + lang);
+            URI uri = apiUri(baseUrl, path + "?location=" + encoded + "&lang=" + lang);
             return httpGet(uri, jwt);
         } catch (Exception e) {
             log.error("调用天气 API 失败: {}", path, e);
@@ -399,7 +412,7 @@ public class WeatherService {
                 return null;
             }
             // 空气质量 v1 接口的 category 与 advice 也是文案，同样按语言请求。
-            URI uri = URI.create(baseUrl + "/airquality/v1/current/" + parts[1].trim() + "/" + parts[0].trim()
+            URI uri = apiUri(baseUrl, "/airquality/v1/current/" + parts[1].trim() + "/" + parts[0].trim()
                     + "?lang=" + lang);
             JsonNode json = httpGet(uri, jwt);
             return json != null ? parseAirQualityResponse(json) : null;
@@ -740,7 +753,14 @@ public class WeatherService {
     }
 
     private static RestTemplate createRestTemplate() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
+                super.prepareConnection(connection, httpMethod);
+                // 请求头携带 JWT：GET 默认会自动跟随跳转，必须在 super 之后关掉才不会带凭据跳到别处。
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
         factory.setConnectTimeout(3000);
         factory.setReadTimeout(5000);
         return new RestTemplate(factory);

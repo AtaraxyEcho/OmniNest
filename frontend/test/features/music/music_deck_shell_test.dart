@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/theme/app_theme.dart';
@@ -331,6 +332,95 @@ void main() {
     expect(find.text('永久删除？'), findsNothing);
     expect(find.text('Local Management Track'), findsOneWidget);
   });
+
+  // 歌单/专辑/艺人详情是页内状态（`_collection`），不是路由：打开详情后一次
+  // 侧滑应先收详情，再一次才离开模块。分区页签不在此列——那里的「一次就出去」
+  // 是既有裁定（与 _sectionHistory 叠成乒乓）。
+  testWidgets('歌单详情在场：第一次侧滑收详情，第二次才离开模块', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final center = MusicCenterState(
+      dashboard: MusicDashboard.empty(),
+      tracks: const [],
+      albums: const [],
+      artists: const [],
+      playlists: const [
+        MusicPlaylist(
+          id: 'p-night',
+          name: '夜航',
+          playlistType: 'CUSTOM',
+          trackCount: 2,
+        ),
+      ],
+    );
+    final router = GoRouter(
+      initialLocation: '/library',
+      routes: [
+        GoRoute(
+          path: '/library',
+          builder:
+              (context, state) => const Scaffold(body: Text('library-root')),
+        ),
+        GoRoute(
+          path: '/music',
+          builder:
+              (context, state) =>
+                  const MobileHostedRoute(child: MusicDeckShell()),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          musicCenterControllerProvider.overrideWith(
+            () => _FakeMusicCenterController(center),
+          ),
+          musicPlatformLibraryProvider.overrideWith(
+            _FakeMusicPlatformLibraryController.new,
+          ),
+          // 详情层要经 musicApiProvider 取曲目：不桩就会因「服务器地址未配置」
+          // 让整页进 error 态。
+          musicApiProvider.overrideWithValue(_DeckCollectionStubApi()),
+          musicPlaybackSessionProvider.overrideWith(
+            _StubPlaybackSessionController.new,
+          ),
+          authSessionProvider.overrideWith(_ManageSessionNotifier.new),
+        ],
+        child: MaterialApp.router(
+          routerConfig: router,
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    router.push('/music');
+    await tester.pumpAndSettle();
+    expect(find.byType(MusicDeckShell), findsOneWidget);
+
+    await tester.tap(find.text('夜航'));
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('library-root'), findsNothing, reason: '详情层先收，不该弹掉模块');
+    expect(find.byType(MusicDeckShell), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('library-root'), findsOneWidget, reason: '没有详情可收时才离开模块');
+    expect(tester.takeException(), isNull);
+  });
 }
 
 const MusicTrack _localManagementTrack = MusicTrack(
@@ -444,6 +534,20 @@ class _IslandPlayModeStubApi implements MusicApi {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// 详情层（歌单）只要空曲目页：其余链路沿用控制岛桩。
+class _DeckCollectionStubApi extends _IslandPlayModeStubApi {
+  @override
+  Future<MusicPagedResult<MusicTrack>> playlistTracksPage(
+    String playlistId, {
+    int page = 0,
+    int size = 50,
+  }) async => MusicPagedResult<MusicTrack>(
+    items: const <MusicTrack>[],
+    page: page,
+    size: size,
+  );
 }
 
 class _FakeMusicPlatformLibraryController

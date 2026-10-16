@@ -1,12 +1,14 @@
-// 托管影视胶囊行与状态筛选面板回归：排序/收藏胶囊按样例 `.chip`（r11、9px、
-// 半透明 tint 底、gap 7、行高 38），酸绿选中态，状态筛选落 `.glass-sheet` 实底面板
-// 并以行族呈现选项。
+// 托管影视胶囊行与状态筛选面板回归：排序/收藏胶囊按样例 `.chip`（r11、
+// 短标签档 10px、半透明 tint 底、gap 7、行高 38），酸绿选中态，状态筛选落
+// `.glass-sheet` 实底面板并以行族呈现选项。
+//
+// 桩不外包页边距：样例 20px 页边距由所在分区页的 sliver 承担，
+// 见 movie_hosted_section_inset_test.dart。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
-import 'package:omninest/app/theme/mobile_env_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -33,18 +35,15 @@ Future<void> _pump(
       home: MobileShellScope(
         hosted: true,
         child: Scaffold(
-          backgroundColor: MobileEnvColors.stage,
+          backgroundColor: MobileEnvPalette.dark.stage,
           body: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: MovieRedesignMobileChips(
-                sortBy: sortBy,
-                onSortBy: onSortBy ?? (_) {},
-                favoritesOnly: false,
-                onFavoritesOnly: (_) {},
-                filter: filter,
-                onFilter: onFilter ?? (_) {},
-              ),
+            child: MovieRedesignMobileChips(
+              sortBy: sortBy,
+              onSortBy: onSortBy ?? (_) {},
+              favoritesOnly: false,
+              onFavoritesOnly: (_) {},
+              filter: filter,
+              onFilter: onFilter ?? (_) {},
             ),
           ),
         ),
@@ -85,13 +84,16 @@ void main() {
     final selectedShape = selected.shape as RoundedRectangleBorder;
     final plainShape = plain.shape as RoundedRectangleBorder;
 
-    expect(selected.color, MobileEnvColors.accent.withValues(alpha: 0.10));
+    expect(
+      selected.color,
+      MobileEnvPalette.dark.accent.withValues(alpha: 0.10),
+    );
     expect(
       selectedShape.side.color,
-      MobileEnvColors.accent.withValues(alpha: 0.38),
+      MobileEnvPalette.dark.accent.withValues(alpha: 0.38),
     );
     expect(plain.color, MobileEnvPalette.dark.surfaceTint);
-    expect(plainShape.side.color, MobileEnvColors.line09);
+    expect(plainShape.side.color, MobileEnvPalette.dark.line09);
     // 工位件是 2px 直角；托管胶囊按样例圆角。
     expect(
       selectedShape.borderRadius,
@@ -107,7 +109,8 @@ void main() {
   testWidgets('胶囊字号与间距按样例，行高取次级档', (tester) async {
     await _pump(tester);
 
-    expect(tester.widget<Text>(find.text('评分')).style?.fontSize, 9);
+    // 样例 `.chip` 是 9px 拉丁短词；中文两字取短标签档 10。
+    expect(tester.widget<Text>(find.text('评分')).style?.fontSize, 10);
 
     final first = tester.getRect(_chipInkWell('最新'));
     final second = tester.getRect(_chipInkWell('评分'));

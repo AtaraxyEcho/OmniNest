@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 
 /// 照片详情/幻灯片信息与分享面板的宿主。
 ///
@@ -60,7 +61,7 @@ class PhotoPanelHost extends StatelessWidget {
       width: photoInfoPanelWidth,
       child: AnimatedSlide(
         offset: visible ? Offset.zero : const Offset(1, 0),
-        duration: const Duration(milliseconds: 450),
+        duration: MotionToken.normal,
         curve: Curves.easeOutCubic,
         child: child,
       ),

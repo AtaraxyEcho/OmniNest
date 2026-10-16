@@ -28,6 +28,17 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
     setState(() => _section = section);
   }
 
+  /// 进入账户空间时作废两份 keepAlive 数据源：会话列表与通知类型字典。
+  ///
+  /// 外观/语言/字号偏好不在此列，它们已由 preference_sync_handler 的推送路径
+  /// 同步，再挂一次进入刷新就是重复控制；两步验证状态是 autoDispose，分区打开
+  /// 时自会取新。这里只作废、不主动发请求：账户子视图是页内状态，未被监听时
+  /// invalidate 仅清缓存，等下一次打开分区再取新值。
+  void _invalidateCachedFeeds() {
+    ref.invalidate(userSessionsProvider);
+    ref.invalidate(notificationTypesProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -42,44 +53,57 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
       'ADMIN' => l10n.profileRoleAdmin,
       _ => l10n.profileRoleMember,
     };
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        bottom: false,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 650),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                MobileModuleHeader(
-                  title: displayName,
-                  subtitle: '$email · $roleLabel',
-                  onBack: () {
-                    if (_section != null) {
-                      setState(() => _section = null);
-                      return;
-                    }
-                    Navigator.of(context).maybePop();
-                  },
-                  actions: [
-                    _ProfileAvatarChip(
-                      avatarUrl: avatarUrl,
-                      name: displayName,
-                      semanticLabel: l10n.profileRowAccountInfo,
-                      onTap: () => _openSection(ProfileSection.account),
+    return ModuleEntryRefreshListener(
+      modulePath: '/profile',
+      onRefresh: _invalidateCachedFeeds,
+      child: PopScope(
+        // 账户子视图（资料/通知/2FA/会话…）是页内状态不是路由：一次侧滑先关
+        // 子视图，再一次才离开账户页。判据与页头返回钮同一条。
+        canPop: _section == null,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          setState(() => _section = null);
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
+            bottom: false,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 650),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MobileModuleHeader(
+                      title: displayName,
+                      subtitle: '$email · $roleLabel',
+                      onBack: () {
+                        if (_section != null) {
+                          setState(() => _section = null);
+                          return;
+                        }
+                        Navigator.of(context).maybePop();
+                      },
+                      actions: [
+                        _ProfileAvatarChip(
+                          avatarUrl: avatarUrl,
+                          name: displayName,
+                          semanticLabel: l10n.profileRowAccountInfo,
+                          onTap: () => _openSection(ProfileSection.account),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                     ),
-                    const SizedBox(width: 8),
+                    Expanded(
+                      child:
+                          _section == null
+                              ? _buildGroupList(context, l10n)
+                              : _buildSectionBody(context, l10n, _section!),
+                    ),
                   ],
                 ),
-                Expanded(
-                  child:
-                      _section == null
-                          ? _buildGroupList(context, l10n)
-                          : _buildSectionBody(context, l10n, _section!),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -304,11 +328,13 @@ class _PmSignOutButton extends StatelessWidget {
     return TextButton(
       onPressed: onTap,
       style: TextButton.styleFrom(
-        foregroundColor: const Color(0xFFE2A1A1),
+        foregroundColor: context.env.statusDanger,
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0x38E2A1A1)),
+          side: BorderSide(
+            color: context.env.statusDanger.withValues(alpha: 0.22),
+          ),
         ),
       ),
       child: Text(
@@ -463,16 +489,16 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
   Future<void> _pickAvatar() async {
     final l10n = AppLocalizations.of(context);
     final service = ref.read(profileCommandServiceProvider);
-    final result = await FilePicker.pickFiles(type: FileType.image);
+    final result = await FilePick.pickImages();
     if (!mounted || result.isEmpty) {
       return;
     }
     final file = result.first;
-    final bytes = await file.readAsBytes();
+    final bytes = await file.readBytes();
     if (!mounted || bytes.isEmpty) {
       return;
     }
-    final extension = file.extension?.toLowerCase();
+    final extension = file.extension;
     if (extension == null ||
         !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
       showOmniFeedback(context, l10n.profileAvatarFormatError);

@@ -77,8 +77,12 @@ class PhotosByTagNotifier extends AsyncNotifier<TagPhotosState> {
       ];
       state = AsyncData(TagPhotosState(items: merged, hasMore: next.hasMore));
     } on Object {
-      // 失败回滚加载中标志，尾部重试行由视图承载。
-      state = AsyncData(current);
+      // 失败只复位加载中标志：整份回滚 await 前抓的快照会覆盖请求窗口内的写入，
+      // 尾部重试行由视图承载。
+      final live = state.asData?.value;
+      if (live != null) {
+        state = AsyncData(live.copyWith(isLoadingMore: false));
+      }
     }
   }
 }

@@ -14,8 +14,9 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/mobile_section_swipe.dart';
+import 'package:omninest/core/widgets/mobile_segment_pager.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
@@ -136,12 +137,22 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                     // 语义整体排除，避免其数百节点随每次语义更新重新序列
                     // 化，触发 Windows 辅助功能桥 "will not be in the tree"
                     // 的更新失败。
-                    child: Scaffold(
-                      backgroundColor: Colors.transparent,
-                      body:
-                          compact
-                              ? _buildMobile(context, platform, sources)
-                              : _buildDesktop(context, platform, sources),
+                    child: PopScope(
+                      // 歌单/专辑/艺人详情是页内层（`_collection`），不是路由：
+                      // 打开着详情时一次侧滑应先收详情，而不是整块离开音乐模块。
+                      // 分区页签不在此列——那里的「一次就出去」是既有裁定。
+                      canPop: _collection == null,
+                      onPopInvokedWithResult: (didPop, result) {
+                        if (didPop) return;
+                        _closeCollection();
+                      },
+                      child: Scaffold(
+                        backgroundColor: Colors.transparent,
+                        body:
+                            compact
+                                ? _buildMobile(context, platform, sources)
+                                : _buildDesktop(context, platform, sources),
+                      ),
                     ),
                   ),
                 ),
@@ -352,8 +363,12 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 center?.albums.length ?? 0,
               ),
               onBack: () {
-                // 头部返回钮 = 直接离开模块回媒体库：分区切换不是导航历史，
-                // 早先「非首栏先回首页」要多按一次才出得去。
+                // 头部返回钮与系统侧滑同一阶梯：详情层先收，再离开模块。
+                if (_collection != null) {
+                  _closeCollection();
+                  return;
+                }
+                // 分区切换不是导航历史：早先「非首栏先回首页」要多按一次才出得去。
                 final navigator = Navigator.of(context);
                 if (navigator.canPop()) {
                   navigator.pop();
@@ -362,17 +377,14 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 }
               },
               actions: [
+                // 样例音乐头只有 返回 + 队列 两枚圆钮，队列即打开完整播放器
+                // （稿子里那颗的 aria-label 就是「Open now playing」）。
+                // 头部的搜索钮按样例撤下：全局搜索覆盖层仍从其它空间与
+                // 影视/相册头部可达，这一档是本模块的刻意偏离。
                 MobileGlassIconButton(
                   tooltip: l10n.musicDeckNowPlaying,
-                  icon: Icons.queue_music_rounded,
+                  vector: OmniIcons.queue,
                   onPressed: _openImmersivePlayer,
-                ),
-                // 托管态此前没有任何搜索入口；补一个进全局覆盖层并预选音乐档。
-                MobileGlassIconButton(
-                  tooltip: l10n.musicSearch,
-                  icon: Icons.search_rounded,
-                  onPressed:
-                      () => unawaited(context.push('/search?scope=music')),
                 ),
               ],
             ),
@@ -430,30 +442,24 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
           ],
           const SizedBox(height: 8),
           Expanded(
-            child: MobileSectionSwipe(
-              onSwipe: (toNext) {
-                const sections = <MusicDeckSection>[
-                  MusicDeckSection.home,
-                  MusicDeckSection.library,
-                  MusicDeckSection.playlists,
-                  MusicDeckSection.favorites,
-                ];
-                final target = adjacentSection(sections, _section, toNext);
-                if (target != null) {
-                  _selectSection(target);
-                }
-              },
-              child: MusicDeckContent(
-                section: _section,
-                libraryView: _libraryView,
-                sources: sources,
-                collection: _collection,
-                onSectionChanged: _selectSection,
-                onLibraryViewChanged:
-                    (view) => setState(() => _libraryView = view),
-                onOpenCollection: _openCollection,
-                onCloseCollection: _closeCollection,
-              ),
+            child: MobileSegmentPager<MusicDeckSection>(
+              sections: MusicDeckMobileNavigation.mobileSections,
+              current: _section,
+              onChanged: _selectSection,
+              pageBuilder:
+                  (context, section) => MusicDeckContent(
+                    section: section,
+                    libraryView: _libraryView,
+                    sources: sources,
+                    // 歌单/收藏集详情只属于当前分段：邻居页拿到它会在预览里画出
+                    // 另一段的详情视图。
+                    collection: section == _section ? _collection : null,
+                    onSectionChanged: _selectSection,
+                    onLibraryViewChanged:
+                        (view) => setState(() => _libraryView = view),
+                    onOpenCollection: _openCollection,
+                    onCloseCollection: _closeCollection,
+                  ),
             ),
           ),
           if (!hosted) ...[

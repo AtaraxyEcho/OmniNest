@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/data/music_api.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -141,7 +142,9 @@ void main() {
   testWidgets('行内下一首播放把曲目移动到当前曲目之后且当前行置灰', (tester) async {
     final harness = await _pumpQueueSheet(tester);
 
-    final playNextButtons = find.byIcon(Icons.queue_music_rounded);
+    final playNextButtons = find.byWidgetPredicate(
+      (widget) => widget is OmniIcon && widget.icon == OmniIcons.queue,
+    );
     expect(playNextButtons, findsNWidgets(3));
 
     // 当前行（首行 Alpha）的下一首播放按钮置灰。

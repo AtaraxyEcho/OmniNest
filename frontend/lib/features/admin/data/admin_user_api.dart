@@ -101,6 +101,14 @@ class AdminUserApi {
     parseEnvelope(response.data);
   }
 
+  /// 重置用户两步验证：清除动态口令秘钥与备份码。用于认证器丢失或凭据加密密钥轮换后的恢复。
+  Future<void> resetTwoFactor(String userId) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/admin/users/$userId/2fa',
+    );
+    parseEnvelope(response.data);
+  }
+
   ({List<AdminUser> items, int total}) parseUserPageResponse(
     Map<String, dynamic>? body,
   ) {

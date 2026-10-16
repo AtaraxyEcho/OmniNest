@@ -161,7 +161,7 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
   }
 
   Widget _buildBody() {
-    if (_loading) return const AppLoading.grid();
+    if (_loading) return const AppLoading();
 
     if (_error != null) {
       return AppErrorView(

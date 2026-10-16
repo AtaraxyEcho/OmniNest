@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_paged_list_card.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
@@ -70,6 +73,17 @@ class _MergedVideoApi implements MovieApi {
   Future<List<MovieVideoItem>> recent({int days = 30}) async {
     recentCalls += 1;
     return recentMovies;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _PendingMovieApi implements MovieApi {
+  @override
+  Future<List<MovieContinueWatching>> continueWatching() {
+    // 永不完成：把卡片钉在首屏等数态。
+    return Completer<List<MovieContinueWatching>>().future;
   }
 
   @override
@@ -198,6 +212,45 @@ void main() {
     final state = await container.read(portalContinueWatchingProvider.future);
     expect(state.items.length, greaterThan(10));
     expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('卡片首屏等数不产生动画指示（整屏唯一动画归区级线）', (tester) async {
+    final container = ProviderContainer(
+      overrides: [movieApiProvider.overrideWithValue(_PendingMovieApi())],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 420,
+                child: PortalPagedListCard<MovieContinueWatching>(
+                  provider: portalContinueWatchingProvider,
+                  headerIcon: Icons.movie_outlined,
+                  headerTitle: '继续观看',
+                  openRoute: '/video',
+                  emptyMessage: '暂无内容',
+                  rowBuilder:
+                      (item) => SizedBox(height: 64, child: Text(item.title)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byType(MobileSkeletonBlock), findsNWidgets(3));
   });
 
   test('书架浏览客户端分窗且 refresh 重取列表', () async {

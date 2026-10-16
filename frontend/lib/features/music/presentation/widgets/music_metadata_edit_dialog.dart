@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,9 +12,11 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/utils/text_file_decoder.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 part 'music_metadata_edit_sections.dart';
 
@@ -76,7 +75,7 @@ class _MetadataEditLoadingDialog extends StatelessWidget {
       content: const SizedBox(
         width: 640,
         height: 220,
-        child: Center(child: AppLoading.detail()),
+        child: Center(child: AppLoading()),
       ),
     );
   }
@@ -241,9 +240,9 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
           existingLyrics: widget.track.lyricsRaw,
           pendingLyrics: _lyricsContent,
           lyricsDetailPending: _lyricsDetailPending,
-          onPickCover: _pickCover,
+          onPickCover: () => unawaited(_pickCover()),
           onRemoveCover: _removeCover,
-          onPickLyrics: _pickLyrics,
+          onPickLyrics: () => unawaited(_pickLyrics()),
           onClearLyrics: _clearLyrics,
           onSearchLyrics: _lyricsSearching ? null : _searchLyrics,
           searchingLyrics: _lyricsSearching,
@@ -516,21 +515,33 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
 
   Future<void> _pickCover() async {
     final generation = ++_filePickGeneration;
-    final result = await FilePicker.pickFiles(type: FileType.image);
-    if (!mounted || generation != _filePickGeneration) {
-      return;
-    }
-    if (result.isNotEmpty) {
-      final file = result.first;
-      final bytes = await file.readAsBytes();
+    try {
+      final result = await FilePick.pickImages();
       if (!mounted || generation != _filePickGeneration) {
         return;
       }
-      setState(() {
-        _coverFileName = file.name;
-        _coverBytes = bytes;
-        _clearCover = false;
-      });
+      if (result.isNotEmpty) {
+        final file = result.first;
+        final bytes = await file.readBytes();
+        if (!mounted || generation != _filePickGeneration) {
+          return;
+        }
+        setState(() {
+          _coverFileName = file.name;
+          _coverBytes = bytes;
+          _clearCover = false;
+        });
+      }
+    } on Object catch (error) {
+      // 两个选择动作都挂在 VoidCallback 上，异常没人接就会落进全局 Zone；只能内联回报。
+      devLog('音乐封面读取异常: error=$error');
+      if (!mounted) {
+        return;
+      }
+      _setStatus(
+        AppLocalizations.of(context).musicCoverReadFailed,
+        error: true,
+      );
     }
   }
 
@@ -556,32 +567,35 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
 
   Future<void> _pickLyrics() async {
     final generation = ++_filePickGeneration;
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['lrc', 'txt', 'srt', 'vtt'],
-    );
-    if (!mounted || generation != _filePickGeneration) {
-      return;
-    }
-    if (result.isNotEmpty) {
-      final file = result.first;
-      final bytes = await file.readAsBytes();
+    try {
+      final result = await FilePick.pickFiles(
+        allowedExtensions: const ['lrc', 'txt', 'srt', 'vtt'],
+      );
       if (!mounted || generation != _filePickGeneration) {
         return;
       }
-      String? content;
-      if (bytes.isNotEmpty) {
-        content = utf8.decode(bytes);
-      } else if (file.path != null && !kIsWeb) {
-        content = await File(file.path!).readAsString();
+      if (result.isNotEmpty) {
+        final file = result.first;
+        final bytes = await file.readBytes();
         if (!mounted || generation != _filePickGeneration) {
           return;
         }
+        setState(() {
+          _lyricsFileName = file.name;
+          _lyricsContent = bytes.isEmpty ? null : decodeTextFileBytes(bytes);
+        });
       }
-      setState(() {
-        _lyricsFileName = file.name;
-        _lyricsContent = content;
-      });
+    } on Object catch (error) {
+      // 歌词文件经常是 GBK/ANSI 中文编码，严格 UTF-8 解码会抛异常；统一走容错解码，
+      // 仍然读不出来时内联回报，而不是把异常丢给全局 Zone。
+      devLog('歌词文件读取异常: error=$error');
+      if (!mounted) {
+        return;
+      }
+      _setStatus(
+        AppLocalizations.of(context).musicLyricsReadFailed,
+        error: true,
+      );
     }
   }
 }

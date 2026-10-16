@@ -90,6 +90,8 @@ class _WeatherSheetRoute extends PopupRoute<void> {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeIn,
     );
+    // 遮罩即关闭入口：点暗区、系统返回/侧滑、下拉甩动三条退路都在，
+    // 头部不再放第四颗重复的关闭钮（2026-10-15 定）。
     final closeTooltip = MaterialLocalizations.of(context).closeButtonTooltip;
     // Material 提供正文默认样式：裸 PopupRoute 页面没有 Scaffold/Material 祖先时，
     // 文本会落到 MaterialApp 的兜底样式（黄色双下划线），抽屉内每个文字都带上它。
@@ -216,46 +218,33 @@ class _WeatherDetailSheet extends StatelessWidget {
                   constraints: const BoxConstraints(minHeight: 86),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(19, 24, 19, 8),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                l10n
-                                    .weatherSheetLocationEyebrow(location)
-                                    .toUpperCase(),
-                                style: TextStyle(
-                                  color: context.env.white70,
-                                  // ignore: font_size_whitelist
-                                  fontSize: 8,
-                                  letterSpacing: 1.4,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                weather.text,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: context.env.ink,
-                                  fontFamily: 'InstrumentSerif',
-                                  // ignore: font_size_whitelist
-                                  fontSize: 27,
-                                  height: 1.05,
-                                ),
-                              ),
-                            ],
+                        Text(
+                          l10n
+                              .weatherSheetLocationEyebrow(location)
+                              .toUpperCase(),
+                          style: TextStyle(
+                            color: context.env.white70,
+                            // ignore: font_size_whitelist
+                            fontSize: 8,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        _WeatherCloseButton(
-                          tooltip:
-                              MaterialLocalizations.of(
-                                context,
-                              ).closeButtonTooltip,
-                          onPressed: () => Navigator.of(context).pop(),
+                        const SizedBox(height: 3),
+                        Text(
+                          weather.text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.env.ink,
+                            fontFamily: 'InstrumentSerif',
+                            // ignore: font_size_whitelist
+                            fontSize: 27,
+                            height: 1.05,
+                          ),
                         ),
                       ],
                     ),
@@ -380,49 +369,6 @@ class _WeatherSceneBackdrop extends ConsumerWidget {
   }
 }
 
-/// 头部关闭钮：样例 `.icon-button`——48 圆形玻璃舱、1px line10 描边、
-/// backdrop blur(16) 与默认 22 号 close 图元。
-class _WeatherCloseButton extends StatelessWidget {
-  const _WeatherCloseButton({required this.tooltip, required this.onPressed});
-
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 48,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: context.env.iconButtonGlass,
-              shape: BoxShape.circle,
-              border: Border.all(color: context.env.line10),
-            ),
-            child: IconButton(
-              tooltip: tooltip,
-              onPressed: onPressed,
-              padding: EdgeInsets.zero,
-              style: IconButton.styleFrom(
-                foregroundColor: context.env.ink,
-                overlayColor: Colors.transparent,
-                minimumSize: const Size.square(48),
-              ),
-              icon: OmniIcon(
-                icon: OmniIcons.close,
-                size: 22,
-                color: context.env.ink,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _WeatherCurrent extends StatelessWidget {
   const _WeatherCurrent({required this.weather});
 
@@ -519,7 +465,10 @@ class _HourlyWeather extends StatelessWidget {
           minWidth: innerWidth + 40,
           maxWidth: innerWidth + 40,
           child: Container(
+            // 面板底固定是 sheetSolid，这里同值铺一层：壁纸带是钉在面板顶部的
+            // 定高 Positioned，行本身会随内容滚动，任何时候滑进带内都不能透出来。
             decoration: BoxDecoration(
+              color: context.env.sheetSolid,
               border: Border(
                 top: BorderSide(color: context.env.line13),
                 bottom: BorderSide(color: context.env.line13),

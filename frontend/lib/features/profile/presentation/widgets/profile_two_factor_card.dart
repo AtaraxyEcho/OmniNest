@@ -39,9 +39,17 @@ class ProfileTwoFactorCard extends ConsumerWidget {
     return _wrap(
       child: status.when(
         loading:
-            () => const SizedBox(
+            () => SizedBox(
+              // 行内子块等自己的 provider 时用静态占位：整屏动画指示至多
+              // 一处，此前这里与会话面板各画一条进度，同屏两个动画。
               height: 44,
-              child: Center(child: LinearProgressIndicator(minHeight: 2)),
+              child: Center(
+                child: Container(
+                  width: 160,
+                  height: 10,
+                  color: scheme.surfaceContainerHighest,
+                ),
+              ),
             ),
         error:
             (_, _) => Row(
@@ -325,6 +333,9 @@ class _TwoFactorEnableDialogState
       _setup = await ref
           .read(meApiProvider)
           .twoFactorSetup(password: _passwordController.text);
+      if (!mounted) {
+        return;
+      }
       setState(() => _step = _EnableStep.scan);
     });
   }
@@ -334,6 +345,9 @@ class _TwoFactorEnableDialogState
       _codes = await ref
           .read(meApiProvider)
           .twoFactorEnable(code: _codeController.text.trim());
+      if (!mounted) {
+        return;
+      }
       setState(() => _step = _EnableStep.codes);
     });
   }
@@ -463,10 +477,11 @@ class _TwoFactorDisableDialogState
       await ref
           .read(meApiProvider)
           .twoFactorDisable(password: _passwordController.text);
-      ref.invalidate(profileTwoFactorStatusProvider);
-      if (mounted) {
-        Navigator.of(context).pop();
+      if (!mounted) {
+        return;
       }
+      ref.invalidate(profileTwoFactorStatusProvider);
+      Navigator.of(context).pop();
     } catch (error) {
       if (mounted) {
         setState(() => _error = describeUserFacingError(error).message);

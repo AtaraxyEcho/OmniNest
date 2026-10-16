@@ -128,6 +128,16 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     );
   }
 
+  /// 取数或远端动作完成后的回写基准。
+  ///
+  /// 完成回调不得拿 `await` 之前抓的快照整份发布：那段窗口里发生的写入（多选、图库形态、
+  /// 续载门闩、已追加的分页窗口、回收站与时间线）会被旧快照无声覆盖，表现为列表闪回旧
+  /// 数据或选中态丢失。优先取发布时刻的实况；实况尚未就绪时才退回快照兜底。
+  /// 命令 mixin 以抽象成员声明同一个助手，实现只保留本处一份。
+  @override
+  PhotoCenterState _liveOr(PhotoCenterState? captured) =>
+      state.asData?.value ?? captured ?? PhotoCenterState.empty();
+
   /// 刷新全部数据
   @override
   Future<void> refresh() async {
@@ -164,8 +174,9 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       _listRefreshSuperseded = true;
       return;
     }
+    final live = _liveOr(current);
     state = AsyncData(
-      current.copyWith(
+      live.copyWith(
         dashboard: results[0] as PhotoDashboard,
         photos: photoPage.items,
         favorites: favoritePage.items,
@@ -176,15 +187,15 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
         favoritePage: favoritePage.page,
         photoTotalElements: photoPage.totalElements,
         favoriteTotalElements: favoritePage.totalElements,
-        photoRefreshVersion: current.photoRefreshVersion + 1,
-        favoriteRefreshVersion: current.favoriteRefreshVersion + 1,
+        photoRefreshVersion: live.photoRefreshVersion + 1,
+        favoriteRefreshVersion: live.favoriteRefreshVersion + 1,
         clearPhotoPageError: true,
         clearFavoritePageError: true,
         errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
       ),
     );
     // 时间线在移入回收站/恢复后计数会变化：已加载过则强制重载，保证徽章与列表一致。
-    if (current.timeline != null) {
+    if (live.timeline != null) {
       unawaited(loadTimeline(force: true));
     }
   }
@@ -230,16 +241,17 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     if (!ref.mounted || generation != _refreshGeneration) return;
     final photoPage = results[1] as PhotoPage;
     final favoritePage = results[2] as PhotoPage;
+    final live = _liveOr(current);
     state = AsyncData(
-      current.copyWith(
+      live.copyWith(
         dashboard: results[0] as PhotoDashboard,
         photos: _mergeRefreshedPage(
-          current.photos,
+          live.photos,
           photoPage.items,
           photoPage.totalElements,
         ),
         favorites: _mergeRefreshedPage(
-          current.favorites,
+          live.favorites,
           favoritePage.items,
           favoritePage.totalElements,
         ),
@@ -248,18 +260,18 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
         albumsPage: (results[3] as PhotoAlbumPage).page,
         photoTotalElements: photoPage.totalElements,
         favoriteTotalElements: favoritePage.totalElements,
-        photoRefreshVersion: current.photoRefreshVersion + 1,
-        favoriteRefreshVersion: current.favoriteRefreshVersion + 1,
+        photoRefreshVersion: live.photoRefreshVersion + 1,
+        favoriteRefreshVersion: live.favoriteRefreshVersion + 1,
         clearError: true,
       ),
     );
-    if (current.timeline != null) {
+    if (live.timeline != null) {
       if (!ref.mounted || generation != _refreshGeneration) return;
       await loadTimeline(force: true);
     }
-    if (current.groups != null) {
+    if (live.groups != null) {
       if (!ref.mounted || generation != _refreshGeneration) return;
-      await loadGroups(current.groupBy, force: true);
+      await loadGroups(live.groupBy, force: true);
     }
     // 永久删除由 Worker 异步落库；回收站已加载或当前在回收站视图时必须补查。
     final latest = state.asData?.value;
@@ -460,7 +472,9 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       }
       return null;
     }();
-    final previous = state;
+    final seedWasInFavorites = current.favorites.any(
+      (photo) => photo.id == photoId,
+    );
     if (seed != null) {
       final updated = seed.copyWith(favorite: nextFavorite);
       state = AsyncData(
@@ -474,8 +488,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
                   ? [
                     for (final photo in current.favorites)
                       photo.id == photoId ? updated : photo,
-                    if (!current.favorites.any((photo) => photo.id == photoId))
-                      updated,
+                    if (!seedWasInFavorites) updated,
                   ]
                   : [
                     for (final photo in current.favorites)
@@ -498,12 +511,43 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       }
       ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
-      if (ref.mounted) {
-        state = previous;
+      if (seed != null && ref.mounted) {
+        _revertFavoriteOptimistic(
+          captured: current,
+          photoId: photoId,
+          seed: seed,
+          seedWasInFavorites: seedWasInFavorites,
+        );
       }
       _setError(describeUserFacingError(e).message);
       rethrow;
     }
+  }
+
+  /// 收藏乐观写失败后的收敛。
+  ///
+  /// 失败回滚只还原这一张照片，发布基准取发布时刻的实况；整份回滚 `await` 前的快照会
+  /// 连带丢掉请求窗口内的多选、视图切换与续载写入。seed 缺失时乐观写从未发生，无需回滚。
+  void _revertFavoriteOptimistic({
+    required PhotoCenterState captured,
+    required String photoId,
+    required PhotoItem seed,
+    required bool seedWasInFavorites,
+  }) {
+    final live = _liveOr(captured);
+    final stillInFavorites = live.favorites.any((photo) => photo.id == photoId);
+    state = AsyncData(
+      live.copyWith(
+        photos: [
+          for (final photo in live.photos) photo.id == photoId ? seed : photo,
+        ],
+        favorites: [
+          for (final photo in live.favorites)
+            if (photo.id != photoId) photo else if (seedWasInFavorites) seed,
+          if (seedWasInFavorites && !stillInFavorites) seed,
+        ],
+      ),
+    );
   }
 
   /// 提交外部编辑器产出的整图字节，保存为新编辑版本。

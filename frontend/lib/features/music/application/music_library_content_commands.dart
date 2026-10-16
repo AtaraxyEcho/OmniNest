@@ -138,20 +138,22 @@ extension MusicLibraryContentCommands on MusicCenterController {
             .toList(growable: false);
       }
 
+      // 收藏回写取发布时刻的实况：远端请求窗口内的队列与分页变化不能被旧快照覆盖。
+      final live = _liveOr(current);
       final nextCurrentItem =
-          current.currentItem?.track.id == track.id
-              ? current.currentItem!.copyWith(
-                track: current.currentItem!.track.copyWith(
+          live.currentItem?.track.id == track.id
+              ? live.currentItem!.copyWith(
+                track: live.currentItem!.track.copyWith(
                   favorite: !track.favorite,
                 ),
               )
-              : current.currentItem;
+              : live.currentItem;
       _replaceState(
-        current.copyWith(
-          tracks: patchFavorite(current.tracks),
-          selectedPlaylistTracks: patchFavorite(current.selectedPlaylistTracks),
-          selectedAlbumTracks: patchFavorite(current.selectedAlbumTracks),
-          selectedArtistTracks: patchFavorite(current.selectedArtistTracks),
+        live.copyWith(
+          tracks: patchFavorite(live.tracks),
+          selectedPlaylistTracks: patchFavorite(live.selectedPlaylistTracks),
+          selectedAlbumTracks: patchFavorite(live.selectedAlbumTracks),
+          selectedArtistTracks: patchFavorite(live.selectedArtistTracks),
           currentItem: nextCurrentItem,
         ),
       );
@@ -205,9 +207,8 @@ extension MusicLibraryContentCommands on MusicCenterController {
         description: description,
         coverFileId: coverFileId,
       );
-      _replaceState(
-        current.copyWith(playlists: [playlist, ...current.playlists]),
-      );
+      final live = _liveOr(current);
+      _replaceState(live.copyWith(playlists: [playlist, ...live.playlists]));
       return playlist;
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
@@ -243,15 +244,16 @@ extension MusicLibraryContentCommands on MusicCenterController {
         coverFileId: coverFileId,
         clearCover: clearCover && coverBytes == null,
       );
+      final live = _liveOr(current);
       _replaceState(
-        current.copyWith(
-          playlists: current.playlists
+        live.copyWith(
+          playlists: live.playlists
               .map((item) => item.id == updated.id ? updated : item)
               .toList(growable: false),
           selectedPlaylist:
-              current.selectedPlaylist?.id == updated.id
+              live.selectedPlaylist?.id == updated.id
                   ? updated
-                  : current.selectedPlaylist,
+                  : live.selectedPlaylist,
         ),
       );
     } on Exception catch (error) {
@@ -268,16 +270,15 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
     try {
       await _api.deletePlaylist(playlist.id);
-      final removingSelected = current.selectedPlaylist?.id == playlist.id;
+      final live = _liveOr(current);
+      final removingSelected = live.selectedPlaylist?.id == playlist.id;
       _replaceState(
-        current.copyWith(
+        live.copyWith(
           playlists:
-              current.playlists
-                  .where((item) => item.id != playlist.id)
-                  .toList(),
+              live.playlists.where((item) => item.id != playlist.id).toList(),
           clearSelectedPlaylist: removingSelected,
           section:
-              removingSelected ? MusicSection.customPlaylists : current.section,
+              removingSelected ? MusicSection.customPlaylists : live.section,
         ),
       );
     } on Exception catch (error) {
@@ -297,22 +298,23 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
     try {
       final updated = await _api.addPlaylistItems(playlist.id, [track.id]);
-      final isSelectedPlaylist = current.selectedPlaylist?.id == playlist.id;
+      final live = _liveOr(current);
+      final isSelectedPlaylist = live.selectedPlaylist?.id == playlist.id;
       final nextSelectedTracks =
           isSelectedPlaylist &&
-                  !current.selectedPlaylistTracks.any(
+                  !live.selectedPlaylistTracks.any(
                     (item) => item.id == track.id,
                   )
-              ? [...current.selectedPlaylistTracks, track]
-              : current.selectedPlaylistTracks;
+              ? [...live.selectedPlaylistTracks, track]
+              : live.selectedPlaylistTracks;
       _replaceState(
-        current.copyWith(
+        live.copyWith(
           playlists:
-              current.playlists
+              live.playlists
                   .map((item) => item.id == updated.id ? updated : item)
                   .toList(),
           selectedPlaylist:
-              isSelectedPlaylist ? updated : current.selectedPlaylist,
+              isSelectedPlaylist ? updated : live.selectedPlaylist,
           selectedPlaylistTracks: nextSelectedTracks,
         ),
       );
@@ -330,8 +332,9 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
     try {
       final page = await _api.playlistTracksPage(playlist.id);
+      final live = _liveOr(current);
       _replaceState(
-        current.copyWith(
+        live.copyWith(
           section: MusicSection.playlistDetail,
           selectedPlaylist: playlist,
           selectedPlaylistTracks: page.items,
@@ -393,16 +396,17 @@ extension MusicLibraryContentCommands on MusicCenterController {
 
   /// 播放前确保歌单曲目全量：播放队列按来源全量重建，滚动窗口不够。
   Future<List<MusicTrack>> ensureCompletePlaylistTracks() async {
-    final state = _currentState;
-    if (state == null) {
+    final snapshot = _currentState;
+    if (snapshot == null) {
       return const <MusicTrack>[];
     }
-    if (!state.detailPaging.hasMore || state.selectedPlaylist == null) {
-      return state.selectedPlaylistTracks;
+    if (!snapshot.detailPaging.hasMore || snapshot.selectedPlaylist == null) {
+      return snapshot.selectedPlaylistTracks;
     }
-    final all = await _api.playlistTracks(state.selectedPlaylist!.id);
+    final all = await _api.playlistTracks(snapshot.selectedPlaylist!.id);
+    final live = _liveOr(snapshot);
     _replaceState(
-      state.copyWith(
+      live.copyWith(
         selectedPlaylistTracks: all,
         detailPaging: const MusicDetailPaging(),
       ),
@@ -448,7 +452,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       // 首页拉取失败时回退客户端过滤子集。
     }
     _replaceState(
-      current.copyWith(
+      _liveOr(current).copyWith(
         section: MusicSection.albumDetail,
         selectedAlbum: album,
         selectedAlbumTracks: albumTracks,
@@ -502,16 +506,17 @@ extension MusicLibraryContentCommands on MusicCenterController {
 
   /// 播放前确保专辑曲目全量：播放队列按来源全量重建。
   Future<List<MusicTrack>> ensureCompleteAlbumTracks() async {
-    final state = _currentState;
-    if (state == null) {
+    final snapshot = _currentState;
+    if (snapshot == null) {
       return const <MusicTrack>[];
     }
-    if (!state.detailPaging.hasMore || state.selectedAlbum == null) {
-      return state.selectedAlbumTracks;
+    if (!snapshot.detailPaging.hasMore || snapshot.selectedAlbum == null) {
+      return snapshot.selectedAlbumTracks;
     }
-    final all = await _api.albumTracks(state.selectedAlbum!.id);
+    final all = await _api.albumTracks(snapshot.selectedAlbum!.id);
+    final live = _liveOr(snapshot);
     _replaceState(
-      state.copyWith(
+      live.copyWith(
         selectedAlbumTracks: all,
         detailPaging: const MusicDetailPaging(),
       ),
@@ -554,7 +559,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       // 首页拉取失败时回退客户端过滤子集。
     }
     _replaceState(
-      current.copyWith(
+      _liveOr(current).copyWith(
         section: MusicSection.artistDetail,
         selectedArtist: artist,
         selectedArtistTracks: artistTracks,
@@ -611,16 +616,17 @@ extension MusicLibraryContentCommands on MusicCenterController {
 
   /// 播放前确保歌手曲目全量：播放队列按来源全量重建。
   Future<List<MusicTrack>> ensureCompleteArtistTracks() async {
-    final state = _currentState;
-    if (state == null) {
+    final snapshot = _currentState;
+    if (snapshot == null) {
       return const <MusicTrack>[];
     }
-    if (!state.detailPaging.hasMore || state.selectedArtist == null) {
-      return state.selectedArtistTracks;
+    if (!snapshot.detailPaging.hasMore || snapshot.selectedArtist == null) {
+      return snapshot.selectedArtistTracks;
     }
-    final all = await _api.artistTracks(state.selectedArtist!.id);
+    final all = await _api.artistTracks(snapshot.selectedArtist!.id);
+    final live = _liveOr(snapshot);
     _replaceState(
-      state.copyWith(
+      live.copyWith(
         selectedArtistTracks: all,
         detailPaging: const MusicDetailPaging(),
       ),
@@ -653,16 +659,17 @@ extension MusicLibraryContentCommands on MusicCenterController {
       final updatedPlaylist = await _api.removePlaylistItems(playlist.id, [
         track.id,
       ]);
+      final live = _liveOr(current);
       final nextTracks =
-          current.selectedPlaylistTracks
+          live.selectedPlaylistTracks
               .where((item) => item.id != track.id)
               .toList();
       _replaceState(
-        current.copyWith(
+        live.copyWith(
           selectedPlaylist: updatedPlaylist,
           selectedPlaylistTracks: nextTracks,
           playlists:
-              current.playlists
+              live.playlists
                   .map(
                     (item) =>
                         item.id == updatedPlaylist.id ? updatedPlaylist : item,

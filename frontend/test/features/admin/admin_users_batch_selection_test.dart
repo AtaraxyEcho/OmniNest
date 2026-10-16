@@ -75,7 +75,12 @@ final _syncHandlerProvider = Provider<AdminSyncHandler>((ref) {
   return AdminSyncHandler(ref);
 });
 
-AdminUser _user(String id, String username, {Set<String>? roles}) {
+AdminUser _user(
+  String id,
+  String username, {
+  Set<String>? roles,
+  bool twoFactorEnabled = false,
+}) {
   return AdminUser(
     id: id,
     username: username,
@@ -85,6 +90,7 @@ AdminUser _user(String id, String username, {Set<String>? roles}) {
     permissions: const {},
     quotaBytes: 1024 * 1024 * 1024,
     usedBytes: 1024,
+    twoFactorEnabled: twoFactorEnabled,
   );
 }
 
@@ -198,5 +204,77 @@ void main() {
     expect(state().selectedIds, {'u1'}, reason: '账户事件刷新后选中集保留');
     expect(state().page, 0);
     expect(find.text('已选择 1 个用户'), findsOneWidget);
+  });
+
+  testWidgets('两步验证重置入口只在已开启的用户行出现，确认后才发请求', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _MockAdminUserApi();
+    when(
+      () => api.listUsers(
+        page: any(named: 'page'),
+        size: any(named: 'size'),
+        query: any(named: 'query'),
+        role: any(named: 'role'),
+        sort: any(named: 'sort'),
+        dir: any(named: 'dir'),
+      ),
+    ).thenAnswer(
+      (_) async => (
+        items: [
+          _user('u1', 'alice', twoFactorEnabled: true),
+          _user('u2', 'bob'),
+        ],
+        total: 2,
+      ),
+    );
+    when(() => api.resetTwoFactor(any())).thenAnswer((_) async {});
+
+    final container = ProviderContainer(
+      overrides: [
+        authSessionProvider.overrideWith(_AdminSessionNotifier.new),
+        adminConsoleControllerProvider.overrideWith(
+          _FakeAdminConsoleController.new,
+        ),
+        adminUserApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const AdminDashboardPage(initialSectionSegment: 'users'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final l10n = AppLocalizations.of(
+      tester.element(find.byType(AdminDashboardPage)),
+    );
+
+    expect(
+      find.byTooltip(l10n.adminResetTwoFactor),
+      findsOneWidget,
+      reason: '只有已开启两步验证的行提供重置入口',
+    );
+
+    await tester.tap(find.byTooltip(l10n.adminResetTwoFactor));
+    await tester.pumpAndSettle();
+    verifyNever(() => api.resetTwoFactor(any()));
+
+    await tester.tap(find.text(l10n.adminResetTwoFactor).last);
+    await tester.pumpAndSettle();
+
+    verify(() => api.resetTwoFactor('u1')).called(1);
+    expect(tester.takeException(), isNull);
   });
 }

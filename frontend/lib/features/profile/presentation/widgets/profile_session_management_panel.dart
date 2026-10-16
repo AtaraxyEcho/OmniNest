@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -65,9 +67,17 @@ class _SessionContent extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return sessionsAsync.when(
       loading:
-          () => const SizedBox(
+          () => SizedBox(
+            // 与两步验证行同一分区：两处各自转圈/进度就是同屏双动画，
+            // 行内等数据改静态占位。
             height: 88,
-            child: Center(child: CircularProgressIndicator.adaptive()),
+            child: Center(
+              child: Container(
+                width: 200,
+                height: 10,
+                color: scheme.surfaceContainerHighest,
+              ),
+            ),
           ),
       error:
           (_, _) => SizedBox(
@@ -492,16 +502,22 @@ class _SessionStatus extends StatelessWidget {
   }
 }
 
-class _SessionRevokeButton extends ConsumerWidget {
+class _SessionRevokeButton extends ConsumerStatefulWidget {
   const _SessionRevokeButton({required this.session});
 
   final UserSession session;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SessionRevokeButton> createState() =>
+      _SessionRevokeButtonState();
+}
+
+class _SessionRevokeButtonState extends ConsumerState<_SessionRevokeButton> {
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
-    if (session.current) {
+    if (widget.session.current) {
       return Text(
         '-',
         textAlign: TextAlign.center,
@@ -514,11 +530,12 @@ class _SessionRevokeButton extends ConsumerWidget {
     return WorkstationActionButton(
       label: l10n.profileRevokeSession,
       variant: WorkstationActionButtonVariant.danger,
-      onPressed: () => _confirmRevoke(context, ref),
+      onPressed: () => unawaited(_confirmRevoke()),
     );
   }
 
-  Future<void> _confirmRevoke(BuildContext context, WidgetRef ref) async {
+  /// 高危写操作：确认框与撤销都是异步边界，回写 ref 与反馈前逐段确认仍在挂载。
+  Future<void> _confirmRevoke() async {
     final l10n = AppLocalizations.of(context);
     final confirmed = await showWorkstationConfirmDialog(
       context,
@@ -529,13 +546,16 @@ class _SessionRevokeButton extends ConsumerWidget {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(profileCommandServiceProvider).revokeSession(session.id);
-      ref.invalidate(userSessionsProvider);
-      if (context.mounted) {
-        showOmniFeedback(context, l10n.profileSessionRevoked);
+      await ref
+          .read(profileCommandServiceProvider)
+          .revokeSession(widget.session.id);
+      if (!mounted) {
+        return;
       }
+      ref.invalidate(userSessionsProvider);
+      showOmniFeedback(context, l10n.profileSessionRevoked);
     } on Exception {
-      if (context.mounted) {
+      if (mounted) {
         showOmniFeedback(
           context,
           l10n.profileSessionRevokeFailed,

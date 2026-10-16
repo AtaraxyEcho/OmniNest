@@ -317,6 +317,13 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
     await _fetch(resetSelection: true);
   }
 
+  /// 重置两步验证：后端清除凭据并撤销该用户会话，本地只刷新列表
+  /// （行的两步验证标记随之消失，选择集不受影响）。
+  Future<void> resetTwoFactor(String userId) async {
+    await _api.resetTwoFactor(userId);
+    await _fetch();
+  }
+
   void toggleSelection(String userId) {
     final current = state.asData?.value;
     if (current == null) {

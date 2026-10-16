@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +7,7 @@ import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
@@ -49,6 +49,7 @@ import 'package:omninest/features/portal/application/weather_preferences_control
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 part 'profile_mobile_view.dart';
 part 'profile_mobile_sections.dart';
@@ -100,18 +101,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Future<void> _pickAndUploadAvatar() async {
     final l10n = AppLocalizations.of(context);
     final profileService = ref.read(profileCommandServiceProvider);
-    final result = await FilePicker.pickFiles(type: FileType.image);
+    final result = await FilePick.pickImages();
     if (!mounted) {
       return;
     }
     if (result.isEmpty) return;
     final file = result.first;
-    final bytes = await file.readAsBytes();
+    final bytes = await file.readBytes();
     if (!mounted) {
       return;
     }
     if (bytes.isEmpty) return;
-    final extension = file.extension?.toLowerCase();
+    final extension = file.extension;
     if (extension == null ||
         !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
       _showMessage(l10n.profileAvatarFormatError);

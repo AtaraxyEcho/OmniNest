@@ -3,6 +3,8 @@ package com.omninest.modules.music.service.platform;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlinePlaylistDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlaybackUrlResult;
@@ -87,10 +89,11 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
 
     private final MusicRuntimeConfigService configService;
     private final MusicPlatformCredentialService credentialService;
+    private final SafeUrlValidator safeUrlValidator;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(REQUEST_TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     @Override
@@ -707,7 +710,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     }
 
     private URI requestUri(String path) {
-        return URI.create(trimTrailingSlash(configService.neteaseBaseUrl()) + path);
+        String base = trimTrailingSlash(configService.neteaseBaseUrl());
+        return OutboundEndpointRules.requireConfiguredEndpoint(base, URI.create(base + path), safeUrlValidator);
     }
 
     private void attachCookie(HttpRequest.Builder requestBuilder, String cookie) {

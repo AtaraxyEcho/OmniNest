@@ -80,7 +80,7 @@ class PhotoEditorPage extends ConsumerWidget {
       loading:
           () => const Scaffold(
             backgroundColor: Colors.black,
-            body: Center(child: AppLoading.detail()),
+            body: Center(child: AppLoading()),
           ),
     );
   }

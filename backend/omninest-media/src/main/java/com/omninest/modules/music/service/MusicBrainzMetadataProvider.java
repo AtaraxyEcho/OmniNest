@@ -1,6 +1,8 @@
 package com.omninest.modules.music.service;
 
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.security.OutboundEndpointRules;
+import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.dto.MusicDtos.MusicScrapeCandidateDto;
 import java.io.IOException;
@@ -34,9 +36,10 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     private final MusicRuntimeConfigService configService;
+    private final SafeUrlValidator safeUrlValidator;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(REQUEST_TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     private final Object throttleLock = new Object();
@@ -445,7 +448,8 @@ public class MusicBrainzMetadataProvider implements MusicMetadataProvider {
                 first = false;
             }
         }
-        return URI.create(builder.toString());
+        return OutboundEndpointRules.requireConfiguredEndpoint(baseUrl, URI.create(builder.toString()),
+                safeUrlValidator);
     }
 
     private String normalize(String value) {

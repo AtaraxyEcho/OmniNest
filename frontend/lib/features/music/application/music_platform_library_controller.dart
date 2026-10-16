@@ -172,12 +172,15 @@ class MusicPlatformLibraryController
 
   /// 重新加载全部平台账号内容。
   ///
-  /// 刷新期间保留上一次成功数据，避免 UI 回落空状态闪烁。
+  /// 刷新期间保留上一次成功数据，避免 UI 回落空状态闪烁。保旧值时取发布时刻的实况
+  /// 而不是发起时的快照：取数窗口里落地的歌单曲目页、续载标记不会被旧快照覆盖；
+  /// 实况尚未就绪（首帧取数、错误态）才退回快照。
   Future<void> refresh() async {
     final previous = state.asData?.value;
     final next = await AsyncValue.guard(() => _load(forceRefresh: true));
-    if (next.hasError && previous != null) {
-      state = AsyncData(previous);
+    final live = state.asData?.value ?? previous;
+    if (next.hasError && live != null) {
+      state = AsyncData(live);
       return;
     }
     state = next;
@@ -807,6 +810,13 @@ class MusicPlatformLibraryController
       playlistTracks: Map<String, MusicPagedResult<OnlineTrack>>.unmodifiable(
         <String, MusicPagedResult<OnlineTrack>>{...?previous?.playlistTracks},
       ),
+      // 在途门闩随刷新一起带过去：请求还在飞的时候把门闩清空，会让歌单/喜欢列表的
+      // 转圈凭空消失，而回包到达时又要按门闩收敛状态。
+      loadingPlaylistKeys: previous?.loadingPlaylistKeys ?? const <String>{},
+      appendingPlaylistKeys:
+          previous?.appendingPlaylistKeys ?? const <String>{},
+      loadingMoreLikedPlatforms:
+          previous?.loadingMoreLikedPlatforms ?? const <String>{},
       failures: Map<String, String>.unmodifiable(failures),
     );
   }

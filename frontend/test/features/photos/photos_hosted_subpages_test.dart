@@ -1,6 +1,8 @@
 // 照片子页托管形态回归：相册详情、查看器与相册选片页在移动壳层内
 // 必须落深玻璃皮肤（样例 photos-overlay / photo-viewer / picker-grid），
 // 而不是继续用 Frame 暖纸顶栏。
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -199,6 +201,26 @@ void main() {
     expect(find.byType(PhotoViewerTopBar), findsNothing);
   });
 
+  // 首屏取数未完成时，托管相册详情只允许一处动画指示：此前是两块占位
+  // 各塞一个转圈（同屏两个加载动画）。
+  testWidgets('相册详情首屏加载：一屏只有一处动画指示', (tester) async {
+    final repository = _MockPhotoRepository();
+    _stubRepository(repository, const []);
+    when(
+      () => repository.getAlbumDetail(any()),
+    ).thenAnswer((_) => Completer<PhotoAlbumDetail>().future);
+
+    await _pumpHostedPhone(
+      tester,
+      initialLocation: '/photos/albums/album-1',
+      repository: repository,
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(MobileSkeletonBlock), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('空相册托管态：EnvEmptyState 主按钮直达选片页', (tester) async {
     final repository = _MockPhotoRepository();
     _stubRepository(repository, const []);
@@ -271,14 +293,28 @@ void main() {
 
     expect(find.byType(MobileModuleHeader), findsOneWidget);
     expect(find.byType(PhotoHostedSquareTile), findsNWidgets(2));
-    expect(find.byType(OmniIcon), findsNothing);
+    // 页头返回钮按样例也是矢量尖括号，计数对勾舱时先减掉页头那一枚。
+    expect(bodyGlyphCount(tester), 0);
 
     await tester.tap(find.byType(PhotoHostedSquareTile).first);
     await _settleTap(tester);
-    expect(find.byType(OmniIcon), findsOneWidget);
+    expect(bodyGlyphCount(tester), 1);
 
     await tester.tap(find.text('Select all'));
     await _settleTap(tester);
-    expect(find.byType(OmniIcon), findsNWidgets(2));
+    expect(bodyGlyphCount(tester), 2);
   });
+}
+
+/// 页头之外的矢量图标数（选片页里就是对勾舱）。
+int bodyGlyphCount(WidgetTester tester) {
+  final header =
+      find
+          .descendant(
+            of: find.byType(MobileModuleHeader),
+            matching: find.byType(OmniIcon),
+          )
+          .evaluate()
+          .length;
+  return find.byType(OmniIcon).evaluate().length - header;
 }

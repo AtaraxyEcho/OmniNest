@@ -21,7 +21,9 @@ extension MusicPlaybackHelpers on MusicCenterController {
       // 绑定新的纯本地曲库来源：重置续页游标。
       _libraryNextPage = null;
     }
-    final pendingState = current.copyWith(
+    // 基准取发布时刻的实况：`current` 由调用方透传，可能是更早之前抓的快照，
+    // 整份发布会抹掉期间的分页与队列写入。播放字段本身仍按本次传入的队列与下标落定。
+    final pendingState = _liveOr(current).copyWith(
       currentItem: item,
       clearPlaybackPlan: true,
       isPlaying: true,

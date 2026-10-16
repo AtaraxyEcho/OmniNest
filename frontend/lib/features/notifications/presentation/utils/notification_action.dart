@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 
@@ -40,4 +42,28 @@ NotificationAction? notificationActionFor(
     ),
     _ => null,
   };
+}
+
+/// 通知动作的跳转方式。
+///
+/// 目标是壳层四空间之一（分支路由）时必须 `go`：通知中心与工具页都挂在
+/// `StatefulShellRoute` 之外的根级导航上，`push` 一条分支路由会让 go_router
+/// 再压入**第二个**壳层页面，Navigator 在 `_debugCheckDuplicatedPageKeys`
+/// 断言 `!keyReservation.contains(key)` 并让整棵内容树失去渲染（实测：断言抛出后
+/// chrome、目标分支与来源页三者都不在树上）。四空间是同级目标，按导航规程走 go。
+/// 其余目标（模块页 `/video`、`/profile` 这类根级路由）继续 push，保住系统返回
+/// 能落回通知中心。
+void navigateNotificationAction(BuildContext context, String route) {
+  final location = route.split('?').first;
+  const shellBranchLocations = <String>{
+    '/portal',
+    '/library',
+    '/reader',
+    '/files',
+  };
+  if (shellBranchLocations.contains(location)) {
+    context.go(route);
+    return;
+  }
+  context.push(route);
 }

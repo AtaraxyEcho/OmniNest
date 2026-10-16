@@ -141,11 +141,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('时间线尚未取到时给骨架，不误报空', (tester) async {
+  testWidgets('时间线尚未取到时给唯一一处加载指示，不误报空', (tester) async {
     await _pump(tester, null);
 
     expect(find.byType(EnvEmptyState), findsNothing);
-    expect(find.byType(MobileSkeletonBlock), findsWidgets);
+    // 首屏只留一处动画指示：此前是两块占位各带一个转圈。
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(MobileSkeletonBlock), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

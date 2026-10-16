@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:omninest/platform/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -214,15 +214,14 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
 
   Future<void> _pickAndUploadSubtitle() async {
     final l10n = AppLocalizations.of(context);
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
+    final result = await FilePick.pickFiles(
       allowedExtensions: const ['vtt', 'srt', 'ass', 'ssa', 'ttml', 'sub'],
     );
     final file = result.singleOrNull;
     if (file == null || !mounted) {
       return;
     }
-    final bytes = await file.readAsBytes();
+    final bytes = await file.readBytes();
     if (!mounted || bytes.isEmpty) {
       return;
     }

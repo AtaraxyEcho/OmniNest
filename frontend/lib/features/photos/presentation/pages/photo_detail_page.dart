@@ -112,7 +112,7 @@ class PhotoDetailPage extends ConsumerWidget {
                             ),
                           ],
                         ),
-                    loading: () => const AppLoading.detail(),
+                    loading: () => const AppLoading(),
                   ),
         ),
       ),

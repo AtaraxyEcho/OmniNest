@@ -70,10 +70,7 @@ class PhotoAlbumDetailPage extends ConsumerWidget {
                             ),
                       ),
           loading:
-              () =>
-                  hosted
-                      ? const _HostedAlbumLoading()
-                      : const AppLoading.grid(),
+              () => hosted ? const _HostedAlbumLoading() : const AppLoading(),
         ),
       ),
     );

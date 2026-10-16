@@ -334,8 +334,9 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       if (await _nextShuffledTrack(current, queue)) {
         return;
       }
-      // 洗牌序无法重生成（队列已空）：按停播收尾。
-      _replaceState(current.copyWith(isPlaying: false));
+      // 洗牌序无法重生成（队列已空）：按停播收尾。回写基准取发布时刻的实况，
+      // 洗牌推进与队列续页在途时不能拿发起时的快照整份发布。
+      _replaceState(_liveOr(current).copyWith(isPlaying: false));
       return;
     }
     final nextIndex = current.playbackIndex + 1;

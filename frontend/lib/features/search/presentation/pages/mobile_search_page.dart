@@ -355,10 +355,10 @@ class _SearchHeader extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      const OmniIcon(
+                      OmniIcon(
                         icon: OmniIcons.search,
                         size: 19,
-                        color: Color(0x9EF6F6F2),
+                        color: context.env.inkMuted,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -404,35 +404,17 @@ class _SearchHeader extends StatelessWidget {
                           return IconButton(
                             tooltip: l10n.coreClear,
                             onPressed: onCleared,
-                            icon: const OmniIcon(
+                            icon: OmniIcon(
                               icon: OmniIcons.close,
                               size: 18,
-                              color: Color(0x9EF6F6F2),
+                              color: context.env.inkMuted,
                             ),
                           );
                         },
                       ),
-                      const SizedBox(width: 6),
-                      // 样例 label 尾部键帽（桌面快捷键提示，移动端弱化）。
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: context.env.line12,
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: const Text(
-                          '⌘K',
-                          style: TextStyle(
-                            color: Color(0x9EF6F6F2),
-                            // ignore: font_size_whitelist
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                      // 样例 label 尾部那颗 ⌘K 键帽不在这里渲染：本页只在移动端出现，
+                      // 触屏没有键盘，且全站搜索的真实绑定是 ⌘F，留一个按不出来的键帽
+                      // 是假承诺。
                     ],
                   ),
                 ),
@@ -463,10 +445,10 @@ class _RecentRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.search,
               size: 18,
-              color: Color(0x9EF6F6F2),
+              color: context.env.inkMuted,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -483,10 +465,10 @@ class _RecentRow extends StatelessWidget {
             ),
             Transform.rotate(
               angle: math.pi / 4,
-              child: const OmniIcon(
+              child: OmniIcon(
                 icon: OmniIcons.arrow,
                 size: 17,
-                color: Color(0x9EF6F6F2),
+                color: context.env.inkMuted,
               ),
             ),
           ],
@@ -545,10 +527,10 @@ class _CommandRow extends StatelessWidget {
                 ),
               ),
             ),
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.chevron,
               size: 17,
-              color: Color(0x9EF6F6F2),
+              color: context.env.inkMuted,
             ),
           ],
         ),
@@ -615,7 +597,7 @@ class _SearchResultRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       // ignore: font_size_whitelist
                       style: TextStyle(
-                        color: const Color(0x9EF6F6F2),
+                        color: context.env.inkMuted,
                         // ignore: font_size_whitelist
                         fontSize: 9,
                       ),
@@ -623,10 +605,10 @@ class _SearchResultRow extends StatelessWidget {
                 ],
               ),
             ),
-            const OmniIcon(
+            OmniIcon(
               icon: OmniIcons.chevron,
               size: 18,
-              color: Color(0x9EF6F6F2),
+              color: context.env.inkMuted,
             ),
           ],
         ),
@@ -659,10 +641,10 @@ class _UnavailableScopeRow extends StatelessWidget {
       padding: const EdgeInsets.only(top: 12),
       child: Row(
         children: [
-          const OmniIcon(
+          OmniIcon(
             icon: OmniIcons.cloud,
             size: 16,
-            color: Color(0x9EF6F6F2),
+            color: context.env.inkMuted,
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -750,7 +732,7 @@ class _ScopeGrid extends StatelessWidget {
                           label,
                           // ignore: font_size_whitelist
                           style: TextStyle(
-                            color: const Color(0x9EF6F6F2),
+                            color: context.env.inkMuted,
                             // ignore: font_size_whitelist
                             fontSize: 10,
                             fontWeight: FontWeight.w600,

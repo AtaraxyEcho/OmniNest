@@ -39,16 +39,17 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
     }
     try {
       final updated = await _api.applyScrapeCandidate(track.id, candidate);
+      final live = _liveOr(current);
       final nextTracks =
-          current.tracks
+          live.tracks
               .map((item) => item.id == updated.id ? updated : item)
               .toList();
       final nextCurrentItem =
-          current.currentItem?.track.id == updated.id
-              ? current.currentItem!.copyWith(track: updated)
-              : current.currentItem;
+          live.currentItem?.track.id == updated.id
+              ? live.currentItem!.copyWith(track: updated)
+              : live.currentItem;
       _replaceState(
-        current.copyWith(tracks: nextTracks, currentItem: nextCurrentItem),
+        live.copyWith(tracks: nextTracks, currentItem: nextCurrentItem),
       );
       await refresh();
     } on Exception catch (error) {
@@ -78,11 +79,12 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
         lyrics,
         lyricsTranslation: lyricsTranslation,
       );
+      final live = _liveOr(current);
       final nextTracks =
-          current.tracks
+          live.tracks
               .map((item) => item.id == updated.id ? updated : item)
               .toList();
-      _replaceState(current.copyWith(tracks: nextTracks));
+      _replaceState(live.copyWith(tracks: nextTracks));
       return updated;
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);

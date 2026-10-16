@@ -198,14 +198,17 @@ class MusicDeckMobileNavigation extends StatelessWidget {
   final MusicDeckSection selected;
   final ValueChanged<MusicDeckSection> onSelected;
 
+  /// 移动端分段次序：导航条与跟手横滑共用同一份，避免两处各写一遍再漂移。
+  static const List<MusicDeckSection> mobileSections = [
+    MusicDeckSection.home,
+    MusicDeckSection.library,
+    MusicDeckSection.playlists,
+    MusicDeckSection.favorites,
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final primary = const <MusicDeckSection>[
-      MusicDeckSection.home,
-      MusicDeckSection.library,
-      MusicDeckSection.playlists,
-      MusicDeckSection.favorites,
-    ];
+    final primary = mobileSections;
     final effective = primary.contains(selected) ? selected : primary.first;
     return MobileSegmentedControl<MusicDeckSection>(
       values: primary,

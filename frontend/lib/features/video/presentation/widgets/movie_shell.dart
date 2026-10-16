@@ -12,6 +12,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_segment_pager.dart';
 import 'package:omninest/core/widgets/mobile_section_swipe.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
@@ -128,7 +129,7 @@ const Map<MovieSidebarGroup, List<MovieSection>> movieSidebarGroups = {
 class MovieShell extends ConsumerStatefulWidget {
   const MovieShell({
     required this.section,
-    required this.child,
+    required this.childFor,
     this.onSectionSelected,
     this.trailing,
     this.onRefresh,
@@ -138,7 +139,10 @@ class MovieShell extends ConsumerStatefulWidget {
   });
 
   final MovieSection section;
-  final Widget child;
+
+  /// 按分区构建内容。托管态的跟手横滑要能提前画出邻位，所以这里给的是构造器
+  /// 而不是已经算好的单个 Widget。
+  final Widget Function(MovieSection section) childFor;
   final ValueChanged<MovieSection>? onSectionSelected;
   final Widget? trailing;
   final Future<void> Function()? onRefresh;
@@ -237,7 +241,9 @@ class _MovieShellState extends ConsumerState<MovieShell> {
                                             );
                                         final content = MovieSectionTransition(
                                           section: effectiveSection,
-                                          child: widget.child,
+                                          child: widget.childFor(
+                                            effectiveSection,
+                                          ),
                                         );
                                         if (widget.childOwnsScroll) {
                                           return Padding(
@@ -264,7 +270,7 @@ class _MovieShellState extends ConsumerState<MovieShell> {
                                 onRefresh: widget.onRefresh,
                                 onBack: _onBack,
                                 childOwnsScroll: widget.childOwnsScroll,
-                                child: widget.child,
+                                childFor: widget.childFor,
                               ),
                     ),
                   ],

@@ -13,6 +13,8 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/presentation/mobile_env_settings_sheet.dart';
 
 const ValueKey<String> _sheetSurfaceKey = ValueKey<String>(
@@ -118,7 +120,15 @@ Color _sheetSurfaceColor(WidgetTester tester) {
 }
 
 Color _sheetInkColor(WidgetTester tester) {
-  return tester.widget<Icon>(find.byIcon(Icons.close_rounded)).color!;
+  // 关闭位换成样例 48 玻璃圆钮后，字形是 OmniIcons.close 矢量。
+  return tester
+      .widget<OmniIcon>(
+        find.descendant(
+          of: find.byType(MobileGlassIconButton),
+          matching: find.byType(OmniIcon),
+        ),
+      )
+      .color!;
 }
 
 void main() {
@@ -145,6 +155,21 @@ void main() {
 
     expect(_sheetSurfaceColor(tester), MobileEnvPalette.dark.sheetSolid);
     expect(_sheetInkColor(tester), MobileEnvPalette.dark.ink);
+  });
+
+  testWidgets('抽屉关闭位是 48 玻璃圆钮配样例 close 矢量', (tester) async {
+    await _pumpOpenSheet(tester);
+
+    final close = find.byType(MobileGlassIconButton);
+    expect(close, findsOneWidget);
+    final rect = tester.getRect(close);
+    expect(rect.width, 48);
+    expect(rect.height, 48);
+    expect(
+      tester.widget<MobileGlassIconButton>(close).vector,
+      OmniIcons.close,
+      reason: '样例 .sheet-head 关闭位是 .icon-button + 同源 close，不留 Material 字形',
+    );
   });
 
   testWidgets('抽屉不重开，仅翻外观设置也必须跟随极性', (tester) async {

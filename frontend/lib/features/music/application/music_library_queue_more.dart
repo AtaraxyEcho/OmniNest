@@ -20,7 +20,9 @@ extension MusicLibraryQueueMore on MusicCenterController {
             .ceil();
     final page = _libraryNextPage!;
     _libraryFetchingMore = true;
-    _replaceState(current.copyWith(tracksLoadingMore: true));
+    // 乐观门闩也要以发布时刻的实况为基准：调用方传进来的 `current` 可能是更早之前
+    // 抓的快照，整份发布会把期间的播放状态写回旧值。
+    _replaceState(_liveOr(current).copyWith(tracksLoadingMore: true));
     try {
       final result = await _api.tracks(
         page: page,

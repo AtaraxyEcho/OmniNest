@@ -187,8 +187,13 @@ public class MoviePlaybackService {
         );
     }
 
-    /** 使用媒体短期令牌流式写出字幕，且每次请求重新校验媒体库授权。 */
-    @Transactional(readOnly = true)
+    /**
+     * 使用媒体短期令牌流式写出字幕，且每次请求重新校验媒体库授权。
+     *
+     * <p>刻意不开事务：本方法可能一路走到下面的 ffmpeg 提取，只读事务会在整个流式期间
+     * 占住一个连接池连接，而 {@code VideoTranscodeService} 对 ffmpeg 的超时上限是 180 分钟，
+     * 并发几条字幕请求即可耗尽连接。鉴权与取数由各自带事务的协作者完成。
+     */
     public void writeSubtitleContentByToken(String token, UUID videoItemId, UUID subtitleId, OutputStream out)
             throws IOException {
         MediaPlaybackTokenService.MediaGrant grant = mediaPlaybackTokenService.requireGrant(token, videoItemId);
@@ -204,28 +209,35 @@ public class MoviePlaybackService {
      * 流式写出字幕文件内容。
      * 外挂字幕：从 File 模块受控内容流拷贝（SRT/ASS/VTT）。
      * 内嵌字幕：从 File 读取探测时提取的 WebVTT；若未提取则实时提取。
+     *
+     * <p>不开事务的理由同 {@link #writeSubtitleContentByToken}：内嵌字幕在没提取过时要现场
+     * 跑 ffmpeg，时长量级是分钟而不是毫秒，绝不能把它包在持库连接的事务里。
      */
-    @Transactional(readOnly = true)
     public void writeSubtitleContent(UUID ownerUserId, UUID subtitleId, OutputStream out)
             throws IOException {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, track.getVideoItemId());
+        // 先把要用的标量取出来：之后既不再读库，也不依赖仍处托管态的实体。
         UUID catalogOwnerId = item.getOwnerUserId();
+        UUID videoFileNodeId = item.getFileNodeId();
+        UUID videoItemId = item.getId();
+        UUID subtitleFileNodeId = track.getFileNodeId();
+        Integer subtitleStreamIndex = track.getStreamIndex();
         try {
-            if (track.getFileNodeId() != null) {
+            if (subtitleFileNodeId != null) {
                 try (FileContentStream content = fileQueryService.openOwnedFileContent(
                         catalogOwnerId,
-                        track.getFileNodeId()
+                        subtitleFileNodeId
                 )) {
                     if (content.sizeBytes() > processingLimits.getMaxSubtitleBytes()) {
                         throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "字幕文件超过大小限制");
                     }
                     content.inputStream().transferTo(out);
                 }
-            } else if (track.getStreamIndex() != null) {
+            } else if (subtitleStreamIndex != null) {
                 Path vttFile = videoTranscodeService.extractSubtitleToWebVtt(
-                        catalogOwnerId, item.getFileNodeId(), item.getId(), track.getStreamIndex());
+                        catalogOwnerId, videoFileNodeId, videoItemId, subtitleStreamIndex);
                 try {
                     if (Files.size(vttFile) > processingLimits.getMaxSubtitleBytes()) {
                         throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "字幕文件超过大小限制");

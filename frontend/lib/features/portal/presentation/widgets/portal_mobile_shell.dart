@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:intl/intl.dart' show DateFormat;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -89,12 +90,42 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
     await actions.refreshAll(force: true);
   }
 
+  /// 返回阶梯的最底一级：门户上要「再按一次」才退出。
+  ///
+  /// 托管态门户是分支里的唯一路由，`Navigator.pop` 无处可弹，退出只能走
+  /// `SystemNavigator.pop`；非托管（窄窗直挂、测试直挂）仍有来源路由，弹回它。
+  void _handleBackRequest(BuildContext context, {required bool hosted}) {
+    final now = DateTime.now();
+    if (_lastBackPress == null ||
+        now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+      _lastBackPress = now;
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).portalPressBackAgain,
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    if (hosted) {
+      unawaited(SystemNavigator.pop());
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final hosted = MobileShellScope.isHosted(context);
     if (hosted) {
-      return _HostedPortalContent(onRefresh: _onRefresh);
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _handleBackRequest(context, hosted: true);
+        },
+        child: _HostedPortalContent(onRefresh: _onRefresh),
+      );
     }
     // 非托管分支（窄窗直开 Portal、测试直挂页面）按原型 `.content-scroll`
     // 处理限宽与页边距；托管 Home 由 _HostedPortalContent 按 `.home-stage`
@@ -104,6 +135,16 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
     final musicSnapshot = ref.watch(portalMusicSnapshotProvider);
     final photoDashboard = ref.watch(portalPhotoDashboardProvider);
     final readerDashboard = ref.watch(portalReaderDashboardProvider);
+    // 整屏唯一动画：卡片各自等数时不再各画转圈，统一由这条线表达。
+    // 分页卡（继续观看/最近照片）自己 watch 的 provider 也要计入，否则
+    // 首屏会出现「区级线 + 卡内转圈」两处动画。
+    final anyCardLoading =
+        storageStats.isLoading ||
+        musicSnapshot.isLoading ||
+        photoDashboard.isLoading ||
+        readerDashboard.isLoading ||
+        ref.watch(portalContinueWatchingProvider).isLoading ||
+        ref.watch(portalRecentPhotosProvider).isLoading;
     final backdropState =
         ref.watch(appBackdropControllerProvider).asData?.value;
     final appBackdropActive =
@@ -160,18 +201,7 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        final now = DateTime.now();
-        if (_lastBackPress == null ||
-            now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
-          _lastBackPress = now;
-          showOmniFeedback(
-            context,
-            l10n.portalPressBackAgain,
-            duration: const Duration(seconds: 2),
-          );
-          return;
-        }
-        Navigator.of(context).pop();
+        _handleBackRequest(context, hosted: false);
       },
       child: Scaffold(
         backgroundColor:
@@ -228,6 +258,11 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
                         ),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
+                            if (anyCardLoading)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 10),
+                                child: MobileLoadingLine(top: true),
+                              ),
                             entrance(
                               'weather',
                               0,
@@ -525,14 +560,32 @@ class _SkeletonCard extends StatelessWidget {
   final double height;
   @override
   Widget build(BuildContext context) {
+    // 卡片各自等数时不再各画转圈（同屏曾有 4-5 个动画）：整屏唯一动画
+    // 由壳层顶部的 MobileLoadingLine 承担，这里只保持版面稳定。
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       child: SizedBox(
         height: height,
-        child: const Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 96,
+                height: 10,
+                color: scheme.onSurface.withValues(alpha: 0.07),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: scheme.onSurface.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

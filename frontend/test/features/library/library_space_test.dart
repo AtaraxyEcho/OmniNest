@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -251,6 +252,85 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(tester.takeException(), isNull);
+  });
+
+  // 媒体库是分支里的唯一路由：没有返回阶梯时，一次侧滑就被引擎当成
+  // 「无路由可退」直接结束 Activity。分段（PageView 页）不是路由，
+  // 返回要先把它收敲回「全部」，才轮到离站回门户。
+  testWidgets('托管媒体库侧滑：先回全部分段，再回门户', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(400, 1600);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final router = GoRouter(
+      initialLocation: '/library',
+      routes: [
+        GoRoute(
+          path: '/library',
+          builder: (context, state) => const LibrarySpacePage(),
+        ),
+        GoRoute(
+          path: '/portal',
+          builder:
+              (context, state) => const Scaffold(body: Text('portal-root')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appBackdropControllerProvider.overrideWith(
+            _EmptyBackdropController.new,
+          ),
+          photoDashboardProvider.overrideWith(_FakePhotoDashboard.new),
+          photoAlbumsProvider.overrideWith((ref) async => _albums),
+          movieDashboardProvider.overrideWith((ref) async => _movieDashboard),
+          musicCenterControllerProvider.overrideWith(
+            _FakeLibraryMusicCenter.new,
+          ),
+        ],
+        child: MaterialApp.router(
+          routerConfig: router,
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          builder:
+              (context, child) => MobileShellScope(hosted: true, child: child!),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    LibrarySegment selectedSegment() =>
+        tester
+            .widget<LibrarySegmentBar>(find.byType(LibrarySegmentBar))
+            .segment;
+
+    // 点选「照片」段：分段是页内层级（PageView 页），不是路由。
+    await tester.tap(
+      find.descendant(
+        of: find.byType(LibrarySegmentBar),
+        matching: find.text('照片'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(selectedSegment(), isNot(LibrarySegment.all));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('portal-root'), findsNothing, reason: '一级分段不该离站');
+    expect(selectedSegment(), LibrarySegment.all);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('portal-root'), findsOneWidget, reason: '已在根才离站');
     expect(tester.takeException(), isNull);
   });
 }

@@ -21,6 +21,9 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
 
   void _setError(String message);
 
+  /// 回写基准助手，实现见主类：优先取发布时刻的实况，退回 `await` 前的快照兜底。
+  PhotoCenterState _liveOr(PhotoCenterState? captured);
+
   int _subtractFloorZero(int value, int decrement) {
     final result = value - decrement;
     return result < 0 ? 0 : result;
@@ -700,22 +703,25 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       (id) => photoPage.items.any((photo) => photo.fileNodeId == id),
     );
     final isFavorites = current.tab == PhotoTab.favorites;
+    // 回写侧改用发布时刻的实况：切 tab 与搜索都会推进 epoch/generation 并在上面的
+    // 守卫处终止，因此 `isFavorites` 与实况的数据源不会错位。
+    final live = _liveOr(current);
     state = AsyncData(
       isFavorites
-          ? current.copyWith(
+          ? live.copyWith(
             dashboard: dashboard,
             favorites: photoPage.items,
             favoritePage: photoPage.page,
             favoriteTotalElements: photoPage.totalElements,
-            favoriteRefreshVersion: current.favoriteRefreshVersion + 1,
+            favoriteRefreshVersion: live.favoriteRefreshVersion + 1,
             clearFavoritePageError: true,
           )
-          : current.copyWith(
+          : live.copyWith(
             dashboard: dashboard,
             photos: photoPage.items,
             photoPage: photoPage.page,
             photoTotalElements: photoPage.totalElements,
-            photoRefreshVersion: current.photoRefreshVersion + 1,
+            photoRefreshVersion: live.photoRefreshVersion + 1,
             clearPhotoPageError: true,
           ),
     );

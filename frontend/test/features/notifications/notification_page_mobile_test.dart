@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
@@ -92,14 +94,28 @@ void main() {
   );
 
   Widget buildPage() {
-    return MaterialApp(
+    // 页面外层是 ModuleEntryRefreshListener，它在 didChangeDependencies 里读
+    // GoRouter 判定分支进入，所以这里必须挂真实路由，MaterialApp(home:) 少一层
+    // 就会抛 No GoRouter found in context。
+    final router = GoRouter(
+      initialLocation: '/notifications',
+      routes: [
+        GoRoute(
+          path: '/notifications',
+          builder:
+              (context, state) => const Scaffold(
+                body: MobileShellScope(hosted: true, child: NotificationPage()),
+              ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    return MaterialApp.router(
       theme: OmniNestTheme.dark(),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
-      home: Scaffold(
-        body: MobileShellScope(hosted: true, child: const NotificationPage()),
-      ),
+      routerConfig: router,
     );
   }
 
@@ -127,6 +143,9 @@ void main() {
     expect(find.byType(WorkstationPortalLink), findsNothing);
     // 两档分段（zh：全部 / 未读，纯标签不带计数）。
     expect(find.text('全部'), findsOneWidget);
+    // 进入刷新已挂在本页外层（触发语义由
+    // module_entry_refresh_listener_test 守，这里只钉"这一面确实包上了"）。
+    expect(find.byType(ModuleEntryRefreshListener), findsOneWidget);
     expect(find.text('未读'), findsOneWidget);
     // 分组眉标（样例两档：今天/更早，昨天并入更早）。
     expect(find.text('今天'), findsOneWidget);
@@ -189,6 +208,80 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fake.filters, [NotificationFilter.unread]);
+  });
+
+  // 通知设置入口必须留下可弹层：入口若用 `go`，`/profile/notifications` 的
+  // 重定向会换掉整条导航栈，之后一次侧滑没有层可弹 → 引擎直接结束 Activity
+  // （真机表现是「从通知中心点设置，再侧滑就退出应用」）。
+  testWidgets('通知设置入口用 push：返回仍落回通知中心', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/library',
+      routes: [
+        GoRoute(
+          path: '/library',
+          builder:
+              (context, state) => const Scaffold(body: Text('library-root')),
+        ),
+        GoRoute(
+          path: '/notifications',
+          builder:
+              (context, state) => MobileShellScope(
+                hosted: true,
+                child: const NotificationPage(),
+              ),
+        ),
+        GoRoute(
+          path: '/profile/notifications',
+          redirect: (context, state) => '/profile?section=notifications',
+        ),
+        GoRoute(
+          path: '/profile',
+          builder:
+              (context, state) => const Scaffold(body: Text('profile-root')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationControllerProvider.overrideWith(
+            () => _RecordingNotificationController(
+              NotificationState(items: [todayItem], total: 1),
+            ),
+          ),
+          unreadCountProvider.overrideWith(() => _FakeUnreadCountNotifier()),
+          userCapabilitiesProvider.overrideWithValue(activityCapableOnly),
+          authSessionProvider.overrideWith(_TestAuthSessionNotifier.new),
+        ],
+        child: MaterialApp.router(
+          routerConfig: router,
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    router.push('/notifications');
+    await tester.pumpAndSettle();
+    expect(find.byType(NotificationPage), findsOneWidget);
+
+    await tester.tap(find.byTooltip('通知设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('profile-root'), findsOneWidget);
+    expect(router.canPop(), isTrue, reason: '入口没留可弹层时，下一次侧滑就是退出应用');
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('profile-root'), findsNothing);
+    expect(find.byType(NotificationPage), findsOneWidget, reason: '返回落回通知中心');
+    expect(tester.takeException(), isNull);
   });
 }
 

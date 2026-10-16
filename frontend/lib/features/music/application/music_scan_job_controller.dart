@@ -139,7 +139,9 @@ class MusicScanJobController extends Notifier<MusicScanJobState> {
         return;
       }
       // 轮询失败不打断进行中的任务，仅记录最近一次错误。
-      state = current.copyWith(
+      // 回写基准取发布时刻的实况：同一世代的重叠轮询或 startScan 在途时，
+      // 用本轮发起时抓的快照整份发布会把它们写入的任务进度覆盖掉。
+      state = state.copyWith(
         errorMessage: describeUserFacingError(error).message,
       );
     }

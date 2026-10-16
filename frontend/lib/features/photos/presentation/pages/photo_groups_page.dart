@@ -8,6 +8,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
@@ -82,16 +83,8 @@ class _PhotoGroupsPageState extends ConsumerState<PhotoGroupsPage> {
     if (data != null && error != null) {
       return _empty(l10n, error, title: l10n.photosOperationFailed);
     }
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
-      child: Column(
-        children: [
-          MobileSkeletonBlock(height: 46),
-          SizedBox(height: 14),
-          MobileSkeletonBlock(height: 320),
-        ],
-      ),
-    );
+    // 整页首屏只留一处动画指示（此前两块占位各带一个转圈）。
+    return const AppLoading();
   }
 
   Widget _empty(AppLocalizations l10n, String message, {String? title}) {

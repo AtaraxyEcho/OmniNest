@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login_form.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 平台登录底部弹出面板（跟随宿主主题：浅色实体、深色实体、浅色 + 动态壁纸的
 /// 烟熏玻璃三种场景都使用 Music 已解析色阶）。
@@ -41,7 +42,10 @@ class PlatformLoginSheet extends ConsumerWidget {
       // 显式承接主题遮罩：窗口自身不透明，缺少遮罩时浅色下会和宿主页面糊在一起。
       barrierColor: colors.scrim,
       useSafeArea: true,
-      builder: (_) => Theme(data: hostTheme, child: const PlatformLoginSheet()),
+      builder:
+          (_) => MobileSheetSemantics(
+            child: Theme(data: hostTheme, child: const PlatformLoginSheet()),
+          ),
     );
   }
 

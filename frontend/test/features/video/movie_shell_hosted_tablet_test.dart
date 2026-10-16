@@ -41,7 +41,9 @@ void main() {
                                 (_) => MobileHostedRoute(
                                   child: MovieShell(
                                     section: MovieSection.movies,
-                                    child: const SizedBox(height: 240),
+                                    childFor:
+                                        (section) =>
+                                            const SizedBox(height: 240),
                                   ),
                                 ),
                           ),
@@ -86,10 +88,11 @@ void main() {
           home: MobileHostedRoute(
             child: MovieShell(
               section: MovieSection.movies,
-              child: const SizedBox(
-                key: Key('movie-hosted-content'),
-                height: 240,
-              ),
+              childFor:
+                  (section) => const SizedBox(
+                    key: Key('movie-hosted-content'),
+                    height: 240,
+                  ),
             ),
           ),
         ),
@@ -122,7 +125,7 @@ void main() {
           home: MobileHostedRoute(
             child: MovieShell(
               section: MovieSection.movies,
-              child: const SizedBox(height: 240),
+              childFor: (section) => const SizedBox(height: 240),
             ),
           ),
         ),
@@ -159,10 +162,11 @@ void main() {
           theme: OmniNestTheme.dark(),
           home: MovieShell(
             section: MovieSection.movies,
-            child: const SizedBox(
-              key: Key('movie-desktop-content'),
-              height: 240,
-            ),
+            childFor:
+                (section) => const SizedBox(
+                  key: Key('movie-desktop-content'),
+                  height: 240,
+                ),
           ),
         ),
       ),

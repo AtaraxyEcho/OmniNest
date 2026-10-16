@@ -9,6 +9,10 @@ import 'package:omninest/features/music/presentation/deck/music_deck_primitives.
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
 
 /// 显示当前播放队列的响应式抽屉。
 Future<void> showMusicDeckQueue(BuildContext context) {
@@ -16,7 +20,8 @@ Future<void> showMusicDeckQueue(BuildContext context) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => const MusicDeckQueueSheet(),
+    builder:
+        (context) => const MobileSheetSemantics(child: MusicDeckQueueSheet()),
   );
 }
 
@@ -198,12 +203,21 @@ class _MusicDeckQueueSheetState extends ConsumerState<MusicDeckQueueSheet> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      IconButton(
-                        tooltip: AppLocalizations.of(context).musicClose,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded, size: 19),
-                      ),
+                      // 样例 `.queue-tools`：清空是 38 方钮，关闭是 48 玻璃圆钮。
+                      // 工位态保持原 IconButton，不在桌面队列抽屉上换档。
+                      if (MobileShellScope.isHosted(context))
+                        MobileGlassIconButton(
+                          tooltip: AppLocalizations.of(context).musicClose,
+                          vector: OmniIcons.close,
+                          onPressed: () => Navigator.of(context).pop(),
+                        )
+                      else
+                        IconButton(
+                          tooltip: AppLocalizations.of(context).musicClose,
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded, size: 19),
+                        ),
                     ],
                   ),
                 ),
@@ -374,8 +388,8 @@ class _MusicQueueRow extends StatelessWidget {
               tooltip: l10n.musicPlayNext,
               visualDensity: VisualDensity.compact,
               onPressed: onPlayNext,
-              icon: Icon(
-                Icons.queue_music_rounded,
+              icon: OmniIcon(
+                icon: OmniIcons.queue,
                 size: 18,
                 color:
                     onPlayNext == null

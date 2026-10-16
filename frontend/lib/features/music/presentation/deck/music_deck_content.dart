@@ -10,6 +10,7 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
@@ -350,15 +351,12 @@ class _DailyRecommendationSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 卡式槽位等数时保持版面即可：岛内已有内容与底部进度各自有动画，
+    // 这里再画一个转圈就是同屏多份加载动画。
     return const SizedBox(
       width: 142,
       height: 196,
-      child: Center(
-        child: SizedBox.square(
-          dimension: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
+      child: MobileSkeletonBlock(height: 196, width: 142),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
@@ -213,7 +214,7 @@ class SlideshowGradients extends StatelessWidget {
         children: [
           AnimatedOpacity(
             opacity: visible ? 1 : 0.4,
-            duration: const Duration(milliseconds: 500),
+            duration: MotionToken.normal,
             child: const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -231,7 +232,7 @@ class SlideshowGradients extends StatelessWidget {
           ),
           AnimatedOpacity(
             opacity: visible ? 1 : 0,
-            duration: const Duration(milliseconds: 500),
+            duration: MotionToken.normal,
             child: const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

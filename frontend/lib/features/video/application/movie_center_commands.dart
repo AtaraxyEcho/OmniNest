@@ -165,7 +165,9 @@ extension MovieCenterCommands on MovieCenterController {
     try {
       final task = await _api.createTranscodeTask(item.id);
       final tasks = await _api.tasks();
-      centerState = AsyncData(current.copyWith(lastTask: task, tasks: tasks));
+      centerState = AsyncData(
+        _liveOr(current).copyWith(lastTask: task, tasks: tasks),
+      );
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -180,7 +182,9 @@ extension MovieCenterCommands on MovieCenterController {
     try {
       final task = await _api.createTranscodeTask(item.id, audioOnly: true);
       final tasks = await _api.tasks();
-      centerState = AsyncData(current.copyWith(lastTask: task, tasks: tasks));
+      centerState = AsyncData(
+        _liveOr(current).copyWith(lastTask: task, tasks: tasks),
+      );
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -192,7 +196,7 @@ extension MovieCenterCommands on MovieCenterController {
     final current = centerState.asData?.value;
     if (current == null) return;
     final tasks = await _api.tasks();
-    centerState = AsyncData(current.copyWith(tasks: tasks));
+    centerState = AsyncData(_liveOr(current).copyWith(tasks: tasks));
   }
 
   Future<void> toggleFavorite(
