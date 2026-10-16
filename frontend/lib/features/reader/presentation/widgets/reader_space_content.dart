@@ -20,7 +20,7 @@ class ReaderSpaceContent extends StatelessWidget {
     required this.notes,
     required this.bookTitles,
     required this.insightMinutes,
-    required this.insightChapters,
+    required this.insightBooksFinished,
     this.insightStreakDays,
     required this.onResume,
     required this.onOpenItem,
@@ -44,8 +44,8 @@ class ReaderSpaceContent extends StatelessWidget {
   /// 本周专注分钟数；null 视为 0（洞察条按样例常驻）。
   final int? insightMinutes;
 
-  /// 本周读完章节数。
-  final int insightChapters;
+  /// 累计读完的书本数（不是章数，也不是本周量）。
+  final int insightBooksFinished;
 
   /// 连续阅读天数；null/0 不展示。
   final int? insightStreakDays;
@@ -71,7 +71,7 @@ class ReaderSpaceContent extends StatelessWidget {
           _ContinueFeature(item: featureItem!, onResume: onResume),
         _InsightStrip(
           minutes: insightMinutes ?? 0,
-          chapters: insightChapters,
+          booksFinished: insightBooksFinished,
           streakDays: insightStreakDays,
           onOpenStats: onOpenStats,
         ),
@@ -428,13 +428,13 @@ class _PaperCover extends StatelessWidget {
 class _InsightStrip extends StatelessWidget {
   const _InsightStrip({
     required this.minutes,
-    required this.chapters,
+    required this.booksFinished,
     this.streakDays,
     this.onOpenStats,
   });
 
   final int minutes;
-  final int chapters;
+  final int booksFinished;
   final int? streakDays;
 
   /// 点击整条进入阅读统计页；null 时不可点。
@@ -453,7 +453,7 @@ class _InsightStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final detail = [
-      l10n.readerInsightChapters(chapters),
+      l10n.readerInsightBooksFinished(booksFinished),
       if (streakDays != null && streakDays! > 0)
         l10n.readerInsightStreak(streakDays!),
     ].join(' · ');

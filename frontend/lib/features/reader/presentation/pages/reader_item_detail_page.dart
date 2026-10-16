@@ -385,10 +385,12 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
       releaseDate: apiItem.releaseDate,
       genres: apiItem.genres,
       serialStatus: apiItem.serialStatus,
+      isbn: apiItem.isbn,
       contentKind: apiItem.contentKind,
       importStatus: apiItem.importStatus,
       parseErrorCode: apiItem.parseErrorCode,
       parseErrorMessage: apiItem.parseErrorMessage,
+      manifestVersion: apiItem.manifestVersion,
     );
   }
 }

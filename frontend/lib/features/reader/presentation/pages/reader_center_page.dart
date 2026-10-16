@@ -252,8 +252,9 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     List<ReaderItem> visibleItems,
   ) {
     final l10n = AppLocalizations.of(context);
-    final dashboard = ref.watch(readerDashboardProvider).asData?.value;
-    final recent = dashboard?.recentItems ?? const <ReaderItem>[];
+    // 复用控制器随下拉刷新一起更新的 dashboard：单独 watch readerDashboardProvider
+    // 拿到的是没跟着刷新的旧缓存，导入或读完一本书后特写与书轨仍显示上一批书。
+    final recent = data.dashboard.recentItems;
     final pool = recent.isNotEmpty ? recent : visibleItems;
     final feature = data.continueItems.firstOrNull ?? pool.firstOrNull;
     final railItems =
@@ -304,18 +305,31 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
         ],
       );
     }
-    return ReaderSpaceContent(
-      featureItem: feature,
-      railItems: railItems,
-      notes: notes,
-      bookTitles: bookTitles,
-      insightMinutes: weekMinutes,
-      insightChapters: overview?.completedCount ?? 0,
-      insightStreakDays: streak,
-      onResume: _openContinueReading,
-      onOpenItem: _onOpenItem,
-      onOpenBookshelf: () => context.push('/reader/bookshelf'),
-      onOpenStats: () => context.push('/reader/stats'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 托管态不渲染书库页头，这里是库里有了书之后唯一的导入入口。
+        Align(
+          alignment: Alignment.centerRight,
+          child: ReaderLibraryImportAction(
+            style: ImportButtonStyle.outlinedButton,
+            label: l10n.readerImportBooks,
+          ),
+        ),
+        ReaderSpaceContent(
+          featureItem: feature,
+          railItems: railItems,
+          notes: notes,
+          bookTitles: bookTitles,
+          insightMinutes: weekMinutes,
+          insightBooksFinished: overview?.completedCount ?? 0,
+          insightStreakDays: streak,
+          onResume: _openContinueReading,
+          onOpenItem: _onOpenItem,
+          onOpenBookshelf: () => context.push('/reader/bookshelf'),
+          onOpenStats: () => context.push('/reader/stats'),
+        ),
+      ],
     );
   }
 

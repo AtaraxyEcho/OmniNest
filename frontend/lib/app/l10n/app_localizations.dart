@@ -11609,6 +11609,12 @@ abstract class AppLocalizations {
   /// **'No description'**
   String get readerNoDescription;
 
+  /// No description provided for @readerNoChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'No chapters yet, wait for parsing or re-parse the book'**
+  String get readerNoChapters;
+
   /// No description provided for @readerDescription.
   ///
   /// In en, this message translates to:
@@ -21982,11 +21988,11 @@ abstract class AppLocalizations {
   /// **'{count}-day streak'**
   String readerInsightStreak(int count);
 
-  /// No description provided for @readerInsightChapters.
+  /// No description provided for @readerInsightBooksFinished.
   ///
   /// In en, this message translates to:
-  /// **'{count} chapters finished'**
-  String readerInsightChapters(int count);
+  /// **'{count} books finished in total'**
+  String readerInsightBooksFinished(int count);
 
   /// No description provided for @readerReadNextEyebrow.
   ///

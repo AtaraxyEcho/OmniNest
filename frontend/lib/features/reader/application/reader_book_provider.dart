@@ -16,6 +16,7 @@ import 'package:omninest/features/reader/data/reader_content_preprocessor.dart';
 import 'package:omninest/features/reader/data/reader_image_cache.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/features/reader/data/txt_parser_service.dart';
+import 'package:omninest/features/reader/domain/chapter_title_normalizer.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';

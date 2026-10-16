@@ -49,7 +49,7 @@ class ReaderViewSettings {
   final bool followBookTypesetting;
 
   /// 移动壳层默认值：暗档正文改用样例的衬线 19/1.85。
-  /// 桌面端与已保存偏好看不见此分支。
+  /// 桌面端与已保存偏好看不见此分支。落盘后不再重复套用，避免每次进书盖掉读者拧过的档位。
   final bool mobileDefaults;
 
   ReaderViewSettings withMobileDefaults() {
@@ -60,6 +60,7 @@ class ReaderViewSettings {
       // ignore: font_size_whitelist
       fontSize: 19,
       lineHeight: 1.85,
+      mobileDefaults: true,
     );
   }
 
@@ -219,6 +220,7 @@ class ReaderViewSettings {
     'pageTurnMode': pageTurnMode,
     'volumeKeyPaging': volumeKeyPaging,
     'followBookTypesetting': followBookTypesetting,
+    'mobileDefaults': mobileDefaults,
     'version': _settingsVersion,
   };
 
@@ -252,6 +254,10 @@ class ReaderViewSettings {
       // v5 → v6：新增 followBookTypesetting，默认不跟随原书
       migrated['followBookTypesetting'] ??= false;
     }
+    if (version < 7) {
+      // v6 → v7：新增 mobileDefaults 标记，旧偏好视为未套用移动壳层默认
+      migrated['mobileDefaults'] ??= false;
+    }
 
     final rawFontSize = (migrated['fontSize'] as num?)?.toDouble() ?? 18.0;
     final rawLineHeight = (migrated['lineHeight'] as num?)?.toDouble() ?? 1.8;
@@ -276,10 +282,11 @@ class ReaderViewSettings {
       volumeKeyPaging: migrated['volumeKeyPaging'] as bool? ?? true,
       followBookTypesetting:
           migrated['followBookTypesetting'] as bool? ?? false,
+      mobileDefaults: migrated['mobileDefaults'] as bool? ?? false,
     );
   }
 
-  static const _settingsVersion = 6;
+  static const _settingsVersion = 7;
 
   /// 段落首行缩进的字数：跟随原书且书表达过时按书的，否则用阅读器默认档。
   ///

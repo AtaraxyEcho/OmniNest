@@ -73,10 +73,18 @@ Future<EpubChapterPayload?> loadChapterContent(
     final rawSlice = parser.rawChapterSlice(text, start, end);
     // 前后端各自解码同一份字节流，编码判定或坏序列策略一有分歧，服务端偏移就会
     // 整体错位，切出来的其实是别章正文。此时宁可显式失败，也不静默渲染错章内容。
+    // 归一位次只数有标题的章：前置书名导言占掉清单首位时，清单顺位比后端建清单用的
+    // 标题位次大 1，两端对同一首行归一出不同结果就把整本书判成偏移漂移。
+    final bookChapters =
+        ref.read(parsedBookProvider(itemId)).asData?.value.chapters;
+    final titledOrdinal = titledChapterOrdinal(
+      bookChapters?.map((parsed) => parsed.title).toList() ?? const <String>[],
+      chapterIndex,
+    );
     if (!TxtParserService.sliceStartsWithTitle(
       rawSlice,
       chapter.title,
-      chapterOrdinal: chapter.number,
+      chapterOrdinal: titledOrdinal,
     )) {
       readerDebugLog(
         'TxtOffsetDrift: itemId=$itemId chapterNumber=${chapter.number} '

@@ -370,6 +370,57 @@ void main() {
       final p = blocks.first as ParagraphBlock;
       expect(p.lines.first.spans.first.isUnderlined, isTrue);
     });
+
+    /// 行内元素里嵌套的 `<br>` 必须与直接子节点的 `<br>` 同权：诗句、信件与台词
+    /// 全靠它分行，被吞掉就会把多行压成一行，折叠字符数也少算一个。
+    test('行内标签内嵌 br 仍按行断开', () {
+      final blocks = parseBlocks('<p><i>第一行诗<br/>第二行诗</i></p>');
+      expect(blocks, hasLength(1));
+      final p = blocks.single as ParagraphBlock;
+      final texts =
+          p.lines
+              .map((line) => line.spans.map((span) => span.text).join())
+              .toList();
+
+      expect(texts, ['第一行诗', '第二行诗']);
+      expect(p.lines[1].collapsedChars, 1);
+      expect(p.lines.first.spans.first.isItalic, isTrue);
+    });
+
+    test('span 内嵌 br 与嵌套两层标签内嵌 br 都断行', () {
+      final spanBlocks = parseBlocks(
+        '<p><span class="poem">甲<br/>乙</span></p>',
+      );
+      final spanLines = (spanBlocks.single as ParagraphBlock).lines;
+      expect(
+        spanLines.map((line) => line.spans.map((s) => s.text).join()).toList(),
+        ['甲', '乙'],
+      );
+
+      final nested = parseBlocks('<p><b><em>丙<br/>丁</em></b></p>');
+      final nestedLines = (nested.single as ParagraphBlock).lines;
+      expect(
+        nestedLines
+            .map((line) => line.spans.map((s) => s.text).join())
+            .toList(),
+        ['丙', '丁'],
+      );
+    });
+
+    test('容器直属裸 br 与行内元素里的 br 都断段', () {
+      final blocks = parseBlocks('<div>甲<br/>乙</div>');
+      final texts =
+          blocks
+              .whereType<ParagraphBlock>()
+              .expand(
+                (block) => block.lines.map(
+                  (line) => line.spans.map((span) => span.text).join(),
+                ),
+              )
+              .toList();
+
+      expect(texts, ['甲', '乙']);
+    });
   });
 
   group('parseBlocks - entity decoding', () {

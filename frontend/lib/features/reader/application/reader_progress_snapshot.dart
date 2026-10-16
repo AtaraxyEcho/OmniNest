@@ -135,6 +135,23 @@ class ReaderProgressSnapshot {
     return aTime.isAfter(bTime) ? a : b;
   }
 
+  /// 详情页展示用的全书进度。
+  ///
+  /// 条目上的 `progressPercent` 由详情接口带着，离线阅读或详情缓存尚未刷新时它是旧的，
+  /// 只看它会让进度块整段消失、主按钮回到"开始阅读"。取本地与服务端里较新一份的
+  /// 全书比例，两份都没写过比例时才退回条目进度。
+  static double displayBookProgress({
+    ReaderProgressSnapshot? local,
+    ReaderProgressSnapshot? server,
+    double? itemProgress,
+  }) {
+    final fromSnapshot = latest(local, server)?.bookProgress;
+    if (fromSnapshot != null && fromSnapshot > 0) {
+      return fromSnapshot.clamp(0.0, 1.0);
+    }
+    return (itemProgress ?? 0).clamp(0.0, 1.0);
+  }
+
   /// 从章节列表中根据进度快照解析目标章节
   ///
   /// 如果快照中有 chapterId 且在列表中找到匹配项，则返回该项；

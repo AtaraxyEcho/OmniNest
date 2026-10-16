@@ -6329,6 +6329,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNoDescription => 'No description';
 
   @override
+  String get readerNoChapters =>
+      'No chapters yet, wait for parsing or re-parse the book';
+
+  @override
   String get readerDescription => 'Description';
 
   @override
@@ -12093,8 +12097,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String readerInsightChapters(int count) {
-    return '$count chapters finished';
+  String readerInsightBooksFinished(int count) {
+    return '$count books finished in total';
   }
 
   @override

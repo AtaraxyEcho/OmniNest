@@ -479,11 +479,14 @@ class ReaderDetailTextContentState
     final l10n = AppLocalizations.of(context);
     final chapters = widget.chapters;
     if (chapters.isEmpty) {
-      return Text(
-        l10n.readerNoDescription,
-        style: TextStyle(
-          color: rc.onSurfaceVariant,
-          fontSize: AppTypography.bodySmall,
+      // SliverMainAxisGroup 只接受 RenderSliver 子节点，裸 Text 会直接红屏。
+      return SliverToBoxAdapter(
+        child: Text(
+          l10n.readerNoChapters,
+          style: TextStyle(
+            color: rc.onSurfaceVariant,
+            fontSize: AppTypography.bodySmall,
+          ),
         ),
       );
     }

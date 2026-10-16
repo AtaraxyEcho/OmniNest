@@ -284,10 +284,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
               bookTitle: detail.item.title,
               chapterTitle: content.title,
               sampleChrome: sampleChrome,
-              onBack: () {
-                syncProgressSync();
-                safePop();
-              },
+              onBack: handleReaderExit,
               onSearch: () => _toggleReaderPanel(ReaderPanelType.search),
               onShowShortcuts:
                   () => _toggleReaderPanel(ReaderPanelType.shortcuts),

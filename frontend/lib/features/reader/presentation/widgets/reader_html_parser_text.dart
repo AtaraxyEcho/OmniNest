@@ -263,17 +263,38 @@ void _walkInlineChildren(
   for (final child in element.nodes) {
     if (child is dom.Text) {
       onText?.call();
-      _collectInlineSpans(child, currentSpans, style, ctx, onImage: onImage);
+      _collectInlineSpans(
+        child,
+        currentSpans,
+        style,
+        ctx,
+        onBr: onBr,
+        onImage: onImage,
+      );
     } else if (child is dom.Element) {
       final tag = child.localName;
       if (tag == 'br') {
         onBr?.call();
       } else if (_isBlockTag(tag)) {
         onText?.call();
-        _collectInlineSpans(child, currentSpans, style, ctx, onImage: onImage);
+        _collectInlineSpans(
+          child,
+          currentSpans,
+          style,
+          ctx,
+          onBr: onBr,
+          onImage: onImage,
+        );
       } else {
         onText?.call();
-        _collectInlineSpans(child, currentSpans, style, ctx, onImage: onImage);
+        _collectInlineSpans(
+          child,
+          currentSpans,
+          style,
+          ctx,
+          onBr: onBr,
+          onImage: onImage,
+        );
       }
     }
   }
@@ -290,12 +311,17 @@ void _walkInlineChildren(
 /// [onImage] 按文档顺序拿到段内 `<img>` 的 src：图在句子中间时，调用方要在那里
 /// 断开当前片段（真书库实测 2403 处"图前后都有字"）。不给回调时图不产 span，
 /// 与引用块、列表、单元格里一贯的"内联图不落在文本流"相同。
+///
+/// [onBr] 在遇到 `<br>` 时要求上层断开当前行：`<p><i>第一句<br/>第二句</i></p>` 这类
+/// 行内元素内嵌的换行必须与直接子节点的 `<br>` 同权，否则诗句、信件与台词被拼成一行，
+/// 折叠字符数也少算一个。
 void _collectInlineSpans(
   dom.Node node,
   List<ReaderInlineSpan> spans,
   _StyleContext style,
   _ParseContext ctx, {
   int depth = 0,
+  void Function()? onBr,
   void Function(String src, String? alt)? onImage,
 }) {
   if (node is dom.Text) {
@@ -362,7 +388,8 @@ void _collectInlineSpans(
 
   switch (tag) {
     case 'br':
-      // 内联 br —— 跳过（由上层 _walkInlineChildren 处理）
+      // 行内元素里的 <br> 由上层按换行处理；没有回调时保持旧行为（不产文本）。
+      onBr?.call();
       break;
 
     case 'img':
@@ -383,6 +410,7 @@ void _collectInlineSpans(
           style.copyWith(isBold: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -396,6 +424,7 @@ void _collectInlineSpans(
           style.copyWith(isItalic: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -409,6 +438,7 @@ void _collectInlineSpans(
           style.copyWith(href: href),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -421,6 +451,7 @@ void _collectInlineSpans(
           style.copyWith(isCode: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -433,6 +464,7 @@ void _collectInlineSpans(
           style.copyWith(isSuperscript: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -445,6 +477,7 @@ void _collectInlineSpans(
           style.copyWith(isSubscript: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -457,6 +490,7 @@ void _collectInlineSpans(
           style.copyWith(isMarked: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -470,6 +504,7 @@ void _collectInlineSpans(
           style.copyWith(isDeleted: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -482,6 +517,7 @@ void _collectInlineSpans(
           style.copyWith(isUnderlined: true),
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }
@@ -495,6 +531,7 @@ void _collectInlineSpans(
           style,
           ctx,
           depth: depth + 1,
+          onBr: onBr,
           onImage: onImage,
         );
       }

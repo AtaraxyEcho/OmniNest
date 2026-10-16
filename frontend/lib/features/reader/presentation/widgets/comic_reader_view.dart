@@ -128,6 +128,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 计时起点必须在进场就定下：只在 resumed 回调里赋值的话，用户从没切过后台时
+    // activeReading 恒为 0 秒，会话被 10 秒阈值丢掉，漫画时长永远不进统计。
+    _lastResumedAt = DateTime.now();
     _progressSync = ref.read(readerProgressSyncServiceProvider);
     final defaultMode = kIsWeb ? 'scroll' : 'page';
     _displaySettings = ComicReaderDisplaySettings(readingMode: defaultMode);
@@ -181,14 +184,18 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final now = DateTime.now();
+    // 仅以 paused（切后台、窗口隐藏）作为挂机边界：inactive 在桌面端弹窗或失焦时也会
+    // 触发，跟着结算会把正常阅读的时间算没。判据与文本阅读页保持一致。
     if (state == AppLifecycleState.resumed) {
-      _lastResumedAt = now;
+      _lastResumedAt ??= DateTime.now();
+      return;
+    }
+    if (state != AppLifecycleState.paused) {
       return;
     }
     final resumedAt = _lastResumedAt;
     if (resumedAt != null) {
-      _accumulatedActive += now.difference(resumedAt);
+      _accumulatedActive += DateTime.now().difference(resumedAt);
       _lastResumedAt = null;
     }
   }

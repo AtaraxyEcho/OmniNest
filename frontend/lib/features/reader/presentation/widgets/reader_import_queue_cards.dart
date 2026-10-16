@@ -72,6 +72,9 @@ class _ImportFromDeviceButtonState
     if (lower.endsWith('.epub')) {
       return 'application/epub+zip';
     }
+    if (lower.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
     if (lower.endsWith('.cbz') || lower.endsWith('.zip')) {
       return 'application/zip';
     }

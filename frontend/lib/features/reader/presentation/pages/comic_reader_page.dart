@@ -42,6 +42,28 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
   bool _leaving = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    // 首帧后先按现值装配一次：READY 漫画的监控流只发一次就结束了（下层路由的详情页还
+    // 持有该 Provider），只等 ref.listen 的推送回调会让 _loading 永远无人解除，
+    // 从详情页点"继续阅读"进来就卡在加载动画上。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _manifest != null) {
+        return;
+      }
+      final manifest =
+          ref
+              .read(comicManifestMonitorProvider(widget.itemId))
+              .asData
+              ?.value
+              .manifest;
+      if (manifest != null) {
+        unawaited(_loadManifest(manifest));
+      }
+    });
+  }
+
   Future<void> _loadManifest(ComicManifest manifest) async {
     if (_requestInFlight) {
       return;
@@ -194,7 +216,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       comicManifestMonitorProvider(widget.itemId),
     );
     // 后台解析每 3 秒推一次清单：清单身份没变时不得重跑装配，否则每次轮询
-    // 都重算一次初始页码，把读者正在看的那一页顶掉。
+    // 都重算一次初始页码，把读者正在看的那一页顶掉。首次装配见 initState 的补读。
     ref.listen(comicManifestMonitorProvider(widget.itemId), (_, next) {
       final manifest = next.asData?.value.manifest;
       if (manifest == null) {

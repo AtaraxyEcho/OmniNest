@@ -55,7 +55,7 @@ void main() {
           ],
           bookTitles: const {'a': 'The Art of Stillness'},
           insightMinutes: 144,
-          insightChapters: 3,
+          insightBooksFinished: 3,
           insightStreakDays: 4,
           onResume: (_) => resumed = true,
           onOpenItem: (_) {},
@@ -69,10 +69,13 @@ void main() {
     expect(find.text('64%'), findsOneWidget);
     expect(find.text('Continue chapter'), findsOneWidget);
 
-    // 洞察：眉标常驻 + 时长 + 章节数。
+    // 洞察：眉标常驻 + 时长 + 累计读完本数（不是章数，也不是本周量）。
     expect(find.text('THIS WEEK'), findsOneWidget);
     expect(find.text('2:24 in focus this week'), findsOneWidget);
-    expect(find.text('3 chapters finished · 4-day streak'), findsOneWidget);
+    expect(
+      find.text('3 books finished in total · 4-day streak'),
+      findsOneWidget,
+    );
 
     // 书轨：标题（纸封 + 标签行各一处）与作者。
     expect(find.text('Designing for Calm'), findsNWidgets(2));
@@ -107,7 +110,7 @@ void main() {
           notes: const [],
           bookTitles: const {},
           insightMinutes: null,
-          insightChapters: 0,
+          insightBooksFinished: 0,
           onResume: (_) {},
           onOpenItem: (_) {},
           onOpenBookshelf: () => shelfOpened = true,

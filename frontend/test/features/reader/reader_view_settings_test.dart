@@ -238,6 +238,7 @@ void main() {
       final mobile = applyReaderShellDefaults(
         loaded: ReaderViewSettings(),
         mobileShell: true,
+        hasSavedTypography: false,
       );
 
       expect(mobile.paletteId, ReaderReadingPalette.dark.id);
@@ -249,10 +250,40 @@ void main() {
       final desktop = applyReaderShellDefaults(
         loaded: ReaderViewSettings(),
         mobileShell: false,
+        hasSavedTypography: false,
       );
 
       expect(desktop.paletteId, ReaderReadingPalette.dark.id);
       expect(desktop.fontSize, ReaderViewSettings().fontSize);
+    });
+
+    test('用户存过字号或行距后，移动壳层不再盖回样例档位', () {
+      final saved = ReaderViewSettings.fromJson(const {
+        'fontSize': 24.0,
+        'lineHeight': 2.1,
+        'paletteId': 'dark',
+        'version': 7,
+      });
+
+      final resolved = applyReaderShellDefaults(
+        loaded: saved,
+        mobileShell: true,
+        hasSavedTypography: true,
+      );
+
+      expect(resolved.fontSize, 24.0);
+      expect(resolved.lineHeight, 2.1);
+    });
+
+    test('套用过的移动默认会落盘，重进同一本书不会二次覆盖', () {
+      final mobile = ReaderViewSettings().withMobileDefaults();
+
+      expect(mobile.mobileDefaults, isTrue);
+      expect(mobile.toJson()['mobileDefaults'], isTrue);
+
+      final reloaded = ReaderViewSettings.fromJson(mobile.toJson());
+      expect(reloaded.mobileDefaults, isTrue);
+      expect(reloaded.withMobileDefaults().fontSize, 19);
     });
   });
 }

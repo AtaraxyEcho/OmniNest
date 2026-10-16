@@ -54,10 +54,14 @@ final readerDashboardProvider = FutureProvider<ReaderDashboard>((ref) async {
 });
 
 /// 条目批注（详情页批注页签）
+///
+/// 必须走离线优先的 ReaderDataManager：阅读页里的增删改先落 SQLite 并排进同步队列，
+/// 直接打服务端会看不到未上传的改动，离线时整页报错。
 final readerItemAnnotationsProvider = FutureProvider.autoDispose
-    .family<List<ReaderAnnotation>, String>((ref, itemId) {
-      return ref.watch(readerApiProvider).annotations(itemId);
-    });
+    .family<List<ReaderAnnotation>, String>(
+      (ref, itemId) =>
+          ref.watch(readerDataManagerProvider).loadAnnotations(itemId),
+    );
 
 /// Reader 空间「最近笔记」：跨书最近标注（本地缓存按创建时间倒序）。
 final readerRecentAnnotationsProvider =
@@ -67,10 +71,12 @@ final readerRecentAnnotationsProvider =
     });
 
 /// 条目书签（详情页书签页签）
-final readerItemBookmarksProvider = FutureProvider.autoDispose
-    .family<List<ReaderBookmark>, String>((ref, itemId) {
-      return ref.watch(readerApiProvider).bookmarks(itemId);
-    });
+///
+/// 与批注同源：书签在阅读页是本地先写、退出时才 flush 队列，直连接口会漏掉未同步的那份。
+final readerItemBookmarksProvider = FutureProvider.autoDispose.family<
+  List<ReaderBookmark>,
+  String
+>((ref, itemId) => ref.watch(readerDataManagerProvider).loadBookmarks(itemId));
 
 /// 条目详情（含进度）
 final readerItemDetailProvider = FutureProvider.autoDispose

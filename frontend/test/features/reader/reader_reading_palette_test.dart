@@ -14,7 +14,7 @@ void main() {
 
     expect(settings.paletteId, ReaderReadingPalette.light.id);
     expect(settings.themeIndex, 0);
-    expect(settings.toJson()['version'], 6);
+    expect(settings.toJson()['version'], 7);
     expect(settings.toJson()['paletteId'], 'light');
   });
 

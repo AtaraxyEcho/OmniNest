@@ -73,6 +73,32 @@ String normalizeChapterTitle(String rawTitle, int chapterOrdinal) {
   return tail.isEmpty ? kept.text : '${kept.text} $tail';
 }
 
+/// 本章参与标题归一的位次，与后端 `ReaderTextParser.buildTxtDrafts` 同口径。
+///
+/// 只有带标题的章计数：书名导言与清单尾部补出来的「正文」块不占位次，否则整本书的
+/// 归一序号偏移 1，「第1章 第38章 吴兴」这类双序号标题会挑错数字，客户端与服务端
+/// 对同一首行归一出不同结果就被判成偏移漂移。
+///
+/// [chapterTitles] 按清单顺序给出，[index] 是本章节在该列表里的下标。
+int titledChapterOrdinal(List<String> chapterTitles, int index) {
+  if (index < 0 || index >= chapterTitles.length) {
+    return index + 1;
+  }
+  if (chapterTitles[index] == untitledChunkTitle) {
+    return index + 1;
+  }
+  var ordinal = 0;
+  for (var position = 0; position <= index; position++) {
+    if (chapterTitles[position] != untitledChunkTitle) {
+      ordinal++;
+    }
+  }
+  return ordinal;
+}
+
+/// 导言与尾部补章使用的固定章名，与后端同名。
+const String untitledChunkTitle = '正文';
+
 ChapterTitleToken? _matchToken(String title, int from) {
   final match = _tokenPattern.matchAsPrefix(title.substring(from));
   if (match == null) {
@@ -98,15 +124,26 @@ int _tokenValue(String token) {
 ///
 /// 不认中文数字的话，"第一回/第二回"编号的书拿不到与目录位次比对的数值，
 /// 服务端也判不出序号回退，头尾的预览副本就切不出段——两端必须算出同一个数。
+///
+/// 连续数位按十进制进位（第一〇八章=108）；单位后只跟一个数位时按口语省略末位单位
+/// （第一百一章=110、第二百五十章=250），但"第一百零一章"的零只是占位读法，必须算成 101。
 int _chineseNumberValue(String token) {
   var section = 0;
   var digit = 0;
   var seen = false;
+  var lastWasNumeral = false;
+  var sawZeroAfterUnit = false;
+  var lastUnit = 0;
   for (final char in token.runes.map(String.fromCharCode)) {
     final value = _numeralValues[char];
     if (value != null) {
-      digit = value;
+      if (value == 0 && !lastWasNumeral && lastUnit > 0) {
+        sawZeroAfterUnit = true;
+        continue;
+      }
+      digit = lastWasNumeral ? (digit * 10 + value) : value;
       seen = true;
+      lastWasNumeral = true;
       continue;
     }
     final unit = _unitValues[char];
@@ -114,10 +151,19 @@ int _chineseNumberValue(String token) {
       continue;
     }
     seen = true;
+    lastWasNumeral = false;
+    sawZeroAfterUnit = false;
+    lastUnit = unit;
     section += (digit == 0 ? unit : digit * unit);
     digit = 0;
   }
-  return seen ? section + digit : -1;
+  if (!seen) {
+    return -1;
+  }
+  if (digit > 0 && digit < 10 && lastUnit >= 100 && !sawZeroAfterUnit) {
+    return section + digit * (lastUnit ~/ 10);
+  }
+  return section + digit;
 }
 
 const Map<String, int> _numeralValues = {

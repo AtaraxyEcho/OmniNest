@@ -6130,6 +6130,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNoDescription => '暂无简介';
 
   @override
+  String get readerNoChapters => '暂无章节，请等待解析完成或重新解析';
+
+  @override
   String get readerDescription => '简介';
 
   @override
@@ -11706,8 +11709,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String readerInsightChapters(int count) {
-    return '读完 $count 章';
+  String readerInsightBooksFinished(int count) {
+    return '累计读完 $count 本';
   }
 
   @override

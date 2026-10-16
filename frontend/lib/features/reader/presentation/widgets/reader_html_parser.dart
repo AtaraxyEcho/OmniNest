@@ -555,6 +555,16 @@ void _walkNode(
     isSplitContinuation = true;
   }
 
+  /// 容器里遇到 `<br>`：断开当前段，后半截是同一段的续行，不补首行缩进。
+  /// 缓冲区为空时什么都不做，否则前导 `<br>` 会把下一段的缩进也吞掉。
+  void splitAtBreak() {
+    if (buffer.isEmpty) {
+      return;
+    }
+    flushBufferAsParagraph();
+    isSplitContinuation = true;
+  }
+
   for (final child in node.nodes) {
     if (child is dom.Text) {
       _collectInlineSpans(
@@ -576,7 +586,8 @@ void _walkNode(
         // `<div>甲<img/>乙</div>`：乙仍是同一段的后半截。
         if (tag == 'img') isSplitContinuation = true;
       } else if (tag == 'br') {
-        // 裸 br 跳过（等价于正则解析器的非段落上下文行为）
+        // 容器直属的裸 br 与 `<p>` 内的 br 同权：断行，不能吞掉。
+        splitAtBreak();
       } else {
         // 内联包装元素（span/em 等）里嵌套的 `<img>` 由 `onImage` 就地断开，
         // 不再先整批提到段前（旧写法会让句子中间的插图跑到句子前面）。
@@ -586,6 +597,7 @@ void _walkNode(
           style,
           ctx,
           depth: depth + 1,
+          onBr: splitAtBreak,
           onImage: splitAtImage,
         );
       }

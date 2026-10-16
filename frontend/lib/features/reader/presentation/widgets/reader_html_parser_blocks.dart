@@ -270,8 +270,18 @@ void _processBlockquote(
         pushLine(own);
         continue;
       }
-      // 内联元素
-      _collectInlineSpans(child, currentSpans, style, ctx);
+      // 内联元素：里面的 `<br>` 与容器直属的裸 `<br>` 同权，必须断行。
+      _collectInlineSpans(
+        child,
+        currentSpans,
+        style,
+        ctx,
+        onBr: () {
+          pushLine(owner, true);
+          pendingCollapsed += 1;
+          ctx.offset += 1;
+        },
+      );
     }
   }
 

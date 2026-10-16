@@ -115,7 +115,11 @@ class _BookDetailSpaceState extends ConsumerState<BookDetailSpace> {
           ),
       data: (detail) {
         final item = detail.item;
-        final progress = item.progressPercent ?? 0.0;
+        final progress = ReaderProgressSnapshot.displayBookProgress(
+          local: _localSnapshot,
+          server: ReaderProgressSnapshot.fromServer(detail.progress),
+          itemProgress: item.progressPercent,
+        );
         final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
         final chapters = _chaptersOf(bookAsync);
         return ListView(
@@ -721,22 +725,22 @@ class _ChapterList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 只列顶级章节（卷级 level 0）。
-    final topLevel = chapters.where((chapter) => chapter.level == 0).toList();
-    final effective = topLevel.isEmpty ? chapters : topLevel;
-    final readCount = (progress * effective.length).floor();
+    // 全量列出：分卷 EPUB 的正文在 level>0，只留顶级就把整本书的正文藏没了，
+    // 目录计数也只剩卷数。判据与桌面详情页的章节页签一致，深层级靠缩进表达。
+    final readCount = (progress * chapters.length).floor();
     return Padding(
       padding: const EdgeInsets.only(top: 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ContentsHeader(chapterCount: effective.length),
-          for (var index = 0; index < effective.length; index++)
+          _ContentsHeader(chapterCount: chapters.length),
+          for (var index = 0; index < chapters.length; index++)
             _ChapterRow(
-              chapter: effective[index],
+              chapter: chapters[index],
               index: index,
+              level: chapters[index].level,
               read: index < readCount,
-              onOpen: () => onOpenChapter(effective[index].id),
+              onOpen: () => onOpenChapter(chapters[index].id),
             ),
         ],
       ),
@@ -748,12 +752,16 @@ class _ChapterRow extends StatelessWidget {
   const _ChapterRow({
     required this.chapter,
     required this.index,
+    required this.level,
     required this.read,
     required this.onOpen,
   });
 
   final ReaderChapter chapter;
   final int index;
+
+  /// 目录层级：每层左移一档，读者能看出哪一章属于哪一卷。
+  final int level;
   final bool read;
   final VoidCallback onOpen;
 
@@ -768,58 +776,62 @@ class _ChapterRow extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: context.env.line07)),
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 34,
-              child: Text(
-                (index + 1).toString().padLeft(2, '0'),
-                style: TextStyle(
-                  color: context.env.ink40,
-                  fontFamily: AppTypography.serifFamily,
-                  fontFamilyFallback: AppTypography.serifFamilyFallback,
-                  fontSize: AppTypography.titleMedium,
+        child: Padding(
+          // 层级缩进：卷下的章往右一档，最多三档，深到看不齐左边缘时不再缩。
+          padding: EdgeInsets.only(left: 12.0 * level.clamp(0, 3)),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 34,
+                child: Text(
+                  (index + 1).toString().padLeft(2, '0'),
+                  style: TextStyle(
+                    color: context.env.ink40,
+                    fontFamily: AppTypography.serifFamily,
+                    fontFamilyFallback: AppTypography.serifFamilyFallback,
+                    fontSize: AppTypography.titleMedium,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.env.ink,
-                      fontSize: AppTypography.labelSmall,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (chapter.pageCount != null && chapter.pageCount! > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        AppLocalizations.of(
-                          context,
-                        ).bookDetailChapterPages(chapter.pageCount!),
-                        style: TextStyle(
-                          color: context.env.inkMuted,
-                          fontSize: AppTypography.labelMicro,
-                        ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.env.ink,
+                        fontSize: AppTypography.labelSmall,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                ],
+                    if (chapter.pageCount != null && chapter.pageCount! > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          AppLocalizations.of(
+                            context,
+                          ).bookDetailChapterPages(chapter.pageCount!),
+                          style: TextStyle(
+                            color: context.env.inkMuted,
+                            fontSize: AppTypography.labelMicro,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            OmniIcon(
-              icon: read ? OmniIcons.check : OmniIcons.chevron,
-              size: 17,
-              color: read ? context.env.accentInk : context.env.inkMuted,
-            ),
-          ],
+              OmniIcon(
+                icon: read ? OmniIcons.check : OmniIcons.chevron,
+                size: 17,
+                color: read ? context.env.accentInk : context.env.inkMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );

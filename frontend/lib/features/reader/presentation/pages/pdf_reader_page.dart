@@ -94,14 +94,18 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final now = DateTime.now();
+    // 仅以 paused（切后台、窗口隐藏）作为挂机边界：inactive 在桌面端弹窗或失焦时也会
+    // 触发，跟着结算会把正常阅读的时间算没。判据与文本阅读页保持一致。
     if (state == AppLifecycleState.resumed) {
-      _lastResumedAt = now;
+      _lastResumedAt ??= DateTime.now();
+      return;
+    }
+    if (state != AppLifecycleState.paused) {
       return;
     }
     final resumedAt = _lastResumedAt;
     if (resumedAt != null) {
-      _accumulatedActive += now.difference(resumedAt);
+      _accumulatedActive += DateTime.now().difference(resumedAt);
       _lastResumedAt = null;
     }
   }

@@ -14,6 +14,11 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/book_detail_space.dart';
 
 class _FakeReaderLocalProgressStore implements ReaderLocalProgressStore {
+  _FakeReaderLocalProgressStore({this.latest});
+
+  /// 替离线阅读留在 SQLite 里的那一份进度；null 表示本机没读过。
+  final Map<String, dynamic>? latest;
+
   @override
   Future<void> save({
     required String itemId,
@@ -38,7 +43,7 @@ class _FakeReaderLocalProgressStore implements ReaderLocalProgressStore {
       null;
 
   @override
-  Future<Map<String, dynamic>?> loadLatest(String itemId) async => null;
+  Future<Map<String, dynamic>?> loadLatest(String itemId) async => latest;
 
   @override
   Future<void> clear(String itemId) async {}
@@ -82,6 +87,42 @@ ParsedBook _manifestBook() {
           sourceStartOffset: index * 120,
           sourceEndOffset: (index + 1) * 120,
         ),
+    ],
+  );
+}
+
+/// 卷（level 0）+ 章（level 1）的多级清单：正文全在 level>0 上。
+ParsedBook _volumeBook() {
+  return ParsedBook(
+    title: '分卷书',
+    chapters: [
+      ParsedChapter(
+        number: 1,
+        title: '第一卷',
+        level: 0,
+        xhtmlContent: '<p>卷首</p>',
+        charCount: 40,
+        sourceStartOffset: 0,
+        sourceEndOffset: 40,
+      ),
+      ParsedChapter(
+        number: 2,
+        title: '第一章 起风了',
+        level: 1,
+        xhtmlContent: '<p>甲</p>',
+        charCount: 120,
+        sourceStartOffset: 40,
+        sourceEndOffset: 160,
+      ),
+      ParsedChapter(
+        number: 3,
+        title: '第二章 落雨时',
+        level: 1,
+        xhtmlContent: '<p>乙</p>',
+        charCount: 120,
+        sourceStartOffset: 160,
+        sourceEndOffset: 280,
+      ),
     ],
   );
 }
@@ -235,5 +276,46 @@ void main() {
 
     expect(find.text('重试'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  /// 分卷 EPUB 的正文挂在 level>0：只列顶级就把整本书的正文藏没了。
+  testWidgets('分卷书的正文章节照常列入目录', (tester) async {
+    final opened = await pumpSpace(
+      tester,
+      detail: () => _detailWithoutChapters(progressPercent: null),
+      manifest: () async => _volumeBook(),
+    );
+
+    expect(find.text('第一卷'), findsOneWidget);
+    expect(find.text('第一章 起风了'), findsOneWidget);
+    expect(find.text('第二章 落雨时'), findsOneWidget);
+
+    await tester.tap(find.text('第二章 落雨时'));
+    await tester.pumpAndSettle();
+    expect(opened, ['chapter_2']);
+  });
+
+  /// 离线读完一章后 item 上的百分比还是旧的：进度必须取本地与服务端里较新一份，
+  /// 否则进度块整段消失，主按钮退回"开始阅读"。
+  testWidgets('本地进度比条目上的旧百分比新时按本地显示进度', (tester) async {
+    ReaderLocalProgress.init(
+      _FakeReaderLocalProgressStore(
+        latest: const {
+          'chapterId': 'chapter_1',
+          'charOffset': 40,
+          'bookProgress': 0.5,
+          'updatedAt': '2026-10-02T01:00:00.000Z',
+        },
+      ),
+    );
+
+    await pumpSpace(
+      tester,
+      detail: () => _detailWithoutChapters(progressPercent: null),
+      manifest: () async => _manifestBook(),
+    );
+
+    expect(find.text('50%'), findsOneWidget);
+    expect(find.text('继续阅读'), findsOneWidget);
   });
 }

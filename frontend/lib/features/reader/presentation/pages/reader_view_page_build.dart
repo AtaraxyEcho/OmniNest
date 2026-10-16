@@ -19,6 +19,31 @@ String chapterLoadErrorMessage(
 
 /// [_ReaderViewPageState] 的根构建树：路由退出、详情/章节错误与骨架态。
 extension _ReaderViewPageRootBuild on _ReaderViewPageState {
+  /// 退出阅读页的唯一入口：顶栏返回、Esc 与系统返回都必须走这里。
+  ///
+  /// 只调 `safePop()` 的那两条路径会让 `PopScope` 收到 `didPop == true` 后直接 return，
+  /// 本次上报与详情页缓存失效一起被跳过——读者退出后进度条还停在进书前的位置，
+  /// 刚改过的批注与书签也要等下一次进详情页才出现。
+  void handleReaderExit() {
+    if (exitRequested) {
+      return;
+    }
+    clearReaderSelection();
+    syncProgressSync();
+    // 详情页必须等本次上报落库之后再失效：同一帧立即失效会让详情页重拉到
+    // 还没更新的进度，续读指针显示回跳。导航不等上报结果。
+    // 失效走容器而不是 ref——本页即将退出，Element 卸载后 ref 不再可用。
+    final container = ProviderScope.containerOf(context, listen: false);
+    unawaited(
+      _syncProgressOnExit().whenComplete(() {
+        container.invalidate(readerItemDetailProvider(widget.itemId));
+        container.invalidate(readerItemAnnotationsProvider(widget.itemId));
+        container.invalidate(readerItemBookmarksProvider(widget.itemId));
+      }),
+    );
+    safePop();
+  }
+
   Widget buildReaderView(BuildContext context) {
     final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
     final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
@@ -45,20 +70,9 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        clearReaderSelection();
-        syncProgressSync();
-        // 详情页必须等本次上报落库之后再失效：同一帧立即失效会让详情页重拉到
-        // 还没更新的进度，续读指针显示回跳。导航不等上报结果。
-        // 失效走容器而不是 ref——本页即将退出，Element 卸载后 ref 不再可用。
-        final container = ProviderScope.containerOf(context, listen: false);
-        unawaited(
-          _syncProgressOnExit().whenComplete(() {
-            container.invalidate(readerItemDetailProvider(widget.itemId));
-          }),
-        );
-        safePop();
+        handleReaderExit();
       },
       child: Scaffold(
         backgroundColor: _settings.surfaceColor,
@@ -67,7 +81,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
             if (bookAsync.hasError && parsedBook == null) {
               return AppErrorView(
                 message: AppLocalizations.of(context).readerChapterLoadFailed,
-                onBack: safePop,
+                onBack: handleReaderExit,
                 onRetry: () {
                   ref.invalidate(parsedBookProvider(widget.itemId));
                 },
@@ -88,7 +102,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
                     AppLocalizations.of(context),
                     _chapterLoadCoordinator.failureReason,
                   ),
-                  onBack: safePop,
+                  onBack: handleReaderExit,
                   onRetry: () {
                     _chapterLoadCoordinator.clearFailure(_currentChapterId);
                     _updateState(() {});
@@ -130,7 +144,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
           error:
               (e, _) => AppErrorView(
                 message: describeUserFacingError(e).displayMessage,
-                onBack: safePop,
+                onBack: handleReaderExit,
                 onRetry:
                     () =>
                         ref.invalidate(readerItemDetailProvider(widget.itemId)),

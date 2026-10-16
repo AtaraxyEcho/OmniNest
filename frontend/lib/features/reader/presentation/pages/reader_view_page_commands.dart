@@ -160,8 +160,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       _toggleReaderImmersive();
       return;
     }
-    syncProgressSync();
-    safePop();
+    handleReaderExit();
   }
 
   void _toggleReaderPanel(ReaderPanelType panel) {

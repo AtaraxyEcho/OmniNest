@@ -17,12 +17,19 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// 按壳层套用阅读默认：只有移动壳层把深色档的正文换成样例的衬线 19/1.85。
+///
+/// [hasSavedTypography] 为用户是否已经存过字号或行距：存过就不再覆盖，否则每次进书都会
+/// 把读者自己拧过的排版打回样例档位。
 @visibleForTesting
 ReaderViewSettings applyReaderShellDefaults({
   required ReaderViewSettings loaded,
   required bool mobileShell,
+  required bool hasSavedTypography,
 }) {
-  return mobileShell ? loaded.withMobileDefaults() : loaded;
+  if (!mobileShell || hasSavedTypography) {
+    return loaded;
+  }
+  return loaded.withMobileDefaults();
 }
 
 /// 阅读页设置与状态初始化逻辑。
@@ -82,13 +89,15 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
             : ReaderViewSettings.fromJson(values);
     // 移动壳层默认：深色档正文换成衬线 19/1.85（样例 ReaderFocus 书体）；判据与
     // 阅读页其余壳层分叉同源，桌面宽窗浏览器不跟着换档。
-    // 用户已显式保存非默认主题时尊重其选择。
+    // 用户已经存过字号或行距时尊重其选择，不能让样例档位每次进书都盖掉读者的设置。
     final resolved = applyReaderShellDefaults(
       loaded: loaded,
       mobileShell: shouldUseResponsiveMobileShell(
         mobilePlatform: isMobilePlatform,
         width: MediaQuery.sizeOf(context).width,
       ),
+      hasSavedTypography:
+          values.containsKey('fontSize') || values.containsKey('lineHeight'),
     );
     setState(() {
       settings = resolved;
