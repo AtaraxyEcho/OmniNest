@@ -289,11 +289,14 @@ class ReaderDataManager {
     }
   }
 
-  /// 先 flush、再拉取、按待同步队列过滤合并。
+  /// 先重放队列、再拉取、按待同步队列过滤合并。
   ///
   /// 顺序不能倒：离线积压的删改先推给服务端，远端快照才可能已经是最新事实，
   /// 否则远端返回的还是旧内容。仍未同步成功的操作必须继续生效——待删 ID 在
   /// 远端快照里仍然存在，直接覆写本地就是墓碑复活；待改 ID 会被旧内容回滚。
+  ///
+  /// `retryFailed` 不能省：断网期间试过一次 flush 会把操作留在 `failed`，
+  /// 而 `_doFlush` 只捞 `pending`；不先唤醒，本机的删除会永远停在失败态。
   Future<List<T>> _mergeWithPendingMutations<T>({
     required Future<List<T>> Function() loadLocal,
     required Future<List<T>> Function() fetchRemote,
@@ -304,6 +307,7 @@ class ReaderDataManager {
     required Future<void> Function(String id) deleteLocal,
     String? updateType,
   }) async {
+    await ReaderSyncQueue.retryFailed();
     await ReaderSyncQueue.flush(api: _api);
     final mutations = await ReaderSyncQueue.pendingMutations(
       updateType: updateType,
@@ -315,11 +319,6 @@ class ReaderDataManager {
     final local = await loadLocal();
     final remote = await fetchRemote();
     final remoteIds = remote.map(idOf).toSet();
-    await ReaderSyncQueue.discardPendingDeletions(
-      deleteType: deleteType,
-      idField: idField,
-      remoteIds: remoteIds,
-    );
     final localById = {for (final item in local) idOf(item): item};
     final merged = <T>[];
     for (final item in remote) {

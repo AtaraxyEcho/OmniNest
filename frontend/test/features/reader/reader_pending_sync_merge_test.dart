@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
@@ -164,5 +165,100 @@ void main() {
       idField: 'bookmarkId',
     );
     expect(pending.deletingIds, contains('server-vanishing'));
+  });
+
+  /// 拉取书籍 A 时手里只有 A 的远端 ID 集合，而待删操作横跨整库。
+  ///
+  /// 早先的实现据此"清理服务端已不存在的待删项"，等于把书籍 B 尚未同步的删除
+  /// 当成已删成功丢掉——下次打开书籍 B，服务端那条书签又回来了。
+  test('打开另一本书不会丢掉别本书尚未同步的删除墓碑', () async {
+    when(() => api.deleteBookmark('bm-book-b')).thenThrow(Exception('网络不可用'));
+    await ReaderSyncQueue.enqueueBookmarkDelete(bookmarkId: 'bm-book-b');
+    await ReaderSyncQueue.flush(api: api);
+
+    when(() => api.bookmarks('item-a')).thenAnswer(
+      (_) async => [
+        ReaderBookmark(
+          id: 'bm-book-a',
+          readerItemId: 'item-a',
+          charOffset: 10,
+          progressPercent: 0.1,
+          createdAt: DateTime(2026, 7, 1),
+        ),
+      ],
+    );
+    await manager.loadBookmarks('item-a');
+
+    final pending = await ReaderSyncQueue.pendingMutations(
+      deleteType: ReaderSyncQueue.opBookmarkDelete,
+      idField: 'bookmarkId',
+    );
+    expect(
+      pending.deletingIds,
+      contains('bm-book-b'),
+      reason: '别本书的待删 ID 不在当前书的远端快照里，不代表服务端已经删掉了它',
+    );
+  });
+
+  /// `_doFlush` 只捞 `pending`，而断网期间试传过一次的操作停在 `failed`。
+  /// 拉取列表前不先 `retryFailed`，那条删除就永远不会再发出去。
+  test('网络恢复后的列表拉取会唤醒并重放失败过的删除', () async {
+    when(() => api.deleteBookmark('bm-stale')).thenThrow(Exception('网络不可用'));
+    await ReaderSyncQueue.enqueueBookmarkDelete(bookmarkId: 'bm-stale');
+    await ReaderSyncQueue.flush(api: api);
+
+    when(() => api.deleteBookmark('bm-stale')).thenAnswer((_) async {});
+    when(() => api.bookmarks('item-1')).thenAnswer((_) async => const []);
+    await manager.loadBookmarks('item-1');
+
+    verify(() => api.deleteBookmark('bm-stale')).called(2);
+    final pending = await ReaderSyncQueue.pendingMutations(
+      deleteType: ReaderSyncQueue.opBookmarkDelete,
+      idField: 'bookmarkId',
+    );
+    expect(pending.deletingIds, isEmpty);
+  });
+
+  /// 目标在另一端已被删掉：删除操作按幂等完成清行，否则失败行长期占表并让本地
+  /// 删除一直显示"尚未同步"。同一个错误名落在更新上不能吞——内容只有本地那一份。
+  test('服务端报"记录不存在"时删除幂等完成、更新保留失败', () async {
+    const gone = AppException(
+      code: '5001',
+      message: '记录不存在',
+      details: {'errorName': 'MEDIA_NOT_FOUND'},
+    );
+    when(() => api.deleteBookmark('bm-gone')).thenThrow(gone);
+    await ReaderSyncQueue.enqueueBookmarkDelete(bookmarkId: 'bm-gone');
+    await ReaderSyncQueue.flush(api: api);
+
+    final deletes = await ReaderSyncQueue.pendingMutations(
+      deleteType: ReaderSyncQueue.opBookmarkDelete,
+      idField: 'bookmarkId',
+    );
+    expect(deletes.deletingIds, isEmpty);
+
+    when(
+      () => api.updateAnnotation(
+        'an-1',
+        note: any(named: 'note'),
+        color: any(named: 'color'),
+      ),
+    ).thenThrow(gone);
+    await ReaderSyncQueue.enqueueAnnotationUpdate(
+      annotationId: 'an-1',
+      note: '离线写的批注',
+    );
+    await ReaderSyncQueue.flush(api: api);
+
+    final updates = await ReaderSyncQueue.pendingMutations(
+      updateType: ReaderSyncQueue.opAnnotationUpdate,
+      deleteType: ReaderSyncQueue.opAnnotationDelete,
+      idField: 'annotationId',
+    );
+    expect(
+      updates.updatingPayloads.keys,
+      contains('an-1'),
+      reason: '更新遇到同一业务错误不能标成完成：那条内容只有本地这一份',
+    );
   });
 }

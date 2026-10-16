@@ -321,6 +321,32 @@ void main() {
       expect(adapter.lastPath, '/reader/items/item-99');
     });
 
+    /// Dio 的 validateStatus 放行 4xx，删除接口又不读返回体：不校验信封就等于把
+    /// 服务端拒绝当成同步成功，队列会清掉墓碑行、离线删除死灰复燃。
+    test('deleteBookmark 对业务错误信封抛 AppException 并带上稳定错误名', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: const {
+          'code': 5001,
+          'message': '书签不存在',
+          'errorName': 'MEDIA_NOT_FOUND',
+          'data': null,
+        },
+        statusCode: 404,
+      );
+      final api = ReaderApi(_apiClient(adapter));
+
+      await expectLater(
+        api.deleteBookmark('bm-1'),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.details['errorName'],
+            'errorName',
+            'MEDIA_NOT_FOUND',
+          ),
+        ),
+      );
+    });
+
     test('getFileTicket parses signed download metadata', () async {
       final adapter = _CapturingHttpClientAdapter(
         body: {

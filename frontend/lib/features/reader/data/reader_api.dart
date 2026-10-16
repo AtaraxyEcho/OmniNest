@@ -418,9 +418,12 @@ class ReaderApi {
   /// 删除书签（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> deleteBookmark(String bookmarkId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/reader/bookmarks/$bookmarkId',
     );
+    // 必须校验信封：Dio 的 validateStatus 放行 4xx，不看信封就等于把服务端拒绝
+    // 当成同步成功，队列会清掉墓碑行、本地删除变成死灰复燃。
+    parseEnvelope(response.data);
   }
 
   // ─── Annotations ─────────────────────────────────────────────
@@ -477,9 +480,10 @@ class ReaderApi {
   /// 删除标注（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> deleteAnnotation(String annotationId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/reader/annotations/$annotationId',
     );
+    parseEnvelope(response.data);
   }
 
   // ─── Notes ───────────────────────────────────────────────────
@@ -530,7 +534,10 @@ class ReaderApi {
   /// 删除笔记（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> deleteNote(String noteId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>('/reader/notes/$noteId');
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/reader/notes/$noteId',
+    );
+    parseEnvelope(response.data);
   }
 
   // ─── Bookshelf ───────────────────────────────────────────────
@@ -751,15 +758,21 @@ class ReaderApi {
   }
 
   /// 解析响应信封，校验 code 字段
+  ///
+  /// `errorName` 是后端 `ErrorCode` 枚举名（稳定符号），放进 details 供调用方分辨
+  /// "资源已不存在"这类可以幂等吞掉的业务错误；`code` 保持数字串不变，避免改动既有
+  /// 按 code 分支的调用点。
   Map<String, dynamic> parseEnvelope(Map<String, dynamic>? body) {
     if (body == null) {
       throw const AppException(code: 'EMPTY_RESPONSE', message: '服务端没有返回阅读器结果');
     }
     final code = body['code'];
     if (code != 200) {
+      final errorName = body['errorName']?.toString();
       throw AppException(
         code: code?.toString() ?? 'READER_ERROR',
         message: body['message']?.toString() ?? '阅读器操作失败',
+        details: {if (errorName != null) 'errorName': errorName},
       );
     }
     return body;

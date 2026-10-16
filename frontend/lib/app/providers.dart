@@ -19,6 +19,7 @@ import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/notifications/data/notification_type_api.dart';
 import 'package:omninest/features/profile/data/me_api.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
+import 'package:omninest/features/reader/application/reader_progress_backup_port.dart';
 import 'package:omninest/features/reader/data/reader_sync_queue.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_image_cache.dart';
@@ -155,6 +156,8 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
     textCipher: ref.watch(offlineColumnCipherProvider),
     userId: userId,
   );
+  // Web 的崩溃备份按账号分键：换号后不能读到上一个账号留下的那份位置。
+  ReaderProgressBackupWeb.setUserId(userId);
   ReaderImageCache.init(imageRepository);
 
   // 启动时自动清理过期缓存（不阻塞启动）

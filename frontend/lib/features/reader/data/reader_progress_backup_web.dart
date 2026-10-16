@@ -1,15 +1,21 @@
 import 'dart:convert';
 import 'package:web/web.dart' as web;
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/features/reader/domain/reader_progress_backup_key.dart';
 
 /// Web 平台 localStorage 备份（同步 API）。
 ///
 /// 存储内容仅含阅读进度元数据（chapterId、charOffset、chapterProgress、savedAt），
-/// 不包含书签正文、批注文本或笔记内容。清理策略：每本书一个 key（`omninest_progress_{itemId}`），
-/// 删除书籍进度时调用 [clear]；SQLite 中的 ReaderLocalStorage 为主存储，localStorage 仅为
-/// Web 端防崩溃/刷新的同步备份，恢复后同步回 SQLite 并可清除。
+/// 不包含书签正文、批注文本或笔记内容。清理策略：每账号每本书一个 key（见
+/// [readerProgressBackupKey]），删除书籍进度时调用 [clear]；SQLite 中的 ReaderLocalStorage
+/// 为主存储，localStorage 仅为 Web 端防崩溃/刷新的同步备份，恢复后同步回 SQLite 并可清除。
 class ReaderProgressBackupWeb {
-  static const _prefix = 'omninest_progress_';
+  static String? _userId;
+
+  /// 由 `localDatabaseInitProvider` 在绑定账号时调用：换号后读写都落到新账号的键上。
+  static void setUserId(String? userId) {
+    _userId = userId;
+  }
 
   static void save({
     required String itemId,
@@ -20,7 +26,7 @@ class ReaderProgressBackupWeb {
     DateTime? savedAt,
   }) {
     try {
-      final key = '$_prefix$itemId';
+      final key = readerProgressBackupKey(userId: _userId, itemId: itemId);
       final data = jsonEncode({
         'chapterId': chapterId,
         'charOffset': charOffset,
@@ -40,7 +46,7 @@ class ReaderProgressBackupWeb {
 
   static Map<String, dynamic>? load(String itemId) {
     try {
-      final key = '$_prefix$itemId';
+      final key = readerProgressBackupKey(userId: _userId, itemId: itemId);
       final data = web.window.localStorage.getItem(key);
       if (data == null || data.isEmpty) return null;
       return jsonDecode(data) as Map<String, dynamic>;
@@ -52,7 +58,9 @@ class ReaderProgressBackupWeb {
 
   static void clear(String itemId) {
     try {
-      web.window.localStorage.removeItem('$_prefix$itemId');
+      web.window.localStorage.removeItem(
+        readerProgressBackupKey(userId: _userId, itemId: itemId),
+      );
     } on Exception catch (error) {
       devLog('ReaderProgressBackupWeb: clear failed for $itemId: $error');
     }

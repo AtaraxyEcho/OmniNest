@@ -50,6 +50,22 @@ class ReaderSyncQueue {
     opSessionCreate,
   ];
 
+  static const _deleteOperationTypes = [
+    opBookmarkDelete,
+    opAnnotationDelete,
+    opNoteDelete,
+  ];
+
+  /// "服务端已经没有这条记录"的业务错误名（后端 `ErrorCode` 枚举名）。
+  ///
+  /// 书签/批注/笔记的删除入口都以 `MEDIA_NOT_FOUND` 报缺失，`NOT_FOUND` 与
+  /// `BOOK_NOT_FOUND` 是条目本身已不在时的返回；三者对删除来说都是目标状态已达成。
+  static const _alreadyGoneErrorNames = {
+    'NOT_FOUND',
+    'MEDIA_NOT_FOUND',
+    'BOOK_NOT_FOUND',
+  };
+
   /// 初始化同步队列（必须在使用前调用）。
   ///
   /// [textCipher]/[userId] 用于回写替换路径的敏感列加密，与
@@ -503,33 +519,6 @@ class ReaderSyncQueue {
     return (deletingIds: deletingIds, updatingPayloads: updatingPayloads);
   }
 
-  /// 服务端已经没有这些记录时，丢弃针对它们的待删操作。
-  ///
-  /// 记录多半是在另一台设备上删掉的：这类操作补发只会一直失败，把失败行长期
-  /// 留在队列里并让本地删除看起来"尚未同步"。
-  static Future<void> discardPendingDeletions({
-    required String deleteType,
-    required String idField,
-    required Set<String> remoteIds,
-  }) async {
-    final operations =
-        await (_database.select(_database.syncOperations)..where(
-          (table) =>
-              table.type.equals(deleteType) &
-              table.status.isIn(const ['pending', 'failed']) &
-              _ownedByCurrentUser(table.userId),
-        )).get();
-    final staleIds = <int>[];
-    for (final operation in operations) {
-      final payload = _decodePayload(operation);
-      final targetId = payload?[idField] as String?;
-      if (targetId != null && !remoteIds.contains(targetId)) {
-        staleIds.add(operation.id);
-      }
-    }
-    await _deleteOwnedOperations(staleIds);
-  }
-
   // ── 刷新队列 ──
 
   /// 批量发送队列中的待同步操作。
@@ -576,6 +565,10 @@ class ReaderSyncQueue {
           // 无 activity:write 的角色：书签/标注/笔记保留本地（本地优先
           // 模型，本地即真值），跳过远端同步，不做无意义重试。
           await _markCompleted(op.id);
+        } else if (_isIdempotentDeleteFailure(op, error)) {
+          // 记录多半在另一台设备上已经删掉了：补发永远不会成功，留着失败行会
+          // 长期占表，并让本地删除一直显示"尚未同步"。
+          await _markCompleted(op.id);
         } else {
           await _markFailed(op);
         }
@@ -607,6 +600,20 @@ class ReaderSyncQueue {
           table.retryCount.isBiggerOrEqualValue(maxOperationRetries) &
           _ownedByCurrentUser(table.userId),
     )).go();
+  }
+
+  /// 这次失败是否等于"服务端已经没有这条记录"：只有删除操作可以按幂等完成处理。
+  ///
+  /// 创建/更新遇到同一错误名不能吞——目标不存在意味着要新建的内容丢了。
+  static bool _isIdempotentDeleteFailure(
+    SyncOperation operation,
+    AppException error,
+  ) {
+    if (!_deleteOperationTypes.contains(operation.type)) {
+      return false;
+    }
+    final errorName = error.details['errorName'] as String?;
+    return errorName != null && _alreadyGoneErrorNames.contains(errorName);
   }
 
   /// 根据操作类型分发到对应的 API 调用。
