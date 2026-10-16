@@ -1,8 +1,19 @@
 # 字号治理基线：每文件允许的裸数字字号违规数（格式：路径 数量）
 # 迁移批次完成后销号递减；白名单行使用 // ignore: font_size_whitelist
 # 0.1.0 发布前登记的存量回归，禁止新增。
+# 扫描面自 lib/features 扩到 lib 全量：共享件里的微型字号会被每个新页面复制，
+# 只盯 features 等于把最容易被扩散的一层留在门外。
 lib/features/music/presentation/player/music_immersive_overlay.dart 1
 lib/features/music/presentation/widgets/music_volume_button.dart 1
 lib/features/reader/presentation/pages/reader_admin_page.dart 5
 lib/features/reader/presentation/widgets/reader_image_preview.dart 1
 lib/features/reader/presentation/widgets/reader_import_section.dart 8
+lib/app/mobile_shell/mobile_account_sheet.dart 7
+lib/app/mobile_shell/mobile_app_shell.dart 1
+lib/app/mobile_shell/workspace_tools_page.dart 2
+lib/app/theme/app_theme.dart 1
+lib/app/theme/feature/music_backdrop_theme.dart 1
+lib/core/feedback/omni_feedback.dart 1
+lib/core/widgets/mobile_appearance_options.dart 1
+lib/core/widgets/mobile_sample_kit.dart 16
+lib/core/widgets/mobile_ui.dart 3

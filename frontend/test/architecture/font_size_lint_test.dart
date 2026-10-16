@@ -2,15 +2,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// 字号治理棘轮：lib/features 禁止新增裸数字字号。
+/// 字号治理棘轮：lib 全量禁止新增裸数字字号。
 ///
+/// 扫描面曾是 lib/features，于是共享件（`core/widgets/mobile_status_kit` 等）
+/// 里的 7-9px 中文不受任何约束，并被每个新页面复制一遍。
 /// 基线 `tool/font_size_baseline.txt` 记录存量（每文件允许的违规数），
 /// 迁移批次完成后销号递减；基线清零后本测试即全量阻断。
 /// 白名单行级标记：`// ignore: font_size_whitelist`。
 void main() {
-  test('lib/features 禁止新增裸数字字号（基线棘轮）', () {
-    final featuresDir = Directory('lib/features');
-    expect(featuresDir.existsSync(), isTrue, reason: '本测试必须在 frontend 根目录下运行');
+  test('lib 全量禁止新增裸数字字号（基线棘轮）', () {
+    final libDir = Directory('lib');
+    expect(libDir.existsSync(), isTrue, reason: '本测试必须在 frontend 根目录下运行');
 
     const whitelistMarker = '// ignore: font_size_whitelist';
     final fontSizePattern = RegExp(r'fontSize:\s*[0-9]');
@@ -20,7 +22,7 @@ void main() {
 
     final violations = <String, int>{};
     final details = <String>[];
-    for (final entity in featuresDir.listSync(recursive: true)) {
+    for (final entity in libDir.listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) {
         continue;
       }

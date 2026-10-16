@@ -34,7 +34,6 @@ const _baseline = <String, int>{
   'lib/features/portal/presentation/widgets/continue_watching_widget.dart': 1,
   'lib/features/portal/presentation/widgets/recent_photos_widget.dart': 1,
   'lib/features/video/presentation/widgets/movie_continue.dart': 1,
-  'lib/features/search/presentation/widgets/search_result_tile.dart': 4,
 };
 
 /// canPop 兜底所在文件：go 必须继续待在上一个判断为假的分支里。
@@ -91,6 +90,70 @@ void main() {
         reason:
             '$path 的 go 只在栈底（深链直入）时兜底；'
             '没有 canPop 判断就意味着正常返回也换了栈',
+      );
+    }
+  });
+
+  // 壳层四空间是分支路由，`StatefulShellRoute.indexedStack` 的壳层页面带固定
+  // key。从壳外的根级页（通知中心、工具页）push 一条分支路由，go_router 会再压入
+  // 第二个壳层页面，Navigator 在 `_debugCheckDuplicatedPageKeys` 上断言
+  // `!keyReservation.contains(key)`，实测断言抛出后 chrome、目标分支与来源页
+  // 三者都不在树上。同级进空间一律 go（见 workspace_tools_page 的注释）。
+  test('分支路由不得被 push', () async {
+    final branchPush = RegExp(
+      r'\.push\(\s*[\x22\x27]/(portal|library|reader|files)(?![\w/-])',
+    );
+    final offenders = <String>[];
+    await for (final entity in Directory('lib').list(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final path = entity.path.replaceAll('\\', '/');
+      final lines = (await entity.readAsString()).split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (branchPush.hasMatch(lines[i])) {
+          offenders.add('$path:${i + 1} ${lines[i].trim()}');
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'push 壳层分支路由会造出第二个壳层页面并触发重复 page key 断言：\n'
+          '${offenders.join('\n')}',
+    );
+  });
+
+  /// 通知动作链接的 go/push 判定收在 `navigateNotificationAction` 里：目标是
+  /// `/files`（壳层分支路由）时 push 会撞重复 page key 断言，其余目标要 push 才留得住
+  /// 返回来路。这个取舍按 route 的**运行时值**决定，字面量正则扫不到，所以直接锁调用点。
+  test('通知动作链接必须走 navigateNotificationAction', () async {
+    const callSites = <String>[
+      'lib/features/notifications/presentation/pages/notification_page.dart',
+      'lib/features/notifications/presentation/pages/notification_page_mobile.dart',
+    ];
+    final rawNavigation = RegExp(
+      r'\.(push|go)\(\s*(?:widget\.)?action\.route\s*\)',
+    );
+
+    for (final path in callSites) {
+      final source = await File(path).readAsString();
+      final lines = source.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        expect(
+          rawNavigation.hasMatch(lines[i]),
+          isFalse,
+          reason:
+              '$path:${i + 1} 对 action.route 裸跳转，绕开了分支路由必须 go 的判定；'
+              '改用 navigateNotificationAction(context, action.route)',
+        );
+      }
+      expect(
+        source.contains('navigateNotificationAction('),
+        isTrue,
+        reason: '$path 没有接线到 navigateNotificationAction',
       );
     }
   });

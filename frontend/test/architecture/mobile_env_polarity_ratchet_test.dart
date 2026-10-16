@@ -1,5 +1,7 @@
-// 极性迁移棘轮：已接入极性表的文件不得再引用单极性的 MobileEnvColors，
-// 未接入的引用总数只允许下降。防止新页面继续写死暗值。
+// 极性落地后的三条常驻守卫：已接入极性表的文件里不许再出现裸白前景与裸酸绿
+// 强调字面量（浅态不翻），推入式面板必须自带极性作用域。
+// 原先还有两条守「不得引用 MobileEnvColors」的断言，那个单极性常量类已删，
+// 引用它连编译都过不了，所以不必再守。
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -60,12 +62,6 @@ const _migrated = <String>[
   'lib/app/app.dart',
 ];
 
-/// 全仓 `MobileEnvColors.` 引用出现数（按 allMatches 计；`grep -c` 数行会少算一行多次）。
-/// 当前 0：移动面全部走 `context.env`，相册查看器那 7 处显式写成
-/// `MobileEnvPalette.dark.*`——沉浸浮层固定暗档，不参与极性翻转。
-/// 该类此后只作为暗基线的等值参照物存在，不得再被新代码读取。
-const _remainingCeiling = 0;
-
 /// 经 PopupRoute/Dialog 推入的面板拿不到空间子树的 Theme 注册，
 /// 必须自带 MobileEnvironmentScope，否则浅态下整张面板仍是暗值。
 const _mustCarryScope = <String>[
@@ -106,18 +102,59 @@ List<String> _scanMigratedLiterals(RegExp pattern) {
 int _totalOf(List<String> offenders) =>
     offenders.fold(0, (sum, entry) => sum + int.parse(entry.split(': ').last));
 
-void main() {
-  test('已迁移文件不再引用 MobileEnvColors', () {
-    for (final path in _migrated) {
-      final source = File(path).readAsStringSync();
-      expect(
-        source.contains('MobileEnvColors.'),
-        isFalse,
-        reason: '$path 必须整体走 context.env，否则浅态会残留暗字面量',
-      );
-    }
-  });
+/// 危险色只有一个来源：`MobileEnvPalette.statusDanger`（暗 #E69696 / 浅 #BA1A1A）。
+/// 手抄字面量的历史值是 #E2A1A1 一族，它在浅纸上约 2.3:1，删除/退出这类高危动作
+/// 在浅色模式下会看不清。
+const _dangerLiteralCeiling = 0;
 
+/// 允许出现这些色值的落点：调色板本体，以及自带 OnPaper 同位表的功能编码。
+const _dangerLiteralAllowed = <String>[
+  'lib/features/files/presentation/widgets/file_env_glyph.dart',
+];
+
+/// 墨色也只有角色可用：`ink`/`inkMuted`/`inkFaint` 在两极性各自成值，
+/// 手抄其中一档（搜索页曾抄走摄影档的 0x9E 前缀）就意味着浅态不翻色。
+const _inkLiteralCeiling = 0;
+
+/// 阅读面板自带一套按亮度三元取值的双值表，不吃空间极性表。
+const _inkLiteralAllowed = <String>[
+  'lib/features/reader/presentation/widgets/reader_view_settings.dart',
+];
+
+/// 全 lib 扫描字面量，跳过调色板本体与逐个说明过的例外落点。
+List<String> _scanLiteralFamily(RegExp pattern, List<String> allowed) {
+  final offenders = <String>[];
+  for (final entity in Directory('lib').listSync(recursive: true)) {
+    if (entity is! File || !entity.path.endsWith('.dart')) {
+      continue;
+    }
+    final path = entity.path.replaceAll('\\', '/');
+    // 调色板本体就是这些色值的定义处。
+    if (path.startsWith('lib/app/theme/') || allowed.contains(path)) {
+      continue;
+    }
+    final hits = pattern.allMatches(entity.readAsStringSync()).length;
+    if (hits > 0) {
+      offenders.add('$path: $hits');
+    }
+  }
+  return offenders;
+}
+
+List<String> _scanDangerLiterals() => _scanLiteralFamily(
+  RegExp(
+    r'Color\(\s*0x(?:[0-9A-Fa-f]{2})?(?:E2A1A1|E69696|BA1A1A)\s*\)',
+    caseSensitive: false,
+  ),
+  _dangerLiteralAllowed,
+);
+
+List<String> _scanInkLiterals() => _scanLiteralFamily(
+  RegExp(r'Color\(0x[0-9A-Fa-f]{2}(?:F6F6F2|F4F7F1)\)'),
+  _inkLiteralAllowed,
+);
+
+void main() {
   test('推入式面板自带极性作用域', () {
     for (final path in _mustCarryScope) {
       expect(
@@ -150,21 +187,28 @@ void main() {
     );
   });
 
-  test('未迁移的暗字面量引用不再增长', () {
-    var total = 0;
-    for (final entity in Directory('lib').listSync(recursive: true)) {
-      if (entity is! File || !entity.path.endsWith('.dart')) {
-        continue;
-      }
-      if (entity.path.endsWith('mobile_env_colors.dart')) {
-        continue;
-      }
-      total += 'MobileEnvColors.'.allMatches(entity.readAsStringSync()).length;
-    }
+  test('危险色不手抄字面量，一律取 statusDanger 角色', () {
+    final offenders = _scanDangerLiterals();
     expect(
-      total,
-      lessThanOrEqualTo(_remainingCeiling),
-      reason: '当前 $total 处；接完一个面请把 _remainingCeiling 降到新值',
+      offenders.fold(
+        0,
+        (sum, entry) => sum + int.parse(entry.split(': ').last),
+      ),
+      lessThanOrEqualTo(_dangerLiteralCeiling),
+      reason:
+          '出现手抄的危险色，浅态不会翻色，请改用 context.env.statusDanger：'
+          '${offenders.join(' / ')}',
+    );
+  });
+
+  test('墨色不手抄字面量，一律取 ink 三档角色', () {
+    final offenders = _scanInkLiterals();
+    expect(
+      _totalOf(offenders),
+      lessThanOrEqualTo(_inkLiteralCeiling),
+      reason:
+          '出现手抄的墨色，浅态不会翻色，请改用 context.env.ink/inkMuted/inkFaint：'
+          '${offenders.join(' / ')}',
     );
   });
 }
