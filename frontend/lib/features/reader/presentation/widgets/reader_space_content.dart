@@ -75,15 +75,17 @@ class ReaderSpaceContent extends StatelessWidget {
           streakDays: insightStreakDays,
           onOpenStats: onOpenStats,
         ),
-        if (railItems.isNotEmpty) ...[
-          _SpaceSectionHeader(
-            eyebrow: AppLocalizations.of(context).readerReadNextEyebrow,
-            title: AppLocalizations.of(context).readerReadNextTitle,
-            actionLabel: AppLocalizations.of(context).readerNavBookshelf,
-            onAction: onOpenBookshelf,
-          ),
+        // 书架入口常驻：样例的 Bookshelf 挂在 YOUR SHELVES 小节的动作位上，
+        // 而那一节恒在。此前整节被 railItems.isNotEmpty 包住，书库有内容
+        // 却没有「继续阅读」推荐时，移动侧唯一的书架入口会跟着一起消失。
+        _SpaceSectionHeader(
+          eyebrow: AppLocalizations.of(context).readerReadNextEyebrow,
+          title: AppLocalizations.of(context).readerReadNextTitle,
+          actionLabel: AppLocalizations.of(context).readerNavBookshelf,
+          onAction: onOpenBookshelf,
+        ),
+        if (railItems.isNotEmpty)
           _BookRail(items: railItems, onOpenItem: onOpenItem),
-        ],
         if (notes.isNotEmpty) ...[
           _SpaceSectionHeader(
             eyebrow: AppLocalizations.of(context).readerNotesEyebrow,

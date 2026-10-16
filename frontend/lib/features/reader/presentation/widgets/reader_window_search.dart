@@ -7,6 +7,7 @@ class WindowSearchChapter {
     required this.chapterId,
     required this.title,
     required this.plainText,
+    this.corpus,
   });
 
   factory WindowSearchChapter.fromBlocks({
@@ -14,19 +15,37 @@ class WindowSearchChapter {
     required String title,
     required List<ContentBlock> blocks,
   }) {
+    final corpus = ChapterSearchCorpus.fromBlocks(blocks);
     return WindowSearchChapter(
       chapterId: chapterId,
       title: title,
-      plainText: plainTextFromBlocks(blocks),
+      plainText: corpus.plainText,
+      corpus: corpus,
     );
   }
 
   final String chapterId;
   final String title;
   final String plainText;
+
+  /// 由块构建时携带的源字符域映射；手搓检索串（测试夹具）时为 null。
+  final ChapterSearchCorpus? corpus;
+
+  /// 把本章检索串下标换算成块源字符域偏移。
+  int toCharOffset(int localPlainIndex) {
+    final corpus = this.corpus;
+    if (corpus == null) {
+      return localPlainIndex;
+    }
+    return corpus.toCharOffset(localPlainIndex);
+  }
 }
 
 /// 窗口搜索命中的章内位置。
+///
+/// [localOffset] 是**块源字符域**偏移（分页、滚动定位与批注同一口径），可以直接交给
+/// `computePage` / `restoreScrollPositionFromOffset`。由 [WindowSearchChapter.fromBlocks]
+/// 构建的章走映射表；只用检索串手工构造的章没有块模型，下标原样透出。
 class WindowSearchHit {
   const WindowSearchHit({
     required this.chapterId,
@@ -55,11 +74,9 @@ class ReaderWindowSearchIndex {
       buffer.write(chapter.plainText);
       segments.add(
         _WindowSearchSegment(
-          chapterId: chapter.chapterId,
-          title: chapter.title,
+          chapter: chapter,
           globalStart: bodyStart,
           globalEnd: buffer.length,
-          textLength: chapter.plainText.length,
         ),
       );
     }
@@ -80,19 +97,23 @@ class ReaderWindowSearchIndex {
     }
     for (final seg in _segments) {
       if (globalOffset >= seg.globalStart && globalOffset < seg.globalEnd) {
-        final local = globalOffset - seg.globalStart;
+        final chapter = seg.chapter;
+        final local = (globalOffset - seg.globalStart).clamp(
+          0,
+          chapter.plainText.length,
+        );
         return WindowSearchHit(
-          chapterId: seg.chapterId,
-          localOffset: local.clamp(0, seg.textLength),
-          chapterTitle: seg.title,
+          chapterId: chapter.chapterId,
+          localOffset: chapter.toCharOffset(local),
+          chapterTitle: chapter.title,
         );
       }
     }
     // 落在末尾换行或最后一章边界。
-    final last = _segments.last;
+    final last = _segments.last.chapter;
     return WindowSearchHit(
       chapterId: last.chapterId,
-      localOffset: last.textLength,
+      localOffset: last.toCharOffset(last.plainText.length),
       chapterTitle: last.title,
     );
   }
@@ -103,16 +124,12 @@ class ReaderWindowSearchIndex {
 
 class _WindowSearchSegment {
   const _WindowSearchSegment({
-    required this.chapterId,
-    required this.title,
+    required this.chapter,
     required this.globalStart,
     required this.globalEnd,
-    required this.textLength,
   });
 
-  final String chapterId;
-  final String title;
+  final WindowSearchChapter chapter;
   final int globalStart;
   final int globalEnd;
-  final int textLength;
 }

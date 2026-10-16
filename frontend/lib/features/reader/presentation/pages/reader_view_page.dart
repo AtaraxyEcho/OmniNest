@@ -28,7 +28,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_content_skeleton.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_image_budget_notice.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_progress_backup.dart';
+import 'package:omninest/features/reader/application/reader_progress_backup_port.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tts_controls.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_bottom_bar.dart';
@@ -67,14 +67,19 @@ class ReaderViewPage extends ConsumerStatefulWidget {
     required this.itemId,
     required this.chapterId,
     this.entry,
+    this.initialCharOffset,
     super.key,
   });
 
   final String itemId;
   final String chapterId;
 
-  /// 路由进入语义（`chapter`=目录显式选章进章首，其余=续读恢复）。
+  /// 路由进入语义（`chapter`=目录显式选章进章首，`offset`=按
+  /// [initialCharOffset] 精确定位，其余=续读恢复）。
   final String? entry;
+
+  /// `entry=offset` 时的章内字符偏移（书签等精确定位入口）。
+  final int? initialCharOffset;
 
   @override
   ConsumerState<ReaderViewPage> createState() => _ReaderViewPageState();
@@ -144,7 +149,13 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Timer? _bookProgressRecomputeTimer;
   double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
-  ReaderProgressSnapshot? _lastOwnProgressSave; // 本机最近一次推送的进度快照
+
+  /// 本机最近推送的进度快照，按上报顺序保留最多 12 条。
+  ///
+  /// 连续滚动时上一条上报的详情刷新可能在用户已经滚出新位置之后才回来，
+  /// 只留最新一条会把上一条本机回声误判成"远端新进度"并重放。
+  final List<ReaderProgressSnapshot> _recentOwnSaves = [];
+  static const int _recentOwnSavesLimit = 12;
   // 清单版本缓存：dispose 路径不能读 Provider，写入与降级判定都用这份缓存。
   int? _manifestVersionCache;
   double? _pendingChapterProgress; // 恢复时的章节进度比例（0-1）
@@ -294,6 +305,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   @override
+  void resetBookProgressInput() {
+    _lastBookProgressInput = -1;
+  }
+
+  @override
   DateTime? get lastAppliedProgressAt => _lastAppliedProgressAt;
   @override
   set lastAppliedProgressAt(DateTime? v) => _lastAppliedProgressAt = v;
@@ -301,19 +317,19 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   /// 记录本机推送的进度快照，供回声判定使用。
   @override
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot) {
-    _lastOwnProgressSave = snapshot;
+    _recentOwnSaves.add(snapshot);
+    while (_recentOwnSaves.length > _recentOwnSavesLimit) {
+      _recentOwnSaves.removeAt(0);
+    }
   }
 
   @override
-  ReaderProgressSnapshot? get lastOwnProgressSave => _lastOwnProgressSave;
+  ReaderProgressSnapshot? get lastOwnProgressSave =>
+      _recentOwnSaves.isEmpty ? null : _recentOwnSaves.last;
 
   @override
   bool isOwnProgressEcho(ReaderProgressSnapshot snapshot) {
-    final at = snapshot.updatedAt;
-    if (at == null) {
-      return false;
-    }
-    return _isOwnProgressEcho(snapshot, at);
+    return _isOwnProgressEcho(snapshot);
   }
 
   @override
@@ -548,7 +564,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _chapterNavigationIntent =
-        ReaderChapterNavigationIntent.intentForRouteEntry(widget.entry);
+        ReaderChapterNavigationIntent.intentForRouteEntry(
+          widget.entry,
+          charOffset: widget.initialCharOffset,
+        );
     _progressSync = ref.read(readerProgressSyncServiceProvider);
     _windowChromeController = ref.read(windowChromeControllerProvider.notifier);
     _progressSaveCoordinator = ReaderProgressSaveCoordinator(
@@ -567,6 +586,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           mode: snapshot.mode,
           chapterId: snapshot.chapterId,
           charOffset: snapshot.charOffset,
+          bookProgress: snapshot.bookProgress,
           manifestVersion: snapshot.manifestVersion,
           updatedAt: snapshot.updatedAt,
         );
@@ -607,6 +627,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       onAnnotationsChanged: () {
         if (mounted) setState(() {});
       },
+      onSelectAnnotation: onAnnotationSelected,
     )..load();
   }
 

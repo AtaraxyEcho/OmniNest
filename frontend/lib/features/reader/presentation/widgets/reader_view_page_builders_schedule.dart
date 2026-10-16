@@ -92,14 +92,20 @@ extension ReaderViewPageBuildersSchedule on ReaderViewPageBuilders {
         pageCountNotifier.value = 0;
       }
       navigator.ensurePage(0);
-      pageCountNotifier.value = navigator.readablePageCount;
+      pageCountNotifier.value = readerDisplayPageCount(
+        contentPages: navigator.readablePageCount,
+        fullyPaginated: navigator.isFullyPaginated,
+      );
       navigator.schedulePrefetch(
         pageIndex,
         onPageReady: () {
           if (!mounted) return;
           // 预取循环不随切章取消：换章后旧章的预取回调不得污染新章计数。
           if (currentChapterId != chapterId) return;
-          pageCountNotifier.value = navigator.readablePageCount;
+          pageCountNotifier.value = readerDisplayPageCount(
+            contentPages: navigator.readablePageCount,
+            fullyPaginated: navigator.isFullyPaginated,
+          );
         },
       );
     });

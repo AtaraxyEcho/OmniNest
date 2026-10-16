@@ -116,9 +116,21 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
         if (widget.layout == ComicPageImageLayout.paged) {
           return SizedBox.expand(child: content);
         }
+        // 服务端没解析出宽高（WebP 无损/扩展、AVIF、TIFF 都可能）时，字节已经就绪
+        // 就不许再锁 3:4：长条漫画会被压成盒子中央的一条细线，上报给高度索引的
+        // 也是这一份错的高度，跳页与进度定位跟着偏。
+        if (!_hasKnownDimensions && _imageBytes != null && _error == null) {
+          return content;
+        }
         return AspectRatio(aspectRatio: _pageAspectRatio, child: content);
       },
     );
+  }
+
+  bool get _hasKnownDimensions {
+    final width = widget.page.width;
+    final height = widget.page.height;
+    return width != null && height != null && width > 0 && height > 0;
   }
 
   double get _pageAspectRatio {
@@ -144,13 +156,26 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
         onRetry: _loadImage,
       );
     }
+    // 连续阅读且尺寸未知：宽度铺满、高度按图片真实比例撑开，撑出来的高度就是
+    // 上报给高度索引的那一份。翻页模式一屏一页，仍按 contain 居中。
+    final isContinuousDynamic =
+        widget.layout == ComicPageImageLayout.continuous &&
+        !_hasKnownDimensions;
     return Image.memory(
       _imageBytes!,
-      fit: BoxFit.contain,
+      fit: isContinuousDynamic ? BoxFit.fitWidth : BoxFit.contain,
       width: double.infinity,
-      height: double.infinity,
+      height: isContinuousDynamic ? null : double.infinity,
       cacheWidth: cacheWidth,
       gaplessPlayback: true,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        // 首帧解码完成才是真实高度的时刻：尺寸未知的图片在 _loadImage 里上报时
+        // 盒子还是占位比例，这一份补报会把高度索引改成实际渲染值。
+        if (frame != null || wasSynchronouslyLoaded) {
+          _reportLayout();
+        }
+        return child;
+      },
       errorBuilder:
           (context, error, stackTrace) => _ImageFailure(
             surfaceColor: widget.surfaceColor,

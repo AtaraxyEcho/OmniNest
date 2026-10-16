@@ -7,7 +7,10 @@ class PageNavigator {
   PageNavigator({required this.blocks, required this.computeFn});
 
   final List<ContentBlock> blocks;
-  final PageSlice? Function(int startCharOffset) computeFn;
+
+  /// 上一页 → 下一页。页链的推进与到底判定都在分页布局里（`computeNextPage`），
+  /// 导航器只管缓存与页码：零宽块链的续页位置不在字符轴上，这里自己算游标就会算错。
+  final PageSlice? Function(PageSlice? previous) computeFn;
 
   final _cache = <int, PageSlice>{};
   int _currentPage = 0;
@@ -31,18 +34,32 @@ class PageNavigator {
   /// 是否已确认所有页都计算完毕。
   bool get isFullyPaginated => _reachedEnd;
 
-  /// 获取指定页的切片（懒计算 + LRU 缓存）。
+  /// 获取指定页的切片（按需顺序递推 + 尾部窗口裁剪）。
   PageSlice? getSlice(int pageIndex) {
     if (pageIndex < 0) return null;
     if (_reachedEnd && pageIndex > _maxComputedPage) return null;
 
-    if (_cache.containsKey(pageIndex)) {
+    final cached = _cache[pageIndex];
+    if (cached != null) {
       _currentPage = pageIndex;
-      return _cache[pageIndex];
+      // 命中缓存也要按新的当前页裁窗：只在新计算页时裁剪的话，连续回跳
+      // 会让缓存停在历史峰值上，远端尾部页一直占着内存。
+      _evictFarPages();
+      return cached;
     }
 
     final sw = Stopwatch()..start();
-    final slice = _computeSlice(pageIndex);
+    // 从已确认的最高连续页向后逐页推进：递归调 getSlice(pageIndex - 1) 时，
+    // 前缀一旦缺失就会在一帧内从目标页同步回滚到第 0 页重算，长章直接卡死 UI。
+    for (var page = _maxComputedPage + 1; page <= pageIndex; page++) {
+      final slice = _computeSlice(page);
+      if (slice == null) {
+        _reachedEnd = true;
+        break;
+      }
+      _cache[page] = slice;
+      _maxComputedPage = page;
+    }
     sw.stop();
     if (kDebugMode && sw.elapsedMilliseconds > 8) {
       // 帧预算观测：单页测量超过半帧（8ms/120Hz 预算）时告警。
@@ -51,45 +68,44 @@ class PageNavigator {
         '${sw.elapsedMilliseconds}ms',
       );
     }
-    if (slice == null) {
-      _reachedEnd = true;
+    final result = _cache[pageIndex];
+    if (result == null) {
       return null;
     }
-
-    _cache[pageIndex] = slice;
     _currentPage = pageIndex;
-    if (pageIndex > _maxComputedPage) _maxComputedPage = pageIndex;
     _evictFarPages();
-    return slice;
+    return result;
   }
 
-  /// 窗口保护式淘汰：只清除距当前页 ±_evictWindow 以外的页。
-  /// _computeSlice 递归依赖前一页缓存，朴素 LRU 会级联重算。
-  static const _evictWindow = 32;
-  static const _maxCacheSize = 128;
+  /// 窗口保护式淘汰：前缀 `[0, _maxComputedPage]` 是递推与二分查找的基础，必须连续保留；
+  /// 缓存超限时只裁掉 `hi` 之后的远端尾部页，并把 `_maxComputedPage` 同步回拨。
+  /// 只裁尾不裁头，否则 `_findCachedPage` 的二分会落进空洞并把整段已算页当没算过。
+  static const _evictWindow = 64;
+  static const _maxCacheSize = 512;
 
   void _evictFarPages() {
     if (_cache.length <= _maxCacheSize) {
       return;
     }
-    final lo = _currentPage - _evictWindow;
     final hi = _currentPage + _evictWindow;
-    // _maxComputedPage 以下的页可能被递归依赖（_computeSlice(pageIndex-1) 链），保留 [0, hi] 窗口。
-    _cache.removeWhere((page, _) => page < lo || page > hi);
+    if (_maxComputedPage > hi) {
+      _cache.removeWhere((page, _) => page > hi);
+      _maxComputedPage = hi;
+      // 尾部是被裁掉的、不是到底的：恢复可继续向前推进。
+      _reachedEnd = false;
+    }
   }
 
-  /// 计算指定页的切片（递归依赖前一页）。
+  /// 计算单页切片（调用前 `pageIndex - 1` 必然已在缓存里）。
   ///
-  /// 直接用上一页的 endCharOffset 作为起始点，
+  /// 下一页的起点由分页布局从上一页推出来（游标 + 零宽块链的续页索引），
   /// 确保 pages[i].endCharOffset == pages[i+1].startCharOffset。
   PageSlice? _computeSlice(int pageIndex) {
-    final prevSlice = pageIndex > 0 ? getSlice(pageIndex - 1) : null;
-    if (prevSlice != null &&
-        prevSlice.nextCursor <= prevSlice.startCharOffset) {
+    final prevSlice = pageIndex > 0 ? _cache[pageIndex - 1] : null;
+    if (pageIndex > 0 && prevSlice == null) {
       return null;
     }
-    final startCharOffset = prevSlice?.nextCursor ?? 0;
-    final slice = computeFn(startCharOffset);
+    final slice = computeFn(prevSlice);
     if (slice == null) {
       return null;
     }

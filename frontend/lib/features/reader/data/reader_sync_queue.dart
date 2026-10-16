@@ -73,6 +73,29 @@ class ReaderSyncQueue {
     );
   }
 
+  /// 队列行的账号归属：共享书籍在不同账号下复用同一个 itemId，重放必须只发
+  /// 当前账号积压的操作，否则换号后会把上一个账号的位置与笔记写到新账号名下。
+  /// 未登录（init 未传 userId）时不隔离，保持设备内单一使用者的读法。
+  static bool get _hasOwner {
+    final userId = _userId;
+    return userId != null && userId.isNotEmpty;
+  }
+
+  static Expression<bool> _ownedByCurrentUser(GeneratedColumn<String> column) {
+    if (!_hasOwner) {
+      return Constant(true);
+    }
+    return column.equals(_userId!);
+  }
+
+  static Future<void> _deleteOwnedOperations(Iterable<int> ids) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await (_database.delete(_database.syncOperations)
+      ..where((table) => table.id.isIn(ids))).go();
+  }
+
   // ── 入队操作 ──
 
   /// 入队进度同步
@@ -128,11 +151,13 @@ class ReaderSyncQueue {
     required String itemId,
     required int charOffset,
     required double progressPercent,
+    String? chapterId,
     String? note,
   }) async {
     await _enqueue(opBookmarkCreate, {
       'localId': localId,
       'itemId': itemId,
+      'chapterId': chapterId,
       'charOffset': charOffset,
       'progressPercent': progressPercent,
       'note': note,
@@ -302,6 +327,7 @@ class ReaderSyncQueue {
         .into(_database.syncOperations)
         .insert(
           SyncOperationsCompanion.insert(
+            userId: Value(_userId ?? ''),
             type: type,
             payload: jsonEncode(data),
             createdAt: DateTime.now(),
@@ -346,7 +372,8 @@ class ReaderSyncQueue {
     return (_database.select(_database.syncOperations)..where(
       (table) =>
           table.type.equals(type) &
-          table.status.isIn(const ['pending', 'failed']),
+          table.status.isIn(const ['pending', 'failed']) &
+          _ownedByCurrentUser(table.userId),
     )).get();
   }
 
@@ -358,7 +385,10 @@ class ReaderSyncQueue {
     final query =
         (_database.select(_database.syncOperations)
           ..where(
-            (table) => table.status.equals('pending') & table.type.isIn(types),
+            (table) =>
+                table.status.equals('pending') &
+                table.type.isIn(types) &
+                _ownedByCurrentUser(table.userId),
           )
           ..orderBy([(table) => OrderingTerm.asc(table.createdAt)]));
     if (limit != null) {
@@ -380,7 +410,8 @@ class ReaderSyncQueue {
         await (_database.select(_database.syncOperations)..where(
           (table) =>
               table.type.equals(opProgress) &
-              table.status.isIn(const ['pending', 'failed']),
+              table.status.isIn(const ['pending', 'failed']) &
+              _ownedByCurrentUser(table.userId),
         )).get();
     final staleIds = <int>[];
     var hasNewerRow = false;
@@ -396,19 +427,32 @@ class ReaderSyncQueue {
       final storedAt = DateTime.tryParse(
         payload['clientUpdatedAt'] as String? ?? '',
       );
-      if (reportedAt != null &&
-          storedAt != null &&
-          storedAt.isAfter(reportedAt)) {
+      if (storedAt == null) {
+        staleIds.add(operation.id);
+        continue;
+      }
+      // 本次没有记录时刻时无从比较：队列里带时刻的行更可能是别处刚记的位置，
+      // 删掉它就是把已知进度丢掉。在线直传成功后的清理同理，那条进度已经
+      // 落库，不需要靠删队列行来合并。
+      if (reportedAt == null || storedAt.isAfter(reportedAt)) {
         hasNewerRow = true;
         continue;
       }
       staleIds.add(operation.id);
     }
-    if (staleIds.isNotEmpty) {
-      await (_database.delete(_database.syncOperations)
-        ..where((table) => table.id.isIn(staleIds))).go();
-    }
+    await _deleteOwnedOperations(staleIds);
     return hasNewerRow;
+  }
+
+  /// 在线直传成功后清理同书已不需要的离线进度行。
+  ///
+  /// 直传绕过了队列，队列里同书的旧进度必须一并作废，否则下一轮 flush 会把
+  /// 更旧的位置再发一次；带更新记录时刻的行由围栏拒绝，这里同样不删。
+  static Future<void> clearSupersededProgress(
+    String itemId, {
+    DateTime? reportedAt,
+  }) async {
+    await _supersedePendingProgress(itemId, reportedAt: reportedAt);
   }
 
   static Map<String, dynamic>? _decodePayload(SyncOperation operation) {
@@ -419,6 +463,71 @@ class ReaderSyncQueue {
     } on TypeError {
       return null;
     }
+  }
+
+  // ── 待同步删改查询 ──
+
+  /// 队列中尚未同步成功的删改目标，供远端拉取合并时兜底。
+  ///
+  /// 离线期间删掉的记录会随远端快照回来，离线改过的内容会被旧值覆盖，
+  /// 合并前必须先读这里：待删 ID 直接过滤掉，待改 ID 保留本地字段。
+  static Future<ReaderPendingMutations> pendingMutations({
+    String? updateType,
+    required String deleteType,
+    required String idField,
+  }) async {
+    final types = <String>[if (updateType != null) updateType, deleteType];
+    final operations =
+        await (_database.select(_database.syncOperations)..where(
+          (table) =>
+              table.type.isIn(types) &
+              table.status.isIn(const ['pending', 'failed']) &
+              _ownedByCurrentUser(table.userId),
+        )).get();
+    final deletingIds = <String>{};
+    final updatingPayloads = <String, Map<String, dynamic>>{};
+    for (final operation in operations) {
+      final payload = _decodePayload(operation);
+      final targetId = payload?[idField] as String?;
+      if (targetId == null) {
+        continue;
+      }
+      if (operation.type == deleteType) {
+        // 同一目标既待删又待改时删除优先：服务端不该再收到一条更新。
+        updatingPayloads.remove(targetId);
+        deletingIds.add(targetId);
+      } else if (!deletingIds.contains(targetId)) {
+        updatingPayloads[targetId] = payload!;
+      }
+    }
+    return (deletingIds: deletingIds, updatingPayloads: updatingPayloads);
+  }
+
+  /// 服务端已经没有这些记录时，丢弃针对它们的待删操作。
+  ///
+  /// 记录多半是在另一台设备上删掉的：这类操作补发只会一直失败，把失败行长期
+  /// 留在队列里并让本地删除看起来"尚未同步"。
+  static Future<void> discardPendingDeletions({
+    required String deleteType,
+    required String idField,
+    required Set<String> remoteIds,
+  }) async {
+    final operations =
+        await (_database.select(_database.syncOperations)..where(
+          (table) =>
+              table.type.equals(deleteType) &
+              table.status.isIn(const ['pending', 'failed']) &
+              _ownedByCurrentUser(table.userId),
+        )).get();
+    final staleIds = <int>[];
+    for (final operation in operations) {
+      final payload = _decodePayload(operation);
+      final targetId = payload?[idField] as String?;
+      if (targetId != null && !remoteIds.contains(targetId)) {
+        staleIds.add(operation.id);
+      }
+    }
+    await _deleteOwnedOperations(staleIds);
   }
 
   // ── 刷新队列 ──
@@ -484,7 +593,8 @@ class ReaderSyncQueue {
       await (_database.delete(_database.syncOperations)..where(
         (table) =>
             table.status.equals('completed') &
-            table.type.isIn(_readerOperationTypes),
+            table.type.isIn(_readerOperationTypes) &
+            _ownedByCurrentUser(table.userId),
       )).go();
     }
     // 进度以本地 cached_reader_progress 为真值，重试耗尽的失败行只会
@@ -494,7 +604,8 @@ class ReaderSyncQueue {
       (table) =>
           table.type.equals(opProgress) &
           table.status.equals('failed') &
-          table.retryCount.isBiggerOrEqualValue(maxOperationRetries),
+          table.retryCount.isBiggerOrEqualValue(maxOperationRetries) &
+          _ownedByCurrentUser(table.userId),
     )).go();
   }
 
@@ -527,6 +638,7 @@ class ReaderSyncQueue {
       case opBookmarkCreate:
         final bookmark = await api.createBookmark(
           itemId: payload['itemId'] as String,
+          chapterId: payload['chapterId'] as String?,
           charOffset: payload['charOffset'] as int,
           progressPercent: (payload['progressPercent'] as num).toDouble(),
           note: payload['note'] as String?,
@@ -601,7 +713,8 @@ class ReaderSyncQueue {
       (table) =>
           table.status.equals('failed') &
           table.type.isIn(_readerOperationTypes) &
-          table.retryCount.isSmallerThanValue(maxRetries),
+          table.retryCount.isSmallerThanValue(maxRetries) &
+          _ownedByCurrentUser(table.userId),
     )).write(SyncOperationsCompanion(status: const Value('pending')));
   }
 
@@ -613,11 +726,18 @@ class ReaderSyncQueue {
           ..addColumns([count])
           ..where(
             _database.syncOperations.status.equals('pending') &
-                _database.syncOperations.type.isIn(_readerOperationTypes),
+                _database.syncOperations.type.isIn(_readerOperationTypes) &
+                _ownedByCurrentUser(_database.syncOperations.userId),
           );
     final result = await query.getSingle();
     return result.read(count) ?? 0;
   }
+
+  /// 创建请求在途期间用户可能已经删除或改写了这条本地记录：回包后既不能把已删的
+  /// 记录写回本地（服务端刚创建的那份也得跟着清），也不能让服务端返回值覆盖用户
+  /// 刚写的内容（那才是最新意图，需要补一条更新把服务端对齐过来）。
+  static ReaderLocalStorage get _localStorage =>
+      ReaderLocalStorage(_database, textCipher: _textCipher, userId: _userId);
 
   static Future<void> _replaceBookmark(
     String? localId,
@@ -626,11 +746,13 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == bookmark.id) {
       return;
     }
-    await ReaderLocalStorage(
-      _database,
-      textCipher: _textCipher,
-      userId: _userId,
-    ).replaceBookmarkId(localId: localId, serverBookmark: bookmark);
+    final replaced = await _localStorage.replaceBookmarkId(
+      localId: localId,
+      serverBookmark: bookmark,
+    );
+    if (!replaced) {
+      await enqueueBookmarkDelete(bookmarkId: bookmark.id);
+    }
   }
 
   static Future<void> _replaceAnnotation(
@@ -640,22 +762,57 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == annotation.id) {
       return;
     }
-    await ReaderLocalStorage(
-      _database,
-      textCipher: _textCipher,
-      userId: _userId,
-    ).replaceAnnotationId(localId: localId, serverAnnotation: annotation);
+    final storage = _localStorage;
+    final local = await storage.loadAnnotationById(localId);
+    if (local == null) {
+      final replaced = await storage.replaceAnnotationId(
+        localId: localId,
+        serverAnnotation: annotation,
+      );
+      if (!replaced) {
+        await enqueueAnnotationDelete(annotationId: annotation.id);
+      }
+      return;
+    }
+    await storage.replaceAnnotationId(
+      localId: localId,
+      serverAnnotation: annotation,
+    );
+    final note = local.note ?? annotation.note;
+    final color = local.color;
+    if (note != annotation.note || color != annotation.color) {
+      await enqueueAnnotationUpdate(
+        annotationId: annotation.id,
+        note: note,
+        color: color,
+      );
+    }
   }
 
   static Future<void> _replaceNote(String? localId, ReaderNote note) async {
     if (localId == null || localId.isEmpty || localId == note.id) {
       return;
     }
-    await ReaderLocalStorage(
-      _database,
-      textCipher: _textCipher,
-      userId: _userId,
-    ).replaceNoteId(localId: localId, serverNote: note);
+    final storage = _localStorage;
+    final local = await storage.loadNoteById(localId);
+    if (local == null) {
+      final replaced = await storage.replaceNoteId(
+        localId: localId,
+        serverNote: note,
+      );
+      if (!replaced) {
+        await enqueueNoteDelete(noteId: note.id);
+      }
+      return;
+    }
+    await storage.replaceNoteId(localId: localId, serverNote: note);
+    if (local.title != note.title || local.content != note.content) {
+      await enqueueNoteUpdate(
+        noteId: note.id,
+        title: local.title,
+        content: local.content,
+      );
+    }
   }
 
   static Future<void> _markCompleted(int id) {
@@ -678,3 +835,10 @@ class ReaderSyncQueue {
     );
   }
 }
+
+/// 队列中尚未同步成功的删改目标。
+typedef ReaderPendingMutations =
+    ({
+      Set<String> deletingIds,
+      Map<String, Map<String, dynamic>> updatingPayloads,
+    });

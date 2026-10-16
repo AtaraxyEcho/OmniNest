@@ -200,9 +200,11 @@ void main() {
     final reference = <double>[];
     var cumulative = 0.0;
     for (final block in data.blocks) {
-      cumulative +=
-          ReaderPaginationEngine.measureBlockHeight(block, 140, settings) +
-          scrollBlockExtraSpacing(block);
+      cumulative += ReaderPaginationEngine.measureBlockHeight(
+        block,
+        140,
+        settings,
+      );
       reference.add(cumulative);
     }
     for (var i = 0; i < reference.length; i++) {

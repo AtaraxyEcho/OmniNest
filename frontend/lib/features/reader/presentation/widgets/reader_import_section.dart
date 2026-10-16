@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,7 +38,14 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
   @override
   void initState() {
     super.initState();
-    _loadCandidates();
+    // 候选加载的异常路径会写控制器状态（importCandidates 内 _setError），
+    // 从 initState 直接发起就是「构建期改 provider」；等首帧后再发，
+    // 无论成功或失败都落在异步边界之后。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_loadCandidates());
+      }
+    });
   }
 
   Future<void> _loadCandidates() async {
@@ -526,10 +535,7 @@ class _ReparseSectionState extends ConsumerState<ReparseSection> {
     }
     setState(() => _reparsing.add(item.id));
     try {
-      await invalidateBookCache(ref, item.id);
-      if (!mounted) {
-        return;
-      }
+      // 解析缓存的作废由 `reparseItem` 自己负责：两个入口各自记得清一遍，迟早有一个入口忘。
       ref.read(comicImageLoaderProvider).invalidate(item.id);
       await ref
           .read(readerCenterControllerProvider.notifier)

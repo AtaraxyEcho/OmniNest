@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/lenient_uri_decode.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
@@ -12,6 +13,7 @@ import 'package:omninest/features/reader/presentation/pages/reader_view_page.dar
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_chapter_end_card.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
@@ -73,6 +75,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   set restoreSilenceUntil(DateTime value);
   double get scrollProgress;
   set scrollProgress(double value);
+
+  /// 全书进度（0..1），未知时为 null；章末卡片用它写位次行。
+  double? get lastKnownBookProgress;
   double? get pendingChapterProgress;
   set pendingChapterProgress(double? value);
   int? get pendingRestoreCharOffset;
@@ -175,15 +180,35 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   }
 
   int computePageCharOffset(int pageIndex) {
+    final pageWidth = computePageWidth();
+    final pageHeight = computePageHeight();
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final slice = contentLoader?.computePage(
       chapterId: currentChapterId,
       settings: settings,
-      pageWidth: computePageWidth(),
-      pageHeight: computePageHeight(),
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
       pageIndex: pageIndex,
-      textScale: MediaQuery.textScalerOf(context).scale(1.0),
+      textScale: textScale,
     );
-    return slice?.startCharOffset ?? 0;
+    if (slice != null) return slice.startCharOffset;
+    // 章末收页没有正文切片，它的位置就是本章末尾。退回 0 会让读者在章末合上书、
+    // 再开时从章首读起——判据收在 readerPageCharOffset，进度与恢复共用同一条。
+    final data = contentLoader?.get(currentChapterId, settings);
+    if (data == null) return 0;
+    final navigator = data.getOrCreatePageNavigator(
+      pageWidth,
+      pageHeight,
+      settings,
+      textScale: textScale,
+    );
+    return readerPageCharOffset(
+      slice: slice,
+      pageIndex: pageIndex,
+      contentPages: navigator.readablePageCount,
+      fullyPaginated: navigator.isFullyPaginated,
+      totalChars: data.totalChars,
+    );
   }
 
   PageTurnMode parsePageTurnMode(String mode) {
@@ -203,13 +228,21 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (htmlContent == null || htmlContent.isEmpty) {
       return null;
     }
+    // 首选解析期记下的锚点位置：与块偏移、页区间同一个字符域。
+    final recorded = data!.anchors[anchor];
+    if (recorded != null) {
+      return recorded.clamp(0, data.totalChars);
+    }
     final anchorOffset = _findAnchorHtmlOffset(htmlContent, anchor);
     if (anchorOffset == null) {
       return null;
     }
+    // 兜底：锚点挂在解析期没有落到的位置（例如被跳过的非正文子树里）时，
+    // 只能按纯文本前缀反推。这一份与字符域不同口径（实体、`<title>`、标签空白
+    // 都不在块的字符计数里），所以只在查不到记录时才用。
     final prefix = htmlContent.substring(0, anchorOffset);
     final plainPrefix = stripHtml(prefix);
-    return plainPrefix.length.clamp(0, data!.totalChars).toInt();
+    return plainPrefix.length.clamp(0, data.totalChars).toInt();
   }
 
   int? _findAnchorHtmlOffset(String html, String anchor) {

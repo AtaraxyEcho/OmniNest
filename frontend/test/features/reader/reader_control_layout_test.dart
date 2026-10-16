@@ -35,6 +35,14 @@ void main() {
     expect(paginated.showPersistentProgress, isTrue);
   });
 
+  test('侧边热区与翻页模式同档，且不被桌面居中列撑满', () {
+    expect(ReaderControlLayout.sideTapZoneWidth(390), 97.5);
+    expect(ReaderControlLayout.sideTapZoneWidth(320), 80);
+    // 窄到 1/4 不足 64 时按拇指下限取。
+    expect(ReaderControlLayout.sideTapZoneWidth(200), 64);
+    expect(ReaderControlLayout.sideTapZoneWidth(1440), 120);
+  });
+
   test('滚动正文首尾净空取稿子的上下 padding', () {
     final frame =
         ReaderChromeLayout.resolve(

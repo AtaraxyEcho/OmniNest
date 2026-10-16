@@ -130,6 +130,10 @@ extension ReaderViewPageMixinLoad on ReaderViewPageMixin {
         0,
         chapterData.totalChars,
       ),
+      // 比例只在落位这一侧换算：目标章的 painted 字符数到这里才拿到。
+      ReaderChapterEntryPoint.proportion =>
+        ((intent.chapterRatio ?? 0.0).clamp(0.0, 1.0) * chapterData.totalChars)
+            .round(),
       ReaderChapterEntryPoint.anchor =>
         resolveAnchorCharOffset(chapterId, intent.anchorHref) ?? 0,
     };
@@ -154,9 +158,6 @@ extension ReaderViewPageMixinLoad on ReaderViewPageMixin {
     }
     pendingRestoreCharOffset = charOffset;
     isRestoringProgress = true;
-    if (intent.offerReturn && returnToProgressSnapshot != null) {
-      showReturnToProgressSnackBar();
-    }
   }
 
   /// 预加载相邻章节。

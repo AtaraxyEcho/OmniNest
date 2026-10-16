@@ -3,11 +3,28 @@ import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 
 /// 基于 SQLite 的阅读进度本地存储。
+///
+/// [userId] 是账号归属：共享书籍在不同账号下复用同一个 itemId，读取必须按归属
+/// 过滤，否则换号会读到上一个账号的位置。为空时不过滤（未登录与测试场景）。
 class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
   /// 创建阅读进度本地存储。
-  const DatabaseReaderLocalProgressStore(this._database);
+  const DatabaseReaderLocalProgressStore(this._database, {String? userId})
+    : _userId = userId;
 
   final LocalDatabase _database;
+  final String? _userId;
+
+  bool get _hasOwner {
+    final userId = _userId;
+    return userId != null && userId.isNotEmpty;
+  }
+
+  Expression<bool> _ownerFilter(GeneratedColumn<String> column) {
+    if (!_hasOwner) {
+      return Constant(true);
+    }
+    return column.equals(_userId!);
+  }
 
   /// 保存进度到本地 SQLite。
   @override
@@ -17,6 +34,7 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
     required String mode,
     String? chapterId,
     int charOffset = 0,
+    double? bookProgress,
     String? pageId,
     int? pageIndex,
     String? pageFingerprint,
@@ -34,9 +52,11 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
         .into(_database.cachedReaderProgress)
         .insertOnConflictUpdate(
           CachedReaderProgressCompanion.insert(
+            userId: Value(_userId ?? ''),
             itemId: itemId,
             charOffset: Value(charOffset),
             chapterProgress: Value(chapterProgress),
+            bookProgress: Value(bookProgress),
             mode: Value(mode),
             chapterId: Value(chapterId ?? ''),
             pageId: Value(pageId),
@@ -58,27 +78,17 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
     final rows =
         await (_database.select(_database.cachedReaderProgress)
               ..where(
-                (t) => t.itemId.equals(itemId) & t.chapterId.equals(chapterId),
+                (t) =>
+                    t.itemId.equals(itemId) &
+                    t.chapterId.equals(chapterId) &
+                    _ownerFilter(t.userId),
               )
               ..limit(1))
             .get();
-    if (rows.isEmpty) return null;
-    final row = rows.first;
-    return {
-      'charOffset': row.charOffset,
-      'chapterProgress': row.chapterProgress,
-      'mode': row.mode,
-      'chapterId': row.chapterId,
-      'pageId': row.pageId,
-      'pageIndex': row.pageIndex,
-      'pageFingerprint': row.pageFingerprint,
-      'sourceId': row.sourceId,
-      'sourcePageIndex': row.sourcePageIndex,
-      'catalogKey': row.catalogKey,
-      'manifestVersion': row.manifestVersion,
-      'intraPageOffset': row.intraPageOffset,
-      'updatedAt': row.updatedAt.toIso8601String(),
-    };
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _toPayload(rows.first);
   }
 
   /// 读取最近保存的一条进度（任意章节），用于 fallback。
@@ -86,15 +96,29 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
   Future<Map<String, dynamic>?> loadLatest(String itemId) async {
     final rows =
         await (_database.select(_database.cachedReaderProgress)
-              ..where((t) => t.itemId.equals(itemId))
+              ..where((t) => t.itemId.equals(itemId) & _ownerFilter(t.userId))
               ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])
               ..limit(1))
             .get();
-    if (rows.isEmpty) return null;
-    final row = rows.first;
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _toPayload(rows.first);
+  }
+
+  /// 清除本地进度。
+  @override
+  Future<void> clear(String itemId) async {
+    await (_database.delete(_database.cachedReaderProgress)..where(
+      (table) => table.itemId.equals(itemId) & _ownerFilter(table.userId),
+    )).go();
+  }
+
+  Map<String, dynamic> _toPayload(CachedReaderProgressData row) {
     return {
       'charOffset': row.charOffset,
       'chapterProgress': row.chapterProgress,
+      'bookProgress': row.bookProgress,
       'mode': row.mode,
       'chapterId': row.chapterId,
       'pageId': row.pageId,
@@ -107,12 +131,5 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
       'intraPageOffset': row.intraPageOffset,
       'updatedAt': row.updatedAt.toIso8601String(),
     };
-  }
-
-  /// 清除本地进度。
-  @override
-  Future<void> clear(String itemId) async {
-    await (_database.delete(_database.cachedReaderProgress)
-      ..where((table) => table.itemId.equals(itemId))).go();
   }
 }

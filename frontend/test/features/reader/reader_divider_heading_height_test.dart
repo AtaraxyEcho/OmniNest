@@ -73,6 +73,44 @@ void main() {
     return (height: size.height, width: size.width);
   }
 
+  /// 单个标题条目在**未被确定高度约束**时的自然高度。
+  Future<double> naturalHeadingHeight(
+    WidgetTester tester,
+    String html, {
+    required double viewWidth,
+    double textScale = 1.0,
+  }) async {
+    tester.view.physicalSize = Size(viewWidth, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      host(
+        Center(
+          child: SizedBox(
+            width: viewWidth,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ReaderContentBlockItem(
+                  block: parseBlocks(html).first,
+                  settings: settings,
+                  itemId: 'b',
+                  chapterId: 'c0',
+                ),
+              ],
+            ),
+          ),
+        ),
+        textScale: textScale,
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 2)),
+    );
+    await tester.pump();
+    return tester.getSize(find.byType(ReaderContentBlockItem)).height;
+  }
+
   group('分割线与标题测量', () {
     test('块级常量：分割线等于上下留白加字形高度', () {
       expect(
@@ -119,6 +157,39 @@ void main() {
         closeTo(rendered.height, 2.0),
         reason: 'headingHeight 收下 textScale 却不用，大字体下标题条目被裁',
       );
+    });
+
+    testWidgets('一档标题收紧行高后测量等于渲染，且不溢出确定高度', (tester) async {
+      // 稿子把 h1 的行高压到 1.25、字距收到 -.04em，两者都小于字体自身行盒。
+      // 这里不走列表条目：itemExtent 会把子项压成确定高度，量到的就是自己下发的值，
+      // 等于用结论验结论；直接用最外层无约束的条目高度跟测量对拍才有信号。
+      const cases = [
+        '<h1>第一回 灵根育源 心性圆明</h1>',
+        '<h1>很长的标题用来验证折行后的块高与渲染一致：第一回 灵根育源 心性圆明 参合万象 造化会元</h1>',
+      ];
+      for (final html in cases) {
+        for (final textScale in <double>[1.0, 1.5]) {
+          final rendered = await naturalHeadingHeight(
+            tester,
+            html,
+            viewWidth: 600,
+            textScale: textScale,
+          );
+          final measured = ReaderPaginationEngine.measureBlockHeight(
+            parseBlocks(html).first,
+            600,
+            settings,
+            textScale: textScale,
+          );
+          expect(
+            measured,
+            closeTo(rendered, ReaderViewContent.headingSlotSlack),
+            reason:
+                'h1（字号缩放 $textScale）测量 $measured / 渲染 $rendered：'
+                '测量偏矮会在确定高度下裁字，偏高则白丢一页的行',
+          );
+        }
+      }
     });
   });
 }

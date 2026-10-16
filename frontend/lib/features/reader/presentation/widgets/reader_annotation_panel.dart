@@ -5,7 +5,10 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
-/// 阅读批注列表面板（底部弹出）。
+/// 批注卡片上的编辑/删除钮触控边长。稿子没有批注抽屉，取本项目次级控件下限 35。
+const double _actionTargetSize = 35;
+
+/// 阅读批注列表：由阅读器自适应面板承载，不再自带底部抽屉。
 ///
 /// 支持按关键词搜索批注，以及切换「本章」/「全书」范围。
 class ReaderAnnotationPanel extends StatefulWidget {
@@ -16,7 +19,7 @@ class ReaderAnnotationPanel extends StatefulWidget {
     required this.settings,
     this.onDelete,
     this.onEdit,
-    this.embedded = false,
+    this.onSelect,
     super.key,
   });
 
@@ -32,7 +35,9 @@ class ReaderAnnotationPanel extends StatefulWidget {
   final ReaderViewSettings settings;
   final ValueChanged<ReaderAnnotation>? onDelete;
   final ValueChanged<ReaderAnnotation>? onEdit;
-  final bool embedded;
+
+  /// 点按卡片时回调：跳转到批注所在章节与偏移。
+  final ValueChanged<ReaderAnnotation>? onSelect;
 
   @override
   State<ReaderAnnotationPanel> createState() => _ReaderAnnotationPanelState();
@@ -68,71 +73,31 @@ class _ReaderAnnotationPanelState extends State<ReaderAnnotationPanel> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final textColor = widget.settings.onSurfaceColor;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.6;
-    final content = Column(
-      mainAxisSize: widget.embedded ? MainAxisSize.max : MainAxisSize.min,
+    // 抽屉外壳（手柄、面板名、关闭钮、遮罩）由 ReaderAdaptivePanelFrame 画，
+    // 这里只交内容本体；条数换成稿子 `.chapter-summary` 那一行 10px 弱化信息。
+    return Column(
+      mainAxisSize: MainAxisSize.max,
       children: [
-        if (!widget.embedded) _buildDragHandle(textColor),
-        if (!widget.embedded) _buildHeader(l10n, textColor),
+        _buildSummary(l10n),
         _buildSearchBar(l10n, textColor),
         _buildChapterToggle(l10n, textColor),
-        if (widget.embedded)
-          Expanded(child: _buildBody(l10n, textColor))
-        else
-          Flexible(child: _buildBody(l10n, textColor)),
+        Expanded(child: _buildBody(l10n, textColor)),
       ],
     );
-
-    if (widget.embedded) {
-      return content;
-    }
-
-    return Container(
-      constraints: BoxConstraints(maxHeight: maxHeight),
-      decoration: BoxDecoration(
-        color: widget.settings.surfaceColor.withValues(alpha: 0.96),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(
-          top: BorderSide(
-            color: widget.settings.onSurfaceColor.withValues(alpha: 0.10),
-          ),
-        ),
-      ),
-      child: content,
-    );
   }
 
-  Widget _buildDragHandle(Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 4),
-      child: Container(
-        width: 36,
-        height: 4,
-        decoration: BoxDecoration(
-          color: textColor.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(AppLocalizations l10n, Color textColor) {
+  /// 批注计数行：撤下私有标题栏后保留「有多少条」这一信息。
+  Widget _buildSummary(AppLocalizations l10n) {
     final filtered = _filteredAnnotations;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-      child: Row(
-        children: [
-          Icon(Icons.edit_note_rounded, color: textColor, size: 20),
-          const SizedBox(width: 10),
-          Text(
-            '${l10n.readerAnnotations}（${filtered.length}）',
-            style: TextStyle(
-              color: textColor,
-              fontSize: AppTypography.titleMedium,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Text(
+        l10n.readerAnnotationCount(filtered.length),
+        style: TextStyle(
+          color: widget.settings.onSurfaceVariantColor,
+          fontSize: AppTypography.labelMicro,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
@@ -247,6 +212,7 @@ class _ReaderAnnotationPanelState extends State<ReaderAnnotationPanel> {
           chapterTitle: chapterName,
           onDelete: widget.onDelete,
           onEdit: widget.onEdit,
+          onSelect: widget.onSelect,
         );
       },
     );
@@ -285,6 +251,7 @@ class _AnnotationCard extends StatelessWidget {
     this.chapterTitle,
     this.onDelete,
     this.onEdit,
+    this.onSelect,
   });
 
   final ReaderAnnotation annotation;
@@ -295,6 +262,9 @@ class _AnnotationCard extends StatelessWidget {
 
   final ValueChanged<ReaderAnnotation>? onDelete;
   final ValueChanged<ReaderAnnotation>? onEdit;
+
+  /// 点按卡片跳转到批注位置；为 null 时卡片不可点。
+  final ValueChanged<ReaderAnnotation>? onSelect;
 
   bool get _hasNote => annotation.note?.trim().isNotEmpty == true;
 
@@ -308,47 +278,55 @@ class _AnnotationCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: settings.surfaceColor,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          // 整卡点按跳批注位置；卡内的编辑/删除钮仍各自独立命中。
+          onTap: onSelect == null ? null : () => onSelect!.call(annotation),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: settings.onSurfaceVariantColor.withValues(alpha: 0.20),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (chapterTitle != null && chapterTitle!.isNotEmpty) ...[
-              Text(
-                chapterTitle!,
-                style: TextStyle(
-                  color: textColor.withValues(alpha: 0.50),
-                  fontSize: AppTypography.bodySmall,
-                  fontWeight: FontWeight.w600,
-                ),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: settings.surfaceColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: settings.onSurfaceVariantColor.withValues(alpha: 0.20),
               ),
-              const SizedBox(height: 6),
-            ],
-            if (_hasNote) ...[
-              Text(
-                annotation.note!,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: AppTypography.bodyLarge,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            _buildHighlightedText(highlightColor, textColor),
-            const SizedBox(height: 8),
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: _buildActions(l10n, textColor),
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (chapterTitle != null && chapterTitle!.isNotEmpty) ...[
+                  Text(
+                    chapterTitle!,
+                    style: TextStyle(
+                      color: textColor.withValues(alpha: 0.50),
+                      fontSize: AppTypography.bodySmall,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                if (_hasNote) ...[
+                  Text(
+                    annotation.note!,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: AppTypography.bodyLarge,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                _buildHighlightedText(highlightColor, textColor),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: _buildActions(l10n, textColor),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -384,7 +362,7 @@ class _AnnotationCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_hasNote && onEdit != null)
+        if (onEdit != null)
           _SmallIconButton(
             icon: Icons.edit_outlined,
             tooltip: l10n.readerEditAnnotation,
@@ -424,9 +402,16 @@ class _SmallIconButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Icon(icon, size: 18, color: textColor.withValues(alpha: 0.55)),
+        child: SizedBox(
+          width: _actionTargetSize,
+          height: _actionTargetSize,
+          child: Center(
+            child: Icon(
+              icon,
+              size: 18,
+              color: textColor.withValues(alpha: 0.55),
+            ),
+          ),
         ),
       ),
     );

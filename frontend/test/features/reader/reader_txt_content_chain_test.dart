@@ -132,7 +132,7 @@ void main() {
     test('Mode P：段间无空行且段首全角缩进时逐行成段', () {
       const text = '　　第一行正文内容。\n　　第二行正文内容。\n　　第三行正文内容。\n';
 
-      final xhtml = parser.chapterFromText(text, 0, text.length);
+      final xhtml = parser.textToXhtml(text);
 
       expect(paragraphCount(xhtml), 3);
       expect(xhtml, contains('　　第一行正文内容。'));
@@ -142,7 +142,7 @@ void main() {
       const line = '这是被固定宽度断开的正文，行首没有缩进。';
       final text = List.generate(12, (_) => line).join('\n');
 
-      final xhtml = parser.chapterFromText(text, 0, text.length);
+      final xhtml = parser.textToXhtml(text);
 
       expect(paragraphCount(xhtml), 1);
       expect(xhtml, contains('$line\n$line'));
@@ -151,7 +151,7 @@ void main() {
     test('Mode W：空行分段保持原有行为', () {
       const text = '第一段内容。\n\n第二段内容。\n\n第三段内容。\n';
 
-      final xhtml = parser.chapterFromText(text, 0, text.length);
+      final xhtml = parser.textToXhtml(text);
 
       expect(paragraphCount(xhtml), 3);
     });
@@ -163,7 +163,7 @@ void main() {
 
       // 19+1+19+1 字节 → 10+1+10+1 字符，与服务端按解码字符累计的偏移一致。
       expect(decoded.length, 22);
-      final xhtml = parser.chapterFromText(decoded, 0, decoded.length);
+      final xhtml = parser.textToXhtml(decoded);
       expect(paragraphCount(xhtml), 2);
       expect(xhtml, contains('第一回 灵根育孕'));
       expect(xhtml, contains('第一章 中文内容测试'));
@@ -172,7 +172,7 @@ void main() {
     test('按偏移切片只取本章内容', () {
       const text = '第一章 甲\n本章正文。\n第二章 乙\n本章正文二。';
 
-      final xhtml = parser.chapterFromText(text, 0, 11);
+      final xhtml = parser.textToXhtml(parser.rawChapterSlice(text, 0, 11));
 
       expect(xhtml, contains('本章正文。'));
       expect(xhtml, isNot(contains('第二章')));
@@ -182,42 +182,104 @@ void main() {
   group('偏移对齐哨兵', () {
     test('切片首行与本章标题一致时判定为对齐', () {
       expect(
-        TxtParserService.sliceStartsWithTitle('第一章 甲\n本章正文。', '第一章 甲'),
+        TxtParserService.sliceStartsWithTitle(
+          '第一章 甲\n本章正文。',
+          '第一章 甲',
+          chapterOrdinal: 1,
+        ),
         isTrue,
       );
     });
 
     test('全角缩进在标题或切片任一侧都不影响判定', () {
       expect(
-        TxtParserService.sliceStartsWithTitle('　　第一章 甲\n正文', '　　第一章 甲'),
+        TxtParserService.sliceStartsWithTitle(
+          '　　第一章 甲\n正文',
+          '　　第一章 甲',
+          chapterOrdinal: 1,
+        ),
         isTrue,
       );
       expect(
-        TxtParserService.sliceStartsWithTitle('　　第一章 甲\n正文', '第一章 甲'),
+        TxtParserService.sliceStartsWithTitle(
+          '　　第一章 甲\n正文',
+          '第一章 甲',
+          chapterOrdinal: 1,
+        ),
         isTrue,
       );
     });
 
     test('标题被入库截断时仍判定为对齐', () {
       expect(
-        TxtParserService.sliceStartsWithTitle('第一章 很长的标题内容\n正文', '第一章'),
+        TxtParserService.sliceStartsWithTitle(
+          '第一章 很长的标题内容\n正文',
+          '第一章',
+          chapterOrdinal: 1,
+        ),
         isTrue,
+      );
+    });
+
+    test('入库标题已归一掉重复序号时仍判定为对齐', () {
+      // 抓取站在原标题前又补了一个号，入库的是归一后的显示标题；
+      // 哨兵必须对首行施加同一归一再比，否则整本书会被判成偏移漂移。
+      expect(
+        TxtParserService.sliceStartsWithTitle(
+          '第1章 第1章 天胡开局\n永和五年，时值七月。',
+          '第1章 天胡开局',
+          chapterOrdinal: 1,
+        ),
+        isTrue,
+      );
+      expect(
+        TxtParserService.sliceStartsWithTitle(
+          '第38章 第1章 吴兴\n正文',
+          '第38章 吴兴',
+          chapterOrdinal: 38,
+        ),
+        isTrue,
+      );
+    });
+
+    test('归一后仍然错章时判定为不对齐', () {
+      expect(
+        TxtParserService.sliceStartsWithTitle(
+          '第2章 第2章 织屩之徒\n正文',
+          '第1章 天胡开局',
+          chapterOrdinal: 1,
+        ),
+        isFalse,
       );
     });
 
     test('偏移错位到别章时判定为不对齐', () {
       expect(
-        TxtParserService.sliceStartsWithTitle('第二章 乙\n正文', '第一章 甲'),
+        TxtParserService.sliceStartsWithTitle(
+          '第二章 乙\n正文',
+          '第一章 甲',
+          chapterOrdinal: 1,
+        ),
         isFalse,
       );
     });
 
     test('后端未识别章节时的单章"正文"不参与判定', () {
-      expect(TxtParserService.sliceStartsWithTitle('任意正文起始行', '正文'), isTrue);
+      expect(
+        TxtParserService.sliceStartsWithTitle(
+          '任意正文起始行',
+          '正文',
+          chapterOrdinal: 1,
+        ),
+        isTrue,
+      );
     });
 
     test('空切片判定为不对齐', () {
-      expect(TxtParserService.sliceStartsWithTitle('', '第一章 甲'), isFalse);
+      expect(
+        TxtParserService.sliceStartsWithTitle('', '第一章 甲', chapterOrdinal: 1),
+        isFalse,
+      );
     });
   });
 }

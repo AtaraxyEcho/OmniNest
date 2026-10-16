@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -48,10 +49,15 @@ void main() {
       ];
       final block = parseBlocks('<p>${lines.join('\n    ')}</p>').single;
 
+      final paragraph = block is ParagraphBlock ? block : null;
       final trailing =
-          block is ParagraphBlock && block.hasTrailingSpacing
-              ? settings.fontSize * 0.6
-              : 0.0;
+          paragraph == null
+              ? 0.0
+              : settings.fontSize *
+                  settings.paragraphSpacingScaleFor(
+                    bookStyle: paragraph.style,
+                    hasTrailingSpacing: paragraph.hasTrailingSpacing,
+                  );
       expect(
         measuredHeight(block),
         closeTo(visualLinesHeight(block) + trailing, 0.01),
@@ -65,9 +71,15 @@ void main() {
             '<blockquote>${List<String>.filled(12, 'a b c d e f g h ').join()}</blockquote>',
           ).single;
 
+      // 盒留白按稿子取（外 30/32 + 上下内衬各 4），且必须从同一份常量算：
+      // 写死数字的话改了渲染侧常量，这条用例就再也测不出漂移。
+      const boxChrome =
+          ReaderContentBlockItem.blockquoteOuterTopPadding +
+          ReaderContentBlockItem.blockquoteOuterBottomPadding +
+          ReaderContentBlockItem.blockquoteInnerVerticalPadding * 2;
       expect(
         measuredHeight(block),
-        closeTo(visualLinesHeight(block) + 48, 0.01),
+        closeTo(visualLinesHeight(block) + boxChrome, 0.01),
       );
     });
 

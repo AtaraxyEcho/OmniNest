@@ -4,94 +4,17 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show compute, kDebugMode, kIsWeb;
 import 'package:gbk_codec/gbk_codec.dart';
 import 'package:omninest/core/utils/yield_to_event_loop.dart';
-import 'package:omninest/features/reader/domain/parsed_book.dart';
+import 'package:omninest/features/reader/domain/chapter_title_normalizer.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
 
 /// TXT 文件解析服务
 ///
-/// 将纯文本文件按章节模式拆分，并转换为可渲染的 XHTML 片段。
+/// 解码 TXT 文本，并把按服务端偏移切出的单章正文转换为可渲染的 XHTML 片段。
+///
+/// 章节的识别与区间划分只由后端 `ReaderTextParser` 决定：客户端不另算一套目录，
+/// 否则同一本书在两端的章数与位次会不一致。
 class TxtParserService {
-  /// 卷级模式（Volume、卷、篇、PART）
-  static final _volumePattern = RegExp(
-    r'^(?:第[零一二三四五六七八九十百千万\d]+[卷篇]|PART\s+[IVXLC\d]+)',
-    multiLine: true,
-    caseSensitive: false,
-  );
-
-  /// 章级模式（Chapter、章、回）
-  static final _chapterPattern = RegExp(
-    r'^(?:'
-    r'第[零一二三四五六七八九十百千万\d]+[章回]'
-    r'|Chapter\s+\d+'
-    r'|CHAPTER\s+\d+'
-    r'|(?:\d{1,4})\s*[\.、]\s*\S'
-    r')',
-    multiLine: true,
-  );
-
-  /// 节级模式（Section、节）
-  static final _sectionPattern = RegExp(
-    r'^第[零一二三四五六七八九十百千万\d]+[节]',
-    multiLine: true,
-  );
-
-  /// 综合章节匹配模式（用于拆分）
-  static final _splitPattern = RegExp(
-    r'^(?:'
-    r'第[零一二三四五六七八九十百千万\d]+[章回节卷篇]'
-    r'|Chapter\s+\d+'
-    r'|CHAPTER\s+\d+'
-    r'|PART\s+[IVXLC\d]+'
-    r'|(?:\d{1,4})\s*[\.、]\s*\S'
-    r')',
-    multiLine: true,
-  );
-
-  /// 解析 TXT 字节流为 [ParsedBook]
-  ///
-  /// 自动检测编码：UTF-8 BOM → UTF-8 → GBK → Latin-1。
-  /// [fileName] 用于提取书名（去除扩展名）。
-  ParsedBook parse(Uint8List bytes, {String? fileName}) {
-    final text = decodeText(bytes);
-
-    // 从文件名提取标题
-    final title = _extractTitle(fileName);
-
-    // 按章节模式拆分
-    final rawChapters = _splitChapters(text);
-
-    final chapters = <ParsedChapter>[];
-    for (var i = 0; i < rawChapters.length; i++) {
-      final raw = rawChapters[i];
-      final xhtmlContent = textToXhtml(raw.content);
-      chapters.add(
-        ParsedChapter(
-          number: i + 1,
-          title: raw.title ?? '第${i + 1}章',
-          xhtmlContent: xhtmlContent,
-          charCount: raw.content.length,
-          level: raw.level,
-        ),
-      );
-    }
-
-    // 如果没有检测到章节，将整个文本作为单章
-    if (chapters.isEmpty) {
-      final xhtmlContent = textToXhtml(text);
-      chapters.add(
-        ParsedChapter(
-          number: 1,
-          title: title ?? '正文',
-          xhtmlContent: xhtmlContent,
-          charCount: text.length,
-        ),
-      );
-    }
-
-    return ParsedBook(chapters: chapters, title: title);
-  }
-
   /// 解码并规范化 TXT 文本，偏移规则与服务端章节清单保持一致。
   String decodeText(Uint8List bytes) {
     return _normalizeLineEndings(_decodeText(bytes));
@@ -203,11 +126,6 @@ class TxtParserService {
     return buffer.toString();
   }
 
-  /// 从已解码文本中按字符偏移取单章并转换为 XHTML。
-  String chapterFromText(String text, int startOffset, int endOffset) {
-    return textToXhtml(rawChapterSlice(text, startOffset, endOffset));
-  }
-
   /// 按服务端记录的字符偏移取出本章原始文本，不做任何转换。
   ///
   /// 偏移由后端在同一解码字符域内累计；前端按 [start,end) 切出的片段首行
@@ -220,48 +138,55 @@ class TxtParserService {
 
   /// 将纯文本转换为 XHTML 片段。
   ///
+  /// 转换前先按章级统计屏蔽抓取残留（章题下的分隔线行、段末字数计数器），
+  /// 见 [_maskScrapeResidue]；屏蔽只改成等长空白，不动字符域。
+  ///
   /// 分段模式按章级统计二选一，不逐行判断、不在同一章内混用：
-  /// - Mode P（行即段）：中文 TXT 主流排版——段间无空行、段首行首空白缩进，
-  ///   每个换行都是段落边界，逐行产出 `<p>`；
-  /// - Mode W（行为软换行）：其余情况按空行分段，段内换行原样保留，
-  ///   避免把硬换行文件（每行约 35-80 字符断行）切成假段落。
+  /// - Mode P（行即段）：中文 TXT 主流排版——段间不空行，每个换行都是段落边界，
+  ///   逐行产出 `<p>`；靠行首缩进或行长离散认出这一档（网文正文常零缩进）；
+  /// - Mode W（行为软换行）：本章确实靠空行分段，或行宽贴着同一个定宽折行，
+  ///   按空行分段、段内换行原样保留，避免把硬换行文件切成假段落。
   ///
   /// 两种模式都不剥行首空白，并把被用作段落边界的空白原样带进下一段行首：
   /// 转换结果与源文本逐字符对应，缩进由解析端剥除后计入 `collapsedChars`，
   /// 块模型的字符总数因此继续等于切片长度，进度与批注不会随分段模式漂移。
   String textToXhtml(String text) {
+    final source = _maskScrapeResidue(text);
     final groups = <String>[];
-    if (_isLinePerParagraph(text)) {
-      var carriedSeparators = 0;
+    if (_isLinePerParagraph(source)) {
+      var carriedSeparators = '';
       var isFirstLine = true;
-      for (final line in text.split('\n')) {
+      for (final line in source.split('\n')) {
         if (!isFirstLine) {
           // 行终止符是源字符：作为下一段的行首空白结转，由解析端计入折叠量。
-          carriedSeparators += 1;
+          carriedSeparators += '\n';
         }
         isFirstLine = false;
         if (line.trim().isEmpty) {
+          // 空白行整行也是源字符：连同终止符一起原样结转，否则块字符总数比切片短。
+          // 结转成空白而不是等量换行，被屏蔽的分隔线行才不会伪装出二十几个空行。
+          carriedSeparators += line;
           continue;
         }
-        groups.add('\n' * carriedSeparators + line);
-        carriedSeparators = 0;
+        groups.add(carriedSeparators + line);
+        carriedSeparators = '';
       }
       // 章末剩余的终止符没有后继段落可承接，挂在最后一段的尾部，
       // 解析端会把它当作尾随空白折叠并计入折叠量。
-      if (groups.isNotEmpty && carriedSeparators > 0) {
+      if (groups.isNotEmpty && carriedSeparators.isNotEmpty) {
         final tail = groups.length - 1;
-        groups[tail] += '\n' * carriedSeparators;
+        groups[tail] += carriedSeparators;
       }
     } else {
       // Mode W：偶数下标是段落组，奇数下标是组间的空白行分隔符。
       final pieces = <String>[];
       var cursor = 0;
-      for (final match in _blankLinePattern.allMatches(text)) {
-        pieces.add(text.substring(cursor, match.start));
+      for (final match in _blankLinePattern.allMatches(source)) {
+        pieces.add(source.substring(cursor, match.start));
         pieces.add(match[0]!);
         cursor = match.end;
       }
-      pieces.add(text.substring(cursor));
+      pieces.add(source.substring(cursor));
 
       var carried = '';
       for (var index = 0; index < pieces.length; index++) {
@@ -291,6 +216,76 @@ class TxtParserService {
     return buffer.toString();
   }
 
+  /// 整行只有分隔符：网文 TXT 在每个标题行下垫一条 `----`，是版式不是正文。
+  static final _ruleLinePattern = RegExp(r'^[\s　]*[-=*—–_~～]{3,}[\s　]*$');
+
+  /// 段末字数计数器：句末标点后挂 1-4 位数字并停在行尾（抓取站的剩余字数）。
+  ///
+  /// 只认句末标点在后继的位置，正文里 `暂定7月12日八公山` 这类真实数字
+  /// 前面不是标点，不会被当成计数器。
+  static final _trailingCounterPattern = RegExp(
+    r'^(.*[。！？；：…’”》）】—－・，])([ \u3000]*\d{1,4})$',
+  );
+
+  /// 判定计数器的抽样行数上限，与判定的最低占比。
+  static const int _residueSampleLines = 400;
+  static const int _residueMinSampledLines = 8;
+
+  /// 计数器占比门槛：本章多数行都挂着一个这种数字，才认定它是抓取残留。
+  static const double _residueCounterLineRatio = 0.7;
+
+  /// 把抓取残留改写成等长空白，而不是删掉。
+  ///
+  /// 删字符会让块模型的字符总数短于源切片，翻页窗口与批注偏移按源空间解释时
+  /// 会整体错位；改成等长空白后解析端按普通空白折叠并计入折叠量，字符域不变。
+  String _maskScrapeResidue(String text) {
+    if (!text.contains('\n')) {
+      return text;
+    }
+    final lines = text.split('\n');
+    final countersDomin = _trailingCounterShare(lines);
+    var changed = false;
+    final masked = <String>[];
+    for (final line in lines) {
+      if (_ruleLinePattern.hasMatch(line)) {
+        changed = true;
+        masked.add(' ' * line.length);
+        continue;
+      }
+      final counter =
+          countersDomin ? _trailingCounterPattern.firstMatch(line) : null;
+      if (counter == null) {
+        masked.add(line);
+        continue;
+      }
+      changed = true;
+      masked.add('${counter.group(1)!}${' ' * counter.group(2)!.length}');
+    }
+    return changed ? masked.join('\n') : text;
+  }
+
+  /// 抽样内"句末标点后挂数字并停在行尾"的非空行占比。
+  bool _trailingCounterShare(List<String> lines) {
+    var sampled = 0;
+    var counters = 0;
+    for (final line in lines) {
+      if (line.trim().isEmpty || _ruleLinePattern.hasMatch(line)) {
+        continue;
+      }
+      sampled += 1;
+      if (_trailingCounterPattern.hasMatch(line)) {
+        counters += 1;
+      }
+      if (sampled >= _residueSampleLines) {
+        break;
+      }
+    }
+    if (sampled < _residueMinSampledLines) {
+      return false;
+    }
+    return counters / sampled >= _residueCounterLineRatio;
+  }
+
   /// 行首/行尾空白剥除，含全角空格与零宽空格。
   static final _edgeWhitespacePattern = RegExp(r'^[\s　﻿]+|[\s　﻿]+$');
 
@@ -299,8 +294,16 @@ class TxtParserService {
   /// 返回 false 表示前后端解码出的字符域不一致（编码判定或坏序列策略分歧），
   /// 此时按偏移切出的内容会静默错位到别的章节。
   /// 单章"正文"（后端未识别出任何标题）与空切片不参与判定，避免误报。
-  static bool sliceStartsWithTitle(String rawSlice, String title) {
-    final expected = title.trim();
+  ///
+  /// 比对前两侧都施加 [normalizeChapterTitle]：入库标题已按目录位次归一掉重复序号，
+  /// 直接拿它比对首行会把每一章都误判成偏移漂移。[chapterOrdinal] 必须与后端建清单时
+  /// 用的是同一个 1-based 位次，否则两侧归一留下的标记不同。
+  static bool sliceStartsWithTitle(
+    String rawSlice,
+    String title, {
+    required int chapterOrdinal,
+  }) {
+    final expected = normalizeChapterTitle(title.trim(), chapterOrdinal);
     if (expected.isEmpty || expected == '正文') {
       return true;
     }
@@ -310,23 +313,8 @@ class TxtParserService {
     if (firstLine.isEmpty) {
       return false;
     }
-    return firstLine == expected || firstLine.startsWith(expected);
-  }
-
-  /// 按服务端记录的字符偏移读取单章并转换为 XHTML。
-  String chapterToXhtml(Uint8List bytes, int startOffset, int endOffset) {
-    final text = decodeText(bytes);
-    final safeStart = startOffset.clamp(0, text.length);
-    final safeEnd = endOffset.clamp(safeStart, text.length);
-    return textToXhtml(text.substring(safeStart, safeEnd));
-  }
-
-  /// 从文件名提取标题（去掉扩展名）
-  String? _extractTitle(String? fileName) {
-    if (fileName == null || fileName.isEmpty) return null;
-    final lastDot = fileName.lastIndexOf('.');
-    if (lastDot <= 0) return fileName;
-    return fileName.substring(0, lastDot);
+    final actual = normalizeChapterTitle(firstLine, chapterOrdinal);
+    return actual == expected || actual.startsWith(expected);
   }
 
   /// 自动检测编码并解码文本
@@ -376,46 +364,6 @@ class TxtParserService {
     }
   }
 
-  /// 按章节模式拆分文本，自动推断层级
-  List<_RawChapter> _splitChapters(String text) {
-    final matches = _splitPattern.allMatches(text).toList();
-    if (matches.isEmpty) return const [];
-
-    final chapters = <_RawChapter>[];
-    for (var i = 0; i < matches.length; i++) {
-      final start = matches[i].start;
-      final end = i + 1 < matches.length ? matches[i + 1].start : text.length;
-      final chunk = text.substring(start, end).trim();
-      if (chunk.isEmpty) continue;
-
-      final firstNewline = chunk.indexOf('\n');
-      final title =
-          firstNewline > 0 ? chunk.substring(0, firstNewline).trim() : null;
-      final content =
-          firstNewline > 0 ? chunk.substring(firstNewline + 1).trim() : chunk;
-
-      // 根据标题模式推断层级
-      final titleStr = title ?? '';
-      final level = _inferLevel(titleStr);
-
-      chapters.add(_RawChapter(title: title, content: content, level: level));
-    }
-
-    return chapters;
-  }
-
-  /// 根据标题文本推断层级
-  int _inferLevel(String title) {
-    // 卷/篇
-    if (_volumePattern.hasMatch(title)) return 0;
-    // 节
-    if (_sectionPattern.hasMatch(title)) return 2;
-    // 章/回
-    if (_chapterPattern.hasMatch(title)) return 1;
-    // 默认章级
-    return 1;
-  }
-
   /// 行首缩进判据：至少一个空白字符（含全角空格）后紧跟非空白内容。
   static final _leadingIndentPattern = RegExp(r'^[ \t　]+\S');
 
@@ -429,15 +377,31 @@ class TxtParserService {
   /// Mode P 要求的最小缩进行占比。
   static const double _modeIndentedLineRatio = 0.3;
 
+  /// 空行算作分段机制所需的最低非空块数：孤立在章首/章尾的空白行不算。
+  static const int _modeMinBlankGroups = 2;
+
+  /// 判为定宽硬换行的行数下限与"贴着同一宽度"的占比。
+  static const int _modeWrapMinSampledLines = 8;
+  static const double _modeFixedWidthLineRatio = 0.7;
+
+  /// 定宽判定里允许比参照宽度短的字符数（段末短句与标点悬挂）。
+  static const int _modeWrapWidthSlack = 3;
+
   /// 判断本章应按"每行一段"分段。
   ///
-  /// 判据：本章不用空行分段，且抽样内的非空行有足够比例以行首空白缩进。
-  /// 段间既无空行也无缩进的硬换行文件会被判为 Mode W，这是文本本身缺少信息，
-  /// 不做逐行启发式猜测。
+  /// 三道判据按信息强度递进，前一道不成立才降级到下一道：
+  /// - 空行分段：只有空白行确实把本章切成多个非空块时，才认定本书用空行分段。
+  ///   按"出现过空行"一刀切会让章尾那一个空行否掉整档（服务端正文切片就带着它）；
+  /// - 行首缩进：抽样非空行有足够比例以行首空白缩进——中文 TXT 的经典排版；
+  /// - 行长离散：网文正文常零缩进、段间不空行，段落靠换行分开，行宽长短不齐。
+  ///   只有多数行都贴着同一个宽度才判为定宽硬换行，此时段内换行不是段落边界。
+  ///
+  /// 三道都不成立时保持 Mode W，不做逐行启发式猜测。
   bool _isLinePerParagraph(String text) {
-    if (_blankLinePattern.hasMatch(text)) {
+    if (_blankSeparatedGroupCount(text) >= _modeMinBlankGroups) {
       return false;
     }
+    final lengths = <int>[];
     var nonEmpty = 0;
     var indented = 0;
     for (final line in text.split('\n')) {
@@ -448,6 +412,8 @@ class TxtParserService {
       if (_leadingIndentPattern.hasMatch(line)) {
         indented++;
       }
+      // 离散量的是去掉行首空白后的正文宽度，否则缩进本身会撑出离散。
+      lengths.add(line.trim().length);
       if (nonEmpty >= _modeSampleLines) {
         break;
       }
@@ -455,7 +421,41 @@ class TxtParserService {
     if (nonEmpty < _modeMinSampledLines) {
       return false;
     }
-    return indented / nonEmpty >= _modeIndentedLineRatio;
+    if (indented / nonEmpty >= _modeIndentedLineRatio) {
+      return true;
+    }
+    if (lengths.length < _modeWrapMinSampledLines) {
+      return false;
+    }
+    return !_isFixedWidthWrapping(lengths);
+  }
+
+  /// 空白行把本章切出的非空块数。
+  int _blankSeparatedGroupCount(String text) {
+    var groups = 0;
+    for (final piece in text.split(_blankLinePattern)) {
+      if (piece.trim().isNotEmpty) {
+        groups++;
+      }
+    }
+    return groups;
+  }
+
+  /// 行宽是否贴着同一个宽度（定宽硬换行的签名）。
+  ///
+  /// 参照宽度取 90 分位而不是最大值：畸形文件里个别超长行会把上限抬高，
+  /// 让真正定宽的书看起来"离散"。
+  bool _isFixedWidthWrapping(List<int> lengths) {
+    final sorted = <int>[...lengths]..sort();
+    final reference =
+        sorted[(sorted.length * 0.9 - 1).clamp(0, sorted.length - 1).toInt()];
+    var atWidth = 0;
+    for (final length in sorted) {
+      if (length >= reference - _modeWrapWidthSlack) {
+        atWidth++;
+      }
+    }
+    return atWidth / sorted.length >= _modeFixedWidthLineRatio;
   }
 
   /// 转义 XML 特殊字符
@@ -467,13 +467,4 @@ class TxtParserService {
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&apos;');
   }
-}
-
-/// 内部使用的原始章节数据
-class _RawChapter {
-  const _RawChapter({this.title, required this.content, this.level = 1});
-
-  final String? title;
-  final String content;
-  final int level;
 }

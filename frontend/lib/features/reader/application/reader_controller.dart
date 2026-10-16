@@ -7,12 +7,14 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
-import 'package:omninest/features/reader/application/reader_cache_providers.dart';
+import 'package:omninest/features/files/file_dashboard.dart'
+    show FileNode, listHostedFileNodes;
+import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
-import 'package:omninest/features/reader/application/reader_parsed_book_cache.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
+import 'package:omninest/features/reader/application/reader_progress_backup_port.dart';
 import 'package:omninest/features/reader/data/reader_sync_queue.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
-import 'package:omninest/features/reader/data/reader_image_cache.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
@@ -155,29 +157,12 @@ class ReaderCenterState {
   List<ReaderItem> get bookshelfItems =>
       items.where((i) => i.addedToBookshelf).toList();
 
-  /// 书库页条目：分段过滤 + 排序 + 搜索后的可见条目
+  /// 书库页条目：服务端已按分段与关键词过滤，这里只做客户端排序。
   List<ReaderItem> get visibleItems {
-    var source = switch (librarySegment) {
-      ReaderLibrarySegment.all => items,
-      ReaderLibrarySegment.books => items.where((i) => !i.isComic).toList(),
-      ReaderLibrarySegment.comics => items.where((i) => i.isComic).toList(),
-    };
-
-    final sorted = switch (sortBy) {
-      ReaderSortBy.recent => source,
-      ReaderSortBy.title => [...source]
-        ..sort((a, b) => a.title.compareTo(b.title)),
-    };
-
-    final query = searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return sorted;
-    return sorted
-        .where(
-          (i) =>
-              i.title.toLowerCase().contains(query) ||
-              (i.authorName?.toLowerCase().contains(query) ?? false),
-        )
-        .toList();
+    if (sortBy == ReaderSortBy.title) {
+      return [...items]..sort((a, b) => a.title.compareTo(b.title));
+    }
+    return items;
   }
 
   /// 复制状态
@@ -213,23 +198,64 @@ class ReaderCenterState {
 class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
   ReaderApi get _api => ref.read(readerApiProvider);
 
+  /// 取数完成后的回写基准。
+  ///
+  /// 完成回调不得拿 `await` 之前抓的快照整份发布：那段窗口里发生的写入（书库分段、
+  /// 搜索词、排序、续载窗口）会被旧快照无声覆盖，表现为刚切完分段又被弹回旧分段。
+  /// 优先取发布时刻的实况；仅在状态尚未就绪（首帧取数、错误态、刷新中的 loading 态）
+  /// 时退回快照，与改动前的空值口径一致。
+  ReaderCenterState _liveOr(ReaderCenterState? captured) =>
+      state.asData?.value ?? captured ?? ReaderCenterState.empty();
+
+  /// 条目取数的筛选代际：分段与关键词已下沉服务端查询参数，一次筛选变更即换代。
+  /// 在途响应代际不符时直接丢弃，否则旧筛选的那页会覆盖用户刚切到的新结果。
+  int _itemsGeneration = 0;
+
+  /// 搜索去抖定时器：控制器持有的异步资源必须随 Provider 一起释放。
+  Timer? _searchDebounce;
+
+  /// 搜索去抖时长：比一次输入停顿短，比逐字符请求长。
+  static const _searchDebounceDelay = Duration(milliseconds: 300);
+
+  /// 分段与关键词对应的服务端查询参数。
+  static ({String? contentKind, String? query}) _serverFilters(
+    ReaderCenterState from,
+  ) {
+    return (
+      contentKind: switch (from.librarySegment) {
+        ReaderLibrarySegment.all => null,
+        ReaderLibrarySegment.books => 'TEXT',
+        ReaderLibrarySegment.comics => 'COMIC',
+      },
+      query: from.searchQuery.trim().isEmpty ? null : from.searchQuery.trim(),
+    );
+  }
+
   @override
   Future<ReaderCenterState> build() async {
     // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
     ref.watch(sessionEpochProvider);
-    return _loadState();
+    ref.onDispose(() => _searchDebounce?.cancel());
+    return _loadState(ReaderCenterState.empty());
   }
 
-  /// 加载全部数据，部分失败不阻塞整体
-  Future<ReaderCenterState> _loadState({
-    String searchQuery = '',
-    ReaderSortBy sortBy = ReaderSortBy.recent,
-  }) async {
+  /// 加载仪表盘与条目首页，部分失败不阻塞整体。
+  ///
+  /// 调用方负责在发布前核对代际：本方法只取数，不知道返回的结果是否已经过期。
+  Future<ReaderCenterState> _loadState(ReaderCenterState from) async {
     // 错误随本次加载局部收集，实例字段会被并发 refresh 互相污染
     final partialErrors = <String>[];
+    final filters = _serverFilters(from);
     final results = await Future.wait([
       _safe(_api.dashboard, ReaderDashboard.empty(), partialErrors),
-      _safe(() => _api.itemsPage(), _emptyItemsPage, partialErrors),
+      _safe(
+        () => _api.itemsPage(
+          contentKind: filters.contentKind,
+          query: filters.query,
+        ),
+        _emptyItemsPage,
+        partialErrors,
+      ),
     ]);
     final dashboard = results[0] as ReaderDashboard;
     final itemPage = results[1] as ReaderItemPage;
@@ -239,8 +265,9 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       items: itemPage.items,
       itemsPage: itemPage.page,
       itemsHasMore: itemPage.hasMore,
-      searchQuery: searchQuery,
-      sortBy: sortBy,
+      searchQuery: from.searchQuery,
+      sortBy: from.sortBy,
+      librarySegment: from.librarySegment,
       errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
     );
   }
@@ -251,11 +278,18 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     if (current == null || !current.itemsHasMore || current.itemsLoadingMore) {
       return;
     }
+    final generation = _itemsGeneration;
+    final filters = _serverFilters(current);
     state = AsyncData(current.copyWith(itemsLoadingMore: true));
     try {
-      final next = await _api.itemsPage(page: current.itemsPage + 1);
+      final next = await _api.itemsPage(
+        contentKind: filters.contentKind,
+        query: filters.query,
+        page: current.itemsPage + 1,
+      );
       final latest = state.asData?.value;
-      if (latest == null) {
+      if (latest == null || generation != _itemsGeneration) {
+        // 换代说明用户已经切了分段或改了关键词：这一页属于旧窗口，不能追加。
         return;
       }
       final seen = latest.items.map((item) => item.id).toSet();
@@ -331,33 +365,82 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
 
   Future<void> _refreshState({required bool strict}) async {
     final current = state.asData?.value;
-    final next = await _loadState(
-      searchQuery: current?.searchQuery ?? '',
-      sortBy: current?.sortBy ?? ReaderSortBy.recent,
-    );
+    final generation = ++_itemsGeneration;
+    final next = await _loadState(current ?? ReaderCenterState.empty());
     if (strict && next.errorMessage != null) {
       throw StateError(next.errorMessage!);
     }
-    // 保留分段状态
+    if (generation != _itemsGeneration) {
+      // 取数在飞期间用户已经换了筛选并另起一轮：这一份属于旧条件，丢弃。
+      return;
+    }
+    // 排序仍是客户端位，取数期间用户可能改过；发布基准必须取发布时刻的实况。
+    final live = _liveOr(current);
     state = AsyncData(
       next.copyWith(
-        librarySegment: current?.librarySegment ?? ReaderLibrarySegment.all,
+        librarySegment: live.librarySegment,
+        searchQuery: live.searchQuery,
+        sortBy: live.sortBy,
       ),
     );
   }
 
-  /// 切换书库分段（全部/图书/漫画）
+  /// 切换书库分段（全部/图书/漫画）：按新条件重取服务端第一页。
   void selectLibrarySegment(ReaderLibrarySegment segment) {
     final current = state.asData?.value;
-    if (current == null) return;
-    state = AsyncData(current.copyWith(librarySegment: segment));
+    if (current == null || current.librarySegment == segment) {
+      return;
+    }
+    _applyItemFilters(current.copyWith(librarySegment: segment));
   }
 
-  /// 设置搜索关键词
+  /// 设置搜索关键词：先去抖，再按新关键词重取服务端第一页。
+  ///
+  /// 关键词已经是查询参数：逐字符发请求等于每敲一键打一次后端。
   void setSearchQuery(String query) {
     final current = state.asData?.value;
-    if (current == null) return;
+    if (current == null || current.searchQuery == query) {
+      return;
+    }
     state = AsyncData(current.copyWith(searchQuery: query));
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDelay, _reloadItemsWithLiveFilters);
+  }
+
+  /// 以当前实况筛选条件重取首页（去抖到点后的搜索入口）。
+  void _reloadItemsWithLiveFilters() {
+    final live = state.asData?.value;
+    if (live == null) {
+      return;
+    }
+    _applyItemFilters(live);
+  }
+
+  /// 发布新筛选并按服务端条件重取首页。
+  ///
+  /// 分段与关键词是查询参数而不是内存过滤位：不重取就只能看见已加载窗口里的那几本，
+  /// 排在第 51 本之后的漫画和搜到的书永远出不来。
+  void _applyItemFilters(ReaderCenterState next) {
+    _searchDebounce?.cancel();
+    final generation = ++_itemsGeneration;
+    // 换代后旧续页的在飞回包会被丢弃，续载门闩必须跟着新窗口一起复位，
+    // 否则一次筛选切换就把触底加载永久锁死。
+    state = AsyncData(next.copyWith(itemsLoadingMore: false));
+    unawaited(
+      _loadState(next).then((loaded) {
+        if (generation != _itemsGeneration) {
+          return;
+        }
+        final live = _liveOr(next);
+        state = AsyncData(
+          loaded.copyWith(
+            librarySegment: live.librarySegment,
+            searchQuery: live.searchQuery,
+            sortBy: live.sortBy,
+          ),
+        );
+      }),
+    );
   }
 
   /// 设置排序方式
@@ -407,12 +490,12 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
         await _restoreItemAfterFailedDelete();
         return;
       }
-      await Future.wait([
-        ref.read(readerLocalStorageProvider).deleteAllForItem(itemId),
-        ref.read(localBookCacheProvider).removeCache(itemId),
-        ReaderImageCache.deleteForItem(itemId),
-      ]);
-      ref.read(readerParsedBookCacheProvider).remove(itemId);
+      await ref.read(readerLocalStorageProvider).deleteAllForItem(itemId);
+      // 进程内解析缓存、书级样式表池、章节正文备忘和归档句柄都挂在 itemId 上；
+      // 只清 SQLite 会让同一进程里重新导入同名的书读到旧正文。
+      await invalidateBookCache(ref, itemId);
+      ReaderCoverByteCache.remove(itemId);
+      ReaderProgressBackupWeb.clear(itemId);
       ref.invalidate(readerItemDetailProvider(itemId));
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
@@ -484,9 +567,14 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
   }
 
   /// 重新解析阅读条目。
+  ///
+  /// 解析缓存必须一起作废：缓存里是旧的书籍结构与逐章正文，只刷新条目列表的话，
+  /// 读者看到的还是重解析前的内容，看起来"点了没反应"。详情页那条入口以前就是
+  /// 这样漏的，所以作废动作放在这里，而不是等每个调用点自己记得清。
   Future<ReaderItem> reparseItem(String itemId) async {
     try {
       final item = await _api.reparseItem(itemId);
+      await invalidateBookCache(ref, itemId);
       await refresh();
       return item;
     } on Exception catch (e) {
@@ -513,6 +601,24 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
   Future<List<ReaderImportCandidate>> importCandidates() async {
     try {
       return await _api.importCandidates();
+    } on Exception catch (e) {
+      _setError(describeUserFacingError(e).displayMessage);
+      rethrow;
+    }
+  }
+
+  /// 列出可用于封面的托管图片节点。
+  ///
+  /// 后端导入候选接口按 `isReaderFile` 过滤，只返回书籍类型，永远不含图片；
+  /// 封面候选必须走文件模块的分类查询（数据库侧已限定 FILE 且排除派生与本地只读）。
+  Future<List<ReaderCoverCandidate>> coverCandidates() async {
+    try {
+      final nodes = await listHostedFileNodes(ref, category: 'image');
+      return [
+        for (final FileNode node in nodes)
+          if (node.id.isNotEmpty)
+            ReaderCoverCandidate(fileNodeId: node.id, fileName: node.name),
+      ];
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).displayMessage);
       rethrow;

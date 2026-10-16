@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_comic_service.dart';
@@ -19,7 +20,13 @@ import 'package:omninest/features/reader/presentation/pages/comic_detail_page.da
 import 'package:omninest/features/reader/presentation/pages/reader_detail_text_content.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/book_detail_space.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_detail_action_sheet.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_detail_header.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -45,6 +52,27 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
     exitDetailRoute(context, fallbackRoute: '/reader');
   }
 
+  /// 打开章节阅读页。
+  ///
+  /// 带偏移（书签点按）用 `entry=offset` 精确定位；显式选章用 `entry=chapter`
+  /// 进章首；继续阅读不传 entry，走续读恢复意图。
+  void _openChapterRoute(
+    String itemId,
+    String chapterId, {
+    required bool resume,
+    int? charOffset,
+  }) {
+    final query = <String, String>{};
+    if (charOffset != null && charOffset > 0) {
+      query['entry'] = 'offset';
+      query['offset'] = '$charOffset';
+    } else if (!resume) {
+      query['entry'] = 'chapter';
+    }
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    context.push('/reader/items/$itemId/chapters/$chapterId$suffix');
+  }
+
   @override
   Widget build(BuildContext context) {
     final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
@@ -62,23 +90,37 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
         !isComicDetail &&
         detailItem.itemType.toUpperCase() != 'PDF';
     if (hostedBook) {
+      final l10n = AppLocalizations.of(context);
       return ReaderPageScaffold(
         target: ReaderPageTarget.library,
         enablePopGuard: false,
         childOwnScroll: true,
+        hostedSurface: true,
         headerPadding: EdgeInsets.zero,
-        header: _DetailBackBar(onTap: _handleBack),
+        header: ReaderDetailHeader(
+          title: l10n.bookDetailHeader,
+          onBack: _handleBack,
+          actions: [
+            MobileGlassIconButton(
+              tooltip: l10n.coreMore,
+              vector: OmniIcons.more,
+              onPressed: () => _openBookActions(detailItem),
+            ),
+          ],
+        ),
         child: BookDetailSpace(
           itemId: widget.itemId,
           bookshelfBusy: _bookshelfBusy,
           bookshelfAdded: detailItem.addedToBookshelf,
           onToggleBookshelf: _toggleBookshelf,
-          onReadChapter: (chapterId, {required resume}) {
-            context.push(
-              '/reader/items/${widget.itemId}/chapters/$chapterId'
-              '${resume ? '' : '?entry=chapter'}',
-            );
-          },
+          onReadChapter:
+              (chapterId, {required resume, int? charOffset}) =>
+                  _openChapterRoute(
+                    widget.itemId,
+                    chapterId,
+                    resume: resume,
+                    charOffset: charOffset,
+                  ),
         ),
       );
     }
@@ -89,9 +131,26 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
     return ReaderPageScaffold(
       target: ReaderPageTarget.library,
       enablePopGuard: false,
+      hostedSurface: true,
       childOwnScroll: detailItem != null && !isPdfDetail,
       headerPadding: EdgeInsets.zero,
-      header: _DetailBackBar(onTap: _handleBack),
+      // 托管态的 PDF/漫画详情与书籍分支共用同一件页头：样例 `.detail-header`
+      // 是 84 带 + 左右两枚 48 圆钮，而这条通栏文字返回条既不让开状态栏，
+      // 也没有右上角的更多入口。桌面工位态保持原样。
+      header:
+          MobileShellScope.isHosted(context) && detailItem != null
+              ? ReaderDetailHeader(
+                title: AppLocalizations.of(context).bookDetailHeader,
+                onBack: _handleBack,
+                actions: [
+                  MobileGlassIconButton(
+                    tooltip: AppLocalizations.of(context).coreMore,
+                    vector: OmniIcons.more,
+                    onPressed: () => _openBookActions(detailItem),
+                  ),
+                ],
+              )
+              : _DetailBackBar(onTap: _handleBack),
       child: detailAsync.when(
         data: (detail) {
           final isPdf =
@@ -127,7 +186,7 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
 
           final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
           if (bookAsync.isLoading) {
-            return AppLoading.detail();
+            return AppLoading();
           }
           if (bookAsync.hasError) {
             return AppErrorView(
@@ -146,14 +205,14 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
             chapters: parsedBook?.chapters ?? const [],
             bookshelfBusy: _bookshelfBusy,
             onToggleBookshelf: _toggleBookshelf,
-            onReadChapter: (chapterId, {required resume}) {
-              // 显式选章（目录/书签）进目标章章首（entry=chapter）；
-              // 继续阅读不传 entry，走续读恢复（resume 意图）。
-              context.push(
-                '/reader/items/${detail.item.id}/chapters/$chapterId'
-                '${resume ? '' : '?entry=chapter'}',
-              );
-            },
+            onReadChapter:
+                (chapterId, {required resume, int? charOffset}) =>
+                    _openChapterRoute(
+                      detail.item.id,
+                      chapterId,
+                      resume: resume,
+                      charOffset: charOffset,
+                    ),
             onEditMetadata:
                 () => context.push('/reader/items/${detail.item.id}/metadata'),
             onReparse: _reparse,
@@ -166,7 +225,7 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
               onRetry:
                   () => ref.invalidate(readerItemDetailProvider(widget.itemId)),
             ),
-        loading: () => AppLoading.detail(),
+        loading: () => AppLoading(),
       ),
     );
   }
@@ -243,6 +302,49 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
         AppLocalizations.of(context).readerDeleteItemFailed,
       );
     }
+  }
+
+  /// 托管详情页右上角「更多」：面板先收起，再执行被选动作。
+  Future<void> _openBookActions(ReaderItem item) async {
+    final ambience = MobileSheetAmbience.capture(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: context.env.modalScrim,
+      builder:
+          (sheetContext) => MobileSheetSemantics(
+            child: ambience.wrap(
+              ReaderDetailActionSheet(
+                onEditMetadata: () {
+                  Navigator.of(sheetContext).pop();
+                  context.push('/reader/items/${item.id}/metadata');
+                },
+                onReparse: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_reparse());
+                },
+                onDelete: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_confirmPermanentDelete(item));
+                },
+              ),
+            ),
+          ),
+    );
+  }
+
+  /// 永久删除确认：与书库管理区同一套对话框件与文案。
+  Future<void> _confirmPermanentDelete(ReaderItem item) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: l10n.readerConfirmDelete,
+      message: l10n.readerConfirmDeleteMsg(item.title),
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    await _deleteItem();
   }
 
   /// 使用解析的元数据覆盖 API 数据（如果 API 数据是临时文件名）

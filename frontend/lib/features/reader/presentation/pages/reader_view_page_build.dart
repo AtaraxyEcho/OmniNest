@@ -49,8 +49,15 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
         if (didPop) return;
         clearReaderSelection();
         syncProgressSync();
-        _syncProgressOnExit();
-        ref.invalidate(readerItemDetailProvider(widget.itemId));
+        // 详情页必须等本次上报落库之后再失效：同一帧立即失效会让详情页重拉到
+        // 还没更新的进度，续读指针显示回跳。导航不等上报结果。
+        // 失效走容器而不是 ref——本页即将退出，Element 卸载后 ref 不再可用。
+        final container = ProviderScope.containerOf(context, listen: false);
+        unawaited(
+          _syncProgressOnExit().whenComplete(() {
+            container.invalidate(readerItemDetailProvider(widget.itemId));
+          }),
+        );
         safePop();
       },
       child: Scaffold(
@@ -112,7 +119,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
                   latestTime != null &&
                   (_lastAppliedProgressAt == null ||
                       latestTime.isAfter(_lastAppliedProgressAt!)) &&
-                  !_isOwnProgressEcho(latestSnapshot, latestTime);
+                  !_isOwnProgressEcho(latestSnapshot);
               if (shouldApply) {
                 scheduleProgressSnapshotApply(latestSnapshot);
               }

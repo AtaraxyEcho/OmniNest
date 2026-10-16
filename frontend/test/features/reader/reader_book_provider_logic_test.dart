@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/data/txt_parser_service.dart';
-import 'package:omninest/features/reader/domain/parsed_book.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
 
 void main() {
   ParsedBook buildBook({String? secondPath = 'OPS/chapter-2.xhtml'}) {
@@ -27,6 +27,24 @@ void main() {
       ],
     );
   }
+
+  group('章节落库体积上限', () {
+    test('上限只按正文规模给，异常大的正文仍然拒绝', () {
+      // 样式表不进正文（书级池 + 章节次序引用），所以这一档没有样式表的放行额度：
+      // 短章（封面、扉页）能落库靠的是 64KB 固定余量本身。
+      expect(
+        expectedStoredChapterChars(contentChars: 12),
+        12 * 6 + 64 * 1024,
+        reason: '上限必须只由正文规模决定',
+      );
+      // 图片提取失败残留的 base64 内嵌图仍然要挡在库外。
+      expect(
+        400000 > expectedStoredChapterChars(contentChars: 12),
+        isTrue,
+        reason: '真正的异常体积不能被放行',
+      );
+    });
+  });
 
   group('持久化书籍元数据判定', () {
     test('仅复用包含完整内容路径的 EPUB 元数据', () {
@@ -61,14 +79,46 @@ void main() {
   });
 
   group('章节标识解析', () {
-    test('兼容规范 ID、内容路径、锚点路径和标题', () {
+    test('兼容清单键、内容路径与锚点路径，标题不再当身份', () {
       final book = buildBook();
 
       expect(resolveParsedChapterIndex(book, 'chapter_1'), 1);
       expect(resolveParsedChapterIndex(book, 'OPS/chapter-2.xhtml'), 1);
       expect(resolveParsedChapterIndex(book, 'OPS/chapter-2.xhtml#section'), 1);
-      expect(resolveParsedChapterIndex(book, '第二章'), 1);
-      expect(canonicalReaderChapterId(book, '第二章'), 'chapter_1');
+      // 标题是会被解析规则改写的显示文本，同名的卷/章也不止一处，不参与身份解析。
+      expect(resolveParsedChapterIndex(book, '第二章'), isNull);
+      expect(
+        canonicalReaderChapterId(book, 'OPS/chapter-2.xhtml#section'),
+        'chapter_1',
+      );
+    });
+
+    test('清单键就是身份：顺位变化后旧位置键不再命中', () {
+      // TXT 清单键按正文起点派生。删掉一个伪标题会让后续章的顺位前移，
+      // 但起点不变：按顺位存的旧 id 必须显式解析失败，而不是静默落到别的章。
+      final book = ParsedBook(
+        chapters: const [
+          ParsedChapter(
+            number: 1,
+            title: '第一章 起',
+            xhtmlContent: '',
+            charCount: 100,
+            chapterKey: 't0',
+          ),
+          ParsedChapter(
+            number: 2,
+            title: '第二章 承',
+            xhtmlContent: '',
+            charCount: 120,
+            chapterKey: 't100',
+          ),
+        ],
+      );
+
+      expect(resolveParsedChapterIndex(book, 't100'), 1);
+      expect(ReaderChapter.fromParsed(1, book.chapters[1]).id, 't100');
+      expect(resolveParsedChapterIndex(book, 'chapter_1'), isNull);
+      expect(canonicalReaderChapterId(book, 't0'), 't0');
     });
 
     test('未知章节标识显式失败返回 null，不静默回退第一章', () {
@@ -87,16 +137,29 @@ void main() {
   });
 
   test('TXT 章节以内联正文直接生成阅读器内容', () {
-    final bytes = Uint8List.fromList(
-      utf8.encode('Chapter 1\nThis is the first chapter.'),
+    const chapter = ParsedChapter(
+      number: 1,
+      title: 'Chapter 1',
+      xhtmlContent: '<p>This is the first chapter.</p>',
+      charCount: 28,
     );
-    final book = TxtParserService().parse(bytes, fileName: 'sample.txt');
 
-    expect(book.chapters, isNotEmpty);
-    final content = inlineReaderChapterContent(book.chapters.first);
+    final content = inlineReaderChapterContent(chapter);
+
     expect(content, isNotNull);
     expect(content!.content, contains('This is the first chapter.'));
     expect(content.wordCount, greaterThan(0));
+  });
+
+  test('空内联正文不生成阅读器内容', () {
+    const chapter = ParsedChapter(
+      number: 1,
+      title: '第一章',
+      xhtmlContent: '  ',
+      charCount: 12,
+    );
+
+    expect(inlineReaderChapterContent(chapter), isNull);
   });
 
   test('TXT 可以按服务端字符偏移提取章节正文', () {
@@ -105,7 +168,10 @@ void main() {
     final text = service.decodeText(bytes);
     final start = text.indexOf('第一章');
 
-    final xhtml = service.chapterToXhtml(bytes, start, text.length);
+    // 与阅读页取正文同一条链：切片 → 转换，客户端不再自己切章。
+    final xhtml = service.textToXhtml(
+      service.rawChapterSlice(text, start, text.length),
+    );
 
     expect(xhtml, contains('第一章'));
     expect(xhtml, contains('章节正文'));

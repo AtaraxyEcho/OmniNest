@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/data/txt_parser_service.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 段内硬换行连排与字符记账回归测试（D-16 / D-17 / N-09）。
 ///
@@ -18,20 +20,65 @@ void main() {
       blocks.fold(0, (sum, block) => sum + BlockClipper.blockCharCount(block));
 
   group('硬换行连排', () {
-    test('段内换行与前导空白不进入可绘制文本', () {
+    test('单换行连排，空行分段并补缩进', () {
       const html = '<p>第一行正文\n  第二行正文\n\n  第三行正文</p>';
 
-      final lines = paragraphsOf(parseBlocks(html)).single.lines;
+      // 空行是作者留在正文里的段落边界：连排到底会让开关关掉时段落黏成一块，
+      // 读者既看不到留白也看不到缩进，等于"这个开关什么也没改"。
+      // 段距只存在于块与块之间，所以边界处切成两块，第三段那一行照旧补缩进。
+      final blocks = paragraphsOf(parseBlocks(html));
+      expect(blocks, hasLength(2), reason: '空行分段必须在边界切块');
+      final lines = [for (final block in blocks) ...block.lines];
 
       expect(lines, hasLength(3));
       expect(lines.first.softWrap, isFalse);
-      for (final line in lines.skip(1)) {
-        expect(line.softWrap, isTrue);
-      }
+      // 单个换行是段内换行：连排，不补换行符也不补缩进。
+      expect(lines[1].softWrap, isTrue);
+      expect(lines[2].softWrap, isFalse, reason: '空行之后的段落是新的段首行');
       for (final line in lines) {
         expect(paintedOf(line).contains('\n'), isFalse);
         expect(paintedOf(line), paintedOf(line).trim());
       }
+
+      // 作者留的那一行白记在**前一段之后**（额度只花一份），折算用读者的行高。
+      expect(blocks.first.style?.paragraphBlankGapLines, 1);
+      expect(
+        blocks[1].style?.paragraphBlankGapLines,
+        isNull,
+        reason: '这一段之前的白已经记给前一块，不能再当它的段后距',
+      );
+      final reader = ReaderViewSettings(fontSize: 20, lineHeight: 1.8);
+      final follow = reader.copyWith(followBookTypesetting: true);
+      expect(
+        ReaderContentBlockItem.blockLeadingChrome(blocks.first, follow),
+        closeTo(20 * 1.8, 0.001),
+      );
+      expect(
+        ReaderContentBlockItem.blockChromeHeight(blocks.first, reader),
+        0.0,
+        reason: '关掉开关的读者不因为一本书用不用空行分段而多出留白',
+      );
+    });
+
+    test('容器直属裸文本与 <p> 走同一条折叠规则', () {
+      // PG 语料的许可页把整段文字直接写在 <div> 里，源码每约 35 字断一行。
+      // 这条路径以前不过 _foldIntoLines：换行原样留在可绘制文本里，一行只剩十几个
+      // 字符的锯齿版面；页尾裁剪落在换行之后时还要多折一行空行，渲染比引擎分配的高
+      // 出一整行（真书语料里西遊记每章几页）。
+      const source =
+          'so the Foundation\n  can copy and distribute it\n  in the United States';
+
+      final paragraph = paragraphsOf(parseBlocks('<div>$source</div>')).single;
+
+      expect(paragraph.lines, hasLength(3));
+      expect(paragraph.lines.first.softWrap, isFalse);
+      for (final line in paragraph.lines.skip(1)) {
+        expect(line.softWrap, isTrue);
+      }
+      for (final line in paragraph.lines) {
+        expect(paintedOf(line).contains('\n'), isFalse, reason: '换行不能留在可绘制文本里');
+      }
+      expect(blockChars([paragraph]), source.length, reason: '折叠量必须留在源字符空间');
     });
 
     test('源字符总数守恒', () {
@@ -194,7 +241,7 @@ void main() {
       const text = '　　第一行正文内容\n　　第二行正文内容\n　　第三行正文内容\n';
       final parser = TxtParserService();
 
-      final xhtml = parser.chapterFromText(text, 0, text.length);
+      final xhtml = parser.textToXhtml(text);
       final blocks = parseBlocks(xhtml);
 
       // 每个源换行都是一个段落边界，字符不能凭空消失。
@@ -210,7 +257,7 @@ void main() {
       ).join('\n');
       final parser = TxtParserService();
 
-      final xhtml = parser.chapterFromText(source, 0, source.length);
+      final xhtml = parser.textToXhtml(source);
       final blocks = parseBlocks(xhtml);
 
       expect(blockChars(blocks), source.length);

@@ -92,6 +92,7 @@ class _FakeReaderLocalProgressStore implements ReaderLocalProgressStore {
     required String mode,
     String? chapterId,
     int charOffset = 0,
+    double? bookProgress,
     String? pageId,
     int? pageIndex,
     String? pageFingerprint,

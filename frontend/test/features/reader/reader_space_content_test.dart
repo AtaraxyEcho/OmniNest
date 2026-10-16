@@ -98,6 +98,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    var shelfOpened = false;
     await tester.pumpWidget(
       _host(
         ReaderSpaceContent(
@@ -109,7 +110,7 @@ void main() {
           insightChapters: 0,
           onResume: (_) {},
           onOpenItem: (_) {},
-          onOpenBookshelf: () {},
+          onOpenBookshelf: () => shelfOpened = true,
         ),
       ),
     );
@@ -124,6 +125,12 @@ void main() {
       ),
       findsOneWidget,
     );
+    // 书架入口常驻：样例的 YOUR SHELVES 小节恒在，动作位就是它。
+    // 此前小节被空的 rail 一起跳过，移动侧唯一的书架入口随之消失。
+    expect(find.text('Bookshelf'), findsOneWidget);
+    await tester.tap(find.text('Bookshelf'));
+    await tester.pump();
+    expect(shelfOpened, isTrue);
     expect(tester.takeException(), isNull);
   });
 }

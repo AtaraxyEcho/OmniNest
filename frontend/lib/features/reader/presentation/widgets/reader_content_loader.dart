@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
@@ -12,13 +13,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
 part 'reader_content_loader_page_navigator.dart';
-
-/// 滚动列表条目相对块高的附加间距。
-///
-/// 标题块之后渲染层会多插一段间距（ReaderViewContent._buildBlock），
-/// 高度表必须计同一份，否则条目实际高度与表按标题数累积偏离。
-double scrollBlockExtraSpacing(ContentBlock block) =>
-    block is HeadingBlock ? ReaderContentBlockItem.headingBottomSpacing : 0.0;
 
 /// 滚动模式的高度表是否已不属于当前排版参数。
 ///
@@ -51,6 +45,7 @@ class ChapterData {
     List<PageSlice> slices = const [],
     List<double> cumulativeHeights = const [],
     this.totalChars = 0,
+    this.anchors = const {},
   }) : _slices = slices,
        _cumulativeHeights = cumulativeHeights;
 
@@ -59,6 +54,9 @@ class ChapterData {
   final List<ContentBlock> blocks;
   final int totalChars;
 
+  /// 章内锚点（`id` / `name`）在字符域里的位置，与块偏移、页区间同一个口径。
+  final Map<String, int> anchors;
+
   List<PageSlice> get slices => _slices;
   final List<PageSlice> _slices;
 
@@ -66,6 +64,14 @@ class ChapterData {
   List<double> _cumulativeHeights;
 
   List<int> _blockCharPrefixes = const [];
+
+  ChapterSearchCorpus? _searchCorpus;
+
+  /// 章内检索语料：面板给出的命中下标是可绘制文本位置，跳转前要经它换算到块源字符域。
+  ///
+  /// 与块内容同生命周期，惰性构建一次；块换章或重解析后 ChapterData 会重建，缓存自然失效。
+  ChapterSearchCorpus get searchCorpus =>
+      _searchCorpus ??= ChapterSearchCorpus.fromBlocks(blocks);
 
   /// 累积字符前缀：`blockCharPrefixes[i]` = 前 i 块的字符数之和，
   /// 长度 = 块数 + 1。blocks 创建后内容不变，惰性计算一次；
@@ -111,6 +117,7 @@ class ChapterData {
   double? _navigatorLineHeight;
   String? _navigatorFontFamily;
   double? _navigatorTextScale;
+  bool? _navigatorFollowBookTypesetting;
 
   /// 获取或创建翻页导航器。
   ///
@@ -127,7 +134,10 @@ class ChapterData {
         _navigatorFontSize != settings.fontSize ||
         _navigatorLineHeight != settings.lineHeight ||
         _navigatorFontFamily != settings.fontFamily ||
-        _navigatorTextScale != textScale;
+        _navigatorTextScale != textScale ||
+        // 「跟随原书排版」改变段距、对齐与行高：漏这一项时同一份页链会被当成
+        // 还是旧排版算出来的那些页，翻页按书的版式落位、装页按读者的默认档。
+        _navigatorFollowBookTypesetting != settings.followBookTypesetting;
     if (_pageNavigator != null && layoutChanged) {
       _pageNavigator = null;
     }
@@ -141,7 +151,7 @@ class ChapterData {
       );
       _pageNavigator = PageNavigator(
         blocks: blocks,
-        computeFn: pageLayout.computePage,
+        computeFn: pageLayout.computeNextPage,
       );
     }
     _navigatorPageWidth = pageWidth;
@@ -150,6 +160,7 @@ class ChapterData {
     _navigatorLineHeight = settings.lineHeight;
     _navigatorFontFamily = settings.fontFamily;
     _navigatorTextScale = textScale;
+    _navigatorFollowBookTypesetting = settings.followBookTypesetting;
     return _pageNavigator!;
   }
 
@@ -162,6 +173,7 @@ class ChapterData {
     _navigatorLineHeight = null;
     _navigatorFontFamily = null;
     _navigatorTextScale = null;
+    _navigatorFollowBookTypesetting = null;
   }
 
   static bool _sameDimension(double? previous, double current) =>
@@ -240,11 +252,17 @@ class _CacheKey {
   final double lineHeight;
   final String fontFamily;
 
+  /// 书的排版意图参与块高与装页，所以它也是缓存键的一维：
+  /// 少了这一维，打开或关闭「跟随原书」会复用上一档测出来的高度表与页区间，
+  /// 版面看着像没反应，实际是拿旧表在渲染。
+  final bool followBookTypesetting;
+
   const _CacheKey({
     required this.chapterId,
     required this.fontSize,
     required this.lineHeight,
     required this.fontFamily,
+    required this.followBookTypesetting,
   });
 
   @override
@@ -254,10 +272,17 @@ class _CacheKey {
           chapterId == other.chapterId &&
           fontSize == other.fontSize &&
           lineHeight == other.lineHeight &&
-          fontFamily == other.fontFamily);
+          fontFamily == other.fontFamily &&
+          followBookTypesetting == other.followBookTypesetting);
 
   @override
-  int get hashCode => Object.hash(chapterId, fontSize, lineHeight, fontFamily);
+  int get hashCode => Object.hash(
+    chapterId,
+    fontSize,
+    lineHeight,
+    fontFamily,
+    followBookTypesetting,
+  );
 }
 
 class ReaderContentLoader {
@@ -277,6 +302,7 @@ class ReaderContentLoader {
       fontSize: settings.fontSize,
       lineHeight: settings.lineHeight,
       fontFamily: settings.fontFamily,
+      followBookTypesetting: settings.followBookTypesetting,
     );
   }
 
@@ -335,13 +361,24 @@ class ReaderContentLoader {
     final isLarge = content.content.length > 10000;
 
     List<ContentBlock> blocks;
+    var anchors = const <String, int>{};
     // isolate 只做 HTML 解析（parseBlocks 纯 Dart 代码，无 Flutter 依赖）
     // TextPainter 不能在 isolate 中使用（继承 NativeFieldWrapperClass2）
     // Web 平台 compute 返回 JSArray，无法转为 Dart List，直接调用
     if (isLarge && !kIsWeb) {
-      blocks = await compute(parseBlocks, content.content);
+      final parsed = await compute(parseChapterPayload, (
+        html: content.content,
+        css: content.stylesheetCss,
+      ));
+      blocks = parsed.blocks;
+      anchors = parsed.anchors;
     } else {
-      blocks = parseBlocks(content.content);
+      final parsed = parseChapterPayload((
+        html: content.content,
+        css: content.stylesheetCss,
+      ));
+      blocks = parsed.blocks;
+      anchors = parsed.anchors;
     }
 
     // 如果 HTML 解析无 blocks，用纯文本创建段落块（兜底）
@@ -351,11 +388,10 @@ class ReaderContentLoader {
           'ReaderContentLoader: parseBlocks returned empty, creating fallback paragraph',
         );
       }
-      final plainText =
-          content.content
-              .replaceAll(RegExp(r'<[^>]*>'), '')
-              .replaceAll(RegExp(r'&[a-zA-Z]+;'), ' ')
-              .trim();
+      // 兜底文本必须走 stripHtml：书的样式表可能以内联 `<style>` 写在章节正文里
+      // （EPUB 的外部表已改走书级池，不再进正文），只剥标签会把整份 CSS 留在
+      // 正文里渲染，章字符数也被撑大。
+      final plainText = stripHtml(content.content);
       final displayText = plainText.isNotEmpty ? plainText : content.title;
       if (displayText.isNotEmpty) {
         blocks = [
@@ -374,6 +410,7 @@ class ReaderContentLoader {
       blocks: blocks,
       slices: const <PageSlice>[],
       cumulativeHeights: const <double>[],
+      anchors: anchors,
       totalChars: blocks.fold(
         0,
         (sum, b) => sum + BlockClipper.blockCharCount(b),
@@ -450,14 +487,12 @@ class ReaderContentLoader {
     final headHeights = <double>[];
     var headCumulative = 0.0;
     for (var i = 0; i < headCount; i++) {
-      headCumulative +=
-          ReaderPaginationEngine.measureBlockHeight(
-            blocks[i],
-            pageWidth,
-            settings,
-            textScale: textScale,
-          ) +
-          scrollBlockExtraSpacing(blocks[i]);
+      headCumulative += ReaderPaginationEngine.measureBlockHeight(
+        blocks[i],
+        pageWidth,
+        settings,
+        textScale: textScale,
+      );
       headHeights.add(headCumulative);
     }
     final estimateBase =
@@ -559,15 +594,12 @@ class ReaderContentLoader {
       cumulative = heights[i];
     }
     for (var i = start; i < blocks.length; i++) {
-      cumulative +=
-          ReaderPaginationEngine.measureBlockHeight(
-            blocks[i],
-            pageWidth,
-            settings,
-            textScale: textScale,
-          ) +
-          // 标题后的包装层间距同样占据滚动条目高度，不计入会让表比渲染矮。
-          scrollBlockExtraSpacing(blocks[i]);
+      cumulative += ReaderPaginationEngine.measureBlockHeight(
+        blocks[i],
+        pageWidth,
+        settings,
+        textScale: textScale,
+      );
       heights[i] = cumulative;
       if (i > 0 && heights[i] < heights[i - 1]) {
         heights[i] = heights[i - 1];
@@ -804,14 +836,12 @@ class ReaderContentLoader {
     final headHeights = <double>[];
     var headCumulative = 0.0;
     for (var i = 0; i < headCount; i++) {
-      headCumulative +=
-          ReaderPaginationEngine.measureBlockHeight(
-            blocks[i],
-            pageWidth,
-            settings,
-            textScale: textScale,
-          ) +
-          scrollBlockExtraSpacing(blocks[i]);
+      headCumulative += ReaderPaginationEngine.measureBlockHeight(
+        blocks[i],
+        pageWidth,
+        settings,
+        textScale: textScale,
+      );
       headHeights.add(headCumulative);
     }
     final estimateBase =
@@ -837,16 +867,12 @@ class ReaderContentLoader {
     final heights = <double>[];
     var cumulative = 0.0;
     for (final block in blocks) {
-      cumulative +=
-          ReaderPaginationEngine.measureBlockHeight(
-            block,
-            pageWidth,
-            settings,
-            textScale: textScale,
-          ) +
-          // 标题后的包装层间距由列表条目实际占据，漏算会让整章表比渲染矮，
-          // 且该入口标记为已精测后还直接决定条目确定高度。
-          scrollBlockExtraSpacing(block);
+      cumulative += ReaderPaginationEngine.measureBlockHeight(
+        block,
+        pageWidth,
+        settings,
+        textScale: textScale,
+      );
       heights.add(cumulative);
     }
     return heights;
@@ -873,7 +899,9 @@ class ReaderContentLoader {
     required ReaderViewSettings settings,
     double textScale = 1.0,
   }) {
-    final data = getByChapterId(chapterId);
+    // 同一章在缓存里按排版参数各有一份；只按 chapterId 取会拿旧字号的高度表
+    // 与新 settings 混算，模式切换时的滚动位置就会落到别的行上。
+    final data = get(chapterId, settings) ?? getByChapterId(chapterId);
     if (data == null || data.blocks.isEmpty) return 0;
     if (charOffset <= 0) return 0;
     if (charOffset >= data.totalChars) {
@@ -895,9 +923,10 @@ class ReaderContentLoader {
     // charOffset 落在这个 block 内
     final blockStart = lo > 0 ? data.cumulativeHeights[lo - 1] : 0.0;
     final charOffsetInBlock = charOffset - accumulated;
+    final block = data.blocks[lo];
     // 用 TextPainter 精确测量块内高度（与分页引擎同一套逻辑）
     final heightInBlock = ReaderPaginationEngine.measureHeightToCharOffset(
-      data.blocks[lo],
+      block,
       pageWidth,
       settings,
       charOffsetInBlock,
@@ -905,8 +934,19 @@ class ReaderContentLoader {
       blockGlobalOffset: accumulated,
       isContinuation: false,
     );
-    return blockStart + heightInBlock;
+    // 渲染侧把块顶留白（段前留白、引用盒上内缩）画在第一行文字之前：
+    // 不收这一份，块起点到首行之间差的那一截会让换算落在上一条文字上。
+    // 列表等整块口径的非文本块，measureHeightToCharOffset 返回的块高已含这份留白。
+    final leading =
+        _hasLineFlowChrome(block)
+            ? ReaderContentBlockItem.blockLeadingChrome(block, settings)
+            : 0.0;
+    return blockStart + leading + heightInBlock;
   }
+
+  /// 块内按视觉行累加定位的文本块：只有这些块需要单独收块顶留白。
+  static bool _hasLineFlowChrome(ContentBlock block) =>
+      block is ParagraphBlock || block is BlockquoteBlock;
 
   /// 内容坐标 Y → 字符偏移（用于保存阅读进度）。
   ///
@@ -919,7 +959,11 @@ class ReaderContentLoader {
     ReaderViewSettings? settings,
     double textScale = 1.0,
   }) {
-    final data = getByChapterId(chapterId);
+    // 与 charOffsetToPixelOffset 同一把尺：先按当前排版参数精确命中缓存，
+    // 命中不到才退回按章找，避免用旧字号的高度表解释新的 contentY。
+    final data =
+        (settings != null ? get(chapterId, settings) : null) ??
+        getByChapterId(chapterId);
     if (data == null || data.blocks.isEmpty) return 0;
     if (data.cumulativeHeights.isEmpty) return 0;
 
@@ -967,7 +1011,12 @@ class ReaderContentLoader {
           blockGlobalOffset: charOffset,
         );
         if (visualLines.isNotEmpty) {
-          var accumulated = 0.0;
+          // 累积起点是块顶留白之后，不是块顶：段前留白画在第一行文字之前，
+          // 从 0 起算会让整块的行号向下错一格，落在这个块里的进度因此少读一行。
+          var accumulated =
+              _hasLineFlowChrome(block)
+                  ? ReaderContentBlockItem.blockLeadingChrome(block, settings)
+                  : 0.0;
           for (var vi = 0; vi < visualLines.length; vi++) {
             final vl = visualLines[vi];
             if (offsetInBlock <= accumulated + vl.height) {

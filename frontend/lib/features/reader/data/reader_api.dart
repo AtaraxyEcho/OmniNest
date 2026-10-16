@@ -78,8 +78,12 @@ class ReaderApi {
   }
 
   /// 分页获取阅读条目列表：书架/书库/管理页滚动加载消费。
+  ///
+  /// [contentKind] 为 `TEXT`/`COMIC`：书库分段必须在服务端过滤，否则分段只能命中
+  /// 已加载的那一页，第 51 本之后的漫画永远看不到。
   Future<ReaderItemPage> itemsPage({
     String? itemType,
+    String? contentKind,
     String? query,
     int page = 0,
     int size = 50,
@@ -88,6 +92,7 @@ class ReaderApi {
       '/reader/items/page',
       queryParameters: {
         if (itemType != null) 'itemType': itemType,
+        if (contentKind != null) 'contentKind': contentKind,
         if (query != null) 'query': query,
         'page': page,
         'size': size,
@@ -133,6 +138,7 @@ class ReaderApi {
             xhtmlContent: '',
             charCount: (chapter['charCount'] as num?)?.toInt() ?? 0,
             contentPath: chapter['contentPath']?.toString(),
+            chapterKey: chapter['chapterKey']?.toString(),
             level: (chapter['level'] as num?)?.toInt() ?? 0,
             sourceStartOffset: (chapter['sourceStartOffset'] as num?)?.toInt(),
             sourceEndOffset: (chapter['sourceEndOffset'] as num?)?.toInt(),
@@ -391,6 +397,7 @@ class ReaderApi {
     required String itemId,
     required int charOffset,
     required double progressPercent,
+    String? chapterId,
     String? note,
     String? clientOperationId,
   }) async {
@@ -398,6 +405,7 @@ class ReaderApi {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/bookmarks',
       data: {
+        if (chapterId != null) 'chapterId': chapterId,
         'charOffset': charOffset,
         'progressPercent': progressPercent.clamp(0.0, 1.0),
         if (note != null) 'note': note,

@@ -124,4 +124,42 @@ void main() {
     expect(find.text('99 / 240'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('不给切换回调时顶栏与底栏都不渲染模式按钮', (tester) async {
+    // Web 没有翻页模式：设置面板按 supportsPageMode 隐藏入口，顶栏与底栏必须
+    // 传 null 一起收口，否则绕过面板照样能切进一个平台不支持的模式。
+    await tester.pumpWidget(
+      buildApp(
+        ComicReaderTopBar(
+          catalogTitle: '第一卷',
+          isPageMode: true,
+          settings: ReaderViewSettings(paletteId: 'dark'),
+          onBack: () {},
+          onShowContents: () {},
+          onShowSettings: () {},
+          onShowShortcuts: () {},
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
+    expect(find.byIcon(Icons.swap_horiz_rounded), findsNothing);
+
+    await tester.pumpWidget(
+      buildApp(
+        ComicReaderBottomBar(
+          currentPageIndex: 3,
+          totalPages: 12,
+          isPageMode: false,
+          settings: ReaderViewSettings(paletteId: 'dark'),
+          onPrevious: () {},
+          onNext: () {},
+          onSeek: (_) {},
+          onShowContents: () {},
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
+    expect(find.byIcon(Icons.swap_horiz_rounded), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

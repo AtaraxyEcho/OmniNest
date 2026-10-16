@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
@@ -34,7 +35,8 @@ class BookDetailSpace extends ConsumerStatefulWidget {
   final String itemId;
 
   /// 打开指定章节（resume=true 走续读恢复）。
-  final void Function(String chapterId, {required bool resume}) onReadChapter;
+  final void Function(String chapterId, {required bool resume, int? charOffset})
+  onReadChapter;
 
   final Future<void> Function() onToggleBookshelf;
   final bool bookshelfBusy;
@@ -48,7 +50,7 @@ class BookDetailSpace extends ConsumerStatefulWidget {
 
 class _BookDetailSpaceState extends ConsumerState<BookDetailSpace> {
   bool _aboutExpanded = false;
-  String? _resumeChapterId;
+  ReaderProgressSnapshot? _localSnapshot;
 
   @override
   void initState() {
@@ -63,24 +65,41 @@ class _BookDetailSpaceState extends ConsumerState<BookDetailSpace> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _resumeChapterId =
-          snapshot.hasReadableProgress ? snapshot.chapterId : null;
-    });
+    setState(() => _localSnapshot = snapshot);
   }
 
-  void _startReading() {
-    final chapterId = _resumeChapterId;
-    if (chapterId != null && chapterId.isNotEmpty) {
-      widget.onReadChapter(chapterId, resume: true);
+  /// 开始/继续阅读：与桌面详情同源，先取服务端清单，再取本地与服务端进度里
+  /// 较新的一份定位章节。清单为空（仍在解析或解析失败）时不发起跳转。
+  void _startReading(
+    List<ReaderChapter> chapters,
+    ReaderProgress? serverProgress,
+  ) {
+    final snapshot = ReaderProgressSnapshot.latest(
+      _localSnapshot,
+      ReaderProgressSnapshot.fromServer(serverProgress),
+    );
+    final chapter = ReaderProgressSnapshot.resolveChapter(chapters, snapshot);
+    if (chapter == null) {
       return;
     }
-    final detail =
-        ref.read(readerItemDetailProvider(widget.itemId)).asData?.value;
-    final chapters = detail?.chapters ?? const <ReaderChapter>[];
-    if (chapters.isNotEmpty) {
-      widget.onReadChapter(chapters.first.id, resume: false);
+    widget.onReadChapter(
+      chapter.id,
+      resume: snapshot?.hasReadableProgress ?? false,
+    );
+  }
+
+  /// 章节清单来源：详情响应不含章节（后端不存目录），此前只读 `detail.chapters`
+  /// 时清单恒空，"开始阅读"因此静默无响应、目录整块消失。
+  static List<ReaderChapter> _chaptersOf(AsyncValue<ParsedBook> bookAsync) {
+    final parsed = bookAsync.asData?.value.chapters;
+    if (parsed == null) {
+      return const <ReaderChapter>[];
     }
+    return parsed
+        .asMap()
+        .entries
+        .map((entry) => ReaderChapter.fromParsed(entry.key, entry.value))
+        .toList();
   }
 
   @override
@@ -97,17 +116,26 @@ class _BookDetailSpaceState extends ConsumerState<BookDetailSpace> {
       data: (detail) {
         final item = detail.item;
         final progress = item.progressPercent ?? 0.0;
-        final chapters = detail.chapters;
+        final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
+        final chapters = _chaptersOf(bookAsync);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          // 样例 `.book-detail-scroll` 内衬 18px 20px 30px。
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
           children: [
-            _BookIdentity(item: item, chapterCount: chapters.length),
-            const SizedBox(height: 20),
+            // 样例 `.book-identity` 的块内另有 5px 水平内缩。
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: _BookIdentity(item: item, chapterCount: chapters.length),
+            ),
+            const SizedBox(height: 26),
             _BookActions(
               hasProgress: progress > 0,
               busy: widget.bookshelfBusy,
               bookshelfAdded: widget.bookshelfAdded,
-              onRead: _startReading,
+              onRead:
+                  chapters.isEmpty
+                      ? null
+                      : () => _startReading(chapters, detail.progress),
               onToggleBookshelf: () => unawaited(widget.onToggleBookshelf()),
               onMetadata:
                   () => context.push('/reader/items/${item.id}/metadata'),
@@ -118,9 +146,11 @@ class _BookDetailSpaceState extends ConsumerState<BookDetailSpace> {
               expanded: _aboutExpanded,
               onToggle: () => setState(() => _aboutExpanded = !_aboutExpanded),
             ),
-            _ChapterList(
+            _ChapterSection(
+              bookAsync: bookAsync,
               chapters: chapters,
               progress: progress,
+              onRetry: () => ref.invalidate(parsedBookProvider(widget.itemId)),
               onOpenChapter: (chapterId) {
                 widget.onReadChapter(chapterId, resume: false);
               },
@@ -144,7 +174,7 @@ class _BookIdentity extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         DecoratedBox(
           decoration: BoxDecoration(
@@ -183,62 +213,60 @@ class _BookIdentity extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 18),
+        const SizedBox(width: 24),
+        // 样例 `.book-identity` 是 align-items:center：右侧信息列垂直居中
+        // 于 175 高的书封，不再靠顶边偏移对齐。
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.bookDetailInLibrary.toUpperCase(),
-                  style: TextStyle(
-                    color: context.env.accentInk,
-                    fontSize: AppTypography.labelMicro,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.3,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                l10n.bookDetailInLibrary.toUpperCase(),
+                style: TextStyle(
+                  color: context.env.accentInk,
+                  fontSize: AppTypography.labelMicro,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.3,
                 ),
-                const SizedBox(height: 9),
-                Text(
-                  item.title,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.env.ink,
-                    fontFamily: AppTypography.serifFamily,
-                    fontFamilyFallback: AppTypography.serifFamilyFallback,
-                    fontSize: AppTypography.displaySmall,
-                    height: 1.02,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              // 样例 `.book-identity h1` margin 9px 0 5px，p 的余下边距 14px。
+              const SizedBox(height: 9),
+              Text(
+                item.title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: context.env.ink,
+                  fontFamily: AppTypography.serifFamily,
+                  fontFamilyFallback: AppTypography.serifFamilyFallback,
+                  fontSize: AppTypography.headlineLarge,
+                  height: 1.02,
+                  fontWeight: FontWeight.w400,
                 ),
-                if (item.authorName?.isNotEmpty == true)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      item.authorName!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.env.inkMuted,
-                        fontSize: AppTypography.bodyMedium,
-                      ),
+              ),
+              if (item.authorName?.isNotEmpty == true)
+                Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: Text(
+                    item.authorName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.env.inkMuted,
+                      fontSize: AppTypography.bodyMedium,
                     ),
                   ),
-                const SizedBox(height: 10),
-                Text(
-                  l10n.bookDetailMeta(
-                    item.itemType.toUpperCase(),
-                    chapterCount,
-                  ),
-                  style: TextStyle(
-                    color: context.env.inkMuted,
-                    fontSize: AppTypography.labelSmall,
-                  ),
                 ),
-              ],
-            ),
+              const SizedBox(height: 14),
+              Text(
+                l10n.bookDetailMeta(item.itemType.toUpperCase(), chapterCount),
+                style: TextStyle(
+                  color: context.env.inkMuted,
+                  fontSize: AppTypography.labelSmall,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -271,7 +299,9 @@ class _BookActions extends StatelessWidget {
   final bool hasProgress;
   final bool busy;
   final bool bookshelfAdded;
-  final VoidCallback onRead;
+
+  /// 清单未就绪（仍在解析或解析失败）时为 null：按钮转灰，不给按下去没反应的入口。
+  final VoidCallback? onRead;
   final VoidCallback onToggleBookshelf;
   final VoidCallback onMetadata;
 
@@ -542,6 +572,141 @@ class _BookAbout extends StatelessWidget {
   }
 }
 
+/// 目录区块的状态外壳：清单就绪列章节，仍在解析给静态骨架，解析失败给重试入口。
+///
+/// 三态都要占住同一块位置：直接塌成 `SizedBox.shrink()` 时，读者分不清
+/// "书还在后台解析"和"这本书没有目录"，也没有任何重试入口。
+class _ChapterSection extends StatelessWidget {
+  const _ChapterSection({
+    required this.bookAsync,
+    required this.chapters,
+    required this.progress,
+    required this.onRetry,
+    required this.onOpenChapter,
+  });
+
+  final AsyncValue<ParsedBook> bookAsync;
+  final List<ReaderChapter> chapters;
+  final double progress;
+  final VoidCallback onRetry;
+  final ValueChanged<String> onOpenChapter;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (chapters.isNotEmpty) {
+      return _ChapterList(
+        chapters: chapters,
+        progress: progress,
+        onOpenChapter: onOpenChapter,
+      );
+    }
+    final failure = bookAsync.error;
+    if (failure != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _ContentsHeader(),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    describeUserFacingError(failure).message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.env.inkMuted,
+                      fontSize: AppTypography.labelSmall,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onRetry,
+                  style: TextButton.styleFrom(
+                    foregroundColor: context.env.ink,
+                    minimumSize: const Size(48, 38),
+                  ),
+                  child: Text(l10n.readerRetry),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _ContentsHeader(),
+          const SizedBox(height: 14),
+          for (final width in <double>[1.0, 0.82, 0.68])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: MobileSkeletonBlock(height: 16, width: width * 320),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 目录区块的标题排（CONTENTS + 章节数）。清单未就绪时章节数为空。
+class _ContentsHeader extends StatelessWidget {
+  const _ContentsHeader({this.chapterCount});
+
+  final int? chapterCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.bookDetailContents.toUpperCase(),
+                style: TextStyle(
+                  color: context.env.white43,
+                  fontSize: AppTypography.labelMicro,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                l10n.bookDetailChapters,
+                style: TextStyle(
+                  color: context.env.ink,
+                  fontSize: AppTypography.titleLarge,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (chapterCount != null)
+          TextButton(
+            onPressed: null,
+            style: TextButton.styleFrom(
+              foregroundColor: context.env.white70,
+              minimumSize: const Size(48, 38),
+              textStyle: const TextStyle(fontSize: AppTypography.labelSmall),
+            ),
+            child: Text(l10n.bookDetailChapterCount(chapterCount!)),
+          ),
+      ],
+    );
+  }
+}
+
 /// 章节目录：CONTENTS 头 + 衬线序号行 + 已读对勾。
 class _ChapterList extends StatelessWidget {
   const _ChapterList({
@@ -556,10 +721,6 @@ class _ChapterList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    if (chapters.isEmpty) {
-      return const SizedBox.shrink();
-    }
     // 只列顶级章节（卷级 level 0）。
     final topLevel = chapters.where((chapter) => chapter.level == 0).toList();
     final effective = topLevel.isEmpty ? chapters : topLevel;
@@ -569,47 +730,7 @@ class _ChapterList extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.bookDetailContents.toUpperCase(),
-                      style: TextStyle(
-                        color: context.env.white43,
-                        fontSize: AppTypography.labelMicro,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      l10n.bookDetailChapters,
-                      style: TextStyle(
-                        color: context.env.ink,
-                        fontSize: AppTypography.titleLarge,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: null,
-                style: TextButton.styleFrom(
-                  foregroundColor: context.env.white70,
-                  minimumSize: const Size(48, 38),
-                  textStyle: const TextStyle(
-                    fontSize: AppTypography.labelSmall,
-                  ),
-                ),
-                child: Text(l10n.bookDetailChapterCount(effective.length)),
-              ),
-            ],
-          ),
+          _ContentsHeader(chapterCount: effective.length),
           for (var index = 0; index < effective.length; index++)
             _ChapterRow(
               chapter: effective[index],

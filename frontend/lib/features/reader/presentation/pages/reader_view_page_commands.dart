@@ -252,32 +252,66 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     );
   }
 
+  /// 底栏进度条拖拽：按全书比例定位到目标章与章内比例。
+  ///
+  /// 口径见 [seekTargetFromBookProgress]：跨章只带比例，同章按当章 painted 字符数
+  /// 换算成块字符偏移。
   Future<void> _seekBookProgress(double progress) async {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return;
     }
-    final counts = parsedBook.chapters
-        .map((chapter) => math.max(1, chapter.charCount))
-        .toList(growable: false);
-    final total = counts.fold<int>(0, (sum, count) => sum + count);
-    var target = (progress.clamp(0.0, 1.0) * total).floor();
-    var chapterIndex = 0;
-    while (chapterIndex < counts.length - 1 && target >= counts[chapterIndex]) {
-      target -= counts[chapterIndex];
-      chapterIndex++;
-    }
+    final target = seekTargetFromBookProgress(
+      manifestCharCounts: parsedBook.chapters
+          .map((chapter) => chapter.charCount)
+          .toList(growable: false),
+      progress: progress,
+    );
     final chapters = _contentLoader?.allChapters ?? const <ReaderChapter>[];
-    if (chapterIndex >= chapters.length) {
+    if (target.chapterIndex >= chapters.length) {
       return;
     }
-    final targetChapter = chapters[chapterIndex];
-    final targetOffset = target.clamp(0, counts[chapterIndex]);
+    final targetChapter = chapters[target.chapterIndex];
+    final chapterData = _contentLoader?.get(targetChapter.id, _settings);
+    if (targetChapter.id == _currentChapterId && chapterData != null) {
+      _seekWithinChapter(
+        (target.chapterRatio * chapterData.totalChars).round(),
+      );
+      return;
+    }
     await switchToChapter(
       targetChapter.id,
-      intent: ReaderChapterNavigationIntent.offset(
-        targetOffset,
+      intent: ReaderChapterNavigationIntent.proportion(
+        target.chapterRatio,
         offerReturn: true,
+      ),
+    );
+  }
+
+  /// 同章跳转落位并按目标位置记账。
+  ///
+  /// 恢复静默窗口会丢弃这一段的滚动读数，用户主动拖到的位置若只等滚动回调写入，
+  /// 进度显示与落盘都停在拖拽之前。
+  void _seekWithinChapter(int charOffset) {
+    _openReaderSearchResult(charOffset);
+    _positionTracker.setCharOffset(charOffset, _currentChapterId);
+    refreshBookProgressNow();
+    final snapshot = buildProgressSnapshot();
+    if (snapshot == null) {
+      return;
+    }
+    scheduleLocalProgressSave(
+      chapterProgress: snapshot.chapterProgress,
+      charOffset: snapshot.charOffset,
+      mode: snapshot.mode,
+    );
+    unawaited(
+      syncProgressAsync(
+        progressOverride: snapshot.chapterProgress,
+        chapterId: snapshot.chapterId,
+        charOffset: snapshot.charOffset,
+        generation: ++syncProgressGeneration,
+        force: true,
       ),
     );
   }
@@ -292,6 +326,47 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       restoreScrollPositionFromOffset(offset);
     }
     _updateState(() {});
+  }
+
+  /// 批注卡片点按：跳到批注所在章节与章内偏移。
+  ///
+  /// 同章复用章内搜索命中的落位通道；跨章带偏移意图切章，内容由
+  /// [ReaderChapterNavigationIntent] 在加载完成后落位。
+  void onAnnotationSelected(String? chapterId, int startOffset) {
+    _closeReaderPanel();
+    if (chapterId == null || chapterId == _currentChapterId) {
+      _openReaderSearchResult(startOffset);
+      return;
+    }
+    unawaited(
+      switchToChapter(
+        chapterId,
+        intent: ReaderChapterNavigationIntent.offset(
+          startOffset,
+          offerReturn: true,
+        ),
+      ),
+    );
+  }
+
+  /// 章内搜索面板。
+  ///
+  /// 检索源换成块模型文本，而不是 `stripHtml(章节 HTML)`：后者是第三套下标域——HTML 标签
+  /// 换出的空格在它里面占字符、在块字符域里不占，行首缩进与 TXT 掩码空白反过来在它里面被
+  /// 折叠掉。命中下标直接当 `charOffset` 用，长章节能偏出几段。
+  /// 章节刚被换出缓存、还没有块时退回原串，下标语义与改动前一致。
+  Widget _buildSearchPanel(ReaderChapterContent content) {
+    final corpus =
+        _contentLoader?.get(_currentChapterId, _settings)?.searchCorpus;
+    return ReaderFindPanel(
+      plainText: corpus?.plainText ?? getPlainText(content.content),
+      settings: _settings,
+      onSelect:
+          corpus == null
+              ? _openReaderSearchResult
+              : (plainIndex) =>
+                  _openReaderSearchResult(corpus.toCharOffset(plainIndex)),
+    );
   }
 
   List<Widget> _buildReaderPanels(
@@ -317,14 +392,9 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       ReaderPanelType.settings => ReaderViewSettingsPanel(
         settings: _settings,
         onSettingsChanged: onSettingsChanged,
-        embedded: true,
         mobile: sampleChrome,
       ),
-      ReaderPanelType.search => ReaderFindPanel(
-        plainText: getPlainText(content.content),
-        settings: _settings,
-        onSelect: _openReaderSearchResult,
-      ),
+      ReaderPanelType.search => _buildSearchPanel(content),
       ReaderPanelType.annotations =>
         _annotationHandler?.buildPanel(context) ?? const SizedBox.shrink(),
       ReaderPanelType.shortcuts => ReaderShortcutPanel(

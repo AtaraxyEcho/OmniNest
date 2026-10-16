@@ -49,6 +49,29 @@ class ReaderImagePreview extends ConsumerStatefulWidget {
 
 class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
   static const _placeholderPrefix = '__IMG_';
+  static const _placeholderSuffix = '__';
+
+  /// 解码尺寸上限：预览只需要按屏幕分辨率解码，系数留给缩放与放大手势。
+  ///
+  /// 全屏预览一本扫描版书里的 8000px 原图时，按原尺寸解码会在切页瞬间打出
+  /// 显存与内存峰值；`cacheWidth` 让解码器直接按比例解到位图。
+  static const int _decodeWidthFactor = 2;
+  static const int _minDecodeWidth = 512;
+  static const int _maxDecodeWidth = 4096;
+
+  int _decodeWidthLimit() {
+    final size = MediaQuery.sizeOf(context);
+    final logicalWidth =
+        size.width.isFinite && size.width > 0
+            ? size.width
+            : _minDecodeWidth.toDouble();
+    return (logicalWidth *
+            MediaQuery.devicePixelRatioOf(context) *
+            _decodeWidthFactor)
+        .round()
+        .clamp(_minDecodeWidth, _maxDecodeWidth)
+        .toInt();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,12 +145,19 @@ class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
 
   Widget _buildImage() {
     final block = widget.block;
+    final cacheWidth = _decodeWidthLimit();
     final isDataUri = block.src.startsWith('data:');
-    final isCachedImage = block.src.startsWith(_placeholderPrefix);
+    // 占位符必须两头都在且中间确有路径：只按前缀判定时，一个长度为 6 的
+    // `__IMG_` 会让 substring 以负长度抛 RangeError，预览整页崩。
+    final isCachedImage =
+        block.src.startsWith(_placeholderPrefix) &&
+        block.src.endsWith(_placeholderSuffix) &&
+        block.src.length >
+            _placeholderPrefix.length + _placeholderSuffix.length;
     if (isCachedImage && widget.itemId != null) {
       final imagePath = block.src.substring(
         _placeholderPrefix.length,
-        block.src.length - 2,
+        block.src.length - _placeholderSuffix.length,
       );
       return ref
           .watch(
@@ -155,6 +185,7 @@ class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
               return Image.memory(
                 bytes,
                 fit: BoxFit.contain,
+                cacheWidth: cacheWidth,
                 gaplessPlayback: true,
                 errorBuilder: (_, _, _) => _errorIcon(),
               );
@@ -171,6 +202,7 @@ class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
         return Image.memory(
           bytes,
           fit: BoxFit.contain,
+          cacheWidth: cacheWidth,
           gaplessPlayback: true,
           errorBuilder: (_, _, _) => _errorIcon(),
         );
@@ -181,6 +213,7 @@ class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
     return Image.network(
       block.src,
       fit: BoxFit.contain,
+      cacheWidth: cacheWidth,
       gaplessPlayback: true,
       loadingBuilder: (context, child, progress) {
         if (progress == null) {

@@ -164,7 +164,8 @@ class ReaderDetailActions extends StatelessWidget {
   final ReaderItemDetail detail;
   final bool bookshelfBusy;
   final VoidCallback onToggleBookshelf;
-  final void Function(String chapterId, {required bool resume}) onReadChapter;
+  final void Function(String chapterId, {required bool resume, int? charOffset})
+  onReadChapter;
   final ReaderProgressSnapshot? localSnapshot;
   final AlignmentGeometry alignment;
 

@@ -1,9 +1,15 @@
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:omninest/features/reader/presentation/widgets/reader_book_stylesheet.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 
 export 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 export 'package:omninest/features/reader/presentation/widgets/reader_html_text.dart';
+
+// ── 分文件（同一库，私有成员共享）──
+// 各块型的处理器在 reader_html_parser_blocks.dart，段内换行折叠与内联提取在 reader_html_parser_text.dart。
+part 'reader_html_parser_blocks.dart';
+part 'reader_html_parser_text.dart';
 
 /// 清洗文本中的占宽不可见 Unicode 字符。
 ///
@@ -24,14 +30,58 @@ String _sanitizeText(String text) {
 
 /// 解析上下文，携带文本偏移量状态，替代全局可变变量。
 class _ParseContext {
+  _ParseContext(this.styles);
+
+  /// 这本书声明过的样式表，元素的内联 `style` 在解析时就地与它层叠。
+  final BookStyleSheet styles;
+
   int offset = 0;
+
+  /// 章内锚点（`id` / `name`）在字符域里的位置，与块偏移、页区间同一个域。
+  ///
+  /// 跳转以前按 `stripHtml(前缀).length` 反推，那是第三个域：实体、`<title>`、
+  /// 标签空白都不在块的字符计数里，落到页上会偏十几到几十字符。
+  final Map<String, int> anchors = {};
+
+  /// 记录一个元素携带的锚点名。只登记第一次出现的位置，重复 id 按 DOM 顺序取先者。
+  void noteAnchor(dom.Element element) {
+    for (final key in const ['id', 'name']) {
+      final value = element.attributes[key];
+      if (value == null || value.isEmpty) continue;
+      anchors.putIfAbsent(value, () => offset);
+    }
+  }
+}
+
+/// isolate 侧的章节解析入口：正文与这本书在本章生效的样式表一次传入。
+///
+/// `compute` 只能带一个位置参数，所以入参是一条 record，返回也带上出参 anchors：
+/// 跨 isolate 不整体打包的话，大章走 isolate 时锚点会静默丢失，跳回旧算法的偏移口径。
+({List<ContentBlock> blocks, Map<String, int> anchors}) parseChapterPayload(
+  ({String html, String css}) chapter,
+) {
+  final anchors = <String, int>{};
+  return (
+    blocks: parseBlocks(chapter.html, anchors: anchors, css: chapter.css),
+    anchors: anchors,
+  );
 }
 
 /// 解析 HTML 为内容块列表。
 ///
 /// 使用 DOM 解析器替代正则，正确处理嵌套标签、
 /// 畸形 HTML 和 HTML 实体。
-List<ContentBlock> parseBlocks(String html) {
+///
+/// [anchors] 非空时，把章内锚点（`id` / `name`）在字符域里的位置写进去，
+/// 供跳转使用同一个偏移口径。
+///
+/// [css] 是这本书在本章生效的外部样式表全文，由调用方按**本章的次序**拼好传入：
+/// EPUB 的样式表不再随正文流动，改为书级池 + 章节次序引用（见 `_authorCssText`）。
+List<ContentBlock> parseBlocks(
+  String html, {
+  Map<String, int>? anchors,
+  String css = '',
+}) {
   if (html.trim().isEmpty) return [];
 
   final document = html_parser.parse(html);
@@ -39,13 +89,190 @@ List<ContentBlock> parseBlocks(String html) {
   if (body == null) return [];
 
   final rawBlocks = <ContentBlock>[];
-  final ctx = _ParseContext();
+  final ctx = _ParseContext(
+    BookStyleSheet.parse(_authorCssText(document, css)),
+  );
   _walkNode(body, rawBlocks, _StyleContext(), ctx);
+  anchors?.addAll(ctx.anchors);
 
-  // 合并连续段落块为单个块，消除段落间换行。
-  // 中文排版靠首行缩进区分段落，不需要额外间距。
-  final blocks = _mergeConsecutiveParagraphs(rawBlocks);
+  // 先把下一段的上边距折成前一段的尾间距，再合并连续段落块。
+  // 顺序不能颠倒：合并以后"段与段之间"这一层就不存在了，top-margin 型的书
+  // （靠上边距分段）会在合并块内部丢掉全部留白。
+  final blocks = _mergeConsecutiveParagraphs(
+    _foldParagraphTopMargins(rawBlocks),
+  );
   return blocks;
+}
+
+/// 把下一段的上外边距折进前一段的尾间距，口径同 CSS 的相邻兄弟外边距折叠。
+///
+/// 阅读器只花"块尾间距"这一份额度（前间距会让同一处被上下两块各算一遍），所以
+/// 折算发生在解析期：段距 = max(自身 margin-bottom, 下一段 margin-top)。
+/// 作用范围是扁平化后的相邻块——跨父级的相邻在规范里还受父级边距影响，这里按同
+/// 一规则近似，最坏是多给一点这本书自己索要的留白。
+List<ContentBlock> _foldParagraphTopMargins(List<ContentBlock> blocks) {
+  final hasLeading = blocks.any(
+    (block) =>
+        block is ParagraphBlock && (block.style?.topMarginScale ?? 0) > 0,
+  );
+  if (!hasLeading) return blocks;
+
+  final result = <ContentBlock>[];
+  for (var i = 0; i < blocks.length; i++) {
+    final block = blocks[i];
+    if (block is! ParagraphBlock || block.style == null) {
+      result.add(block);
+      continue;
+    }
+    final style = block.style!;
+    // XHTML 源码里段落之间的缩进空白也会被切成段落块，它们在合并时被丢掉、
+    // 不构成兄弟之间的隔断，查"下一段"时必须跳过，否则上边距永远找不到归属。
+    var nextIndex = i + 1;
+    while (nextIndex < blocks.length &&
+        _isBlankParagraphBlock(blocks[nextIndex])) {
+      nextIndex++;
+    }
+    final next = nextIndex < blocks.length ? blocks[nextIndex] : null;
+    final leading = next is ParagraphBlock ? next.style?.topMarginScale : null;
+    final trailing = style.paragraphSpacingScale;
+    var spacing =
+        leading == null
+            ? trailing
+            : trailing == null
+            ? leading
+            : (trailing > leading ? trailing : leading);
+    // 序列里第一个段落没有前置兄弟来代收它的上边距（紧跟标题、分隔线之后的那一段
+    // 同理）：折叠规则在这里退化成自己交给自己，否则这一段之前的留白凭空消失。
+    final ownTop = style.topMarginScale;
+    if (ownTop != null && !_hasPrecedingParagraph(blocks, i)) {
+      spacing = spacing == null || ownTop > spacing ? ownTop : spacing;
+    }
+    if (spacing == trailing) {
+      result.add(block);
+      continue;
+    }
+    final folded = ParagraphStyleSpec(
+      firstLineIndentChars: style.firstLineIndentChars,
+      paragraphSpacingScale: spacing,
+      lineHeightScale: style.lineHeightScale,
+      textAlign: style.textAlign,
+    );
+    result.add(
+      ParagraphBlock(
+        // 行上的样式只更新块级那两份：缩进要保留这一行自己登记过的值（样式表没写、
+        // 源文本用全角空格写的那一格），而 `topMarginScale` 必须继续留空——
+        // 前间距已经折进这一段自己的尾间距，行上再带一份会被合并块当成本段的表达，
+        // 相邻两段就各扣一次。
+        lines: [
+          for (final line in block.lines)
+            line.withStyle(
+              ParagraphStyleSpec(
+                firstLineIndentChars:
+                    style.firstLineIndentChars ??
+                    line.style?.firstLineIndentChars,
+                paragraphSpacingScale: spacing,
+                // 空行留白要原样带过去：合并阶段才把它转记成块尾段距，
+                // 这里漏掉的话靠 margin-top 分段的书同时失去两种留白。
+                paragraphBlankGapLines: line.style?.paragraphBlankGapLines,
+                lineHeightScale:
+                    style.lineHeightScale ?? line.style?.lineHeightScale,
+                textAlign: style.textAlign,
+              ),
+            ),
+        ],
+        hasTrailingSpacing: block.hasTrailingSpacing,
+        style: folded,
+      ),
+    );
+  }
+  return result;
+}
+
+/// [blocks] 里第 [index] 个段落之前是否已经有一个段落块。
+///
+/// 只算段落：标题与分隔线在版面上把上一段隔开了，它们之后的第一段必须自己交出
+/// 上边距。空白段落块（只有缩进空格的假段）会在合并时被丢掉，不构成隔断。
+bool _hasPrecedingParagraph(List<ContentBlock> blocks, int index) {
+  for (var i = index - 1; i >= 0; i--) {
+    final block = blocks[i];
+    if (_isBlankParagraphBlock(block)) {
+      continue;
+    }
+    if (block is ParagraphBlock) {
+      return true;
+    }
+    if (block is HeadingBlock || block is DividerBlock) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/// 按「样式表明写 > 源文本字面 > 分段机制推断」的次序补齐缩进。
+///
+/// 第三档只补一种情况：这本书给段落要了留白（`margin-bottom` 或 `margin-top`），
+/// 却在元素自己到根的链上从头到尾没写过 `text-indent` —— 那是"顶格 + 段距"的版式，
+/// 浏览器里它的 `text-indent` 计算值就是 0（CSS 2.1 的 initial 值）。果麦那一类书整本
+/// 都是这型：开关打开后若仍由阅读器补两个字，就成了"又缩进又留白"的双重分段，两头都不像。
+/// 书连样式表都没提供时不推断——那本书对排版什么都没说，交给阅读器默认档。
+///
+/// 只在跟随档被采纳（`ReaderViewSettings.firstLineIndentChars` 把关），关闭档一寸不动。
+ParagraphStyleSpec? _withSpacingInferredIndent(ParagraphStyleSpec? style) {
+  if (style == null || style.firstLineIndentChars != null) return style;
+  final separatesBySpacing =
+      (style.paragraphSpacingScale ?? 0) > 0 || (style.topMarginScale ?? 0) > 0;
+  if (!separatesBySpacing) return style;
+  return ParagraphStyleSpec(
+    firstLineIndentChars: 0,
+    paragraphSpacingScale: style.paragraphSpacingScale,
+    topMarginScale: style.topMarginScale,
+    lineHeightScale: style.lineHeightScale,
+    textAlign: style.textAlign,
+  );
+}
+
+/// 把"后一段之前的空白行数"转记成这一块自己的尾留白。
+///
+/// 始终以传入值为准（包括传 0 表示没有留白）：块样式取自首行的样式，而首行那份
+/// `paragraphBlankGapLines` 描述的是**这一段之前**的白，留着它就成了这一段的段后距。
+ParagraphStyleSpec? _withTrailingBlankGap(
+  ParagraphStyleSpec? style,
+  int gapLines,
+) {
+  final gap = gapLines > 0 ? gapLines : null;
+  if (style == null) {
+    return gap == null ? null : ParagraphStyleSpec(paragraphBlankGapLines: gap);
+  }
+  if (style.paragraphBlankGapLines == gap) return style;
+  return ParagraphStyleSpec(
+    firstLineIndentChars: style.firstLineIndentChars,
+    paragraphSpacingScale: style.paragraphSpacingScale,
+    topMarginScale: style.topMarginScale,
+    paragraphBlankGapLines: gap,
+    lineHeightScale: style.lineHeightScale,
+    textAlign: style.textAlign,
+  );
+}
+
+/// 收集这份文档的作者样式表：文档内联的 `<style>` 在前，[external] 拼在最后。
+///
+/// 顺序就是层叠的源序，不能反。书的内联 `<style>` 基本都写在 head，外部表由同一份
+/// head 里的 `<link>` 引用、按引用点生效，于是同特异度的冲突规则由外部表胜出；
+/// 反过来拼会让外部表输给章节自己的一份内联声明。
+/// `<style>` 的文本不会进正文（见 `_isNonContentTag`），在这里只作为层叠的作者段使用。
+String _authorCssText(dom.Document document, String external) {
+  final buffer = StringBuffer();
+  for (final node in document.querySelectorAll('style')) {
+    buffer
+      ..write(node.text)
+      ..write('\n');
+  }
+  if (external.isNotEmpty) {
+    buffer
+      ..write(external)
+      ..write('\n');
+  }
+  return buffer.toString();
 }
 
 // ── 段落合并 ──
@@ -60,6 +287,11 @@ bool _isBlankLine(LineData line) {
   final text = line.spans.map((s) => s.text).join();
   return text.trim().isEmpty;
 }
+
+/// 整块都是空白（源码缩进、段间换行）的段落块：合并时会被丢掉，也不构成兄弟块之间的隔断。
+bool _isBlankParagraphBlock(ContentBlock block) =>
+    block is ParagraphBlock &&
+    (block.lines.isEmpty || block.lines.every(_isBlankLine));
 
 /// 合并段落块的分块上限：行数与字符数双阈值，先到先切。
 ///
@@ -79,21 +311,29 @@ List<ContentBlock> _mergeConsecutiveParagraphs(List<ContentBlock> blocks) {
   final result = <ContentBlock>[];
   final pendingLines = <LineData>[];
   var pendingTrailingSpacing = false;
+  var pendingTrailingGapLines = 0;
   var pendingChars = 0;
+  ParagraphStyleSpec? pendingStyle;
 
   void flushPending() {
     if (pendingLines.isEmpty) {
+      // 没有正文块可挂这份留白（章首就是空行的那一型）：丢掉。块与块之间才有段距，
+      // 章首留白既没有前一块可记，也不该把第一行推下去。
+      pendingTrailingGapLines = 0;
       return;
     }
     result.add(
       ParagraphBlock(
         lines: List<LineData>.of(pendingLines),
         hasTrailingSpacing: pendingTrailingSpacing,
+        style: _withTrailingBlankGap(pendingStyle, pendingTrailingGapLines),
       ),
     );
     pendingLines.clear();
     pendingTrailingSpacing = false;
+    pendingTrailingGapLines = 0;
     pendingChars = 0;
+    pendingStyle = null;
   }
 
   for (final block in blocks) {
@@ -119,8 +359,29 @@ List<ContentBlock> _mergeConsecutiveParagraphs(List<ContentBlock> blocks) {
       final overHardLimit =
           pendingLines.length >= _hardMergedParagraphLines ||
           pendingChars + lineChars > _hardMergedParagraphChars;
+      // 段距与对齐是块级的：两个段落各自表达不同时不能塞进同一块，否则后一个
+      // 段落的前间距与前一个的对齐都会被首段的值抹平。
+      final differentBlockLayout =
+          !ParagraphStyleSpec.sameBlockLayout(pendingStyle, line.style);
+      // 书真的用段距分段时，段落必须各自成块：块内的行距只是排版折行，不是书的
+      // 留白，合并会把整章的段距抹成块尾的一次。
+      final spacingKeepsParagraphsApart =
+          line.isNewParagraph && (pendingStyle?.paragraphSpacingScale ?? 0) > 0;
+      // 作者用空行分段：这一段之前的空白属于**前一段之后**的那一份留白，口径与
+      // `margin-top` 的折算一致（额度只花一次）。块内的行距只是排版折行，表达不了
+      // 它，所以在这里切块并把行数转记给前一块。
+      final blankGapLines = line.style?.paragraphBlankGapLines ?? 0;
+      final gapKeepsParagraphsApart =
+          blankGapLines > 0 && pendingLines.isNotEmpty;
+      if (gapKeepsParagraphsApart) {
+        pendingTrailingGapLines = blankGapLines;
+      }
       if (pendingLines.isNotEmpty &&
-          (overHardLimit || (overSoftLimit && !line.softWrap))) {
+          (overHardLimit ||
+              differentBlockLayout ||
+              spacingKeepsParagraphsApart ||
+              gapKeepsParagraphsApart ||
+              (overSoftLimit && !line.softWrap))) {
         flushPending();
       }
       // 新块首行不再标记新段落，由渲染端按首行缩进处理；
@@ -130,9 +391,12 @@ List<ContentBlock> _mergeConsecutiveParagraphs(List<ContentBlock> blocks) {
           spans: line.spans,
           isNewParagraph: pendingLines.isNotEmpty,
           collapsedChars: line.collapsedChars + carriedCollapsed,
+          trailingCollapsedChars: line.trailingCollapsedChars,
           softWrap: line.softWrap,
+          style: line.style,
         ),
       );
+      pendingStyle ??= line.style;
       carriedCollapsed = 0;
       pendingChars += lineChars;
     }
@@ -170,7 +434,45 @@ const _blockElements = {
   'aside',
 };
 
+/// 取标题内第一张内联图的 `alt`：纯图片标题没有文字，`alt` 是它唯一的可读语义。
+String _headingImageAlt(dom.Element element) {
+  for (final image in element.getElementsByTagName('img')) {
+    final alt = image.attributes['alt']?.trim() ?? '';
+    if (alt.isNotEmpty) {
+      return alt;
+    }
+  }
+  return '';
+}
+
+/// 把标题内的图片按文档顺序落成 [ImageBlock]。
+///
+/// 卷首艺术字标题整块只有一张图，连标题块一起丢弃等于把图也丢了。
+void _collectHeadingImages(dom.Element element, List<ContentBlock> blocks) {
+  for (final image in element.getElementsByTagName('img')) {
+    final src = image.attributes['src'];
+    if (src != null && src.isNotEmpty) {
+      blocks.add(ImageBlock(src: src, alt: image.attributes['alt']));
+    }
+  }
+}
+
 bool _isBlockTag(String? tag) => _blockElements.contains(tag);
+
+/// 非正文元素：它们的文本子节点是样式表、脚本源码或元数据，不是可读内容。
+///
+/// 正文 XHTML 里带内联 `<style>` 很常见（部分转换工具把每章的样式写进 body），
+/// 不跳过会把 CSS 源码当正文渲染出来，还会白占字符偏移，把书签与标注推歪。
+const _nonContentElements = {
+  'style',
+  'script',
+  'head',
+  'title',
+  'noscript',
+  'template',
+};
+
+bool _isNonContentTag(String? tag) => _nonContentElements.contains(tag);
 
 /// 块级与内联递归的最大深度；畸形 EPUB 的超深嵌套折叠为纯文本，
 /// 防止解析期栈溢出。
@@ -202,39 +504,90 @@ void _walkNode(
           ],
         ),
       );
-      ctx.offset += text.length + 1;
+      ctx.offset += text.length;
     }
     return;
   }
   final buffer = <ReaderInlineSpan>[];
 
+  /// 容器自己（含祖先继承）表达过的排版意图，裸文本就落在这个块盒里。
+  ///
+  /// `<p>` 走 `_processParagraph` 取样式，这一条通路不取的话，全书正文都写成
+  /// `<div>甲\n\n乙</div>` 的书（PG 与 Kindle 导出的裸文本形状）就把书的表达
+  /// 整份丢掉，读者看到的内容与关掉开关一模一样。
+  final containerStyle = node is dom.Element ? ctx.styles.styleFor(node) : null;
+
+  /// 容器里的文本被段内 `<img>` 断开过：后半截是同一段的续行，不补首行缩进。
+  var isSplitContinuation = false;
+
   void flushBufferAsParagraph() {
     if (buffer.isEmpty) return;
-    blocks.add(ParagraphBlock(lines: [LineData(spans: List.of(buffer))]));
+    final spans = List.of(buffer);
     buffer.clear();
+    // 与 `<p>` 共用同一条折叠规则：容器直属的裸文本也带着源码里的硬换行
+    // （PG 语料的许可页就是 `<div>` 里每约 35 字断行的一段），不折就把
+    // HTML 的空格规范化当排版换行用，一行只剩十几个字符。
+    final (lines, residue) = _foldIntoLines(
+      spans,
+      firstLineIsNewParagraph: true,
+    );
+    if (residue > 0) {
+      // 整段只有空白：没有行可挂折叠量，退账并放弃这个块 —— 旧写法会产出一个
+      // 零行的 ParagraphBlock，字符一格不收，却照样占一份段距。
+      ctx.offset -= residue;
+    }
+    if (lines.isEmpty) return;
+    var styled = <LineData>[
+      for (final line in lines)
+        line.withStyle(_withSpacingInferredIndent(containerStyle)),
+    ];
+    if (isSplitContinuation) {
+      styled = _markLeadingLineContinuation(styled);
+      isSplitContinuation = false;
+    }
+    blocks.add(ParagraphBlock(lines: styled, style: containerStyle));
+  }
+
+  /// 内联上下文里遇到 `<img>`：按文档顺序在此断开，图自己成一个零字符块。
+  void splitAtImage(String src, String? alt) {
+    flushBufferAsParagraph();
+    blocks.add(ImageBlock(src: src, alt: alt));
+    isSplitContinuation = true;
   }
 
   for (final child in node.nodes) {
     if (child is dom.Text) {
-      _collectInlineSpans(child, buffer, style, ctx, depth + 1);
+      _collectInlineSpans(
+        child,
+        buffer,
+        style,
+        ctx,
+        depth: depth + 1,
+        onImage: splitAtImage,
+      );
     } else if (child is dom.Element) {
       final tag = child.localName;
+      if (_isNonContentTag(tag)) {
+        continue;
+      }
       if (_isBlockTag(tag)) {
         flushBufferAsParagraph();
         _processBlock(child, blocks, style, ctx, depth + 1);
+        // `<div>甲<img/>乙</div>`：乙仍是同一段的后半截。
+        if (tag == 'img') isSplitContinuation = true;
       } else if (tag == 'br') {
         // 裸 br 跳过（等价于正则解析器的非段落上下文行为）
       } else {
-        // 内联上下文中嵌套的 <img> 升级为独立图片块，原实现静默丢弃
-        final images =
-            tag == 'img' ? <dom.Element>[child] : child.querySelectorAll('img');
-        for (final img in images) {
-          final src = img.attributes['src'];
-          if (src == null || src.isEmpty) continue;
-          flushBufferAsParagraph();
-          blocks.add(ImageBlock(src: src, alt: img.attributes['alt']));
-        }
-        _collectInlineSpans(child, buffer, style, ctx, depth + 1);
+        // 内联包装元素（span/em 等）里嵌套的 `<img>` 由 `onImage` 就地断开，
+        // 不再先整批提到段前（旧写法会让句子中间的插图跑到句子前面）。
+        _collectInlineSpans(
+          child,
+          buffer,
+          style,
+          ctx,
+          depth: depth + 1,
+          onImage: splitAtImage,
+        );
       }
     }
   }
@@ -253,6 +606,10 @@ void _processBlock(
   int depth = 0,
 ]) {
   final tag = element.localName ?? '';
+  if (_isNonContentTag(tag)) {
+    return;
+  }
+  ctx.noteAnchor(element);
 
   switch (tag) {
     case 'h1':
@@ -263,12 +620,36 @@ void _processBlock(
     case 'h6':
       final level = int.tryParse(tag.substring(1)) ?? 2;
       final text = _collectText(element).trim();
-      if (text.isNotEmpty) {
+      // 只取对齐：白名单里的缩进与段距对标题没有落点（标题条目按固定档位画），
+      // 居中却是中文书页码最常见的标题版式，不取就等于开关对标题无效。
+      final align = ctx.styles.styleFor(element)?.textAlign;
+      if (text.isEmpty) {
+        // 卷首艺术字标题（`<h1 class="..."><img/></h1>`）与只做目录跳转的空锚点
+        // （`<h1 id="ch1"></h1>`）都没有文字：整块丢掉会让标题层级与锚点一起消失，
+        // 图也跟着落不进块列表。这里保留标题块（有 alt 就用 alt 顶位），
+        // 并把内联图片按原顺序落块。
+        final alt = _headingImageAlt(element);
         blocks.add(
-          HeadingBlock(text: text, level: level, startOffset: ctx.offset),
+          HeadingBlock(
+            text: alt,
+            level: level,
+            startOffset: ctx.offset,
+            align: align,
+          ),
         );
-        ctx.offset += text.length + 1;
+        ctx.offset += alt.length;
+        _collectHeadingImages(element, blocks);
+        break;
       }
+      blocks.add(
+        HeadingBlock(
+          text: text,
+          level: level,
+          startOffset: ctx.offset,
+          align: align,
+        ),
+      );
+      ctx.offset += text.length;
 
     case 'p':
       _processParagraph(element, blocks, style, ctx);
@@ -300,8 +681,9 @@ void _processBlock(
       }
 
     case 'hr':
+      // 分隔线在字符域里不占位（blockCharCount 为 0），游标也不能替它 advance：
+      // 多出来的这 1 会让后面每个块的起点与分页前缀表逐块错开一格。
       blocks.add(DividerBlock());
-      ctx.offset += 1;
 
     case 'blockquote':
       _processBlockquote(element, blocks, style, ctx);
@@ -319,766 +701,6 @@ void _processBlock(
     default:
       // section, article, main 等 —— 递归子节点
       _walkNode(element, blocks, style, ctx, depth + 1);
-  }
-}
-
-// ── 段内换行折叠 ──
-
-/// 含换行的空白串：段内硬换行（如 Project Gutenberg 老书每约 35 字断行）。
-final _wrapRunPattern = RegExp(r'[ \t　 ]*\n[ \t\n　 ]*');
-
-/// 行首空白，缩进统一由渲染端注入，源字符数转入 `collapsedChars`。
-final _lineLeadingPattern = RegExp(r'^[ \t　 ]+');
-
-bool _isAsciiWordUnit(int unit) =>
-    (unit >= 0x30 && unit <= 0x39) ||
-    (unit >= 0x41 && unit <= 0x5A) ||
-    (unit >= 0x61 && unit <= 0x7A);
-
-/// 用新的可绘制文本复制 span，样式与起始偏移保持不变。
-ReaderInlineSpan _respan(ReaderInlineSpan source, String text) =>
-    ReaderInlineSpan(
-      text: text,
-      isBold: source.isBold,
-      isItalic: source.isItalic,
-      isHeading: source.isHeading,
-      href: source.href,
-      isCode: source.isCode,
-      startOffset: source.startOffset,
-      isSuperscript: source.isSuperscript,
-      isSubscript: source.isSubscript,
-      isMarked: source.isMarked,
-      isDeleted: source.isDeleted,
-      isUnderlined: source.isUnderlined,
-    );
-
-/// 把一段内联 spans 折成逻辑行。
-///
-/// 折叠规则：
-/// - 行首空白剥除，长度记入本行 `collapsedChars`；
-/// - 含换行的空白串视为软换行边界：结束当前行，续行标记 `softWrap`，
-///   空白串长度记入续行 `collapsedChars`；两侧都是 ASCII 词字符时保留一个空格
-///   作为可绘制文本（对应空白串中的一个源字符），避免英文被粘连；
-/// - 全空白行不产出，其字符数并入后续行的折叠量。
-///
-/// 折叠量一律只落在行首，所以同一行内 `源索引 = 可绘制索引 + collapsedChars`
-/// 恒成立，块级字符记账与页内裁剪可以共用这一不变式。
-List<LineData> _foldIntoLines(
-  List<ReaderInlineSpan> spans, {
-  required bool firstLineIsNewParagraph,
-  int carriedCollapsed = 0,
-}) {
-  final out = <LineData>[];
-  var buffer = <ReaderInlineSpan>[];
-  var painted = 0;
-  var collapsed = carriedCollapsed;
-  var isNewParagraph = firstLineIsNewParagraph;
-  var isSoftWrap = false;
-  var lastPaintedUnit = 0;
-
-  void closeLine() {
-    if (painted == 0) {
-      buffer = <ReaderInlineSpan>[];
-      return;
-    }
-    out.add(
-      LineData(
-        spans: List<ReaderInlineSpan>.unmodifiable(buffer),
-        isNewParagraph: isNewParagraph,
-        collapsedChars: collapsed,
-        softWrap: isSoftWrap,
-      ),
-    );
-    buffer = <ReaderInlineSpan>[];
-    painted = 0;
-    collapsed = 0;
-    isNewParagraph = false;
-    isSoftWrap = true;
-  }
-
-  void append(String text, ReaderInlineSpan source) {
-    if (text.isEmpty) {
-      return;
-    }
-    buffer.add(_respan(source, text));
-    painted += text.length;
-    lastPaintedUnit = text.codeUnitAt(text.length - 1);
-  }
-
-  for (final span in spans) {
-    final text = span.text;
-    var cursor = 0;
-    for (final match in _wrapRunPattern.allMatches(text)) {
-      var piece = text.substring(cursor, match.start);
-      if (painted == 0) {
-        final leading = _lineLeadingPattern.firstMatch(piece);
-        if (leading != null) {
-          collapsed += leading.end;
-          piece = piece.substring(leading.end);
-        }
-      }
-      append(piece, span);
-
-      final gap = match[0]!;
-      final nextUnit = match.end < text.length ? text.codeUnitAt(match.end) : 0;
-      final joinSpace =
-          _isAsciiWordUnit(lastPaintedUnit) && _isAsciiWordUnit(nextUnit)
-              ? ' '
-              : '';
-      closeLine();
-      collapsed = gap.length - joinSpace.length;
-      if (joinSpace.isNotEmpty) {
-        append(joinSpace, span);
-      }
-      cursor = match.end;
-      if (cursor >= text.length) {
-        break;
-      }
-      // 续行行首不再含空白：它已被上面的空白串整体吞掉。
-    }
-    if (cursor < text.length) {
-      var rest = text.substring(cursor);
-      if (painted == 0) {
-        final leading = _lineLeadingPattern.firstMatch(rest);
-        if (leading != null) {
-          collapsed += leading.end;
-          rest = rest.substring(leading.end);
-        }
-      }
-      append(rest, span);
-    }
-  }
-
-  if (painted == 0) {
-    // 段尾只剩空白：折叠量挂到上一行，保证块字符总数仍等于源文本长度。
-    if (collapsed > 0 && out.isNotEmpty) {
-      final tail = out.removeLast();
-      out.add(
-        LineData(
-          spans: tail.spans,
-          isNewParagraph: tail.isNewParagraph,
-          collapsedChars: tail.collapsedChars + collapsed,
-          softWrap: tail.softWrap,
-        ),
-      );
-    }
-    return out;
-  }
-  closeLine();
-  return out;
-}
-
-// ── 段落处理 ──
-
-/// 处理 `<p>` / `<div>` 元素，遍历子节点处理 `<br>` 分行。
-void _processParagraph(
-  dom.Element element,
-  List<ContentBlock> blocks,
-  _StyleContext style,
-  _ParseContext ctx,
-) {
-  final lines = <LineData>[];
-  final currentSpans = <ReaderInlineSpan>[];
-  var prevWasBr = false;
-
-  /// 段内是否出现过相邻的两个 `<br>`，即作者真正留出的空行。
-  ///
-  /// 旧实现累计段内所有 `<br>`（被文本隔开也算），导致 `A<br>B<br>C`
-  /// 这种诗节行拿到段前间距，而 `A<br><br>B` 的空行反而在合并阶段被丢弃。
-  var sawAdjacentBreaks = false;
-
-  /// 硬换行边界（`<br>`）造成的、要计入下一行折叠量的源字符数。
-  var pendingCollapsed = 0;
-
-  /// 把已累积的 spans 折成逻辑行追加到 lines。
-  void pushSpansAsLines() {
-    if (currentSpans.isEmpty) {
-      return;
-    }
-    final spans = List<ReaderInlineSpan>.of(currentSpans);
-    currentSpans.clear();
-    lines.addAll(
-      _foldIntoLines(
-        spans,
-        firstLineIsNewParagraph: lines.isEmpty,
-        carriedCollapsed: pendingCollapsed,
-      ),
-    );
-    pendingCollapsed = 0;
-  }
-
-  /// 将当前累积的 spans 和 lines 刷新为一个 ParagraphBlock。
-  void flushParagraph() {
-    pushSpansAsLines();
-    if (lines.isNotEmpty) {
-      blocks.add(
-        ParagraphBlock(
-          lines: List.of(lines),
-          hasTrailingSpacing: sawAdjacentBreaks,
-        ),
-      );
-      lines.clear();
-      if (sawAdjacentBreaks) ctx.offset += 1;
-      sawAdjacentBreaks = false;
-    }
-    prevWasBr = false;
-  }
-
-  // 预遍历子节点，遇到 <img> 时刷新段落并创建 ImageBlock。
-  // 内联包装元素（span/em 等）内部嵌套的 <img> 同样要提升为独立图片
-  // 块，否则会被 _walkInlineChildren 静默丢弃（方案 §34 双消费/零消费
-  // 防御：一个 DOM img 节点在段落上下文中只由此预遍历消费一次）。
-  for (final child in element.nodes) {
-    if (child is! dom.Element) continue;
-    final imgs =
-        child.localName == 'img'
-            ? <dom.Element>[child]
-            : child.querySelectorAll('img');
-    for (final img in imgs) {
-      flushParagraph();
-      final src = img.attributes['src'];
-      if (src != null && src.isNotEmpty) {
-        blocks.add(ImageBlock(src: src, alt: img.attributes['alt']));
-      }
-    }
-  }
-
-  _walkInlineChildren(
-    element,
-    currentSpans,
-    style,
-    ctx,
-    onBr: () {
-      if (currentSpans.isNotEmpty) {
-        pushSpansAsLines();
-        prevWasBr = false;
-      }
-      if (prevWasBr) {
-        // 相邻的第二个 <br>：只登记空行信号，空白行字符计入下一行折叠量。
-        sawAdjacentBreaks = true;
-        pendingCollapsed += 1;
-        ctx.offset += 1;
-        return;
-      }
-      prevWasBr = true;
-      pendingCollapsed += 1;
-      ctx.offset += 1;
-    },
-    onText: () {
-      prevWasBr = false;
-    },
-  );
-
-  // 收尾：残余 spans 成为最后一行，并 flush 本段。
-  flushParagraph();
-}
-
-// ── Blockquote 处理 ──
-
-/// 处理 `<blockquote>` 元素，将子内容转为 [LineData] 列表。
-///
-/// 块级子元素（p, h1-h6）被转为行，
-/// 内联元素和文本被收集为行。
-void _processBlockquote(
-  dom.Element element,
-  List<ContentBlock> blocks,
-  _StyleContext style,
-  _ParseContext ctx,
-) {
-  final bqLines = <LineData>[];
-  final currentSpans = <ReaderInlineSpan>[];
-
-  for (final child in element.nodes) {
-    if (child is dom.Element) {
-      final tag = child.localName ?? '';
-      if (tag == 'p' || tag == 'div') {
-        // 段落内容作为一行
-        if (currentSpans.isNotEmpty) {
-          bqLines.add(LineData(spans: List.of(currentSpans)));
-          currentSpans.clear();
-        }
-        _walkInlineChildren(
-          child,
-          currentSpans,
-          style,
-          ctx,
-          onBr: () {
-            if (currentSpans.isNotEmpty) {
-              bqLines.add(LineData(spans: List.of(currentSpans)));
-              currentSpans.clear();
-            }
-            ctx.offset += 1;
-          },
-        );
-        if (currentSpans.isNotEmpty) {
-          bqLines.add(LineData(spans: List.of(currentSpans)));
-          currentSpans.clear();
-        }
-      } else if (_isHeadingTag(tag)) {
-        // heading 在 blockquote 内降级为加粗
-        _collectInlineSpans(
-          child,
-          currentSpans,
-          style.copyWith(isBold: true),
-          ctx,
-        );
-      } else if (tag == 'br') {
-        if (currentSpans.isNotEmpty) {
-          bqLines.add(LineData(spans: List.of(currentSpans)));
-          currentSpans.clear();
-        }
-        ctx.offset += 1;
-      } else if (_isBlockTag(tag)) {
-        // 其他块级元素 —— 递归提取文本
-        _collectInlineSpans(child, currentSpans, style, ctx);
-      } else {
-        // 内联元素
-        _collectInlineSpans(child, currentSpans, style, ctx);
-      }
-    } else if (child is dom.Text) {
-      _collectInlineSpans(child, currentSpans, style, ctx);
-    }
-  }
-
-  // 最后的残余
-  if (currentSpans.isNotEmpty) {
-    bqLines.add(LineData(spans: List.of(currentSpans)));
-  }
-
-  if (bqLines.isNotEmpty) {
-    blocks.add(
-      BlockquoteBlock(lines: List.of(bqLines), startOffset: ctx.offset),
-    );
-  }
-}
-
-bool _isHeadingTag(String tag) =>
-    tag.length == 2 && tag[0] == 'h' && int.tryParse(tag[1]) != null;
-
-// ── List 处理 ──
-
-/// 处理 `<ul>` / `<ol>` 列表元素。
-void _processList(
-  dom.Element element,
-  List<ContentBlock> blocks,
-  _StyleContext style,
-  _ParseContext ctx,
-) {
-  final isOrdered = element.localName == 'ol';
-  final items = <ListItemData>[];
-
-  for (final child in element.nodes) {
-    if (child is dom.Element && child.localName == 'li') {
-      _processListItem(child, items, style, ctx);
-    }
-  }
-
-  if (items.isNotEmpty) {
-    blocks.add(
-      ListBlock(
-        items: List.of(items),
-        isOrdered: isOrdered,
-        startOffset: ctx.offset,
-      ),
-    );
-  }
-}
-
-/// 处理 `<li>` 列表项，支持嵌套列表。
-///
-/// 嵌套列表的子项会追加到当前 items 列表中，
-/// 保持与正则解析器一致的扁平化行为。
-void _processListItem(
-  dom.Element element,
-  List<ListItemData> items,
-  _StyleContext style,
-  _ParseContext ctx,
-) {
-  final spans = <ReaderInlineSpan>[];
-
-  for (final child in element.nodes) {
-    if (child is dom.Element) {
-      final tag = child.localName;
-      if (tag == 'ul' || tag == 'ol') {
-        // 嵌套列表：先保存当前项，再递归处理子列表
-        if (spans.isNotEmpty) {
-          items.add(ListItemData(spans: List.of(spans)));
-          spans.clear();
-        }
-        // 用临时 blocks 收集嵌套列表的 ListBlock
-        final nestedBlocks = <ContentBlock>[];
-        _processList(child, nestedBlocks, style, ctx);
-        // 将嵌套列表块中的子项追加到当前 items
-        for (final block in nestedBlocks) {
-          if (block is ListBlock) {
-            items.addAll(block.items);
-          }
-        }
-      } else {
-        _collectInlineSpans(child, spans, style, ctx);
-      }
-    } else if (child is dom.Text) {
-      _collectInlineSpans(child, spans, style, ctx);
-    }
-  }
-
-  // 空列表项也保留（序号正确性）
-  items.add(ListItemData(spans: List.of(spans)));
-}
-
-// ── Table 处理 ──
-
-/// 处理 `<table>` 元素。
-void _processTable(
-  dom.Element element,
-  List<ContentBlock> blocks,
-  _StyleContext style,
-  _ParseContext ctx,
-) {
-  final rows = <TableRowData>[];
-  _collectTableRows(element, rows, ctx);
-
-  if (rows.isNotEmpty) {
-    blocks.add(TableBlock(rows: List.of(rows), startOffset: ctx.offset));
-  }
-}
-
-/// 递归收集表格行（处理 thead/tbody/tfoot）。
-void _collectTableRows(
-  dom.Element element,
-  List<TableRowData> rows,
-  _ParseContext ctx,
-) {
-  for (final child in element.nodes) {
-    if (child is! dom.Element) continue;
-    final tag = child.localName;
-    if (tag == 'tr') {
-      _processTableRow(child, rows, ctx);
-    } else if (tag == 'thead' || tag == 'tbody' || tag == 'tfoot') {
-      _collectTableRows(child, rows, ctx);
-    }
-  }
-}
-
-/// 处理 `<tr>` 表格行。
-void _processTableRow(
-  dom.Element element,
-  List<TableRowData> rows,
-  _ParseContext ctx,
-) {
-  final cells = <List<ReaderInlineSpan>>[];
-  var isHeader = false;
-
-  for (final child in element.nodes) {
-    if (child is! dom.Element) continue;
-    final tag = child.localName;
-    if (tag == 'th' || tag == 'td') {
-      if (tag == 'th') isHeader = true;
-      final spans = <ReaderInlineSpan>[];
-      _collectInlineSpans(child, spans, _StyleContext(), ctx);
-      cells.add(List.of(spans));
-    }
-  }
-
-  if (cells.isNotEmpty) {
-    rows.add(TableRowData(cells: List.of(cells), isHeader: isHeader));
-  }
-}
-
-// ── Pre 处理 ──
-
-/// 处理 `<pre>` 预格式化文本。
-void _processPre(
-  dom.Element element,
-  List<ContentBlock> blocks,
-  _ParseContext ctx,
-) {
-  final text = _collectText(element);
-  if (text.isNotEmpty) {
-    final span = ReaderInlineSpan(
-      text: text,
-      isCode: true,
-      startOffset: ctx.offset,
-    );
-    blocks.add(
-      ParagraphBlock(
-        lines: [
-          LineData(spans: [span]),
-        ],
-      ),
-    );
-    ctx.offset += text.length;
-  }
-}
-
-// ── Figure 处理 ──
-
-/// 处理 `<figure>` 元素，提取图片和 figcaption。
-void _processFigure(dom.Element element, List<ContentBlock> blocks) {
-  for (final child in element.nodes) {
-    if (child is! dom.Element) continue;
-    if (child.localName == 'img') {
-      final src = child.attributes['src'];
-      if (src != null && src.isNotEmpty) {
-        blocks.add(ImageBlock(src: src, alt: child.attributes['alt']));
-      }
-    } else if (child.localName == 'figcaption') {
-      final captionText = _collectText(child).trim();
-      if (captionText.isNotEmpty &&
-          blocks.isNotEmpty &&
-          blocks.last is ImageBlock) {
-        final last = blocks.last as ImageBlock;
-        blocks[blocks.length - 1] = ImageBlock(
-          src: last.src,
-          caption: captionText,
-          alt: last.alt,
-        );
-      }
-    }
-  }
-}
-
-// ── 内联内容提取 ──
-
-/// 遍历元素的子节点，提取内联 spans 并处理 `<br>` 分行。
-///
-/// [onBr] 回调在遇到 `<br>` 时调用，由调用者决定如何处理换行。
-void _walkInlineChildren(
-  dom.Element element,
-  List<ReaderInlineSpan> currentSpans,
-  _StyleContext style,
-  _ParseContext ctx, {
-  void Function()? onBr,
-  void Function()? onText,
-}) {
-  for (final child in element.nodes) {
-    if (child is dom.Text) {
-      onText?.call();
-      _collectInlineSpans(child, currentSpans, style, ctx);
-    } else if (child is dom.Element) {
-      final tag = child.localName;
-      if (tag == 'br') {
-        onBr?.call();
-      } else if (_isBlockTag(tag)) {
-        onText?.call();
-        _collectInlineSpans(child, currentSpans, style, ctx);
-      } else {
-        onText?.call();
-        _collectInlineSpans(child, currentSpans, style, ctx);
-      }
-    }
-  }
-}
-
-/// 递归提取节点的内联文本 spans。
-///
-/// 根据祖先元素跟踪样式（粗体、斜体、链接等），
-/// 为每个文本片段创建 [ReaderInlineSpan]。
-///
-/// 空白文本节点在两个内联元素之间时保留为一个空格，
-/// 避免单词合并（如 `<span>A</span> <span>B</span>` → "A B"）。
-void _collectInlineSpans(
-  dom.Node node,
-  List<ReaderInlineSpan> spans,
-  _StyleContext style,
-  _ParseContext ctx, [
-  int depth = 0,
-]) {
-  if (node is dom.Text) {
-    final text = _sanitizeText(node.text);
-    if (text.trim().isNotEmpty) {
-      spans.add(
-        ReaderInlineSpan(
-          text: text,
-          isBold: style.isBold,
-          isItalic: style.isItalic,
-          isHeading: style.isHeading,
-          href: style.href,
-          isCode: style.isCode,
-          startOffset: ctx.offset,
-          isSuperscript: style.isSuperscript,
-          isSubscript: style.isSubscript,
-          isMarked: style.isMarked,
-          isDeleted: style.isDeleted,
-          isUnderlined: style.isUnderlined,
-        ),
-      );
-      ctx.offset += text.length;
-    } else if (text.contains(' ') ||
-        text.contains('\n') ||
-        text.contains('\t')) {
-      // 空白文本节点：折叠为单个空格，保留单词间距
-      spans.add(
-        ReaderInlineSpan(
-          text: ' ',
-          isBold: style.isBold,
-          isItalic: style.isItalic,
-          isHeading: style.isHeading,
-          href: style.href,
-          isCode: style.isCode,
-          startOffset: ctx.offset,
-        ),
-      );
-      ctx.offset += 1;
-    }
-    return;
-  }
-
-  if (node is! dom.Element) return;
-  final tag = node.localName ?? '';
-  if (depth > _maxHtmlParseDepth) {
-    // 超深内联嵌套折叠为纯文本 span
-    final text = _sanitizeText(_collectText(node));
-    if (text.trim().isNotEmpty) {
-      spans.add(
-        ReaderInlineSpan(
-          text: text,
-          isBold: style.isBold,
-          isItalic: style.isItalic,
-          href: style.href,
-          startOffset: ctx.offset,
-        ),
-      );
-      ctx.offset += text.length;
-    }
-    return;
-  }
-
-  switch (tag) {
-    case 'br':
-      // 内联 br —— 跳过（由上层 _walkInlineChildren 处理）
-      break;
-
-    case 'b':
-    case 'strong':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isBold: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'i':
-    case 'em':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isItalic: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'a':
-      final href = node.attributes['href'];
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(href: href),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'code':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isCode: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'sup':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isSuperscript: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'sub':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isSubscript: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'mark':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isMarked: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'del':
-    case 's':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isDeleted: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    case 'u':
-      for (final child in node.nodes) {
-        _collectInlineSpans(
-          child,
-          spans,
-          style.copyWith(isUnderlined: true),
-          ctx,
-          depth + 1,
-        );
-      }
-
-    default:
-      // span, abbr, cite, q, small 等 —— 递归处理子节点
-      for (final child in node.nodes) {
-        _collectInlineSpans(child, spans, style, ctx, depth + 1);
-      }
-  }
-}
-
-// ── 文本收集 ──
-
-/// 递归收集节点及其后代中的所有文本。
-String _collectText(dom.Node node) {
-  final buffer = StringBuffer();
-  _collectTextRecursive(node, buffer);
-  return buffer.toString();
-}
-
-void _collectTextRecursive(dom.Node node, StringBuffer buffer) {
-  if (node is dom.Text) {
-    buffer.write(_sanitizeText(node.text));
-  } else if (node is dom.Element) {
-    if (node.localName == 'br') {
-      buffer.write('\n');
-    }
-    for (final child in node.nodes) {
-      _collectTextRecursive(child, buffer);
-    }
   }
 }
 

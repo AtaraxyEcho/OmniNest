@@ -5,6 +5,8 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_book_stylesheet.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
@@ -19,6 +21,7 @@ class ReaderViewSettings {
     this.immersiveMode = false,
     this.pageTurnMode = 'slide',
     this.volumeKeyPaging = true,
+    this.followBookTypesetting = false,
     this.mobileDefaults = false,
   }) : paletteId =
            paletteId ?? ReaderReadingPalette.idFromLegacyIndex(themeIndex ?? 2);
@@ -39,6 +42,11 @@ class ReaderViewSettings {
 
   /// 音量键翻页：移动端将音量键映射为翻页命令，默认开启。
   final bool volumeKeyPaging;
+
+  /// 跟随原书排版：书自己的样式表与内联 `style` 参与层叠，优先级低于用户在
+  /// 本面板上拧过的项，高于阅读器默认档。默认关闭——刚定稿的样例排版是所有人的
+  /// 起点，一本样式表写乱的书不该把已经读顺的版面顶掉。
+  final bool followBookTypesetting;
 
   /// 移动壳层默认值：暗档正文改用样例的衬线 19/1.85。
   /// 桌面端与已保存偏好看不见此分支。
@@ -74,23 +82,98 @@ class ReaderViewSettings {
   String? get resolvedFontFamily =>
       fontFamily == 'serif' ? 'NotoSerifSC' : null;
 
+  /// 正文字距相对字号的倍率，稿子 `.article-column > p` 的 `letter-spacing: .025em`。
+  ///
+  /// 正文样式、行内样式与分页测量的基准样式共用这一份：字距不同则同一串文字的
+  /// 行宽不同，断页与字符偏移都会漂。
+  static const double bodyLetterSpacingScale = 0.025;
+
   /// 正文样式：字距按稿子 `.article-column > p` 的 `letter-spacing: .025em`，
   /// 分页引擎的 `ReaderViewContent.spanStyle` 必须跟着同一份，否则测量与渲染
   /// 的行长不一致，断页会漂。
-  TextStyle get bodyStyle => TextStyle(
+  TextStyle get bodyStyle => bodyStyleWith();
+
+  /// 正文字体样式，按本书在这一段表达过的行高倍率放大行距。
+  ///
+  /// 绘制与测量都只能经由这里取行高：两侧各乘一份，同一块就会折出不同行数。
+  TextStyle bodyStyleWith({double lineHeightScale = 1}) => TextStyle(
     fontFamily: resolvedFontFamily,
     fontSize: fontSize,
-    height: lineHeight,
-    letterSpacing: fontSize * 0.025,
+    height: lineHeight * lineHeightScale,
+    letterSpacing: fontSize * bodyLetterSpacingScale,
     color: onSurfaceColor,
   );
 
+  /// 分页测量用的正文基准样式。
+  ///
+  /// 直接由 [bodyStyle] 派生，只放大 fontSize：框架的 `TextStyle.getTextStyle`
+  /// 对 textScaler 也只放大 fontSize（letterSpacing/wordSpacing 原样透传），
+  /// 另写一份样式就会在系统字号缩放 ≠ 1 时与渲染折不同的行——而字距差每字不到
+  /// 0.3px，行高容差测不出来，只能靠"两侧同一个表达式"封住。
+  TextStyle measurementBaseStyle({
+    double textScale = 1,
+    double lineHeightScale = 1,
+  }) => bodyStyleWith(
+    lineHeightScale: lineHeightScale,
+  ).copyWith(fontSize: fontSize * textScale);
+
   /// 返回与正文渲染及分页测量一致的行高约束。
-  StrutStyle bodyStrutStyle({double textScale = 1}) => StrutStyle(
+  StrutStyle bodyStrutStyle({
+    double textScale = 1,
+    double lineHeightScale = 1,
+  }) => StrutStyle(
     fontFamily: resolvedFontFamily,
     fontSize: fontSize * textScale,
-    height: lineHeight,
+    height: lineHeight * lineHeightScale,
     forceStrutHeight: true,
+  );
+
+  /// 引用块的文字样式：稿子是 `calc(+1px)` 字号与 `line-height: 1.75`。
+  ///
+  /// 与 [measurementBaseStyle]、[bodyStrutStyle] 一样必须**两侧同源**：绘制用 1.75 行高
+  /// 而测量仍按正文行高折行时，引用块每页的行数会与装页算出的不一致，页底直接裁字。
+  TextStyle blockquoteStyle({
+    double textScale = 1,
+    double lineHeightScale = 1,
+  }) => bodyStyleWith(lineHeightScale: lineHeightScale).copyWith(
+    fontSize: (fontSize + blockquoteFontDeltaPx) * textScale,
+    height: blockquoteLineHeight * lineHeightScale,
+  );
+
+  /// 引用块行高约束，与 [blockquoteStyle] 同一份字号与行高。
+  StrutStyle blockquoteStrutStyle({
+    double textScale = 1,
+    double lineHeightScale = 1,
+  }) => StrutStyle(
+    fontFamily: resolvedFontFamily,
+    fontSize: (fontSize + blockquoteFontDeltaPx) * textScale,
+    height: blockquoteLineHeight * lineHeightScale,
+    forceStrutHeight: true,
+  );
+
+  /// 稿子 `.article-column blockquote` 的字色：`color-mix(in srgb, ink 84%, accent)`。
+  Color get quoteTextColor =>
+      Color.lerp(onSurfaceColor, accentColor, 0.16) ?? onSurfaceColor;
+
+  /// 章序标签（稿子 `.chapter-kicker`）：11px、700 字重、`.24em` 字距、强调色。
+  ///
+  /// 它是翻页页头那行章名，不是正文块：章序只进 chrome，不往正文里注入合成文本，
+  /// 所以不进字符域、不参与装页预算。
+  static const double chapterKickerFontSize = 11.0;
+  static const double chapterKickerLetterSpacingScale = 0.24;
+
+  /// 标签字色：稿子的 `--accent` 压在米黄（`eyeCare`）与葱绿（`green`）纸底上只有
+  /// 4.1–4.2:1，不到正文 AA 的 4.5。按稿子自己对引用块的写法把强调色往墨色折
+  /// 20%，四档纸底下都过 4.5（reader_reading_palette_test 把关）。
+  Color get chapterKintColor =>
+      Color.lerp(accentColor, onSurfaceColor, 0.2) ?? accentColor;
+
+  TextStyle chapterKickerStyle() => TextStyle(
+    fontSize: chapterKickerFontSize,
+    color: chapterKintColor,
+    fontWeight: FontWeight.w700,
+    letterSpacing: chapterKickerFontSize * chapterKickerLetterSpacingScale,
+    height: 1.4,
   );
 
   ReaderViewSettings copyWith({
@@ -103,6 +186,7 @@ class ReaderViewSettings {
     bool? immersiveMode,
     String? pageTurnMode,
     bool? volumeKeyPaging,
+    bool? followBookTypesetting,
     bool? mobileDefaults,
   }) {
     return ReaderViewSettings(
@@ -118,6 +202,8 @@ class ReaderViewSettings {
       immersiveMode: immersiveMode ?? this.immersiveMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
       volumeKeyPaging: volumeKeyPaging ?? this.volumeKeyPaging,
+      followBookTypesetting:
+          followBookTypesetting ?? this.followBookTypesetting,
       mobileDefaults: mobileDefaults ?? this.mobileDefaults,
     );
   }
@@ -132,6 +218,7 @@ class ReaderViewSettings {
     'immersiveMode': immersiveMode,
     'pageTurnMode': pageTurnMode,
     'volumeKeyPaging': volumeKeyPaging,
+    'followBookTypesetting': followBookTypesetting,
     'version': _settingsVersion,
   };
 
@@ -161,6 +248,10 @@ class ReaderViewSettings {
       // v4 → v5：新增 volumeKeyPaging 字段，默认开启
       migrated['volumeKeyPaging'] ??= true;
     }
+    if (version < 6) {
+      // v5 → v6：新增 followBookTypesetting，默认不跟随原书
+      migrated['followBookTypesetting'] ??= false;
+    }
 
     final rawFontSize = (migrated['fontSize'] as num?)?.toDouble() ?? 18.0;
     final rawLineHeight = (migrated['lineHeight'] as num?)?.toDouble() ?? 1.8;
@@ -183,17 +274,113 @@ class ReaderViewSettings {
       pageTurnMode:
           allowedTurnModes.contains(rawTurnMode) ? rawTurnMode : 'slide',
       volumeKeyPaging: migrated['volumeKeyPaging'] as bool? ?? true,
+      followBookTypesetting:
+          migrated['followBookTypesetting'] as bool? ?? false,
     );
   }
 
-  static const _settingsVersion = 5;
+  static const _settingsVersion = 6;
+
+  /// 段落首行缩进的字数：跟随原书且书表达过时按书的，否则用阅读器默认档。
+  ///
+  /// 测量与绘制都只能经由这里取缩进，两侧各算一份会让同一块按两种宽度折行。
+  int firstLineIndentChars(ParagraphStyleSpec? bookStyle) {
+    final expressed = bookStyle?.firstLineIndentChars;
+    if (followBookTypesetting && expressed != null) return expressed;
+    return defaultFirstLineIndentChars;
+  }
+
+  /// 首行缩进盒子的宽度（逻辑像素）。
+  ///
+  /// 缩进由定宽 WidgetSpan 表达，不再由全角空格的字宽决定：CJK 下两个字宽必须
+  /// 量出来，而两端对齐会把行首空白折成零宽。测量侧的 textScale 与绘制侧继承的
+  /// 环境缩放同源，两侧只能经由这里换算，各算一份会让同一块折出不同行数。
+  double indentBoxWidth({
+    required int indentChars,
+    bool blockquote = false,
+    double textScale = 1,
+  }) {
+    if (indentChars <= 0) {
+      return 0;
+    }
+    return baseFontSize(blockquote: blockquote) * textScale * indentChars;
+  }
+
+  /// 「跟随书籍样式」打开时，本书在这一段表达过的行高倍率。
+  ///
+  /// 读者的行距设置不能被书顶掉，只能在读者的行距之上再乘这一份；开关关闭时
+  /// 恒为 1，块级的 `lineHeightScale` 一寸都不参与。
+  double lineHeightScaleFor(ParagraphStyleSpec? bookStyle) =>
+      followBookTypesetting ? (bookStyle?.lineHeightScale ?? 1.0) : 1.0;
+
+  /// 正文与引用块的有效基准字号（未叠加环境缩放）。
+  double baseFontSize({bool blockquote = false}) =>
+      blockquote ? fontSize + blockquoteFontDeltaPx : fontSize;
+
+  /// 段落尾间距相对字号的倍率，0 表示这一块不加间距。
+  ///
+  /// 跟随原书时按两档书的表达取：`margin-bottom` 倍率、源文本空白行折出的留白，
+  /// 同一处只花一份（取较大者，口径同解析期的 margin 折叠）；书的段距优先，因为这类书
+  /// 就是靠段距分段，读者侧的 `<br><br>` 信号本来不该参与。两者都没有才回到阅读器档：
+  /// 有 `<br><br>` 信号用默认倍率，否则 0，段落只靠首行缩进区分。
+  ///
+  /// 测量、装页与渲染三处都只能经由这里取值：各写一份时同一块会在两侧加上不同的间距，
+  /// 页底与条目确定高度都按短了的那份算。
+  double paragraphSpacingScaleFor({
+    required ParagraphStyleSpec? bookStyle,
+    required bool hasTrailingSpacing,
+  }) {
+    final expressed = bookStyle?.paragraphSpacingScale;
+    final blankGap = _blankLineSpacingScale(bookStyle);
+    if (followBookTypesetting) {
+      if (expressed != null) {
+        return blankGap > expressed ? blankGap : expressed;
+      }
+      if (blankGap > 0) return blankGap;
+    }
+    return hasTrailingSpacing ? defaultParagraphSpacingScale : 0.0;
+  }
+
+  /// 源文本空行折出的段距倍率：一行白算读者的一个行高，最多 [maxBlankLineGapLines] 行。
+  ///
+  /// 关掉开关恒为 0——默认档不因为一本书用不用空行分段而改变它看到的留白。
+  double _blankLineSpacingScale(ParagraphStyleSpec? bookStyle) {
+    if (!followBookTypesetting) return 0.0;
+    final gapLines = bookStyle?.paragraphBlankGapLines ?? 0;
+    if (gapLines <= 0) return 0.0;
+    final capped =
+        gapLines > maxBlankLineGapLines ? maxBlankLineGapLines : gapLines;
+    return capped * lineHeight;
+  }
+
+  /// 段落对齐方式。书没表达时沿用稿子的两端对齐。
+  TextAlign paragraphAlign(ParagraphStyleSpec? bookStyle) {
+    final expressed = bookStyle?.textAlign;
+    if (followBookTypesetting && expressed != null) return expressed;
+    return TextAlign.justify;
+  }
+
+  /// 引用块的对齐：只在跟随原书且书表达过时采纳，否则维持现状的起始对齐。
+  ///
+  /// 不能复用 [paragraphAlign]——正文默认两端对齐，引用块一直是起始对齐，
+  /// 借用会把关掉开关的读者也改掉。null 交给 RenderParagraph 按文字方向取值。
+  TextAlign? blockquoteAlign(ParagraphStyleSpec? bookStyle) {
+    return followBookTypesetting ? bookStyle?.textAlign : null;
+  }
+
+  /// 标题的对齐：这本书在这个 `h*` 上写过（或从祖先继承到）才接管。
+  ///
+  /// 与 [blockquoteAlign] 同一口径：关掉开关时返回 null，条目仍按文字方向取起始侧，
+  /// 版面一寸不动。居中是中文书页码标题最常见的版式，丢掉它等于开关对标题无效。
+  TextAlign? headingAlign(TextAlign? bookAlign) {
+    return followBookTypesetting ? bookAlign : null;
+  }
 }
 
 class ReaderViewSettingsPanel extends StatelessWidget {
   const ReaderViewSettingsPanel({
     required this.settings,
     required this.onSettingsChanged,
-    this.embedded = false,
     this.pageModeEnabled,
     this.mobile = false,
     super.key,
@@ -201,7 +388,6 @@ class ReaderViewSettingsPanel extends StatelessWidget {
 
   final ReaderViewSettings settings;
   final ValueChanged<ReaderViewSettings> onSettingsChanged;
-  final bool embedded;
 
   /// 是否提供翻页模式；null 时跟随 [supportsPageMode]（Web 恒 false）。
   final bool? pageModeEnabled;
@@ -213,64 +399,107 @@ class ReaderViewSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showPageMode = pageModeEnabled ?? supportsPageMode;
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!embedded) ...[_buildHeader(context), const SizedBox(height: 20)],
-        if (showPageMode) ...[
-          _buildReadingModeToggle(context),
-          const SizedBox(height: 18),
-        ],
-        _buildPageTransitionToggle(context),
-        const SizedBox(height: 18),
-        _buildFontSizeControl(context),
-        const SizedBox(height: 18),
-        _buildLineHeightControl(context),
-        const SizedBox(height: 18),
-        _buildFontFamilyToggle(context),
-        const SizedBox(height: 18),
-        _buildThemeSelector(context),
-        const SizedBox(height: 18),
-        _buildImmersiveToggle(context),
-        const SizedBox(height: 18),
-        _buildVolumeKeyPagingToggle(context),
-      ],
-    );
-    if (embedded) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: content,
-      );
-    }
-    // 稿子 `.bottom-sheet`：max-height min(82dvh, 720px)，超出纵向滚动。
-    // 头部换成 25pt 衬线 + 手柄后面板更高，不滚动尾部开关就落在剪切区外。
-    final sheetMaxHeight = MediaQuery.sizeOf(context).height * 0.82;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-      decoration: BoxDecoration(
-        // 与目录面板同一张稿子 `.bottom-sheet`：glass-solid 实底、顶部 r28、
-        // 三边 --line 描边（底边贴屏不画）、投影 0 -20 60。
-        color: settings.glassSolidColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(
-          top: BorderSide(color: settings.lineColor),
-          left: BorderSide(color: settings.lineColor),
-          right: BorderSide(color: settings.lineColor),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: settings.shadowColor,
-            blurRadius: 60,
-            offset: const Offset(0, -20),
+    final showPageTurn = showPageMode && settings.readingMode == 'page';
+    final l10n = AppLocalizations.of(context);
+    // 稿子 `.sheet-appearance` 的分区顺序与分隔：阅读方式 → 字号 → 字体+行距 →
+    // 阅读背景，每段 `.setting-section` 上沿一条 --line 发丝线，首段不画。
+    // 音量键翻页是本产品特有开关（稿子没有键盘控件），排在最后同一段式。
+    // 沉浸模式不再出现在设置里：chrome 的显隐由点按正文控制，页脚已有开关。
+    final sections = <Widget>[
+      if (showPageMode)
+        _SettingSection(
+          settings: settings,
+          first: true,
+          label: l10n.readerReadingMode,
+          value:
+              settings.readingMode == 'scroll'
+                  ? l10n.readerModeScroll
+                  : l10n.readerModePage,
+          child: _SampleSegmented(
+            settings: settings,
+            labels: [l10n.readerModeScroll, l10n.readerModePage],
+            selectedIndex: settings.readingMode == 'scroll' ? 0 : 1,
+            onChanged:
+                (index) => onSettingsChanged(
+                  settings.copyWith(
+                    readingMode: index == 0 ? 'scroll' : 'page',
+                  ),
+                ),
           ),
-        ],
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: sheetMaxHeight > 720 ? 720.0 : sheetMaxHeight,
         ),
-        child: SingleChildScrollView(child: content),
+      if (showPageTurn)
+        _SettingSection(
+          settings: settings,
+          first: !showPageMode,
+          label: l10n.readerPageTransition,
+          child: _SampleSegmented(
+            settings: settings,
+            labels: [
+              l10n.readerTransitionSlide,
+              l10n.readerTransitionCover,
+              l10n.readerTransitionFade,
+            ],
+            selectedIndex: const [
+              'slide',
+              'cover',
+              'fade',
+            ].indexOf(settings.pageTurnMode),
+            onChanged:
+                (index) => onSettingsChanged(
+                  settings.copyWith(
+                    pageTurnMode: const ['slide', 'cover', 'fade'][index],
+                  ),
+                ),
+          ),
+        ),
+      _SettingSection(
+        settings: settings,
+        label: l10n.readerFontSize,
+        value: '${settings.fontSize.round()}px',
+        child: _FontSizeRange(
+          settings: settings,
+          value: settings.fontSize,
+          onChanged: (v) => onSettingsChanged(settings.copyWith(fontSize: v)),
+        ),
+      ),
+      _SettingSection(
+        settings: settings,
+        // 稿子把字体与行距并排放在 `.setting-grid`（0.82fr / 1.18fr，间隙 12）。
+        child: _FontAndLineHeightGrid(
+          settings: settings,
+          onSettingsChanged: onSettingsChanged,
+        ),
+      ),
+      _buildThemeSection(context, l10n),
+      _SettingSection(
+        settings: settings,
+        label: l10n.readerFollowBookTypesetting,
+        // 开关名比它的实际作用域宽（只管缩进·段距·对齐，字号字体行距恒归读者），
+        // 说明放在段名下而不是开关行里：移动态整行 excludeSemantics，
+        // 挂在行内会被读屏吞掉，作为段的兄弟节点才念得到。
+        hint: l10n.readerFollowBookTypesettingHint,
+        child: _buildFollowBookTypesettingRow(context, l10n),
+      ),
+      if (PlatformCapabilities.current().supportsVolumeKeyPageTurn)
+        _SettingSection(
+          settings: settings,
+          label: l10n.readerVolumeKeyPaging,
+          child: _buildVolumeKeyPagingRow(context, l10n),
+        ),
+    ];
+    // 稿子 `.sheet-appearance`：段与段自带发丝线，尾部留 safe-bottom + 14。
+    // 抽屉外壳由 ReaderAdaptivePanelFrame 画，这里只交滚动本体。
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        0,
+        24,
+        14 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: sections,
       ),
     );
   }
@@ -284,349 +513,54 @@ class ReaderViewSettingsPanel extends StatelessWidget {
     };
   }
 
-  /// 稿子 `.sheet-handle` + `.sheet-header h2`：先手柄，再 25/600 衬线面板名。
-  /// 样式的抽屉头部不放图标，图标位留给右侧关闭钮。
-  Widget _buildHeader(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 10, bottom: 12),
-          child: Center(
-            child: Container(
-              width: 38,
-              height: 4,
-              decoration: BoxDecoration(
-                color: settings.onSurfaceColor.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
-        Text(
-          l10n.readerSettingsTitle,
-          style: TextStyle(
-            fontFamily: AppTypography.serifFamily,
-            fontFamilyFallback: AppTypography.serifFamilyFallback,
-            color: settings.onSurfaceColor,
-            fontSize: 25, // ignore: font_size_whitelist
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReadingModeToggle(BuildContext context) {
-    // Web 只开放滚动阅读（产品决策 D3）；整段由 build 的 showPageMode 门控。
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.readerReadingMode,
-          style: TextStyle(
-            color: settings.onSurfaceVariantColor,
-            fontSize: AppTypography.bodyMedium,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _ReadingModeOption(
-              icon: Icons.swap_vert_rounded,
-              label: l10n.readerModeScroll,
-              selected: settings.readingMode == 'scroll',
-              color: settings.accentColor,
-              surfaceColor: settings.onSurfaceColor,
-              onTap:
-                  () => onSettingsChanged(
-                    settings.copyWith(readingMode: 'scroll'),
-                  ),
-            ),
-            const SizedBox(width: 10),
-            _ReadingModeOption(
-              icon: Icons.swap_horiz_rounded,
-              label: l10n.readerModePage,
-              selected: settings.readingMode == 'page',
-              color: settings.accentColor,
-              surfaceColor: settings.onSurfaceColor,
-              onTap:
-                  () =>
-                      onSettingsChanged(settings.copyWith(readingMode: 'page')),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPageTransitionToggle(BuildContext context) {
-    // 仅在翻页模式下显示
-    if (settings.readingMode != 'page') return const SizedBox.shrink();
-
-    final l10n = AppLocalizations.of(context);
-    final transitions = [
-      ('slide', Icons.swap_horiz_rounded, l10n.readerTransitionSlide),
-      ('cover', Icons.layers_rounded, l10n.readerTransitionCover),
-      ('fade', Icons.animation_rounded, l10n.readerTransitionFade),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.readerPageTransition,
-          style: TextStyle(
-            color: settings.onSurfaceVariantColor,
-            fontSize: AppTypography.bodyMedium,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            for (var i = 0; i < transitions.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              _ReadingModeOption(
-                icon: transitions[i].$2,
-                label: transitions[i].$3,
-                selected: settings.pageTurnMode == transitions[i].$1,
-                color: settings.accentColor,
-                surfaceColor: settings.onSurfaceColor,
-                onTap:
-                    () => onSettingsChanged(
-                      settings.copyWith(pageTurnMode: transitions[i].$1),
-                    ),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFontSizeControl(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              l10n.readerFontSize,
-              style: TextStyle(
-                color: settings.onSurfaceVariantColor,
-                fontSize: AppTypography.bodyMedium,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '${settings.fontSize.round()}px',
-              style: TextStyle(
-                color: settings.accentColor,
-                fontSize: AppTypography.bodyMedium,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SliderTheme(
-          data: SliderThemeData(
-            trackHeight: 4,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            activeTrackColor: settings.accentColor,
-            inactiveTrackColor: settings.onSurfaceColor.withValues(alpha: 0.12),
-            thumbColor: settings.accentColor,
-            overlayColor: settings.accentColor.withValues(alpha: 0.18),
-            activeTickMarkColor: Colors.transparent,
-            inactiveTickMarkColor: Colors.transparent,
-          ),
-          child: AppSlider(
-            value: settings.fontSize,
-            min: 14,
-            max: 28,
-            divisions: 14,
-            onChanged: (v) => onSettingsChanged(settings.copyWith(fontSize: v)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLineHeightControl(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              l10n.readerLineHeight,
-              style: TextStyle(
-                color: settings.onSurfaceVariantColor,
-                fontSize: AppTypography.bodyMedium,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              settings.lineHeight.toStringAsFixed(1),
-              style: TextStyle(
-                color: settings.accentColor,
-                fontSize: AppTypography.bodyMedium,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SliderTheme(
-          data: SliderThemeData(
-            trackHeight: 4,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            activeTrackColor: settings.accentColor,
-            inactiveTrackColor: settings.onSurfaceColor.withValues(alpha: 0.12),
-            thumbColor: settings.accentColor,
-            overlayColor: settings.accentColor.withValues(alpha: 0.18),
-            activeTickMarkColor: Colors.transparent,
-            inactiveTickMarkColor: Colors.transparent,
-          ),
-          child: AppSlider(
-            value: settings.lineHeight,
-            min: 1.2,
-            max: 2.4,
-            divisions: 12,
-            onChanged:
-                (v) => onSettingsChanged(settings.copyWith(lineHeight: v)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFontFamilyToggle(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.readerFontFamily,
-          style: TextStyle(
-            color: settings.onSurfaceVariantColor,
-            fontSize: AppTypography.bodyMedium,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // 3 个字族项在手机面板宽度与大字号档位下会超出裸 Row 的可用宽，
-        // 改用 Wrap 让其换行；间距由 Wrap 统一承担。
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _FontOption(
-              label: l10n.readerFontSerif,
-              fontFamily: 'NotoSerifSC',
-              selected: settings.fontFamily == 'serif',
-              color: settings.accentColor,
-              surfaceColor: settings.onSurfaceColor,
-              onTap:
-                  () =>
-                      onSettingsChanged(settings.copyWith(fontFamily: 'serif')),
-            ),
-            _FontOption(
-              label: l10n.readerFontSans,
-              fontFamily: null,
-              selected: settings.fontFamily == 'sans',
-              color: settings.accentColor,
-              surfaceColor: settings.onSurfaceColor,
-              onTap:
-                  () =>
-                      onSettingsChanged(settings.copyWith(fontFamily: 'sans')),
-            ),
-            _FontOption(
-              label: l10n.readerFontSystem,
-              fontFamily: null,
-              selected: settings.fontFamily == 'system',
-              color: settings.accentColor,
-              surfaceColor: settings.onSurfaceColor,
-              onTap:
-                  () => onSettingsChanged(
-                    settings.copyWith(fontFamily: 'system'),
-                  ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildThemeSelector(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.readerTheme,
-          style: TextStyle(
-            color: settings.onSurfaceVariantColor,
-            fontSize: AppTypography.bodyMedium,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // 4 个主题项在窄面板与字号上限档位下超出裸 Row 可用宽，允许换行。
-        Wrap(
-          runSpacing: 10,
-          children: List.generate(ReaderReadingPalette.values.length, (i) {
-            final theme = ReaderReadingPalette.values[i];
-            final selected = settings.themeIndex == i;
-            return Padding(
-              padding: EdgeInsets.only(
-                right: i < ReaderReadingPalette.values.length - 1 ? 10 : 0,
-              ),
+  Widget _buildThemeSection(BuildContext context, AppLocalizations l10n) {
+    // 稿子 `.theme-picker` 没有固定高：色板 48 + 间隙 6 + 9px 档名，四格等高
+    // 由结构保证，写死 66 会在档名行高变化时溢出 1px。
+    return _SettingSection(
+      settings: settings,
+      label: l10n.readerTheme,
+      child: Row(
+        children: List.generate(ReaderReadingPalette.values.length, (i) {
+          final theme = ReaderReadingPalette.values[i];
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: i == 3 ? 0 : 10),
               child: _ThemeOption(
                 theme: theme,
                 localizedName: _themeName(l10n, i),
-                selected: selected,
+                selected: settings.themeIndex == i,
+                // 稿子的档名恒为 --muted，选中只靠描边与光环；这里额外把
+                // 当前档名转强调色，是给色弱用户的第二通道（光环是纯亮度差）。
                 labelColor:
-                    selected
+                    settings.themeIndex == i
                         ? settings.accentColor
                         : settings.onSurfaceVariantColor,
                 onTap:
                     () => onSettingsChanged(settings.copyWith(themeIndex: i)),
               ),
-            );
-          }),
-        ),
-      ],
+            ),
+          );
+        }),
+      ),
     );
   }
 
-  Widget _buildImmersiveToggle(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+  /// 跟随原书排版开关：书的样式表与内联 `style` 参与层叠。
+  Widget _buildFollowBookTypesettingRow(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
     return _buildToggleRow(
       context,
-      icon: Icons.fullscreen_rounded,
-      label: l10n.readerImmersiveMode,
-      value: settings.immersiveMode,
-      onChanged: (v) => onSettingsChanged(settings.copyWith(immersiveMode: v)),
+      icon: Icons.format_size_rounded,
+      label: l10n.readerFollowBookTypesetting,
+      value: settings.followBookTypesetting,
+      onChanged:
+          (v) => onSettingsChanged(settings.copyWith(followBookTypesetting: v)),
     );
   }
 
-  Widget _buildVolumeKeyPagingToggle(BuildContext context) {
-    // 音量键翻页依赖原生按键拦截，仅具备该能力的平台展示（当前 Android）。
-    if (!PlatformCapabilities.current().supportsVolumeKeyPageTurn) {
-      return const SizedBox.shrink();
-    }
-    final l10n = AppLocalizations.of(context);
+  Widget _buildVolumeKeyPagingRow(BuildContext context, AppLocalizations l10n) {
     return _buildToggleRow(
       context,
       icon: Icons.volume_up_rounded,
@@ -734,22 +668,150 @@ const List<BoxShadow> _lightPanelKnobShadow = [
   BoxShadow(color: Color(0x401A1D1B), offset: Offset(0, 1), blurRadius: 3),
 ];
 
-class _ReadingModeOption extends StatelessWidget {
-  const _ReadingModeOption({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.color,
-    required this.surfaceColor,
-    required this.onTap,
+/// 稿子 `.setting-section`：上下 14/16 内边距，段间一条 --line 发丝线，首段不画。
+/// 标签行 `.setting-label`：11/600 段名在左，强调色 10px 当前值在右，下沿 11 间隙。
+class _SettingSection extends StatelessWidget {
+  const _SettingSection({
+    required this.settings,
+    required this.child,
+    this.label,
+    this.value,
+    this.hint,
+    this.first = false,
   });
 
-  final IconData icon;
+  final ReaderViewSettings settings;
+  final Widget child;
+  final String? label;
+  final String? value;
+
+  /// 段名之下的一行作用域说明：只给"名字比实际作用域宽"的项用。
+  final String? hint;
+
+  /// 稿子 `.setting-section:first-of-type { border-top: 0 }`。
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration:
+          first
+              ? null
+              : BoxDecoration(
+                border: Border(top: BorderSide(color: settings.lineColor)),
+              ),
+      padding: const EdgeInsets.fromLTRB(0, 14, 0, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (label != null)
+            Padding(
+              padding: EdgeInsets.only(bottom: hint == null ? 11 : 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label!,
+                      style: TextStyle(
+                        color: settings.onSurfaceColor,
+                        fontSize: AppTypography.labelSmall,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (value != null)
+                    Text(
+                      value!,
+                      style: TextStyle(
+                        color: settings.accentColor,
+                        fontSize: AppTypography.labelMicro,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (hint != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 11),
+              child: Text(
+                hint!,
+                style: TextStyle(
+                  color: settings.onSurfaceVariantColor,
+                  fontSize: AppTypography.labelMicro,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// 稿子 `.segmented`：3 内边距、3 间隙、r13 槽底（墨色 6%）；
+/// 选项 38 高、r10、10px，选中面换成纸面并加 0 3 10 投影。
+/// `.setting-grid .segmented button` 再收一档：padding 0 5、9px。
+class _SampleSegmented extends StatelessWidget {
+  const _SampleSegmented({
+    required this.settings,
+    required this.labels,
+    required this.selectedIndex,
+    required this.onChanged,
+    this.dense = false,
+  });
+
+  final ReaderViewSettings settings;
+  final List<String> labels;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: settings.onSurfaceColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++) ...[
+            if (i > 0) const SizedBox(width: 3),
+            Expanded(
+              child: _SegmentOption(
+                label: labels[i],
+                selected: i == selectedIndex,
+                settings: settings,
+                dense: dense,
+                onTap: () => onChanged(i),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentOption extends StatelessWidget {
+  const _SegmentOption({
+    required this.label,
+    required this.selected,
+    required this.settings,
+    required this.onTap,
+    this.dense = false,
+  });
+
   final String label;
   final bool selected;
-  final Color color;
-  final Color surfaceColor;
+  final ReaderViewSettings settings;
   final VoidCallback onTap;
+
+  /// 稿子 `.setting-grid .segmented button`：格子挤，字号与横向 padding 各降一档。
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -757,42 +819,42 @@ class _ReadingModeOption extends StatelessWidget {
       label: label,
       selected: selected,
       button: true,
-      child: GestureDetector(
+      child: InkWell(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          constraints: const BoxConstraints(minHeight: 38),
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(horizontal: dense ? 5 : 8),
           decoration: BoxDecoration(
-            color:
-                selected
-                    ? color.withValues(alpha: 0.14)
-                    : surfaceColor.withValues(alpha: 0.06),
+            color: selected ? settings.elevatedColor : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
+            boxShadow:
+                selected
+                    ? [
+                      BoxShadow(
+                        color: settings.shadowColor.withValues(alpha: 0.48),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                    : null,
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
               color:
                   selected
-                      ? color.withValues(alpha: 0.40)
-                      : surfaceColor.withValues(alpha: 0.10),
+                      ? settings.onSurfaceColor
+                      : settings.onSurfaceVariantColor,
+              fontSize:
+                  dense ? AppTypography.labelNano : AppTypography.labelMicro,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: selected ? color : surfaceColor.withValues(alpha: 0.70),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color:
-                      selected ? color : surfaceColor.withValues(alpha: 0.70),
-                  fontSize: AppTypography.bodyLarge,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -800,61 +862,197 @@ class _ReadingModeOption extends StatelessWidget {
   }
 }
 
-class _FontOption extends StatelessWidget {
-  const _FontOption({
-    required this.label,
-    required this.fontFamily,
-    required this.selected,
-    required this.color,
-    required this.surfaceColor,
-    required this.onTap,
+/// 稿子 `.range-control`：`32px 1fr 32px` 三列，两端是 13px 与 21px 衬线的大 A，
+/// 中间滑杆取强调色；字号档位 16..26，默认 19。
+class _FontSizeRange extends StatelessWidget {
+  const _FontSizeRange({
+    required this.settings,
+    required this.value,
+    required this.onChanged,
   });
 
-  final String label;
-  final String? fontFamily;
-  final bool selected;
-  final Color color;
-  final Color surfaceColor;
-  final VoidCallback onTap;
+  final ReaderViewSettings settings;
+  final double value;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: label,
-      selected: selected,
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            color:
-                selected
-                    ? color.withValues(alpha: 0.14)
-                    : surfaceColor.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color:
-                  selected
-                      ? color.withValues(alpha: 0.40)
-                      : surfaceColor.withValues(alpha: 0.10),
+    // 存档允许 12..32，稿子滑杆只有 16..26：越界的历史值按端点显示，
+    // 用户一动滑杆就回到稿子档位。
+    final clamped = value.clamp(16.0, 26.0);
+    return Row(
+      children: [
+        SizedBox(
+          width: 32,
+          child: Text(
+            'A',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              // 稿子 `.range-control > span` 两端都是衬线，只是 13 与 21 两档。
+              fontFamily: AppTypography.serifFamily,
+              fontFamilyFallback: AppTypography.serifFamilyFallback,
+              color: settings.onSurfaceVariantColor,
+              fontSize: AppTypography.bodyMedium,
             ),
           ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 4,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+              activeTrackColor: settings.accentColor,
+              inactiveTrackColor: settings.onSurfaceColor.withValues(
+                alpha: 0.12,
+              ),
+              thumbColor: settings.accentColor,
+              overlayColor: settings.accentColor.withValues(alpha: 0.18),
+              activeTickMarkColor: Colors.transparent,
+              inactiveTickMarkColor: Colors.transparent,
+            ),
+            child: AppSlider(
+              value: clamped,
+              min: 16,
+              max: 26,
+              divisions: 10,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 32,
+          child: Text(
+            'A',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: AppTypography.serifFamily,
+              fontFamilyFallback: AppTypography.serifFamilyFallback,
+              color: settings.onSurfaceColor,
+              // 稿子 `.range-control strong` 就是 21px 衬线大 A。
+              fontSize: 21, // ignore: font_size_whitelist
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 稿子 `.setting-grid`：字体占 0.82 份、行距占 1.18 份并排，间隙 12，
+/// 各自的标签高 17。行距是三档分段（1.6 / 1.85 / 2.1）。
+class _FontAndLineHeightGrid extends StatelessWidget {
+  const _FontAndLineHeightGrid({
+    required this.settings,
+    required this.onSettingsChanged,
+  });
+
+  final ReaderViewSettings settings;
+  final ValueChanged<ReaderViewSettings> onSettingsChanged;
+
+  static const List<double> _lineHeights = <double>[1.6, 1.85, 2.1];
+  static const List<String> _familyValues = <String>['serif', 'sans', 'system'];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // 存档里可能是三档之外的旧值（例如 1.7）：按最近的一档显示选中，
+    // 点选即归到稿子档位。
+    var nearest = 0;
+    for (var i = 1; i < _lineHeights.length; i++) {
+      if ((settings.lineHeight - _lineHeights[i]).abs() <
+          (settings.lineHeight - _lineHeights[nearest]).abs()) {
+        nearest = i;
+      }
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 82,
+          child: _GridField(
+            settings: settings,
+            label: l10n.readerFontFamily,
+            child: _SampleSegmented(
+              settings: settings,
+              dense: true,
+              labels: [
+                l10n.readerFontSerif,
+                l10n.readerFontSans,
+                l10n.readerFontSystem,
+              ],
+              selectedIndex: _familyValues.indexOf(settings.fontFamily),
+              onChanged:
+                  (index) => onSettingsChanged(
+                    settings.copyWith(fontFamily: _familyValues[index]),
+                  ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 118,
+          child: _GridField(
+            settings: settings,
+            label: l10n.readerLineHeight,
+            child: _SampleSegmented(
+              settings: settings,
+              dense: true,
+              labels: const ['1.6', '1.85', '2.1'],
+              selectedIndex: nearest,
+              onChanged:
+                  (index) => onSettingsChanged(
+                    settings.copyWith(lineHeight: _lineHeights[index]),
+                  ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GridField extends StatelessWidget {
+  const _GridField({
+    required this.settings,
+    required this.label,
+    required this.child,
+  });
+
+  final ReaderViewSettings settings;
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 17,
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontFamily: fontFamily,
-              color: selected ? color : surfaceColor.withValues(alpha: 0.70),
-              fontSize: AppTypography.titleMedium,
+              color: settings.onSurfaceColor,
+              fontSize: AppTypography.labelSmall,
               fontWeight: FontWeight.w600,
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 11),
+        child,
+      ],
     );
   }
 }
 
+/// 稿子 `.theme-dot`：色板占满等分格、48 高、r13、1px --line；选中换成 2px
+/// 强调色描边并外加 3px 强调软底光环，格内一枚 16 的勾，标签 9px。
 class _ThemeOption extends StatelessWidget {
   const _ThemeOption({
     required this.theme,
@@ -876,35 +1074,49 @@ class _ThemeOption extends StatelessWidget {
       label: localizedName,
       selected: selected,
       button: true,
-      child: GestureDetector(
+      child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 52,
-              height: 52,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 48,
               decoration: BoxDecoration(
                 color: theme.surface,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(13),
                 border: Border.all(
-                  color:
-                      selected
-                          ? theme.accent
-                          : theme.onSurface.withValues(alpha: 0.12),
-                  width: selected ? 2.5 : 1,
+                  // 稿子 `.theme-dot > span` 未选中用该档自己的 --line 描边，
+                  // 色板是预览另一档纸面，不能借当前档的线色。
+                  color: selected ? theme.accent : theme.line,
+                  width: selected ? 2 : 1,
                 ),
+                boxShadow:
+                    selected
+                        ? [BoxShadow(color: theme.accentSoft, spreadRadius: 3)]
+                        : null,
               ),
               child:
                   selected
-                      ? Icon(Icons.check_rounded, color: theme.accent, size: 22)
+                      ? Center(
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: theme.accent,
+                          size: 16,
+                        ),
+                      )
                       : null,
             ),
             const SizedBox(height: 6),
             Text(
               localizedName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: labelColor,
-                fontSize: AppTypography.labelSmall,
+                fontSize: AppTypography.labelNano,
                 fontWeight: FontWeight.w600,
               ),
             ),

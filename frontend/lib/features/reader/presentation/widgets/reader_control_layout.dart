@@ -74,6 +74,75 @@ class ReaderChromeLayout {
   }
 }
 
+/// 稿子覆盖层面板的几何唯一来源（`.sheet-layer` / `.bottom-sheet` /
+/// `.sheet-handle` / `.sheet-header` / `@media (min-width:720px)`）。
+///
+/// 阅读器三个面板（目录、显示与排版、批注/工具）都必须从这里取值，不要再各自
+/// 抄一份底部抽屉，否则同一张稿子在仓里会有四种高度和描边。
+@immutable
+class ReaderSheetSpec {
+  const ReaderSheetSpec._();
+
+  /// `.sheet-layer` 的 `rgb(15 18 16 / 42%)`。稿子这层还带 `blur(3px)`；正文页
+  /// 是整屏滚动/翻页表面，全屏 BackdropFilter 在低端安卓上直接掉帧，只保留色相。
+  static const Color scrimColor = Color(0x6B0F1210);
+
+  /// `.bottom-sheet` 的 `width: min(100%, 680px)`。
+  static const double maxWidth = 680;
+
+  /// `.bottom-sheet` 的 `border-radius: 28px 28px 0 0`。
+  static const double radius = 28;
+
+  /// `@media (min-width: 720px)`：视口达到这个宽度才离底边抬起、四角全圆。
+  static const double wideBreakpointWidth = 720;
+  static const double wideBottomMargin = 18;
+
+  /// `.sheet-handle`：38×4、r3、`margin: 10px auto 0`，颜色 `--ink` 18%。
+  static const double handleWidth = 38;
+  static const double handleHeight = 4;
+  static const double handleTopPadding = 10;
+  static const double handleOpacity = 0.18;
+
+  /// `.sheet-header`：`padding: 12px 20px 12px 24px`。
+  static const EdgeInsets headerPadding = EdgeInsets.fromLTRB(24, 12, 20, 12);
+
+  /// `.sheet-header h2` 与其上 `small` 的行距。
+  static const double headerTitleFontSize = 25; // 稿子 px，非正文，不受字号白名单约束
+  static const double headerTitleGap = 3;
+
+  /// `box-shadow: 0 -20px 60px var(--shadow)`。
+  static const double shadowBlurRadius = 60;
+  static const Offset shadowOffset = Offset(0, -20);
+
+  /// `.icon-button` 是 44×44；本项目把返回/关闭这类逃生控件的下限定在 48dp
+  /// （AGENTS.md 移动端触控下限），所以这里取 48 而不是 44。
+  static const double closeTargetSize = 48;
+  static const double closeIconSize = 20;
+
+  /// 稿子 `sheet-up 240ms cubic-bezier(.22,.8,.25,1)`。
+  static const Duration entranceDuration = Duration(milliseconds: 240);
+  static const Curve entranceCurve = Cubic(0.22, 0.8, 0.25, 1);
+
+  static bool isWide(double viewportWidth) =>
+      viewportWidth >= wideBreakpointWidth;
+
+  /// 底部抽屉的圆角：窄屏只圆顶部两角（贴住屏幕底边），≥720 四角全圆。
+  static BorderRadius borderRadiusFor(double viewportWidth) =>
+      isWide(viewportWidth)
+          ? BorderRadius.circular(radius)
+          : const BorderRadius.vertical(top: Radius.circular(radius));
+
+  /// 底部抽屉的描边：窄屏不画底边（贴屏），≥720 四边齐全。
+  static Border borderFor(double viewportWidth, Color lineColor) =>
+      isWide(viewportWidth)
+          ? Border.all(color: lineColor)
+          : Border(
+            top: BorderSide(color: lineColor),
+            left: BorderSide(color: lineColor),
+            right: BorderSide(color: lineColor),
+          );
+}
+
 /// 阅读器根据实际视口计算的布局约束。
 @immutable
 class ReaderControlLayout {
@@ -99,6 +168,14 @@ class ReaderControlLayout {
   double get panelWidth => density == ReaderControlDensity.expanded ? 400 : 360;
 
   double get contentFrameWidth => textColumnWidth + horizontalPadding * 2;
+
+  /// 滚动模式左右侧边热区各自的宽度。
+  ///
+  /// 与翻页模式 `ReaderPageView` 的 1/4 同档：两侧都只占 12% 时，拇指落在正文
+  /// 边缘就落到中段，读起来表现为"随便点一下就弹出顶栏底栏"。上限留给桌面
+  /// 居中列，再宽就要吃掉整段正文才点得到控制栏。
+  static double sideTapZoneWidth(double contentWidth) =>
+      (contentWidth * 0.25).clamp(64.0, 120.0);
 
   /// 按视口、字体大小和系统文字缩放计算稳定阅读列。
   static ReaderControlLayout resolve({
@@ -129,13 +206,13 @@ class ReaderControlLayout {
     final textColumnWidth = math.min(preferredTextWidth, availableTextWidth);
     final isShort = viewport.height < 480;
     final panelRatio = isShort ? 0.92 : 0.82;
-
     return ReaderControlLayout(
       density: density,
       isShort: isShort,
       horizontalPadding: horizontalPadding,
       textColumnWidth: textColumnWidth,
-      panelMaxHeight: math.min(viewport.height * panelRatio, 680),
+      // 稿子 `.bottom-sheet` 的 max-height: min(82dvh, 720px)。
+      panelMaxHeight: math.min(viewport.height * panelRatio, 720),
     );
   }
 }

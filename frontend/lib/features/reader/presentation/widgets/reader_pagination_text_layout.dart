@@ -108,6 +108,7 @@ abstract final class _ReaderPaginationTextLayout {
     if (lines == null || lines.isEmpty) return [];
 
     final allSpans = <InlineSpan>[];
+    final placeholderDimensions = <PlaceholderDimensions>[];
     final contentSegments = <_PainterContentSegment>[];
     var charAccum = blockGlobalOffset;
     var painterOffset = 0;
@@ -124,90 +125,163 @@ abstract final class _ReaderPaginationTextLayout {
         lineSpans = [];
       }
 
-      final separator = paragraphLineSeparator(
-        isFirstLine: i == 0,
-        isNewParagraph: line is LineData && line.isNewParagraph,
-        previousLineIsEmpty:
-            i > 0 &&
-            lines[i - 1] is LineData &&
-            (lines[i - 1] as LineData).spans.isEmpty,
-        isBlockContinuation: isContinuation,
-        startsWithFullWidthIndent: lineStartsWithFullWidthIndent(lineSpans),
-        isSoftWrap: line is LineData && line.softWrap,
+      // 列表项不共享段落规则：渲染侧的"缩进位"是符号列，注入缩进会让首项比绘制
+      // 多占两个字宽，同一块在两侧折出不同行数。
+      final gap =
+          block is ListBlock
+              ? ParagraphLineGap(newLine: i > 0, indentChars: 0)
+              : paragraphGap(
+                isFirstLine: i == 0,
+                isNewParagraph: line is LineData && line.isNewParagraph,
+                previousLineIsEmpty:
+                    i > 0 &&
+                    lines[i - 1] is LineData &&
+                    (lines[i - 1] as LineData).spans.isEmpty,
+                isBlockContinuation: isContinuation,
+                startsWithFullWidthIndent: lineStartsWithFullWidthIndent(
+                  lineSpans,
+                ),
+                indentChars: settings.firstLineIndentChars(
+                  line is LineData ? line.style : null,
+                ),
+                isSoftWrap: line is LineData && line.softWrap,
+              );
+      final indentWidth = settings.indentBoxWidth(
+        indentChars: gap.indentChars,
+        blockquote: block is BlockquoteBlock,
+        textScale: textScale,
       );
-      if (separator.isNotEmpty) {
-        allSpans.add(TextSpan(text: separator));
-        painterOffset += separator.length;
+      allSpans.addAll(paragraphGapSpans(gap, indentWidth: indentWidth));
+      if (gap.indentChars > 0 && indentWidth > 0) {
+        // TextPainter 不会替 WidgetSpan 量尺寸：必须把与绘制侧同一个宽度
+        // 显式喂给它，否则 layout 直接断言失败。
+        placeholderDimensions.add(
+          PlaceholderDimensions(
+            size: Size(indentWidth, 0),
+            alignment: PlaceholderAlignment.bottom,
+          ),
+        );
       }
+      // 缩进盒子在排版文本里只占一个 0xFFFC 码元，不占章节字符域的位置。
+      painterOffset += gap.painterUnits;
 
-      final renderedSpans = _ReaderPaginationMetrics.lineTextSpans(
-        lineSpans,
-        settings,
-        textScale,
-      );
+      final renderedSpans =
+          _ReaderPaginationMetrics.lineTextSpans(
+            lineSpans,
+            settings,
+            textScale,
+          ).toList();
       allSpans.addAll(renderedSpans);
 
-      // 折叠字符只出现在行首：可绘制文本的源起点整体后移 collapsedChars，
-      // 行内 painter 索引与源索引仍保持等距。
+      // 折叠字符有行首与行尾两份：行首那份让本行可绘制文本整体后移（`lineStart`），
+      // 行尾那份不属于本行绘制，但占用源位置——不加进 charAccum，下一行的起点就会偏早，
+      // 于是同一字符会在两页各画一次（页链铺贴出现重复）。
       final collapsedChars = line is LineData ? line.collapsedChars : 0;
+      final trailingChars = line is LineData ? line.trailingCollapsedChars : 0;
       final lineStart = charAccum + collapsedChars;
       var lineLength = 0;
       for (final span in lineSpans) {
         lineLength += span.text.length;
       }
+      var paintedLength = 0;
+      for (final span in renderedSpans) {
+        paintedLength += span.text?.length ?? 0;
+      }
       if (lineLength > 0) {
         contentSegments.add(
           _PainterContentSegment(
             painterStart: painterOffset,
-            painterEnd: painterOffset + lineLength,
+            painterEnd: painterOffset + paintedLength,
             globalStart: lineStart,
           ),
         );
       }
-      painterOffset += lineLength;
-      charAccum += lineLength + collapsedChars;
+      painterOffset += paintedLength;
+      charAccum += lineLength + collapsedChars + trailingChars;
     }
 
     if (allSpans.isEmpty) return [];
 
-    final innerWidth =
-        block is BlockquoteBlock
-            // 渲染侧引用块是 padding-left 16 + 3px 强调边框，两条都要从可用宽度
-            // 里扣掉；只扣 16 会让测量比实际多出一行能塞下的空间。
-            ? pageWidth - 19
-            : block is ListBlock
-            ? pageWidth - 24
-            : pageWidth;
+    final isQuote = block is BlockquoteBlock;
+    // 行高倍率挂在块级样式上：绘制侧按同一份样式折行，两侧必须一起放大。
+    final lineHeightScale = settings.lineHeightScaleFor(switch (block) {
+      ParagraphBlock(:final style) => style,
+      BlockquoteBlock(:final style) => style,
+      _ => null,
+    });
+    final innerWidth = switch (block) {
+      // 稿子的强调条是叠在左内缩槽里的浮层，不占文字宽度：只扣 22 的左内缩。
+      // 以前按 `Border.left` 实现时要连条一起扣，改成叠层后仍扣就会多算一行。
+      BlockquoteBlock() =>
+        pageWidth - ReaderContentBlockItem.blockquoteInnerLeftPadding,
+      ListBlock() => pageWidth - ReaderContentBlockItem.listMarkerColumnWidth,
+      _ => pageWidth,
+    };
 
-    final painter = TextPainter(
-      text: TextSpan(
-        children: allSpans,
-        style: _ReaderPaginationMetrics.baseStyle(
-          settings,
-          settings.fontSize * textScale,
-        ),
-      ),
-      strutStyle: settings.bodyStrutStyle(textScale: textScale),
-      textDirection: TextDirection.ltr,
-      maxLines: null,
-    )..layout(maxWidth: innerWidth);
+    final painter =
+        TextPainter(
+            text: TextSpan(
+              children: allSpans,
+              // 引用块比正文大 1px、行高固定 1.75：绘制用这一份，测量也必须用这一份。
+              style:
+                  isQuote
+                      ? settings.blockquoteStyle(
+                        textScale: textScale,
+                        lineHeightScale: lineHeightScale,
+                      )
+                      : settings.measurementBaseStyle(
+                        textScale: textScale,
+                        lineHeightScale: lineHeightScale,
+                      ),
+            ),
+            strutStyle:
+                isQuote
+                    ? settings.blockquoteStrutStyle(
+                      textScale: textScale,
+                      lineHeightScale: lineHeightScale,
+                    )
+                    : settings.bodyStrutStyle(
+                      textScale: textScale,
+                      lineHeightScale: lineHeightScale,
+                    ),
+            textDirection: TextDirection.ltr,
+            maxLines: null,
+          )
+          ..setPlaceholderDimensions(
+            placeholderDimensions.isEmpty ? null : placeholderDimensions,
+          )
+          ..layout(maxWidth: innerWidth);
 
     final metrics = painter.computeLineMetrics();
     if (metrics.isEmpty) return [];
+    final lineTops = [
+      for (final metric in metrics) metric.baseline - metric.ascent,
+    ];
+    final lineHeights = _ReaderPaginationMetrics.lineHeightsFromTops(
+      lineTops,
+      painter.height,
+    );
 
     // 将每条视觉行的像素边界转换回章节字符范围。
     final result = <PaginationVisualLine>[];
     var segmentCursor = 0;
-    for (final metric in metrics) {
-      final top = metric.baseline - metric.ascent;
+    // 空白视觉行（`<pre>` 里的 `\n\n`）没有字符可映射，但仍然占一个行高：
+    // 块高由各行高度累加得出，把它们整行丢掉会让测量比渲染少 N 行，
+    // 紧约束的列表条目直接报 RenderFlex overflow，翻页模式下页底还会裁字。
+    var pendingEmptyHeight = 0.0;
+    for (var lineIndex = 0; lineIndex < metrics.length; lineIndex++) {
+      final top = lineTops[lineIndex];
       final probePosition = painter.getPositionForOffset(
-        Offset(0, top + metric.height / 2),
+        Offset(0, top + lineHeights[lineIndex] / 2),
       );
       final lineBoundary = painter.getLineBoundary(probePosition);
       final painterStart = lineBoundary.start.clamp(0, painterOffset);
       final painterEnd = lineBoundary.end.clamp(0, painterOffset);
 
-      if (painterStart >= painterEnd) continue;
+      if (painterStart >= painterEnd) {
+        pendingEmptyHeight += lineHeights[lineIndex];
+        continue;
+      }
 
       while (segmentCursor < contentSegments.length &&
           contentSegments[segmentCursor].painterEnd <= painterStart) {
@@ -238,7 +312,18 @@ abstract final class _ReaderPaginationTextLayout {
         PaginationVisualLine(
           globalStart: globalStart,
           globalEnd: globalEnd,
-          height: metric.height,
+          height: lineHeights[lineIndex] + pendingEmptyHeight,
+        ),
+      );
+      pendingEmptyHeight = 0;
+    }
+    if (pendingEmptyHeight > 0 && result.isNotEmpty) {
+      final tail = result.removeLast();
+      result.add(
+        PaginationVisualLine(
+          globalStart: tail.globalStart,
+          globalEnd: tail.globalEnd,
+          height: tail.height + pendingEmptyHeight,
         ),
       );
     }

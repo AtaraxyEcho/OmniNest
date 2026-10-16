@@ -8,6 +8,7 @@ import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/utils/lenient_uri_decode.dart';
 import 'package:omninest/features/reader/data/epub_archive_loader.dart';
 import 'package:omninest/features/reader/data/epub_archive_source.dart';
+import 'package:omninest/features/reader/domain/reader_html_scan.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:xml/xml.dart';
 
@@ -162,6 +163,36 @@ class EpubParseLimitException implements Exception {
   String toString() => 'EpubParseLimitException: $message';
 }
 
+/// 一章的解析产物。
+///
+/// 样式表不再拼进正文随章节流动：[stylesheetPool] 是这本书声明的全部样式表
+/// （归档内路径 → 文本，按 manifest 顺序），[stylesheetRefs] 是**本章 head 里
+/// `<link>` 的生效次序**。两者分开存才修掉逐章重复携带：一本 393 章的书把 12KB
+/// 的 CSS 插进每一章，就是 4.8MB 进缓存，而真正跟着章变的只有那串路径。
+typedef EpubChapterPayload =
+    ({
+      String xhtml,
+      List<String> stylesheetRefs,
+      Map<String, String> stylesheetPool,
+    });
+
+/// 按本章次序从书级样式表池拼出解析侧要的样式表全文。
+///
+/// 引用了池里不存在的路径（清单截断、或样式表文件缺失）就跳过，与采集侧同一口径：
+/// 缺一两张表只是降级到阅读器默认档，不能因此把整章的次序挪位。
+/// 每份表前留一个换行，避免上一份的最后一条规则与下一份的选择器粘连。
+String buildChapterStylesheetCss(Map<String, String> pool, List<String> refs) {
+  final buffer = StringBuffer();
+  for (final ref in refs) {
+    final text = pool[ref];
+    if (text == null) continue;
+    buffer
+      ..write('\n')
+      ..write(text);
+  }
+  return buffer.toString();
+}
+
 /// EPUB 文件解析服务
 ///
 /// 从 EPUB ZIP 归档中提取元数据、封面和章节内容。
@@ -174,8 +205,14 @@ class EpubParserService {
       FileSizeThresholds.epubRatioCheckThresholdBytes;
   static const _maxTextEntryBytes = FileSizeThresholds.epubMaxTextEntryBytes;
 
+  /// 样式表读取上限：文件数与总字符数。超出的部分按截断处理，
+  /// 一本用十几份 css 或写了巨型样式表的书不能拖慢每章加载。
+  static const _maxStylesheetFiles = 16;
+  static const _maxStylesheetCharacters = 256 * 1024;
+
   /// 缓存已解压的 Archive，避免重复解压整个 ZIP 归档。
   Archive? _cachedArchive;
+  List<_StylesheetPart>? _cachedStylesheetParts;
   int? _cachedArchiveHash;
   int? _cachedArchiveLength;
   String? _cachedArchivePath;
@@ -183,6 +220,13 @@ class EpubParserService {
 
   /// 当前归档实例已保留的解压字节数，超过阈值即释放整个归档。
   int _retainedEntryBytes = 0;
+
+  /// 当前归档实例**真实解压**出来的累计字节数。
+  ///
+  /// `_validateArchive` 的整包预算只能按目录里声明的 uncompressedSize 求和，那是书
+  /// 自己写的数：谎报小值就能绕过预检。逐条读取时拿到的是解压后的真实长度，
+  /// 累计到同一个上限才是可信的容量闸门。
+  int _inflatedEntryBytes = 0;
 
   /// 当前持有租约的数量。归档被持有时不得释放或重开。
   int _leaseHolders = 0;
@@ -287,7 +331,9 @@ class EpubParserService {
     _cachedArchiveHash = null;
     _cachedArchiveLength = null;
     _cachedArchivePath = null;
+    _cachedStylesheetParts = null;
     _retainedEntryBytes = 0;
+    _inflatedEntryBytes = 0;
   }
 
   /// 获取当前缓存的 Archive（仅供持有租约期间读取）。
@@ -323,7 +369,10 @@ class EpubParserService {
   /// 调用方必须持有 [acquireLease] 取得的租约，直到本章的图片预处理完成：
   /// 本方法只在归档上读取，不再自行释放归档——旧实现在入口 `releaseArchive()`
   /// 会让邻章预取关掉当前章仍在使用的文件流，并把解压缓存彻底作废。
-  Future<String?> parseChapter(Uint8List archiveBytes, String contentPath) {
+  Future<EpubChapterPayload?> parseChapter(
+    Uint8List archiveBytes,
+    String contentPath,
+  ) {
     assert(_leaseHolders > 0, 'parseChapter 必须在持有归档租约时调用');
     return _parseChapterArchive(
       () => _getCachedArchive(archiveBytes),
@@ -332,12 +381,15 @@ class EpubParserService {
   }
 
   /// 从原生文件流按需解析单个章节。同样要求调用方持有租约。
-  Future<String?> parseChapterFile(String path, String contentPath) {
+  Future<EpubChapterPayload?> parseChapterFile(
+    String path,
+    String contentPath,
+  ) {
     assert(_leaseHolders > 0, 'parseChapterFile 必须在持有归档租约时调用');
     return _parseChapterArchive(() => _getCachedFileArchive(path), contentPath);
   }
 
-  Future<String?> _parseChapterArchive(
+  Future<EpubChapterPayload?> _parseChapterArchive(
     Archive? Function() loadArchive,
     String contentPath,
   ) async {
@@ -365,7 +417,18 @@ class EpubParserService {
         return null;
       }
 
-      return decodeEpubText(_entryBytes(fileEntry));
+      final xhtml = decodeEpubText(_entryBytes(fileEntry));
+      final parts = _bookStylesheetParts(archive, opfPath);
+      return (
+        xhtml: xhtml,
+        stylesheetRefs: _chapterStylesheetRefs(
+          parts: parts,
+          opfPath: opfPath,
+          contentPath: contentPath,
+          xhtml: xhtml,
+        ),
+        stylesheetPool: {for (final part in parts) part.path: part.text},
+      );
     } on EpubParseLimitException {
       rethrow;
     } on EpubUnsupportedEncodingException {
@@ -377,6 +440,128 @@ class EpubParserService {
       }
       return null;
     }
+  }
+
+  /// 读这本书声明的样式表，按 OPF manifest 顺序收集（media-type 为 text/css 的条目）。
+  ///
+  /// 任何失败都只返回已经读到的部分：没有样式表的书照常渲染，读坏的样式表降级到
+  /// 阅读器默认档，一章正文不能因为样式表而失败。按归档身份缓存，同一本书的
+  /// 全部章节共用一份。
+  List<_StylesheetPart> _bookStylesheetParts(Archive archive, String opfPath) {
+    final cached = _cachedStylesheetParts;
+    if (cached != null) return cached;
+    final parts = <_StylesheetPart>[];
+    try {
+      final opfEntry =
+          _findExactEntry(archive, _normalizeArchivePath(opfPath)) ??
+          _findEntry(archive, opfPath);
+      if (opfEntry != null) {
+        final document = XmlDocument.parse(
+          decodeEpubText(_entryBytes(opfEntry)),
+        );
+        final hrefs = <String>[];
+        for (final item in document.findAllElements('item')) {
+          final mediaType = item.getAttribute('media-type')?.toLowerCase();
+          final href = item.getAttribute('href');
+          if (mediaType != 'text/css' || href == null || href.isEmpty) {
+            continue;
+          }
+          hrefs.add(href);
+          if (hrefs.length >= _maxStylesheetFiles) break;
+        }
+        var totalCharacters = 0;
+        for (final href in hrefs) {
+          final path = _resolvePath(opfPath, href);
+          final entry =
+              _findExactEntry(archive, path) ?? _findEntry(archive, path);
+          if (entry == null) continue;
+          final text = decodeEpubText(_entryBytes(entry));
+          parts.add(_StylesheetPart(path, text));
+          totalCharacters += text.length;
+          if (totalCharacters >= _maxStylesheetCharacters) break;
+        }
+      }
+    } on Exception catch (error) {
+      if (kDebugMode) {
+        readerDebugLog('EPUB: stylesheet read failed: $error');
+      }
+    }
+    _cachedStylesheetParts = parts;
+    return parts;
+  }
+
+  /// 这一章生效的样式表次序，取**本章 head 里 `<link>` 的书写顺序**。
+  ///
+  /// EPUB 的层叠次序由章节自己的 link 决定，不是 manifest 的条目顺序：西遊記的
+  /// manifest 是 pgepub→0→1，而每章 head 是 0→1→pgepub，完全倒置，同特异度冲突
+  /// 规则的胜负会反（SE 那四本恰好两边一致，所以从未显形）。因此这份次序必须按章
+  /// 存下来，不能拿 manifest 序给整本书拼一份了事。本章一个 link 都没有时退回
+  /// manifest 顺序——读不到样式表只是降级，不能把书自己的排版意图丢掉。
+  ///
+  /// 返回的是 [parts] 里真实存在的路径（link 指向清单外的文件按不存在处理），拼文本
+  /// 交给 [buildChapterStylesheetCss]：次序与全文两处各写一份就会漂。
+  List<String> _chapterStylesheetRefs({
+    required List<_StylesheetPart> parts,
+    required String opfPath,
+    required String contentPath,
+    required String xhtml,
+  }) {
+    if (parts.isEmpty) return const [];
+    final chapterPath = _resolvePath(opfPath, contentPath);
+    final byPath = {for (final part in parts) part.path: part};
+    final ordered = <String>[];
+    for (final href in _chapterStylesheetHrefs(xhtml, chapterPath)) {
+      if (byPath.containsKey(href) && !ordered.contains(href)) {
+        ordered.add(href);
+      }
+    }
+    if (ordered.isEmpty) {
+      return [for (final part in parts) part.path];
+    }
+    // link 没提到的声明文件仍在书里生效（例如只被别的章节引用的公共表），
+    // 按 manifest 顺序补在后面，保持相对次序不变。
+    for (final part in parts) {
+      if (!ordered.contains(part.path)) ordered.add(part.path);
+    }
+    return ordered;
+  }
+
+  /// 章节 head 中 `<link rel="stylesheet">` 指向的归档内路径，按书写顺序。
+  ///
+  /// 只认 href，属性顺序不限；相对路径按本章所在目录解析，与 `_resolvePath` 同源。
+  List<String> _chapterStylesheetHrefs(String xhtml, String chapterPath) {
+    final directory =
+        chapterPath.contains('/')
+            ? chapterPath.substring(0, chapterPath.lastIndexOf('/'))
+            : '';
+    final hrefs = <String>[];
+    for (final tag in scanHtmlTags(xhtml, const {'link'})) {
+      // rel 是空格分隔的多值属性：`" stylesheet "` 与 `alternate stylesheet` 都是
+      // 合法写法，整串比较会把前者判成"不是样式表"。EPUB2 的 `alternate` 是给
+      // 读者换用的样式，默认不参与渲染，跟着解析会盖掉正文样式。
+      final relTokens =
+          tag
+              .attributeValue('rel')
+              ?.toLowerCase()
+              .split(RegExp(r'\s+'))
+              .where((token) => token.isNotEmpty)
+              .toSet() ??
+          const <String>{};
+      if (!relTokens.contains('stylesheet') ||
+          relTokens.contains('alternate')) {
+        continue;
+      }
+      final href = tag.attributeValue('href');
+      if (href == null || href.isEmpty) continue;
+      // 样式表的 link 写坏不能拖垮整章正文：越界路径在归一化时会抛，跳过这一条。
+      try {
+        hrefs.add(_normalizeArchivePath('$directory/$href'));
+      } on FormatException {
+        continue;
+      }
+      if (hrefs.length >= _maxStylesheetFiles) break;
+    }
+    return hrefs;
   }
 
   // ── Private helpers ──────────────────────────────────────────
@@ -397,10 +582,17 @@ class EpubParserService {
     entry = archive.findFile(path.toLowerCase());
     if (entry != null) return entry;
 
-    // 遍历所有条目做模糊匹配
+    // 段边界锚定的兜底匹配：书里常见"条目少了容器前缀"或"路径多了一层根目录"，
+    // 所以两端各允许一次整段相等。不锚定段边界的 endsWith 会让任意尾部相同的条目
+    // 抢走路径 —— 清单写 `OEBPS/text/chapter1.xhtml` 而归档里先出现一个
+    // `pter1.xhtml` 时，旧写法读到的是那个杂项文件，读者看到张冠李戴的一章。
+    final wanted = path.replaceAll('\\', '/').toLowerCase();
     for (final file in archive.files) {
-      if (file.name.toLowerCase().endsWith(path.toLowerCase()) ||
-          path.toLowerCase().endsWith(file.name.toLowerCase())) {
+      final name = file.name.replaceAll('\\', '/').toLowerCase();
+      if (name.isEmpty || wanted.isEmpty) continue;
+      if (name == wanted ||
+          name.endsWith('/$wanted') ||
+          wanted.endsWith('/$name')) {
         return file;
       }
     }
@@ -505,12 +697,23 @@ class EpubParserService {
     if (content.length > maxBytes) {
       throw EpubParseLimitException('归档条目解压后超过解析上限: ${entry.name}');
     }
+    _inflatedEntryBytes += content.length;
+    if (_inflatedEntryBytes > _maxExpandedBytes) {
+      throw const EpubParseLimitException('EPUB 实际展开体积超过 1 GiB');
+    }
     _retainedEntryBytes += content.length;
     if (_retainedEntryBytes > FileSizeThresholds.epubRetainedEntryBytes) {
       releaseArchive();
     }
     return content;
   }
+
+  /// 受控读取归档条目的解压字节：归档图片这类"正文之外的大条目"也必须走这里。
+  ///
+  /// 直接取 `ArchiveFile.content` 会把解压字节永久留在归档实例里，且完全不计入
+  /// 本服务的解压与保留量闸门——多图章节连续阅读时归档内存永不按阈值释放。
+  Uint8List readArchiveEntryBytes(ArchiveFile entry, {required int maxBytes}) =>
+      _entryBytes(entry, maxBytes: maxBytes);
 
   /// 解析 container.xml 获取 OPF 路径
   String? _parseContainerXml(Uint8List bytes) {
@@ -619,4 +822,12 @@ class EpubArchiveLease {
     _released = true;
     _service._releaseLease();
   }
+}
+
+/// 一份已读出的样式表：归档内路径与文本。路径用来匹配章节的 `<link>`。
+class _StylesheetPart {
+  const _StylesheetPart(this.path, this.text);
+
+  final String path;
+  final String text;
 }

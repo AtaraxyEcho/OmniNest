@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/app/theme/mobile_env_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -66,6 +67,7 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
     this.header,
     this.headerPadding,
     this.enablePopGuard = true,
+    this.hostedSurface = false,
     super.key,
   });
 
@@ -89,6 +91,11 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 
   /// 是否拦截系统返回（模块主页面 true）；详情等推入页传 false 以保留自然返回
   final bool enablePopGuard;
+
+  /// 托管态是否自铺一层样例纸面玻璃底（`.book-detail` 的 module-overlay 档）。
+  /// 空间主页留 false 直接坐在环境上；从别处 push 进来的子页必须为 true，
+  /// 否则壳层仍停在来源空间，其 chrome 与环境档会从透明页底透出来。
+  final bool hostedSurface;
 
   @override
   ConsumerState<ReaderPageScaffold> createState() => _ReaderPageScaffoldState();
@@ -142,7 +149,12 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
           child: Scaffold(
             // 托管态：移动壳层环境隔离——纸感调色板整体重绑为环境暗色
             // 玻璃族，壳底透明由环境层绘制；非托管（桌面）维持纸感实底。
-            backgroundColor: hosted ? Colors.transparent : rc.surface,
+            backgroundColor:
+                hosted
+                    ? (widget.hostedSurface
+                        ? context.env.stage.withValues(alpha: 0.94)
+                        : Colors.transparent)
+                    : rc.surface,
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

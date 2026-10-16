@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_progress_backup.dart';
+import 'package:omninest/features/reader/application/reader_progress_backup_port.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// 进度加载工具方法。

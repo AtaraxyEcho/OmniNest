@@ -13,7 +13,6 @@ class ReaderStatsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final overviewAsync = ref.watch(readerStatsOverviewProvider);
     final rc = context.readerColors;
     return ReaderPageScaffold(
       target: ReaderPageTarget.stats,
@@ -38,23 +37,92 @@ class ReaderStatsPage extends ConsumerWidget {
           Container(height: 1, color: rc.outlineVariant.withValues(alpha: 0.6)),
         ],
       ),
-      child: overviewAsync.when(
-        loading:
-            () => const SizedBox(
-              height: 120,
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
-            ),
-        error: (_, _) => const SizedBox.shrink(),
-        data: (overview) => _StatsOverview(overview: overview),
-      ),
+      child: const _ReaderStatsOverviewSection(),
     );
   }
 }
 
+/// 统计概览区块。
+///
+/// 下拉刷新会 invalidate provider，使状态回到「无值 loading」：此时若渲染
+/// 正文转圈，就会与壳层的下拉弧同屏，同一件事出现两个动画。因此保留上一份
+/// 概览继续展示，只有真正的首屏（从未取到过数据）才出动图指示。
+class _ReaderStatsOverviewSection extends ConsumerStatefulWidget {
+  const _ReaderStatsOverviewSection();
+
+  @override
+  ConsumerState<_ReaderStatsOverviewSection> createState() =>
+      _ReaderStatsOverviewSectionState();
+}
+
+class _ReaderStatsOverviewSectionState
+    extends ConsumerState<_ReaderStatsOverviewSection> {
+  ReaderStatsOverview? _lastOverview;
+
+  @override
+  Widget build(BuildContext context) {
+    final overviewAsync = ref.watch(readerStatsOverviewProvider);
+    ref.listen(readerStatsOverviewProvider, (_, next) {
+      final value = next.asData?.value;
+      if (value != null) {
+        _lastOverview = value;
+      }
+    });
+    final overview = overviewAsync.asData?.value ?? _lastOverview;
+    if (overview != null) {
+      return _StatsOverview(overview: overview, streak: _streakOf(overview));
+    }
+    if (overviewAsync.hasError) {
+      return const SizedBox.shrink();
+    }
+    return const SizedBox(
+      height: 120,
+      child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+    );
+  }
+
+  /// 连续阅读天数：以后端按 365 天窗口算好的权威值为准。
+  ///
+  /// 概览只带最近 14 天，本地计数最多也只能到 14 天；权威值取不到时才退回
+  /// 本地兜底算法。
+  int _streakOf(ReaderStatsOverview overview) {
+    final authoritative = ref.watch(readerStatsProvider).asData?.value;
+    if (authoritative != null) {
+      return authoritative.currentStreak;
+    }
+    return _localStreak(overview);
+  }
+
+  /// 本地兜底：从最近一个有阅读记录的日期往回数。
+  ///
+  /// 今天还没读不算断档——概览的最后一项就是今天，直接从它开始会在早上把
+  /// 连续 30 天显示成 0 天，与后端口径不一致。
+  int _localStreak(ReaderStatsOverview overview) {
+    final days = overview.dailyMinutes;
+    if (days.isEmpty) return 0;
+    var streak = 0;
+    final startIdx =
+        days.last.minutes == 0 && days.length > 1
+            ? days.length - 2
+            : days.length - 1;
+    for (var i = startIdx; i >= 0; i--) {
+      if (days[i].minutes > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+}
+
 class _StatsOverview extends StatelessWidget {
-  const _StatsOverview({required this.overview});
+  const _StatsOverview({required this.overview, required this.streak});
 
   final ReaderStatsOverview overview;
+
+  /// 连续阅读天数：由持 Provider 的上层算好传下来。
+  final int streak;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +149,7 @@ class _StatsOverview extends StatelessWidget {
                   ),
                   _StatCard(
                     label: l10n.readerStatsStreak,
-                    value: '${_streak(overview)}',
+                    value: '$streak',
                     unit: l10n.readerStatsDayUnit,
                   ),
                   _StatCard(
@@ -144,18 +212,6 @@ class _StatsOverview extends StatelessWidget {
     if (days.isEmpty) return 0;
     final take = days.length >= 7 ? 7 : days.length;
     return days.skip(days.length - take).fold(0, (sum, d) => sum + d.minutes);
-  }
-
-  int _streak(ReaderStatsOverview overview) {
-    var streak = 0;
-    for (final day in overview.dailyMinutes.reversed) {
-      if (day.minutes > 0) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    return streak;
   }
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 摘要：高度表必须随列宽与文字缩放失效。
@@ -246,6 +248,122 @@ void main() {
           textScale: 1.2,
         ),
         isTrue,
+      );
+    });
+  });
+
+  group('坐标换算与缓存键（R6）', () {
+    // 同一章在缓存里按排版参数各留一份，块顶留白又画在第一行文字之前：
+    // 换算取错那一份、或者从块顶而不是首行起算，保存的进度就会落到别的行上。
+    final quoteContent = ReaderChapterContent(
+      title: '第一章',
+      content:
+          '<p>${'第一段正文 word ' * 40}</p>'
+          '<blockquote>${'引用内容 quote ' * 120}</blockquote>'
+          '<p>${'收尾正文 tail ' * 40}</p>',
+    );
+
+    test('切换跟随原书排版必须重建翻页导航器', () async {
+      final follow = settings.copyWith(followBookTypesetting: true);
+      final loader = ReaderContentLoader(allChapters: chapters);
+      final data = await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: content,
+        pageWidth: 320,
+        pageHeight: 600,
+        settings: settings,
+      );
+
+      final off = data.getOrCreatePageNavigator(320, 600, settings);
+      final on = data.getOrCreatePageNavigator(320, 600, follow);
+      expect(identical(off, on), isFalse, reason: '书的段距与行高改了页的切法，同一份页链不能接着用');
+      expect(
+        identical(on, data.getOrCreatePageNavigator(320, 600, follow)),
+        isTrue,
+        reason: '同参数反复重建等于每帧重算整章布局',
+      );
+    });
+
+    test('块顶留白计入像素换算的两头', () async {
+      final loader = ReaderContentLoader(allChapters: chapters);
+      final data = await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: quoteContent,
+        pageWidth: 320,
+        pageHeight: 600,
+        settings: settings,
+      );
+      final quoteIndex = data.blocks.indexWhere(
+        (block) => block is BlockquoteBlock,
+      );
+      expect(quoteIndex, greaterThan(0), reason: '夹具里引用块前要有正文');
+
+      final blockStart =
+          quoteIndex == 0 ? 0.0 : data.cumulativeHeights[quoteIndex - 1];
+      final quoteStartChar = data.blockCharPrefixes[quoteIndex];
+      final leading = ReaderContentBlockItem.blockLeadingChrome(
+        data.blocks[quoteIndex],
+        settings,
+      );
+      expect(leading, greaterThan(0));
+
+      final pixel = loader.charOffsetToPixelOffset(
+        'chapter_1',
+        quoteStartChar,
+        pageWidth: 320,
+        settings: settings,
+      );
+      expect(
+        pixel,
+        closeTo(blockStart + leading, 0.5),
+        reason: '首行之前那一份块顶留白没计进像素换算',
+      );
+      expect(
+        loader.contentYToCharOffset(
+          'chapter_1',
+          blockStart + leading,
+          pageWidth: 320,
+          settings: settings,
+        ),
+        quoteStartChar,
+        reason: 'contentY 落在首行起点却换回上一块的字符：行号整体向下错一格',
+      );
+    });
+
+    test('换算必须按当前排版命中缓存，不拿旧字号的高度表', () async {
+      final bigger = settings.copyWith(fontSize: 30);
+      final loader = ReaderContentLoader(allChapters: chapters);
+      await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: quoteContent,
+        pageWidth: 320,
+        pageHeight: 600,
+        settings: settings,
+      );
+      final bigData = await loader.loadChapter(
+        chapterId: 'chapter_1',
+        content: quoteContent,
+        pageWidth: 320,
+        pageHeight: 600,
+        settings: bigger,
+      );
+
+      final lastBlock = bigData.blocks.length - 1;
+      final target = bigData.blockCharPrefixes[lastBlock] + 5;
+      final bigBlockStart =
+          lastBlock == 0 ? 0.0 : bigData.cumulativeHeights[lastBlock - 1];
+      final pixel = loader.charOffsetToPixelOffset(
+        'chapter_1',
+        target,
+        pageWidth: 320,
+        settings: bigger,
+      );
+      expect(
+        pixel,
+        greaterThanOrEqualTo(bigBlockStart),
+        reason:
+            '按 30px 换算却落在 18px 表的块起点之前，说明取到旧字号的高度表：'
+            '$pixel 对 $bigBlockStart',
       );
     });
   });

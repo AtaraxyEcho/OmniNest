@@ -60,7 +60,7 @@ class ComicLayoutIndex {
     if (index >= 0 && index < _heights.length && _heights[index] > 0) {
       return _heights[index];
     }
-    return _estimatedHeight(index, viewportHeight);
+    return _estimatedHeight(index);
   }
 
   /// 根据滚动偏移计算当前页和页内偏移。
@@ -127,15 +127,15 @@ class ComicLayoutIndex {
     if (index < _heights.length && _heights[index] > 0) {
       return _heights[index];
     }
-    return _estimatedHeight(index, contentWidth);
+    return _estimatedHeight(index);
   }
 
   /// 基于图片宽高比预估页面高度。
   ///
   /// 高度 = contentWidth × (imageHeight / imageWidth)。
   /// 无尺寸信息时使用 3:4 默认比例。
-  double _estimatedHeight(int index, double viewportHeight) {
-    if (index < 0 || index >= _pages.length) return viewportHeight;
+  double _estimatedHeight(int index) {
+    if (index < 0 || index >= _pages.length) return contentWidth * (4.0 / 3.0);
     final page = _pages[index];
     if (page.width != null &&
         page.height != null &&

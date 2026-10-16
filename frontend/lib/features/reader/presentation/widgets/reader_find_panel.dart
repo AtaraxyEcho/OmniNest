@@ -35,6 +35,9 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
   List<int> _matches = const [];
   bool _truncated = false;
 
+  /// 命中数上限：超出即标记截断，面板不为一次输入构建上千个可点条目。
+  static const int _maxMatches = 100;
+
   @override
   void didUpdateWidget(covariant ReaderFindPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -51,30 +54,29 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
     super.dispose();
   }
 
+  /// 在**原串**上匹配，拿到的下标才是可切片、可跳转的下标域。
+  ///
+  /// 旧写法把正文 `toLowerCase()` 之后再 indexOf：个别字符小写化会变长（`İ` →
+  /// `i̇` 两个码元），整串下标整体前移，之后的切片高亮与跳转全部错位。
+  /// `RegExp.escape` 保证用户输入的 `(`、`*` 等按字面量匹配。
   void _search(String query) {
-    final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
       setState(() {
         _matches = const [];
         _truncated = false;
       });
       return;
     }
-    final source = widget.plainText.toLowerCase();
+    final pattern = RegExp(RegExp.escape(trimmed), caseSensitive: false);
     final matches = <int>[];
-    var start = 0;
     var truncated = false;
-    while (matches.length < 100) {
-      final index = source.indexOf(normalized, start);
-      if (index < 0) {
+    for (final match in pattern.allMatches(widget.plainText)) {
+      if (matches.length >= _maxMatches) {
+        truncated = true;
         break;
       }
-      matches.add(index);
-      start = index + math.max(1, normalized.length);
-    }
-    // 达到上限且仍有后续命中时标记截断。
-    if (matches.length == 100 && source.indexOf(normalized, start) >= 0) {
-      truncated = true;
+      matches.add(match.start);
     }
     setState(() {
       _matches = matches;

@@ -295,4 +295,106 @@ void main() {
       await tester.pumpAndSettle();
     });
   });
+
+  group('批注面板', () {
+    Widget panelHost(Widget Function(BuildContext context) build) {
+      return MaterialApp(
+        locale: const Locale('zh'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh'), Locale('en')],
+        home: Scaffold(
+          body: SizedBox(height: 600, child: Builder(builder: build)),
+        ),
+      );
+    }
+
+    ReaderAnnotationHandler handlerWithSelect(
+      List<String> jumps, {
+      bool edit = true,
+    }) {
+      return ReaderAnnotationHandler(
+        itemId: 'item-1',
+        chapterId: 'ch-1',
+        dataManager: mockDataManager,
+        settings: settings,
+        onAnnotationsChanged: () {},
+        onSelectAnnotation:
+            edit
+                ? (chapterId, startOffset) =>
+                    jumps.add('$chapterId:$startOffset')
+                : null,
+      );
+    }
+
+    testWidgets('点按卡片回调章节与章内偏移', (tester) async {
+      final jumps = <String>[];
+      final handler = handlerWithSelect(jumps);
+      when(() => mockDataManager.loadAnnotations('item-1')).thenAnswer(
+        (_) async => [createAnnotation(chapterId: 'ch-1', start: 300)],
+      );
+      await handler.load();
+
+      await tester.pumpWidget(panelHost(handler.buildPanel));
+      await tester.tap(find.text('test note'));
+      await tester.pump();
+
+      expect(jumps, ['ch-1:300']);
+    });
+
+    testWidgets('纯高亮也提供编辑入口，可补加备注', (tester) async {
+      final jumps = <String>[];
+      final handler = handlerWithSelect(jumps);
+      when(() => mockDataManager.loadAnnotations('item-1')).thenAnswer(
+        (_) async => [createAnnotation(chapterId: 'ch-1', note: '', start: 12)],
+      );
+      await handler.load();
+
+      await tester.pumpWidget(panelHost(handler.buildPanel));
+
+      expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+    });
+
+    testWidgets('清空备注后确认按空串提交', (tester) async {
+      final handler = handlerWithSelect(<String>[]);
+      when(
+        () => mockDataManager.loadAnnotations('item-1'),
+      ).thenAnswer((_) async => [createAnnotation(chapterId: 'ch-1')]);
+      await handler.load();
+      when(
+        () => mockDataManager.updateAnnotation(
+          annotationId: 'ann-1',
+          note: any(named: 'note'),
+          color: any(named: 'color'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await tester.pumpWidget(panelHost(handler.buildPanel));
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        '',
+      );
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+
+      verify(
+        () => mockDataManager.updateAnnotation(
+          annotationId: 'ann-1',
+          note: '',
+          color: '#FFEB3B',
+        ),
+      ).called(1);
+    });
+  });
 }

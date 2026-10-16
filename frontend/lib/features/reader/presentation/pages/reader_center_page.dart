@@ -25,6 +25,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_empty_state
 import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_fill.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_space_content.dart';
 
@@ -66,6 +67,15 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(readerCenterControllerProvider);
+    final state = stateAsync.asData?.value;
+    // 分段/关键词已经下沉服务端；首屏不足一栅格两行时仍要把分页补到能触底，
+    // 否则 InfiniteScrollTrigger 永远不会被滚到。
+    scheduleReaderPageFill(
+      ref,
+      visibleCount: state?.visibleItems.length ?? 0,
+      hasMore: state?.itemsHasMore ?? false,
+      isLoadingMore: state?.itemsLoadingMore ?? false,
+    );
     return ModuleEntryRefreshListener(
       modulePath: '/reader',
       onRefresh:
@@ -113,7 +123,7 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
                     onRetry:
                         () => ref.invalidate(readerCenterControllerProvider),
                   ),
-              loading: () => const AppLoading.grid(gridAspectRatio: 0.72),
+              loading: () => const AppLoading(),
             ),
           ),
         ),
@@ -322,12 +332,24 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
   }
 
   /// 继续阅读卡：直接打开阅读器（定位到上次章节），返回时回到当前页。
+  ///
+  /// 漫画与 PDF 先按形态分流：它们的进度记录借用同一张进度表，但章节语义不同
+  /// ——PDF 上报固定写 `chapterId: 'pdf'`，漫画上报不带章节，按文本章节路由
+  /// 会把它们推进 `ReaderViewPage` 或退回详情页。
   Future<void> _openContinueReading(ReaderItem item) async {
     if (item.id.isEmpty) {
       showReaderSnackBar(
         context,
         AppLocalizations.of(context).readerOperationFailed,
       );
+      return;
+    }
+    if (item.isComic) {
+      context.push('/reader/comics/${item.id}/read');
+      return;
+    }
+    if (item.itemType.toUpperCase() == 'PDF') {
+      context.push('/reader/pdfs/${item.id}/read');
       return;
     }
     final localSnapshot = ReaderProgressSnapshot.fromLocal(
@@ -501,56 +523,63 @@ class _SearchAndFilterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 16,
-      runSpacing: 10,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 224, minWidth: 160),
-          child: TextField(
-            controller: searchController,
-            onChanged: onSearchChanged,
-            style: TextStyle(
-              color: rc.onSurface,
-              fontSize: AppTypography.bodyMedium,
-              height: 1.2,
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 10,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 224, minWidth: 160),
+              child: TextField(
+                controller: searchController,
+                onChanged: onSearchChanged,
+                style: TextStyle(
+                  color: rc.onSurface,
+                  fontSize: AppTypography.bodyMedium,
+                  height: 1.2,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: true,
+                  fillColor: rc.surfaceContainerHigh,
+                  hintText: l10n.readerSearchBooksHint,
+                  hintStyle: TextStyle(
+                    color: rc.onSurfaceVariant,
+                    fontSize: AppTypography.bodyMedium,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 18,
+                    color: rc.onSurfaceVariant,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 36),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(2),
+                    borderSide: BorderSide(color: rc.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(2),
+                    borderSide: BorderSide(color: rc.outlineVariant),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(2),
+                    borderSide: BorderSide(color: rc.onSurface),
+                  ),
+                ),
+              ),
             ),
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: rc.surfaceContainerHigh,
-              hintText: l10n.readerSearchBooksHint,
-              hintStyle: TextStyle(
-                color: rc.onSurfaceVariant,
-                fontSize: AppTypography.bodyMedium,
-              ),
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                size: 18,
-                color: rc.onSurfaceVariant,
-              ),
-              prefixIconConstraints: const BoxConstraints(minWidth: 36),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 9,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(2),
-                borderSide: BorderSide(color: rc.outlineVariant),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(2),
-                borderSide: BorderSide(color: rc.outlineVariant),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(2),
-                borderSide: BorderSide(color: rc.onSurface),
-              ),
-            ),
-          ),
+            _FilterTabs(segment: segment, onChanged: onSegmentChanged),
+          ],
         ),
-        _FilterTabs(segment: segment, onChanged: onSegmentChanged),
+        // 分割线是整行的收尾，不是搜索框与页签的同伴：留在 Wrap 里会被当成一个
+        // 流式子项另起一 run，既叠上 runSpacing，又画不出贯穿宽度的线。
         const SizedBox(height: 16),
         Container(height: 1, color: rc.outlineVariant.withValues(alpha: 0.6)),
       ],

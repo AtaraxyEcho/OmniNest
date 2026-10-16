@@ -66,6 +66,7 @@ class ReaderItem {
     this.releaseDate,
     this.genres,
     this.serialStatus,
+    this.isbn,
     this.contentKind = 'TEXT',
     this.importStatus,
     this.parseErrorCode,
@@ -95,6 +96,7 @@ class ReaderItem {
       releaseDate: _parseDateTime(json['releaseDate']),
       genres: _parseStringList(json['genres']),
       serialStatus: json['serialStatus']?.toString(),
+      isbn: json['isbn']?.toString(),
       contentKind: json['contentKind']?.toString() ?? 'TEXT',
       importStatus: json['importStatus']?.toString(),
       parseErrorCode: json['parseErrorCode']?.toString(),
@@ -137,6 +139,9 @@ class ReaderItem {
 
   /// 连载状态（ONGOING / COMPLETED / UNKNOWN）
   final String? serialStatus;
+
+  /// ISBN，来自 reader_items.external_ids 的 isbn 键
+  final String? isbn;
 
   /// 内容类型（TEXT / COMIC）
   final String contentKind;

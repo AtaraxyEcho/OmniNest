@@ -9,6 +9,8 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_annotations.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
@@ -23,9 +25,12 @@ class ReaderViewContent extends StatefulWidget {
     this.annotations = const [],
     this.visibleBlocks,
     this.rawBlocks,
+    this.stylesheetCss = '',
     this.scrollController,
     this.scrollPhysics,
     this.initialScrollOffset,
+    this.footer,
+    this.footerExtent,
     this.blockExtents,
     this.isFirstBlockContinuation = false,
     this.onImageTap,
@@ -54,6 +59,13 @@ class ReaderViewContent extends StatefulWidget {
   /// 全章原始 blocks（用于 _findTextOffset 批注偏移定位）。
   /// 仅在 visibleBlocks 非 null 时生效；为 null 时 fallback 到 visibleBlocks。
   final List<ContentBlock>? rawBlocks;
+
+  /// 这本书在 [htmlContent] 所属章节生效的样式表全文。
+  ///
+  /// 只在 widget 自己解析正文时用到（[visibleBlocks] 为 null 的那条路径）：
+  /// 样式表不进 htmlContent，走的是书级池 + 章节次序引用，漏传就等于关掉「跟随
+  /// 原书」——同一段正文会按两套排版折行，块高与字符偏移随之漂。
+  final String stylesheetCss;
   final ScrollController? scrollController;
   final ScrollPhysics? scrollPhysics;
 
@@ -61,8 +73,22 @@ class ReaderViewContent extends StatefulWidget {
   /// 用于恢复阅读进度时设置 ListView 的起始位置。
   final double? initialScrollOffset;
 
+  /// 章末条目（稿子的 `.chapter-end` + `.next-chapter`）。非空时替换末尾留白，
+  /// 因此必须同时给出 [footerExtent]——懒建列表按确定高度算滚动范围。
+  final Widget? footer;
+  final double? footerExtent;
+
   /// 滚动列表末尾留白条目高度，同时作为该项的确定高度。
   static const double trailingSpacerHeight = 80.0;
+
+  /// 标题槽位在高度表之外另留的余量。
+  ///
+  /// 块高由 TextPainter 量得，渲染侧 RenderParagraph 的 tight 行盒与之最多差
+  /// 2px（reader_block_measure_render_matrix_test 就按这条容差把关）。标题字号
+  /// 是正文的 1.25/1.63 倍且一档行高收到 1.25，差值落在放大行盒上最明显，固定
+  /// itemExtent 便报 RenderFlex overflowed by 2.0 pixels。表格保持"量到的值"，
+  /// 余量由渲染侧吸收。
+  static const double headingSlotSlack = 2.0;
 
   /// 逐块确定高度，来自整章测得后的章节高度表。
   ///
@@ -93,25 +119,40 @@ class ReaderViewContent extends StatefulWidget {
   /// 注册清除选中函数（子组件初始化时注册，父组件可调用）
   final void Function(VoidCallback fn)? onRegisterClearSelection;
 
+  /// 行内代码相对正文的字号倍率。
+  static const double codeFontScale = 0.9;
+
+  /// 行内小标题相对正文的字号倍率。
+  static const double headingSpanScale = 1.15;
+
+  /// 上标/下标相对正文的字号倍率。
+  static const double scriptSpanScale = 0.75;
+
   /// 根据 ReaderInlineSpan 的样式属性构建 TextStyle。
   ///
-  /// 供分页引擎复用，确保测量与渲染的样式完全一致。
+  /// 供分页引擎复用，确保测量与渲染的样式完全一致。凡是**影响字宽**的属性
+  /// （字号、字族）都必须只在这里表达一次：渲染侧另抄一份时，同一块文本会
+  /// 按一种宽度测量、按另一种宽度折行，行差直接变成页区间与字符偏移漂移。
   static TextStyle spanStyle(
     ReaderInlineSpan span,
     ReaderViewSettings settings,
   ) {
     final fontSize =
-        span.isHeading
-            ? settings.fontSize * 1.15
+        span.isCode
+            ? settings.fontSize * codeFontScale
+            : span.isHeading
+            ? settings.fontSize * headingSpanScale
             : span.isSuperscript || span.isSubscript
-            ? settings.fontSize * 0.75
+            ? settings.fontSize * scriptSpanScale
             : settings.fontSize;
     return TextStyle(
-      fontFamily: settings.resolvedFontFamily,
+      fontFamily:
+          span.isCode ? AppTypography.monoFamily : settings.resolvedFontFamily,
+      fontFamilyFallback: span.isCode ? AppTypography.monoFamilyFallback : null,
       fontSize: fontSize,
       height: settings.lineHeight,
       // 与 ReaderViewSettings.bodyStyle 同源：稿子 `.article-column > p` 的 .025em。
-      letterSpacing: fontSize * 0.025,
+      letterSpacing: fontSize * ReaderViewSettings.bodyLetterSpacingScale,
       fontWeight: span.isBold ? FontWeight.w700 : FontWeight.w400,
       fontStyle: span.isItalic ? FontStyle.italic : FontStyle.normal,
       color: settings.onSurfaceColor.withValues(alpha: 0.90),
@@ -138,6 +179,10 @@ class ReaderViewContent extends StatefulWidget {
 class _ReaderViewContentState extends State<ReaderViewContent> {
   List<ContentBlock> _blocks = [];
   List<ContentBlock> _rawBlocks = [];
+
+  /// 选区语料缓存：拖动选区会反复解析同一批块，块身份不变就不必重建整章文本与偏移表。
+  List<ContentBlock>? _selectionCorpusBlocks;
+  ChapterSearchCorpus? _selectionCorpus;
   List<int> _paragraphIndices = [];
   int _parseGeneration = 0;
   bool _isLoading = true;
@@ -204,10 +249,11 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     final generation = ++_parseGeneration;
     // 小章节（<500 字符）同步解析，避免 isolate 开销；大章节在 isolate 中解析
     // Web 平台 compute 返回 JSArray，无法转为 Dart List，直接调用
+    final chapter = (html: widget.htmlContent, css: widget.stylesheetCss);
     final result =
         (widget.htmlContent.length < 500 || kIsWeb)
-            ? parseBlocks(widget.htmlContent)
-            : await compute(parseBlocks, widget.htmlContent);
+            ? parseChapterPayload(chapter).blocks
+            : (await compute(parseChapterPayload, chapter)).blocks;
     // 检查是否已被更新的内容取代
     if (!mounted || generation != _parseGeneration) return;
     setState(() {
@@ -367,16 +413,23 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
                                   ? null
                                   : (index, creator) =>
                                       index < extents.length
-                                          ? extents[index]
-                                          : ReaderViewContent
-                                              .trailingSpacerHeight,
+                                          ? extents[index] +
+                                              (_blocks[index] is HeadingBlock
+                                                  ? ReaderViewContent
+                                                      .headingSlotSlack
+                                                  : 0.0)
+                                          : (widget.footerExtent ??
+                                              ReaderViewContent
+                                                  .trailingSpacerHeight),
                           addAutomaticKeepAlives: false,
                           addRepaintBoundaries: false,
                           itemBuilder: (context, index) {
                             if (index == _blocks.length) {
-                              return const SizedBox(
-                                height: ReaderViewContent.trailingSpacerHeight,
-                              );
+                              return widget.footer ??
+                                  const SizedBox(
+                                    height:
+                                        ReaderViewContent.trailingSpacerHeight,
+                                  );
                             }
                             return RepaintBoundary(child: _buildBlock(index));
                           },
@@ -404,16 +457,8 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       onLinkTap: _launchUrl,
       onImageTap: _handleImageTap,
     );
-    // 翻页标题后保留额外间距，与分页引擎视觉一致。
-    if (block is HeadingBlock) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          item,
-          const SizedBox(height: ReaderContentBlockItem.headingBottomSpacing),
-        ],
-      );
-    }
+    // 标题后的间距属于块自身的盒（ReaderContentBlockItem._heading），
+    // 不再由包装层追加：包装层里的那一份测量侧看不见，每页会按标题数少算。
     return item;
   }
 
@@ -511,54 +556,91 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     );
   }
 
+  /// 把选中的可绘制文本回指到块源字符域。
+  ///
+  /// 逐个 span 查找在真实正文里必然落空：一个自然段会被软换行拆成多行，内联加粗、链接、
+  /// 代码各自切开 span，已有高亮的边界还会再切一次——跨这些边界的选区拿不到偏移，
+  /// 高亮与批注按钮整体消失；章内重复出现的短词更会永远命中首次出现的位置。
+  /// 这里改用整块连续文本加逐码元源偏移映射，命中区间直接由映射表给出。
   (int, int)? _resolveSelectionRange(String selectedText) {
     if (selectedText.isEmpty) {
       return null;
     }
-    final candidates = <(ReaderInlineSpan, String)>[
-      for (final span in _visibleTextSpans()) (span, 'projected'),
-      if (!identical(_rawBlocks, _blocks))
-        for (final span in _textSpans(_rawBlocks)) (span, 'raw'),
+    // 首行缩进是定宽 WidgetSpan，选到的行首会带一个 0xFFFC 对象替换字符：
+    // 它不属于任何源文本 span，先去掉再回指源文本区间。
+    final needle = selectedText.replaceAll('￼', '').trim();
+    if (needle.isEmpty) {
+      return null;
+    }
+    final candidates = <List<ContentBlock>>[
+      _blocks,
+      if (!identical(_rawBlocks, _blocks)) _rawBlocks,
     ];
-    for (final (span, source) in candidates) {
-      final localOffset = span.text.indexOf(selectedText);
-      if (localOffset >= 0) {
-        return _logResolvedRange(source, span, false, localOffset, (
-          span.startOffset + localOffset,
-          span.startOffset + localOffset + selectedText.length,
-        ));
-      }
-      final normalized = _findNormalizedOffset(span.text, selectedText);
-      if (normalized != null) {
-        return _logResolvedRange(source, span, true, normalized, (
-          span.startOffset + normalized,
-          span.startOffset + normalized + selectedText.length,
-        ));
+    for (final blocks in candidates) {
+      final range = _matchSelectionInBlocks(blocks, needle);
+      if (range != null) {
+        readerDebugLog(
+          '[reader-selection][range] 命中 blocks=${blocks.length} '
+          'range=(${range.$1}, ${range.$2})',
+        );
+        return range;
       }
     }
     readerDebugLog(
-      '[reader-selection][range] 未命中任何 span：候选 ${candidates.length} 个，'
-      '选中 len=${selectedText.length} hash=${_debugTextHash(selectedText)}',
+      '[reader-selection][range] 未命中任何块：候选 ${candidates.length} 组，'
+      '选中 len=${needle.length} hash=${_debugTextHash(needle)}',
     );
     return null;
   }
 
-  /// 诊断辅助：输出命中 span 的来源与偏移明细后返回解析区间。
-  (int, int) _logResolvedRange(
-    String source,
-    ReaderInlineSpan span,
-    bool normalizedMatch,
-    int localOffset,
-    (int, int) range,
+  (int, int)? _matchSelectionInBlocks(
+    List<ContentBlock> blocks,
+    String needle,
   ) {
-    readerDebugLog(
-      '[reader-selection][range] 命中 $source '
-      'span(start=${span.startOffset}, len=${span.text.length}, '
-      'hash=${_debugTextHash(span.text)}) '
-      '${normalizedMatch ? 'normalized' : 'exact'} local=$localOffset '
-      'range=(${range.$1}, ${range.$2})',
+    return matchCorpusRange(
+      _corpusFor(blocks),
+      needle,
+      anchorCharOffset: _viewportAnchorCharOffset(blocks),
     );
-    return range;
+  }
+
+  ChapterSearchCorpus _corpusFor(List<ContentBlock> blocks) {
+    if (identical(_selectionCorpusBlocks, blocks) && _selectionCorpus != null) {
+      return _selectionCorpus!;
+    }
+    final corpus = ChapterSearchCorpus.fromBlocks(blocks);
+    _selectionCorpusBlocks = blocks;
+    _selectionCorpus = corpus;
+    return corpus;
+  }
+
+  /// 视口中心在块源字符域的位置，用来给章内重复出现的短词就近消歧。
+  ///
+  /// 按块确定高度累加定位，量不到（无高度表、列表未挂载）时返回 null，
+  /// 调用方退回"取第一个命中"的旧行为。
+  int? _viewportAnchorCharOffset(List<ContentBlock> blocks) {
+    final controller = widget.scrollController;
+    final extents = widget.blockExtents;
+    if (controller == null ||
+        !controller.hasClients ||
+        extents == null ||
+        extents.isEmpty) {
+      return null;
+    }
+    final position = controller.position;
+    final target = position.pixels + position.viewportDimension * 0.5;
+    final limit =
+        extents.length < blocks.length ? extents.length : blocks.length;
+    var consumed = 0.0;
+    var chars = 0;
+    for (var i = 0; i < limit; i++) {
+      if (consumed + extents[i] >= target) {
+        return chars;
+      }
+      consumed += extents[i];
+      chars += BlockClipper.blockCharCount(blocks[i]);
+    }
+    return chars;
   }
 
   String _debugTextHash(String text) {
@@ -573,60 +655,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
               ':${a.startOffset}..${a.endOffset}',
         )
         .join(', ');
-  }
-
-  int? _findNormalizedOffset(String source, String selectedText) {
-    final normalizedSource = source.replaceAll(RegExp(r'\s+'), ' ');
-    final normalizedSelection = selectedText.replaceAll(RegExp(r'\s+'), ' ');
-    final normalizedOffset = normalizedSource.indexOf(normalizedSelection);
-    if (normalizedOffset < 0) {
-      return null;
-    }
-    var sourceOffset = 0;
-    var normalizedIndex = 0;
-    while (sourceOffset < source.length && normalizedIndex < normalizedOffset) {
-      if (RegExp(r'\s').hasMatch(source[sourceOffset])) {
-        while (sourceOffset < source.length &&
-            RegExp(r'\s').hasMatch(source[sourceOffset])) {
-          sourceOffset++;
-        }
-        normalizedIndex++;
-      } else {
-        sourceOffset++;
-        normalizedIndex++;
-      }
-    }
-    return sourceOffset;
-  }
-
-  Iterable<ReaderInlineSpan> _textSpans(List<ContentBlock> blocks) sync* {
-    for (final block in blocks) {
-      switch (block) {
-        case ParagraphBlock(:final lines):
-        case BlockquoteBlock(:final lines):
-          for (final line in lines) {
-            yield* line.spans;
-          }
-        case ListBlock(:final items):
-          for (final item in items) {
-            yield* item.spans;
-          }
-        case TableBlock(:final rows):
-          for (final row in rows) {
-            for (final cell in row.cells) {
-              yield* cell;
-            }
-          }
-        case HeadingBlock():
-        case ImageBlock():
-        case DividerBlock():
-          break;
-      }
-    }
-  }
-
-  Iterable<ReaderInlineSpan> _visibleTextSpans() sync* {
-    yield* _textSpans(_blocks);
   }
 
   void _launchUrl(String href) {

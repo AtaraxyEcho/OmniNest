@@ -25,10 +25,27 @@ class ReaderPaginationEngine {
   static double imageSlotHeight(double effectiveWidth) =>
       _ReaderPaginationMetrics.imageSlotHeight(effectiveWidth);
 
+  /// 图片题注的行高倍率：渲染与测量共用一条口径。
+  static const double imageCaptionLineHeight =
+      _ReaderPaginationMetrics.captionLineHeight;
+
+  /// 图片槽位收进可用高度的唯一一条规则：渲染（ReaderContentImage）与测量共用。
+  static double clampImageSlot({
+    required double slot,
+    required double availableHeight,
+    required bool hasCaption,
+  }) => _ReaderPaginationMetrics.clampImageSlot(
+    slot: slot,
+    availableHeight: availableHeight,
+    hasCaption: hasCaption,
+  );
+
   /// 懒计算单页：从指定字符偏移开始，按像素累积填充一页。
   ///
   /// [startCharOffset] 是章节全文中的字符偏移，用于精确定位续接点。
   /// 内部自动将字符偏移转换为 block 索引和视觉行位置。
+  /// [chainContinueBlock] 只在续接一条没画完的零宽块链时给出（见
+  /// [PageSlice.chainContinueBlock]），按字符偏移随机访问时留负值。
   /// 返回 null 表示已到达内容末尾。
   static PageSlice? computePage(
     List<ContentBlock> blocks,
@@ -37,6 +54,7 @@ class ReaderPaginationEngine {
     ReaderViewSettings settings,
     int startCharOffset, {
     double textScale = 1.0,
+    int chainContinueBlock = -1,
   }) {
     return preparePageLayout(
       blocks,
@@ -44,7 +62,7 @@ class ReaderPaginationEngine {
       pageHeight,
       settings,
       textScale: textScale,
-    ).computePage(startCharOffset);
+    ).computePage(startCharOffset, chainContinueBlock: chainContinueBlock);
   }
 
   /// 创建可复用的章节分页布局。
@@ -110,14 +128,20 @@ class ReaderPaginationEngine {
   /// 分割线块的块高，与渲染共用同一组常量（供对照测试引用）。
   static const double dividerHeight = _ReaderPaginationMetrics.dividerHeight;
 
-  /// 计算单个 block 的渲染高度（像素）。
+  /// 计算单个 block 实际占据的高度（像素）：文字行 + 块自身的 padding/段间距。
   ///
-  /// 公式与 ReaderViewContent._buildBlock() 逐像素对齐。
+  /// 这是块高的唯一来源，滚动高度表、翻页装页与渲染条目三处都必须取这一份；
+  /// 渲染条目不再在块外另加间距（标题的 24px 已进块内下内边距），任何"包装层
+  /// 再加一点"的写法都会让测量按短了的口径塞页，页底报 RenderFlex 溢出。
+  ///
+  /// [availableHeight] 是这一页能留给该块的总高度：翻页装页必须传，图片槽位才会
+  /// 像渲染那样收缩；滚动高度表留 0（那里的渲染同样拿到无界约束）。
   static double measureBlockHeight(
     ContentBlock block,
     double effectiveWidth,
     ReaderViewSettings settings, {
     double textScale = 1.0,
+    double availableHeight = 0.0,
   }) {
     return switch (block) {
       HeadingBlock(:final text, :final level) =>
@@ -128,26 +152,16 @@ class ReaderPaginationEngine {
           settings,
           textScale,
         ),
-      ParagraphBlock(:final hasTrailingSpacing) => _flowBlockHeight(
-        block,
-        effectiveWidth,
-        settings,
-        textScale,
-        hasTrailingSpacing: hasTrailingSpacing,
-      ),
+      ParagraphBlock() || BlockquoteBlock() || ListBlock() =>
+        _flowBlockHeight(block, effectiveWidth, settings, textScale) +
+            ReaderContentBlockItem.blockChromeHeight(block, settings),
       ImageBlock(:final caption) => _ReaderPaginationMetrics.imageHeight(
         effectiveWidth,
         caption,
+        textScale: textScale,
+        availableHeight: availableHeight,
       ),
       DividerBlock() => _ReaderPaginationMetrics.dividerHeight,
-      BlockquoteBlock() =>
-        _flowBlockHeight(block, effectiveWidth, settings, textScale) + 48,
-      ListBlock(:final items) => _ReaderPaginationMetrics.listHeight(
-        items,
-        effectiveWidth,
-        settings,
-        textScale,
-      ),
       TableBlock(:final rows) => _ReaderPaginationMetrics.tableHeight(
         rows,
         settings,
@@ -156,18 +170,18 @@ class ReaderPaginationEngine {
     };
   }
 
-  /// 段落与引用块的渲染高度：直接累加共享视觉行结果。
+  /// 段落、引用块与列表的文字行高度：直接累加共享视觉行结果。
   ///
   /// 逐逻辑行测量会把源文本里的硬换行当成排版换行，与合并渲染的行盒不符：
   /// 同一块在高度表里和块内 charOffset 插值里得到两个高度，差值随硬换行数
-  /// 累积（4 行硬换行样例实测 232 对 174 像素）。滚动与翻页共用这一份行盒。
+  /// 累积（4 行硬换行样例实测 232 对 174 像素）。滚动与翻页共用这一份行盒，
+  /// 块自身的 padding/段间距一律由 `blockChromeHeight` 另加，不掺进行高。
   static double _flowBlockHeight(
     ContentBlock block,
     double effectiveWidth,
     ReaderViewSettings settings,
-    double textScale, {
-    bool hasTrailingSpacing = false,
-  }) {
+    double textScale,
+  ) {
     final visualLines = _ReaderPaginationTextLayout.measureVisualLinesInternal(
       block,
       effectiveWidth,
@@ -175,15 +189,7 @@ class ReaderPaginationEngine {
       textScale,
       blockGlobalOffset: 0,
     );
-    var height = visualLines.fold<double>(
-      0.0,
-      (sum, line) => sum + line.height,
-    );
-    if (hasTrailingSpacing) {
-      // 段尾间距按渲染位置计入（ReaderContentBlockItem 加在段落之后）。
-      height += settings.fontSize * 0.6;
-    }
-    return height;
+    return visualLines.fold<double>(0.0, (sum, line) => sum + line.height);
   }
 
   /// 计算从块起始到 [charOffset] 的渲染高度（像素）。
@@ -308,27 +314,83 @@ class ReaderPageLayout {
   final Map<int, List<PaginationVisualLine>> _continuationVisualLines = {};
   final Map<int, double> _fixedBlockHeights = {};
 
+  /// 每块的字符数：`_charOffsets` 的相邻差。
+  ///
+  /// 二分定位、零字符组判定与图片组回退每页都要问几十次，每次重算一遍块的折行
+  /// 记账（逐行 fold 字符数）是白花的；差表一次算好，同域性由前缀表本身保证。
+  late final List<int> _blockCharCounts = List<int>.generate(
+    blocks.length,
+    (index) =>
+        index + 1 < blocks.length
+            ? _charOffsets[index + 1] - _charOffsets[index]
+            : _totalChars - _charOffsets[index],
+  );
+
+  int _blockChars(int index) => _blockCharCounts[index];
+
   /// 已执行的文本布局测量次数，用于性能回归测试。
   int get visualLineMeasurementCount =>
       _regularVisualLines.length + _continuationVisualLines.length;
 
+  /// 上一页之后的一页；[previous] 为空即取本章第一页。
+  ///
+  /// "页链还能不能继续"只在这里表达一次：游标不前进就算到底，**唯一的例外**是上一页
+  /// 把一条零宽块链切到了下一页（那种页靠 [PageSlice.chainContinueBlock] 接着画）。
+  /// 翻页导航器与回归语料都必须走这里，两侧各写一份就会一个判成结束、另一个死循环。
+  PageSlice? computeNextPage(PageSlice? previous) {
+    if (previous == null) return computePage(0);
+    if (previous.nextCursor <= previous.startCharOffset &&
+        previous.chainContinueBlock < 0) {
+      return null;
+    }
+    return computePage(
+      previous.nextCursor,
+      chainContinueBlock: previous.chainContinueBlock,
+    );
+  }
+
   /// 从章节字符偏移计算一页内容。
-  PageSlice? computePage(int startCharOffset) {
+  PageSlice? computePage(int startCharOffset, {int chainContinueBlock = -1}) {
     if (blocks.isEmpty) return null;
 
     if (_totalChars == 0) {
-      if (startCharOffset > 0) return null;
+      // 整章都是零字符块（图片、分隔线）：字符轴推不动游标，改按"已画到第几个块"
+      // 寻址。旧写法把整章压成一页并按索引裁到末尾，第二页永远不会出现，
+      // 读者只看到第一张图，其余的既不出页也不报错。
+      if (startCharOffset >= blocks.length) return null;
+      final zeroBudget = pageHeight - 1;
+      var usedZeroHeight = 0.0;
+      var zeroEnd = startCharOffset;
+      while (zeroEnd < blocks.length) {
+        final height = _fixedBlockHeights.putIfAbsent(
+          zeroEnd,
+          () => ReaderPaginationEngine.measureBlockHeight(
+            blocks[zeroEnd],
+            pageWidth,
+            settings,
+            textScale: textScale,
+            availableHeight: pageHeight,
+          ),
+        );
+        if (zeroEnd > startCharOffset && usedZeroHeight + height > zeroBudget) {
+          break;
+        }
+        usedZeroHeight += height;
+        zeroEnd++;
+      }
       return PageSlice(
-        startIndex: 0,
-        endIndex: blocks.length,
+        startIndex: startCharOffset,
+        endIndex: zeroEnd,
         startCharOffset: 0,
         endCharOffset: 0,
+        cursorEnd: zeroEnd,
+        accountedHeight: usedZeroHeight,
       );
     }
 
     // 图片页寻址：零字符图片块在字符轴上宽度为 0，普通二分定位会跳过它，
     // 导致放不下整页的图片被静默丢弃。游标落在图片块起点时单独产出一页。
-    final imagePage = _imagePageAt(startCharOffset);
+    final imagePage = _imagePageAt(startCharOffset, chainContinueBlock);
     if (imagePage != null) {
       return imagePage;
     }
@@ -342,13 +404,78 @@ class ReaderPageLayout {
     final budget = pageHeight - 1;
     var usedHeight = 0.0;
     var blockIndex = _findStartBlockIndex(effectiveStart);
+    blockIndex = _pageHeadBlockIndex(
+      blockIndex,
+      effectiveStart,
+      snappedBack: effectiveStart != startCharOffset,
+    );
     if (blockIndex >= blocks.length) return null;
     final startBlockIndex = blockIndex;
 
     while (blockIndex < blocks.length) {
       final block = blocks[blockIndex];
+      if (block is TableBlock) {
+        final tableStart = _charOffsets[blockIndex];
+        final rowPrefix = _tableRowPrefix(block);
+        final rowHeights = _ReaderPaginationMetrics.tableRowHeights(
+          block.rows,
+          settings,
+          textScale,
+        );
+        final localStart = math.min(
+          math.max(effectiveStart - tableStart, 0),
+          rowPrefix.last,
+        );
+        var rowIndex = _rowIndexAtRowStart(rowPrefix, localStart);
+        if (rowIndex >= block.rows.length) {
+          blockIndex++;
+          continue;
+        }
+        // 片段的外边距同样先确认这一行能在本页起头才扣，口径同正文块。
+        final tableChrome = ReaderContentBlockItem.tableVerticalPadding * 2;
+        if (blockIndex > startBlockIndex &&
+            usedHeight + tableChrome + rowHeights[rowIndex] > budget) {
+          return PageSlice(
+            startIndex: startBlockIndex,
+            endIndex: blockIndex,
+            startCharOffset: effectiveStart,
+            endCharOffset: tableStart,
+            accountedHeight: usedHeight,
+          );
+        }
+        var isFirstRowOfPage = usedHeight <= 0;
+        usedHeight += tableChrome;
+        while (rowIndex < block.rows.length) {
+          final rowHeight = rowHeights[rowIndex];
+          if (usedHeight + rowHeight > budget &&
+              (blockIndex > startBlockIndex || !isFirstRowOfPage)) {
+            return PageSlice(
+              startIndex: startBlockIndex,
+              endIndex: blockIndex + 1,
+              startCharOffset: effectiveStart,
+              endCharOffset: tableStart + rowPrefix[rowIndex],
+              accountedHeight: usedHeight,
+            );
+          }
+          if (isFirstRowOfPage && rowHeight > budget) {
+            // 单行比一整页还高：行是不可分的最小单位，只能让它独占一页。
+            return PageSlice(
+              startIndex: startBlockIndex,
+              endIndex: blockIndex + 1,
+              startCharOffset: effectiveStart,
+              endCharOffset: tableStart + rowPrefix[rowIndex + 1],
+              accountedHeight: usedHeight + rowHeight,
+            );
+          }
+          usedHeight += rowHeight;
+          isFirstRowOfPage = false;
+          rowIndex++;
+        }
+        blockIndex++;
+        continue;
+      }
       if (_isAtomicBlock(block)) {
-        if (_ReaderPaginationTextLayout.blockCharCount(block) > 0 &&
+        if (_blockChars(blockIndex) > 0 &&
             _charOffsets[blockIndex] < effectiveStart) {
           blockIndex++;
           continue;
@@ -361,6 +488,7 @@ class ReaderPageLayout {
             pageWidth,
             settings,
             textScale: textScale,
+            availableHeight: pageHeight,
           ),
         );
         // 图片独占一页：当前页已有正文时先收尾，图片由下一页单独渲染。
@@ -372,16 +500,15 @@ class ReaderPageLayout {
               endIndex: imageGroupStart,
               startCharOffset: effectiveStart,
               endCharOffset: _charOffsets[imageGroupStart],
+              accountedHeight: usedHeight,
             );
           }
-          // 当前页即图片组本身（正常情况下由 _imagePageAt 处理）：
-          // 整组产出一页，靠块区间渲染。
-          return PageSlice(
-            startIndex: imageGroupStart,
-            endIndex: _imageGroupEnd(blockIndex),
-            startCharOffset: effectiveStart,
-            endCharOffset: effectiveStart,
-            cursorEnd: effectiveStart + 1,
+          // 当前页的页头就是这条链（正常情况下由 _imagePageAt 处理）：
+          // 按页高装一页，靠块区间渲染，装不下的接着下一页画。
+          return _chainPage(
+            _charOffsets[imageGroupStart],
+            imageGroupStart,
+            _imageGroupEnd(blockIndex),
           );
         }
         if (usedHeight + height > budget && blockIndex > startBlockIndex) {
@@ -390,19 +517,25 @@ class ReaderPageLayout {
             endIndex: blockIndex,
             startCharOffset: effectiveStart,
             endCharOffset: _charOffsets[blockIndex],
+            accountedHeight: usedHeight,
           );
         }
         if (usedHeight + height > budget && blockIndex == startBlockIndex) {
           final endOffset =
               blockIndex + 1 < blocks.length
                   ? _charOffsets[blockIndex + 1]
-                  : _charOffsets[blockIndex] +
-                      _ReaderPaginationTextLayout.blockCharCount(block);
+                  : _charOffsets[blockIndex] + _blockChars(blockIndex);
+          // 零字符块（分隔线）比整页还高时，字符窗口是零宽的：不额外推进游标就会
+          // 原地产出一页空窗口，本章剩下的内容再也够不到。按图片组同一约定多走一格，
+          // 下一页因此不再回退纳这一块（回退只服务"上一页没画过它"的情形）。
+          final zeroWidthRun = _blockChars(blockIndex) == 0;
           return PageSlice(
             startIndex: startBlockIndex,
             endIndex: blockIndex + 1,
             startCharOffset: effectiveStart,
             endCharOffset: endOffset,
+            cursorEnd: zeroWidthRun ? endOffset + 1 : -1,
+            accountedHeight: usedHeight + height,
           );
         }
         usedHeight += height;
@@ -421,11 +554,49 @@ class ReaderPageLayout {
       }
 
       var visualLineIndex = _findVisualLineIndex(visualLines, effectiveStart);
+      // 块自身的 padding/段间距先占额度，再逐行判预算：渲染条目每页都把这一份画在块首，
+      // 而逐行塞满之后才补加会让整页超出预算正好一个间距（引用块 48、段距 1.35em）。
+      // 翻页内容层不可滚，超出的部分不是报错而是被静默裁掉，真书语料里每章都会碰上几页。
+      //
+      // 预扣之前先确认这一块能在本页起头：连间距带首行都塞不下时整块该推到下一页，
+      // 否则这份间距留在本页额度里，而本页并没有画它——引擎自算超页正好一个间距
+      // （真书语料里 walden 的 48.15）就是这么来的。
+      final blockChrome = ReaderContentBlockItem.blockLeadingChrome(
+        block,
+        settings,
+      );
+      // 引用盒的下留白与段距画在块的最后一行之后：只有把这一行放进来那一页才扣，
+      // 续页不再画它，收整份就是白丢一截预算（跨页引用每次多出 24 + 段距）。
+      final blockTrailingChrome = ReaderContentBlockItem.blockTrailingChrome(
+        block,
+        settings,
+      );
+      if (visualLineIndex < visualLines.length &&
+          blockIndex > startBlockIndex &&
+          usedHeight + blockChrome + visualLines[visualLineIndex].height >
+              budget) {
+        // 页首回退纳进来的零字符块已经花掉本页额度，而这一块一行都放不下：
+        // 此时窗口会退回 effectiveStart（零宽）。必须按图片组同一约定多走一格，
+        // 否则这一页什么都不写、游标也不动，本章剩余内容永远翻不到。
+        final stalledAtZeroWidth =
+            _charOffsets[blockIndex] <= effectiveStart && usedHeight > 0;
+        return PageSlice(
+          startIndex: startBlockIndex,
+          endIndex: blockIndex,
+          startCharOffset: effectiveStart,
+          endCharOffset: _charOffsets[blockIndex],
+          cursorEnd: stalledAtZeroWidth ? effectiveStart + 1 : -1,
+          accountedHeight: usedHeight,
+        );
+      }
       var isFirstLineOfPage = usedHeight <= 0;
+      usedHeight += blockChrome;
       while (visualLineIndex < visualLines.length) {
         final visualLine = visualLines[visualLineIndex];
+        final isLastLineOfBlock = visualLineIndex == visualLines.length - 1;
+        final trailing = isLastLineOfBlock ? blockTrailingChrome : 0.0;
         final height = visualLine.height;
-        if (usedHeight + height > budget &&
+        if (usedHeight + height + trailing > budget &&
             (blockIndex > startBlockIndex || !isFirstLineOfPage)) {
           return PageSlice(
             startIndex: startBlockIndex,
@@ -435,12 +606,15 @@ class ReaderPageLayout {
               visualLine.globalStart,
               effectiveStart,
             ),
+            accountedHeight: usedHeight,
           );
         }
         if (isFirstLineOfPage && height > budget) {
           visualLineIndex++;
           if (visualLineIndex >= visualLines.length) {
-            blockIndex++;
+            // 这一行比整页还高：强制收下并结束本块。外层循环随后推进块指针，
+            // 这里不能再自增一次，否则紧跟在后面的那一块被整页跳过。
+            usedHeight += height + trailing;
             break;
           }
           return PageSlice(
@@ -451,16 +625,15 @@ class ReaderPageLayout {
               visualLines[visualLineIndex].globalStart,
               effectiveStart,
             ),
+            accountedHeight: usedHeight + height,
           );
         }
-        usedHeight += height;
+        usedHeight += height + trailing;
         isFirstLineOfPage = false;
         visualLineIndex++;
       }
 
-      if (block is ParagraphBlock && block.hasTrailingSpacing) {
-        usedHeight += settings.fontSize * 0.6;
-      }
+      // 块间距已在进入本块时按渲染顺序预扣，这里不再补加。
       blockIndex++;
     }
 
@@ -469,6 +642,7 @@ class ReaderPageLayout {
       endIndex: blocks.length,
       startCharOffset: effectiveStart,
       endCharOffset: _totalChars,
+      accountedHeight: usedHeight,
     );
   }
 
@@ -476,18 +650,54 @@ class ReaderPageLayout {
   ///
   /// 图片页的真实字符区间为零宽（[startCharOffset] == [endCharOffset]），
   /// 通过 [PageSlice.cursorEnd] 指向图片之后，保证页链继续推进。
-  PageSlice? _imagePageAt(int cursor) {
+  /// 链比一页高时按页预算切成多页，续页位置走 [PageSlice.chainContinueBlock]。
+  PageSlice? _imagePageAt(int cursor, int chainContinueBlock) {
     final runs = _imageRuns ??= _buildImageRuns();
     final run = runs[cursor];
     if (run == null) {
       return null;
     }
+    var start = run.$1;
+    if (chainContinueBlock >= start && chainContinueBlock < run.$2) {
+      start = chainContinueBlock;
+    }
+    return _chainPage(cursor, start, run.$2);
+  }
+
+  /// 把零宽块链 [start, end) 按页高预算装成一页。
+  ///
+  /// 链里的块在字符轴上全是零宽，装页时谁也不给谁让位：过去整条链压成一页、又不出
+  /// 预算，两张高图就在一页里叠起来，翻页内容层不可滚，被挤下去的那张静默看不见。
+  /// 现在装到装不下为止，剩下的用块索引接到下一页；链首那块无条件进页——比整页还高的
+  /// 单张图只能独占一页，切成零块的页会推不动游标。
+  PageSlice _chainPage(int cursor, int start, int end) {
+    final budget = pageHeight - 1;
+    var used = 0.0;
+    var last = start;
+    for (var index = start; index < end; index++) {
+      final height = _fixedBlockHeights.putIfAbsent(
+        index,
+        () => ReaderPaginationEngine.measureBlockHeight(
+          blocks[index],
+          pageWidth,
+          settings,
+          textScale: textScale,
+          availableHeight: pageHeight,
+        ),
+      );
+      if (index > start && used + height > budget) break;
+      used += height;
+      last = index + 1;
+    }
+    final exhausted = last >= end;
     return PageSlice(
-      startIndex: run.$1,
-      endIndex: run.$2,
+      startIndex: start,
+      endIndex: last,
       startCharOffset: cursor,
       endCharOffset: cursor,
-      cursorEnd: cursor + 1,
+      cursorEnd: exhausted ? cursor + 1 : cursor,
+      chainContinueBlock: exhausted ? -1 : last,
+      accountedHeight: used,
     );
   }
 
@@ -517,14 +727,13 @@ class ReaderPageLayout {
     final endByIndex = <int, int>{};
     var i = 0;
     while (i < blocks.length) {
-      if (_ReaderPaginationTextLayout.blockCharCount(blocks[i]) != 0) {
+      if (_blockChars(i) != 0) {
         i++;
         continue;
       }
       var end = i;
       var hasImage = false;
-      while (end < blocks.length &&
-          _ReaderPaginationTextLayout.blockCharCount(blocks[end]) == 0) {
+      while (end < blocks.length && _blockChars(end) == 0) {
         if (blocks[end] is ImageBlock) {
           hasImage = true;
         }
@@ -560,18 +769,39 @@ class ReaderPageLayout {
       return cursor;
     }
     final previous = index - 1;
-    if (previous < 0 ||
-        _ReaderPaginationTextLayout.blockCharCount(blocks[previous]) != 0) {
+    if (previous < 0 || _blockChars(previous) != 0) {
       return cursor;
     }
     return _charOffsets[index];
   }
 
   bool _isAtomicBlock(ContentBlock block) =>
-      block is HeadingBlock ||
-      block is ImageBlock ||
-      block is DividerBlock ||
-      block is TableBlock;
+      block is HeadingBlock || block is ImageBlock || block is DividerBlock;
+
+  /// 表格各行在块内的字符前缀：`prefix[i]` = 前 i 行的字符数，长度 = 行数 + 1。
+  ///
+  /// 行的字符口径与 `BlockClipper.blockCharCount` 完全一致（各单元格可绘制文本相接，
+  /// 没有分隔符），否则切点与裁剪两侧对不上，跨页表格会重字或丢字。
+  static List<int> _tableRowPrefix(TableBlock block) {
+    final prefix = <int>[0];
+    var total = 0;
+    for (final row in block.rows) {
+      total += row.cells.fold(
+        0,
+        (sum, cell) => sum + cell.fold(0, (s, span) => s + span.text.length),
+      );
+      prefix.add(total);
+    }
+    return prefix;
+  }
+
+  /// [localStart] 落在哪一行；行尾之后返回行数，让调用方跳过本块。
+  static int _rowIndexAtRowStart(List<int> prefix, int localStart) {
+    for (var i = 0; i < prefix.length - 1; i++) {
+      if (prefix[i + 1] > localStart) return i;
+    }
+    return prefix.length - 1;
+  }
 
   List<PaginationVisualLine> _visualLinesFor(
     int blockIndex, {
@@ -592,14 +822,47 @@ class ReaderPageLayout {
     );
   }
 
+  /// 渲染侧 `BlockClipper.clipBlocksByCharRange` 会把"起点偏移上正好压着的零字符块"
+  /// 回退纳入本页（只排除图片：图片由按索引裁剪的图片页单独出页），而二分定位按
+  /// `块尾 <= 起点` 把它们判给上一页。两侧对"页首是谁"判断不同，引擎就少算整块高度，
+  /// 翻页内容层不可滚 → 页底那一行被静默裁掉。这里按裁剪侧的同一条判据回退。
+  ///
+  /// 起始正文块属于图片组时整条回退作废：图片组占的是零宽字符窗口，并进来会让本页
+  /// 的起止偏移相同，页链原地踏步（真书语料里 walden 前置页实测过）。混合组
+  /// （`<hr>` 紧邻 `<img>`）里分隔线被谁渲染仍未定论，作为单独缺陷跟踪。
+
+  int _pageHeadBlockIndex(
+    int textStartIndex,
+    int effectiveStart, {
+    required bool snappedBack,
+  }) {
+    if (textStartIndex >= blocks.length) return textStartIndex;
+    // 游标是被"多走一格"退回来的：那一串零字符块已经由上一页画过，再回退就是画两遍。
+    if (snappedBack) return textStartIndex;
+    if (_imageGroupStart(textStartIndex) != null) return textStartIndex;
+    var index = textStartIndex;
+    while (index > 0 &&
+        _charOffsets[index - 1] == effectiveStart &&
+        blocks[index - 1] is! ImageBlock &&
+        _blockChars(index - 1) == 0) {
+      index--;
+    }
+    if (index == textStartIndex) return textStartIndex;
+    // 回退范围里若混进图片组成员，同样放弃：图片不在字符裁剪这一侧出页。
+    for (var i = index; i < textStartIndex; i++) {
+      if (blocks[i] is ImageBlock || _imageGroupStart(i) != null) {
+        return textStartIndex;
+      }
+    }
+    return index;
+  }
+
   int _findStartBlockIndex(int startCharOffset) {
     var low = 0;
     var high = blocks.length;
     while (low < high) {
       final middle = low + ((high - low) >> 1);
-      final blockEnd =
-          _charOffsets[middle] +
-          _ReaderPaginationTextLayout.blockCharCount(blocks[middle]);
+      final blockEnd = _charOffsets[middle] + _blockChars(middle);
       if (blockEnd <= startCharOffset) {
         low = middle + 1;
       } else {

@@ -319,7 +319,7 @@ class _TopBarButton extends StatelessWidget {
 }
 
 /// 样例 `.reader-topbar`：66 高（安全区另计）+ 顶部实底到 58% 再渐隐 +
-/// 玻璃圆钮 + 左起双行书名/章节。
+/// 玻璃圆钮 + 居中的双行书名/章节（稿子 `48px minmax(0,1fr) 48px` 三列网格）。
 class _ReaderSampleTopBar extends StatelessWidget {
   const _ReaderSampleTopBar({required this.bar});
 
@@ -349,24 +349,33 @@ class _ReaderSampleTopBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
-                _ReaderGlassCircleButton(
-                  icon: OmniIcons.arrow,
-                  tooltip: l10n.coreBack,
-                  settings: bar.settings,
-                  onTap: bar.onBack,
+                // 稿子是 `grid-template-columns: 48px minmax(0,1fr) 48px`：
+                // 两条等宽侧轨，中列才真正落在屏幕中线上。返回/溢出各自占满
+                // 一条 48 轨（返回是逃生控件，48 下限优先于稿子里 44 的钮）。
+                SizedBox(
+                  width: 48,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ReaderGlassCircleButton(
+                      icon: OmniIcons.arrow,
+                      tooltip: l10n.coreBack,
+                      settings: bar.settings,
+                      onTap: bar.onBack,
+                    ),
+                  ),
                 ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      // 稿子的 .book-context 是网格中列，文字左起。
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
                           bar.bookTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: bar.settings.onSurfaceColor,
                             fontSize: AppTypography.bodyMedium,
@@ -381,6 +390,7 @@ class _ReaderSampleTopBar extends StatelessWidget {
                               bar.chapterTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: bar.settings.onSurfaceVariantColor,
                                 fontSize: AppTypography.labelMicro,
@@ -392,7 +402,13 @@ class _ReaderSampleTopBar extends StatelessWidget {
                     ),
                   ),
                 ),
-                _ReaderSampleOverflowMenu(bar: bar),
+                SizedBox(
+                  width: 48,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _ReaderSampleOverflowMenu(bar: bar),
+                  ),
+                ),
               ],
             ),
           ),

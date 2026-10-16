@@ -13,9 +13,11 @@ import 'package:omninest/features/reader/application/reader_comic_image_provider
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_sync_service.dart';
+import 'package:omninest/features/reader/application/reader_session_recorder.dart';
 import 'package:omninest/features/reader/domain/comic_anchor.dart';
 import 'package:omninest/features/reader/domain/comic_layout_index.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
+import 'package:omninest/features/reader/domain/comic_navigation.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_page_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_layout.dart';
@@ -73,7 +75,8 @@ class ComicReaderView extends ConsumerStatefulWidget {
   ConsumerState<ComicReaderView> createState() => _ComicReaderViewState();
 }
 
-class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
+class _ComicReaderViewState extends ConsumerState<ComicReaderView>
+    with WidgetsBindingObserver {
   late PageController _pageController;
   late ScrollController _scrollController;
   late ComicLayoutIndex _layoutIndex;
@@ -108,6 +111,12 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   VoidCallback? _volumeKeyEventCancel;
   bool _volumeKeyPagingPushed = false;
 
+  /// 会话记账：只累计前台活跃时长，切后台挂机不计入阅读统计。
+  final DateTime _sessionStart = DateTime.now();
+  Duration _accumulatedActive = Duration.zero;
+  DateTime? _lastResumedAt;
+  bool _sessionRecorded = false;
+
   ComicManifest get _manifest => widget.manifest;
   List<ComicPage> get _pages => _manifest.pages;
   int get _totalPages => _pages.length;
@@ -118,6 +127,7 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _progressSync = ref.read(readerProgressSyncServiceProvider);
     final defaultMode = kIsWeb ? 'scroll' : 'page';
     _displaySettings = ComicReaderDisplaySettings(readingMode: defaultMode);
@@ -170,7 +180,41 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final now = DateTime.now();
+    if (state == AppLifecycleState.resumed) {
+      _lastResumedAt = now;
+      return;
+    }
+    final resumedAt = _lastResumedAt;
+    if (resumedAt != null) {
+      _accumulatedActive += now.difference(resumedAt);
+      _lastResumedAt = null;
+    }
+  }
+
+  /// 阅读会话只记一次：退出与后台挂起都可能触发，重复记录会把时长算两遍。
+  void _recordSession() {
+    if (_sessionRecorded) {
+      return;
+    }
+    _sessionRecorded = true;
+    final resumedAt = _lastResumedAt;
+    ReaderSessionRecorder.recordSession(
+      itemId: widget.itemId,
+      sessionStart: _sessionStart,
+      activeReading:
+          resumedAt == null
+              ? _accumulatedActive
+              : _accumulatedActive + DateTime.now().difference(resumedAt),
+    );
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // 看漫画也是阅读：不记会话就没有时长，连续天数与统计对漫画永远是空的。
+    _recordSession();
     // 退出前补一次最终落库：滚动进度走 500ms 防抖，直接 cancel 会丢
     // 最近一次未落盘的位置；持久化不依赖 ref，可在 dispose 中执行。
     _persistProgress(force: true);
@@ -231,11 +275,27 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
       _settings = _settings.copyWith(volumeKeyPaging: value);
     });
     _syncVolumeKeyPaging();
-    unawaited(
-      ref.read(readerPreferencesProvider.notifier).save({
-        'volumeKeyPaging': value,
-      }),
-    );
+    unawaited(_saveMergedPreferences({'volumeKeyPaging': value}));
+  }
+
+  /// 合并整张偏好字典后再落盘。
+  ///
+  /// 只传单键的 `save` 会把偏好字典覆盖成只剩这一项：字号、主题与漫画显示设置一起丢。
+  Future<void> _saveMergedPreferences(Map<String, dynamic> patch) async {
+    final current = await ref.read(readerPreferencesProvider.future);
+    if (!mounted) {
+      return;
+    }
+    await ref
+        .read(readerPreferencesProvider.notifier)
+        .save(
+          mergeComicReaderPreferences(
+            current: current,
+            pendingDisplaySettings: _pendingDisplaySettings,
+            appliedDisplaySettings: _displaySettings,
+            patch: patch,
+          ),
+        );
   }
 
   @override
@@ -646,7 +706,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
               onShowContents: () => _togglePanel(ReaderPanelType.contents),
               onShowSettings: () => _togglePanel(ReaderPanelType.settings),
               onShowShortcuts: () => _togglePanel(ReaderPanelType.shortcuts),
-              onSwitchReadingMode: _switchReadingMode,
+              // 设置面板按产品决策在 Web 上不出现翻页模式入口；顶栏与底栏必须同一口径，
+              // 否则绕过面板照样能切进 Web 不支持的模式。
+              onSwitchReadingMode: supportsPageMode ? _switchReadingMode : null,
             ),
             ComicReaderBottomBar(
               visible: _showControls,
@@ -662,7 +724,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
                       : null,
               onSeek: _jumpToPage,
               onShowContents: () => _togglePanel(ReaderPanelType.contents),
-              onSwitchReadingMode: _switchReadingMode,
+              // 设置面板按产品决策在 Web 上不出现翻页模式入口；顶栏与底栏必须同一口径，
+              // 否则绕过面板照样能切进 Web 不支持的模式。
+              onSwitchReadingMode: supportsPageMode ? _switchReadingMode : null,
             ),
             ComicPageIndicator(
               visible: !_showControls,

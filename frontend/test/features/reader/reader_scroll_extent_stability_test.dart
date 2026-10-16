@@ -124,6 +124,9 @@ void main() {
       final expected =
           blockExtent * parseBlocks(html).length +
           ReaderViewContent.trailingSpacerHeight +
+          // 标题槽在渲染侧另留一份余量，范围要跟着算。
+          ReaderViewContent.headingSlotSlack *
+              parseBlocks(html).whereType<HeadingBlock>().length +
           insets.top +
           insets.bottom -
           600;

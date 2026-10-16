@@ -7,6 +7,31 @@ import 'package:omninest/features/reader/presentation/widgets/reader_html_parser
 /// 修复前 `_mergeConsecutiveParagraphs` 无上限，整章连续段落会合并成单个块：
 /// 测高分批（40 块/批）、逐页懒分页与远跳分批全部退化为单批，
 /// 数 MB 文本进入一次 TextPainter 全量 layout。
+/// 装配规则的等宽文本视图：换行照原样，缩进盒子记成同样字宽的全角空格。
+///
+/// 真实排版由 `paragraphGapSpans` 给出 span 序列；这里只为把一整块的版面拼成
+/// 字符串比对，规则一律以 `paragraphGap` 为准。
+String paragraphLineSeparator({
+  required bool isFirstLine,
+  required bool isNewParagraph,
+  required bool previousLineIsEmpty,
+  required bool isBlockContinuation,
+  required bool startsWithFullWidthIndent,
+  int indentChars = defaultFirstLineIndentChars,
+  bool isSoftWrap = false,
+}) {
+  final gap = paragraphGap(
+    isFirstLine: isFirstLine,
+    isNewParagraph: isNewParagraph,
+    previousLineIsEmpty: previousLineIsEmpty,
+    isBlockContinuation: isBlockContinuation,
+    startsWithFullWidthIndent: startsWithFullWidthIndent,
+    indentChars: indentChars,
+    isSoftWrap: isSoftWrap,
+  );
+  return '${gap.newLine ? '\n' : ''}${'　' * gap.indentChars}';
+}
+
 void main() {
   String paragraphText(ParagraphBlock block) =>
       block.lines

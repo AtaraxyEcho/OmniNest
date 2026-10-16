@@ -14,6 +14,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_fill.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.dart';
@@ -28,6 +29,12 @@ class ReaderBookshelfPage extends ConsumerWidget {
     final stateAsync = ref.watch(readerCenterControllerProvider);
     final state = stateAsync.asData?.value;
     final shelved = state?.bookshelfItems ?? const <ReaderItem>[];
+    scheduleReaderPageFill(
+      ref,
+      visibleCount: shelved.length,
+      hasMore: state?.itemsHasMore ?? false,
+      isLoadingMore: state?.itemsLoadingMore ?? false,
+    );
     return ReaderPageScaffold(
       target: ReaderPageTarget.bookshelf,
       // 书架自带滚动体：外层若是页级 SingleChildScrollView，列表的

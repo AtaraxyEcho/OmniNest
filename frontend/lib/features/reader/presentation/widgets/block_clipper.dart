@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_models.dart';
 
 /// 按字符范围裁剪 ContentBlock 列表的静态工具类。
 ///
@@ -52,6 +55,39 @@ class BlockClipper {
   ///
   /// 供零字符块（图片独占页）使用：这类页面的真实字符区间为零宽，
   /// 无法用字符范围表达，只能按块区间取。
+  /// 按页切片取本页要画的块，渲染侧与回归语料只能经由这里取数。
+  ///
+  /// 零宽窗口（图片独占页、链页）按块索引裁；其余按字符区间裁，再把**尾端**正好压在
+  /// [PageSlice.endCharOffset] 上的零宽块补回来：区间裁剪按 `块起点 >= 区间尾` 停步，
+  /// 而引擎已经把这些块装进本页并算过高度——不补就是收尾的分隔线静默不画。
+  /// 起点侧的零宽图片块不补：那归 `_pageHeadBlockIndex` 的回退判据管，补了就画两遍。
+  static List<ContentBlock> clipBlocksByPageRange(
+    List<ContentBlock> blocks,
+    PageSlice slice,
+  ) {
+    if (slice.endCharOffset <= slice.startCharOffset) {
+      return clipBlocksByIndexRange(blocks, slice.startIndex, slice.endIndex);
+    }
+    final clipped = clipBlocksByCharRange(
+      blocks,
+      slice.startCharOffset,
+      slice.endCharOffset,
+    );
+    final offsets = _prefixFor(blocks);
+    final trailing = <ContentBlock>[];
+    for (
+      var i = slice.startIndex;
+      i < slice.endIndex && i + 1 < offsets.length;
+      i++
+    ) {
+      if (offsets[i] >= slice.endCharOffset && offsets[i] == offsets[i + 1]) {
+        trailing.add(blocks[i]);
+      }
+    }
+    if (trailing.isEmpty) return clipped;
+    return <ContentBlock>[...clipped, ...trailing];
+  }
+
   static List<ContentBlock> clipBlocksByIndexRange(
     List<ContentBlock> blocks,
     int startIndex,
@@ -167,18 +203,47 @@ class BlockClipper {
     int localEnd,
   ) {
     switch (block) {
-      case ParagraphBlock(:final lines, :final hasTrailingSpacing):
+      case ParagraphBlock(
+        :final lines,
+        :final hasTrailingSpacing,
+        :final style,
+      ):
         final trimmed = trimTextBlockByCharRange(lines, localStart, localEnd);
+        final blockChars = lines.fold<int>(
+          0,
+          (sum, line) => sum + line.sourceChars,
+        );
         return trimmed != null
             ? ParagraphBlock(
               lines: trimmed,
-              hasTrailingSpacing: hasTrailingSpacing,
+              // 段尾间距只属于把最后一行放在本页的那一份：跨 N 页的长段落每页都
+              // 保留这个信号时，同一处留白被计入 N 次，续接页底部凭空多出段距。
+              hasTrailingSpacing: hasTrailingSpacing && localEnd >= blockChars,
+              style: style,
             )
             : null;
-      case BlockquoteBlock(:final lines, :final startOffset):
+      case BlockquoteBlock(
+        :final lines,
+        :final startOffset,
+        :final style,
+        :final hasTopPadding,
+        :final hasBottomPadding,
+      ):
         final trimmed = trimTextBlockByCharRange(lines, localStart, localEnd);
+        final blockChars = lines.fold<int>(
+          0,
+          (sum, line) => sum + line.sourceChars,
+        );
         return trimmed != null
-            ? BlockquoteBlock(lines: trimmed, startOffset: startOffset)
+            ? BlockquoteBlock(
+              lines: trimmed,
+              startOffset: startOffset,
+              style: style,
+              // 留白要按"运行位置 ∧ 窗口位置"取交集：整块被推到下一页时它不再带
+              // 首段的顶部留白，留在本页的前半段也不再带尾段的底部留白。
+              hasTopPadding: hasTopPadding && localStart == 0,
+              hasBottomPadding: hasBottomPadding && localEnd >= blockChars,
+            )
             : null;
       case ListBlock(:final items, :final isOrdered, :final startOffset):
         final trimmed = trimListBlockByCharRange(items, localStart, localEnd);
@@ -192,10 +257,66 @@ class BlockClipper {
       case HeadingBlock():
       case ImageBlock():
       case DividerBlock():
-      case TableBlock():
         return localStart == 0 ? block : null;
+      case TableBlock(:final rows, :final startOffset):
+        // 表格可以按行跨页：整块放不下时页底会静默裁掉最后几行（真书语料里 walden
+        // 的 696px 表格就是这样）。行是不可分的最小单位，切点只落在行边界上。
+        return _trimTableByCharRange(rows, localStart, localEnd, startOffset);
     }
   }
+
+  /// 按字符范围裁剪表格的行列表，切点只落在行边界。
+  ///
+  /// 行的字符数就是各单元格可绘制文本依次相接的长度（没有分隔符），所以行内裁剪
+  /// 直接按单元格顺序换算。空单元格要保留，否则列数变了，表头底色也会跟着错位。
+  static ContentBlock? _trimTableByCharRange(
+    List<TableRowData> rows,
+    int localStart,
+    int localEnd,
+    int startOffset,
+  ) {
+    var offset = 0;
+    final kept = <TableRowData>[];
+    for (final row in rows) {
+      final rowChars = _rowCharCount(row);
+      final rowEnd = offset + rowChars;
+      if (rowEnd <= localStart || offset >= localEnd) {
+        offset = rowEnd;
+        continue;
+      }
+      final clipStart = math.max(0, localStart - offset);
+      final clipEnd = math.min(rowChars, localEnd - offset);
+      final cells = <List<ReaderInlineSpan>>[];
+      var cellOffset = 0;
+      for (final cell in row.cells) {
+        final cellChars = cell.fold(0, (sum, span) => sum + span.text.length);
+        if (cellChars == 0) {
+          if (cellOffset >= clipStart && cellOffset <= clipEnd) {
+            cells.add(cell);
+          }
+          continue;
+        }
+        final from = math.max(clipStart, cellOffset) - cellOffset;
+        final to = math.min(clipEnd, cellOffset + cellChars) - cellOffset;
+        if (to > from) {
+          final trimmed = trimSpansByCharRange(cell, from, to);
+          if (trimmed.isNotEmpty) {
+            cells.add(trimmed);
+          }
+        }
+        cellOffset += cellChars;
+      }
+      kept.add(TableRowData(cells: cells, isHeader: row.isHeader));
+      offset = rowEnd;
+    }
+    if (kept.isEmpty) return null;
+    return TableBlock(rows: kept, startOffset: startOffset);
+  }
+
+  static int _rowCharCount(TableRowData row) => row.cells.fold(
+    0,
+    (sum, cell) => sum + cell.fold(0, (s2, span) => s2 + span.text.length),
+  );
 
   /// 按字符范围裁剪文本行列表。
   ///
@@ -221,8 +342,12 @@ class BlockClipper {
         LineData(
           spans: last.spans,
           isNewParagraph: last.isNewParagraph,
-          collapsedChars: last.collapsedChars + orphanSource,
+          collapsedChars: last.collapsedChars,
+          // 孤儿折叠字符来自被丢掉的空白行，位置在这一行可绘制文本之后，
+          // 记进行尾而不是行首，行首定位才不会跟着整体偏移。
+          trailingCollapsedChars: last.trailingCollapsedChars + orphanSource,
           softWrap: last.softWrap,
+          style: last.style,
         ),
       );
       orphanSource = 0;
@@ -267,13 +392,24 @@ class BlockClipper {
         }
         if (trimmedSpans.isNotEmpty) {
           attachOrphans();
+          // 窗口内的折叠字符要继续计入，但必须按位置分成行首与行尾两份：
+          // 行首那部分是 paintedStart 之前、窗口起点之后的字符。
+          final keptLeading = math.max(
+            0,
+            paintedStart - (localStart > offset ? localStart : offset),
+          );
+          final keptTrailing = math.max(
+            0,
+            keptSource - trimmedPainted - keptLeading,
+          );
           result.add(
             LineData(
               spans: trimmedSpans,
               isNewParagraph: line.isNewParagraph,
-              // 落在裁剪窗口内的折叠字符继续计入，跨页字符总数才守恒。
-              collapsedChars: keptSource - trimmedPainted,
+              collapsedChars: keptLeading,
+              trailingCollapsedChars: keptTrailing,
               softWrap: line.softWrap,
+              style: line.style,
             ),
           );
           offset = lineEnd;

@@ -2,34 +2,21 @@ import 'package:flutter/material.dart';
 
 /// 侧边点击区域。
 ///
-/// Listener 不参与手势竞技场，允许 SelectionArea 正常接收点击事件。
-/// 用距离检测区分点击（<18px）和滚动（>=18px）。
-class SideTapZone extends StatefulWidget {
+/// 用真手势识别器（不是 Listener）声明这次点击：Listener 不进竞技场，
+/// 正文那层的 onTap 会在同一次点击里再触发一遍，移动端点左右两侧就同时
+/// 滚视口和弹 chrome。竞技场里顶部（后加入 Stack 的这层）先入队并胜出，
+/// 正文的点击因此不再触发。只声明点击，不声明拖拽，纵向滚动仍由下面的
+/// Scrollable 取得；轻滑阈值由 TapGestureRecognizer 的 slop 提供。
+class SideTapZone extends StatelessWidget {
   const SideTapZone({required this.onTap, super.key});
 
   final VoidCallback onTap;
 
   @override
-  State<SideTapZone> createState() => SideTapZoneState();
-}
-
-class SideTapZoneState extends State<SideTapZone> {
-  Offset? _downPosition;
-
-  @override
   Widget build(BuildContext context) {
-    return Listener(
+    return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        _downPosition = event.buttons == 1 ? event.position : null;
-      },
-      onPointerUp: (event) {
-        if (_downPosition == null) return;
-        final distance = (event.position - _downPosition!).distance;
-        _downPosition = null;
-        if (distance < 18) widget.onTap();
-      },
-      onPointerCancel: (_) => _downPosition = null,
+      onTap: onTap,
       child: const SizedBox.expand(),
     );
   }

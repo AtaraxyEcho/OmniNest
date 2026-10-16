@@ -1,15 +1,17 @@
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:omninest/platform/file_pick.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
@@ -43,6 +45,10 @@ class _ReaderMetadataEditPageState
   String _serialStatus = 'UNKNOWN';
   bool _saving = false;
 
+  /// 表单只在首次拿到详情时回填一次。在 `build` 里无条件回填会让用户清空
+  /// 任一字段后，任何一次 `setState`（切下拉框、点保存）都把旧值顶回去。
+  bool _formInitialized = false;
+
   static const _serialStatuses = ['UNKNOWN', 'ONGOING', 'COMPLETED'];
 
   void _handleBack() {
@@ -64,6 +70,23 @@ class _ReaderMetadataEditPageState
     _ratingCtrl = TextEditingController();
     _genresCtrl = TextEditingController();
     _isbnCtrl = TextEditingController();
+    unawaited(_seedFormFromDetail());
+  }
+
+  /// 首次拿到详情后回填一次表单；正文渲染只读状态，不在 build 中写控制器。
+  Future<void> _seedFormFromDetail() async {
+    try {
+      final detail = await ref.read(
+        readerItemDetailProvider(widget.itemId).future,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _initForm(detail.item));
+    } on Exception catch (e) {
+      // 详情请求失败时 build 已经渲染 AppErrorView，这里只留痕，不重复提示。
+      devLog('元数据编辑页表单回填失败: ${describeUserFacingError(e).displayMessage}');
+    }
   }
 
   @override
@@ -79,34 +102,21 @@ class _ReaderMetadataEditPageState
     super.dispose();
   }
 
-  void _initForm(ReaderItemDetail detail) {
-    final item = detail.item;
-    if (_titleCtrl.text.isEmpty && item.title.isNotEmpty) {
-      _titleCtrl.text = item.title;
+  void _initForm(ReaderItem item) {
+    if (_formInitialized) {
+      return;
     }
-    if (_authorCtrl.text.isEmpty) {
-      _authorCtrl.text = item.authorName ?? '';
-    }
-    if (_descriptionCtrl.text.isEmpty) {
-      _descriptionCtrl.text = item.description ?? '';
-    }
-    if (_publisherCtrl.text.isEmpty) {
-      _publisherCtrl.text = item.publisher ?? '';
-    }
-    if (_releaseDateCtrl.text.isEmpty) {
-      _releaseDateCtrl.text =
-          item.releaseDate?.toIso8601String().split('T').first ?? '';
-    }
-    if (_ratingCtrl.text.isEmpty) {
-      _ratingCtrl.text = item.rating?.toString() ?? '';
-    }
-    if (_genresCtrl.text.isEmpty) {
-      _genresCtrl.text = item.genres?.join(', ') ?? '';
-    }
-    if (_isbnCtrl.text.isEmpty) {
-      _isbnCtrl.text = '';
-    }
-    if (_serialStatus == 'UNKNOWN' && item.serialStatus != null) {
+    _formInitialized = true;
+    _titleCtrl.text = item.title;
+    _authorCtrl.text = item.authorName ?? '';
+    _descriptionCtrl.text = item.description ?? '';
+    _publisherCtrl.text = item.publisher ?? '';
+    _releaseDateCtrl.text =
+        item.releaseDate?.toIso8601String().split('T').first ?? '';
+    _ratingCtrl.text = item.rating?.toString() ?? '';
+    _genresCtrl.text = item.genres?.join(', ') ?? '';
+    _isbnCtrl.text = item.isbn ?? '';
+    if (item.serialStatus != null) {
       _serialStatus = item.serialStatus!;
     }
   }
@@ -147,7 +157,7 @@ class _ReaderMetadataEditPageState
       fields['serialStatus'] = _serialStatus;
     }
     final isbn = _isbnCtrl.text.trim();
-    if (isbn.isNotEmpty) {
+    if (isbn != (original.isbn ?? '')) {
       fields['isbn'] = isbn;
     }
     return fields;
@@ -233,15 +243,12 @@ class _ReaderMetadataEditPageState
         ],
       ),
       body: detailAsync.when(
-        data: (detail) {
-          _initForm(detail);
-          return _buildForm(detail);
-        },
+        data: _buildForm,
         error:
             (e, _) => AppErrorView(
               message: describeUserFacingError(e).displayMessage,
             ),
-        loading: () => const AppLoading.detail(),
+        loading: () => const AppLoading(),
       ),
     );
   }
@@ -505,30 +512,20 @@ class _ReaderMetadataEditPageState
       final candidates =
           await ref
               .read(readerCenterControllerProvider.notifier)
-              .importCandidates();
+              .coverCandidates();
       if (!mounted) {
         return;
       }
-      final imageFiles =
-          candidates.where((candidate) {
-            final name = candidate.fileName.toLowerCase();
-            return name.endsWith('.jpg') ||
-                name.endsWith('.jpeg') ||
-                name.endsWith('.png') ||
-                name.endsWith('.webp');
-          }).toList();
-      if (!mounted || imageFiles.isEmpty) {
-        if (mounted) {
-          final l10n = AppLocalizations.of(context);
-          showReaderSnackBar(context, l10n.readerNoImageFiles);
-        }
+      if (candidates.isEmpty) {
+        final l10n = AppLocalizations.of(context);
+        showReaderSnackBar(context, l10n.readerNoImageFiles);
         return;
       }
-      final selected = await showWorkstationDialog<ReaderImportCandidate>(
+      final selected = await showWorkstationDialog<ReaderCoverCandidate>(
         context: context,
         builder:
             (ctx) => _FilePickerDialog(
-              files: imageFiles,
+              files: candidates,
               title: AppLocalizations.of(context).readerSelectCoverImage,
             ),
       );
@@ -560,16 +557,15 @@ class _ReaderMetadataEditPageState
 
   Future<void> _pickAndUpload() async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+      final result = await FilePick.pickFiles(
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
       );
       if (result.isEmpty) return;
       if (!mounted) {
         return;
       }
       final file = result.first;
-      final bytes = await file.readAsBytes();
+      final bytes = await file.readBytes();
       if (!mounted) {
         return;
       }
@@ -602,7 +598,7 @@ class _ReaderMetadataEditPageState
 class _FilePickerDialog extends StatelessWidget {
   const _FilePickerDialog({required this.files, required this.title});
 
-  final List<ReaderImportCandidate> files;
+  final List<ReaderCoverCandidate> files;
   final String title;
 
   @override

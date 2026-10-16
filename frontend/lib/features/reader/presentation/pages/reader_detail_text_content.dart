@@ -39,7 +39,8 @@ class ReaderDetailTextContent extends ConsumerStatefulWidget {
   final List<ParsedChapter> chapters;
   final bool bookshelfBusy;
   final VoidCallback onToggleBookshelf;
-  final void Function(String chapterId, {required bool resume}) onReadChapter;
+  final void Function(String chapterId, {required bool resume, int? charOffset})
+  onReadChapter;
   final VoidCallback onEditMetadata;
   final VoidCallback onReparse;
   final VoidCallback onDelete;
@@ -75,14 +76,7 @@ class ReaderDetailTextContentState
     return widget.chapters
         .asMap()
         .entries
-        .map(
-          (e) => ReaderChapter.fromParsed(
-            e.key,
-            e.value.title,
-            contentPath: e.value.contentPath,
-            level: e.value.level,
-          ),
-        )
+        .map((entry) => ReaderChapter.fromParsed(entry.key, entry.value))
         .toList();
   }
 
@@ -500,8 +494,12 @@ class ReaderDetailTextContentState
     return SliverList.builder(
       itemCount: chapters.length,
       itemBuilder: (context, i) {
+        // 章节身份必须走 parsedChapterId：TXT 的真实键是 't{偏移}'，硬编码 'chapter_$i'
+        // 会让路由查不到章（"章节加载失败"），当前阅读章的高亮也永远不亮。
+        final chapterId = parsedChapterId(chapters[i]);
+        final isCurrent = chapterId == currentChapterId;
         return InkWell(
-          onTap: () => widget.onReadChapter('chapter_$i', resume: false),
+          onTap: () => widget.onReadChapter(chapterId, resume: false),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Row(
@@ -528,14 +526,11 @@ class ReaderDetailTextContentState
                       color: rc.onSurface,
                       fontSize: AppTypography.bodyMedium,
                       height: 1.3,
-                      fontWeight:
-                          'chapter_$i' == currentChapterId
-                              ? FontWeight.w700
-                              : FontWeight.w400,
+                      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w400,
                     ),
                   ),
                 ),
-                if ('chapter_$i' == currentChapterId) ...[
+                if (isCurrent) ...[
                   const SizedBox(width: 8),
                   Container(
                     width: 6,
@@ -688,11 +683,23 @@ class ReaderDetailTextContentState
           itemBuilder: (context, index) {
             final bookmark = bookmarks[index];
             return InkWell(
-              onTap:
-                  () => widget.onReadChapter(
-                    _resolveBookmarkChapterId(bookmark),
+              onTap: () {
+                final chapterId = bookmark.chapterId?.trim() ?? '';
+                if (chapterId.isNotEmpty) {
+                  widget.onReadChapter(
+                    chapterId,
                     resume: false,
-                  ),
+                    charOffset: bookmark.charOffset,
+                  );
+                  return;
+                }
+                // 无章节归属的行（改动前建的书签）偏移不可解释，只能按当前
+                // 进度章章首近似定位。
+                final fallbackChapterId = _progressSnapshot?.chapterId;
+                if (fallbackChapterId != null && fallbackChapterId.isNotEmpty) {
+                  widget.onReadChapter(fallbackChapterId, resume: false);
+                }
+              },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(
@@ -701,9 +708,7 @@ class ReaderDetailTextContentState
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        bookmark.note?.isNotEmpty == true
-                            ? bookmark.note!
-                            : widget.item.title,
+                        _bookmarkLabel(bookmark),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -732,12 +737,24 @@ class ReaderDetailTextContentState
     );
   }
 
-  String _resolveBookmarkChapterId(ReaderBookmark bookmark) {
-    final snapshotChapterId = _progressSnapshot?.chapterId;
-    if (snapshotChapterId != null && snapshotChapterId.isNotEmpty) {
-      return snapshotChapterId;
+  /// 书签行标题：备注优先，其次所在章节名。
+  ///
+  /// 全书可存在多条书签后，一律显示书名会让列表每行长得一样、无从分辨。
+  String _bookmarkLabel(ReaderBookmark bookmark) {
+    final note = bookmark.note?.trim() ?? '';
+    if (note.isNotEmpty) {
+      return note;
     }
-    return 'chapter_0';
+    final chapterId = bookmark.chapterId?.trim() ?? '';
+    if (chapterId.isNotEmpty) {
+      final match = widget.chapters.where(
+        (c) => parsedChapterId(c) == chapterId,
+      );
+      if (match.isNotEmpty && match.first.title.trim().isNotEmpty) {
+        return match.first.title.trim();
+      }
+    }
+    return widget.item.title;
   }
 
   String _formatDateTime(DateTime time) {

@@ -199,7 +199,10 @@ extension ReaderViewPageBuildersRestore on ReaderViewPageBuilders {
         textScale: MediaQuery.textScalerOf(context).scale(1.0),
       );
       if (pageCountNotifier.value < targetPage + 1) {
-        pageCountNotifier.value = navigator.readablePageCount;
+        pageCountNotifier.value = readerDisplayPageCount(
+          contentPages: navigator.readablePageCount,
+          fullyPaginated: navigator.isFullyPaginated,
+        );
       }
       // 落位对齐（_syncPageView jumpToPage）会派发一次 onPageChanged 回声，
       // 静默窗内的提交按闸门丢弃；窗长与其余恢复入口共用同一常量。

@@ -1,3 +1,5 @@
+import 'package:omninest/features/reader/domain/parsed_book.dart';
+
 export 'package:omninest/features/reader/domain/comic_models.dart';
 export 'package:omninest/features/reader/domain/parsed_book.dart';
 export 'package:omninest/features/reader/domain/reader_annotation.dart';
@@ -31,19 +33,17 @@ class ReaderChapter {
   /// 嵌套层级：0=卷/顶级，1=章，2=节，3=小节
   final int level;
 
-  /// 从 ParsedChapter 创建兼容实例
-  factory ReaderChapter.fromParsed(
-    int index,
-    String title, {
-    String? contentPath,
-    int level = 0,
-  }) {
+  /// 从清单章节创建阅读器章节。
+  ///
+  /// 身份一律取清单下发的稳定键：阅读器把进度与批注按它落库，用顺位当身份时
+  /// 解析规则一改就会把旧进度搬到别的章节正文上。
+  factory ReaderChapter.fromParsed(int index, ParsedChapter chapter) {
     return ReaderChapter(
-      id: 'chapter_$index',
-      title: title,
+      id: parsedChapterId(chapter),
+      title: chapter.title,
       chapterNumber: index + 1,
-      contentPath: contentPath,
-      level: level,
+      contentPath: chapter.contentPath,
+      level: chapter.level,
     );
   }
 }
@@ -55,11 +55,19 @@ class ReaderChapterContent {
     required this.content,
     this.wordCount = 0,
     this.droppedImageCount,
+    this.stylesheetCss = '',
   });
 
   final String title;
   final String content;
   final int wordCount;
+
+  /// 这本书在**本章**生效的样式表全文，按本章 `<link>` 的次序拼好。
+  ///
+  /// 样式表不进 [content]：它存在书级池里，章节行只带次序引用，解析时经
+  /// `parseBlocks(css:)` 传入。内联正文（TXT 与服务端下发的章节）没有样式表，
+  /// 取空串。
+  final String stylesheetCss;
 
   /// 本章因超出数量或容量上限而未加载的图片数；null 表示本次读取无法得知。
   ///
@@ -100,6 +108,17 @@ class ReaderImportCandidate {
   final String fileName;
   final String itemType;
   final String sizeDisplay;
+}
+
+/// 封面候选图片（文件管理中已托管的图片节点，供"从文件选择封面"列出）
+class ReaderCoverCandidate {
+  const ReaderCoverCandidate({
+    required this.fileNodeId,
+    required this.fileName,
+  });
+
+  final String fileNodeId;
+  final String fileName;
 }
 
 /// 阅读排序方式

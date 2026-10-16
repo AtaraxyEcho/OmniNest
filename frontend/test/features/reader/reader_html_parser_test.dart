@@ -1,5 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_book_stylesheet.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+
+/// 装配规则的等宽文本视图：换行照原样，缩进盒子记成同样字宽的全角空格。
+///
+/// 真实排版由 `paragraphGapSpans` 给出 span 序列；这里只为把一整块的版面拼成
+/// 字符串比对，规则一律以 `paragraphGap` 为准。
+String paragraphLineSeparator({
+  required bool isFirstLine,
+  required bool isNewParagraph,
+  required bool previousLineIsEmpty,
+  required bool isBlockContinuation,
+  required bool startsWithFullWidthIndent,
+  int indentChars = defaultFirstLineIndentChars,
+  bool isSoftWrap = false,
+}) {
+  final gap = paragraphGap(
+    isFirstLine: isFirstLine,
+    isNewParagraph: isNewParagraph,
+    previousLineIsEmpty: previousLineIsEmpty,
+    isBlockContinuation: isBlockContinuation,
+    startsWithFullWidthIndent: startsWithFullWidthIndent,
+    indentChars: indentChars,
+    isSoftWrap: isSoftWrap,
+  );
+  return '${gap.newLine ? '\n' : ''}${'　' * gap.indentChars}';
+}
 
 void main() {
   group('parseBlocks - basic', () {
@@ -15,6 +42,59 @@ void main() {
       final p = blocks.first as ParagraphBlock;
       expect(p.lines, hasLength(1));
       expect(p.lines.first.spans.first.text, 'Hello World');
+    });
+
+    test('skips inline style and script elements in body content', () {
+      // HTML5 只在 body 直属层把 style/script 抬进 head；写在 div、figure 里的
+      // 样式表会留在原地，不跳过就把 CSS 源码当正文渲染，还白占字符偏移。
+      final blocks = parseBlocks(
+        '<div><style>p { text-indent: 2em; margin-bottom: 0 }</style>'
+        '<p>正文一。</p></div>'
+        '<div><script>var broken = 1;</script><p>正文二。</p></div>',
+      );
+      final text =
+          blocks
+              .whereType<ParagraphBlock>()
+              .expand((block) => block.lines)
+              .expand((line) => line.spans)
+              .map((span) => span.text)
+              .join();
+      expect(text, isNot(contains('text-indent')));
+      expect(text, isNot(contains('var broken')));
+      expect(text, contains('正文一。'));
+      expect(text, contains('正文二。'));
+    });
+
+    test('内联样式表在正文各层级都不进文本', () {
+      // `_isNonContentTag` 原先只挡在块级分发处：标题、单元格、`pre`、`li` 与段落
+      // 内联子节点各有一条取文本的路，漏一条就把 CSS 源码渲染成正文，还按字符数
+      // 撑大本章的偏移域（书签与标注都会跟着偏）。
+      const css = 'p { margin-bottom: 0; text-indent: 2em }';
+      final cases = <String, String>{
+        '段落内': r'<p>前段<$css>后段</p>',
+        '标题内': r'<h2>标题<$css></h2>',
+        '单元格内': r'<table><tr><td>格<$css></td></tr></table>',
+        '代码块内': r'<pre>代码<$css></pre>',
+        '列表项内': r'<ul><li>项<$css></li></ul>',
+        '引用内': r'<blockquote>引<$css></blockquote>',
+      };
+      for (final entry in cases.entries) {
+        // 把样式表原文塞进正文里对应的位置，再整块查文本。
+        final html = entry.value.replaceAll(r'$css', '<style>$css</style>');
+        final text = _allBlockText(parseBlocks(html));
+        expect(text, isNot(contains('margin-bottom')), reason: entry.key);
+        expect(text, isNot(contains('text-indent')), reason: entry.key);
+      }
+    });
+
+    test('skips inline script nested in body content', () {
+      final blocks = parseBlocks(
+        '<p>正文<script>var leak = "css源码";</script>续。</p>',
+      );
+      final text = _allBlockText(blocks);
+      expect(text, isNot(contains('var leak')));
+      expect(text, contains('正文'));
+      expect(text, contains('续。'));
     });
 
     test('parses heading', () {
@@ -131,6 +211,60 @@ void main() {
       expect(blocks.first, isA<BlockquoteBlock>());
       // Heading should NOT produce a separate HeadingBlock
       expect(blocks.whereType<HeadingBlock>(), isEmpty);
+    });
+
+    test('格式化缩进的空白不再变成引用块首尾的空行', () {
+      // 制作工具写的 `<blockquote>\n  <p>一</p>\n  <p>二</p>\n</blockquote>`
+      // 里，标签之间的换行与缩进以前会被当成一行画出来：引用块第一行是空白，
+      // 真正的第一段退到第二行并丢掉自己的首行缩进。
+      final blocks = parseBlocks(
+        '<blockquote>\n  <p>引用段一</p>\n  <p>引用段二</p>\n</blockquote>',
+      );
+      final bq = blocks.first as BlockquoteBlock;
+      final texts =
+          bq.lines
+              .map((line) => line.spans.map((span) => span.text).join())
+              .toList();
+
+      expect(texts, ['引用段一', '引用段二']);
+      expect(bq.lines.first.isNewParagraph, isFalse);
+      expect(bq.lines.last.isNewParagraph, isTrue);
+    });
+
+    test('引用块内的硬换行仍是同段续行', () {
+      final blocks = parseBlocks('<blockquote>甲<br>乙</blockquote>');
+      final bq = blocks.first as BlockquoteBlock;
+      final texts =
+          bq.lines
+              .map((line) => line.spans.map((span) => span.text).join())
+              .toList();
+
+      expect(texts, ['甲', '乙']);
+      // <br> 之后不是新起一段，不该补首行缩进。
+      expect(bq.lines.last.isNewParagraph, isFalse);
+    });
+  });
+
+  group('parseBlocks - figure', () {
+    test('嵌套容器里的图与图注都要收进来', () {
+      final blocks = parseBlocks(
+        '<figure><div><img src="images/a.png" alt="甲"/></div>'
+        '<figcaption>图一</figcaption></figure>',
+      );
+
+      expect(blocks.whereType<ImageBlock>().map((b) => b.src), [
+        'images/a.png',
+      ]);
+      expect(blocks.whereType<ImageBlock>().single.caption, '图一');
+      expect(blocks.whereType<ImageBlock>().single.alt, '甲');
+    });
+
+    test('链接包住的图不被丢掉', () {
+      final blocks = parseBlocks(
+        '<figure><a href="#x"><img src="b.png"/></a></figure>',
+      );
+
+      expect(blocks.whereType<ImageBlock>().map((b) => b.src), ['b.png']);
     });
   });
 
@@ -283,6 +417,146 @@ void main() {
       final h = blocks[1] as HeadingBlock;
       expect(h.startOffset, greaterThan(0));
     });
+
+    test('块起始偏移等于前面所有块的字符累计', () {
+      // 分页前缀表与页内裁剪都按"块起点 = 前面块的字符数之和"取数；引用、列表、
+      // 表格这三类块在收集完子内容之后才写 startOffset，落的其实是块尾。
+      final blocks = parseBlocks(
+        '<p>正文四。</p>'
+        '<blockquote>引用两行。</blockquote>'
+        '<ul><li>列表项。</li></ul>'
+        '<table><tr><td>单元格</td></tr></table>',
+      );
+      expect(blocks, hasLength(4));
+      var prefix = 0;
+      for (final block in blocks) {
+        final start = switch (block) {
+          ParagraphBlock() => block.lines.first.spans.first.startOffset,
+          BlockquoteBlock() => block.startOffset,
+          ListBlock() => block.startOffset,
+          TableBlock() => block.startOffset,
+          HeadingBlock() => block.startOffset,
+          _ => 0,
+        };
+        expect(
+          start,
+          prefix,
+          reason: '${block.runtimeType} 的起始偏移应落在 $prefix，实得 $start',
+        );
+        prefix += BlockClipper.blockCharCount(block);
+      }
+    });
+
+    test('标题、分隔线与换行都不给字符域凭空加一格', () {
+      // 游标（span 与块偏移的来源）和 blockCharCount 之和必须是同一个域。旧实现里
+      // 标题与 hr 各多 advance 1、相邻 `<br>` 的空行信号再加 1、引用块与段尾的 `<br>`
+      // 只 advance 不记账：漂移随标题/分隔线数量单调增长，标注存下来的偏移比分页域
+      // 偏高，甚至可以超出本章 totalChars。
+      final blocks = parseBlocks(
+        '<h2>章标题</h2>'
+        '<p>第一段正文</p>'
+        '<hr>'
+        '<p>甲行\n  乙行\n  丙行</p>'
+        '<p>甲<br>\n乙</p>'
+        '<p>A<br>B<br>C</p>'
+        '<p>尾随换行<br></p>'
+        '<blockquote>引一<br>引二</blockquote>'
+        '<p>收尾段落</p>',
+      );
+      var prefix = 0;
+      for (final block in blocks) {
+        final lines = switch (block) {
+          ParagraphBlock() => block.lines,
+          BlockquoteBlock() => block.lines,
+          _ => const <LineData>[],
+        };
+        final start = switch (block) {
+          ParagraphBlock() =>
+            lines.first.spans.first.startOffset - lines.first.collapsedChars,
+          BlockquoteBlock() => block.startOffset,
+          ListBlock() => block.startOffset,
+          TableBlock() => block.startOffset,
+          HeadingBlock() => block.startOffset,
+          _ => prefix,
+        };
+        expect(
+          start,
+          prefix,
+          reason: '${block.runtimeType} 起点应落在 $prefix，实得 $start',
+        );
+        // 行内每个 span 的偏移就是它自己的源位置：块内前缀 + 行首折叠量 + 行内偏移。
+        var linePrefix = prefix;
+        for (final line in lines) {
+          var paintedInLine = 0;
+          for (final span in line.spans) {
+            expect(
+              span.startOffset,
+              linePrefix + line.collapsedChars + paintedInLine,
+              reason: 'span "${span.text}" 的偏移没落在自己的源位置上',
+            );
+            paintedInLine += span.text.length;
+          }
+          linePrefix += line.sourceChars;
+        }
+        prefix += BlockClipper.blockCharCount(block);
+      }
+    });
+
+    test('章内锚点记在同一个字符域里', () {
+      // 跳转过去按 stripHtml(前缀).length 反推：标签折成的空格、实体长度都不在块的
+      // 字符计数里，落点会偏。锚点必须在解析期就记成与块偏移同一个口径。
+      // 源文本 `标题`(2) + `a b`(3，&nbsp; 归一为空格) → `fn2` 落在 5。
+      const html = '<h2>标题</h2><p>a&nbsp;b</p><p id="fn2">target</p>';
+      final anchors = <String, int>{};
+      final blocks = parseBlocks(html, anchors: anchors);
+      final total = blocks.fold<int>(
+        0,
+        (sum, block) => sum + BlockClipper.blockCharCount(block),
+      );
+
+      expect(anchors['fn2'], 5);
+      expect(anchors['fn2'], lessThanOrEqualTo(total), reason: '锚点不能超出本章字符域');
+      // 旧算法给的是 6：多算的正是标签换出来的那一个空格。
+      expect(
+        stripHtml(html.substring(0, html.indexOf('id="fn2"'))).length,
+        isNot(5),
+      );
+    });
+    test('整段空白与孤立 br 不给字符域留洞', () {
+      // 这几条分支都折不出任何行：折叠量没有行可挂，旧写法只推进游标、不退回，
+      // 于是块字符记账从此比游标少一格 —— 之后每个锚点与块起点都落在偏移后的
+      // 域里，高亮与跳转整体偏，锚点甚至能超出本章 totalChars。
+      // (正文, 本章字符域总数, 期望的 anchors['b'])
+      const cases = <(String, int, int)>[
+        ('<p id="a">x</p><p> </p><p id="b">y</p>', 2, 1),
+        ('<p id="a">x</p><p><br></p><p id="b">y</p>', 2, 1),
+        ('<p id="a">x</p><div>\n\n</div><p id="b">y</p>', 2, 1),
+        ('<p id="a">x</p><blockquote><br></blockquote><p id="b">y</p>', 2, 1),
+        ('<p id="a">x</p><p>y<br>\nB</p><p id="b">z</p>', 6, 5),
+      ];
+      final failures = <String>[];
+      for (final (html, expectedTotal, expectedAnchor) in cases) {
+        final anchors = <String, int>{};
+        final blocks = parseBlocks(html, anchors: anchors);
+        final total = blocks.fold<int>(
+          0,
+          (sum, block) => sum + BlockClipper.blockCharCount(block),
+        );
+        // 相邻同版式的段落会并成一块，锚点因此可以落在块中间的某一行的行首；
+        // "某一行的起点"才是域内定位的判据，"某个块的起点"太严。
+        final lineStarts = _lineStartOffsets(blocks);
+        if (total != expectedTotal) {
+          failures.add('$html 字符域 $total，应为 $expectedTotal');
+        }
+        if (anchors['b'] != expectedAnchor) {
+          failures.add('$html 锚点 ${anchors['b']}，应为 $expectedAnchor');
+        }
+        if (!lineStarts.contains(expectedAnchor)) {
+          failures.add('$html 锚点没落在任何行的行首：$lineStarts');
+        }
+      }
+      expect(failures, isEmpty);
+    });
   });
 
   group('stripHtml', () {
@@ -301,5 +575,253 @@ void main() {
       expect(result, contains('A'));
       expect(result, contains('B'));
     });
+
+    test('drops style and script bodies, not just tags', () {
+      // 书的样式表随章节正文一起送达；只剥标签会把 CSS 留给 TTS 与正文检索。
+      final result = stripHtml(
+        '<p>正文</p><style>p { text-indent: 2em }</style>'
+        '<script>var a = 1;</script><p>续</p>',
+      );
+      expect(result, '正文 续');
+      expect(result, isNot(contains('text-indent')));
+      expect(result, isNot(contains('var a')));
+    });
+
+    test('style 元素不闭合时整段不算正文', () {
+      // 浏览器读到 EOF 也不渲染 RAWTEXT 内容；旧正则要求闭标签，于是 CSS 源码
+      // 原样留在朗读文本与章内检索里。
+      final result = stripHtml('<p>a</p><style>b{margin:0}');
+      expect(result, 'a');
+      expect(result, isNot(contains('margin')));
+    });
+
+    test('实体只解码一次', () {
+      // 旧实现按实体表逐个 replaceAll，`&amp;lt;` 先变成 `&lt;`，后面那一遍又把它
+      // 变成 `<`：书上写的字面量在朗读与检索里换成了另一个字符。
+      expect(stripHtml('&amp;lt;'), '&lt;');
+      expect(stripHtml('&amp;amp;'), '&amp;');
+    });
+
+    test('认不出的实体原样保留，超范围数字不抛', () {
+      // `String.fromCharCode(1114112)` 会抛 RangeError，旧实现让整章的纯文本兜底失败。
+      expect(stripHtml('&#1114112;'), '&#1114112;');
+      expect(stripHtml('&#xZZ;'), '&#xZZ;');
+      expect(stripHtml('&notit;'), '&notit;');
+      expect(stripHtml('&AMP;'), '&AMP;');
+      expect(stripHtml('&#65;&#x42;&nbsp;'), 'AB ');
+    });
   });
+
+  group('段内图按文档顺序断开', () {
+    // 旧写法先预遍历把 <p> 里的图**全部**提到段前，再收整段文本，
+    // 真书库实测 2403 处"图前后都有字"的插图因此跑到句子前面去了。
+    String firstLineText(ParagraphBlock block) =>
+        block.lines.first.spans.map((span) => span.text).join();
+
+    int charsOf(List<ContentBlock> blocks) => blocks.fold(
+      0,
+      (sum, block) => sum + BlockClipper.blockCharCount(block),
+    );
+
+    test('甲<img/>乙 收成 前半、图、后半', () {
+      final blocks = parseBlocks('<p>甲段正文<img src="i.png" alt="插图"/>乙段正文</p>');
+      expect(blocks.map((block) => block.runtimeType), [
+        ParagraphBlock,
+        ImageBlock,
+        ParagraphBlock,
+      ]);
+      final img = blocks[1] as ImageBlock;
+      expect(img.src, 'i.png');
+      expect(img.alt, '插图');
+      expect(firstLineText(blocks.first as ParagraphBlock), '甲段正文');
+      expect(firstLineText(blocks.last as ParagraphBlock), '乙段正文');
+    });
+
+    test('后半截是同一段的续行：既不补换行也不补首行缩进', () {
+      final blocks = parseBlocks('<p>甲段正文<img src="i.png"/>乙段正文</p>');
+      final tail = blocks.last as ParagraphBlock;
+      expect(tail.lines.first.softWrap, isTrue);
+      expect(
+        paragraphLineSeparator(
+          isFirstLine: true,
+          isNewParagraph: tail.lines.first.isNewParagraph,
+          previousLineIsEmpty: false,
+          isBlockContinuation: false,
+          startsWithFullWidthIndent: lineStartsWithFullWidthIndent(
+            tail.lines.first.spans,
+          ),
+          isSoftWrap: tail.lines.first.softWrap,
+        ),
+        isEmpty,
+        reason: '分隔符是缩进的唯一出口，这里必须是空串',
+      );
+    });
+
+    test('图不占字符域：与去掉图的同一句字符总数相等', () {
+      expect(
+        charsOf(parseBlocks('<p>甲段正文<img src="i.png"/>乙段正文</p>')),
+        charsOf(parseBlocks('<p>甲段正文乙段正文</p>')),
+      );
+    });
+
+    test('包装元素里的图也按原位断开，内联样式不外泄', () {
+      final blocks = parseBlocks('<p>甲段<b>粗文<img src="i.png"/>乙段</b></p>');
+      expect(blocks.map((block) => block.runtimeType), [
+        ParagraphBlock,
+        ImageBlock,
+        ParagraphBlock,
+      ]);
+      expect(firstLineText(blocks.first as ParagraphBlock), '甲段粗文');
+      final tailSpan = (blocks.last as ParagraphBlock).lines.first.spans.first;
+      expect(tailSpan.text, '乙段');
+      expect(tailSpan.isBold, isTrue, reason: '断开点仍在 <b> 之内');
+    });
+
+    test('段尾图留在段后', () {
+      final blocks = parseBlocks('<p>甲段正文<img src="i.png"/></p>');
+      expect(blocks.map((block) => block.runtimeType), [
+        ParagraphBlock,
+        ImageBlock,
+      ]);
+    });
+
+    test('容器裸文本里的图同样按原位断开', () {
+      final blocks = parseBlocks('<div>甲段正文<img src="i.png"/>乙段正文</div>');
+      expect(blocks.map((block) => block.runtimeType), [
+        ParagraphBlock,
+        ImageBlock,
+        ParagraphBlock,
+      ]);
+      expect((blocks.last as ParagraphBlock).lines.first.softWrap, isTrue);
+    });
+  });
+
+  group('预格式化文本', () {
+    test('代码块记下"顶格"这本书已经说过', () {
+      // 预格式化文本的行首空白本来就是内容，再由阅读器补一遍首行缩进就凭空多出一截；
+      // 补不补由开关决定，这里只保证书的表达查得到（默认档一寸不动）。
+      final paragraph =
+          parseBlocks(
+            '<pre>fn main() {\n  run();\n}</pre>',
+          ).whereType<ParagraphBlock>().single;
+      expect(paragraph.lines.single.style?.firstLineIndentChars, 0);
+    });
+
+    test('书写在 pre 上的行距落在代码块自己的样式槽', () {
+      // 跟随档只把读者的行距乘这一份：不带这一份时，整本书的代码块与正文同高，
+      // 书的代码留白层次在「跟随原书排版」上查不到出处。
+      final paragraph =
+          parseBlocks(
+            '<pre>fn main() {\n  run();\n}</pre>',
+            css: 'pre { line-height: 2 }',
+          ).whereType<ParagraphBlock>().single;
+      expect(
+        paragraph.lines.single.style?.lineHeightScale,
+        closeTo(2 / BookStyleSheet.baseBookLineHeight, 0.001),
+      );
+      expect(paragraph.lines.single.style?.firstLineIndentChars, 0);
+    });
+
+    test('pre 与后一段行距不同即另起一块', () {
+      final paragraphs =
+          parseBlocks(
+            '<pre>code</pre><p>正文</p>',
+            css: 'pre { line-height: 2 }',
+          ).whereType<ParagraphBlock>().toList();
+      expect(paragraphs, hasLength(2), reason: '行高是块级量：并成一块后两段只能共用首段那一份');
+    });
+  });
+
+  group('标题的图片与空锚点（T8）', () {
+    test('卷首艺术字标题保留层级，图按原顺序落块', () {
+      final blocks = parseBlocks(
+        '<h1><img src="title.png" alt="第一卷"></h1><p>正文</p>',
+      );
+      final heading = blocks.first as HeadingBlock;
+      expect(heading.level, 1, reason: '标题层级不能因为正文是图就一起丢掉');
+      expect(heading.text, '第一卷');
+      expect(blocks[1], isA<ImageBlock>());
+      expect(
+        BlockClipper.blockCharCount(blocks.first),
+        '第一卷'.length,
+        reason: 'alt 顶位的那几个字必须占字符域，后面的块起点才会整体错开',
+      );
+    });
+
+    test('只做目录跳转的空标题不丢锚点', () {
+      final anchors = <String, int>{};
+      final blocks = parseBlocks(
+        '<h1 id="ch1"></h1><p>正文</p>',
+        anchors: anchors,
+      );
+      expect(blocks.first, isA<HeadingBlock>());
+      expect(anchors.containsKey('ch1'), isTrue);
+    });
+  });
+}
+
+/// 块内所有可读文本，按块型汇总。
+///
+/// 用来断言"样式表源码不会出现在正文的任何一层"：标题、单元格、`pre`、列表项与
+/// 引用各有独立的取文本路径，逐个拼在一起才不会再漏一条。
+String _allBlockText(List<ContentBlock> blocks) {
+  final buffer = StringBuffer();
+  void writeSpans(Iterable<ReaderInlineSpan> spans) {
+    for (final span in spans) {
+      buffer.write(span.text);
+    }
+  }
+
+  for (final block in blocks) {
+    if (block is HeadingBlock) {
+      buffer.write(block.text);
+    } else if (block is ParagraphBlock) {
+      for (final line in block.lines) {
+        writeSpans(line.spans);
+      }
+    } else if (block is BlockquoteBlock) {
+      for (final line in block.lines) {
+        writeSpans(line.spans);
+      }
+    } else if (block is ListBlock) {
+      for (final item in block.items) {
+        writeSpans(item.spans);
+      }
+    } else if (block is TableBlock) {
+      for (final row in block.rows) {
+        for (final cell in row.cells) {
+          writeSpans(cell);
+        }
+      }
+    } else if (block is ImageBlock) {
+      buffer.write(block.caption ?? '');
+      buffer.write(block.alt ?? '');
+    }
+  }
+  return buffer.toString();
+}
+
+/// 每个逻辑行在字符域里的起点。
+///
+/// 锚点挂在块级元素上，而相邻同版式的段落会被并成一个块（块内一行一格），
+/// 所以"某个块的起点"太严；行的起点才是页内裁剪与高亮真正用来定位的刻度。
+List<int> _lineStartOffsets(List<ContentBlock> blocks) {
+  final starts = <int>[];
+  var prefix = 0;
+  for (final block in blocks) {
+    final lines = switch (block) {
+      ParagraphBlock() => block.lines,
+      BlockquoteBlock() => block.lines,
+      _ => const <LineData>[],
+    };
+    if (lines.isEmpty) {
+      prefix += BlockClipper.blockCharCount(block);
+      continue;
+    }
+    for (final line in lines) {
+      starts.add(prefix);
+      prefix += line.sourceChars;
+    }
+  }
+  return starts;
 }

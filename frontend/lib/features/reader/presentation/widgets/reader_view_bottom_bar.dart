@@ -11,7 +11,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 /// 阅读器底部导航、进度和工具控制栏。
 ///
 /// [sampleChrome] 为移动端阅读器稿的页脚皮肤：进度行（3px 轨道 + 百分比）在上，
-/// 五槽玻璃控制条（上一页 / 目录 / Aa 显示 / 书签 / 下一页）在下；默认
+/// 五槽玻璃控制条（上一章 / 目录 / Aa 显示 / 书签 / 下一章）在下；默认
 /// false 维持工位实底皮肤。
 class ReaderViewBottomBar extends StatelessWidget {
   const ReaderViewBottomBar({
@@ -24,6 +24,8 @@ class ReaderViewBottomBar extends StatelessWidget {
     required this.onShowSettings,
     required this.onToggleImmersive,
     this.onAddBookmark,
+    this.onPreviousChapter,
+    this.onNextChapter,
     this.onProgressSeek,
     this.chapterIndex,
     this.chapterCount,
@@ -43,6 +45,11 @@ class ReaderViewBottomBar extends StatelessWidget {
   /// 书签开关：样例把第五槽给书签（顶栏只留返回、书名与更多三件）。
   /// 为空时该槽按稿子的 `:disabled` 呈现，不悄悄换成别的动作。
   final VoidCallback? onAddBookmark;
+
+  /// 样例条的首末槽按稿子走章节（`changeChapter(±1)`），不是翻页。
+  /// 到章首/章末时由本控件按 [chapterIndex]/[chapterCount] 置空。
+  final VoidCallback? onPreviousChapter;
+  final VoidCallback? onNextChapter;
   final ValueChanged<double>? onProgressSeek;
 
   /// 当前章序号（1-based）；与 [chapterCount] 同时提供时展示章节位置。
@@ -350,101 +357,135 @@ class _ReaderSampleBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final settings = bar.settings;
+    // 稿子首末槽是 changeChapter(±1)，并在章首/章末落 `:disabled`。
+    // 章节位置没给（懒加载未就绪）时按可点处理，不让整条灰掉。
+    final position = bar.chapterIndex;
+    final total = bar.chapterCount;
+    final canStepBack = position == null || total == null || position > 1;
+    final canStepAhead = position == null || total == null || position < total;
     final percent = (bar.progress.clamp(0.0, 1.0) * 100).round();
     final hasChapters = bar.chapterIndex != null && bar.chapterCount != null;
-    return SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 30, 20, 0),
-            child: Row(
-              children: [
-                if (hasChapters) ...[
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      '${bar.chapterIndex} / ${bar.chapterCount}',
-                      style: TextStyle(
-                        color: settings.onSurfaceVariantColor,
-                        fontSize: AppTypography.labelNano,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
+    // 稿子整条页脚铺 `linear-gradient(to bottom, transparent, --page 30%)`：
+    // 9px 的章节计数与 13% 墨色的轨道都要落在纸面上才读得清，
+    // 直接压在壁纸上就是"进度条显示不清晰"。
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            settings.surfaceColor.withValues(alpha: 0),
+            settings.surfaceColor,
+          ],
+          stops: const [0.0, 0.3],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 30, 20, 0),
+              child: Center(
+                child: ConstrainedBox(
+                  // 稿子 `.progress-row`：width min(100%, 680px)、内缩 6。
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Row(
+                      children: [
+                        if (hasChapters) ...[
+                          SizedBox(
+                            width: 44,
+                            child: Text(
+                              '${bar.chapterIndex} / ${bar.chapterCount}',
+                              style: TextStyle(
+                                color: settings.onSurfaceVariantColor,
+                                fontSize: AppTypography.labelNano,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: _ReaderSampleProgressTrack(
+                            settings: settings,
+                            progress: bar.progress,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 29,
+                          child: Text(
+                            '$percent%',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: settings.onSurfaceColor,
+                              fontSize: AppTypography.labelMicro,
+                              fontWeight: FontWeight.w600,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: _ReaderSampleProgressTrack(
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+              child: _ReaderSampleActionStrip(
+                settings: settings,
+                children: [
+                  _ReaderSampleFooterButton(
+                    icon: OmniIcons.previous,
+                    label: l10n.readerPreviousChapter,
+                    tooltip: l10n.readerPreviousChapter,
                     settings: settings,
-                    progress: bar.progress,
+                    onTap: canStepBack ? bar.onPreviousChapter : null,
                   ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 29,
-                  child: Text(
-                    '$percent%',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: settings.onSurfaceColor,
-                      fontSize: AppTypography.labelMicro,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                  _ReaderSampleFooterButton(
+                    icon: OmniIcons.list,
+                    label: l10n.readerTableOfContents,
+                    tooltip: l10n.readerTableOfContents,
+                    settings: settings,
+                    onTap: bar.onShowContents,
                   ),
-                ),
-              ],
+                  _ReaderSampleFooterButton(
+                    icon: OmniIcons.settings,
+                    label: l10n.readerSettingsTitle,
+                    tooltip: l10n.readerSettingsTitle,
+                    settings: settings,
+                    onTap: bar.onShowSettings,
+                    markLabel: 'Aa',
+                  ),
+                  _ReaderSampleFooterButton(
+                    icon: OmniIcons.bookmark,
+                    label: l10n.readerAddBookmark,
+                    tooltip: l10n.readerAddBookmark,
+                    settings: settings,
+                    onTap: bar.onAddBookmark,
+                  ),
+                  _ReaderSampleFooterButton(
+                    icon: OmniIcons.next,
+                    label: l10n.readerNextChapter,
+                    tooltip: l10n.readerNextChapter,
+                    settings: settings,
+                    onTap: canStepAhead ? bar.onNextChapter : null,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-            child: _ReaderSampleActionStrip(
-              settings: settings,
-              children: [
-                _ReaderSampleFooterButton(
-                  icon: OmniIcons.previous,
-                  label: l10n.readerPreviousPage,
-                  tooltip: l10n.readerPreviousPage,
-                  settings: settings,
-                  onTap: bar.onPrevious,
-                ),
-                _ReaderSampleFooterButton(
-                  icon: OmniIcons.list,
-                  label: l10n.readerTableOfContents,
-                  tooltip: l10n.readerTableOfContents,
-                  settings: settings,
-                  onTap: bar.onShowContents,
-                ),
-                _ReaderSampleFooterButton(
-                  icon: OmniIcons.settings,
-                  label: l10n.readerSettingsTitle,
-                  tooltip: l10n.readerSettingsTitle,
-                  settings: settings,
-                  onTap: bar.onShowSettings,
-                  primary: true,
-                  markLabel: 'Aa',
-                ),
-                _ReaderSampleFooterButton(
-                  icon: OmniIcons.bookmark,
-                  label: l10n.readerAddBookmark,
-                  tooltip: l10n.readerAddBookmark,
-                  settings: settings,
-                  onTap: bar.onAddBookmark,
-                ),
-                _ReaderSampleFooterButton(
-                  icon: OmniIcons.next,
-                  label: l10n.readerNextPage,
-                  tooltip: l10n.readerNextPage,
-                  settings: settings,
-                  onTap: bar.onNext,
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -530,7 +571,7 @@ class _ReaderSampleActionStrip extends StatelessWidget {
 }
 
 /// 玻璃条内的一槽：50 高、r15，图标在上、9px 标签在下；
-/// `primary` 槽按稿子 `.primary-control` 取强调色铺底。
+/// `onTap` 为空即稿子 `.reader-actions button:disabled` 的 0.3 弱化态。
 class _ReaderSampleFooterButton extends StatelessWidget {
   const _ReaderSampleFooterButton({
     required this.icon,
@@ -538,7 +579,6 @@ class _ReaderSampleFooterButton extends StatelessWidget {
     required this.tooltip,
     required this.settings,
     required this.onTap,
-    this.primary = false,
     this.markLabel,
   });
 
@@ -547,9 +587,6 @@ class _ReaderSampleFooterButton extends StatelessWidget {
   final String tooltip;
   final ReaderViewSettings settings;
   final VoidCallback? onTap;
-
-  /// `.primary-control`：强调色 12% 铺底，前景换成正文墨色。
-  final bool primary;
 
   /// 用文字标记替掉图标（稿子的 `Aa`：衬线 17/700）。
   final String? markLabel;
@@ -569,10 +606,7 @@ class _ReaderSampleFooterButton extends StatelessWidget {
           child: Container(
             height: 50,
             padding: const EdgeInsets.symmetric(horizontal: 3),
-            decoration: BoxDecoration(
-              color: primary ? settings.accentSoftColor : null,
-              borderRadius: BorderRadius.circular(15),
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
             child: Opacity(
               opacity: onTap == null ? 0.3 : 1,
               child: Column(

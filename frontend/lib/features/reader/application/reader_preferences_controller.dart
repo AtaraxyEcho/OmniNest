@@ -17,6 +17,14 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
 
   String? _userId;
 
+  /// 远端写入返回后的回写基准。
+  ///
+  /// 完成回调不得拿 `await` 之前合并的旧图整份发布：那段窗口里发生的其他偏好写入
+  /// 会被无声覆盖，表现为连拖两个滑块时后一次设置被前一次回包顶掉。优先取发布时刻
+  /// 的实况；仅在状态尚未就绪（首帧读取、错误态）时退回本次合并结果。
+  Map<String, dynamic> _liveOr(Map<String, dynamic> captured) =>
+      state.asData?.value ?? captured;
+
   @override
   Future<Map<String, dynamic>> build() async {
     final legacy = await _readLegacyLocal();
@@ -56,7 +64,7 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
           scope: readerPreferenceScope,
           changes: preferences,
         );
-    state = AsyncData({...merged, ...snapshot.preferences});
+    state = AsyncData({..._liveOr(merged), ...snapshot.preferences});
   }
 
   /// 从远端重新同步阅读偏好，并保留本地待提交变更。

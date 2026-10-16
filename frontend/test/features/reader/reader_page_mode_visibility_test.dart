@@ -27,7 +27,6 @@ void main() {
         ReaderViewSettingsPanel(
           settings: settings(),
           onSettingsChanged: (_) {},
-          embedded: true,
           pageModeEnabled: true,
         ),
       ),
@@ -42,7 +41,6 @@ void main() {
         ReaderViewSettingsPanel(
           settings: settings(),
           onSettingsChanged: (_) {},
-          embedded: true,
           pageModeEnabled: false,
         ),
       ),

@@ -6,16 +6,36 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
-/// 章节列表面板（直接渲染在 Stack 内，不依赖独立路由）。
+// 稿子 `.chapter-*` 的签名密度：12/9/10 三档靠色阶分层，不随字号设置放大，
+// 也不为了"更好读"整体上抬（见 living-glass 红线 4）。
+const double _rowMinHeight = 65;
+const double _rowVerticalPadding = 8;
+const double _rowHorizontalPadding = 4;
+const double _rowGap = 12;
+const double _listHorizontalPadding = 20;
+const double _numberWidth = 27;
+const double _titleFontSize = AppTypography.bodySmall;
+const double _subLabelFontSize = AppTypography.labelNano;
+const double _subLabelTopGap = 4;
+const double _pillFontSize = 8;
+const double _pillMinHeight = 24;
+const double _summaryFontSize = AppTypography.labelMicro;
+const double _summaryTextGap = 14;
+const double _summaryListGap = 8;
+
+/// 卷/节层级的缩进。稿子是平铺列表，层级是本书 TOC 带进来的数据结构。
+const double _levelIndent = 24;
+
+/// 章节列表：稿子 `.chapter-summary` + `.chapter-list`。
+///
+/// 抽屉外壳（手柄、眉标、面板名、关闭钮、遮罩）由 `ReaderAdaptivePanelFrame`
+/// 统一绘制，本组件只交列表本体。
 class ChapterPanel extends StatefulWidget {
   const ChapterPanel({
     required this.chapters,
     required this.currentChapterId,
     required this.settings,
     required this.onChapterTap,
-    required this.onDismiss,
-    this.embedded = false,
-    this.bookTitle,
     super.key,
   });
 
@@ -23,43 +43,13 @@ class ChapterPanel extends StatefulWidget {
   final String currentChapterId;
   final ReaderViewSettings settings;
   final ValueChanged<String> onChapterTap;
-  final VoidCallback onDismiss;
-  final bool embedded;
-
-  /// 稿子 `.sheet-header small` 的书名眉标；调用方没有书名时留空不占行。
-  final String? bookTitle;
 
   @override
   State<ChapterPanel> createState() => ChapterPanelState();
 }
 
-class ChapterPanelState extends State<ChapterPanel>
-    with SingleTickerProviderStateMixin {
+class ChapterPanelState extends State<ChapterPanel> {
   final Set<String> _collapsed = {};
-  late final AnimationController _slideController;
-  late final Animation<Offset> _slideAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-    );
-    _slideController.forward();
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    super.dispose();
-  }
 
   bool _hasChildren(ReaderChapter chapter) {
     return ReaderChapterHierarchy.hasChildren(widget.chapters, chapter);
@@ -81,154 +71,82 @@ class ChapterPanelState extends State<ChapterPanel>
       widget.chapters,
       _collapsed,
     );
-    final mq = MediaQuery.of(context);
-    final chapterList = _buildChapterList(visible, mq);
     final currentIndex = widget.chapters.indexWhere(
       (chapter) => chapter.id == widget.currentChapterId,
     );
 
-    if (widget.embedded) {
-      return chapterList;
-    }
+    return Column(
+      children: [
+        _buildSummary(context, currentIndex),
+        Expanded(child: _buildChapterList(visible)),
+      ],
+    );
+  }
 
-    return SlideTransition(
-      position: _slideAnimation,
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.6,
-        ),
-        decoration: BoxDecoration(
-          // 稿子 `.bottom-sheet`：--glass-solid 实底、顶部 r28、三边 --line 描边
-          //（底边贴屏幕不画）、投影 0 -20 60。
-          color: widget.settings.glassSolidColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border(
-            top: BorderSide(color: widget.settings.lineColor),
-            left: BorderSide(color: widget.settings.lineColor),
-            right: BorderSide(color: widget.settings.lineColor),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: widget.settings.shadowColor,
-              blurRadius: 60,
-              offset: const Offset(0, -20),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 拖拽手柄：稿子 .sheet-handle 38×4 r3，正文墨色 18%。
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: widget.settings.onSurfaceColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(3),
+  /// `.chapter-summary`：左右两段 10px 弱化信息，底下压一条发丝线。
+  Widget _buildSummary(BuildContext context, int currentIndex) {
+    final l10n = AppLocalizations.of(context);
+    final summaryStyle = TextStyle(
+      color: widget.settings.onSurfaceVariantColor,
+      fontSize: _summaryFontSize,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, _summaryListGap),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: _summaryTextGap),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.readerTotalChapters('${widget.chapters.length}'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: summaryStyle,
+                  ),
                 ),
-              ),
-            ),
-            // 标题栏：9/700 强调色书名 + 25/600 衬线面板名。
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if ((widget.bookTitle ?? '').isNotEmpty)
-                          Text(
-                            widget.bookTitle!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: widget.settings.accentColor,
-                              fontSize: AppTypography.labelNano,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.08,
-                            ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Text(
-                            AppLocalizations.of(context).readerChapterList,
-                            style: TextStyle(
-                              fontFamily: AppTypography.serifFamily,
-                              fontFamilyFallback:
-                                  AppTypography.serifFamilyFallback,
-                              color: widget.settings.onSurfaceColor,
-                              fontSize: 25, // ignore: font_size_whitelist
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: widget.onDismiss,
-                    tooltip: AppLocalizations.of(context).readerClose,
-                    iconSize: 20,
-                    color: widget.settings.onSurfaceVariantColor,
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            // .chapter-summary：左右两段 10px 弱化信息，底下压一条发丝线。
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      currentIndex < 0
-                          ? AppLocalizations.of(context).readerChapterList
-                          : widget.chapters[currentIndex].title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: widget.settings.onSurfaceVariantColor,
-                        fontSize: AppTypography.labelMicro,
-                      ),
-                    ),
-                  ),
+                if (currentIndex >= 0)
                   Text(
-                    '${currentIndex + 1} / ${widget.chapters.length}',
-                    style: TextStyle(
-                      color: widget.settings.onSurfaceVariantColor,
-                      fontSize: AppTypography.labelMicro,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                    l10n.readerChapterPosition(
+                      currentIndex + 1,
+                      widget.chapters.length,
                     ),
+                    style: summaryStyle,
                   ),
-                ],
-              ),
+              ],
             ),
-            Divider(height: 1, color: widget.settings.lineColor),
-            // 章节列表（Expanded 确保占满剩余空间）
-            Expanded(child: chapterList),
-          ],
-        ),
+          ),
+          Divider(height: 1, thickness: 1, color: widget.settings.lineColor),
+        ],
       ),
     );
   }
 
-  Widget _buildChapterList(
-    List<ReaderChapter> visible,
-    MediaQueryData mediaQuery,
-  ) {
+  Widget _buildChapterList(List<ReaderChapter> visible) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return ListView.builder(
-      padding: EdgeInsets.only(bottom: mediaQuery.padding.bottom + 8),
+      padding: EdgeInsets.fromLTRB(
+        _listHorizontalPadding,
+        0,
+        _listHorizontalPadding,
+        bottomInset + 8,
+      ),
       itemCount: visible.length,
       itemBuilder: (_, index) {
         final chapter = visible[index];
         final isCurrent = chapter.id == widget.currentChapterId;
         final isParent = _hasChildren(chapter);
         final isExpanded = !_collapsed.contains(chapter.id);
-        final indent = chapter.level * 24.0;
+        final indent = chapter.level * _levelIndent;
+        // 当前行转强调色是整行的事（稿子 `.chapter-list button.current`），
+        // 副标题另有显式 --muted，不跟着变。
+        final rowColor =
+            isCurrent
+                ? widget.settings.accentColor
+                : widget.settings.onSurfaceColor;
 
         return Material(
           color: Colors.transparent,
@@ -238,12 +156,13 @@ class ChapterPanelState extends State<ChapterPanel>
               widget.onChapterTap(chapter.id);
             },
             child: Padding(
-              padding: EdgeInsets.only(left: 12 + indent, right: 8),
+              padding: EdgeInsets.only(left: indent),
               child: Container(
-                // 稿子 `.chapter-list button`：min-height 65、padding 8 4、
-                // gap 12，每行底下一条 --line 发丝线。
-                constraints: const BoxConstraints(minHeight: 65),
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                constraints: const BoxConstraints(minHeight: _rowMinHeight),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _rowHorizontalPadding,
+                  vertical: _rowVerticalPadding,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(color: widget.settings.lineColor),
@@ -251,9 +170,8 @@ class ChapterPanelState extends State<ChapterPanel>
                 ),
                 child: Row(
                   children: [
-                    // .chapter-number：27 宽衬线序号；当前章整行转强调色。
                     SizedBox(
-                      width: 27,
+                      width: _numberWidth,
                       child:
                           chapter.level > 0
                               ? Icon(
@@ -262,7 +180,8 @@ class ChapterPanelState extends State<ChapterPanel>
                                 size: 5,
                               )
                               : Text(
-                                '${index + 1}',
+                                // 稿子 String(index + 1).padStart(2, '0')
+                                '${index + 1}'.padLeft(2, '0'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontFamily: AppTypography.serifFamily,
@@ -276,7 +195,7 @@ class ChapterPanelState extends State<ChapterPanel>
                                 ),
                               ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: _rowGap),
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -287,22 +206,16 @@ class ChapterPanelState extends State<ChapterPanel>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color:
-                                  isCurrent
-                                      ? widget.settings.accentColor
-                                      : widget.settings.onSurfaceColor,
-                              fontSize: chapter.level == 0 ? 15 : 14,
-                              fontWeight:
-                                  chapter.level == 0
-                                      ? FontWeight.w600
-                                      : isCurrent
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
+                              color: rowColor,
+                              fontSize: _titleFontSize,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           if (chapter.level > 0)
                             Padding(
-                              padding: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.only(
+                                top: _subLabelTopGap,
+                              ),
                               child: Text(
                                 readerChapterLabelText(
                                   AppLocalizations.of(context),
@@ -310,13 +223,17 @@ class ChapterPanelState extends State<ChapterPanel>
                                 ),
                                 style: TextStyle(
                                   color: widget.settings.onSurfaceVariantColor,
-                                  fontSize: AppTypography.labelSmall,
+                                  fontSize: _subLabelFontSize,
                                 ),
                               ),
                             ),
                         ],
                       ),
                     ),
+                    if (isCurrent) ...[
+                      const SizedBox(width: _rowGap),
+                      _buildReadingPill(context),
+                    ],
                     if (isParent)
                       IconButton(
                         onPressed: () => _toggle(chapter.id),
@@ -342,6 +259,27 @@ class ChapterPanelState extends State<ChapterPanel>
           ),
         );
       },
+    );
+  }
+
+  /// `.reading-pill`：min-height 24、padding 0 8、r8、--accent-soft 底、8px 字。
+  Widget _buildReadingPill(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: _pillMinHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: widget.settings.accentSoftColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        AppLocalizations.of(context).readerNowReading,
+        style: TextStyle(
+          color: widget.settings.accentColor,
+          fontSize: _pillFontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

@@ -18,12 +18,13 @@ mixin ReaderViewPageLibraryActionsMixin on ConsumerState<ReaderViewPage> {
   bool get isInBookshelf;
   set isInBookshelf(bool value);
   String get itemId;
+  String get currentChapterId;
   double? get bookProgress;
 
   ReaderProgressSnapshot? buildProgressSnapshot({double? progressOverride});
   Future<void> checkBookmarkState();
 
-  /// 切换书签状态。
+  /// 切换当前章节的书签状态。
   Future<void> toggleBookmark(
     ReaderItemDetail detail,
     ReaderChapterContent content,
@@ -32,20 +33,34 @@ mixin ReaderViewPageLibraryActionsMixin on ConsumerState<ReaderViewPage> {
     setState(() => bookmarkBusy = true);
     final l10n = AppLocalizations.of(context);
     final dataManager = ref.read(readerDataManagerProvider);
+    final snapshot = buildProgressSnapshot();
+    final chapterId = (snapshot?.chapterId ?? currentChapterId).trim();
+    final charOffset = snapshot?.charOffset ?? 0;
     String msg;
     try {
+      final bookmarks = await dataManager.loadBookmarks(itemId);
       final existing =
-          (await dataManager.loadBookmarks(
-            itemId,
-          )).where((b) => b.readerItemId == itemId).toList();
+          bookmarks
+              .where(
+                (b) =>
+                    b.readerItemId == itemId &&
+                    bookmarkAtChapter(
+                      b,
+                      chapterId: chapterId.isEmpty ? null : chapterId,
+                      charOffset: charOffset,
+                    ),
+              )
+              .toList();
       if (existing.isNotEmpty) {
-        await dataManager.deleteBookmark(existing.first.id);
+        for (final bookmark in existing) {
+          await dataManager.deleteBookmark(bookmark.id);
+        }
         msg = l10n.readerBookmarkRemoved;
       } else {
-        final snapshot = buildProgressSnapshot();
         await dataManager.createBookmark(
           itemId: itemId,
-          charOffset: snapshot?.charOffset ?? 0,
+          chapterId: chapterId.isEmpty ? null : chapterId,
+          charOffset: charOffset,
           // 全书口径未知时记 0，不把章内比例写成全书百分比。
           progressPercent: bookProgress ?? 0,
         );

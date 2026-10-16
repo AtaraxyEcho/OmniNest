@@ -49,6 +49,7 @@ class ParsedChapter {
     required this.xhtmlContent,
     required this.charCount,
     this.contentPath,
+    this.chapterKey,
     this.level = 0,
     this.sourceStartOffset,
     this.sourceEndOffset,
@@ -57,6 +58,12 @@ class ParsedChapter {
 
   final int number;
   final String title;
+
+  /// 章节身份键，由服务端清单下发（TXT 按正文起点派生，EPUB 按归档顺位）。
+  ///
+  /// 阅读进度与批注存的就是它；不能用清单顺位当身份，否则解析规则一改、
+  /// 后续每一章的顺位整体位移，旧进度会静默落到别的章节正文上。
+  final String? chapterKey;
 
   /// 章节 XHTML 内容。由 [EpubParserService.parseChapter] 按需填充。
   final String xhtmlContent;
@@ -79,4 +86,16 @@ class ParsedChapter {
   /// TXT 正文起点相对 [sourceStartOffset] 的字符偏移：标题行及其终止符不计入正文。
   /// 服务端正文与本地兜底切片都按它剥标题，两条路径渲染结果一致（D-12）。
   final int bodyStartOffset;
+}
+
+/// 章节在阅读器里使用的稳定身份。
+///
+/// 一律取清单下发的 [ParsedChapter.chapterKey]；缺失时退回顺位键，只可能出现在
+/// 未经服务端解析的本地产物上，不参与跨设备对齐。
+String parsedChapterId(ParsedChapter chapter) {
+  final key = chapter.chapterKey?.trim();
+  if (key != null && key.isNotEmpty) {
+    return key;
+  }
+  return 'chapter_${chapter.number - 1}';
 }

@@ -7,8 +7,11 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/reader/application/reader_comic_service.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
+import 'package:omninest/features/reader/domain/comic_navigation.dart';
+import 'package:omninest/features/reader/domain/reader_progress.dart';
 import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_view.dart';
 
@@ -58,13 +61,18 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       var initialPage = 0;
       if (manifest.totalPages > 0) {
         if (widget.initialCatalogNodeId != null) {
-          final idx = manifest.pages.indexWhere(
-            (page) => page.catalogNodeId == widget.initialCatalogNodeId,
+          final idx = resolveComicCatalogStartPage(
+            manifest,
+            widget.initialCatalogNodeId!,
           );
-          initialPage =
-              idx >= 0
-                  ? idx
-                  : await _resolveInitialPage(comicService, manifest);
+          if (idx != null) {
+            // 目录跳转是"从这个节点的第一页看起"：页内偏移必须一起清零，
+            // 否则续读留下的滚动位置会把读者又带回上一次看的那一页。
+            initialPage = idx;
+            _initialIntraPageOffset = 0.0;
+          } else {
+            initialPage = await _resolveInitialPage(comicService, manifest);
+          }
         } else {
           initialPage = await _resolveInitialPage(comicService, manifest);
         }
@@ -104,6 +112,9 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       return;
     }
     _leaving = true;
+    // 详情页的进度与目录高亮来自 readerItemDetailProvider：不失效就还停在进
+    // 阅读器之前的那一页，读者以为刚才没读进去。
+    ref.invalidate(readerItemDetailProvider(widget.itemId));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -143,100 +154,37 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     };
   }
 
-  /// 从本地和服务端进度解析初始页码，优先级为稳定页面锚点、来源页码、目录键、同版本页码、进度比例。
+  /// 从本地和服务端进度解析初始页码：取两份进度里较新的那一份，再按锚点逐级落位。
   Future<int> _resolveInitialPage(
     ReaderComicService comicService,
     ComicManifest manifest,
   ) async {
+    // 服务端详情与本地进度分开取：离线时 loadDetail 抛异常不得跳过 SQLite 里
+    // 已经保存的那份进度，否则断网续读永远回到第一页。
+    ReaderProgress? serverProgress;
     try {
       final detail = await comicService.loadDetail(widget.itemId);
-      final progress = detail.progress;
-      final local = await ReaderLocalProgress.loadLatest(widget.itemId);
-      final anchor = _latestAnchor(progress, local);
-      if (anchor == null) return 0;
-
-      _initialIntraPageOffset = anchor.intraPageOffset;
-
-      if (anchor.pageId != null) {
-        final idx = manifest.pages.indexWhere(
-          (page) => page.id == anchor.pageId,
-        );
-        if (idx >= 0) {
-          return idx;
-        }
-      }
-
-      if (anchor.pageFingerprint != null) {
-        final idx = manifest.pages.indexWhere(
-          (page) =>
-              page.fingerprint == anchor.pageFingerprint &&
-              (anchor.sourceId == null || page.sourceId == anchor.sourceId),
-        );
-        if (idx >= 0) {
-          return idx;
-        }
-      }
-
-      if (anchor.sourceId != null && anchor.sourcePageIndex != null) {
-        final idx = manifest.pages.indexWhere(
-          (page) =>
-              page.sourceId == anchor.sourceId &&
-              page.sourcePageIndex == anchor.sourcePageIndex,
-        );
-        if (idx >= 0) {
-          return idx;
-        }
-      }
-
-      if (anchor.catalogKey != null) {
-        final idx = manifest.pages.indexWhere(
-          (page) => page.catalogKey == anchor.catalogKey,
-        );
-        if (idx >= 0) {
-          return idx;
-        }
-      }
-
-      final sameManifest =
-          anchor.manifestVersion == null ||
-          anchor.manifestVersion == manifest.manifestVersion;
-      if (sameManifest &&
-          anchor.pageIndex != null &&
-          anchor.pageIndex! >= 0 &&
-          anchor.pageIndex! < manifest.totalPages) {
-        return anchor.pageIndex!;
-      }
-
-      if (anchor.progressPercent > 0) {
-        return (((anchor.progressPercent * manifest.totalPages).ceil()) - 1)
-            .clamp(0, manifest.totalPages - 1)
-            .toInt();
-      }
+      serverProgress = detail.progress;
+    } on Exception {
+      serverProgress = null;
+    }
+    Map<String, dynamic>? local;
+    try {
+      local = await ReaderLocalProgress.loadLatest(widget.itemId);
+    } on Exception {
+      local = null;
+    }
+    try {
+      final restore = resolveComicRestore(
+        manifest: manifest,
+        serverProgress: serverProgress,
+        localProgress: local,
+      );
+      _initialIntraPageOffset = restore.intraPageOffset;
+      return restore.page;
     } on Exception {
       return 0;
     }
-    return 0;
-  }
-
-  _ComicProgressAnchor? _latestAnchor(
-    dynamic serverProgress,
-    Map<String, dynamic>? localProgress,
-  ) {
-    final serverAnchor =
-        serverProgress == null
-            ? null
-            : _ComicProgressAnchor.fromServer(serverProgress);
-    final localAnchor =
-        localProgress == null
-            ? null
-            : _ComicProgressAnchor.fromLocal(localProgress);
-    if (serverAnchor == null) return localAnchor;
-    if (localAnchor == null) return serverAnchor;
-    final serverUpdatedAt = serverAnchor.updatedAt;
-    final localUpdatedAt = localAnchor.updatedAt;
-    if (serverUpdatedAt == null) return localAnchor;
-    if (localUpdatedAt == null) return serverAnchor;
-    return localUpdatedAt.isAfter(serverUpdatedAt) ? localAnchor : serverAnchor;
   }
 
   @override
@@ -245,11 +193,23 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     final manifestMonitor = ref.watch(
       comicManifestMonitorProvider(widget.itemId),
     );
+    // 后台解析每 3 秒推一次清单：清单身份没变时不得重跑装配，否则每次轮询
+    // 都重算一次初始页码，把读者正在看的那一页顶掉。
     ref.listen(comicManifestMonitorProvider(widget.itemId), (_, next) {
       final manifest = next.asData?.value.manifest;
-      if (manifest != null) {
-        unawaited(_loadManifest(manifest));
+      if (manifest == null) {
+        return;
       }
+      final previous = _manifest;
+      final firstLoad = previous == null;
+      final changed =
+          previous == null ||
+          previous.manifestVersion != manifest.manifestVersion ||
+          previous.totalPages != manifest.totalPages;
+      if (!firstLoad && !changed) {
+        return;
+      }
+      unawaited(_loadManifest(manifest));
     });
     if (_loading && manifestMonitor.asData?.value.refreshError != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -266,7 +226,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       return Scaffold(
         body: Stack(
           children: [
-            const Positioned.fill(child: AppLoading.simple()),
+            const Positioned.fill(child: AppLoading()),
             SafeArea(
               child: IconButton(
                 tooltip: AppLocalizations.of(context).coreBack,
@@ -351,6 +311,109 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       onBack: _handleBack,
     );
   }
+}
+
+/// 恢复位置：本地与服务端进度按记录时刻取较新的一份，再按锚点逐级落位。
+///
+/// 优先级为稳定页面锚点、来源页码、目录键、同版本页码、进度比例；一份都没有
+/// 时回到第一页。离线时 `serverProgress` 是 null，不得因此跳过 SQLite 里那份。
+({int page, double intraPageOffset}) resolveComicRestore({
+  required ComicManifest manifest,
+  ReaderProgress? serverProgress,
+  Map<String, dynamic>? localProgress,
+}) {
+  final anchor = _latestComicAnchor(serverProgress, localProgress);
+  if (anchor == null) {
+    return (page: 0, intraPageOffset: 0.0);
+  }
+  final intraPageOffset = anchor.intraPageOffset ?? 0.0;
+
+  int? indexOf(bool Function(ComicPage page) test) {
+    final idx = manifest.pages.indexWhere(test);
+    return idx >= 0 ? idx : null;
+  }
+
+  final byPageId =
+      anchor.pageId == null
+          ? null
+          : indexOf((page) => page.id == anchor.pageId);
+  if (byPageId != null) {
+    return (page: byPageId, intraPageOffset: intraPageOffset);
+  }
+
+  final byFingerprint =
+      anchor.pageFingerprint == null
+          ? null
+          : indexOf(
+            (page) =>
+                page.fingerprint == anchor.pageFingerprint &&
+                (anchor.sourceId == null || page.sourceId == anchor.sourceId),
+          );
+  if (byFingerprint != null) {
+    return (page: byFingerprint, intraPageOffset: intraPageOffset);
+  }
+
+  final bySource =
+      anchor.sourceId == null || anchor.sourcePageIndex == null
+          ? null
+          : indexOf(
+            (page) =>
+                page.sourceId == anchor.sourceId &&
+                page.sourcePageIndex == anchor.sourcePageIndex,
+          );
+  if (bySource != null) {
+    return (page: bySource, intraPageOffset: intraPageOffset);
+  }
+
+  final byCatalogKey =
+      anchor.catalogKey == null
+          ? null
+          : indexOf((page) => page.catalogKey == anchor.catalogKey);
+  if (byCatalogKey != null) {
+    return (page: byCatalogKey, intraPageOffset: intraPageOffset);
+  }
+
+  final sameManifest =
+      anchor.manifestVersion == null ||
+      anchor.manifestVersion == manifest.manifestVersion;
+  if (sameManifest &&
+      anchor.pageIndex != null &&
+      anchor.pageIndex! >= 0 &&
+      anchor.pageIndex! < manifest.totalPages) {
+    return (page: anchor.pageIndex!, intraPageOffset: intraPageOffset);
+  }
+
+  if (anchor.progressPercent > 0 && manifest.totalPages > 0) {
+    final byPercent =
+        ((anchor.progressPercent * manifest.totalPages).ceil() - 1)
+            .clamp(0, manifest.totalPages - 1)
+            .toInt();
+    return (page: byPercent, intraPageOffset: intraPageOffset);
+  }
+
+  return (page: 0, intraPageOffset: intraPageOffset);
+}
+
+/// 取两份进度里记录时刻更新的那一份；任一侧缺时间戳时相信有戳的那一侧。
+_ComicProgressAnchor? _latestComicAnchor(
+  ReaderProgress? serverProgress,
+  Map<String, dynamic>? localProgress,
+) {
+  final serverAnchor =
+      serverProgress == null
+          ? null
+          : _ComicProgressAnchor.fromServer(serverProgress);
+  final localAnchor =
+      localProgress == null
+          ? null
+          : _ComicProgressAnchor.fromLocal(localProgress);
+  if (serverAnchor == null) return localAnchor;
+  if (localAnchor == null) return serverAnchor;
+  final serverUpdatedAt = serverAnchor.updatedAt;
+  final localUpdatedAt = localAnchor.updatedAt;
+  if (serverUpdatedAt == null) return localAnchor;
+  if (localUpdatedAt == null) return serverAnchor;
+  return localUpdatedAt.isAfter(serverUpdatedAt) ? localAnchor : serverAnchor;
 }
 
 class _ComicProgressAnchor {

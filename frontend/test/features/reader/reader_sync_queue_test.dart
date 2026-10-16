@@ -86,6 +86,62 @@ void main() {
     expect(operations, isEmpty);
   });
 
+  test('书签章节归属随队列补传并在落库时保留', () async {
+    final createdAt = DateTime(2026, 6, 30);
+    await storage.saveBookmark(
+      ReaderBookmark(
+        id: 'local-chapter',
+        readerItemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        createdAt: createdAt,
+      ),
+    );
+    await ReaderSyncQueue.enqueueBookmarkCreate(
+      localId: 'local-chapter',
+      itemId: 'item-1',
+      chapterId: 't1280',
+      charOffset: 640,
+      progressPercent: 0.3,
+    );
+    when(
+      () => api.createBookmark(
+        itemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        note: null,
+        clientOperationId: 'local-chapter',
+      ),
+    ).thenAnswer(
+      (_) async => ReaderBookmark(
+        id: 'server-chapter',
+        readerItemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        createdAt: createdAt,
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    verify(
+      () => api.createBookmark(
+        itemId: 'item-1',
+        chapterId: 't1280',
+        charOffset: 640,
+        progressPercent: 0.3,
+        note: null,
+        clientOperationId: 'local-chapter',
+      ),
+    ).called(1);
+    final bookmarks = await storage.loadBookmarks('item-1');
+    expect(bookmarks.single.chapterId, 't1280');
+    expect(bookmarks.single.charOffset, 640);
+  });
+
   test(
     'annotation loading merges remote data with pending local records',
     () async {
@@ -129,6 +185,19 @@ void main() {
 
   test('annotation sync preserves chapter ownership', () async {
     final createdAt = DateTime(2026, 7, 31);
+    // 本地优先：离线创建的记录先落本地库，队列回包才有可替换的那一行。
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'local-annotation',
+        readerItemId: 'item-annotations',
+        chapterId: 'chapter_3',
+        startOffset: 15,
+        endOffset: 30,
+        highlightText: 'chapter text',
+        color: '#FFEB3B',
+        createdAt: createdAt,
+      ),
+    );
     await ReaderSyncQueue.enqueueAnnotationCreate(
       localId: 'local-annotation',
       itemId: 'item-annotations',

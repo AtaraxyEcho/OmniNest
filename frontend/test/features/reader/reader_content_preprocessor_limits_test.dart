@@ -123,6 +123,41 @@ void main() {
     expect(repository.images.length, 1, reason: '同一条目重复解压会重复计入容量');
   });
 
+  test('未加引号的 src 也按属性取值', () async {
+    ReaderImageCache.init(_MemoryReaderImageRepository());
+    final archive = Archive();
+    final bytes = utf8.encode('real-image');
+    archive.addFile(ArchiveFile('images/real.png', bytes.length, bytes));
+
+    final preprocessed = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item-unquoted',
+      xhtml: '<body><img src=../images/real.png></body>',
+      archive: archive,
+      contentPath: 'text/chapter.xhtml',
+    );
+
+    // 旧写法只认引号包裹的值，这张图会被整条跳过：src 仍是相对路径，渲染端破图。
+    expect(preprocessed.html, contains('src="__IMG_images/real.png__"'));
+    expect(preprocessed.droppedImageCount, 0);
+  });
+
+  test('属性值里的尖括号不截断 src 改写', () async {
+    ReaderImageCache.init(_MemoryReaderImageRepository());
+    final archive = Archive();
+    final bytes = utf8.encode('real-image');
+    archive.addFile(ArchiveFile('images/real.png', bytes.length, bytes));
+
+    final preprocessed = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item-gt-in-alt',
+      xhtml: '<body><img src="../images/real.png" alt="b > c"></body>',
+      archive: archive,
+      contentPath: 'text/chapter.xhtml',
+    );
+
+    expect(preprocessed.html, contains('src="__IMG_images/real.png__"'));
+    expect(preprocessed.html, contains('alt="b > c"'));
+  });
+
   test('内嵌 Base64 图片写入缓存并保留轻量占位符', () async {
     final repository = _MemoryReaderImageRepository();
     ReaderImageCache.init(repository);

@@ -52,3 +52,25 @@ class ComicReaderDisplaySettings {
     'comicPageGap': pageGap,
   };
 }
+
+/// 合并出一次要落盘的完整偏好字典。
+///
+/// 只传单键的 `save` 会把整张偏好覆盖成只剩这一项：字号、主题与漫画显示设置一起丢。
+/// 显示设置按"已应用 → 防抖中尚未落盘"的顺序写入：防抖那份是用户更新的最后一次
+/// 调整，必须盖过内存里那份旧的，否则它落盘时又把用户刚调过的值盖回去。
+/// [patch] 最后写入，同一键以本次显式改动为准。
+Map<String, dynamic> mergeComicReaderPreferences({
+  required Map<String, dynamic> current,
+  ComicReaderDisplaySettings? pendingDisplaySettings,
+  ComicReaderDisplaySettings? appliedDisplaySettings,
+  Map<String, dynamic> patch = const {},
+}) {
+  return {
+    ...current,
+    if (appliedDisplaySettings != null)
+      ...appliedDisplaySettings.toPreferences(),
+    if (pendingDisplaySettings != null)
+      ...pendingDisplaySettings.toPreferences(),
+    ...patch,
+  };
+}

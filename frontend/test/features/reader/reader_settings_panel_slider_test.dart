@@ -28,7 +28,6 @@ void main() {
           child: ReaderViewSettingsPanel(
             settings: ReaderViewSettings(paletteId: 'dark'),
             onSettingsChanged: onSettingsChanged,
-            embedded: true,
           ),
         ),
       ),
@@ -37,8 +36,9 @@ void main() {
   }
 
   Future<void> dragFontSizeSlider(WidgetTester tester) async {
+    // 稿子把行距换成了三档分段，面板里只剩字号一条滑杆。
     final sliders = find.byType(AppSlider);
-    expect(sliders, findsNWidgets(2));
+    expect(sliders, findsOneWidget);
     await tester.drag(sliders.first, const Offset(80, 0));
     await tester.pumpAndSettle();
   }

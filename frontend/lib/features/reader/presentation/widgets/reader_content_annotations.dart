@@ -16,12 +16,16 @@ abstract final class ReaderContentAnnotationProjector {
         return ParagraphBlock(
           lines: _applyToLines(block.lines, annotations),
           hasTrailingSpacing: block.hasTrailingSpacing,
+          style: block.style,
         );
       }
       if (block is BlockquoteBlock) {
         return BlockquoteBlock(
           lines: _applyToLines(block.lines, annotations),
           startOffset: block.startOffset,
+          style: block.style,
+          hasTopPadding: block.hasTopPadding,
+          hasBottomPadding: block.hasBottomPadding,
         );
       }
       if (block is ListBlock) {
@@ -60,15 +64,20 @@ abstract final class ReaderContentAnnotationProjector {
     List<ReaderAnnotation> annotations,
   ) {
     return lines.map((line) {
-      // isNewParagraph 是首行缩进标记，必须随行保留：投影重建时丢弃
-      // 会让加过批注的段落失去首行缩进（布局视为非段首行）。
-      // collapsedChars 与 softWrap 同样是字符记账与折行语义的一部分，
-      // 丢任何一个都会让批注偏移与页裁剪落到不同字符空间。
+      // 重建行必须带上全部字段：
+      // - isNewParagraph 是首行缩进标记，丢了会让加过批注的段落失去首行缩进；
+      // - style 是书给该源段落的排版，绘制侧 `firstLineIndentChars(line.style)`
+      //   取它，丢了「跟随原书」下书表达的缩进会整章消失，而测量侧仍用带样式的
+      //   ChapterData.blocks ⇒ 测量/渲染分叉（固定 itemExtent 下裁行、页预算偏一行）；
+      // - trailingCollapsedChars 参与 LineData.sourceChars 记账，丢了会让批注偏移
+      //   与页裁剪落到不同字符位置。
       return LineData(
         spans: _applyToSpans(line.spans, annotations),
         isNewParagraph: line.isNewParagraph,
         collapsedChars: line.collapsedChars,
+        trailingCollapsedChars: line.trailingCollapsedChars,
         softWrap: line.softWrap,
+        style: line.style,
       );
     }).toList();
   }

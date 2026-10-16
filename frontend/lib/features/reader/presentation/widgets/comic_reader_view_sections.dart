@@ -87,10 +87,14 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
   Future<void> _saveDisplaySettings(ComicReaderDisplaySettings settings) async {
     final current = await ref.read(readerPreferencesProvider.future);
     if (!mounted) return;
-    await ref.read(readerPreferencesProvider.notifier).save({
-      ...current,
-      ...settings.toPreferences(),
-    });
+    await ref
+        .read(readerPreferencesProvider.notifier)
+        .save(
+          mergeComicReaderPreferences(
+            current: current,
+            appliedDisplaySettings: settings,
+          ),
+        );
   }
 
   /// 切换控件显示/隐藏。
@@ -129,9 +133,12 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
   }
 
   /// 跳转到指定目录节点的起始页。
+  ///
+  /// 页面的 `catalogNodeId` 只绑在叶子节点上：点季、卷这类聚合节点时按页面找必然落空，
+  /// 直接返回就是"点了目录没反应"，聚合节点自己的 `pageStartIndex` 才是它的起点。
   void _jumpToCatalogNode(ComicCatalogNode node) {
-    final targetIndex = _pages.indexWhere((p) => p.catalogNodeId == node.id);
-    if (targetIndex < 0) {
+    final targetIndex = resolveComicCatalogStartPage(_manifest, node.id);
+    if (targetIndex == null || targetIndex >= _totalPages) {
       return;
     }
     _jumpToPage(targetIndex);
@@ -142,22 +149,29 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
       return;
     }
     final targetIndex = index.clamp(0, _totalPages - 1).toInt();
-    if (targetIndex == _anchor.pageIndex) {
+    if (comicJumpIsNoOp(
+      targetIndex: targetIndex,
+      currentPageIndex: _anchor.pageIndex,
+      intraPageOffset: _anchor.intraPageOffset,
+      isPageMode: _readingMode == ComicReadingMode.page,
+    )) {
       return;
     }
 
     _resetImageTransform();
     final page = _pages[targetIndex];
+    final targetAnchor = ComicAnchor(
+      pageId: page.id,
+      pageIndex: targetIndex,
+      pageFingerprint: page.fingerprint,
+      sourceId: page.sourceId,
+      sourcePageIndex: page.sourcePageIndex,
+      catalogKey: page.catalogKey,
+      intraPageOffset: 0.0,
+      manifestVersion: _manifest.manifestVersion,
+    );
     _update(() {
-      _anchor = ComicAnchor(
-        pageId: page.id,
-        pageIndex: targetIndex,
-        pageFingerprint: page.fingerprint,
-        sourceId: page.sourceId,
-        sourcePageIndex: page.sourcePageIndex,
-        catalogKey: page.catalogKey,
-        manifestVersion: _manifest.manifestVersion,
-      );
+      _anchor = targetAnchor;
     });
 
     if (_readingMode == ComicReadingMode.page) {
@@ -168,19 +182,11 @@ extension _ComicReaderViewSections on _ComicReaderViewState {
           curve: Curves.easeOutCubic,
         );
       }
-    } else if (_scrollController.hasClients) {
-      final viewportHeight = _scrollController.position.viewportDimension;
-      final targetOffset = _layoutIndex.scrollTo(
-        targetIndex,
-        0.0,
-        viewportHeight,
-      );
-      final max = _scrollController.position.maxScrollExtent;
-      _scrollController.animateTo(
-        targetOffset.clamp(0.0, max),
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-      );
+    } else {
+      // 直接 animateTo 会让动画途经的每一帧都触发 _onScroll 并用途经页覆写锚点，
+      // 目标页尚未布局时还会被 maxScrollExtent 截住。_startScrollRestore 在恢复期间
+      // 抑制进度回写，并在高度收敛后按锚点重算落位。
+      _startScrollRestore(targetAnchor);
     }
     _saveProgress();
   }

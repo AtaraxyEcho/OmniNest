@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -11,7 +14,7 @@ void main() {
 
     expect(settings.paletteId, ReaderReadingPalette.light.id);
     expect(settings.themeIndex, 0);
-    expect(settings.toJson()['version'], 5);
+    expect(settings.toJson()['version'], 6);
     expect(settings.toJson()['paletteId'], 'light');
   });
 
@@ -33,4 +36,37 @@ void main() {
       expect(palette.controlSurface.a, 1.0, reason: '${palette.id} 的控制层必须是实底');
     }
   });
+
+  test('章序标签在四档纸底上都是可读的微型文本', () {
+    // 稿子的 --accent 压在米黄与葱绿纸底上只有 4.1–4.2:1；标签按稿子的
+    // 8–11px 密度不放大字号，只能靠把强调色往墨色折算来补齐正文 AA。
+    for (final palette in ReaderReadingPalette.values) {
+      final settings = ReaderViewSettings(paletteId: palette.id);
+      final style = settings.chapterKickerStyle();
+      expect(
+        _contrast(style.color!, palette.surface),
+        greaterThanOrEqualTo(4.5),
+        reason: '${palette.id} 的标签字色',
+      );
+      expect(style.fontSize, 11.0);
+      expect(style.fontWeight, FontWeight.w700);
+      expect(
+        style.letterSpacing,
+        closeTo(11.0 * 0.24, 0.001),
+        reason: '稿子 .chapter-kicker 的 letter-spacing: .24em',
+      );
+    }
+  });
+}
+
+double _contrast(Color foreground, Color background) {
+  final lighter = math.max(
+    foreground.computeLuminance(),
+    background.computeLuminance(),
+  );
+  final darker = math.min(
+    foreground.computeLuminance(),
+    background.computeLuminance(),
+  );
+  return (lighter + 0.05) / (darker + 0.05);
 }

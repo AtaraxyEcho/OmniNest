@@ -4,7 +4,10 @@ part of 'reader_view_page_builders.dart';
 extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
   // ── 翻页模式 ──
 
-  Widget buildPageModeContent(ReaderChapterContent content) {
+  Widget buildPageModeContent(
+    ReaderChapterContent content,
+    ReaderItemDetail detail,
+  ) {
     final chapters = contentLoader?.allChapters ?? [];
     final chapterIdx = chapters.indexWhere((c) => c.id == currentChapterId);
     final currentChapter = chapterIdx >= 0 ? chapters[chapterIdx] : null;
@@ -51,8 +54,15 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
           settings,
           textScale: textScale,
         );
-        final pageCount = navigator?.readablePageCount ?? 0;
+        final contentPages = navigator?.readablePageCount ?? 0;
         final hasMore = !(navigator?.isFullyPaginated ?? false);
+        // 章末收页挂在正文之后。稿子的 `.chapter-end` 在滚动模式里跟着最后一句走，
+        // 而翻页模式一屏就是一页：末页剩余空间实测有约两成不足一张卡片（168px），
+        // 钉在页底就会挤掉正文最后几行——翻页内容层不可滚，被挤掉的是看不见的字。
+        final pageCount = readerDisplayPageCount(
+          contentPages: contentPages,
+          fullyPaginated: !hasMore,
+        );
         if (navigator != null && data != null) {
           _schedulePageNavigatorWarmup(navigator, pageModePage, data.chapterId);
         }
@@ -90,6 +100,16 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
             ),
             selectionActive: selectionActive,
             pageBuilder: (index) {
+              if (index >= contentPages) {
+                // 收页在正文切片之外：越界的一律不渲染，正好等于正文页数的是收页。
+                return isReaderChapterEndPage(
+                      pageIndex: index,
+                      contentPages: contentPages,
+                      fullyPaginated: !hasMore,
+                    )
+                    ? _buildChapterEndPage(detail, pageLayout, chromeLayout)
+                    : null;
+              }
               final slice = contentLoader?.computePage(
                 chapterId: currentChapterId,
                 settings: settings,
@@ -178,22 +198,10 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
 
   // ── 单页内容 ──
 
-  /// 按切片取可见块：字符区间非空走字符裁剪；零字符切片（图片
-  /// 独占页）走块索引裁剪，避免零宽块被字符裁剪丢弃。
-  List<ContentBlock> _sliceVisibleBlocks(ChapterData data, PageSlice slice) {
-    if (slice.endCharOffset > slice.startCharOffset) {
-      return BlockClipper.clipBlocksByCharRange(
-        data.blocks,
-        slice.startCharOffset,
-        slice.endCharOffset,
-      );
-    }
-    return BlockClipper.clipBlocksByIndexRange(
-      data.blocks,
-      slice.startIndex,
-      slice.endIndex,
-    );
-  }
+  /// 按切片取可见块：规则收在 `BlockClipper.clipBlocksByPageRange`，
+  /// 渲染侧与语料 walker 共用同一条，不再各写一份零宽块的归属判断。
+  List<ContentBlock> _sliceVisibleBlocks(ChapterData data, PageSlice slice) =>
+      BlockClipper.clipBlocksByPageRange(data.blocks, slice);
 
   Widget buildPageContent(
     ChapterData data,
@@ -221,6 +229,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
 
     final content = ReaderViewContent(
       htmlContent: data.content.content,
+      stylesheetCss: data.content.stylesheetCss,
       settings: settings,
       itemId: itemId,
       annotations: annotationHandler?.chapterAnnotations ?? [],
@@ -270,23 +279,85 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
   }
 
   Widget buildChapterHeader(String chapterTitle) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final headerFontSize = (screenWidth * 0.02).clamp(13.0, 15.0);
-    final labelColor = settings.onSurfaceColor.withValues(alpha: 0.35);
+    // 尺寸与颜色取自稿子 `.chapter-kicker`，且不再跟着屏宽浮动：微型标签的层级
+    // 靠字重与字距维持，放大只会把它推成正文一档。
     return Text(
       chapterTitle,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: headerFontSize,
-        color: labelColor,
-        height: 1.4,
-        letterSpacing: 0.3,
-      ),
+      style: settings.chapterKickerStyle(),
     );
   }
 
   // ── 滚动模式 ──
+
+  /// 稿子的章末两块：发丝线行写真实的章节位次与全书进度（原型那行
+  /// "还剩约 7 分钟"是假数据），末章只留分隔行，不摆点了没反应的卡。
+  Widget _buildChapterEndCard(ReaderItemDetail detail) {
+    final l10n = AppLocalizations.of(context);
+    final chapters = _chapterList(detail);
+    final index = chapters.indexWhere(
+      (chapter) => chapter.id == currentChapterId,
+    );
+    final next = _nextChapterOf(detail);
+    final percent = ((lastKnownBookProgress ?? 0) * 100).round();
+    return ReaderChapterEndCard(
+      settings: settings,
+      chapterLabel:
+          index >= 0
+              ? l10n.readerBookChapterPosition(
+                index + 1,
+                chapters.length,
+                percent,
+              )
+              : '',
+      nextChapterTitle: next?.title,
+      onNextChapter: next == null ? null : () => tryNavigateChapter(1),
+    );
+  }
+
+  /// 章末收页：整页只有稿子那两块，贴在页底。
+  ///
+  /// 收页不进正文块列表，因此不参与字符域：它没有自己的字符区间，位置记账归到本章
+  /// 末尾（见 `computePageCharOffset`），进度与恢复都不会把读者退回章首。
+  Widget _buildChapterEndPage(
+    ReaderItemDetail detail,
+    ReaderControlLayout pageLayout,
+    ReaderChromeLayout chromeLayout,
+  ) {
+    return Container(
+      color: settings.surfaceColor,
+      width: double.infinity,
+      // 左右与正文列同一份内缩，否则卡片与上一句的首字对不齐。
+      padding: chromeLayout.contentPadding.copyWith(
+        left: pageLayout.horizontalPadding,
+        right: pageLayout.horizontalPadding,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [_buildChapterEndCard(detail)],
+      ),
+    );
+  }
+
+  ReaderChapter? _nextChapterOf(ReaderItemDetail detail) {
+    final chapters = _chapterList(detail);
+    final index = chapters.indexWhere(
+      (chapter) => chapter.id == currentChapterId,
+    );
+    if (index < 0 || index + 1 >= chapters.length) {
+      return null;
+    }
+    return chapters[index + 1];
+  }
+
+  List<ReaderChapter> _chapterList(ReaderItemDetail detail) {
+    final loaded = contentLoader?.allChapters;
+    if (loaded != null && loaded.isNotEmpty) {
+      return loaded;
+    }
+    return detail.chapters;
+  }
 
   Widget buildScrollModeContent(
     ReaderChapterContent content,
@@ -334,12 +405,21 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
         },
         child: ReaderViewContent(
           htmlContent: content.content,
+          stylesheetCss: content.stylesheetCss,
           settings: settings,
           itemId: itemId,
           annotations: annotationHandler?.chapterAnnotations ?? [],
           rawBlocks: chapterData?.blocks,
           blockExtents: chapterData?.blockExtents,
           scrollController: scrollController,
+          footer: _buildChapterEndCard(detail),
+          // 章末两块的高度随文字缩放同步放大：卡内文本吃缩放，高度不跟就会在紧约束下
+          // 溢出。取卡片实际所在内容层的缩放（已剔除应用字体档位），页面环境值在档位
+          // 低于标准时比渲染矮整整一行。
+          footerExtent: ReaderChapterEndCard.heightFor(
+            hasNextChapter: _nextChapterOf(detail) != null,
+            scaler: FontScaleScope.systemScalerOf(context),
+          ),
           onHighlight: (text, start, end) {
             if (!mounted) return;
             annotationHandler?.highlight(text, start, end, context);

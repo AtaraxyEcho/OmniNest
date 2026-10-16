@@ -67,13 +67,11 @@ void main() {
       expect(extents, hasLength(data.blocks.length));
       for (var i = 0; i < data.blocks.length; i++) {
         final block = data.blocks[i];
-        final expected =
-            ReaderPaginationEngine.measureBlockHeight(
-              block,
-              pageWidth,
-              settings,
-            ) +
-            scrollBlockExtraSpacing(block);
+        final expected = ReaderPaginationEngine.measureBlockHeight(
+          block,
+          pageWidth,
+          settings,
+        );
         expect(
           extents![i],
           closeTo(expected, 0.01),

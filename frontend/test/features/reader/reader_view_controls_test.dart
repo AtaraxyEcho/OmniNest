@@ -311,7 +311,6 @@ void main() {
             allAnnotations: const [],
             chapters: const [],
             settings: ReaderViewSettings(paletteId: 'dark'),
-            embedded: true,
           ),
         ),
         textScale: 1.5,

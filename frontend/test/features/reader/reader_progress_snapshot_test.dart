@@ -63,6 +63,44 @@ void main() {
       expect(latest.charOffset, 120);
     });
 
+    test('停在非首章章首的本地快照压过服务端旧章位置', () {
+      // charOffset 与两个比例全 0：这条快照唯一的"我读过这里"证据是章节归属
+      // 加记录时刻。把它当没有进度，服务端停在第二章的旧位置就会在
+      // "另一侧不可读"那一支无条件胜出，跳到第十章退出后重开又被拉回第二章。
+      final local = ReaderProgressSnapshot.fromLocal({
+        'chapterId': 'chapter-10',
+        'charOffset': 0,
+        'chapterProgress': 0.0,
+        'updatedAt': DateTime(2026, 1, 2, 10).toIso8601String(),
+      });
+      final server = ReaderProgressSnapshot.fromServer(
+        ReaderProgress(
+          readerItemId: 'item-1',
+          charOffset: 900,
+          progressPercent: 10,
+          readingMode: 'scroll',
+          chapterId: 'chapter-2',
+          updatedAt: DateTime(2026, 1, 1),
+        ),
+      );
+
+      expect(local.hasReadableProgress, isTrue);
+      final latest = ReaderProgressSnapshot.latest(local, server)!;
+      expect(latest.chapterId, 'chapter-10');
+    });
+
+    test('章首快照只带全书比例时也算读过', () {
+      final local = ReaderProgressSnapshot.fromLocal({
+        'chapterId': 'chapter-10',
+        'charOffset': 0,
+        'bookProgress': 0.42,
+        'updatedAt': DateTime(2026, 1, 2, 10).toIso8601String(),
+      });
+
+      expect(local.hasReadableProgress, isTrue);
+      expect(local.bookProgress, 0.42);
+    });
+
     test('uses newer server progress when its timestamp is later', () {
       final local = ReaderProgressSnapshot.fromLocal({
         'chapterId': 'chapter-1',

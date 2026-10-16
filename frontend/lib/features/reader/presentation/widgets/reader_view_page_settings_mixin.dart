@@ -8,6 +8,9 @@ import 'package:flutter/widgets.dart' show MediaQuery, Size;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
+import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart'
+    show bookmarkAtChapter;
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -31,11 +34,14 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
   set persistTimer(Timer? value);
   bool get isPageMode;
   String get itemId;
+  String get currentChapterId;
   bool get isBookmarked;
   set isBookmarked(bool value);
   WindowChromeController get windowChromeController;
   WindowChromeLease? get windowChromeLease;
   set windowChromeLease(WindowChromeLease? value);
+
+  ReaderProgressSnapshot? buildProgressSnapshot({double? progressOverride});
 
   void repaginateForViewportChange(Size newSize);
 
@@ -90,16 +96,27 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
     applyImmersiveMode(resolved.immersiveMode);
   }
 
-  /// 检查当前书籍的书签状态。
+  /// 检查当前章节的书签状态。
+  ///
+  /// 按整书判存会把别章的书签算到本章头上，切章后高亮与取消目标都错位。
   Future<void> checkBookmarkState() async {
     if (!mounted) return;
+    final snapshot = buildProgressSnapshot();
+    final chapterId = snapshot?.chapterId ?? currentChapterId;
+    final charOffset = snapshot?.charOffset ?? 0;
     try {
       final bookmarks = await ref
           .read(readerDataManagerProvider)
           .loadBookmarks(itemId);
       if (mounted) {
         setState(() {
-          isBookmarked = bookmarks.isNotEmpty;
+          isBookmarked = bookmarks.any(
+            (bookmark) => bookmarkAtChapter(
+              bookmark,
+              chapterId: chapterId,
+              charOffset: charOffset,
+            ),
+          );
         });
       }
     } on Exception catch (e) {

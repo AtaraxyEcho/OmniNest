@@ -30,6 +30,7 @@ class ReaderDataManager {
     required String itemId,
     required int charOffset,
     required double progressPercent,
+    String? chapterId,
     String? note,
   }) async {
     final now = DateTime.now();
@@ -38,6 +39,7 @@ class ReaderDataManager {
     final bookmark = ReaderBookmark(
       id: id,
       readerItemId: itemId,
+      chapterId: chapterId,
       charOffset: charOffset,
       progressPercent: progressPercent,
       note: note,
@@ -51,6 +53,7 @@ class ReaderDataManager {
     await ReaderSyncQueue.enqueueBookmarkCreate(
       localId: id,
       itemId: itemId,
+      chapterId: chapterId,
       charOffset: charOffset,
       progressPercent: progressPercent,
       note: note,
@@ -72,9 +75,23 @@ class ReaderDataManager {
     }
   }
 
-  /// 加载书签列表
+  /// 加载书签列表（远端拉取 + 离线待同步项合并）
   Future<List<ReaderBookmark>> loadBookmarks(String itemId) async {
-    return _localStorage.loadBookmarks(itemId);
+    Future<List<ReaderBookmark>> loadLocal() =>
+        _localStorage.loadBookmarks(itemId);
+    try {
+      return await _mergeWithPendingMutations<ReaderBookmark>(
+        loadLocal: loadLocal,
+        fetchRemote: () => _api.bookmarks(itemId),
+        deleteType: ReaderSyncQueue.opBookmarkDelete,
+        idField: 'bookmarkId',
+        idOf: (bookmark) => bookmark.id,
+        saveRemote: (bookmark) => _localStorage.saveBookmark(bookmark),
+        deleteLocal: (bookmarkId) => _localStorage.deleteBookmark(bookmarkId),
+      );
+    } on Exception {
+      return loadLocal();
+    }
   }
 
   // ── 标注 ──
@@ -164,31 +181,24 @@ class ReaderDataManager {
     }
   }
 
-  /// 加载标注列表
+  /// 加载标注列表（远端拉取 + 离线待同步项合并）
   Future<List<ReaderAnnotation>> loadAnnotations(String itemId) async {
-    final local = await _localStorage.loadAnnotations(itemId);
+    Future<List<ReaderAnnotation>> loadLocal() =>
+        _localStorage.loadAnnotations(itemId);
     try {
-      final remote = await _api.annotations(itemId);
-      final remoteIds = remote.map((annotation) => annotation.id).toSet();
-      for (final annotation in remote) {
-        await _localStorage.saveAnnotation(annotation);
-      }
-      for (final annotation in local) {
-        if (!annotation.id.startsWith('local_') &&
-            !remoteIds.contains(annotation.id)) {
-          await _localStorage.deleteAnnotation(annotation.id);
-        }
-      }
-      return [
-        ...remote,
-        ...local.where(
-          (annotation) =>
-              annotation.id.startsWith('local_') &&
-              !remoteIds.contains(annotation.id),
-        ),
-      ];
+      return await _mergeWithPendingMutations<ReaderAnnotation>(
+        loadLocal: loadLocal,
+        fetchRemote: () => _api.annotations(itemId),
+        updateType: ReaderSyncQueue.opAnnotationUpdate,
+        deleteType: ReaderSyncQueue.opAnnotationDelete,
+        idField: 'annotationId',
+        idOf: (annotation) => annotation.id,
+        saveRemote: (annotation) => _localStorage.saveAnnotation(annotation),
+        deleteLocal:
+            (annotationId) => _localStorage.deleteAnnotation(annotationId),
+      );
     } on Exception {
-      return local;
+      return loadLocal();
     }
   }
 
@@ -260,30 +270,85 @@ class ReaderDataManager {
     }
   }
 
-  /// 加载笔记列表
+  /// 加载笔记列表（远端拉取 + 离线待同步项合并）
   Future<List<ReaderNote>> loadNotes(String itemId) async {
-    final local = await _localStorage.loadNotes(itemId);
+    Future<List<ReaderNote>> loadLocal() => _localStorage.loadNotes(itemId);
     try {
-      final remote = await _api.notes(itemId);
-      final remoteIds = remote.map((note) => note.id).toSet();
-      for (final note in remote) {
-        await _localStorage.saveNote(note);
-      }
-      for (final note in local) {
-        if (!note.id.startsWith('local_') && !remoteIds.contains(note.id)) {
-          await _localStorage.deleteNote(note.id);
-        }
-      }
-      return [
-        ...remote,
-        ...local.where(
-          (note) =>
-              note.id.startsWith('local_') && !remoteIds.contains(note.id),
-        ),
-      ];
+      return await _mergeWithPendingMutations<ReaderNote>(
+        loadLocal: loadLocal,
+        fetchRemote: () => _api.notes(itemId),
+        updateType: ReaderSyncQueue.opNoteUpdate,
+        deleteType: ReaderSyncQueue.opNoteDelete,
+        idField: 'noteId',
+        idOf: (note) => note.id,
+        saveRemote: (note) => _localStorage.saveNote(note),
+        deleteLocal: (noteId) => _localStorage.deleteNote(noteId),
+      );
     } on Exception {
-      return local;
+      return loadLocal();
     }
+  }
+
+  /// 先 flush、再拉取、按待同步队列过滤合并。
+  ///
+  /// 顺序不能倒：离线积压的删改先推给服务端，远端快照才可能已经是最新事实，
+  /// 否则远端返回的还是旧内容。仍未同步成功的操作必须继续生效——待删 ID 在
+  /// 远端快照里仍然存在，直接覆写本地就是墓碑复活；待改 ID 会被旧内容回滚。
+  Future<List<T>> _mergeWithPendingMutations<T>({
+    required Future<List<T>> Function() loadLocal,
+    required Future<List<T>> Function() fetchRemote,
+    required String deleteType,
+    required String idField,
+    required String Function(T item) idOf,
+    required Future<void> Function(T item) saveRemote,
+    required Future<void> Function(String id) deleteLocal,
+    String? updateType,
+  }) async {
+    await ReaderSyncQueue.flush(api: _api);
+    final mutations = await ReaderSyncQueue.pendingMutations(
+      updateType: updateType,
+      deleteType: deleteType,
+      idField: idField,
+    );
+    // 本地列表在 flush 之后读取：在途创建成功回包会把临时 ID 换成服务端 ID，
+    // flush 之前读到的那份临时行已经不存在了。
+    final local = await loadLocal();
+    final remote = await fetchRemote();
+    final remoteIds = remote.map(idOf).toSet();
+    await ReaderSyncQueue.discardPendingDeletions(
+      deleteType: deleteType,
+      idField: idField,
+      remoteIds: remoteIds,
+    );
+    final localById = {for (final item in local) idOf(item): item};
+    final merged = <T>[];
+    for (final item in remote) {
+      final id = idOf(item);
+      if (mutations.deletingIds.contains(id)) {
+        await deleteLocal(id);
+        continue;
+      }
+      if (mutations.updatingPayloads.containsKey(id)) {
+        merged.add(localById[id] ?? item);
+        continue;
+      }
+      await saveRemote(item);
+      merged.add(item);
+    }
+    for (final item in local) {
+      final id = idOf(item);
+      if (id.startsWith('local_')) {
+        // 创建还排在队列里：本地行是它唯一的副本，远端自然没有它。
+        if (!remoteIds.contains(id)) {
+          merged.add(item);
+        }
+        continue;
+      }
+      if (!remoteIds.contains(id)) {
+        await deleteLocal(id);
+      }
+    }
+    return merged;
   }
 
   /// 生成本地临时 ID，作为离线创建的幂等操作号。

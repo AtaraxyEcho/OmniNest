@@ -13,13 +13,7 @@ extension _ReaderViewPageBuildWork on _ReaderViewPageState {
           parsedBook.chapters
               .asMap()
               .entries
-              .map(
-                (e) => ReaderChapter.fromParsed(
-                  e.key,
-                  e.value.title,
-                  contentPath: e.value.contentPath,
-                ),
-              )
+              .map((entry) => ReaderChapter.fromParsed(entry.key, entry.value))
               .toList();
     }
     return _chaptersCache;

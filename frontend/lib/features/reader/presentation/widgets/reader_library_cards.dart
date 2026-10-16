@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
+import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 书库“继续阅读”横滑卡：小封面 + 标题作者 + 细进度线。
 class ReaderContinueCard extends StatefulWidget {
@@ -253,48 +254,50 @@ class ReaderLibraryGridCard extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       builder:
-          (sheetContext) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (onToggleBookshelf != null)
-                  ListTile(
-                    leading: Icon(
-                      item.addedToBookshelf
-                          ? Icons.bookmark_remove_rounded
-                          : Icons.bookmark_add_rounded,
-                      color: Theme.of(sheetContext).colorScheme.primary,
+          (sheetContext) => MobileSheetSemantics(
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onToggleBookshelf != null)
+                    ListTile(
+                      leading: Icon(
+                        item.addedToBookshelf
+                            ? Icons.bookmark_remove_rounded
+                            : Icons.bookmark_add_rounded,
+                        color: Theme.of(sheetContext).colorScheme.primary,
+                      ),
+                      title: Text(
+                        item.addedToBookshelf
+                            ? l10n.readerRemoveFromBookshelf
+                            : l10n.readerAddToBookshelf,
+                      ),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        onToggleBookshelf!(item);
+                      },
                     ),
-                    title: Text(
-                      item.addedToBookshelf
-                          ? l10n.readerRemoveFromBookshelf
-                          : l10n.readerAddToBookshelf,
-                    ),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      onToggleBookshelf!(item);
-                    },
-                  ),
-                if (onDelete != null)
-                  ListTile(
-                    leading: Icon(
-                      Icons.delete_outline_rounded,
-                      color: Theme.of(sheetContext).colorScheme.error,
-                    ),
-                    title: Text(
-                      l10n.readerDeleteBook,
-                      style: TextStyle(
+                  if (onDelete != null)
+                    ListTile(
+                      leading: Icon(
+                        Icons.delete_outline_rounded,
                         color: Theme.of(sheetContext).colorScheme.error,
                       ),
+                      title: Text(
+                        l10n.readerDeleteBook,
+                        style: TextStyle(
+                          color: Theme.of(sheetContext).colorScheme.error,
+                        ),
+                      ),
+                      subtitle: Text(l10n.readerDeleteBookHint),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _confirmDelete(context);
+                      },
                     ),
-                    subtitle: Text(l10n.readerDeleteBookHint),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _confirmDelete(context);
-                    },
-                  ),
-                const SizedBox(height: 8),
-              ],
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
           ),
     );

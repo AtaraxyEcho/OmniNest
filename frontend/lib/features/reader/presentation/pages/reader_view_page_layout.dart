@@ -43,7 +43,8 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     final screenWidth = viewport.width;
     final contentWidth = math.min(screenWidth, readerLayout.contentFrameWidth);
     final offset = (screenWidth - contentWidth) / 2;
-    final edgeWidth = (contentWidth * 0.12).clamp(44.0, 72.0);
+    // 侧边热区与翻页模式同档（各 1/4 内容宽），中段留给 chrome 开关。
+    final edgeWidth = ReaderControlLayout.sideTapZoneWidth(contentWidth);
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final chromeLayout = ReaderChromeLayout.resolve(
       immersiveMode: _settings.immersiveMode,
@@ -135,7 +136,9 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
         // 又被包进 IgnorePointer → AnimatedOpacity 的交叉淡入链里，StackParentData
         // 因此挂到 FadeTransition 上，阅读页每帧抛 Incorrect use of ParentDataWidget。
         // 定位几何上提到这里，动画链留在 Positioned 内部。
-        if (chromeLayout.showPersistentProgress)
+        // 常驻进度胶囊只在工位皮肤下保留：移动端样例页脚自带进度行，
+        // 再挂一条就是同一条信息的两种密度叠在一起。
+        if (chromeLayout.showPersistentProgress && !sampleChrome)
           Positioned(
             left: sampleChrome ? 20 : null,
             right: sampleChrome ? 20 : 16,
@@ -221,23 +224,20 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     );
   }
 
-  /// 构建章节列表面板（直接在 Stack 内渲染，不使用独立路由）
+  /// 构建章节列表面板（直接在 Stack 内渲染，不使用独立路由）。
+  ///
+  /// 书名眉标由 [ReaderAdaptivePanelOverlay] 的头部负责，这里不再传一遍。
   Widget _buildChapterPanel(ReaderItemDetail detail) {
-    final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
-    final allChapters =
-        parsedBook == null ? detail.chapters : _cachedChaptersFor(parsedBook);
+    final allChapters = _chaptersFor(detail);
 
     return ChapterPanel(
       chapters: allChapters,
       currentChapterId: _currentChapterId,
       settings: _settings,
-      bookTitle: detail.item.title,
       onChapterTap: (chapterId) {
         _closeReaderPanel();
         onChapterSelected(chapterId);
       },
-      onDismiss: _closeReaderPanel,
-      embedded: true,
     );
   }
 
@@ -317,6 +317,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     ReaderChapterContent content, {
     bool sampleChrome = false,
   }) {
+    final chapters = _chaptersFor(detail);
     return Positioned(
       bottom: 0,
       left: 0,
@@ -343,6 +344,10 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                     sampleChrome: sampleChrome,
                     onPrevious: () => _navigateReader(detail, forward: false),
                     onNext: () => _navigateReader(detail, forward: true),
+                    onPreviousChapter: () => tryNavigateChapter(-1),
+                    onNextChapter: () => tryNavigateChapter(1),
+                    chapterIndex: _currentChapterPosition(chapters),
+                    chapterCount: chapters.length,
                     onShowContents:
                         () => _toggleReaderPanel(ReaderPanelType.contents),
                     onShowSettings:
@@ -361,6 +366,28 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
     );
   }
 
+  /// 阅读页章节列表的统一来源：已装载的内容加载器优先（正在读的就是这一份），
+  /// 其次服务端清单映射，最后才是详情响应带的章节。
+  ///
+  /// 后端详情响应不下发章节，只读 `detail.chapters` 时目录恒空，底栏的
+  /// "第 N / M 章" 整块不出现，章节位次也永远解析不到。
+  List<ReaderChapter> _chaptersFor(ReaderItemDetail detail) {
+    final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
+    return readerChapterSource(
+      loaded: _contentLoader?.allChapters,
+      manifest: parsedBook == null ? null : _cachedChaptersFor(parsedBook),
+      fromDetail: detail.chapters,
+    );
+  }
+
+  /// 当前章在目录里的 1-based 序号；章节尚未装载或不在册时返回 null。
+  int? _currentChapterPosition(List<ReaderChapter> chapters) {
+    final index = chapters.indexWhere(
+      (chapter) => chapter.id == _currentChapterId,
+    );
+    return index < 0 ? null : index + 1;
+  }
+
   Widget _buildContent(ReaderChapterContent content, ReaderItemDetail detail) {
     if (kDebugMode) {
       readerDebugLog(
@@ -369,7 +396,26 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
         'contentLength=${content.content.length}',
       );
     }
-    if (_isPageMode) return buildPageModeContent(content);
+    if (_isPageMode) return buildPageModeContent(content, detail);
     return buildScrollModeContent(content, detail);
   }
+}
+
+/// 阅读页章节列表的来源优先级：已装载的章节 > 服务端清单映射 > 详情响应带的章节。
+///
+/// 后端详情响应只带 item 与 progress，`ReaderItemDetail.chapters` 恒为空：
+/// 直接读它时底栏的"第 N / M 章"整块不出现，章末卡的位次与"下一章"也解析不到。
+/// 前两级为 null 或空列表时继续降级，避免章节切换的瞬间目录空掉。
+List<ReaderChapter> readerChapterSource({
+  required List<ReaderChapter>? loaded,
+  required List<ReaderChapter>? manifest,
+  required List<ReaderChapter> fromDetail,
+}) {
+  if (loaded != null && loaded.isNotEmpty) {
+    return loaded;
+  }
+  if (manifest != null && manifest.isNotEmpty) {
+    return manifest;
+  }
+  return fromDetail;
 }

@@ -1,11 +1,21 @@
 part of 'reader_book_provider.dart';
 
+/// 内联正文（TXT 与服务端下发的章节）没有外部样式表：引用与池都为空。
+EpubChapterPayload _inlineChapterPayload(String xhtml) => (
+  xhtml: xhtml,
+  stylesheetRefs: const <String>[],
+  stylesheetPool: const <String, String>{},
+);
+
 /// 按需加载单个章节的 XHTML 内容。
 ///
 /// TXT 优先取服务端解析时派生的单章 UTF-8 正文；派生缺失、请求失败或返回长度与
 /// 本地清单不符时回退本地整本解码链。EPUB 由客户端解压，原生平台从会话明文文件
 /// 按需读取，Web 使用有界内存字节。
-Future<String?> loadChapterContent(
+///
+/// 返回值带本章的样式表次序与书级池：只有解压 EPUB 的那两条分支拿得到，其余分支
+/// 走 [_inlineChapterPayload]。
+Future<EpubChapterPayload?> loadChapterContent(
   WidgetRef ref,
   String itemId,
   ParsedChapter chapter, {
@@ -17,7 +27,9 @@ Future<String?> loadChapterContent(
     chapterIndex == chapter.number - 1,
     'chapterIndex=$chapterIndex 与 chapter.number=${chapter.number} 不一致',
   );
-  if (chapter.xhtmlContent.isNotEmpty) return chapter.xhtmlContent;
+  if (chapter.xhtmlContent.isNotEmpty) {
+    return _inlineChapterPayload(chapter.xhtmlContent);
+  }
   final detail = await ref.read(readerItemDetailProvider(itemId).future);
   if (detail.item.itemType == 'TXT') {
     final start = chapter.sourceStartOffset;
@@ -32,8 +44,8 @@ Future<String?> loadChapterContent(
     );
     if (serverText != null) {
       // 整章只有标题行时服务端正文为空：用章名补一段，避免出现空白页
-      return parser.textToXhtml(
-        serverText.isEmpty ? chapter.title : serverText,
+      return _inlineChapterPayload(
+        parser.textToXhtml(serverText.isEmpty ? chapter.title : serverText),
       );
     }
     // 服务端取不到正文时的本地兜底：整本下载＋本地解码，只在离线或旧数据未重解析时走到。
@@ -61,7 +73,11 @@ Future<String?> loadChapterContent(
     final rawSlice = parser.rawChapterSlice(text, start, end);
     // 前后端各自解码同一份字节流，编码判定或坏序列策略一有分歧，服务端偏移就会
     // 整体错位，切出来的其实是别章正文。此时宁可显式失败，也不静默渲染错章内容。
-    if (!TxtParserService.sliceStartsWithTitle(rawSlice, chapter.title)) {
+    if (!TxtParserService.sliceStartsWithTitle(
+      rawSlice,
+      chapter.title,
+      chapterOrdinal: chapter.number,
+    )) {
       readerDebugLog(
         'TxtOffsetDrift: itemId=$itemId chapterNumber=${chapter.number} '
         'offsets=$start-$end sliceChars=${rawSlice.length} '
@@ -74,9 +90,13 @@ Future<String?> loadChapterContent(
     }
     final body = txtChapterBody(rawSlice, chapter.bodyStartOffset);
     // 整章只有标题行时剥完标题会剩空串：保留完整切片，与服务端返回保持一致
-    return parser.textToXhtml(body.isEmpty ? rawSlice : body);
+    return _inlineChapterPayload(
+      parser.textToXhtml(body.isEmpty ? rawSlice : body),
+    );
   }
-  if (detail.item.itemType != 'EPUB') return chapter.xhtmlContent;
+  if (detail.item.itemType != 'EPUB') {
+    return _inlineChapterPayload(chapter.xhtmlContent);
+  }
 
   final contentPath = chapter.contentPath;
   if (contentPath == null) return null;
@@ -86,8 +106,8 @@ Future<String?> loadChapterContent(
 
   // 编码不支持是可诊断的读者动作（重导或转 UTF-8），必须翻成带原因的章节失败；
   // 其它异常仍按原样上抛，交给通用加载失败文案。
-  Future<String?> readWithEncodingFailure(
-    Future<String?> Function() read,
+  Future<EpubChapterPayload?> readWithEncodingFailure(
+    Future<EpubChapterPayload?> Function() read,
   ) async {
     try {
       return await read();

@@ -82,6 +82,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 章节加载/切换完成后立即重算全书进度一次（切章期间防抖重算被挂起）。
   void refreshBookProgressNow();
+
+  /// 作废全书进度的去重输入。
+  ///
+  /// 两章章首的章内读数同为 0，防抖重算会因"输入没变"短路，读数停在上一章；
+  /// 切章入口必须先作废它。
+  void resetBookProgressInput();
   double? get pendingChapterProgress;
   set pendingChapterProgress(double? value);
   int? get pendingRestoreCharOffset;
@@ -532,15 +538,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     if (isPageMode) {
       final data = contentLoader?.get(currentChapterId, settings);
       if (data == null) return;
-      final slice = contentLoader?.computePage(
-        chapterId: currentChapterId,
-        settings: settings,
-        pageWidth: computePageWidth(),
-        pageHeight: computePageHeight(),
-        pageIndex: pageModePage,
-        textScale: MediaQuery.textScalerOf(context).scale(1.0),
-      );
-      final charOffset = slice?.startCharOffset ?? 0;
+      // 位置只经由 computePageCharOffset 取：那里认得章末收页（它没有正文切片），
+      // 这里再抄一份 slice ?? 0 就会把"读到章末"记成"章首"。
+      final charOffset = computePageCharOffset(pageModePage);
       scrollProgress =
           data.totalChars > 0
               ? (charOffset / data.totalChars).clamp(0.0, 1.0)
@@ -617,6 +617,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
     // 先锁定状态，再进行任何异步持久化，避免连点创建并发切换。
     isSwitchingChapter = true;
+    // 两章章首的章内读数同为 0，不去重的话切章后仍沿用上一章的全书比例上报。
+    resetBookProgressInput();
     clearReaderSelection();
     isLoadingChapter = false;
     loadGeneration++;

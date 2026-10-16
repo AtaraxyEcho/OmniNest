@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -10,6 +9,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/space_selector_sheet.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
+import 'package:omninest/platform/file_pick.dart';
 
 /// 「从设备导入」按钮：选择阅读文件并加入导入队列。
 class ImportFromDeviceButton extends ConsumerStatefulWidget {
@@ -24,18 +24,20 @@ class _ImportFromDeviceButtonState
     extends ConsumerState<ImportFromDeviceButton> {
   Future<void> _pickAndUpload() async {
     try {
-      final picked = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['epub', 'txt', 'cbz', 'zip', 'pdf'],
+      final picked = await FilePick.pickFiles(
+        allowedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
       );
       if (picked.isEmpty) return;
       if (!mounted) return;
       final files = <XFile>[];
       for (final file in picked) {
-        final uploadFile = await _toUploadFile(file);
-        if (uploadFile != null) {
-          files.add(uploadFile);
+        final localPath = file.path;
+        final hasLocalPath = localPath != null && localPath.isNotEmpty;
+        if (!hasLocalPath && (await file.length() ?? 0) == 0) {
+          // 平台只给内存字节且为空文件时不入队，与迁移前的判定一致。
+          continue;
         }
+        files.add(await file.toXFile(mimeType: _mimeTypeFor(file.name)));
       }
       if (files.isEmpty) throw StateError('No readable files selected');
       if (!mounted) {
@@ -63,23 +65,6 @@ class _ImportFromDeviceButtonState
         );
       }
     }
-  }
-
-  Future<XFile?> _toUploadFile(PlatformFile file) async {
-    final fileName = file.name;
-    final path = file.path;
-    if (path != null && path.isNotEmpty) {
-      return XFile(path, name: fileName, mimeType: _mimeTypeFor(fileName));
-    }
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      return null;
-    }
-    return XFile.fromData(
-      bytes,
-      name: fileName,
-      mimeType: _mimeTypeFor(fileName),
-    );
   }
 
   String _mimeTypeFor(String fileName) {

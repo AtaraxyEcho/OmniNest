@@ -30,8 +30,12 @@ class ReaderProgressSnapshot {
     return ReaderProgressSnapshot(
       chapterId: payload['chapterId']?.toString() ?? '',
       charOffset: _asInt(payload['charOffset']),
-      // 本地行只存章内口径，全书进度需要清单才能算出。
       chapterProgress: _asDouble(payload['chapterProgress']),
+      // 本地行带全书比例：停在非首章章首时，它是这条快照唯一的"我读过这里"证据。
+      bookProgress:
+          payload['bookProgress'] == null
+              ? null
+              : _asDouble(payload['bookProgress']),
       chapterTitle: payload['chapterTitle']?.toString() ?? '',
       mode: payload['mode']?.toString() ?? 'scroll',
       manifestVersion:
@@ -83,10 +87,18 @@ class ReaderProgressSnapshot {
   final int? manifestVersion;
   final DateTime? updatedAt;
 
-  /// 是否有可恢复的阅读进度
+  /// 是否携带显式阅读位置。
+  ///
+  /// 除偏移与比例之外，带章节归属且有记录时刻的快照也算可读位置：用户主动
+  /// 跳到第 10 章章首后退出，三个数值字段都是 0，若不认这条快照，服务端停在
+  /// 第 2 章的旧位置就会在 `latest()` 的"另一侧不可读"分支里无条件胜出，
+  /// 无视时间戳把进度回退。零时间戳的初始化占位仍靠 [updatedAt] 为空排除。
   bool get hasReadableProgress =>
       chapterId.isNotEmpty &&
-      (charOffset > 0 || chapterProgress > 0 || (bookProgress ?? 0) > 0);
+      (charOffset > 0 ||
+          chapterProgress > 0 ||
+          (bookProgress ?? 0) > 0 ||
+          updatedAt != null);
 
   /// 降级为章首恢复：清单版本变化后字符偏移不再可比。
   ReaderProgressSnapshot degradeToChapterStart() {
@@ -101,8 +113,9 @@ class ReaderProgressSnapshot {
 
   /// 从两个快照中选取更新时间较新的一方。
   ///
-  /// 零进度快照（无 charOffset 且无 progress）不得作为“最新”，
-  /// 否则开书时写入的 chapter_0(0,0) 会把用户从正文章拉回封面。
+  /// 两侧都带章节归属与记录时刻时一律按时刻比较；只有没有任何位置证据
+  /// （偏移、章内比例、全书比例、记录时刻全空）的一方才被排除，避免开书时
+  /// 写入的无时间戳 chapter_0(0,0) 占位把用户从正文章拉回封面。
   static ReaderProgressSnapshot? latest(
     ReaderProgressSnapshot? a,
     ReaderProgressSnapshot? b,

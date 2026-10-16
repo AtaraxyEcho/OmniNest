@@ -6,19 +6,23 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/features/files/application/space_migration_service.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_fill.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
 /// 元数据管理区：标题 + 搜索 + 限高懒加载列表。
 ///
 /// 标题与搜索固定在列表上方；列表在固定高度容器内用 [ListView.builder]
 /// 懒构建，避免大书库一次实例化全部行，同时不把「最近阅读」推得过远。
-class MetadataSection extends StatefulWidget {
+///
+/// 删除由本节状态发起：条目删除后行组件会被移除，提示必须由存活的父组件发出。
+class MetadataSection extends ConsumerStatefulWidget {
   const MetadataSection({required this.items, super.key});
 
   final List<ReaderItem> items;
@@ -27,19 +31,78 @@ class MetadataSection extends StatefulWidget {
   static const double _listMaxHeight = 560;
 
   @override
-  State<MetadataSection> createState() => _MetadataSectionState();
+  ConsumerState<MetadataSection> createState() => _MetadataSectionState();
 }
 
-class _MetadataSectionState extends State<MetadataSection> {
+class _MetadataSectionState extends ConsumerState<MetadataSection> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _listScrollController = ScrollController();
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _listScrollController.addListener(_onListScroll);
+  }
+
+  /// 管理列表在固定高度容器里自带滚动体：外层页面的触底控件看不见它的滚动事件，
+  /// 触底必须自己续拉分页，否则第 51 本之后的条目在本页永远滚不到。
+  void _onListScroll() {
+    if (!mounted || !_listScrollController.hasClients) {
+      return;
+    }
+    final position = _listScrollController.position;
+    if (position.pixels < position.maxScrollExtent - 200) {
+      return;
+    }
+    unawaited(
+      ref.read(readerCenterControllerProvider.notifier).loadMoreItems(),
+    );
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     _listScrollController.dispose();
     super.dispose();
+  }
+
+  /// 永久删除书籍：书库记录与源文件（含 MinIO 对象）一起清理。
+  Future<void> _deleteItem(ReaderItem item) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: l10n.readerConfirmDelete,
+      message: l10n.readerConfirmDeleteMsg(item.title),
+      confirmLabel: l10n.filesDelete,
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .deleteItem(item.id);
+      if (!mounted) {
+        return;
+      }
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerDeletedItem(item.title),
+      );
+    } on Exception catch (error) {
+      if (mounted) {
+        // 与书库页同口径：共享进来的书不属于当前用户，后端会回「无权删除」，
+        // 吞成「稍后重试」会让人反复点删除。
+        showReaderSnackBar(
+          context,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
+        );
+      }
+    }
   }
 
   List<ReaderItem> get _filtered {
@@ -58,6 +121,15 @@ class _MetadataSectionState extends State<MetadataSection> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filtered;
+    // 本节只持有已加载的分页窗口，搜索是窗口内匹配：命中不足一屏时继续往后拉，
+    // 直到凑满或服务端没有下一页，排在后面的书名才可能被搜到。
+    final center = ref.watch(readerCenterControllerProvider).asData?.value;
+    scheduleReaderPageFill(
+      ref,
+      visibleCount: filtered.length,
+      hasMore: center?.itemsHasMore ?? false,
+      isLoadingMore: center?.itemsLoadingMore ?? false,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,7 +270,10 @@ class _MetadataSectionState extends State<MetadataSection> {
                     padding: EdgeInsets.fromLTRB(12, 12, 8, 12),
                     itemCount: filtered.length,
                     itemBuilder:
-                        (context, index) => _MetadataRow(item: filtered[index]),
+                        (context, index) => _MetadataRow(
+                          item: filtered[index],
+                          onDeleteItem: _deleteItem,
+                        ),
                   ),
                 ),
               ),
@@ -255,9 +330,10 @@ class _MetadataSectionState extends State<MetadataSection> {
 }
 
 class _MetadataRow extends ConsumerStatefulWidget {
-  const _MetadataRow({required this.item});
+  const _MetadataRow({required this.item, required this.onDeleteItem});
 
   final ReaderItem item;
+  final Future<void> Function(ReaderItem item) onDeleteItem;
 
   @override
   ConsumerState<_MetadataRow> createState() => _MetadataRowState();
@@ -265,15 +341,13 @@ class _MetadataRow extends ConsumerStatefulWidget {
 
 class _MetadataRowState extends ConsumerState<_MetadataRow> {
   bool _hovered = false;
-  bool _migrating = false;
+  bool _busy = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final item = widget.item;
     final isShared = item.spaceType == 'SHARED';
-    final canMigrateSpace =
-        item.fileNodeId != null && item.fileNodeId!.isNotEmpty;
     final statusLabel = switch (item.metadataStatus) {
       'PENDING' => l10n.readerStatusPending,
       'FAILED' => l10n.readerStatusFailed,
@@ -417,34 +491,41 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
             SizedBox(width: 4),
             PopupMenuButton<String>(
               tooltip: l10n.filesOpenFileMenu,
-              enabled: !_migrating && canMigrateSpace,
+              enabled: !_busy,
               icon: Icon(
                 Icons.more_vert_rounded,
                 size: 18,
                 color:
-                    canMigrateSpace && !_migrating
-                        ? context.readerColors.onSurfaceVariant
-                        : context.readerColors.onSurfaceVariant.withValues(
+                    _busy
+                        ? context.readerColors.onSurfaceVariant.withValues(
                           alpha: 0.35,
-                        ),
+                        )
+                        : context.readerColors.onSurfaceVariant,
               ),
               onSelected: (value) => unawaited(_handleMenuAction(value)),
               itemBuilder: (context) {
                 final fileNodeId = item.fileNodeId;
-                if (fileNodeId == null || fileNodeId.isEmpty) {
-                  return const <PopupMenuEntry<String>>[];
-                }
+                final canMigrateSpace =
+                    fileNodeId != null && fileNodeId.isNotEmpty;
                 return <PopupMenuEntry<String>>[
-                  if (!isShared)
-                    PopupMenuItem<String>(
-                      value: 'moveToShared',
-                      child: Text(l10n.filesMoveToShared),
-                    )
-                  else
-                    PopupMenuItem<String>(
-                      value: 'moveToPersonal',
-                      child: Text(l10n.filesMoveToPersonal),
+                  if (canMigrateSpace)
+                    if (!isShared)
+                      PopupMenuItem<String>(
+                        value: 'moveToShared',
+                        child: Text(l10n.filesMoveToShared),
+                      )
+                    else
+                      PopupMenuItem<String>(
+                        value: 'moveToPersonal',
+                        child: Text(l10n.filesMoveToPersonal),
+                      ),
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Text(
+                      l10n.readerDeleteBook,
+                      style: TextStyle(color: context.readerColors.danger),
                     ),
+                  ),
                 ];
               },
             ),
@@ -455,13 +536,42 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
   }
 
   Future<void> _handleMenuAction(String action) async {
-    final item = widget.item;
-    final fileNodeId = item.fileNodeId;
-    if (fileNodeId == null || fileNodeId.isEmpty || _migrating) {
+    if (_busy) {
       return;
     }
+    final item = widget.item;
+    if (action == 'delete') {
+      setState(() => _busy = true);
+      try {
+        // 删除会让本行从列表消失，确认与提示由父节状态承接。
+        await widget.onDeleteItem(item);
+      } finally {
+        if (mounted) {
+          setState(() => _busy = false);
+        }
+      }
+      return;
+    }
+    final fileNodeId = item.fileNodeId;
+    if (fileNodeId == null || fileNodeId.isEmpty) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await _migrateSpace(item, fileNodeId, action == 'moveToShared');
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _migrateSpace(
+    ReaderItem item,
+    String fileNodeId,
+    bool toShared,
+  ) async {
     final l10n = AppLocalizations.of(context);
-    final toShared = action == 'moveToShared';
     final confirmed = await confirmDestructiveAction(
       context,
       title:
@@ -478,7 +588,6 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
     if (!confirmed || !mounted) {
       return;
     }
-    setState(() => _migrating = true);
     try {
       final service = ref.read(spaceMigrationServiceProvider);
       if (toShared) {
@@ -506,10 +615,6 @@ class _MetadataRowState extends ConsumerState<_MetadataRow> {
           context,
           AppLocalizations.of(context).filesMoveSpaceFailed,
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _migrating = false);
       }
     }
   }

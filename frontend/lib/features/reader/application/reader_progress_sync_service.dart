@@ -43,6 +43,13 @@ class ReaderProgressSyncService {
         intraPageOffset: intraPageOffset,
         clientUpdatedAt: clientUpdatedAt,
       );
+      // 在线直传绕过了队列：同书积压的、记录时刻不晚于本次的进度行必须一并作废，
+      // 否则下一轮 flush 会把更旧的位置再发一次。带更新时刻的行由围栏拒绝，
+      // 这里同样不删。
+      await ReaderSyncQueue.clearSupersededProgress(
+        itemId,
+        reportedAt: clientUpdatedAt,
+      );
     } on Exception {
       await ReaderSyncQueue.enqueueProgress(
         itemId: itemId,

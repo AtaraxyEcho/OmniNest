@@ -17,6 +17,8 @@ class PageSlice {
     this.startCharOffset = 0,
     this.endCharOffset = 0,
     this.cursorEnd = -1,
+    this.accountedHeight = -1,
+    this.chainContinueBlock = -1,
   });
 
   final int startIndex;
@@ -38,10 +40,61 @@ class PageSlice {
   /// 保证页链能够继续推进且不吞掉后一段正文的首字符。
   final int cursorEnd;
 
+  /// 零宽块链没能在这一页画完时，下一页要接着画的块索引；负值表示链已画完。
+  ///
+  /// 连续的图片与分隔线在字符轴上同宽（0），游标只能表示"链之前"和"链之后"，
+  /// 表示不了"链里的第几张"。所以链被页高切成多页时，游标原地不动，续页位置
+  /// 由这里带着——它不进字符域，进度、锚点与批注的偏移口径因此不受影响。
+  final int chainContinueBlock;
+
   /// 下一页的计算起点。
   int get nextCursor => cursorEnd >= 0 ? cursorEnd : endCharOffset;
 
+  /// 装页时算给这一页的高度（含已预扣的块间距）。
+  ///
+  /// 负值表示这一页不是逐行累计出来的（空章页）。逐行累计与渲染两侧对同一页各算
+  /// 一次是两类不同的错误：预算算错要改装页，测量对不上要改测量口径，只有把引擎
+  /// 算到的值一起带出来，回归才不用靠猜来判断锅在哪一侧。
+  final double accountedHeight;
+
   int get length => endIndex - startIndex;
+}
+
+/// 翻页模式的显示页数 = 正文页数 + 章末收页。
+///
+/// 收页只在整章分页完成后挂上：正文页数是懒算的，未完成时把收页算进去，边界判定会
+/// 以为已经到了章末，翻页手势提前把读者送进下一章。
+int readerDisplayPageCount({
+  required int contentPages,
+  required bool fullyPaginated,
+}) => fullyPaginated && contentPages > 0 ? contentPages + 1 : contentPages;
+
+/// 第 [pageIndex] 页是不是章末收页（本章正文之外的最后一页）。
+bool isReaderChapterEndPage({
+  required int pageIndex,
+  required int contentPages,
+  required bool fullyPaginated,
+}) => fullyPaginated && contentPages > 0 && pageIndex == contentPages;
+
+/// 某一页在章节字符域里的位置：正文页取页首偏移，章末收页取本章末尾，越界页取 0。
+///
+/// 收页没有正文切片。若与"越界"一样记 0，读者在章末合上书就会被送回章首——
+/// 进度与恢复两条通路都经由这里取值，两侧不会各写一份判据。
+int readerPageCharOffset({
+  required PageSlice? slice,
+  required int pageIndex,
+  required int contentPages,
+  required bool fullyPaginated,
+  required int totalChars,
+}) {
+  if (slice != null) return slice.startCharOffset;
+  return isReaderChapterEndPage(
+        pageIndex: pageIndex,
+        contentPages: contentPages,
+        fullyPaginated: fullyPaginated,
+      )
+      ? totalChars
+      : 0;
 }
 
 /// 公开视觉行信息（供 ReaderContentLoader 使用）。

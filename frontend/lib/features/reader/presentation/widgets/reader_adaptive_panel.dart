@@ -7,9 +7,10 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 
 /// 阅读器目录、设置和辅助工具共用的面板框架。
 ///
-/// 底部形态（移动壳层）按稿子 `.bottom-sheet` 画：glass-solid 实底、顶部 r28、
-/// 三边 --line 描边（底边贴屏不画）、投影 0 -20 60、38×4 手柄，头部是
-/// 9pt 强调色眉标 + 25pt 衬线面板名。侧栏形态（桌面宽窗）保持工位直角框架。
+/// 底部形态（移动壳层）按稿子 `.bottom-sheet` 画，几何全部取自
+/// [ReaderSheetSpec]：glass-solid 实底、r28、--line 描边（窄屏底边贴屏不画）、
+/// 投影 0 -20 60、38×4 手柄，头部是 9pt 强调色眉标 + 25pt 衬线面板名。
+/// 侧栏形态（桌面宽窗）保持工位直角框架。
 class ReaderAdaptivePanelFrame extends StatelessWidget {
   const ReaderAdaptivePanelFrame({
     required this.title,
@@ -56,38 +57,40 @@ class ReaderAdaptivePanelFrame extends StatelessWidget {
   }
 
   Widget _bottomSheet(BuildContext context) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final sheetRadius = ReaderSheetSpec.borderRadiusFor(viewportWidth);
     return Container(
       // 描边挂在 Container 上：Border 会把子节点按线宽内缩，
       // 画在 Material 自己那层会被实底内容盖掉。
       decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(
-          top: BorderSide(color: settings.lineColor),
-          left: BorderSide(color: settings.lineColor),
-          right: BorderSide(color: settings.lineColor),
-        ),
+        borderRadius: sheetRadius,
+        border: ReaderSheetSpec.borderFor(viewportWidth, settings.lineColor),
         boxShadow: [
           BoxShadow(
             color: settings.shadowColor,
-            blurRadius: 60,
-            offset: const Offset(0, -20),
+            blurRadius: ReaderSheetSpec.shadowBlurRadius,
+            offset: ReaderSheetSpec.shadowOffset,
           ),
         ],
       ),
       child: Material(
         color: settings.glassSolidColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: sheetRadius,
         clipBehavior: Clip.antiAlias,
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 2),
+              padding: const EdgeInsets.only(
+                top: ReaderSheetSpec.handleTopPadding,
+              ),
               child: Center(
                 child: Container(
-                  width: 38,
-                  height: 4,
+                  width: ReaderSheetSpec.handleWidth,
+                  height: ReaderSheetSpec.handleHeight,
                   decoration: BoxDecoration(
-                    color: settings.onSurfaceColor.withValues(alpha: 0.18),
+                    color: settings.onSurfaceColor.withValues(
+                      alpha: ReaderSheetSpec.handleOpacity,
+                    ),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -103,62 +106,93 @@ class ReaderAdaptivePanelFrame extends StatelessWidget {
 
   Widget _headerRow(BuildContext context, {required bool compact}) {
     final eyebrowText = eyebrow;
-    return SizedBox(
-      height: compact ? 56 : 74,
-      child: Padding(
-        padding: EdgeInsets.only(left: compact ? 20 : 24, right: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!compact && eyebrowText != null && eyebrowText.isNotEmpty)
-                    Text(
-                      eyebrowText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: settings.accentColor,
-                        fontSize: AppTypography.labelNano,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.08,
-                      ),
-                    ),
-                  Padding(
-                    padding: EdgeInsets.only(top: compact ? 0 : 3),
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: compact ? null : AppTypography.serifFamily,
-                        fontFamilyFallback:
-                            compact ? null : AppTypography.serifFamilyFallback,
-                        color: settings.onSurfaceColor,
-                        fontSize:
-                            compact
-                                ? AppTypography.titleMedium
-                                : 25, // ignore: font_size_whitelist
-                        fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
-                      ),
-                    ),
+    final closeChip = _CloseChip(onClose: onClose, settings: settings);
+    final header = Row(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!compact && eyebrowText != null && eyebrowText.isNotEmpty)
+                Text(
+                  eyebrowText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: settings.accentColor,
+                    fontSize: AppTypography.labelNano,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.08,
                   ),
-                ],
+                ),
+              Padding(
+                padding: EdgeInsets.only(
+                  top: compact ? 0 : ReaderSheetSpec.headerTitleGap,
+                ),
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: compact ? null : AppTypography.serifFamily,
+                    fontFamilyFallback:
+                        compact ? null : AppTypography.serifFamilyFallback,
+                    color: settings.onSurfaceColor,
+                    fontSize:
+                        compact
+                            ? AppTypography.titleMedium
+                            : ReaderSheetSpec.headerTitleFontSize,
+                    fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-            if (headerAction != null) headerAction!,
-            IconButton(
-              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-              onPressed: onClose,
-              icon: Icon(
-                Icons.close_rounded,
-                color: settings.onSurfaceVariantColor,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+        if (headerAction != null) headerAction!,
+        closeChip,
+      ],
+    );
+    if (compact) {
+      return SizedBox(
+        height: 56,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 20, right: 8),
+          child: header,
+        ),
+      );
+    }
+    return Padding(padding: ReaderSheetSpec.headerPadding, child: header);
+  }
+}
+
+/// 稿子 `.icon-button`：44×44 圆形、`--page-elevated` 72% 底、1px --line 描边、
+/// 投影 0 5 18。本项目把关闭这类逃生控件的触控下限定在 48dp，所以取
+/// [ReaderSheetSpec.closeTargetSize]；描边和底色照稿子。
+class _CloseChip extends StatelessWidget {
+  const _CloseChip({required this.onClose, required this.settings});
+
+  final VoidCallback onClose;
+  final ReaderViewSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: ReaderSheetSpec.closeTargetSize,
+      height: ReaderSheetSpec.closeTargetSize,
+      child: IconButton(
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        onPressed: onClose,
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          backgroundColor: settings.elevatedColor.withValues(alpha: 0.72),
+          shape: CircleBorder(side: BorderSide(color: settings.lineColor)),
+        ),
+        iconSize: ReaderSheetSpec.closeIconSize,
+        color: settings.onSurfaceColor,
+        icon: const Icon(Icons.close_rounded),
       ),
     );
   }
@@ -201,13 +235,22 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
     final duration =
         MediaQuery.disableAnimationsOf(context)
             ? Duration.zero
-            : const Duration(milliseconds: 210);
+            : ReaderSheetSpec.entranceDuration;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 键盘弹出后 Scaffold body 变矮；面板高度按实际可用高收敛，并保留
-        // 一条遮罩带供点外关闭，否则标题与关闭钮会被 Stack 裁到可视区外。
-        final availableHeight = math.max(0.0, constraints.maxHeight - 24);
+        // 稿子 `@media (min-width:720px)` 让抽屉离屏幕底边抬起 18px 并补上
+        // 底边描边；键盘弹出后 Scaffold body 变矮，面板高度按实际可用高收敛，
+        // 并保留一条遮罩带供点外关闭，否则标题与关闭钮会被 Stack 裁到可视区外。
+        final sheetBottomMargin =
+            layout.usesSidePanel ||
+                    !ReaderSheetSpec.isWide(constraints.maxWidth)
+                ? 0.0
+                : ReaderSheetSpec.wideBottomMargin;
+        final availableHeight = math.max(
+          0.0,
+          constraints.maxHeight - 24 - sheetBottomMargin,
+        );
         final panelHeight = math.min(layout.panelMaxHeight, availableHeight);
         return Stack(
           children: [
@@ -215,7 +258,7 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onClose,
-                child: ColoredBox(color: Colors.black.withValues(alpha: 0.34)),
+                child: const ColoredBox(color: ReaderSheetSpec.scrimColor),
               ),
             ),
             if (layout.usesSidePanel)
@@ -234,12 +277,23 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 0,
+                bottom: sheetBottomMargin,
                 height: panelHeight,
-                child: _ReaderPanelEntrance(
-                  horizontal: false,
-                  duration: duration,
-                  child: panel,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  // `.bottom-sheet` 的 width: min(100%, 680px) + margin: 0 auto。
+                  child: SizedBox(
+                    width: math.min(
+                      ReaderSheetSpec.maxWidth,
+                      constraints.maxWidth,
+                    ),
+                    height: panelHeight,
+                    child: _ReaderPanelEntrance(
+                      horizontal: false,
+                      duration: duration,
+                      child: panel,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -265,7 +319,7 @@ class _ReaderPanelEntrance extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: duration,
-      curve: Curves.easeOutCubic,
+      curve: ReaderSheetSpec.entranceCurve,
       builder:
           (context, value, child) => Transform.translate(
             offset:

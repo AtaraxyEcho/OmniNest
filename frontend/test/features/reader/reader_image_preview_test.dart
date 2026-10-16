@@ -38,4 +38,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ReaderImagePreview), findsNothing);
   });
+
+  testWidgets('残缺占位符走失败态而不是 RangeError', (tester) async {
+    // `__IMG_` 只有前缀、长度正好 6：按下标两头各切 6/2 会拿负长度抛 RangeError，
+    // 预览整页崩；后缀与长度都必须先校验。
+    final block = ImageBlock(src: '__IMG_');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReaderImagePreview(
+            block: block,
+            itemId: 'item-1',
+            retryCount: 0,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+  });
 }

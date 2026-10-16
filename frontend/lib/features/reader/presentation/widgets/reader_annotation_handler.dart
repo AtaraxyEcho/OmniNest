@@ -22,6 +22,7 @@ class ReaderAnnotationHandler {
     required this.dataManager,
     required this.settings,
     required this.onAnnotationsChanged,
+    this.onSelectAnnotation,
     this.chapters = const [],
   });
 
@@ -30,6 +31,9 @@ class ReaderAnnotationHandler {
   final ReaderDataManager dataManager;
   ReaderViewSettings settings;
   final VoidCallback onAnnotationsChanged;
+
+  /// 点按批注卡片时请求跳转到该批注的章节与章内偏移。
+  final void Function(String? chapterId, int startOffset)? onSelectAnnotation;
 
   /// 章节列表，用于在全书批注模式下查找章节标题。
   List<ReaderChapter> chapters;
@@ -179,6 +183,10 @@ class ReaderAnnotationHandler {
     }
   }
 
+  /// 批注存色可能为空或不在预设内；编辑对话框只能选中预设格，回落批注默认色。
+  static String _presetColorOrDefault(String? color) =>
+      _presetColors.contains(color) ? color! : '#E0E0E0';
+
   /// 创建批注（弹出输入弹窗）。
   Future<void> annotate(
     String selectedText,
@@ -189,134 +197,19 @@ class ReaderAnnotationHandler {
     // 弹窗 await 窗口长，章节归属必须在此刻原子捕获。
     final chapter = chapterId;
     final l10n = AppLocalizations.of(context);
-    final noteController = TextEditingController();
-    String selectedColor = '#E0E0E0';
-    bool noteEmpty = true;
 
-    final result = await showWorkstationDialog<bool>(
+    final result = await showWorkstationDialog<_AnnotationDraft>(
       context: context,
       builder:
-          (ctx) => StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: Text(l10n.readerAddAnnotation),
-                // 键盘弹出时引文+备注+色板可能超出可用高，滚动兜底。
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 150),
-                        child: SingleChildScrollView(
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .outlineVariant
-                                    .withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Text(
-                              selectedText,
-                              style: const TextStyle(
-                                fontSize: AppTypography.bodyMedium,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children:
-                            _presetColors.map((colorHex) {
-                              final isSelected = selectedColor == colorHex;
-                              final color = parseAnnotationColor(colorHex);
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: InkWell(
-                                  onTap:
-                                      () => setState(() {
-                                        selectedColor = colorHex;
-                                      }),
-                                  customBorder: const CircleBorder(),
-                                  child: Container(
-                                    width: 28,
-                                    height: 28,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: color,
-                                      border: Border.all(
-                                        color:
-                                            isSelected
-                                                ? Theme.of(
-                                                  context,
-                                                ).colorScheme.outline
-                                                : Colors.transparent,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child:
-                                        isSelected
-                                            ? Icon(
-                                              Icons.check,
-                                              size: 16,
-                                              color: Colors.black,
-                                            )
-                                            : null,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: noteController,
-                        maxLines: 3,
-                        onChanged: (v) {
-                          setState(() => noteEmpty = v.trim().isEmpty);
-                        },
-                        decoration: InputDecoration(
-                          hintText: l10n.readerAnnotationHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: Text(
-                      MaterialLocalizations.of(context).cancelButtonLabel,
-                    ),
-                  ),
-                  FilledButton(
-                    onPressed:
-                        noteEmpty ? null : () => Navigator.pop(ctx, true),
-                    child: Text(
-                      MaterialLocalizations.of(context).okButtonLabel,
-                    ),
-                  ),
-                ],
-              );
-            },
+          (_) => _AnnotationDialog(
+            title: l10n.readerAddAnnotation,
+            quote: selectedText,
+            initialColor: '#E0E0E0',
+            requireNote: true,
           ),
     );
 
-    if (result == true && noteController.text.trim().isNotEmpty) {
+    if (result != null) {
       try {
         await _deleteOverlapping(chapter, startOffset, endOffset);
         await dataManager.createAnnotation(
@@ -325,8 +218,8 @@ class ReaderAnnotationHandler {
           startOffset: startOffset,
           endOffset: endOffset,
           highlightText: selectedText,
-          note: noteController.text.trim(),
-          color: selectedColor,
+          note: result.note,
+          color: result.color,
         );
         await load();
       } on Exception catch (e) {
@@ -344,7 +237,6 @@ class ReaderAnnotationHandler {
         }
       }
     }
-    noteController.dispose();
   }
 
   /// 删除批注。
@@ -359,53 +251,41 @@ class ReaderAnnotationHandler {
     }
   }
 
-  /// 编辑批注备注。
+  /// 编辑批注的备注与高亮色；把备注清空即等于取消附注，保留高亮。
   Future<void> edit(ReaderAnnotation annotation, BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final noteController = TextEditingController(text: annotation.note);
 
-    final result = await showWorkstationDialog<bool>(
+    final result = await showWorkstationDialog<_AnnotationDraft>(
       context: context,
       builder:
-          (ctx) => AlertDialog(
-            title: Text(l10n.readerEditAnnotation),
-            content: TextField(
-              controller: noteController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: l10n.readerAnnotationHint,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(
-                  MaterialLocalizations.of(context).cancelButtonLabel,
-                ),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(MaterialLocalizations.of(context).okButtonLabel),
-              ),
-            ],
+          (_) => _AnnotationDialog(
+            title: l10n.readerEditAnnotation,
+            initialNote: annotation.note,
+            initialColor: _presetColorOrDefault(annotation.color),
           ),
     );
 
-    if (result == true && noteController.text.trim().isNotEmpty) {
+    if (result != null) {
       try {
         await dataManager.updateAnnotation(
           annotationId: annotation.id,
-          note: noteController.text.trim(),
+          note: result.note,
+          color: result.color,
         );
         await load();
       } on Exception catch (e) {
+        // 编辑是用户显式动作，失败必须可感知，否则用户以为清空已生效。
         if (kDebugMode) {
           readerDebugLog('ReaderAnnotationHandler: annotation edit failed: $e');
         }
+        if (context.mounted) {
+          showReaderSnackBar(
+            context,
+            AppLocalizations.of(context).readerAnnotationSaveFailed,
+          );
+        }
       }
     }
-    noteController.dispose();
   }
 
   /// 构建由阅读器自适应面板承载的批注内容。
@@ -415,13 +295,206 @@ class ReaderAnnotationHandler {
       allAnnotations: _annotations,
       chapters: chapters,
       settings: settings,
-      embedded: true,
       onDelete: (annotation) async {
         await delete(annotation);
       },
       onEdit: (annotation) {
         edit(annotation, context);
       },
+      onSelect:
+          onSelectAnnotation == null
+              ? null
+              : (annotation) => onSelectAnnotation!(
+                annotation.chapterId,
+                annotation.startOffset,
+              ),
+    );
+  }
+}
+
+/// 预设高亮色选一列：新建与编辑批注对话框共用同一份色板与选中态。
+class _PresetColorRow extends StatelessWidget {
+  const _PresetColorRow({required this.selectedColor, required this.onChanged});
+
+  final String selectedColor;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (final colorHex in ReaderAnnotationHandler._presetColors)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: InkWell(
+              onTap: () => onChanged(colorHex),
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ReaderAnnotationHandler.parseAnnotationColor(colorHex),
+                  border: Border.all(
+                    color:
+                        selectedColor == colorHex
+                            ? Theme.of(context).colorScheme.outline
+                            : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child:
+                    selectedColor == colorHex
+                        ? const Icon(Icons.check, size: 16, color: Colors.black)
+                        : null,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 批注对话框的确认结果。
+class _AnnotationDraft {
+  const _AnnotationDraft({required this.note, required this.color});
+
+  final String note;
+  final String color;
+}
+
+/// 批注编辑对话框：新建与修改共用。
+///
+/// 文本控制器与色板选中态由对话框自身释放。调用方若在弹层退场动画期间
+/// 继续 await 后 dispose 控制器，TextField 会在已销毁的控制器上重新
+/// addListener，触发 `A TextEditingController was used after being disposed`。
+class _AnnotationDialog extends StatefulWidget {
+  const _AnnotationDialog({
+    required this.title,
+    required this.initialColor,
+    this.initialNote,
+    this.quote,
+    this.requireNote = false,
+  });
+
+  final String title;
+  final String initialColor;
+  final String? initialNote;
+
+  /// 新建时展示的引文；修改时为 null。
+  final String? quote;
+
+  /// 新建必须写备注；修改允许清空备注。
+  final bool requireNote;
+
+  @override
+  State<_AnnotationDialog> createState() => _AnnotationDialogState();
+}
+
+class _AnnotationDialogState extends State<_AnnotationDialog> {
+  late final TextEditingController _noteController = TextEditingController(
+    text: widget.initialNote,
+  );
+  late String _selectedColor = widget.initialColor;
+  late bool _noteEmpty = _noteController.text.trim().isEmpty;
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(widget.title),
+      // 键盘弹出时引文+备注+色板可能超出可用高，滚动兜底。
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.quote != null) ...[
+              _QuoteBox(text: widget.quote!),
+              const SizedBox(height: 12),
+            ],
+            _PresetColorRow(
+              selectedColor: _selectedColor,
+              onChanged:
+                  (colorHex) => setState(() => _selectedColor = colorHex),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _noteController,
+              maxLines: 3,
+              onChanged: (value) {
+                setState(() => _noteEmpty = value.trim().isEmpty);
+              },
+              decoration: InputDecoration(
+                hintText: l10n.readerAnnotationHint,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+        ),
+        FilledButton(
+          onPressed:
+              _noteEmpty && widget.requireNote
+                  ? null
+                  : () => Navigator.pop(
+                    context,
+                    _AnnotationDraft(
+                      note: _noteController.text.trim(),
+                      color: _selectedColor,
+                    ),
+                  ),
+          child: Text(MaterialLocalizations.of(context).okButtonLabel),
+        ),
+      ],
+    );
+  }
+}
+
+/// 新建批注时展示的选中文本引用块。
+class _QuoteBox extends StatelessWidget {
+  const _QuoteBox({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 150),
+      child: SingleChildScrollView(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: AppTypography.bodyMedium,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

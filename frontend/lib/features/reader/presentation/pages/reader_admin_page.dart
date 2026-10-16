@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -21,6 +23,8 @@ class ReaderAdminPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final hosted = MobileShellScope.isHosted(context);
     final stateAsync = ref.watch(readerCenterControllerProvider);
     final importJobs = ref.watch(readerImportQueueProvider);
     final items = stateAsync.asData?.value.items ?? const <ReaderItem>[];
@@ -34,6 +38,16 @@ class ReaderAdminPage extends ConsumerWidget {
             .length;
     return ReaderPageScaffold(
       target: ReaderPageTarget.admin,
+      // 托管态此前只有深链进得来：页面顶端没有模块头，也就没有返回位。
+      header:
+          hosted
+              ? MobileModuleHeader(
+                title: l10n.readerAdminModuleTitle,
+                subtitle: l10n.readerAdminModuleSubtitle,
+                onBack: () => Navigator.of(context).maybePop(),
+              )
+              : null,
+      headerPadding: EdgeInsets.zero,
       onRefresh: () async {
         await ref.read(readerCenterControllerProvider.notifier).refresh();
       },

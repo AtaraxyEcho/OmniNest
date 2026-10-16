@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/data/epub_parser_service.dart';
+import 'package:omninest/features/reader/data/reader_content_preprocessor.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 
 void main() {
   late Directory directory;
@@ -18,6 +20,54 @@ void main() {
     }
   });
 
+  test('条目选取按段边界锚定，尾部相同的杂项文件抢不了路径', () async {
+    // 清单里的章节缺了一层前缀（真实条目是 `text/chapter1.xhtml`），而归档里先放了
+    // 一个叫 `pter1.xhtml` 的杂项文件。旧兜底用裸 endsWith：目标串正好以它结尾，
+    // 于是章节内容取自杂项文件，读者看到张冠李戴的一章，还不报错。
+    final file = File('${directory.path}/decoy.epub');
+    final archive = Archive();
+    _addText(archive, 'mimetype', 'application/epub+zip');
+    _addText(
+      archive,
+      'META-INF/container.xml',
+      '<?xml version="1.0"?>'
+          '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+          '<rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>'
+          '</container>',
+    );
+    _addText(
+      archive,
+      'OEBPS/content.opf',
+      '<?xml version="1.0"?>'
+          '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+          '<metadata xmlns:dc="http://purl.org/dc/elements/1.1">'
+          '<dc:title>错配测试</dc:title></metadata>'
+          '<manifest><item id="c1" href="text/chapter1.xhtml" '
+          'media-type="application/xhtml+xml"/></manifest>'
+          '<spine><itemref idref="c1"/></spine></package>',
+    );
+    _addText(archive, 'pter1.xhtml', '<html><body><p>杂项文件</p></body></html>');
+    _addText(
+      archive,
+      'text/chapter1.xhtml',
+      '<html><body><p>真章节</p></body></html>',
+    );
+    await file.writeAsBytes(ZipEncoder().encode(archive));
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    final chapter =
+        (await service.parseChapterFile(
+          file.path,
+          'OEBPS/text/chapter1.xhtml',
+        ))?.xhtml;
+    lease.release();
+    service.releaseArchive();
+
+    expect(chapter, contains('真章节'));
+    expect(chapter, isNot(contains('杂项文件')));
+  });
+
   test('解析章节后释放归档可关闭文件句柄', () async {
     final file = File('${directory.path}/valid.epub');
     await _writeEpub(
@@ -27,10 +77,11 @@ void main() {
     final service = EpubParserService();
 
     final lease = await service.acquireLease();
-    final chapter = await service.parseChapterFile(
-      file.path,
-      'OEBPS/chapter1.xhtml',
-    );
+    final chapter =
+        (await service.parseChapterFile(
+          file.path,
+          'OEBPS/chapter1.xhtml',
+        ))?.xhtml;
     lease.release();
 
     expect(chapter, contains('流式章节正文'));
@@ -64,10 +115,11 @@ void main() {
     final service = EpubParserService();
 
     final lease = await service.acquireLease();
-    final chapter = await service.parseChapterFile(
-      file.path,
-      'OEBPS/chapter1.xhtml',
-    );
+    final chapter =
+        (await service.parseChapterFile(
+          file.path,
+          'OEBPS/chapter1.xhtml',
+        ))?.xhtml;
     lease.release();
 
     expect(chapter, contains('服务端路径正文'));
@@ -155,7 +207,8 @@ void main() {
     final service = EpubParserService();
 
     final lease = await service.acquireLease();
-    final chapter = await service.parseChapterFile(file.path, '第一章.xhtml');
+    final chapter =
+        (await service.parseChapterFile(file.path, '第一章.xhtml'))?.xhtml;
     lease.release();
     service.releaseArchive();
 
@@ -170,19 +223,128 @@ void main() {
     final lease = await service.acquireLease();
     // Uri.decodeComponent 对含裸非 ASCII 的路径会抛 ArgumentError，
     // 服务端下发的 contentPath 正是这种形态；此处同时覆盖编码与未编码两种输入。
-    final encoded = await service.parseChapterFile(
-      file.path,
-      Uri.encodeComponent('OEBPS/chapter1.xhtml'),
-    );
-    final plain = await service.parseChapterFile(
-      file.path,
-      'OEBPS/chapter1.xhtml',
-    );
+    final encoded =
+        (await service.parseChapterFile(
+          file.path,
+          Uri.encodeComponent('OEBPS/chapter1.xhtml'),
+        ))?.xhtml;
+    final plain =
+        (await service.parseChapterFile(
+          file.path,
+          'OEBPS/chapter1.xhtml',
+        ))?.xhtml;
     lease.release();
     service.releaseArchive();
 
     expect(encoded, contains('百分号编码正文'));
     expect(plain, contains('百分号编码正文'));
+  });
+
+  test('样式表与正文分开返回：正文里不再有那份 `<style>` 载体', () async {
+    final file = File('${directory.path}/with-css.epub');
+    await _writeEpubWithCss(
+      file,
+      '<html><body><p class="first">带样式正文</p></body></html>',
+    );
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    final chapter = await service.parseChapterFile(file.path, 'chapter1.xhtml');
+    // 同一本书的后续章节复用同一份样式表缓存，不再重复解归档。
+    final second = await service.parseChapterFile(file.path, 'chapter1.xhtml');
+    lease.release();
+    service.releaseArchive();
+
+    expect(chapter, isNotNull);
+    expect(chapter!.xhtml, isNot(contains('<style')));
+    // 本章 head 里没有 link：次序退回 manifest，指向池里那张表。
+    expect(chapter.stylesheetRefs, ['OEBPS/styles/base.css']);
+    expect(
+      chapter.stylesheetPool['OEBPS/styles/base.css'],
+      'p.first { text-indent: 0em; margin-bottom: 2em }',
+    );
+    expect(second?.stylesheetRefs, chapter.stylesheetRefs);
+
+    final css = buildChapterStylesheetCss(
+      chapter.stylesheetPool,
+      chapter.stylesheetRefs,
+    );
+    final preprocessed = await ReaderContentPreprocessor.preprocessForStorage(
+      itemId: 'item',
+      xhtml: chapter.xhtml,
+    );
+    final blocks = parseBlocks(preprocessed.html, css: css);
+    final paragraph = blocks.whereType<ParagraphBlock>().single;
+    expect(paragraph.style?.firstLineIndentChars, 0);
+    expect(paragraph.style?.paragraphSpacingScale, closeTo(2.0, 0.001));
+    // 纯文本侧不能把 CSS 源码念出来：TTS 与章内检索都取这一份。
+    expect(stripHtml(preprocessed.html), '带样式正文');
+  });
+
+  test('样式表的层叠次序取本章 head 的 link 顺序，不是 manifest 顺序', () async {
+    // 真书证据：西遊記 content.opf 的 item 顺序是 pgepub→0→1，而每章 head 的
+    // <link> 是 0→1→pgepub，完全倒置。同特异度的冲突规则（两边都写 p）胜负会反。
+    final file = File('${directory.path}/link-order.epub');
+    await _writeEpubWithLinkOrderCss(
+      file,
+      '<html><head>'
+      '<link href="styles/book.css" rel="stylesheet" type="text/css"/>'
+      '<link href="styles/public.css" rel="stylesheet" type="text/css"/>'
+      '</head><body><p>顺序正文</p></body></html>',
+    );
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    final chapter = await service.parseChapterFile(file.path, 'chapter1.xhtml');
+    lease.release();
+    service.releaseArchive();
+
+    expect(chapter, isNotNull);
+    expect(chapter!.stylesheetRefs, [
+      'OEBPS/styles/book.css',
+      'OEBPS/styles/public.css',
+    ], reason: '次序必须按章存下来，池自己的插入序是 manifest 序');
+    final paragraph =
+        parseBlocks(
+          chapter.xhtml,
+          css: buildChapterStylesheetCss(
+            chapter.stylesheetPool,
+            chapter.stylesheetRefs,
+          ),
+        ).whereType<ParagraphBlock>().single;
+    expect(
+      paragraph.style?.paragraphSpacingScale,
+      closeTo(3.0, 0.001),
+      reason: 'link 里 public.css 写在 book.css 之后，同特异度必须后者胜出',
+    );
+
+    // 反证：拿池的插入序（manifest 序）拼一份给全书，同一条规则就翻了个。
+    expect(
+      parseBlocks(
+        chapter.xhtml,
+        css: buildChapterStylesheetCss(
+          chapter.stylesheetPool,
+          chapter.stylesheetPool.keys.toList(),
+        ),
+      ).whereType<ParagraphBlock>().single.style?.paragraphSpacingScale,
+      closeTo(1.0, 0.001),
+    );
+  });
+
+  test('没有样式表的书返回原样正文', () async {
+    final file = File('${directory.path}/no-css.epub');
+    await _writeEpub(file, '<html><body><p>无样式正文</p></body></html>');
+    final service = EpubParserService();
+
+    final lease = await service.acquireLease();
+    final chapter = await service.parseChapterFile(file.path, 'chapter1.xhtml');
+    lease.release();
+    service.releaseArchive();
+
+    expect(chapter, isNotNull);
+    expect(chapter!.xhtml, contains('无样式正文'));
+    expect(chapter.stylesheetRefs, isEmpty);
+    expect(chapter.stylesheetPool, isEmpty);
   });
 }
 
@@ -210,6 +372,78 @@ Future<void> _writeEpub(File file, String chapterContent) async {
         '<spine><itemref idref="chapter-1"/></spine>'
         '</package>',
   );
+  _addText(archive, 'OEBPS/chapter1.xhtml', chapterContent);
+  await file.writeAsBytes(ZipEncoder().encode(archive));
+}
+
+Future<void> _writeEpubWithCss(File file, String chapterContent) async {
+  final archive = Archive();
+  _addText(archive, 'mimetype', 'application/epub+zip');
+  _addText(
+    archive,
+    'META-INF/container.xml',
+    '<?xml version="1.0"?>'
+        '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+        '<rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>'
+        '</container>',
+  );
+  _addText(
+    archive,
+    'OEBPS/content.opf',
+    '<?xml version="1.0"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:title>带样式测试</dc:title></metadata>'
+        '<manifest>'
+        '<item id="chapter-1" href="chapter1.xhtml" '
+        'media-type="application/xhtml+xml"/>'
+        '<item id="base" href="styles/base.css" media-type="text/css"/>'
+        '</manifest>'
+        '<spine><itemref idref="chapter-1"/></spine>'
+        '</package>',
+  );
+  _addText(
+    archive,
+    'OEBPS/styles/base.css',
+    'p.first { text-indent: 0em; margin-bottom: 2em }',
+  );
+  _addText(archive, 'OEBPS/chapter1.xhtml', chapterContent);
+  await file.writeAsBytes(ZipEncoder().encode(archive));
+}
+
+Future<void> _writeEpubWithLinkOrderCss(
+  File file,
+  String chapterContent,
+) async {
+  final archive = Archive();
+  _addText(archive, 'mimetype', 'application/epub+zip');
+  _addText(
+    archive,
+    'META-INF/container.xml',
+    '<?xml version="1.0"?>'
+        '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+        '<rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>'
+        '</container>',
+  );
+  // manifest 里 public.css 排在 book.css 之后；本章 head 的 link 顺序正好相反。
+  _addText(
+    archive,
+    'OEBPS/content.opf',
+    '<?xml version="1.0"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:title>次序测试</dc:title></metadata>'
+        '<manifest>'
+        '<item id="chapter-1" href="chapter1.xhtml" '
+        'media-type="application/xhtml+xml"/>'
+        '<item id="public" href="styles/public.css" media-type="text/css"/>'
+        '<item id="book" href="styles/book.css" media-type="text/css"/>'
+        '</manifest>'
+        '<spine><itemref idref="chapter-1"/></spine>'
+        '</package>',
+  );
+  _addText(archive, 'OEBPS/styles/book.css', 'p { margin-bottom: 1em }');
+  _addText(archive, 'OEBPS/styles/public.css', 'p { margin-bottom: 3em }');
   _addText(archive, 'OEBPS/chapter1.xhtml', chapterContent);
   await file.writeAsBytes(ZipEncoder().encode(archive));
 }

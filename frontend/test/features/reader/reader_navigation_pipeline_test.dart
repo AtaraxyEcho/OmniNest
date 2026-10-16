@@ -175,7 +175,8 @@ void main() {
   test('异步页码定位不限制五百页并可恢复长章节位置', () async {
     final navigator = PageNavigator(
       blocks: parseBlocks('<p>测试</p>'),
-      computeFn: (startCharOffset) {
+      computeFn: (previous) {
+        final startCharOffset = previous?.nextCursor ?? 0;
         if (startCharOffset >= 900) {
           return null;
         }

@@ -54,18 +54,12 @@ class ReaderContentImage extends StatelessWidget {
             outerConstraints.maxWidth.isFinite && outerConstraints.maxWidth > 0
                 ? outerConstraints.maxWidth
                 : MediaQuery.sizeOf(context).width;
-        var slotHeight = ReaderPaginationEngine.imageSlotHeight(width);
-        final available =
-            clampSlotToConstraints ? outerConstraints.maxHeight : 0.0;
-        final hasCaption = block.caption?.isNotEmpty == true;
-        if (available.isFinite && available > 0) {
-          // 预留：上下内边距 48 + 容器边框 2 + 题注区（顶距 10 + 行高 + 余量）。
-          final reserved = 54.0 + (hasCaption ? 32.0 : 0.0);
-          final bounded = available - reserved;
-          if (bounded > 0 && slotHeight > bounded) {
-            slotHeight = bounded;
-          }
-        }
+        final slotHeight = ReaderPaginationEngine.clampImageSlot(
+          slot: ReaderPaginationEngine.imageSlotHeight(width),
+          availableHeight:
+              clampSlotToConstraints ? outerConstraints.maxHeight : 0.0,
+          hasCaption: block.caption?.isNotEmpty == true,
+        );
         return _buildContent(
           context,
           slotHeight: slotHeight,
@@ -161,6 +155,9 @@ class ReaderContentImage extends StatelessWidget {
                     color: settings.onSurfaceVariantColor,
                     fontSize: AppTypography.bodyMedium,
                     fontStyle: FontStyle.italic,
+                    // 不写就会并入主题的题注行距，与测量的 TextPainter 差几个像素，
+                    // 每个图片块都短出一截；高度由 ReaderPaginationEngine 统一给。
+                    height: ReaderPaginationEngine.imageCaptionLineHeight,
                   ),
                   textAlign: TextAlign.center,
                 ),

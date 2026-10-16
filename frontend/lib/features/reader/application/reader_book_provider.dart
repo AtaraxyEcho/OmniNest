@@ -284,6 +284,7 @@ final parsedBookProvider = FutureProvider.autoDispose.family<
       _chapterContentMemoryCache.removeWhere(
         (key, _) => key.startsWith('$itemId|'),
       );
+      _stylesheetPoolMemo.remove(itemId);
       cachedMeta = null;
     }
     if (cachedMeta != null && (itemType == 'EPUB' || itemType == 'TXT')) {
@@ -392,33 +393,32 @@ Future<ParsedBook> _awaitServerTextManifest(
 
 /// 将路由、目录或历史进度中的章节标识解析为书籍章节索引。
 ///
+/// 先按清单身份键匹配，再按 EPUB 归档路径匹配（带 `#` 锚的旧式标识取路径段）。
+/// 不按标题匹配：标题是会被解析规则改写的显示文本，同名的卷/章也不止一处。
 /// 未知章节标识返回 null（显式失败），由调用方决定忽略请求或提示错误；
 /// 禁止静默回退到第一章伪造目标位置。
 int? resolveParsedChapterIndex(ParsedBook book, String chapterId) {
   if (book.chapters.isEmpty) return null;
 
-  final indexMatch = RegExp(r'^chapter_(\d+)$').firstMatch(chapterId);
-  if (indexMatch != null) {
-    final index = int.parse(indexMatch.group(1)!);
-    if (index >= 0 && index < book.chapters.length) return index;
-  }
+  final keyIndex = book.chapters.indexWhere(
+    (chapter) => parsedChapterId(chapter) == chapterId,
+  );
+  if (keyIndex >= 0) return keyIndex;
 
   final contentPath = chapterId.split('#').first;
   final pathIndex = book.chapters.indexWhere(
     (chapter) => chapter.contentPath == contentPath,
   );
-  if (pathIndex >= 0) return pathIndex;
-
-  final titleIndex = book.chapters.indexWhere(
-    (chapter) => chapter.title == chapterId,
-  );
-  return titleIndex >= 0 ? titleIndex : null;
+  return pathIndex >= 0 ? pathIndex : null;
 }
 
 /// 返回客户端阅读器使用的规范章节标识。
+///
+/// 规范化到清单身份键：路由或本地进度里的旧式片段（带 `#` 锚、EPUB 归档路径）
+/// 先解析回所属章节，再统一换成该章的键，避免同一章的两种写法各自落库。
 String canonicalReaderChapterId(ParsedBook book, String chapterId) {
   final index = resolveParsedChapterIndex(book, chapterId);
-  return index == null ? chapterId : 'chapter_$index';
+  return index == null ? chapterId : parsedChapterId(book.chapters[index]);
 }
 
 /// 将 TXT 等内联章节正文转换为阅读器内容。
@@ -519,11 +519,12 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
 }) async {
   // ── Layer 1: SQLite 章节缓存命中 ──
   final localStorage = ref.read(readerLocalStorageProvider);
-  final cachedHtml = await localStorage.loadChapterContent(
+  final cached = await localStorage.loadChapterContent(
     itemId: itemId,
     contentPath: cacheKey,
   );
-  if (cachedHtml != null && cachedHtml.isNotEmpty) {
+  final cachedHtml = cached?.html;
+  if (cached != null && cachedHtml != null && cachedHtml.isNotEmpty) {
     // 注意：cachedHtml 是预处理后的 HTML（含占位符/标签），
     // matched.charCount 是解析出的纯文本字数，两者单位不同。
     // 不能用 charCount 严格校验 HTML 长度，否则会把正常章节
@@ -553,6 +554,11 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
         title: matched.title,
         content: cachedHtml,
         wordCount: expectedChars > 0 ? expectedChars : cachedHtml.length,
+        stylesheetCss: await _chapterStylesheetCss(
+          localStorage,
+          itemId,
+          cached.refs,
+        ),
       );
       _rememberChapterContent(memoryKey, content);
       return content;
@@ -577,13 +583,14 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
       useArchive ? ref.read(epubParserServiceProvider(itemId)) : null;
   final lease = epubService == null ? null : await epubService.acquireLease();
   try {
-    final xhtml = await loadChapterContent(
+    final chapter = await loadChapterContent(
       ref,
       itemId,
       matched,
       chapterIndex: chapterIndex,
     );
-    if (xhtml == null) return null;
+    if (chapter == null) return null;
+    final xhtml = chapter.xhtml;
 
     final String storageHtml;
     final int droppedImageCount;
@@ -605,15 +612,33 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
         archive: sharedArchive,
         archiveBytes: sharedArchive == null ? source.memoryBytes : null,
         contentPath: contentPath,
+        // 归档字节必须经解析服务读取，图片才会计入它的解压与保留量闸门。
+        readEntryBytes:
+            sharedArchive == null ? null : epubService.readArchiveEntryBytes,
       );
       storageHtml = preprocessed.html;
       droppedImageCount = preprocessed.droppedImageCount;
     }
 
+    // 样式表池落库只有这一条通路：元数据是在"没有归档可开"的服务端清单路径上
+    // 写下的（见 parsedBookProvider 的 Layer 3），拿得到 CSS 的只有持租约的本章。
+    // 本章的次序引用随章节行落库，正文里不再有那份 `<style>` 载体。
+    final pool = await _ensureStylesheetPool(
+      localStorage,
+      itemId,
+      chapter.stylesheetPool,
+    );
+    final stylesheetCss = buildChapterStylesheetCss(
+      pool,
+      chapter.stylesheetRefs,
+    );
+
     // SQLite 只存"体积小"的占位符 HTML。图片提取失败时正文可能仍带着
     // base64 内嵌图（单章可达数 MB），落库会长期占住缓存且不自愈；
     // 这种情况只保留本次会话的内存结果，下次打开重新提取。
-    final expectedStoredChars = matched.charCount * 6 + 64 * 1024;
+    final expectedStoredChars = expectedStoredChapterChars(
+      contentChars: matched.charCount,
+    );
     final tooLargeToStore = storageHtml.length > expectedStoredChars;
     if (tooLargeToStore) {
       if (kDebugMode) {
@@ -638,6 +663,7 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
         chapterNumber: matched.number,
         charCount: matched.charCount,
         processedHtml: storageHtml,
+        stylesheetRefs: chapter.stylesheetRefs,
       );
     }
 
@@ -652,6 +678,7 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
       content: storageHtml,
       wordCount: matched.charCount > 0 ? matched.charCount : storageHtml.length,
       droppedImageCount: droppedImageCount,
+      stylesheetCss: stylesheetCss,
     );
     _rememberChapterContent(memoryKey, ready);
     return ready;
@@ -660,8 +687,12 @@ Future<ReaderChapterContent?> _loadChapterContentFromStorage(
   }
 }
 
-/// 清除指定书籍的解析缓存（内存 + SQLite + 图片磁盘缓存）
-Future<void> invalidateBookCache(WidgetRef ref, String itemId) async {
+/// 清除指定书籍的解析缓存（内存 + SQLite + 图片磁盘缓存）。
+///
+/// 参数取 `Ref` 而不是 `WidgetRef`：作废必须跟着"重新解析"这条业务流程走，而流程
+/// 归 application 层。以前它挂在页面按钮上（详情页那条入口根本没调用），两个入口
+/// 各自决定要不要清，迟早有一个忘 —— 缓存留着旧结构，读者看到的还是重解析前的内容。
+Future<void> invalidateBookCache(Ref ref, String itemId) async {
   final parsedBookCache = ref.read(readerParsedBookCacheProvider);
   final localStorage = ref.read(readerLocalStorageProvider);
   final localBookCache = ref.read(localBookCacheProvider);
@@ -670,6 +701,7 @@ Future<void> invalidateBookCache(WidgetRef ref, String itemId) async {
   _chapterContentMemoryCache.removeWhere(
     (key, _) => key.startsWith('$itemId|'),
   );
+  _stylesheetPoolMemo.remove(itemId);
   parsedBookCache.remove(itemId);
   parserService.releaseArchive();
   ref.invalidate(cachedBookHandleProvider(itemId));
@@ -697,6 +729,7 @@ Future<void> _saveBookMetaToSqlite(
             (c) => {
               'number': c.number,
               'title': c.title,
+              'chapterKey': c.chapterKey,
               'charCount': c.charCount,
               'contentPath': c.contentPath,
               'level': c.level,
@@ -740,6 +773,7 @@ ParsedBook? _deserializeBookMeta(Map<String, dynamic> meta) {
               (c) => ParsedChapter(
                 number: (c as Map<String, dynamic>)['number'] as int? ?? 0,
                 title: c['title'] as String? ?? '',
+                chapterKey: c['chapterKey'] as String?,
                 xhtmlContent: '',
                 charCount: c['charCount'] as int? ?? 0,
                 contentPath: c['contentPath'] as String?,
@@ -764,4 +798,71 @@ ParsedBook? _deserializeBookMeta(Map<String, dynamic> meta) {
     }
     return null;
   }
+}
+
+/// 一章正文允许落库的字符上限。
+///
+/// 正文异常的真实来源是图片提取失败后残留的 base64 内嵌图，单章可达数 MB；
+/// 样式表已经不进正文（书级池 + 章节次序引用），所以这里不再有样式表的放行额度。
+int expectedStoredChapterChars({required int contentChars}) {
+  return contentChars * 6 + 64 * 1024;
+}
+
+/// 进程内样式表池：itemId → (归档内路径 → CSS 文本)。
+///
+/// 一本书一份，避免每章读取都打一次 SQLite 并把整池解密一遍。作废与章节正文
+/// 缓存在同一处发生（清单版本不符、重新解析）。整池可以上百 KB，所以与章节 LRU
+/// 一样要有上限：一次会话里翻过很多本书时不能把它们全留在内存里。
+final _stylesheetPoolMemo = <String, Map<String, String>>{};
+const _stylesheetPoolMemoLimit = 4;
+
+void _rememberStylesheetPool(String itemId, Map<String, String> pool) {
+  _stylesheetPoolMemo.remove(itemId);
+  _stylesheetPoolMemo[itemId] = pool;
+  while (_stylesheetPoolMemo.length > _stylesheetPoolMemoLimit) {
+    _stylesheetPoolMemo.remove(_stylesheetPoolMemo.keys.first);
+  }
+}
+
+/// 取这本书的样式表池；库里没有而本章带回了样式表时，就地补写一次。
+///
+/// 返回本章该用的池：写成功就是刚拿到的那份，写不成（元数据行还没落地）也用
+/// 它渲染本章，只是不记进 memo —— 下一章重试，别让一本书静默失去原版排版。
+Future<Map<String, String>> _ensureStylesheetPool(
+  ReaderLocalStorage localStorage,
+  String itemId,
+  Map<String, String> fromArchive,
+) async {
+  if (fromArchive.isEmpty) return const {};
+  final memo = _stylesheetPoolMemo[itemId];
+  if (memo != null && memo.isNotEmpty) return memo;
+  final stored = await localStorage.loadStylesheetPool(itemId);
+  if (stored.isNotEmpty) {
+    _rememberStylesheetPool(itemId, stored);
+    return stored;
+  }
+  final written = await localStorage.saveStylesheetPool(
+    itemId: itemId,
+    pool: fromArchive,
+  );
+  if (written) {
+    _rememberStylesheetPool(itemId, fromArchive);
+  } else {
+    readerDebugLog('BookProvider: 样式表池未能落库（元数据行缺失）itemId=$itemId');
+  }
+  return fromArchive;
+}
+
+/// 按本章次序引用拼出解析侧要的样式表全文（缓存命中通路）。
+Future<String> _chapterStylesheetCss(
+  ReaderLocalStorage localStorage,
+  String itemId,
+  List<String> refs,
+) async {
+  if (refs.isEmpty) return '';
+  final memo = _stylesheetPoolMemo[itemId];
+  if (memo != null) return buildChapterStylesheetCss(memo, refs);
+  final stored = await localStorage.loadStylesheetPool(itemId);
+  _rememberStylesheetPool(itemId, stored);
+  return buildChapterStylesheetCss(stored, refs);
 }
