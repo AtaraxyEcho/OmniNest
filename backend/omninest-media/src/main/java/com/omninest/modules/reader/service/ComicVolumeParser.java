@@ -48,13 +48,14 @@ public final class ComicVolumeParser {
             "\\b(?:vol\\.?|volume|ch\\.?|chapter|ep\\.?|episode|part|act|book|season)\\s*(\\d{1,4})",
             Pattern.CASE_INSENSITIVE);
     // S01E02
-    private static final Pattern SEASON_EP = Pattern.compile("\\bs(\\d{1,2})\\s*e(\\d{1,3})\\b",
+    private static final Pattern SEASON_EP = Pattern.compile("\\bs(\\d{1,3})\\s*e(\\d{1,3})\\b",
             Pattern.CASE_INSENSITIVE);
     // 季号信号：s+/数字必须前后不紧邻字母或数字，否则 "Class1"、"Boss2"、"Windows10" 里的
     // "s1"/"s2"/"s10" 会被当成季号，目录树凭空多出一层季节点，来源排序也跟着走偏。
+    // 位数上限 3 与排序键 "s%03de%06d" 的定宽一致，超出会让字典序失去可比性。
     private static final Pattern SEASON_TOKEN = Pattern.compile(
-            "(?<![A-Za-z0-9])s(\\d{1,2})(?:\\s*e\\d{1,3})?(?![A-Za-z0-9])"
-                    + "|(?<![A-Za-z0-9])season\\s*(\\d{1,2})(?![A-Za-z0-9])"
+            "(?<![A-Za-z0-9])s(\\d{1,3})(?:\\s*e\\d{1,3})?(?![A-Za-z0-9])"
+                    + "|(?<![A-Za-z0-9])season\\s*(\\d{1,3})(?![A-Za-z0-9])"
                     + "|第\\s*([0-9零一二三四五六七八九十百千万両两壹贰叁肆伍陆柒捌玖拾]+)\\s*季",
             Pattern.CASE_INSENSITIVE);
 

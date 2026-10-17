@@ -120,9 +120,19 @@ class ComicVolumeParserTest {
         assertThat(ComicVolumeParser.parseSeasonNo("某动画 _S02_ 第03话.cbz")).isEqualTo(2);
         assertThat(ComicVolumeParser.parseSeasonNo("某动画 Season 3.cbz")).isEqualTo(3);
         assertThat(ComicVolumeParser.parseSeasonNo("某动画 第十一季.cbz")).isEqualTo(11);
+        assertThat(ComicVolumeParser.parseSeasonNo("某动画 S100.cbz")).isEqualTo(100);
         assertThat(ComicVolumeParser.parseSeasonNo("Class1 Vol.1.cbz")).isNull();
         assertThat(ComicVolumeParser.parseSeasonNo("Boss2 第01话.cbz")).isNull();
         assertThat(ComicVolumeParser.parseSeasonNo("Windows10 第1卷.cbz")).isNull();
         assertThat(ComicVolumeParser.parseSeasonNo("白夜")).isNull();
+    }
+
+    @Test
+    void threeDigitSeasonEpisodeStillParses() {
+        ComicVolumeParser.PartInfo part = ComicVolumeParser.parse("某动画 S100E005.cbz");
+        assertThat(part.matched()).isTrue();
+        assertThat(part.partKind()).isEqualTo("SEASON_EP");
+        assertThat(part.partNo()).isEqualTo(100);
+        assertThat(part.rangeEnd()).isEqualTo(5);
     }
 }
