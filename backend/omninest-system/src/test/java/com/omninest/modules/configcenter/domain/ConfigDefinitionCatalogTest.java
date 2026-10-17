@@ -53,6 +53,22 @@ class ConfigDefinitionCatalogTest {
     }
 
     @Test
+    void logRetentionScanPathsStayRelativeToTheRunDirectoryAndSuperAdminOnly() {
+        ConfigDefinition definition = ConfigDefinitionCatalog.find("log-retention.scan-paths").orElseThrow();
+
+        // 该目录下的文件会被清理任务删除：绝对路径、盘符、UNC 与 .. 逃逸必须在写入前拒绝，
+        // 而不是等到定时任务执行时才发现配置无效。
+        assertThat(definition.normalize(" logs , logs/archive ")).isEqualTo("logs,logs/archive");
+        assertThat(definition.superAdminOnly()).isTrue();
+        for (String rejected : new String[] {
+                "/var/lib/omninest", "D:\\logs", "\\\\fileserver\\share", "../outside", "logs/../../x", ""}) {
+            assertThatThrownBy(() -> definition.normalize(rejected))
+                    .as("拒绝 %s", rejected)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
     void numericDefinitionsAcceptOnlyIntegralValues() {
         ConfigDefinition definition = ConfigDefinitionCatalog.find("storage.quota.default").orElseThrow();
 

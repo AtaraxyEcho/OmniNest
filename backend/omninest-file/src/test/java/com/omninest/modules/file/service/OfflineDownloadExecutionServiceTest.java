@@ -9,6 +9,7 @@ import com.omninest.common.download.OfflineDownloadGateway.TaskSnapshot;
 import com.omninest.common.download.OfflineDownloadSourceResolver;
 import com.omninest.common.download.OfflineDownloadSourceResolver.ResolvedSource;
 import com.omninest.common.download.OfflineDownloadSourceResolver.SourceKind;
+import com.omninest.common.download.TorrentAddressValidator;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.DomainEventPublisher;
@@ -75,6 +76,7 @@ class OfflineDownloadExecutionServiceTest {
     private final NotificationService notificationService = Mockito.mock(NotificationService.class);
     private final TaskRecordService taskRecordService = Mockito.mock(TaskRecordService.class);
     private final SafeUrlValidator safeUrlValidator = Mockito.mock(SafeUrlValidator.class);
+    private final TorrentAddressValidator torrentAddressValidator = Mockito.mock(TorrentAddressValidator.class);
     private final BoundedFileTreeScanner fileTreeScanner = fileTreeScanner();
     private final FileIngressSafetyService ingressSafetyService = Mockito.mock(FileIngressSafetyService.class);
     private final FileIngressLifecycleService ingressLifecycleService =
@@ -87,6 +89,7 @@ class OfflineDownloadExecutionServiceTest {
             storageQuotaService, sharedSpaceQuotaService, objectStorageClient, domainEventPublisher, postProcessingTaskService,
             sourceResolver, offlineDownloadGateway, objectStorageBuckets,
             transactionTemplate, notificationService, taskRecordService, safeUrlValidator,
+            torrentAddressValidator,
             fileTreeScanner, ingressSafetyService, ingressLifecycleService
     );
 

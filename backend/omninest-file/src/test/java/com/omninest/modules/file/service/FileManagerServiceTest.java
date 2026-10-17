@@ -18,6 +18,8 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.modules.file.port.MediaCoverDirectory;
 import com.omninest.modules.user.port.UserNameDirectory;
 import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.file.domain.FileAccessRecord;
@@ -353,6 +355,9 @@ class FileManagerServiceTest {
         assertThat(saved.getSourceType()).isEqualTo("SHARE");
         assertThat(saved.getNodeType()).isEqualTo("FILE");
         assertThat(link.getAccessCount()).isEqualTo(1);
+        // 转存进来的文件同样是接收方的占用：漏加计会让"转存—清空回收站"倒扣配额。
+        verify(storageQuotaService).checkQuota(RECIPIENT_ID, 2048L);
+        verify(storageQuotaService).incrementUsage(RECIPIENT_ID, 2048L);
     }
 
     @Test
@@ -474,6 +479,12 @@ class FileManagerServiceTest {
         assertThat(result.sizeBytes()).isEqualTo(2048);
         assertThat(result.parentId()).isEqualTo(targetFolderId);
         assertThat(result.normalizedPath()).isEqualTo("/Documents/report.pdf");
+        // 副本必须按新节点加计配额：彻底删除副本时无条件扣减，不加计就能把已用空间刷空。
+        verify(storageQuotaService).checkQuota(OWNER_ID, 2048L);
+        verify(storageQuotaService).incrementUsage(OWNER_ID, 2048L);
+        verify(syncEventRecorder).record(argThat(
+                command -> command.action() == SyncAction.CREATED
+                        && "FILE_NODE".equals(command.resourceType())));
     }
 
     @Test

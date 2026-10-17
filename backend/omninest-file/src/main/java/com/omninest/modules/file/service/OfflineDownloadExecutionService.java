@@ -6,6 +6,7 @@ import com.omninest.common.download.OfflineDownloadGateway.TaskSnapshot;
 import com.omninest.common.download.OfflineDownloadSourceResolver;
 import com.omninest.common.download.OfflineDownloadSourceResolver.ResolvedSource;
 import com.omninest.common.download.OfflineDownloadSourceResolver.SourceKind;
+import com.omninest.common.download.TorrentAddressValidator;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
@@ -88,6 +89,7 @@ public class OfflineDownloadExecutionService {
     private final NotificationPublisher notificationService;
     private final TaskRecordService taskRecordService;
     private final SafeUrlValidator safeUrlValidator;
+    private final TorrentAddressValidator torrentAddressValidator;
     private final BoundedFileTreeScanner fileTreeScanner;
     private final FileIngressSafetyService ingressSafetyService;
     private final FileIngressLifecycleService ingressLifecycleService;
@@ -178,7 +180,9 @@ public class OfflineDownloadExecutionService {
         options.put("bt-save-metadata", "true");
         options.put("bt-metadata-only", "false");
         options.put("seed-time", "0");
-        options.put("follow-torrent", "true");
+        // mem 与 true 同样跟随种子内容，但种子本体不落下载目录：否则 resolveCompletedFiles
+        // 会把 .torrent 当成一个已完成文件导入用户空间。
+        options.put("follow-torrent", "mem");
         if (source.kind() == SourceKind.TORRENT_FILE) {
             byte[] torrent = downloadTorrent(source.uri());
             return offlineDownloadGateway.submitTorrent(torrent, options);
@@ -251,7 +255,10 @@ public class OfflineDownloadExecutionService {
                 if (statusCode >= 400) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "BT 种子下载失败，状态码=" + statusCode);
                 }
-                return readLimited(response.body());
+                byte[] torrent = readLimited(response.body());
+                // 种子内部的 announce 与 url-list 由下载器自行发起请求，提交前必须过一次闸门。
+                torrentAddressValidator.validate(torrent);
+                return torrent;
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("BT 种子下载被中断", exception);

@@ -358,6 +358,7 @@ public class FilePurgeStateService {
         Set<UUID> objectIds = new HashSet<>();
         nodes.stream().map(FileNode::getCurrentObjectId).filter(Objects::nonNull).forEach(objectIds::add);
         versions.stream().map(FileVersion::getObjectId).forEach(objectIds::add);
+        List<FileObject> batchObjects = fileObjectRepository.findAllById(objectIds);
 
         eventPublisher.publishEvent(new FileNodesDeletedEvent(
                 event.ownerUserId(),
@@ -366,10 +367,7 @@ public class FilePurgeStateService {
         ));
         permissionRepository.deleteByFileNodeIdIn(nodeIds);
         fileVersionRepository.deleteByFileNodeIdIn(nodeIds);
-        long releasedBytes = nodes.stream()
-                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
-                .mapToLong(FileNode::getSizeBytes)
-                .sum();
+        long releasedBytes = quotaReleaseBytes(nodes, versions, sizeByObjectId(batchObjects));
         fileSearchIndexService.deleteFiles(nodeIds, event.ownerUserId());
         fileNodeRepository.deleteAllInBatch(nodes);
         fileNodeRepository.flush();
@@ -377,11 +375,56 @@ public class FilePurgeStateService {
                 event.taskId(),
                 objectIds
         );
-        List<FileObject> orphanObjects = fileObjectRepository.findAllById(objectIds).stream()
+        List<FileObject> orphanObjects = batchObjects.stream()
                 .filter(object -> !externallyReferencedObjectIds.contains(object.getId()))
                 .toList();
         fileObjectRepository.deleteAllInBatch(orphanObjects);
         return new FinalizationResult(nodes.size(), releasedBytes);
+    }
+
+    /**
+     * 计算彻底删除应释放的字节数，口径与配额记账一致。
+     * 每个个人文件节点的占用＝节点自身大小（上传或转存时全额加计），
+     * 加上该节点历史版本对象的占用：新版本上传按新对象加计、恢复只在当前对象与版本行之间换位，
+     * 两者都不改变账本总量，所以删除必须一并释放，否则版本字节会永久留在 used_bytes 上。
+     * 与所在节点当前对象同引用的版本行不重复计，同一节点内重复出现的对象标识也只计一次。
+     */
+    static long quotaReleaseBytes(
+            List<FileNode> nodes,
+            List<FileVersion> versions,
+            Map<UUID, Long> objectSizes
+    ) {
+        long released = 0L;
+        Map<UUID, UUID> currentObjectByNodeId = new LinkedHashMap<>();
+        for (FileNode node : nodes) {
+            if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+                continue;
+            }
+            released += node.getSizeBytes();
+            if (node.getCurrentObjectId() != null) {
+                currentObjectByNodeId.put(node.getId(), node.getCurrentObjectId());
+            }
+        }
+        Map<UUID, Set<UUID>> countedObjectIdsByNode = new LinkedHashMap<>();
+        for (FileVersion version : versions) {
+            UUID objectId = version.getObjectId();
+            UUID nodeKey = version.getFileNodeId();
+            if (objectId == null || objectId.equals(currentObjectByNodeId.get(nodeKey))) {
+                continue;
+            }
+            Set<UUID> counted = countedObjectIdsByNode.computeIfAbsent(nodeKey, key -> new HashSet<>());
+            if (!counted.add(objectId)) {
+                continue;
+            }
+            released += objectSizes.getOrDefault(objectId, 0L);
+        }
+        return released;
+    }
+
+    private static Map<UUID, Long> sizeByObjectId(List<FileObject> objects) {
+        Map<UUID, Long> sizes = new LinkedHashMap<>();
+        objects.forEach(object -> sizes.put(object.getId(), object.getSizeBytes()));
+        return sizes;
     }
 
     /**

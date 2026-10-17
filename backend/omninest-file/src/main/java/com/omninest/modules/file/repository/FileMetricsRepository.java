@@ -105,19 +105,40 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
     );
 
     /**
-     * 按指定用户汇总个人空间的实际存储用量。
+     * 按指定用户汇总个人空间的实际存储用量，口径与配额账本一致。
+     * 回收站节点在彻底删除前仍然占用配额，历史版本在上传时按新对象全额加计，
+     * 两者都必须计入重算基数；与节点当前对象同引用的版本行不重复计，
+     * 因为恢复只在当前对象与版本行之间换位，不产生新的加计。
      *
      * @param ownerUserIds 用户标识集合
      * @return 用户存储用量投影列表
      */
     @Query(value = """
-            select n.owner_user_id as "userId", coalesce(sum(f.size_bytes), 0) as "totalBytes"
-            from omni.file_nodes n
-            join omni.file_objects f on f.id = n.current_object_id
-            where n.is_deleted = false
-              and n.space_type = 'PERSONAL'
-              and n.owner_user_id in (:ownerUserIds)
-            group by n.owner_user_id
+            with node_usage as (
+                select n.owner_user_id as user_id, n.size_bytes as bytes
+                from omni.file_nodes n
+                where n.node_type = 'FILE'
+                  and n.space_type = 'PERSONAL'
+                  and n.owner_user_id in (:ownerUserIds)
+            ),
+            version_usage as (
+                select distinct v.file_node_id as node_id, v.object_id as object_id
+                from omni.file_versions v
+                join omni.file_nodes n on n.id = v.file_node_id
+                where n.space_type = 'PERSONAL'
+                  and n.owner_user_id in (:ownerUserIds)
+                  and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            )
+            select u.user_id as "userId", coalesce(sum(u.bytes), 0) as "totalBytes"
+            from (
+                select user_id, bytes from node_usage
+                union all
+                select n.owner_user_id, coalesce(f.size_bytes, 0)
+                from version_usage vu
+                join omni.file_nodes n on n.id = vu.node_id
+                left join omni.file_objects f on f.id = vu.object_id
+            ) u
+            group by u.user_id
             """, nativeQuery = true)
     List<FileUserUsageProjection> sumFileSizeForUsers(
             @Param("ownerUserIds") Collection<UUID> ownerUserIds
