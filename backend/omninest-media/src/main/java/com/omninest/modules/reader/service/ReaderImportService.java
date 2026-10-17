@@ -318,20 +318,24 @@ public class ReaderImportService {
      */
     @Transactional(readOnly = true)
     public List<ReaderDtos.ImportCandidateDto> importCandidates(UUID ownerUserId) {
-        List<FileDescriptor> personalFiles = fileMetadataQueryService.listOwnedActive(ownerUserId);
-        List<FileDescriptor> sharedFiles = fileMetadataQueryService.listActiveBySpace(SpaceType.SHARED);
+        // 目录行由 SQL 过滤掉，候选集只剩文件节点。
+        List<FileDescriptor> personalFiles = fileMetadataQueryService.listOwnedActiveFiles(ownerUserId);
+        List<FileDescriptor> sharedFiles = fileMetadataQueryService.listActiveFilesBySpace(SpaceType.SHARED);
 
         List<FileDescriptor> allFiles = new ArrayList<>(personalFiles);
+        Set<UUID> seenFileNodeIds = new HashSet<>();
+        personalFiles.forEach(file -> seenFileNodeIds.add(file.id()));
         for (FileDescriptor shared : sharedFiles) {
-            if (allFiles.stream().noneMatch(file -> file.id().equals(shared.id()))) {
+            if (seenFileNodeIds.add(shared.id())) {
                 allFiles.add(shared);
             }
         }
 
-        List<UUID> allFileNodeIds = allFiles.stream()
-                .filter(file -> "FILE".equals(file.nodeType()) && fileDetector.isReaderFile(file.name()))
-                .map(FileDescriptor::id)
+        List<ReaderDtos.ImportCandidateDto> candidates = new ArrayList<>();
+        List<FileDescriptor> readerFiles = allFiles.stream()
+                .filter(file -> fileDetector.isReaderFile(file.name()))
                 .toList();
+        List<UUID> allFileNodeIds = readerFiles.stream().map(FileDescriptor::id).toList();
 
         Set<UUID> importedFileNodeIds = importedFileNodeIds(ownerUserId, allFileNodeIds);
         Set<String> importedContentHashes = new HashSet<>(
@@ -341,14 +345,7 @@ public class ReaderImportService {
         Map<UUID, String> contentHashes = fileMetadataQueryService
                 .findContentSha256ByFileNodeIds(allFileNodeIds);
 
-        List<ReaderDtos.ImportCandidateDto> candidates = new ArrayList<>();
-        for (FileDescriptor file : allFiles) {
-            if (!"FILE".equals(file.nodeType())) {
-                continue;
-            }
-            if (!fileDetector.isReaderFile(file.name())) {
-                continue;
-            }
+        for (FileDescriptor file : readerFiles) {
             if (importedFileNodeIds.contains(file.id())) {
                 continue;
             }

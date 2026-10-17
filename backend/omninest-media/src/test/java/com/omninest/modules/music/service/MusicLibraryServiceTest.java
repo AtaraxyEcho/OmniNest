@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 
@@ -117,14 +118,22 @@ class MusicLibraryServiceTest {
     }
 
     @Test
-    void albumTracksPageSlicesWithFilteredTotal() {
+    void albumTracksPagePagesInDatabaseAndKeepsFilteredTotal() {
         UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
         MusicAlbum album = new MusicAlbum();
         album.setId(albumId);
         album.setOwnerUserId(OWNER_ID);
         when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.of(album));
-        when(trackRepository.findAlbumTracks(OWNER_ID, albumId))
-                .thenReturn(List.of(track(), track(), track()));
+        // 分页必须由仓储承载：全量物化整张专辑再内存切页会在大专辑上放大查询与实体开销。
+        when(trackRepository.findAlbumTracksPage(eq(OWNER_ID), eq(albumId), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable requested = invocation.getArgument(2);
+                    List<MusicTrack> all = List.of(track(), track(), track());
+                    int from = (int) Math.min(requested.getOffset(), all.size());
+                    int to = (int) Math.min((long) from + requested.getPageSize(), all.size());
+                    return new PageImpl<>(
+                            all.subList(from, to), requested, all.size());
+                });
 
         var first = libraryService.albumTracksPage(OWNER_ID, albumId, 0, 2);
         var second = libraryService.albumTracksPage(OWNER_ID, albumId, 1, 2);
@@ -133,6 +142,8 @@ class MusicLibraryServiceTest {
         org.assertj.core.api.Assertions.assertThat(first.getTotalElements()).isEqualTo(3);
         org.assertj.core.api.Assertions.assertThat(second.getContent()).hasSize(1);
         org.assertj.core.api.Assertions.assertThat(second.getTotalElements()).isEqualTo(3);
+        org.assertj.core.api.Assertions.assertThat(second.getPageable().getOffset()).isEqualTo(2);
+        verify(trackRepository, never()).findAlbumTracks(OWNER_ID, albumId);
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileObjectDescriptor;
@@ -89,6 +90,19 @@ public class FileMetadataQueryService {
     }
 
     /**
+     * 查询用户拥有的未删除文件（不含目录），供只需要文件的批量候选场景使用。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 文件描述符列表
+     */
+    @Transactional(readOnly = true)
+    public List<FileDescriptor> listOwnedActiveFiles(UUID ownerUserId) {
+        return fileNodeRepository.findByOwnerUserIdAndNodeTypeAndDeletedFalse(
+                        ownerUserId, NodeType.FILE.getValue())
+                .stream().map(this::toDescriptor).toList();
+    }
+
+    /**
      * 查询用户指定父目录下拥有的未删除文件节点。
      *
      * @param ownerUserId 所有者用户 ID
@@ -114,14 +128,15 @@ public class FileMetadataQueryService {
     }
 
     /**
-     * 查询指定空间内的全部未删除文件节点。
+     * 查询指定空间内的全部未删除文件（不含目录）。
      *
      * @param spaceType 空间类型
      * @return 文件描述符列表
      */
     @Transactional(readOnly = true)
-    public List<FileDescriptor> listActiveBySpace(SpaceType spaceType) {
-        return fileNodeRepository.findBySpaceTypeAndDeletedFalse(spaceType)
+    public List<FileDescriptor> listActiveFilesBySpace(SpaceType spaceType) {
+        return fileNodeRepository.findBySpaceTypeAndNodeTypeAndDeletedFalse(
+                        spaceType, NodeType.FILE.getValue())
                 .stream().map(this::toDescriptor).toList();
     }
 

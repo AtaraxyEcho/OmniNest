@@ -372,63 +372,143 @@ public class OfflineDownloadExecutionService {
             TaskSnapshot status,
             List<Path> completedFiles
     ) {
-        transactionTemplate.executeWithoutResult(transactionStatus -> {
-            DownloadOfflineTask task = requireTask(taskId);
-            if (TaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
-                return;
-            }
-            long totalSize = totalSize(completedFiles);
-            boolean sharedTarget = resolveSpaceType(task) == SpaceType.SHARED;
-            if (sharedTarget) {
-                // 共享空间无预留机制：入库前复核容量，完成时按实际计入共享用量
-                sharedSpaceQuotaService.checkQuota(totalSize);
-            } else {
-                storageQuotaService.reserve(
-                        task.getOwnerUserId(),
-                        "OFFLINE_DOWNLOAD",
-                        task.getId(),
-                        totalSize,
-                        Instant.now().plus(Duration.ofHours(24))
-                );
-            }
-            FileNode targetParent = resolveParent(task.getOwnerUserId(), task.getTargetParentId(), resolveSpaceType(task));
-            FileNode importRoot = createImportRootIfNeeded(task, targetParent, status, completedFiles);
-            FileNode completedNode = importFiles(task, taskDirectory, targetParent, importRoot, completedFiles);
-            if (sharedTarget) {
-                sharedSpaceQuotaService.increaseUsage(totalSize, completedFiles.size());
-            } else {
-                storageQuotaService.settleReservation("OFFLINE_DOWNLOAD", task.getId(), totalSize);
-            }
-            task.setStatus(TaskStatus.COMPLETED.getValue());
-            task.setTotalBytes(totalSize);
-            task.setCompletedBytes(totalSize);
-            task.setDownloadSpeedBytes(0L);
-            task.setCompletedFileId(completedNode.getId());
-            task.setCompletedAt(Instant.now());
-            task.setFileName(completedNode.getName());
-            task.setErrorSummary(null);
-            offlineTaskRepository.save(task);
-        });
-        // 发送完成通知
-        DownloadOfflineTask completedTask = offlineTaskRepository.findById(taskId).orElse(null);
-        if (completedTask != null) {
-            taskRecordService.markCompleted(systemTaskId(completedTask), Map.of(
-                    "completedFileId", completedTask.getCompletedFileId().toString(),
-                    "fileName", completedTask.getFileName(),
-                    "totalBytes", completedTask.getTotalBytes()));
-            notificationService.notifyOrLog(completedTask.getOwnerUserId(), "TASK_COMPLETED",
-                    "离线下载完成", "文件 " + completedTask.getFileName() + " 已下载完成",
-                    Map.of("taskId", taskId.toString()));
+        DownloadOfflineTask snapshot = requireTask(taskId);
+        if (TaskStatus.CANCELLED.getValue().equals(snapshot.getStatus())) {
+            return;
         }
+        long totalSize = totalSize(completedFiles);
+        boolean sharedTarget = resolveSpaceType(snapshot) == SpaceType.SHARED;
+        reserveImportCapacity(snapshot, sharedTarget, totalSize);
+
+        // 阶段 A：多 GB 上传、ClamAV 扫描与桶间复制全部在事务外完成。此前这些 I/O 处在一个
+        // 覆盖整批的数据库事务内，最长可达数十分钟；worker 池只有 6 条连接，几路并发入库就会
+        // 把连接占满，而入库链路上的 ingress 生命周期方法还是 REQUIRES_NEW，会在持有连接的
+        // 同时再抢一条。失败时不做额外补偿：异常冒泡到 execute() 的 markFailed，由其释放预留。
+        List<StagedOfflineFile> stagedFiles = stageOfflineFiles(snapshot, taskDirectory, completedFiles);
+
+        // 阶段 B：短事务只写 file_objects、file_nodes、共享用量与任务终态。
+        List<ImportedOfflineFile> imported = transactionTemplate.execute(transactionStatus ->
+                persistImportedBatch(taskId, status, completedFiles.size(), stagedFiles, totalSize, sharedTarget));
+        if (imported == null) {
+            return;
+        }
+        // 阶段 C：元数据提交后再投递索引与媒体自动导入事件，消费者不会读到未提交节点。
+        imported.forEach(item -> publishFileUploaded(item.node(), item.object()));
+    }
+
+    private List<ImportedOfflineFile> persistImportedBatch(
+            UUID taskId,
+            TaskSnapshot status,
+            int completedFileCount,
+            List<StagedOfflineFile> stagedFiles,
+            long totalSize,
+            boolean sharedTarget
+    ) {
+        DownloadOfflineTask task = requireTask(taskId);
+        if (TaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
+            releaseImportCapacity(task, sharedTarget);
+            discardStagedFiles(stagedFiles);
+            return List.of();
+        }
+        FileNode targetParent = resolveParent(task.getOwnerUserId(), task.getTargetParentId(), resolveSpaceType(task));
+        FileNode importRoot = createImportRootIfNeeded(task, targetParent, status, completedFileCount);
+        List<ImportedOfflineFile> imported = persistStagedFiles(task, targetParent, importRoot, stagedFiles);
+        settleImportCapacity(task, sharedTarget, totalSize, completedFileCount);
+        task.setStatus(TaskStatus.COMPLETED.getValue());
+        task.setTotalBytes(totalSize);
+        task.setCompletedBytes(totalSize);
+        task.setDownloadSpeedBytes(0L);
+        task.setCompletedFileId(terminalNodeId(imported, importRoot));
+        task.setCompletedAt(Instant.now());
+        task.setFileName(imported.isEmpty() ? task.getFileName() : imported.getLast().node().getName());
+        task.setErrorSummary(null);
+        offlineTaskRepository.save(task);
+        registerPostImportNotification(taskId);
+        return imported;
+    }
+
+    /**
+     * 事务提交后再通知与投递派生任务：元数据未落库时不得让索引与媒体导入看见文件。
+     */
+    private void registerPostImportNotification(UUID taskId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishImportNotifications(taskId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publishImportNotifications(taskId);
+            }
+        });
+    }
+
+    private void publishImportNotifications(UUID taskId) {
+        DownloadOfflineTask completedTask = offlineTaskRepository.findById(taskId).orElse(null);
+        if (completedTask == null || completedTask.getCompletedFileId() == null) {
+            return;
+        }
+        taskRecordService.markCompleted(systemTaskId(completedTask), Map.of(
+                "completedFileId", completedTask.getCompletedFileId().toString(),
+                "fileName", String.valueOf(completedTask.getFileName()),
+                "totalBytes", completedTask.getTotalBytes()));
+        notificationService.notifyOrLog(completedTask.getOwnerUserId(), "TASK_COMPLETED",
+                "离线下载完成", "文件 " + completedTask.getFileName() + " 已下载完成",
+                Map.of("taskId", taskId.toString()));
+    }
+
+    private void reserveImportCapacity(DownloadOfflineTask task, boolean sharedTarget, long totalSize) {
+        if (sharedTarget) {
+            // 共享空间无预留机制：入库前复核容量，完成时按实际计入共享用量
+            sharedSpaceQuotaService.checkQuota(totalSize);
+            return;
+        }
+        storageQuotaService.reserve(
+                task.getOwnerUserId(),
+                "OFFLINE_DOWNLOAD",
+                task.getId(),
+                totalSize,
+                Instant.now().plus(Duration.ofHours(24))
+        );
+    }
+
+    private void settleImportCapacity(
+            DownloadOfflineTask task,
+            boolean sharedTarget,
+            long totalSize,
+            int importedFileCount
+    ) {
+        if (sharedTarget) {
+            sharedSpaceQuotaService.increaseUsage(totalSize, importedFileCount);
+            return;
+        }
+        storageQuotaService.settleReservation("OFFLINE_DOWNLOAD", task.getId(), totalSize);
+    }
+
+    private void releaseImportCapacity(DownloadOfflineTask task, boolean sharedTarget) {
+        if (sharedTarget) {
+            return;
+        }
+        storageQuotaService.releaseReservation("OFFLINE_DOWNLOAD", task.getId());
+    }
+
+    private UUID terminalNodeId(List<ImportedOfflineFile> imported, FileNode importRoot) {
+        if (importRoot != null) {
+            return importRoot.getId();
+        }
+        if (imported.isEmpty()) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "离线下载导入失败");
+        }
+        return imported.getLast().node().getId();
     }
 
     private FileNode createImportRootIfNeeded(
             DownloadOfflineTask task,
             FileNode targetParent,
             TaskSnapshot status,
-            List<Path> completedFiles
+            int completedFileCount
     ) {
-        if (completedFiles.size() == 1) {
+        if (completedFileCount == 1) {
             return null;
         }
         String rootName = normalizeFileName(resolveDisplayName(status)
@@ -451,26 +531,165 @@ public class OfflineDownloadExecutionService {
         return fileNodeRepository.save(folder);
     }
 
-    private FileNode importFiles(
+    /**
+     * 阶段 A 产物：内容已上传并通过扫描，尚未写入业务元数据。
+     *
+     * @param relativeParent 相对下载目录的父级路径，用于在事务内还原目录层级
+     * @param fileName 未做重名去重的规范化文件名
+     * @param quarantineKey 隔离桶对象
+     * @param targetKey 正式桶对象
+     * @param ingressId 入库记录标识
+     * @param sha256 服务端摘要
+     * @param sizeBytes 字节数
+     * @param mimeType MIME 类型
+     */
+    private record StagedOfflineFile(
+            Path relativeParent,
+            String fileName,
+            ObjectStorageKey quarantineKey,
+            ObjectStorageKey targetKey,
+            UUID ingressId,
+            String sha256,
+            long sizeBytes,
+            String mimeType
+    ) {
+    }
+
+    /**
+     * 阶段 B 产物：已落库的节点与内容对象，供阶段 C 投递事件。
+     *
+     * @param node 文件节点
+     * @param object 内容对象
+     */
+    private record ImportedOfflineFile(FileNode node, FileObject object) {
+    }
+
+    private List<StagedOfflineFile> stageOfflineFiles(
             DownloadOfflineTask task,
             Path taskDirectory,
-            FileNode targetParent,
-            FileNode importRoot,
             List<Path> completedFiles
     ) {
-        FileNode lastImported = importRoot;
+        List<StagedOfflineFile> staged = new ArrayList<>();
+        try {
+            for (Path file : completedFiles) {
+                Path relative = taskDirectory.relativize(file).normalize();
+                staged.add(stageOfflineFile(task, file, relative));
+            }
+            return staged;
+        } catch (RuntimeException exception) {
+            // 事务尚未开启，本批已暂存的对象无人回滚，必须就地清理，否则隔离与正式桶只等回收器兜底。
+            discardStagedFiles(staged);
+            throw exception;
+        }
+    }
+
+    private StagedOfflineFile stageOfflineFile(DownloadOfflineTask task, Path source, Path relative) {
+        String fileName = normalizeFileName(relative.getFileName().toString());
+        String quarantineObjectKey = "offline-downloads/" + task.getOwnerUserId()
+                + "/" + task.getId()
+                + "/" + UUID.randomUUID()
+                + "/" + fileName;
+        String targetObjectKey = "users/" + task.getOwnerUserId()
+                + "/offline-downloads/" + task.getId()
+                + "/" + UUID.randomUUID()
+                + "/" + fileName;
+        String mimeType = detectMimeType(source);
+        long sizeBytes = size(source);
+        ObjectStorageKey quarantineKey = new ObjectStorageKey(
+                objectStorageBuckets.quarantine(),
+                quarantineObjectKey
+        );
+        ObjectStorageKey targetKey = new ObjectStorageKey(
+                objectStorageBuckets.userFiles(),
+                targetObjectKey
+        );
+        objectStorageClient.putObject(quarantineKey, source, mimeType);
+        UUID ingressId = ingressLifecycleService.open(new IngressCommand(
+                task.getOwnerUserId(),
+                "OFFLINE",
+                task.getId(),
+                null,
+                quarantineKey.bucket(),
+                quarantineKey.objectKey(),
+                targetKey.bucket(),
+                targetKey.objectKey(),
+                task.getTargetParentId(),
+                fileName,
+                sizeBytes,
+                mimeType
+        ));
+        ingressLifecycleService.markScanning(ingressId);
+        InspectionResult inspection;
+        try {
+            inspection = ingressSafetyService.inspect(
+                    quarantineKey,
+                    sizeBytes,
+                    null,
+                    "OFFLINE",
+                    task.getId()
+            );
+        } catch (BusinessException exception) {
+            ingressLifecycleService.markFailed(
+                    ingressId,
+                    exception.errorCode() == ErrorCode.FILE_SECURITY_REJECTED,
+                    exception.errorCode().name(),
+                    exception.getMessage()
+            );
+            throw exception;
+        }
+        ingressLifecycleService.markClean(ingressId, inspection.sha256());
+        objectStorageClient.copyObject(quarantineKey, targetKey);
+        return new StagedOfflineFile(
+                relative.getParent(),
+                fileName,
+                quarantineKey,
+                targetKey,
+                ingressId,
+                inspection.sha256(),
+                sizeBytes,
+                mimeType
+        );
+    }
+
+    private void discardStagedFiles(List<StagedOfflineFile> stagedFiles) {
+        for (StagedOfflineFile staged : stagedFiles) {
+            try {
+                ingressLifecycleService.markFailed(
+                        staged.ingressId(),
+                        false,
+                        ErrorCode.FILE_UPLOAD_FAILED.name(),
+                        "离线下载导入未完成"
+                );
+            } catch (RuntimeException exception) {
+                log.warn("标记离线下载入库记录失败: ingressId={}, errorType={}",
+                        staged.ingressId(), exception.getClass().getSimpleName());
+            }
+            // 隔离对象留给隔离回收器按保留期处理，正式桶副本无人引用，立即删除。
+            removeObjectQuietly(staged.targetKey());
+        }
+    }
+
+    private List<ImportedOfflineFile> persistStagedFiles(
+            DownloadOfflineTask task,
+            FileNode targetParent,
+            FileNode importRoot,
+            List<StagedOfflineFile> stagedFiles
+    ) {
+        SpaceType spaceType = resolveSpaceType(task);
+        List<ImportedOfflineFile> imported = new ArrayList<>();
         Map<Path, FileNode> folderCache = new LinkedHashMap<>();
-        for (Path file : completedFiles) {
-            Path relative = taskDirectory.relativize(file).normalize();
+        for (StagedOfflineFile staged : stagedFiles) {
             FileNode parent = importRoot == null
                     ? targetParent
-                    : resolveNestedParent(task.getOwnerUserId(), importRoot, relative.getParent(), folderCache, resolveSpaceType(task));
-            lastImported = importSingleFile(task, parent, file, relative.getFileName().toString());
+                    : resolveNestedParent(
+                            task.getOwnerUserId(),
+                            importRoot,
+                            staged.relativeParent(),
+                            folderCache,
+                            spaceType);
+            imported.add(persistStagedFile(task, parent, staged, spaceType));
         }
-        if (lastImported == null) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "离线下载导入失败");
-        }
-        return importRoot == null ? lastImported : importRoot;
+        return imported;
     }
 
     private FileNode resolveNestedParent(
@@ -520,75 +739,24 @@ public class OfflineDownloadExecutionService {
         }
     }
 
-    private FileNode importSingleFile(DownloadOfflineTask task, FileNode parent, Path source, String rawFileName) {
-        String fileName = normalizeFileName(rawFileName);
+    private ImportedOfflineFile persistStagedFile(
+            DownloadOfflineTask task,
+            FileNode parent,
+            StagedOfflineFile staged,
+            SpaceType spaceType
+    ) {
         String availableName = resolveAvailableName(
                 task.getOwnerUserId(),
-                resolveSpaceType(task),
+                spaceType,
                 parent == null ? null : parent.getId(),
-                fileName
+                staged.fileName()
         );
-        String quarantineObjectKey = "offline-downloads/" + task.getOwnerUserId()
-                + "/" + task.getId()
-                + "/" + UUID.randomUUID()
-                + "/" + availableName;
-        String targetObjectKey = "users/" + task.getOwnerUserId()
-                + "/offline-downloads/" + task.getId()
-                + "/" + UUID.randomUUID()
-                + "/" + availableName;
-        String mimeType = detectMimeType(source);
-        long sizeBytes = size(source);
-        ObjectStorageKey quarantineKey = new ObjectStorageKey(
-                objectStorageBuckets.quarantine(),
-                quarantineObjectKey
-        );
-        ObjectStorageKey targetKey = new ObjectStorageKey(
-                objectStorageBuckets.userFiles(),
-                targetObjectKey
-        );
-        objectStorageClient.putObject(quarantineKey, source, mimeType);
-        UUID ingressId = ingressLifecycleService.open(new IngressCommand(
-                task.getOwnerUserId(),
-                "OFFLINE",
-                task.getId(),
-                null,
-                quarantineKey.bucket(),
-                quarantineKey.objectKey(),
-                targetKey.bucket(),
-                targetKey.objectKey(),
-                parent == null ? null : parent.getId(),
-                availableName,
-                sizeBytes,
-                mimeType
-        ));
-        ingressLifecycleService.markScanning(ingressId);
-        InspectionResult inspection;
-        try {
-            inspection = ingressSafetyService.inspect(
-                    quarantineKey,
-                    sizeBytes,
-                    null,
-                    "OFFLINE",
-                    task.getId()
-            );
-        } catch (BusinessException exception) {
-            ingressLifecycleService.markFailed(
-                    ingressId,
-                    exception.errorCode() == ErrorCode.FILE_SECURITY_REJECTED,
-                    exception.errorCode().name(),
-                    exception.getMessage()
-            );
-            throw exception;
-        }
-        ingressLifecycleService.markClean(ingressId, inspection.sha256());
-        objectStorageClient.copyObject(quarantineKey, targetKey);
-
         FileObject object = new FileObject();
-        object.setBucketName(targetKey.bucket());
-        object.setObjectKey(targetKey.objectKey());
-        object.setSha256(inspection.sha256());
-        object.setSizeBytes(sizeBytes);
-        object.setMimeType(mimeType);
+        object.setBucketName(staged.targetKey().bucket());
+        object.setObjectKey(staged.targetKey().objectKey());
+        object.setSha256(staged.sha256());
+        object.setSizeBytes(staged.sizeBytes());
+        object.setMimeType(staged.mimeType());
         FileObject savedObject = fileObjectRepository.save(object);
 
         FileNode fileNode = new FileNode();
@@ -597,15 +765,19 @@ public class OfflineDownloadExecutionService {
         fileNode.setNodeType(NodeType.FILE.getValue());
         fileNode.setName(availableName);
         fileNode.setNormalizedPath(resolveChildPath(parent, availableName));
-        fileNode.setMimeType(mimeType);
+        fileNode.setMimeType(staged.mimeType());
         fileNode.setSizeBytes(savedObject.getSizeBytes());
         fileNode.setCurrentObjectId(savedObject.getId());
         fileNode.setSourceType(SourceType.LOCAL.getValue());
-        fileNode.setSpaceType(resolveSpaceType(task));
+        fileNode.setSpaceType(spaceType);
         FileNode savedFile = fileNodeRepository.save(fileNode);
-        registerObjectFinalization(quarantineKey, targetKey, ingressId, savedFile.getId());
-        publishFileUploaded(savedFile, savedObject);
-        return savedFile;
+        registerObjectFinalization(
+                staged.quarantineKey(),
+                staged.targetKey(),
+                staged.ingressId(),
+                savedFile.getId()
+        );
+        return new ImportedOfflineFile(savedFile, savedObject);
     }
 
     private void registerObjectFinalization(

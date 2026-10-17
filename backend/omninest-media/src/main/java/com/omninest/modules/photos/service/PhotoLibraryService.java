@@ -264,7 +264,7 @@ public class PhotoLibraryService {
                 .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
                 .stream()
                 .collect(Collectors.toMap(PhotoItem::getId, item -> item));
-        Map<UUID, String> coverUrls = resolveCoverUrls(
+        Map<UUID, String> coverUrls = resolveDownloadUrls(
                 ownerUserId,
                 itemsById.values().stream()
                         .map(PhotoItem::getCoverFileId)
@@ -275,7 +275,7 @@ public class PhotoLibraryService {
                 .filter(Objects::nonNull)
                 .map(item -> PhotoItemDto.fromEntity(
                         item,
-                        coverUrlOrNull(coverUrls, item.getCoverFileId()),
+                        urlOrNull(coverUrls, item.getCoverFileId()),
                         favoriteIds.contains(item.getId()),
                         tagsByPhoto.getOrDefault(item.getId(), List.of())
                 ))
@@ -585,7 +585,7 @@ public class PhotoLibraryService {
                         PhotoTag::getPhotoId,
                         Collectors.mapping(PhotoTag::getTag, Collectors.toList())
                 ));
-        Map<UUID, String> coverUrls = resolveCoverUrls(
+        Map<UUID, String> coverUrls = resolveDownloadUrls(
                 ownerUserId,
                 items.stream()
                         .map(PhotoItem::getCoverFileId)
@@ -594,7 +594,7 @@ public class PhotoLibraryService {
         return items.stream()
                 .map(item -> PhotoItemDto.fromEntity(
                         item,
-                        coverUrlOrNull(coverUrls, item.getCoverFileId()),
+                        urlOrNull(coverUrls, item.getCoverFileId()),
                         favoriteIds.contains(item.getId()),
                         tagsByPhoto.getOrDefault(item.getId(), List.of())
                 ))
@@ -948,10 +948,18 @@ public class PhotoLibraryService {
                                 PhotoTag::getPhotoId,
                                 Collectors.mapping(PhotoTag::getTag, Collectors.toList())
                         ));
-        Map<UUID, String> coverUrls = resolveCoverUrls(
+        Map<UUID, String> coverUrls = resolveDownloadUrls(
                 ownerUserId,
                 projections.stream()
                         .map(PhotoListItemProjection::getCoverFileId)
+                        .filter(Objects::nonNull)
+                        .toList());
+        // 原图地址同样批量签发：逐行 createDownloadUrl 每张照片都要两次单行查询加一次
+        // 签名运算，一屏 200 张就是数百次往返，而列表接口与详情共用同一份投影。
+        Map<UUID, String> sourceUrls = resolveDownloadUrls(
+                ownerUserId,
+                projections.stream()
+                        .map(PhotoListItemProjection::getFileNodeId)
                         .filter(Objects::nonNull)
                         .toList());
         return projections.stream().map(item -> new PhotoListItemDto(
@@ -968,8 +976,8 @@ public class PhotoLibraryService {
                 item.getGpsLocation(),
                 item.getFormat(),
                 item.getFileSize(),
-                coverUrlOrNull(coverUrls, item.getCoverFileId()),
-                resolveSourceUrl(ownerUserId, item.getFileNodeId()),
+                urlOrNull(coverUrls, item.getCoverFileId()),
+                urlOrNull(sourceUrls, item.getFileNodeId()),
                 item.getMetadataStatus(),
                 favoriteIds.contains(item.getId()),
                 item.getCreatedAt(),
@@ -1093,26 +1101,28 @@ public class PhotoLibraryService {
     }
 
     /**
-     * 批量解析封面下载地址，避免列表场景逐行回查文件节点。
+     * 批量解析文件下载地址，避免列表场景逐行回查文件节点与签名。
+     *
+     * <p>批量签发会跳过缺失、已删除或非文件节点，未命中即无地址。</p>
      */
-    private Map<UUID, String> resolveCoverUrls(UUID ownerUserId, Collection<UUID> coverFileIds) {
-        if (coverFileIds.isEmpty()) {
+    private Map<UUID, String> resolveDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
+        if (fileIds.isEmpty()) {
             return Map.of();
         }
         Map<UUID, String> result = new LinkedHashMap<>();
         fileQueryService
-                .createDownloadUrls(ownerUserId, coverFileIds)
+                .createDownloadUrls(ownerUserId, fileIds)
                 .forEach((fileId, dto) -> result.put(fileId, dto.downloadUrl()));
         return result;
     }
 
-    /// 封面文件 ID 为空（派生未完成/失败）或映射未命中时返回 null；
+    /// 文件 ID 为空（封面派生未完成/失败）或映射未命中时返回 null；
     /// Map.of() 不可变映射对 null 键 get() 直接抛 NPE（D-012）。
-    private String coverUrlOrNull(Map<UUID, String> coverUrls, UUID coverFileId) {
-        if (coverFileId == null) {
+    private String urlOrNull(Map<UUID, String> urls, UUID fileId) {
+        if (fileId == null) {
             return null;
         }
-        return coverUrls.get(coverFileId);
+        return urls.get(fileId);
     }
 
     private void invalidateDashboardCache(UUID ownerUserId) {

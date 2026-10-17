@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,8 @@ public class VideoStreamService {
     /** 流式转码超时（秒）：4 小时 */
     private static final long STREAM_TRANSCODE_TIMEOUT_SECONDS = 4 * 3600;
     private static final long TIMEOUT_JOIN_MILLIS = 5_000L;
+    /** 同一时刻允许的实时 ffmpeg 流上限。 */
+    private static final int MAX_CONCURRENT_FFMPEG_STREAMS = 4;
 
     /** Web 端浏览器原生不支持的音频编码（flac/vorbis 现代浏览器已支持，不再列入） */
     public static final List<String> WEB_UNSUPPORTED_AUDIO = List.of(
@@ -37,6 +40,30 @@ public class VideoStreamService {
 
     private final MediaVideoItemRepository videoItemRepository;
     private final VideoSourceInputResolver sourceInputResolver;
+
+    /**
+     * 同一时刻允许的实时 ffmpeg 流数。
+     *
+     * <p>每次 Seek 都会另起一路 HTTP 流请求，无上限时连续拖动进度条会让多个 ffmpeg
+     * 同时全速拉取源视频，打满宿主机 CPU 与对象存储带宽。槽位耗尽即拒绝新流，
+     * 由播放器按普通失败处理，而不是让既有播放一起卡死。</p>
+     */
+    private final Semaphore streamSlots = new Semaphore(MAX_CONCURRENT_FFMPEG_STREAMS);
+
+    /**
+     * 占用一路实时转码槽位，取不到时返回可重试的业务错误。
+     */
+    private void requireStreamSlot(UUID videoItemId) {
+        if (!streamSlots.tryAcquire()) {
+            log.warn("实时音频转码并发已达上限: limit={}, videoItemId={}",
+                    MAX_CONCURRENT_FFMPEG_STREAMS, videoItemId);
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "实时转码通道已满，请稍后重试");
+        }
+    }
+
+    private void releaseStreamSlot() {
+        streamSlots.release();
+    }
 
     public VideoStreamService(
             MediaVideoItemRepository videoItemRepository,
@@ -118,6 +145,7 @@ public class VideoStreamService {
                 videoItemId, item.getAudioCodec(), item.getContainerFormat(), startSeconds);
 
         String[] command = buildFfmpegTranscodeCommand(internalUrl, startSeconds);
+        requireStreamSlot(videoItemId);
 
         Process process = null;
         try {
@@ -160,6 +188,7 @@ public class VideoStreamService {
             log.warn("流式转码被中断: videoItemId={}", videoItemId);
         } finally {
             terminateProcess(process);
+            releaseStreamSlot();
         }
     }
 
@@ -210,6 +239,7 @@ public class VideoStreamService {
         ));
 
         String[] command = cmd.toArray(new String[0]);
+        requireStreamSlot(sourceVideoItemId);
 
         Process process = null;
         try {
@@ -256,6 +286,7 @@ public class VideoStreamService {
             log.warn("mux 被中断: sourceVideoItemId={}", sourceVideoItemId);
         } finally {
             terminateProcess(process);
+            releaseStreamSlot();
         }
     }
 

@@ -473,10 +473,13 @@ public class PhotoAlbumService {
                 log.warn("相册封面解析失败，尝试从第一张照片获取: albumId={}, error={}", album.getId(), ex.getMessage());
             }
         }
-        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(album.getId());
-        if (!photoIds.isEmpty()) {
+        // 只为取第一张封面而加载整个相册的照片 ID 列表，会在大相册上按相册数量线性放大；
+        // 复用已有的分页重载，一条 SQL 只回一行。
+        List<UUID> firstPhotoIds = albumItemRepository.findPhotoIdsByAlbumId(
+                album.getId(), PageRequest.of(0, 1));
+        if (!firstPhotoIds.isEmpty()) {
             try {
-                PhotoItem firstPhoto = libraryService.findPhotoById(photoIds.get(0));
+                PhotoItem firstPhoto = libraryService.findPhotoById(firstPhotoIds.get(0));
                 if (firstPhoto != null && firstPhoto.getCoverFileId() != null) {
                     return libraryService.resolveCoverUrl(firstPhoto.getOwnerUserId(), firstPhoto.getCoverFileId());
                 }

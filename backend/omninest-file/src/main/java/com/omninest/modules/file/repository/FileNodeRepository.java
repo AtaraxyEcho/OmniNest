@@ -92,6 +92,17 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
 
     List<FileNode> findByOwnerUserIdAndDeletedFalse(UUID ownerUserId);
 
+    /**
+     * 按类型查询用户未删除节点。
+     *
+     * <p>面向"只需要文件"的批量候选场景：把类型判定下推数据库，目录行不再进入内存。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param nodeType 节点类型
+     * @return 匹配节点
+     */
+    List<FileNode> findByOwnerUserIdAndNodeTypeAndDeletedFalse(UUID ownerUserId, String nodeType);
+
     List<FileNode> findByOwnerUserIdAndDeletedTrueOrderByDeletedAtDesc(UUID ownerUserId);
 
     /**
@@ -672,9 +683,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     List<FileNode> findByDeletedByAndSpaceTypeAndDeletedTrueOrderByDeletedAtDesc(UUID deletedBy, SpaceType spaceType);
 
     /**
-     * 查询指定空间类型的所有未删除文件（不限 owner，用于共享空间文件发现）。
+     * 查询指定空间类型的所有未删除文件节点（不限 owner，用于共享空间文件发现）。
+     *
+     * <p>类型下推数据库：只需要文件的候选场景不必把整个空间的目录行读进内存。</p>
      */
-    List<FileNode> findBySpaceTypeAndDeletedFalse(SpaceType spaceType);
+    List<FileNode> findBySpaceTypeAndNodeTypeAndDeletedFalse(SpaceType spaceType, String nodeType);
 
     @Query("""
             SELECT n FROM FileNode n

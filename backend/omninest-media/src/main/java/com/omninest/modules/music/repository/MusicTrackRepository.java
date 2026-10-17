@@ -136,6 +136,33 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     );
 
     /**
+     * 分页查询专辑内可见曲目。
+     *
+     * <p>详情列表只需当前页的曲目，把分页下推到 SQL 才不会为每页加载整张专辑的实体。</p>
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param albumId 专辑 ID
+     * @param pageable 分页参数
+     * @return 当前页专辑曲目
+     */
+    @Query(value = """
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and track.albumId = :albumId and file.deleted = false
+            order by track.discNumber asc, track.trackNumber asc, track.title asc
+            """,
+            countQuery = """
+            select count(track) from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and track.albumId = :albumId and file.deleted = false
+            """)
+    Page<MusicTrack> findAlbumTracksPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("albumId") UUID albumId,
+            Pageable pageable
+    );
+
+    /**
      * 查询歌手内全部可见曲目，按专辑名、碟号、音轨号排序。
      *
      * @param ownerUserId 所属用户 ID
@@ -151,6 +178,31 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     List<MusicTrack> findArtistTracks(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("artistId") UUID artistId
+    );
+
+    /**
+     * 分页查询歌手可见曲目，分页下推到 SQL。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param artistId 歌手 ID
+     * @param pageable 分页参数
+     * @return 当前页歌手曲目
+     */
+    @Query(value = """
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and track.artistId = :artistId and file.deleted = false
+            order by track.albumTitle asc, track.discNumber asc, track.trackNumber asc, track.title asc
+            """,
+            countQuery = """
+            select count(track) from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and track.artistId = :artistId and file.deleted = false
+            """)
+    Page<MusicTrack> findArtistTracksPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistId") UUID artistId,
+            Pageable pageable
     );
 
     long countByOwnerUserIdAndAlbumId(UUID ownerUserId, UUID albumId);

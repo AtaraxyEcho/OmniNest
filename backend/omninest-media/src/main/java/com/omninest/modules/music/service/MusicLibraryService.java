@@ -52,6 +52,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -154,7 +155,15 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public Page<MusicTrackDto> albumTracksPage(UUID ownerUserId, UUID albumId, int page, int size) {
-        return sliceTrackPage(albumTracks(ownerUserId, albumId), page, size);
+        MusicAlbum album = albumRepository.findByIdAndOwnerUserId(albumId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
+        Page<MusicTrack> trackPage = trackRepository.findAlbumTracksPage(
+                ownerUserId, album.getId(), trackPageRequest(page, size));
+        return new PageImpl<>(
+                toTrackSummaryDtos(ownerUserId, trackPage.getContent()),
+                trackPage.getPageable(),
+                trackPage.getTotalElements()
+        );
     }
 
     /**
@@ -176,16 +185,20 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public Page<MusicTrackDto> artistTracksPage(UUID ownerUserId, UUID artistId, int page, int size) {
-        return sliceTrackPage(artistTracks(ownerUserId, artistId), page, size);
+        MusicArtist artist = artistRepository.findByIdAndOwnerUserId(artistId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
+        Page<MusicTrack> trackPage = trackRepository.findArtistTracksPage(
+                ownerUserId, artist.getId(), trackPageRequest(page, size));
+        return new PageImpl<>(
+                toTrackSummaryDtos(ownerUserId, trackPage.getContent()),
+                trackPage.getPageable(),
+                trackPage.getTotalElements()
+        );
     }
 
-    /// 曲目分页通用切片：排序已由全量查询承载，此处仅切页。
-    private Page<MusicTrackDto> sliceTrackPage(List<MusicTrackDto> all, int page, int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(size, 1);
-        int from = (int) Math.min((long) safePage * safeSize, all.size());
-        int to = (int) Math.min((long) from + safeSize, all.size());
-        return new PageImpl<>(all.subList(from, to), PageRequest.of(safePage, safeSize), all.size());
+    /// 曲目分页请求：排序由各分页查询自带，此处只钳制页码与页长。
+    private Pageable trackPageRequest(int page, int size) {
+        return PageRequest.of(Math.max(page, 0), Math.max(size, 1));
     }
 
     @Transactional(readOnly = true)

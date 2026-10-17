@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +37,9 @@ import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -223,7 +226,6 @@ class PhotoLibraryServiceTest {
 
         // 验证缩略图 URL 已解析
         assertThat(result).allSatisfy(dto -> assertThat(dto.coverUrl()).isNotBlank());
-        assertThat(result).allSatisfy(dto -> assertThat(dto.sourceUrl()).isNull());
     }
 
     @Test
@@ -290,14 +292,23 @@ class PhotoLibraryServiceTest {
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
         when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any()))
-                .thenReturn(Map.of(
-                        COVER_FILE_ID_1,
-                        new FileDownloadUrlDto(
-                                COVER_FILE_ID_1,
-                                "photo1.jpg",
-                                "http://minio/photo1",
-                                Instant.now().plusSeconds(900)
-                        )));
+                .thenAnswer(invocation -> {
+                    Collection<UUID> requested = invocation.getArgument(1);
+                    Map<UUID, FileDownloadUrlDto> resolved = new LinkedHashMap<>();
+                    // 封面与原图共用同一次批量签发：逐行签发会退化成每张照片两次单行查询
+                    // 加一次对象存储签名运算，一屏 200 张就是数百次往返。
+                    if (requested.contains(COVER_FILE_ID_1)) {
+                        resolved.put(COVER_FILE_ID_1, new FileDownloadUrlDto(
+                                COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1",
+                                Instant.now().plusSeconds(900)));
+                    }
+                    if (requested.contains(FILE_NODE_ID_1)) {
+                        resolved.put(FILE_NODE_ID_1, new FileDownloadUrlDto(
+                                FILE_NODE_ID_1, "photo1.jpg", "http://minio/photo1-source",
+                                Instant.now().plusSeconds(900)));
+                    }
+                    return resolved;
+                });
 
         Page<PhotoListItemDto> result = service.listPhotosPage(
                 OWNER_ID,
@@ -314,7 +325,9 @@ class PhotoLibraryServiceTest {
             assertThat(item.title()).isEqualTo("分页照片");
             assertThat(item.favorite()).isTrue();
             assertThat(item.coverUrl()).isEqualTo("http://minio/photo1");
+            assertThat(item.sourceUrl()).isEqualTo("http://minio/photo1-source");
         });
+        verify(fileQueryService, never()).createDownloadUrl(eq(OWNER_ID), any());
     }
 
     @Test
