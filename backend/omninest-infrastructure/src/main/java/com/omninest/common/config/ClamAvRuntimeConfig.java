@@ -2,7 +2,6 @@ package com.omninest.common.config;
 
 import java.time.Duration;
 import java.util.Optional;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,7 +27,6 @@ public class ClamAvRuntimeConfig {
      *
      * @param properties 环境配置默认值
      */
-    @Autowired
     public ClamAvRuntimeConfig(
             ClamAvProperties properties,
             LegacyDeploymentConfigResolver legacyDeploymentConfigResolver,
@@ -42,13 +40,17 @@ public class ClamAvRuntimeConfig {
     }
 
     /**
-     * 保留无 Spring 测试构造器，便于验证部署默认值和兼容旧键。
+     * 创建不接入配置中心的运行时配置实例，仅用于验证部署默认值和兼容旧键。
+     *
+     * @param properties 环境配置默认值
+     * @param legacyDeploymentConfigResolver 部署环境变量与旧键解析器
+     * @return 只依赖部署配置的运行时配置实例
      */
-    public ClamAvRuntimeConfig(
+    static ClamAvRuntimeConfig withoutConfigCenter(
             ClamAvProperties properties,
             LegacyDeploymentConfigResolver legacyDeploymentConfigResolver
     ) {
-        this(properties, legacyDeploymentConfigResolver, null, null);
+        return new ClamAvRuntimeConfig(properties, legacyDeploymentConfigResolver, null, null);
     }
 
     /**

@@ -28,7 +28,7 @@ class ClamAvRuntimeConfigTest {
                 cache,
                 new MockEnvironment()
         );
-        ClamAvRuntimeConfig config = new ClamAvRuntimeConfig(properties, resolver);
+        ClamAvRuntimeConfig config = ClamAvRuntimeConfig.withoutConfigCenter(properties, resolver);
 
         assertThat(config.isEnabled()).isFalse();
         assertThat(config.host()).isEqualTo("clamav.internal");

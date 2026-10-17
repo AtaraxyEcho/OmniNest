@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
@@ -43,12 +46,14 @@ class ConfigCenterServiceTest {
     private final DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
+    private final RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
     private final ConfigCenterService service = new ConfigCenterService(
             configEntryRepository,
             configHistoryRepository,
             publisher,
             credentialCipher,
-            currentUserContext
+            currentUserContext,
+            runtimeConfigCache
     );
 
     @BeforeEach
@@ -117,6 +122,32 @@ class ConfigCenterServiceTest {
         assertThat(entry.getConfigValue()).isEqualTo("false");
         verify(configHistoryRepository).save(any(ConfigHistory.class));
         verify(publisher).publishFanout(ArgumentMatchers.eq(QueueNames.CONFIG_REFRESH_EXCHANGE), any());
+    }
+
+    @Test
+    void seedSystemConfigValuePersistsExistingEntryAndEvictsCache() {
+        ConfigEntry entry = entry("auth.two-factor.required-roles", "", "TEXT", "security", "HOT");
+        when(configEntryRepository.findByConfigKey("auth.two-factor.required-roles"))
+                .thenReturn(Optional.of(entry));
+        when(configEntryRepository.save(any(ConfigEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.seedSystemConfigValue("auth.two-factor.required-roles", "SUPER_ADMIN,ADMIN");
+
+        assertThat(entry.getConfigValue()).isEqualTo("SUPER_ADMIN,ADMIN");
+        verify(configEntryRepository).save(entry);
+        verify(runtimeConfigCache).evict("auth.two-factor.required-roles");
+        verify(currentUserContext, never()).requireCurrentUser();
+        verifyNoInteractions(configHistoryRepository);
+    }
+
+    @Test
+    void seedSystemConfigValueDoesNotCreateMissingEntry() {
+        when(configEntryRepository.findByConfigKey("auth.two-factor.required-roles")).thenReturn(Optional.empty());
+
+        service.seedSystemConfigValue("auth.two-factor.required-roles", "");
+
+        verify(configEntryRepository, never()).save(any(ConfigEntry.class));
+        verify(runtimeConfigCache).evict("auth.two-factor.required-roles");
     }
 
     @Test

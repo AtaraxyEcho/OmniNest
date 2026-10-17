@@ -1,6 +1,7 @@
 package com.omninest.modules.configcenter.service;
 
 import com.omninest.common.config.ConfigRefreshEvent;
+import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.config.RuntimeConfigCommand;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -47,6 +48,7 @@ public class ConfigCenterService implements RuntimeConfigCommand {
     private final DomainEventPublisher publisher;
     private final CredentialCipher credentialCipher;
     private final CurrentUserContext currentUserContext;
+    private final RuntimeConfigCache runtimeConfigCache;
 
     /**
      * 在 API 角色启动阶段同步配置目录及兼容数据。
@@ -113,6 +115,25 @@ public class ConfigCenterService implements RuntimeConfigCommand {
     @Transactional(rollbackFor = Exception.class)
     public void updateValue(String key, String value, String reason, UUID changedBy) {
         update(key, value, reason, changedBy);
+    }
+
+    /**
+     * 内部播种已存在的配置行并逐出运行期缓存。
+     *
+     * <p>供首次安装等没有认证上下文的内部流程使用：不经管理 API 的权限校验，
+     * 不写变更历史，也不发布配置刷新事件；配置行不存在时不创建。</p>
+     *
+     * @param configKey 配置键
+     * @param value 待写入的配置值
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void seedSystemConfigValue(String configKey, String value) {
+        configEntryRepository.findByConfigKey(configKey)
+                .ifPresent(entry -> {
+                    entry.setConfigValue(value);
+                    configEntryRepository.save(entry);
+                });
+        runtimeConfigCache.evict(configKey);
     }
 
     /**

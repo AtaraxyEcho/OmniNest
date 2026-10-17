@@ -1,11 +1,9 @@
 package com.omninest.modules.user.service;
 
-import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Roles;
-import com.omninest.modules.configcenter.repository.ConfigEntryRepository;
-import com.omninest.modules.configcenter.domain.ConfigEntry;
+import com.omninest.modules.configcenter.service.ConfigCenterService;
 import com.omninest.modules.user.config.InitialSetupProperties;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -54,8 +52,7 @@ public class InitialSetupService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
     private final TwoFactorService twoFactorService;
-    private final ConfigEntryRepository configEntryRepository;
-    private final RuntimeConfigCache runtimeConfigCache;
+    private final ConfigCenterService configCenterService;
 
     /**
      * 查询首次安装向导状态。
@@ -158,16 +155,11 @@ public class InitialSetupService {
 
     /**
      * 把安装期的两步验证姿态写入配置中心，使运行期强制策略与部署选择一致；
-     * 直写行并逐出缓存（安装期无认证上下文，不走 ConfigCenterService 的权限路径）。
+     * 安装期无认证上下文，使用配置中心的内部播种入口，不走管理 API 的权限路径。
      */
     private void seedTwoFactorRuntimePolicy(boolean required) {
         String value = required ? TwoFactorPolicyService.DEFAULT_REQUIRED_ROLES : "";
-        configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY)
-                .ifPresent(entry -> {
-                    entry.setConfigValue(value);
-                    configEntryRepository.save(entry);
-                });
-        runtimeConfigCache.evict(TwoFactorPolicyService.REQUIRED_ROLES_KEY);
+        configCenterService.seedSystemConfigValue(TwoFactorPolicyService.REQUIRED_ROLES_KEY, value);
     }
 
     private void requireSetupStillRequired() {

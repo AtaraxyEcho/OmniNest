@@ -6,11 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.isNull;
 
-import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Roles;
-import com.omninest.modules.configcenter.domain.ConfigEntry;
-import com.omninest.modules.configcenter.repository.ConfigEntryRepository;
+import com.omninest.modules.configcenter.service.ConfigCenterService;
 import com.omninest.modules.user.config.InitialSetupProperties;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -44,8 +42,7 @@ class InitialSetupServiceTest {
     private final SystemInstanceRepository systemInstanceRepository = Mockito.mock(SystemInstanceRepository.class);
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final TwoFactorService twoFactorService = Mockito.mock(TwoFactorService.class);
-    private final ConfigEntryRepository configEntryRepository = Mockito.mock(ConfigEntryRepository.class);
-    private final RuntimeConfigCache runtimeConfigCache = Mockito.mock(RuntimeConfigCache.class);
+    private final ConfigCenterService configCenterService = Mockito.mock(ConfigCenterService.class);
     private final InitialSetupService service = new InitialSetupService(
             properties,
             authUserRepository,
@@ -54,8 +51,7 @@ class InitialSetupServiceTest {
             passwordEncoder,
             new PasswordPolicy(),
             twoFactorService,
-            configEntryRepository,
-            runtimeConfigCache
+            configCenterService
     );
 
     @BeforeEach
@@ -64,8 +60,6 @@ class InitialSetupServiceTest {
         properties.setToken(SETUP_TOKEN);
         properties.setPersistentStateEnabled(true);
         properties.setTwoFactorRequired(false);
-        Mockito.when(configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY))
-                .thenReturn(Optional.of(Mockito.mock(ConfigEntry.class)));
     }
 
     @Test
@@ -239,10 +233,6 @@ class InitialSetupServiceTest {
         });
         Mockito.when(twoFactorService.provisionForNewUser(createdUserId, "SECRET32", "123456"))
                 .thenReturn(List.of("ABCD-2345"));
-        ConfigEntry entry = Mockito.mock(ConfigEntry.class);
-
-        Mockito.when(configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY))
-                .thenReturn(Optional.of(entry));
 
         var backupCodes = service.createSuperAdmin(
                 SETUP_TOKEN,
@@ -254,9 +244,10 @@ class InitialSetupServiceTest {
 
         assertThat(backupCodes).containsExactly("ABCD-2345");
         Mockito.verify(twoFactorService).provisionForNewUser(createdUserId, "SECRET32", "123456");
-        Mockito.verify(entry).setConfigValue("SUPER_ADMIN,ADMIN");
-        Mockito.verify(configEntryRepository).save(entry);
-        Mockito.verify(runtimeConfigCache).evict(TwoFactorPolicyService.REQUIRED_ROLES_KEY);
+        Mockito.verify(configCenterService).seedSystemConfigValue(
+                TwoFactorPolicyService.REQUIRED_ROLES_KEY,
+                "SUPER_ADMIN,ADMIN"
+        );
     }
 
     @Test
@@ -294,16 +285,15 @@ class InitialSetupServiceTest {
             user.setId(UUID.randomUUID());
             return user;
         });
-        ConfigEntry entry = Mockito.mock(ConfigEntry.class);
-        Mockito.when(configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY))
-                .thenReturn(Optional.of(entry));
 
         var backupCodes = service.createSuperAdmin(SETUP_TOKEN, request("ChangeMe123!"));
 
         assertThat(backupCodes).isNull();
         Mockito.verify(twoFactorService, Mockito.never()).provisionForNewUser(any(), any(), any());
-        Mockito.verify(entry).setConfigValue("");
-        Mockito.verify(runtimeConfigCache).evict(TwoFactorPolicyService.REQUIRED_ROLES_KEY);
+        Mockito.verify(configCenterService).seedSystemConfigValue(
+                TwoFactorPolicyService.REQUIRED_ROLES_KEY,
+                ""
+        );
     }
 
     @Test
