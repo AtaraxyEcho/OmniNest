@@ -426,17 +426,32 @@ class LocalDatabase extends _$LocalDatabase {
   }
 
   /// 清理退出账号关联的本地敏感数据，保留设备级背景设置。
+  ///
+  /// 带归属列的表按「当前账号 + 设备级空归属」两类删除：同设备上另一个具名账号
+  /// 尚未同步的进度、批注与队列必须原样留下，退出谁就清谁。整表清空等于让 A 的
+  /// 退出把 B 的离线写入一并删掉。
+  ///
+  /// [cachedReaderBookDetails]、[cachedFiles] 与 [cachedMediaProgress] 没有归属列
+  /// （按 itemId/mediaId 存的服务端只读快照），只能整表清。
   Future<void> clearUserData(String userId) {
     return transaction(() async {
-      await delete(syncOperations).go();
+      final owned = [userId, ''];
+      await (delete(syncOperations)
+        ..where((table) => table.userId.isIn(owned))).go();
       await delete(cachedFiles).go();
       await delete(cachedMediaProgress).go();
-      await delete(cachedReaderProgress).go();
-      await delete(cachedReaderBookmarks).go();
-      await delete(cachedReaderAnnotations).go();
-      await delete(cachedReaderNotes).go();
-      await delete(cachedReaderBooks).go();
-      await delete(cachedReaderChapters).go();
+      await (delete(cachedReaderProgress)
+        ..where((table) => table.userId.isIn(owned))).go();
+      await (delete(cachedReaderBookmarks)
+        ..where((table) => table.userId.isIn(owned))).go();
+      await (delete(cachedReaderAnnotations)
+        ..where((table) => table.userId.isIn(owned))).go();
+      await (delete(cachedReaderNotes)
+        ..where((table) => table.userId.isIn(owned))).go();
+      await (delete(cachedReaderBooks)
+        ..where((table) => table.userId.isIn(owned))).go();
+      await (delete(cachedReaderChapters)
+        ..where((table) => table.userId.isIn(owned))).go();
       await delete(cachedReaderBookDetails).go();
       await (delete(cachedReaderImages)
         ..where((table) => table.userId.equals(userId))).go();

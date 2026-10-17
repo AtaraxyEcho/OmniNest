@@ -161,7 +161,51 @@ void main() {
                 userId: userId,
               ),
             );
+        // 另一个具名账号尚未同步的离线写入：退出 user-1 不能把它一起带走。
+        await db
+            .into(db.syncOperations)
+            .insert(
+              SyncOperationsCompanion.insert(
+                userId: Value(userId),
+                type: 'reader.annotation.delete',
+                payload: '{"annotationId":"$userId-ann"}',
+                createdAt: now,
+              ),
+            );
+        await db
+            .into(db.cachedReaderProgress)
+            .insert(
+              CachedReaderProgressCompanion.insert(
+                userId: Value(userId),
+                itemId: 'book-1',
+                chapterId: const Value('chapter-1'),
+                charOffset: const Value(100),
+                updatedAt: now,
+              ),
+            );
       }
+      await db
+          .into(db.cachedReaderBookmarks)
+          .insert(
+            CachedReaderBookmarksCompanion.insert(
+              id: 'user-2-bookmark',
+              userId: const Value('user-2'),
+              readerItemId: 'book-1',
+              createdAt: now,
+            ),
+          );
+      await db
+          .into(db.cachedReaderAnnotations)
+          .insert(
+            CachedReaderAnnotationsCompanion.insert(
+              id: 'user-2-annotation',
+              userId: const Value('user-2'),
+              readerItemId: 'book-1',
+              startOffset: 10,
+              endOffset: 20,
+              createdAt: now,
+            ),
+          );
       await db
           .into(db.appBackdropSettingsTable)
           .insert(
@@ -173,9 +217,30 @@ void main() {
 
       await db.clearUserData('user-1');
 
+      // cachedFiles 与 cachedMediaProgress 没有归属列，仍按整表清。
       expect(await db.select(db.cachedFiles).get(), isEmpty);
-      expect(await db.select(db.syncOperations).get(), isEmpty);
-      expect(await db.select(db.cachedReaderProgress).get(), isEmpty);
+      expect(await db.select(db.cachedMediaProgress).get(), isEmpty);
+      // 带归属列的表只清当前账号与设备级空归属残留（上面未带 userId 插入的行）。
+      expect(
+        (await db.select(db.syncOperations).get()).map((row) => row.userId),
+        ['user-2'],
+      );
+      expect(
+        (await db.select(db.cachedReaderProgress).get()).map(
+          (row) => row.userId,
+        ),
+        ['user-2'],
+      );
+      expect(
+        (await db.select(db.cachedReaderBookmarks).get()).map((row) => row.id),
+        ['user-2-bookmark'],
+      );
+      expect(
+        (await db.select(db.cachedReaderAnnotations).get()).map(
+          (row) => row.id,
+        ),
+        ['user-2-annotation'],
+      );
       expect(
         (await db.select(db.cachedReaderImages).get()).map((row) => row.userId),
         ['user-2'],
