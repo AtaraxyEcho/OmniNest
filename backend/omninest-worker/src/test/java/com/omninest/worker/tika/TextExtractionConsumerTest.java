@@ -1,7 +1,9 @@
 package com.omninest.worker.tika;
 
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
@@ -15,6 +17,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
@@ -77,7 +80,8 @@ class TextExtractionConsumerTest {
                 fileLifecycleGuard,
                 taskTracker
         );
-        when(fileLifecycleGuard.isOwnedProcessable(any(), any())).thenReturn(true);
+        when(fileLifecycleGuard.findOwnedProcessable(any(), any()))
+                .thenReturn(Optional.of(describedFile(SpaceType.PERSONAL)));
         lenient().when(taskTracker.begin(any(), anyString(), any(), anyString()))
                 .thenReturn(new FilePostProcessingTaskTracker.TrackedTask(UUID.randomUUID(), true));
     }
@@ -96,6 +100,57 @@ class TextExtractionConsumerTest {
                 mimeType,
                 1024L,
                 Instant.now()
+        );
+    }
+
+    /**
+     * 构造带指定空间归属的文件描述符。
+     */
+    private FileDescriptor describedFile(SpaceType spaceType) {
+        UUID ownerUserId = UUID.randomUUID();
+        return new FileDescriptor(
+                UUID.randomUUID(),
+                ownerUserId,
+                null,
+                "FILE",
+                "sample.bin",
+                "/sample.bin",
+                "application/octet-stream",
+                1024L,
+                null,
+                "UPLOAD",
+                false,
+                spaceType == SpaceType.SHARED,
+                spaceType,
+                ownerUserId,
+                Instant.EPOCH,
+                Instant.EPOCH
+        );
+    }
+
+    @Test
+    @DisplayName("共享空间文档的索引必须写在 SHARED 空间")
+    void handle_withSharedSpaceFile_shouldIndexAsShared() throws IOException {
+        FileUploadedEvent event = createEvent("shared-notes.txt", "text/plain");
+        when(fileLifecycleGuard.findOwnedProcessable(any(), any()))
+                .thenReturn(Optional.of(describedFile(SpaceType.SHARED)));
+        when(fileQueryService.openOwnedFileContent(any(), any())).thenReturn(
+                new FileContentStream(
+                        new ByteArrayInputStream("共享空间正文内容".getBytes(StandardCharsets.UTF_8)),
+                        "shared-notes.txt",
+                        1L,
+                        "application/octet-stream"));
+
+        textExtractionConsumer.handle(event, createMessage(), channel);
+
+        // 索引写入会先按 fileId 删旧文档再写空间字段：这里写错就让共享检索丢文件、
+        // 上传者个人检索越权命中。
+        verify(fileSearchIndexService).indexFileChunks(
+                eq(event.fileNodeId()),
+                eq(event.ownerUserId()),
+                eq(event.fileName()),
+                any(),
+                eq("SHARED")
         );
     }
 

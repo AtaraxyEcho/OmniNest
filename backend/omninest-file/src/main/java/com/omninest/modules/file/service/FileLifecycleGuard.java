@@ -7,6 +7,7 @@ import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -69,6 +70,24 @@ public class FileLifecycleGuard {
         return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, ownerUserId)
                 .map(this::isIdle)
                 .orElse(false);
+    }
+
+    /**
+     * 取得仍允许异步任务处理的文件描述符。
+     *
+     * <p>与 {@link #isOwnedProcessable} 同一判据，但把节点带出来：写搜索索引时要按文件的
+     * 真实空间落 {@code spaceType}，共享空间的文档如果被硬编码成个人空间，删除旧文档后
+     * 会在共享检索里消失、在上传者个人检索里越权命中。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileNodeId 文件节点 ID
+     * @return 文件存在、未删除且未进入永久删除流程时返回描述符，否则空
+     */
+    @Transactional(readOnly = true)
+    public Optional<FileDescriptor> findOwnedProcessable(UUID ownerUserId, UUID fileNodeId) {
+        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, ownerUserId)
+                .filter(this::isIdle)
+                .map(this::toDescriptor);
     }
 
     /**

@@ -3,6 +3,7 @@ package com.omninest.worker.tika;
 import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.search.service.FileSearchIndexService;
@@ -49,7 +50,7 @@ public class TextExtractionConsumer {
             return;
         }
         try {
-            if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
+            if (fileLifecycleGuard.findOwnedProcessable(event.ownerUserId(), event.fileNodeId()).isEmpty()) {
                 log.info("源文件已删除或正在永久删除，跳过文本提取: fileNodeId={}", event.fileNodeId());
                 taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
                 channel.basicAck(deliveryTag, false);
@@ -60,7 +61,12 @@ public class TextExtractionConsumer {
                     textExtractionService.extract(event.ownerUserId(), event.fileNodeId());
             List<String> chunks = extraction.chunks();
             if (!chunks.isEmpty()) {
-                if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
+                // 索引里的空间归属必须在写入前重新取一次：提取耗时段内文件可能已被删除，
+                // 而 spaceType 只能来自节点本身，不能按调用方猜测。
+                FileDescriptor descriptor = fileLifecycleGuard
+                        .findOwnedProcessable(event.ownerUserId(), event.fileNodeId())
+                        .orElse(null);
+                if (descriptor == null) {
                     log.info("源文件在文本提取期间进入永久删除流程，放弃索引写入: fileNodeId={}",
                             event.fileNodeId());
                     taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
@@ -72,7 +78,7 @@ public class TextExtractionConsumer {
                         event.ownerUserId(),
                         event.fileName(),
                         chunks,
-                        "PERSONAL"
+                        descriptor.spaceType().getValue()
                 );
                 log.info("文本提取完成: fileNodeId={}, 文本长度={}, chunkCount={}, truncated={}",
                         event.fileNodeId(), extraction.textLength(), chunks.size(), extraction.truncated());
