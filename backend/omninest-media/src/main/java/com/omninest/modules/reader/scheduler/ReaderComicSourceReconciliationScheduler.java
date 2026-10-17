@@ -1,10 +1,13 @@
 package com.omninest.modules.reader.scheduler;
 
 import com.omninest.modules.reader.service.ReaderComicSourceReconciliationService;
+import com.omninest.modules.reader.service.ReaderComicSourceReconciliationService.ReconcileOutcome;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -12,8 +15,9 @@ import org.springframework.stereotype.Component;
 /**
  * 漫画来源排序元数据对账调度器。
  *
- * <p>仅在 scheduler 运行角色节点生效，与背景库（3:40）、音乐封面（4:10）对账错开时间。
- * 调度器只做分页与失败隔离，回正判定与落库在 service 内按条目各自成事务。
+ * <p>仅在 scheduler 运行角色节点生效，落在同步事件保留（2:15）与照片背景回收（3:30 起）
+ * 之间的空档。调度器只做游标推进、时长预算与失败隔离，回正判定与落库在 service 内按条目
+ * 各自成事务。
  *
  * @author OmniNest
  */
@@ -23,41 +27,67 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "omninest.runtime", name = "role", havingValue = "scheduler")
 public class ReaderComicSourceReconciliationScheduler {
 
-    /** 每页条目数。 */
+    /** 每段条目数。 */
     private static final int PAGE_SIZE = 100;
 
-    /** 单轮扫描页数上限，超大库留给下一轮，避免一次调度占满连接。 */
-    private static final int MAX_PAGES = 100;
+    /** 试运行：只统计规模，不落库、不重建清单。 */
+    @Value("${omninest.reader.source-metadata-reconcile.dry-run:false}")
+    private boolean dryRun;
+
+    /** 单轮时长预算，超预算则带游标退出，下一轮从断点继续。 */
+    @Value("${omninest.reader.source-metadata-reconcile.max-duration:PT5M}")
+    private Duration maxDuration = Duration.ofMinutes(5);
 
     private final ReaderComicSourceReconciliationService reconciliationService;
 
     /**
-     * 每天凌晨 4:40 回正漫画来源排序元数据。
+     * 游标在进程内推进；重启即从头巡检，回正本身幂等，重复扫描只是空跑。
      */
-    @Scheduled(cron = "0 40 4 * * *")
+    private volatile UUID cursor = ReaderComicSourceReconciliationService.FIRST_CURSOR;
+
+    /**
+     * 每天凌晨 2:50 回正漫画来源排序元数据。
+     */
+    @Scheduled(cron = "0 50 2 * * *")
     public void reconcile() {
-        log.info("漫画来源排序元数据对账调度开始");
+        long deadlineNanos = System.nanoTime() + maxDuration.toNanos();
         int scanned = 0;
-        int healed = 0;
-        for (int page = 0; page < MAX_PAGES; page++) {
-            List<UUID> itemIds = reconciliationService.findReconcileCandidateIds(page, PAGE_SIZE);
+        int metadataUpdated = 0;
+        int manifestRebuilt = 0;
+        boolean budgetExhausted = false;
+        log.info("漫画来源排序元数据对账开始: startCursor={}, dryRun={}", cursor, dryRun);
+        while (true) {
+            List<UUID> itemIds = reconciliationService.findReconcileCandidateIds(cursor, PAGE_SIZE);
             if (itemIds.isEmpty()) {
+                cursor = ReaderComicSourceReconciliationService.FIRST_CURSOR;
                 break;
             }
             for (UUID itemId : itemIds) {
                 scanned++;
+                cursor = itemId;
                 try {
-                    if (reconciliationService.reconcileItem(itemId)) {
-                        healed++;
+                    ReconcileOutcome outcome = dryRun
+                            ? reconciliationService.previewItem(itemId)
+                            : reconciliationService.reconcileItem(itemId);
+                    if (outcome != ReconcileOutcome.UNCHANGED) {
+                        metadataUpdated++;
+                    }
+                    if (outcome == ReconcileOutcome.REBUILD_REQUIRED) {
+                        manifestRebuilt++;
                     }
                 } catch (RuntimeException ex) {
                     log.error("漫画来源排序元数据对账失败: itemId={}", itemId, ex);
                 }
+                if (System.nanoTime() >= deadlineNanos) {
+                    budgetExhausted = true;
+                    break;
+                }
             }
-            if (itemIds.size() < PAGE_SIZE) {
+            if (budgetExhausted || itemIds.size() < PAGE_SIZE) {
                 break;
             }
         }
-        log.info("漫画来源排序元数据对账结束: 扫描条目={}, 回正条目={}", scanned, healed);
+        log.info("漫画来源排序元数据对账结束: 扫描条目={}, 待回正条目={}, 需重建目录={}, 触及预算={}, 下轮游标={}",
+                scanned, metadataUpdated, manifestRebuilt, budgetExhausted, cursor);
     }
 }

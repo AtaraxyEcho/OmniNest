@@ -89,9 +89,16 @@ public interface ReaderItemSourceRepository extends JpaRepository<ReaderItemSour
     List<ReaderItem> findItemsBySourceContentHash(@Param("contentHash") String contentHash);
 
     /**
-     * 分页取出带来源记录的漫画条目 ID，供排序元数据对账回正。
+     * 按游标取下一段待对账的漫画条目 ID。
      *
      * <p>主文件已进回收站的条目不在范围内：那些条目的派生数据由清理链路负责。
+     * 游标用 UUID 字典序推进，扫到尾段后由调用方归回零值从头巡检；用 nil UUID 而不是
+     * null 参数，避免 "参数为空则不加条件" 的写法在 Hibernate 里推断不出类型。
+     *
+     * @param contentKind 条目内容形态
+     * @param afterId     上一轮最后一个条目 ID，从头开始时传 nil UUID
+     * @param pageable    分页参数（只取页大小）
+     * @return 条目 ID，按字典序升序
      */
     @Query("""
             select distinct source.readerItemId
@@ -100,10 +107,12 @@ public interface ReaderItemSourceRepository extends JpaRepository<ReaderItemSour
             join FileNode f on item.fileNodeId = f.id
             where f.deleted = false
               and item.contentKind = :contentKind
+              and source.readerItemId > :afterId
             order by source.readerItemId
             """)
-    List<UUID> findComicItemIds(
+    List<UUID> findComicItemIdsAfter(
             @Param("contentKind") String contentKind,
+            @Param("afterId") UUID afterId,
             Pageable pageable
     );
 
