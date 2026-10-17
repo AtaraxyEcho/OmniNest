@@ -55,27 +55,17 @@ class ReaderLocalStorage {
     return _decipher(stored);
   }
 
-  /// 归属账号：共享书籍在不同账号下复用同一个 itemId，进度、书签、批注与笔记
-  /// 必须按写入者的账号隔离，否则同设备换号会读到上一个账号的用户数据。
-  /// 未登录（[userId] 为空）时不过滤，保持设备内单一使用者的读法。
-  bool get _hasOwner {
-    final userId = _columnUserId;
-    return userId != null && userId.isNotEmpty;
-  }
-
-  Expression<bool> _ownedByUser(GeneratedColumn<String> column) {
-    if (!_hasOwner) {
-      return Constant(true);
-    }
-    return column.equals(_columnUserId!);
-  }
-
-  /// 正文与元数据缓存的归属读法：按写入时落的同一取值（无归属时为 `''`）精确匹配。
+  /// 归属账号过滤：按写入时落的同一取值（未登录或无归属时为 `''`）精确匹配。
   ///
-  /// 这两张表把归属放进了主键，一个 itemId 可以有多行；用 [Constant(true)] 放宽读取
-  /// 会让 `getSingleOrNull` 在换号写过之后直接抛「Too many elements」，而缓存正文本来
-  /// 就是按账号密钥加密的，跨账号读也没有意义。
-  Expression<bool> _cacheOwnedByUser(GeneratedColumn<String> column) =>
+  /// 共享书籍在不同账号下复用同一个 itemId，进度、书签、批注与笔记必须按写入者的
+  /// 账号隔离。未登录窗口若放宽成全表匹配，会把上一个账号的书签、批注读出来，删除
+  /// 与清库还会把它们一并带走；旧库升级行与未登录写入行的 `user_id` 都是 `''`，
+  /// 精确匹配 `''` 既读得到设备级旧行，也不会串到具名账号。
+  ///
+  /// 正文与元数据缓存把归属放进了主键，一个 itemId 可以有多行：宽匹配会让
+  /// `getSingleOrNull` 在换号写过之后直接抛「Too many elements」，而缓存正文本来就是
+  /// 按账号密钥加密的，跨账号读也没有意义。
+  Expression<bool> _ownedByUser(GeneratedColumn<String> column) =>
       column.equals(_columnUserId ?? '');
 
   // ─── Progress ────────────────────────────────────────────────
@@ -461,7 +451,7 @@ class ReaderLocalStorage {
 
   Future<Map<String, dynamic>?> loadBookMeta(String itemId) async {
     final query = _db.select(_db.cachedReaderBooks)
-      ..where((t) => t.itemId.equals(itemId) & _cacheOwnedByUser(t.userId));
+      ..where((t) => t.itemId.equals(itemId) & _ownedByUser(t.userId));
     final row = await query.getSingleOrNull();
     if (row == null) return null;
     return {
@@ -481,9 +471,8 @@ class ReaderLocalStorage {
 
   /// 删除指定书籍的元数据缓存。
   Future<void> deleteBookMeta(String itemId) async {
-    await (_db.delete(_db.cachedReaderBooks)..where(
-      (t) => t.itemId.equals(itemId) & _cacheOwnedByUser(t.userId),
-    )).go();
+    await (_db.delete(_db.cachedReaderBooks)
+      ..where((t) => t.itemId.equals(itemId) & _ownedByUser(t.userId))).go();
   }
 
   // ─── 章节内容缓存 ──────────────────────────────────────────
@@ -524,7 +513,7 @@ class ReaderLocalStorage {
       (t) =>
           t.itemId.equals(itemId) &
           t.contentPath.equals(contentPath) &
-          _cacheOwnedByUser(t.userId),
+          _ownedByUser(t.userId),
     );
     final row = await query.getSingleOrNull();
     if (row == null) {
@@ -549,7 +538,7 @@ class ReaderLocalStorage {
   }) async {
     if (pool.isEmpty) return false;
     final changes = await (_db.update(_db.cachedReaderBooks)..where(
-      (table) => table.itemId.equals(itemId) & _cacheOwnedByUser(table.userId),
+      (table) => table.itemId.equals(itemId) & _ownedByUser(table.userId),
     )).write(
       CachedReaderBooksCompanion(
         stylesheetPoolJson: Value(await _encipher(jsonEncode(pool))),
@@ -565,8 +554,7 @@ class ReaderLocalStorage {
   Future<Map<String, String>> loadStylesheetPool(String itemId) async {
     final row =
         await (_db.select(_db.cachedReaderBooks)..where(
-          (table) =>
-              table.itemId.equals(itemId) & _cacheOwnedByUser(table.userId),
+          (table) => table.itemId.equals(itemId) & _ownedByUser(table.userId),
         )).getSingleOrNull();
     final stored = row?.stylesheetPoolJson;
     if (stored == null || stored.isEmpty || stored == '{}') {
@@ -603,9 +591,8 @@ class ReaderLocalStorage {
 
   /// 删除指定书籍的所有章节缓存
   Future<void> deleteChaptersForItem(String itemId) async {
-    await (_db.delete(_db.cachedReaderChapters)..where(
-      (t) => t.itemId.equals(itemId) & _cacheOwnedByUser(t.userId),
-    )).go();
+    await (_db.delete(_db.cachedReaderChapters)
+      ..where((t) => t.itemId.equals(itemId) & _ownedByUser(t.userId))).go();
   }
 
   /// 删除单个章节的缓存内容，损坏章节精准清理时避免整本书失效。
@@ -614,7 +601,7 @@ class ReaderLocalStorage {
       (t) =>
           t.itemId.equals(itemId) &
           t.contentPath.equals(contentPath) &
-          _cacheOwnedByUser(t.userId),
+          _ownedByUser(t.userId),
     )).go();
   }
 

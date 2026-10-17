@@ -86,4 +86,40 @@ void main() {
     expect(kept?['chapterId'], 'chapter-3');
     expect(kept?['charOffset'], 900);
   });
+
+  test('未登录态只认空归属行，不误读也不误删具名账号的进度', () async {
+    final anonymous = DatabaseReaderLocalProgressStore(db);
+    final ownerA = DatabaseReaderLocalProgressStore(db, userId: 'user-a');
+    await ownerA.save(
+      itemId: 'shared-item',
+      chapterId: 'chapter-5',
+      charOffset: 1200,
+      chapterProgress: 0.5,
+      bookProgress: 0.5,
+      mode: 'scroll',
+      updatedAt: DateTime(2026, 6, 5),
+    );
+
+    // 退出登录的瞬间（或 provider 还没拿到 userId）读到的必须是匿名自己的那一份，
+    // 而不是上一个账号停过的章节。
+    expect(await anonymous.loadLatest('shared-item'), isNull);
+    expect(await anonymous.load('shared-item', 'chapter-5'), isNull);
+
+    // 匿名态清库只清 user_id 为空的行，具名账号的位置必须原样留下。
+    await anonymous.clear('shared-item');
+    expect(await ownerA.loadLatest('shared-item'), isNotNull);
+
+    // 旧库升级行与未登录写入行的归属都是空串，匿名态照常读写。
+    await anonymous.save(
+      itemId: 'shared-item',
+      chapterId: 'chapter-1',
+      charOffset: 10,
+      chapterProgress: 0.1,
+      bookProgress: 0.1,
+      mode: 'scroll',
+      updatedAt: DateTime(2026, 6, 6),
+    );
+    expect(await anonymous.loadLatest('shared-item'), isNotNull);
+    expect(await ownerA.load('shared-item', 'chapter-1'), isNull);
+  });
 }

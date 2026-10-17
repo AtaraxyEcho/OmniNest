@@ -5,7 +5,8 @@ import 'package:omninest/features/reader/application/reader_local_progress.dart'
 /// 基于 SQLite 的阅读进度本地存储。
 ///
 /// [userId] 是账号归属：共享书籍在不同账号下复用同一个 itemId，读取必须按归属
-/// 过滤，否则换号会读到上一个账号的位置。为空时不过滤（未登录与测试场景）。
+/// 过滤，否则换号会读到上一个账号的位置。未登录时按写入用的 `''` 精确匹配，
+/// 不放行成全表匹配。
 class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
   /// 创建阅读进度本地存储。
   const DatabaseReaderLocalProgressStore(this._database, {String? userId})
@@ -14,17 +15,9 @@ class DatabaseReaderLocalProgressStore implements ReaderLocalProgressStore {
   final LocalDatabase _database;
   final String? _userId;
 
-  bool get _hasOwner {
-    final userId = _userId;
-    return userId != null && userId.isNotEmpty;
-  }
-
-  Expression<bool> _ownerFilter(GeneratedColumn<String> column) {
-    if (!_hasOwner) {
-      return Constant(true);
-    }
-    return column.equals(_userId!);
-  }
+  /// 归属账号过滤：按写入时落的同一取值（未登录时为 `''`）精确匹配。
+  Expression<bool> _ownerFilter(GeneratedColumn<String> column) =>
+      column.equals(_userId ?? '');
 
   /// 保存进度到本地 SQLite。
   @override

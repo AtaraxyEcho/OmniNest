@@ -91,18 +91,10 @@ class ReaderSyncQueue {
 
   /// 队列行的账号归属：共享书籍在不同账号下复用同一个 itemId，重放必须只发
   /// 当前账号积压的操作，否则换号后会把上一个账号的位置与笔记写到新账号名下。
-  /// 未登录（init 未传 userId）时不隔离，保持设备内单一使用者的读法。
-  static bool get _hasOwner {
-    final userId = _userId;
-    return userId != null && userId.isNotEmpty;
-  }
-
-  static Expression<bool> _ownedByCurrentUser(GeneratedColumn<String> column) {
-    if (!_hasOwner) {
-      return Constant(true);
-    }
-    return column.equals(_userId!);
-  }
+  /// 未登录（init 未传 userId）时按写入用的 `''` 精确匹配：既读得到匿名期积压的
+  /// 行，也不会把具名账号的积压用匿名上下文发出去、或在清库时一并删掉。
+  static Expression<bool> _ownedByCurrentUser(GeneratedColumn<String> column) =>
+      column.equals(_userId ?? '');
 
   static Future<void> _deleteOwnedOperations(Iterable<int> ids) async {
     if (ids.isEmpty) {
@@ -781,10 +773,16 @@ class ReaderSyncQueue {
       }
       return;
     }
-    await storage.replaceAnnotationId(
+    final replaced = await storage.replaceAnnotationId(
       localId: localId,
       serverAnnotation: annotation,
     );
+    if (!replaced) {
+      // 读取与替换之间用户把这条删了：服务端刚创建的记录要补发删除，
+      // 也不能再为一条已删记录排更新。
+      await enqueueAnnotationDelete(annotationId: annotation.id);
+      return;
+    }
     final note = local.note ?? annotation.note;
     final color = local.color;
     if (note != annotation.note || color != annotation.color) {
@@ -812,7 +810,16 @@ class ReaderSyncQueue {
       }
       return;
     }
-    await storage.replaceNoteId(localId: localId, serverNote: note);
+    final replaced = await storage.replaceNoteId(
+      localId: localId,
+      serverNote: note,
+    );
+    if (!replaced) {
+      // 读取与替换之间用户把这条删了：服务端刚创建的记录要补发删除，
+      // 也不能再为一条已删记录排更新。
+      await enqueueNoteDelete(noteId: note.id);
+      return;
+    }
     if (local.title != note.title || local.content != note.content) {
       await enqueueNoteUpdate(
         noteId: note.id,
