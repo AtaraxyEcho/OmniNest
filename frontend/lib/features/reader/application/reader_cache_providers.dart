@@ -17,7 +17,7 @@ final encryptedFileVaultProvider = Provider<EncryptedFileVault>((ref) {
 /// 当前认证用户隔离的本地书籍文件缓存。
 final localBookCacheProvider = Provider<LocalBookCache>((ref) {
   final userId = ref.watch(
-    authSessionProvider.select((session) => session.asData?.value.user?.id),
+    authSessionProvider.select((session) => session.value?.user?.id),
   );
   return LocalBookCache(
     userId: userId,

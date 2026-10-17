@@ -78,7 +78,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
   @override
   List<ReaderImportJob> build() {
     final userId = ref.watch(
-      authSessionProvider.select((value) => value.asData?.value.user?.id),
+      authSessionProvider.select((value) => value.value?.user?.id),
     );
     if (_sessionUserId != userId) {
       _sessionUserId = userId;

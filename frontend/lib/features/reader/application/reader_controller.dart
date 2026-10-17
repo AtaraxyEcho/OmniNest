@@ -30,7 +30,7 @@ final readerApiProvider = Provider<ReaderApi>((ref) {
 /// 阅读器本地存储（共享 LocalDatabase 单例；章节正文/笔记等敏感列按当前用户加密）
 final readerLocalStorageProvider = Provider<ReaderLocalStorage>((ref) {
   final userId = ref.watch(
-    authSessionProvider.select((session) => session.asData?.value.user?.id),
+    authSessionProvider.select((session) => session.value?.user?.id),
   );
   return ReaderLocalStorage(
     ref.watch(localDatabaseProvider),

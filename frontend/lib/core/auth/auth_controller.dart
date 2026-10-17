@@ -138,7 +138,9 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   /// 其他设备变更资料（头像/显示名）后经 PREFERENCES 实时事件重拉并
   /// 就地更新会话资料；令牌与过期时间保持不变，瞬时失败静默保留旧值。
   Future<void> reloadProfile() async {
-    final current = state.asData?.value;
+    // 读 value 而不是 asData：重载过渡期状态是带旧值的 AsyncLoading，asData 会变 null，
+    // 就地刷新会静默跳过，会话资料停在旧值上。
+    final current = state.value;
     if (current == null || current.user == null) {
       return;
     }
@@ -267,8 +269,10 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     // 界面切换，也不得被并发刷新写回已登录。
     _rejectSessionWrites = true;
     final store = ref.read(authSessionStoreProvider);
-    final wasAuthenticated = state.asData?.value.isAuthenticated ?? false;
-    final userId = state.asData?.value.user?.id;
+    // 读 .value 而不是 asData：重载过渡期状态是带前值的 AsyncLoading，asData 为 null
+    // 会让 userId 取不到，离线库与密钥的清理被整段跳过——登出看似成功但数据还在设备上。
+    final wasAuthenticated = state.value?.isAuthenticated ?? false;
+    final userId = state.value?.user?.id;
     state = const AsyncData(AuthSessionState.unauthenticated());
 
     String? storedRefreshToken;
@@ -329,7 +333,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       if (ok) return;
       // 明确失效时 refreshSession 内部已清会话并取消排程；
       // 瞬时故障保留会话，按原过期时间继续排程等待下个周期。
-      final stillAuthenticated = state.asData?.value.isAuthenticated ?? false;
+      final stillAuthenticated = state.value?.isAuthenticated ?? false;
       if (stillAuthenticated) {
         _scheduleRefresh(expiresAt);
       }

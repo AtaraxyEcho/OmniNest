@@ -89,7 +89,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       if (!mounted) {
         return true;
       }
-      ref.invalidate(authSessionProvider);
+      // 就地重取会话资料而不是 invalidate 整个会话 provider：后者会把状态打成
+      // 过渡帧，下游按账号归属工作的缓存与队列在这一帧里读不到身份。
+      await ref.read(authSessionProvider.notifier).reloadProfile();
+      if (!mounted) {
+        return true;
+      }
       _showMessage(l10n.profileUpdateSuccess);
       return true;
     } catch (_) {
@@ -127,7 +132,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       if (!mounted) {
         return;
       }
-      ref.invalidate(authSessionProvider);
+      await ref.read(authSessionProvider.notifier).reloadProfile();
+      if (!mounted) {
+        return;
+      }
       _showMessage(l10n.profileAvatarSuccess);
     } catch (_) {
       _showMessage(l10n.profileAvatarFailed);

@@ -17,6 +17,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 
@@ -79,13 +80,24 @@ final List<ProviderOrFamily> _resetProviders = <ProviderOrFamily>[
 /// 覆盖登出（用户→未认证）、换号（用户 A→B）与 401 强制登出三条路径，
 /// 三者都表现为 authSessionProvider 的用户身份变化。此前没有登录用户的
 /// 冷启动与同用户 token 刷新不触发，避免无意义的批量失效。
+///
+/// 过渡帧（AsyncLoading）一律跳过，身份改由 lastUserId 自己记：拿 prev/next 两侧
+/// 即时值比较时，一帧过渡态会被当成"登出"触发整站失效，紧接着真正落地的 A→B 又因为
+/// prev 是过渡帧取不到前值而被漏掉。
 final sessionResetCoordinatorProvider = Provider<void>((ref) {
-  ref.listen<AsyncValue<AuthSessionState>>(authSessionProvider, (prev, next) {
-    final prevId = prev?.asData?.value.user?.id;
-    final nextId = next.asData?.value.user?.id;
+  String? lastUserId = ref.read(authSessionProvider).value?.user?.id;
+  ref.listen<AsyncValue<AuthSessionState>>(authSessionProvider, (_, next) {
+    if (next.isLoading) {
+      return;
+    }
+    final nextId = next.value?.user?.id;
+    final prevId = lastUserId;
+    lastUserId = nextId;
     if (prevId == null || prevId == nextId) {
       return;
     }
+    // 静态进程内缓存不随 provider 销毁，换号必须显式清掉。
+    ReaderCoverByteCache.clear();
     // 先递增会话世代：已接入世代的 provider 以依赖变化语义重建，旧账号
     // 数据不会被当作可访问旧值渲染（失效清单中未接入世代的 provider 仍
     // 由下方 invalidate 兜底重建）。

@@ -513,7 +513,10 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
       if (!mounted) {
         return;
       }
-      ref.invalidate(authSessionProvider);
+      await ref.read(authSessionProvider.notifier).reloadProfile();
+      if (!mounted) {
+        return;
+      }
       showOmniFeedback(context, l10n.profileAvatarSuccess);
     } on Exception {
       if (!mounted) {
@@ -544,7 +547,10 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
       if (!mounted) {
         return;
       }
-      ref.invalidate(authSessionProvider);
+      await ref.read(authSessionProvider.notifier).reloadProfile();
+      if (!mounted) {
+        return;
+      }
       showOmniFeedback(context, l10n.profileUpdateSuccess);
     } on Exception {
       if (!mounted) {

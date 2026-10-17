@@ -31,7 +31,7 @@ class LocaleController extends Notifier<String> {
       ref.read(appBootstrapDataProvider).languageCode,
     );
     ref.listen(authSessionProvider, (_, next) {
-      final userId = next.asData?.value.user?.id;
+      final userId = next.value?.user?.id;
       unawaited(_bindUser(userId));
     }, fireImmediately: true);
     return initial;

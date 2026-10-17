@@ -5,7 +5,7 @@ import 'package:omninest/features/reader/domain/parsed_book.dart';
 /// 当前认证会话拥有的解析书籍元数据缓存。
 final readerParsedBookCacheProvider = Provider<ReaderParsedBookCache>((ref) {
   final ownerUserId = ref.watch(
-    authSessionProvider.select((session) => session.asData?.value.user?.id),
+    authSessionProvider.select((session) => session.value?.user?.id),
   );
   final cache = ReaderParsedBookCache(ownerUserId: ownerUserId);
   ref.onDispose(cache.clear);

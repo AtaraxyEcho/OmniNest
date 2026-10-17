@@ -122,6 +122,6 @@ class UserCapabilities {
 
 /// 当前会话用户能力；未登录时为全 false。
 final userCapabilitiesProvider = Provider<UserCapabilities>((ref) {
-  final session = ref.watch(authSessionProvider).asData?.value;
+  final session = ref.watch(authSessionProvider).value;
   return UserCapabilities.fromUser(session?.user);
 });

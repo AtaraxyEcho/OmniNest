@@ -10,7 +10,7 @@ import 'package:omninest/features/admin/domain/admin_console_access.dart';
 /// 与路由守卫统一消费本 provider，摘要请求经 [adminConsoleSummaryProvider]
 /// 的短路保证手机形态不产生管理端请求。
 final canAccessAdminConsoleProvider = Provider<bool>((ref) {
-  final session = ref.watch(authSessionProvider).asData?.value;
+  final session = ref.watch(authSessionProvider).value;
   return canAccessAdminConsoleUser(session?.user) &&
       !ref.watch(phoneFormFactorProvider);
 });

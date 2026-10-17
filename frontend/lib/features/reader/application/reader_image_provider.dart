@@ -36,6 +36,11 @@ class ReaderCoverByteCache {
   static void remove(String itemId) {
     _entries.remove(itemId);
   }
+
+  /// 清空全部条目：登录用户变更时由会话重置协调器调用，跨账号不留字节缓存。
+  static void clear() {
+    _entries.clear();
+  }
 }
 
 /// 阅读封面图片字节。

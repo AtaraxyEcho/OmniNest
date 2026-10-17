@@ -36,7 +36,7 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   }
   final sessionStore = ref.watch(authSessionStoreProvider);
   Set<String> readPermissions() =>
-      ref.read(authSessionProvider).asData?.value.user?.permissions ??
+      ref.read(authSessionProvider).value?.user?.permissions ??
       const <String>{};
   final apiClient = ApiClient(
     environment,
@@ -117,12 +117,22 @@ final globalMusicApiProvider = Provider<MusicApi>((ref) {
   return MusicApi(ref.watch(apiClientProvider));
 });
 
+/// 通用离线操作队列，按当前登录账号归属。
+///
+/// 音乐与文件域的操作行都落在这张共享表上，归属必须在入队时定下来；
+/// 会话未解析完时取上一次已解析的身份，不退回匿名，避免造出无人认领的行。
+final syncQueueProvider = Provider<SyncQueue>((ref) {
+  final userId = ref.watch(
+    authSessionProvider.select((session) => session.value?.user?.id),
+  );
+  return SyncQueue(ref.watch(localDatabaseProvider), userId: userId);
+});
+
 final globalMusicProgressRepositoryProvider = Provider<MusicProgressRepository>(
   (ref) {
-    final database = ref.watch(localDatabaseProvider);
     return MusicProgressRepository(
-      database: database,
-      syncQueue: SyncQueue(database),
+      database: ref.watch(localDatabaseProvider),
+      syncQueue: ref.watch(syncQueueProvider),
       api: ref.watch(globalMusicApiProvider),
     );
   },
@@ -137,7 +147,7 @@ final globalReaderApiProvider = Provider<ReaderApi>((ref) {
 final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   final db = ref.watch(localDatabaseProvider);
   final userId = ref.watch(
-    authSessionProvider.select((session) => session.asData?.value.user?.id),
+    authSessionProvider.select((session) => session.value?.user?.id),
   );
   final localStorage = ReaderLocalStorage(
     db,
@@ -169,7 +179,7 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
 /// 全局网络恢复监听器，用于重放离线同步队列。
 final connectivityListenerProvider = Provider<ConnectivityListener>((ref) {
   final listener = ConnectivityListener(
-    syncQueue: SyncQueue(ref.watch(localDatabaseProvider)),
+    syncQueue: ref.watch(syncQueueProvider),
     fileApi: ref.watch(fileApiProvider),
     musicApi: ref.watch(globalMusicApiProvider),
     musicProgressRepository: ref.watch(globalMusicProgressRepositoryProvider),

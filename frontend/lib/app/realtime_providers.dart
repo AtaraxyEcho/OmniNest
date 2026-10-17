@@ -16,7 +16,7 @@ import 'package:omninest/core/storage/local_database_provider.dart';
 /// 协调器只跟随用户身份重建，避免长连接被无谓打断。
 final realtimeSessionUserIdProvider = Provider<String?>((ref) {
   return ref.watch(
-    authSessionProvider.select((async) => async.asData?.value.user?.id),
+    authSessionProvider.select((async) => async.value?.user?.id),
   );
 });
 

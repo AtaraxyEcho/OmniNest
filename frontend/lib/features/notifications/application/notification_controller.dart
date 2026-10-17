@@ -53,7 +53,7 @@ class UnreadCountNotifier extends Notifier<int> {
     ref.watch(sessionEpochProvider);
     // 只跟随登录用户身份：同用户 token 刷新不重建，换号/登出重置计数。
     final userId = ref.watch(
-      authSessionProvider.select((async) => async.asData?.value.user?.id),
+      authSessionProvider.select((async) => async.value?.user?.id),
     );
     if (userId != null) {
       unawaited(_loadInitialCount());

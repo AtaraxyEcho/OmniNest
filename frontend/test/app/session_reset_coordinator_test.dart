@@ -28,6 +28,12 @@ class _ControllableAuthSessionNotifier extends AuthSessionNotifier {
   void signOut() {
     state = const AsyncData(AuthSessionState.unauthenticated());
   }
+
+  /// 模拟登录重检的真实过渡帧：`signInWithCredentials` 与 `_applyRemoteSession`
+  /// 都会先写一帧 `AsyncLoading`，此时按 `asData` 取值会读成"没有用户"。
+  void beginRecheck() {
+    state = const AsyncLoading();
+  }
 }
 
 class _CountingMusicHistoryNotifier extends MusicHistoryController {
@@ -108,6 +114,82 @@ void main() {
     await container.read(fileStorageStatsProvider.future);
 
     expect(statsBuilds, 1);
+  });
+
+  test(
+    'transition frame for the same user keeps business providers alive',
+    () async {
+      var statsBuilds = 0;
+      final container = ProviderContainer.test(
+        overrides: [
+          authSessionProvider.overrideWith(
+            _ControllableAuthSessionNotifier.new,
+          ),
+          fileStorageStatsProvider.overrideWith((ref) {
+            statsBuilds += 1;
+            return const FileStorageStats(
+              totalFiles: 0,
+              totalFolders: 0,
+              usedBytes: 0,
+              quotaStatus: 'NORMAL',
+              quotaBytes: 1024,
+              typeDistribution: [],
+            );
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(sessionResetCoordinatorProvider);
+      final auth =
+          container.read(authSessionProvider.notifier)
+              as _ControllableAuthSessionNotifier;
+      await container.read(authSessionProvider.future);
+
+      auth.signInAs('user-a');
+      await container.read(fileStorageStatsProvider.future);
+      // 会话重检：先经过一帧 AsyncLoading，再回到同一个用户。
+      auth.beginRecheck();
+      auth.signInAs('user-a');
+      await container.read(fileStorageStatsProvider.future);
+
+      expect(statsBuilds, 1, reason: '过渡帧不是登出，不能把常驻业务 provider 全量失效');
+    },
+  );
+
+  test('account switch behind a transition frame still resets once', () async {
+    var statsBuilds = 0;
+    final container = ProviderContainer.test(
+      overrides: [
+        authSessionProvider.overrideWith(_ControllableAuthSessionNotifier.new),
+        fileStorageStatsProvider.overrideWith((ref) {
+          statsBuilds += 1;
+          return const FileStorageStats(
+            totalFiles: 0,
+            totalFolders: 0,
+            usedBytes: 0,
+            quotaStatus: 'NORMAL',
+            quotaBytes: 1024,
+            typeDistribution: [],
+          );
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(sessionResetCoordinatorProvider);
+    final auth =
+        container.read(authSessionProvider.notifier)
+            as _ControllableAuthSessionNotifier;
+    await container.read(authSessionProvider.future);
+
+    auth.signInAs('user-a');
+    await container.read(fileStorageStatsProvider.future);
+    auth.beginRecheck();
+    auth.signInAs('user-b');
+    await container.read(fileStorageStatsProvider.future);
+
+    expect(statsBuilds, greaterThan(1), reason: '跳过过渡帧不能连带漏掉真正的换号重置');
   });
 
   test('account switch and sign-out reset cached business providers', () async {

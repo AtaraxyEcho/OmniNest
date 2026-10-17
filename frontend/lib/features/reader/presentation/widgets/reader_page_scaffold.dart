@@ -112,7 +112,7 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     // 个人内容管理：成员及以上可导入与维护自己的阅读条目
     final canManage = user?.permissions.contains('media:write') ?? false;
     if (widget.target == ReaderPageTarget.admin && !canManage) {
