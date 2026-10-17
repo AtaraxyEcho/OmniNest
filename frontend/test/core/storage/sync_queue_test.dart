@@ -111,4 +111,42 @@ void main() {
       'music.play_history',
     ]);
   });
+
+  test('队列按归属隔离，换号不重放上一个账号的积压', () async {
+    final ownerA = SyncQueue(db, userId: 'user-a');
+    final ownerB = SyncQueue(db, userId: 'user-b');
+
+    await ownerA.enqueue(type: 'music.play_history', payload: '{}');
+    await ownerA.enqueueLatest(type: 'music.progress:item-1', payload: 'a');
+
+    expect(await ownerB.dequeue(), isEmpty);
+    expect(await ownerB.hasPending('music.play_history'), isFalse);
+    expect(await ownerB.pendingCount(), 0);
+
+    // 同账号照常可见，且合并只合并自己的行。
+    await ownerA.enqueueLatest(type: 'music.progress:item-1', payload: 'a2');
+    expect(await ownerA.dequeue(), hasLength(2));
+    expect(await ownerA.hasPending('music.play_history'), isTrue);
+    expect(await ownerB.dequeue(), isEmpty);
+  });
+
+  test('完成态清理只作用于当前账号', () async {
+    final ownerA = SyncQueue(db, userId: 'user-a');
+    final ownerB = SyncQueue(db, userId: 'user-b');
+    final firstId = await ownerA.enqueue(
+      type: 'music.play_history',
+      payload: '{}',
+    );
+    await ownerA.markCompleted(firstId);
+    final secondId = await ownerB.enqueue(
+      type: 'music.play_history',
+      payload: '{}',
+    );
+    await ownerB.markCompleted(secondId);
+
+    expect(await ownerA.clearCompleted(), 1);
+
+    final remaining = await db.select(db.syncOperations).get();
+    expect(remaining.map((row) => row.userId), ['user-b']);
+  });
 }

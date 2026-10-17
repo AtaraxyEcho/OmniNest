@@ -643,13 +643,6 @@ class ReaderLocalStorage {
     }
   }
 
-  // ─── 书籍详情缓存 ──────────────────────────────────────────
-
-  Future<void> deleteBookDetail(String itemId) async {
-    await (_db.delete(_db.cachedReaderBookDetails)
-      ..where((t) => t.itemId.equals(itemId))).go();
-  }
-
   // ─── Bulk cleanup ────────────────────────────────────────────
 
   /// 删除指定条目的结构化本地数据。
@@ -661,6 +654,5 @@ class ReaderLocalStorage {
     await deleteChaptersForItem(itemId);
     // 元数据行带着书级样式表池：漏删它就是留着一条没人再读的加密正文缓存。
     await deleteBookMeta(itemId);
-    await deleteBookDetail(itemId);
   }
 }

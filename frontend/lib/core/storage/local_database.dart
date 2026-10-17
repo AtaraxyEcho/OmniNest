@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 
-import 'package:omninest/core/storage/tables/cached_files.dart';
 import 'package:omninest/core/storage/tables/sync_operations.dart';
 import 'package:omninest/core/storage/tables/cached_media_progress.dart';
 import 'package:omninest/core/storage/tables/cached_reader_progress.dart';
@@ -9,7 +8,6 @@ import 'package:omninest/core/storage/tables/cached_reader_annotations.dart';
 import 'package:omninest/core/storage/tables/cached_reader_notes.dart';
 import 'package:omninest/core/storage/tables/cached_reader_books.dart';
 import 'package:omninest/core/storage/tables/cached_reader_chapters.dart';
-import 'package:omninest/core/storage/tables/cached_reader_book_details.dart';
 import 'package:omninest/core/storage/tables/cached_reader_images.dart';
 import 'package:omninest/core/storage/tables/app_backdrop_assets.dart';
 import 'package:omninest/core/storage/tables/app_backdrop_settings.dart';
@@ -26,7 +24,6 @@ part 'local_database.g.dart';
 /// 本地 SQLite 数据库，用于离线缓存和同步队列
 @DriftDatabase(
   tables: [
-    CachedFiles,
     SyncOperations,
     CachedMediaProgress,
     CachedReaderProgress,
@@ -35,7 +32,6 @@ part 'local_database.g.dart';
     CachedReaderNotes,
     CachedReaderBooks,
     CachedReaderChapters,
-    CachedReaderBookDetails,
     CachedReaderImages,
     AppBackdropAssets,
     AppBackdropSettingsTable,
@@ -52,7 +48,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   Future<bool> _tableExists(Migrator migrator, String tableName) async {
     final rows =
@@ -96,11 +92,10 @@ class LocalDatabase extends _$LocalDatabase {
           await migrator.deleteTable('cached_reader_progress');
           await migrator.createTable(cachedReaderProgress);
         }
-        // Schema v6: 新增书籍元数据、章节内容、书籍详情缓存表
+        // Schema v6: 新增书籍元数据与章节内容缓存表（书籍详情表已在 v27 摘除）
         if (from < 6) {
           await migrator.createTable(cachedReaderBooks);
           await migrator.createTable(cachedReaderChapters);
-          await migrator.createTable(cachedReaderBookDetails);
         }
         // Schema v7: 新增章节图片 BLOB 缓存表
         if (from < 7) {
@@ -421,6 +416,18 @@ class LocalDatabase extends _$LocalDatabase {
             );
           }
         }
+        // Schema v27：摘除从未接线、也没有归属列的两张缓存表。
+        // cached_files 的唯一写入者 OfflineCacheService 没有生产调用点，离线文件与
+        // 加密图片缓存早已由 LocalBookCache / cached_reader_images 按账号承接；
+        // cached_reader_book_details 只剩一句删除，实时详情一直直接走接口。
+        if (from < 27) {
+          await migrator.database.customStatement(
+            'DROP TABLE IF EXISTS cached_files',
+          );
+          await migrator.database.customStatement(
+            'DROP TABLE IF EXISTS cached_reader_book_details',
+          );
+        }
       },
     );
   }
@@ -431,14 +438,12 @@ class LocalDatabase extends _$LocalDatabase {
   /// 尚未同步的进度、批注与队列必须原样留下，退出谁就清谁。整表清空等于让 A 的
   /// 退出把 B 的离线写入一并删掉。
   ///
-  /// [cachedReaderBookDetails]、[cachedFiles] 与 [cachedMediaProgress] 没有归属列
-  /// （按 itemId/mediaId 存的服务端只读快照），只能整表清。
+  /// [cachedMediaProgress] 没有归属列（按 mediaId 存的服务端只读快照），只能整表清。
   Future<void> clearUserData(String userId) {
     return transaction(() async {
       final owned = [userId, ''];
       await (delete(syncOperations)
         ..where((table) => table.userId.isIn(owned))).go();
-      await delete(cachedFiles).go();
       await delete(cachedMediaProgress).go();
       await (delete(cachedReaderProgress)
         ..where((table) => table.userId.isIn(owned))).go();
@@ -452,7 +457,6 @@ class LocalDatabase extends _$LocalDatabase {
         ..where((table) => table.userId.isIn(owned))).go();
       await (delete(cachedReaderChapters)
         ..where((table) => table.userId.isIn(owned))).go();
-      await delete(cachedReaderBookDetails).go();
       await (delete(cachedReaderImages)
         ..where((table) => table.userId.equals(userId))).go();
       await (delete(syncClientStates)

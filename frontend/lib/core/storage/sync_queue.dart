@@ -4,11 +4,20 @@ import 'package:omninest/core/storage/local_database.dart';
 
 /// 离线操作同步队列。
 /// 网络恢复后按顺序重放待处理操作。
+///
+/// [userId] 是操作归属账号：`sync_operations` 是各业务域共用的表，reader 侧已按账号
+/// 隔离，这里也必须落同一个口径——否则同设备换号后，上一个账号积压的播放位置会被
+/// 用当前账号的身份重放出去，当前账号的退登清理也说不清清了谁的数据。未登录时按
+/// 写入用的 `''` 精确匹配，不放行成全表匹配。
 class SyncQueue {
   /// 创建同步队列实例
-  SyncQueue(this._db);
+  SyncQueue(this._db, {String? userId}) : _userId = userId ?? '';
 
   final LocalDatabase _db;
+  final String _userId;
+
+  Expression<bool> _owned(GeneratedColumn<String> column) =>
+      column.equals(_userId);
 
   /// 入队一条离线操作。
   Future<int> enqueue({required String type, required String payload}) {
@@ -16,6 +25,7 @@ class SyncQueue {
         .into(_db.syncOperations)
         .insert(
           SyncOperationsCompanion.insert(
+            userId: Value(_userId),
             type: type,
             payload: payload,
             createdAt: DateTime.now(),
@@ -28,6 +38,7 @@ class SyncQueue {
     return _db.transaction(() async {
       await (_db.delete(_db.syncOperations)..where(
         (table) =>
+            _owned(table.userId) &
             table.type.equals(type) &
             (table.status.equals('pending') | table.status.equals('failed')),
       )).go();
@@ -40,6 +51,7 @@ class SyncQueue {
     final row =
         await (_db.select(_db.syncOperations)..where(
           (table) =>
+              _owned(table.userId) &
               table.type.equals(type) &
               (table.status.equals('pending') | table.status.equals('failed')),
         )).getSingleOrNull();
@@ -50,7 +62,10 @@ class SyncQueue {
   Future<List<SyncOperation>> dequeue({int limit = 20}) {
     return (_db.select(_db.syncOperations)
           ..where(
-            (t) => t.status.equals('pending') & t.type.like('reader.%').not(),
+            (t) =>
+                _owned(t.userId) &
+                t.status.equals('pending') &
+                t.type.like('reader.%').not(),
           )
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
           ..limit(limit))
@@ -60,7 +75,7 @@ class SyncQueue {
   /// 标记操作已完成。
   Future<void> markCompleted(int id) {
     return (_db.update(_db.syncOperations)
-      ..where((t) => t.id.equals(id))).write(
+      ..where((t) => t.id.equals(id) & _owned(t.userId))).write(
       SyncOperationsCompanion(
         status: const Value('completed'),
         syncedAt: Value(DateTime.now()),
@@ -72,8 +87,9 @@ class SyncQueue {
   Future<void> markFailed(int id) async {
     final op =
         await (_db.select(_db.syncOperations)
-          ..where((t) => t.id.equals(id))).getSingle();
-    await (_db.update(_db.syncOperations)..where((t) => t.id.equals(id))).write(
+          ..where((t) => t.id.equals(id) & _owned(t.userId))).getSingle();
+    await (_db.update(_db.syncOperations)
+      ..where((t) => t.id.equals(id) & _owned(t.userId))).write(
       SyncOperationsCompanion(
         status: const Value('failed'),
         retryCount: Value(op.retryCount + 1),
@@ -85,6 +101,7 @@ class SyncQueue {
   Future<void> retryFailed({int maxRetries = 3}) {
     return (_db.update(_db.syncOperations)..where(
       (t) =>
+          _owned(t.userId) &
           t.status.equals('failed') &
           t.retryCount.isSmallerThanValue(maxRetries) &
           t.type.like('reader.%').not(),
@@ -97,7 +114,10 @@ class SyncQueue {
     final query =
         _db.selectOnly(_db.syncOperations)
           ..addColumns([count])
-          ..where(_db.syncOperations.status.equals('pending'));
+          ..where(
+            _owned(_db.syncOperations.userId) &
+                _db.syncOperations.status.equals('pending'),
+          );
     final result = await query.getSingle();
     return result.read(count) ?? 0;
   }
@@ -105,6 +125,6 @@ class SyncQueue {
   /// 清除已完成的操作。
   Future<int> clearCompleted() {
     return (_db.delete(_db.syncOperations)
-      ..where((t) => t.status.equals('completed'))).go();
+      ..where((t) => _owned(t.userId) & t.status.equals('completed'))).go();
   }
 }

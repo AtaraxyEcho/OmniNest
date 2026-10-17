@@ -20,23 +20,6 @@ void main() {
     }
   });
 
-  test('cachedFiles table stores and retrieves file metadata', () async {
-    await db
-        .into(db.cachedFiles)
-        .insert(
-          CachedFilesCompanion.insert(
-            id: 'file-1',
-            fileName: 'test.pdf',
-            sizeBytes: 1024,
-            cachedAt: DateTime(2026, 6, 5),
-          ),
-        );
-    final files = await db.select(db.cachedFiles).get();
-    expect(files, hasLength(1));
-    expect(files.first.fileName, 'test.pdf');
-    expect(files.first.sizeBytes, 1024);
-  });
-
   test('syncOperations table stores pending operations', () async {
     await db
         .into(db.syncOperations)
@@ -112,16 +95,6 @@ void main() {
     () async {
       final now = DateTime(2026, 7, 22);
       final storageKey = List<String>.filled(64, 'a').join();
-      await db
-          .into(db.cachedFiles)
-          .insert(
-            CachedFilesCompanion.insert(
-              id: 'file-1',
-              fileName: 'private.txt',
-              sizeBytes: 32,
-              cachedAt: now,
-            ),
-          );
       await db
           .into(db.syncOperations)
           .insert(
@@ -217,8 +190,7 @@ void main() {
 
       await db.clearUserData('user-1');
 
-      // cachedFiles 与 cachedMediaProgress 没有归属列，仍按整表清。
-      expect(await db.select(db.cachedFiles).get(), isEmpty);
+      // cachedMediaProgress 没有归属列，仍按整表清。
       expect(await db.select(db.cachedMediaProgress).get(), isEmpty);
       // 带归属列的表只清当前账号与设备级空归属残留（上面未带 userId 插入的行）。
       expect(
