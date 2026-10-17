@@ -39,7 +39,6 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.NIOFSDirectory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -57,7 +56,6 @@ public class FileSearchIndexService implements Closeable {
     private static final String FIELD_HAS_CONTENT = "hasContent";
     private static final String HAS_CONTENT_YES = "Y";
     private static final String HAS_CONTENT_NO = "N";
-    private static final long MAX_CACHED_USER_INDEXES = 64;
     private static final Duration USER_INDEX_IDLE_TTL = Duration.ofMinutes(30);
 
     private final Path basePath;
@@ -66,14 +64,17 @@ public class FileSearchIndexService implements Closeable {
     /** 按用户缓存的索引状态，淘汰时同步关闭 Lucene 资源。 */
     private final Cache<UUID, UserIndexState> userIndexes;
 
-    @Autowired
+    /**
+     * 创建文件搜索索引服务。
+     *
+     * @param indexPath 索引根目录
+     * @param maxCachedUserIndexes 同时驻留的按用户索引上限
+     * @throws IOException 索引根目录创建失败
+     */
     public FileSearchIndexService(
-            @Value("${omninest.search.index-path:${user.home}/.omninest/lucene-index}") String indexPath
+            @Value("${omninest.search.index-path:${user.home}/.omninest/lucene-index}") String indexPath,
+            @Value("${omninest.search.max-cached-user-indexes:64}") long maxCachedUserIndexes
     ) throws IOException {
-        this(indexPath, MAX_CACHED_USER_INDEXES);
-    }
-
-    FileSearchIndexService(String indexPath, long maxCachedUserIndexes) throws IOException {
         this.basePath = Path.of(indexPath);
         Files.createDirectories(this.basePath);
         RemovalListener<UUID, UserIndexState> removalListener =

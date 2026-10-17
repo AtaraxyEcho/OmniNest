@@ -33,7 +33,7 @@ class FileSearchIndexServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new FileSearchIndexService(tempDir.toString());
+        service = new FileSearchIndexService(tempDir.toString(), 64);
     }
 
     @AfterEach
