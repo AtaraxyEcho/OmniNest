@@ -4,7 +4,12 @@ import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncEventCommand;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.util.LikePatterns;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.ShareLink;
@@ -49,6 +54,8 @@ public class FileShareAccessService {
     private final ResourceShareLinkService resourceShareLinkService;
     private final ReadThroughCache readThroughCache;
     private final FileNodeSupport fileNodeSupport;
+    private final StorageQuotaService storageQuotaService;
+    private final UserSyncEventRecorder syncEventRecorder;
 
     /**
      * 通过分享 token 与密码访问文件并消费一次访问次数。
@@ -60,7 +67,7 @@ public class FileShareAccessService {
     @Transactional(rollbackFor = Exception.class)
     public FileShareAccessDto shareAccess(String rawToken, String password) {
         String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash);
+        requireShareRateLimit(tokenHash, null);
         ShareLink link = findShareLinkCached(tokenHash);
         if (link.getDisabledAt() != null) {
             throw new BusinessException(ErrorCode.CONFLICT, "分享链接已撤销");
@@ -112,7 +119,7 @@ public class FileShareAccessService {
     @Transactional(readOnly = true)
     public FileSharePreviewDto previewShare(String rawToken, String password) {
         String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash);
+        requireShareRateLimit(tokenHash, null);
         ShareLink link = findShareLinkCached(tokenHash);
         if (link.getDisabledAt() != null) {
             throw new BusinessException(ErrorCode.CONFLICT, "分享链接已撤销");
@@ -155,7 +162,7 @@ public class FileShareAccessService {
     @Transactional(rollbackFor = Exception.class)
     public void acceptShare(UUID userId, String rawToken, AcceptShareRequest request) {
         String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash);
+        requireShareRateLimit(tokenHash, null);
         ShareLink link = findShareLinkCached(tokenHash);
         if (link.getDisabledAt() != null) {
             throw new BusinessException(ErrorCode.CONFLICT, "分享链接已撤销");
@@ -206,17 +213,24 @@ public class FileShareAccessService {
      *
      * @param rawToken     分享明文 token
      * @param sessionToken 短期会话 token
+     * @param clientAddress 客户端地址，用于按访问者计限流键
      * @return 分享文件访问结果
      */
     @Transactional(rollbackFor = Exception.class)
-    public FileShareAccessDto shareAccessSession(String rawToken, String sessionToken) {
+    public FileShareAccessDto shareAccessSession(String rawToken, String sessionToken, String clientAddress) {
         String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash);
+        requireShareRateLimit(tokenHash, clientAddress);
         resourceShareLinkService.authorizeAnySession(rawToken, sessionToken);
         ShareLink link = findShareLinkCached(tokenHash);
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(), link.getOwnerUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在或已被删除"));
+        // 文件夹没有单文件下载语义：createDownloadUrl 会直接拒绝非 FILE 节点，
+        // 让整条分享以 400 结束。此处回文件夹元数据并把下载入口留空。
+        if (NodeType.FOLDER.getValue().equals(link.getResourceType())) {
+            return new FileShareAccessDto(
+                    node.getName(), node.getMimeType(), node.getSizeBytes(), null, link.getResourceType());
+        }
         FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrl(link.getOwnerUserId(), node.getId());
         return new FileShareAccessDto(
                 node.getName(), node.getMimeType(), node.getSizeBytes(),
@@ -228,12 +242,13 @@ public class FileShareAccessService {
      *
      * @param rawToken     分享明文 token
      * @param sessionToken 短期会话 token
+     * @param clientAddress 客户端地址，用于按访问者计限流键
      * @return 分享预览信息
      */
     @Transactional(readOnly = true)
-    public FileSharePreviewDto previewShareSession(String rawToken, String sessionToken) {
+    public FileSharePreviewDto previewShareSession(String rawToken, String sessionToken, String clientAddress) {
         String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash);
+        requireShareRateLimit(tokenHash, clientAddress);
         resourceShareLinkService.requireAnySession(rawToken, sessionToken);
         ShareLink link = findShareLinkCached(tokenHash);
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
@@ -251,6 +266,7 @@ public class FileShareAccessService {
      * @param userId       接受用户 ID
      * @param rawToken     分享明文 token
      * @param sessionToken 短期会话 token
+     * @param clientAddress 客户端地址，用于按访问者计限流键
      * @param request      接受请求
      */
     @Transactional(rollbackFor = Exception.class)
@@ -258,10 +274,11 @@ public class FileShareAccessService {
             UUID userId,
             String rawToken,
             String sessionToken,
+            String clientAddress,
             AcceptShareRequest request
     ) {
         String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash);
+        requireShareRateLimit(tokenHash, clientAddress);
         resourceShareLinkService.authorizeAnySession(rawToken, sessionToken);
         ShareLink link = findShareLinkCached(tokenHash);
         FileNode sourceNode = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
@@ -275,8 +292,16 @@ public class FileShareAccessService {
         }
     }
 
-    private void requireShareRateLimit(String tokenHash) {
-        if (!rateLimitService.tryAcquire("share:" + tokenHash, 10, Duration.ofMinutes(1))) {
+    private void requireShareRateLimit(String tokenHash, String clientAddress) {
+        // 单链接全局兜底阈值必须高于单 IP 阈值，否则任一访客刷几次就能把该链接对所有
+        // 正常访问者锁死，限流键退化成拒绝服务开关。
+        if (clientAddress != null && !rateLimitService.tryAcquire(
+                "share:ip:" + FileShareService.sha256(clientAddress) + ":" + tokenHash,
+                30,
+                Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+        }
+        if (!rateLimitService.tryAcquire("share:" + tokenHash, 300, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
         }
     }
@@ -305,7 +330,32 @@ public class FileShareAccessService {
         newNode.setSourceType(SourceType.SHARE.getValue());
         newNode.setShared(false);
         newNode.setSpaceType(SpaceType.PERSONAL);
-        fileNodeRepository.save(newNode);
+        FileNode saved = fileNodeRepository.save(newNode);
+        chargePersonalQuota(userId, newNode.getSizeBytes());
+        recordFileEvent(userId, saved.getId(), SyncAction.CREATED);
+    }
+
+    /**
+     * 转存进个人空间的节点按实际字节计入用户配额。
+     *
+     * <p>彻底删除时一律按节点字节扣减，转存与复制若不加计，用户可以用「转存—清空回收站」
+     * 把已用空间反复刷成负数并绕过配额。</p>
+     */
+    private void chargePersonalQuota(UUID userId, long bytes) {
+        storageQuotaService.checkQuota(userId, bytes);
+        storageQuotaService.incrementUsage(userId, bytes);
+    }
+
+    private void recordFileEvent(UUID ownerUserId, UUID fileId, SyncAction action) {
+        syncEventRecorder.record(new SyncEventCommand(
+                ownerUserId,
+                SyncScope.FILES,
+                "FILE_NODE",
+                fileId.toString(),
+                action,
+                null,
+                Map.of()
+        ));
     }
 
     private void acceptFolderShare(UUID userId, FileNode sourceFolder, UUID targetParentId) {
@@ -313,6 +363,11 @@ public class FileShareAccessService {
         if (targetParentId != null) {
             targetParent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetParentId, userId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
+        }
+        UUID targetParentNodeId = targetParent != null ? targetParent.getId() : null;
+        if (fileNodeSupport.sameNameExists(
+                userId, SpaceType.PERSONAL, targetParentNodeId, sourceFolder.getName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "目标目录已存在同名文件夹，请先改名或清理后再保存");
         }
         FileNode newFolder = new FileNode();
         newFolder.setOwnerUserId(userId);
@@ -334,6 +389,8 @@ public class FileShareAccessService {
         Map<String, FileNode> pathToNewNode = new LinkedHashMap<>();
         pathToNewNode.put(sourceFolder.getNormalizedPath(), savedFolder);
 
+        long totalBytes = 0L;
+        long totalFiles = 0L;
         for (FileNode child : descendants) {
             String relativePath = child.getNormalizedPath().substring(sourceFolder.getNormalizedPath().length());
             String[] segments = relativePath.split("/");
@@ -362,7 +419,13 @@ public class FileShareAccessService {
             newChild.setSpaceType(SpaceType.PERSONAL);
             FileNode savedChild = fileNodeRepository.save(newChild);
             pathToNewNode.put(child.getNormalizedPath(), savedChild);
+            if (NodeType.FILE.getValue().equals(child.getNodeType())) {
+                totalBytes += child.getSizeBytes();
+                totalFiles += 1;
+            }
         }
+        chargePersonalQuota(userId, totalBytes);
+        recordFileEvent(userId, savedFolder.getId(), SyncAction.CREATED);
     }
 
     /**

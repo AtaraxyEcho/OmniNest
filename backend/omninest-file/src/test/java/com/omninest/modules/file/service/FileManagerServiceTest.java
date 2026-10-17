@@ -39,12 +39,14 @@ import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.notification.service.NotificationService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -98,6 +100,8 @@ class FileManagerServiceTest {
     private final FilePermissionService filePermissionService =
             Mockito.mock(FilePermissionService.class);
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
+    private final StorageQuotaService storageQuotaService = Mockito.mock(StorageQuotaService.class);
+    private final SharedSpaceQuotaService sharedSpaceQuotaService = Mockito.mock(SharedSpaceQuotaService.class);
     private final ResourceShareLinkService resourceShareLinkService =
             Mockito.mock(ResourceShareLinkService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class, invocation -> {
@@ -122,7 +126,8 @@ class FileManagerServiceTest {
             filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
     private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, passwordEncoder, rateLimitService,
-            notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
+            notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
+                storageQuotaService, syncEventRecorder);
     private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
     private final ExternalStorageAccountService externalStorageAccountService = new ExternalStorageAccountService(
             externalAccountRepository, externalStorageService, mock(ExternalStorageCredentialService.class),
@@ -132,7 +137,10 @@ class FileManagerServiceTest {
             accessRecordRepository,
             fileObjectRepository,
             objectStorageClient,
-            fileNodeSupport
+            fileNodeSupport,
+            storageQuotaService,
+            sharedSpaceQuotaService,
+            syncEventRecorder
     );
 
     @Test
@@ -324,7 +332,13 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
                 .thenReturn(Optional.empty());
         when(fileNodeRepository.save(any(FileNode.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
         when(shareLinkRepository.save(any(ShareLink.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -400,7 +414,13 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
                 .thenReturn(Optional.empty());
         when(fileNodeRepository.save(any(FileNode.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
         when(shareLinkRepository.save(any(ShareLink.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -538,7 +558,13 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(new com.omninest.modules.file.domain.FileUploadSession()));
         when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
         when(fileNodeRepository.save(any(FileNode.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
 
         var result = fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, "replace");
 
@@ -769,6 +795,54 @@ class FileManagerServiceTest {
         }
     }
 
+    @Test
+    void packAsZip_deduplicatesSameNameAndSkipsTrashedNode() throws IOException {
+        UUID firstId = UUID.fromString("70000000-0000-0000-0000-000000000021");
+        UUID secondId = UUID.fromString("70000000-0000-0000-0000-000000000022");
+        UUID trashedId = UUID.fromString("70000000-0000-0000-0000-000000000023");
+        UUID obj1 = UUID.fromString("80000000-0000-0000-0000-000000000021");
+        UUID obj2 = UUID.fromString("80000000-0000-0000-0000-000000000022");
+        UUID obj3 = UUID.fromString("80000000-0000-0000-0000-000000000023");
+
+        FileNode reportA = node("report.pdf", "application/pdf", 1024);
+        reportA.setId(firstId);
+        reportA.setCurrentObjectId(obj1);
+        FileNode reportB = node("report.pdf", "application/pdf", 2048);
+        reportB.setId(secondId);
+        reportB.setCurrentObjectId(obj2);
+        FileNode trashed = node("gone.txt", "text/plain", 512);
+        trashed.setId(trashedId);
+        trashed.setCurrentObjectId(obj3);
+        trashed.setDeleted(true);
+
+        when(fileNodeRepository.findByIdAndOwnerUserId(firstId, OWNER_ID)).thenReturn(Optional.of(reportA));
+        when(fileNodeRepository.findByIdAndOwnerUserId(secondId, OWNER_ID)).thenReturn(Optional.of(reportB));
+        when(fileNodeRepository.findByIdAndOwnerUserId(trashedId, OWNER_ID)).thenReturn(Optional.of(trashed));
+        for (UUID objectId : List.of(obj1, obj2, obj3)) {
+            FileObject object = new FileObject();
+            object.setBucketName("files");
+            object.setObjectKey("obj-" + objectId);
+            when(fileObjectRepository.findById(objectId)).thenReturn(Optional.of(object));
+            when(objectStorageClient.getObject(new ObjectStorageKey("files", "obj-" + objectId)))
+                    .thenReturn(new ByteArrayInputStream("payload".getBytes()));
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        fileManagerService.packAsZip(
+                OWNER_ID, List.of(firstId.toString(), secondId.toString(), trashedId.toString()), out);
+
+        List<String> entryNames = new ArrayList<>();
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                entryNames.add(entry.getName());
+                zis.closeEntry();
+            }
+        }
+        // 首个同名条目保持原名，第二个追加序号；回收站节点不入包
+        assertThat(entryNames).containsExactly("report.pdf", "report (1).pdf");
+    }
+
     // ==================== 端到端分享流程测试 ====================
 
     @Test
@@ -781,7 +855,8 @@ class FileManagerServiceTest {
                 filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, realEncoder, rateLimitService,
-                notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
+                notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
+                storageQuotaService, syncEventRecorder);
 
         // 模拟：文件存在
         FileNode file = node("report.xlsx", "application/vnd.ms-excel", 4096);
@@ -842,7 +917,13 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
                 .thenReturn(Optional.empty());
         when(fileNodeRepository.save(any(FileNode.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
 
         realAccessService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(plainPassword, null));
 
@@ -871,7 +952,8 @@ class FileManagerServiceTest {
                 filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, realEncoder, rateLimitService,
-                notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
+                notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
+                storageQuotaService, syncEventRecorder);
 
         FileNode file = node("photo.jpg", "image/jpeg", 2048);
         file.setCurrentObjectId(OBJECT_ID);

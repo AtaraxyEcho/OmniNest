@@ -84,12 +84,12 @@ class FileSearchIndexServiceTest {
         // 为 userA 索引两份文档
         UUID fileIdA1 = UUID.randomUUID();
         UUID fileIdA2 = UUID.randomUUID();
-        service.indexFile(fileIdA1, USER_A, "项目报告", "第一季度工作总结");
-        service.indexFile(fileIdA2, USER_A, "会议纪要", "团队周会讨论内容");
+        service.indexFile(fileIdA1, USER_A, "项目报告", "第一季度工作总结", "PERSONAL");
+        service.indexFile(fileIdA2, USER_A, "会议纪要", "团队周会讨论内容", "PERSONAL");
 
         // 为 userB 索引一份文档
         UUID fileIdB1 = UUID.randomUUID();
-        service.indexFile(fileIdB1, USER_B, "项目报告", "第二季度工作计划");
+        service.indexFile(fileIdB1, USER_B, "项目报告", "第二季度工作计划", "PERSONAL");
 
         // 以 userA 身份搜索"项目报告"
         List<SearchResultDto> resultsA = service.search(USER_A, "项目报告", 50);
@@ -107,8 +107,8 @@ class FileSearchIndexServiceTest {
     void search_differentUsersWithSameKeyword_doNotLeak() {
         UUID fileIdA = UUID.randomUUID();
         UUID fileIdB = UUID.randomUUID();
-        service.indexFile(fileIdA, USER_A, "机密文档", "仅供内部使用");
-        service.indexFile(fileIdB, USER_B, "机密文档", "外部共享版本");
+        service.indexFile(fileIdA, USER_A, "机密文档", "仅供内部使用", "PERSONAL");
+        service.indexFile(fileIdB, USER_B, "机密文档", "外部共享版本", "PERSONAL");
 
         // userA 搜索"机密文档"只能看到自己的
         List<SearchResultDto> resultsA = service.search(USER_A, "机密文档", 50);
@@ -126,8 +126,8 @@ class FileSearchIndexServiceTest {
     void clearIndex_onlyClearsSpecifiedUserIndex() {
         UUID fileIdA = UUID.randomUUID();
         UUID fileIdB = UUID.randomUUID();
-        service.indexFile(fileIdA, USER_A, "用户A的文件", "内容A");
-        service.indexFile(fileIdB, USER_B, "用户B的文件", "内容B");
+        service.indexFile(fileIdA, USER_A, "用户A的文件", "内容A", "PERSONAL");
+        service.indexFile(fileIdB, USER_B, "用户B的文件", "内容B", "PERSONAL");
 
         // 清除 userA 的索引
         int cleared = service.clearIndex(USER_A);
@@ -148,8 +148,8 @@ class FileSearchIndexServiceTest {
     void deleteFile_onlyDeletesFromSpecifiedUserIndex() {
         UUID fileIdA = UUID.randomUUID();
         UUID fileIdB = UUID.randomUUID();
-        service.indexFile(fileIdA, USER_A, "待删除文件", "内容A");
-        service.indexFile(fileIdB, USER_B, "待删除文件", "内容B");
+        service.indexFile(fileIdA, USER_A, "待删除文件", "内容A", "PERSONAL");
+        service.indexFile(fileIdB, USER_B, "待删除文件", "内容B", "PERSONAL");
 
         // 仅删除 userA 的文档
         service.deleteFile(fileIdA, USER_A);
@@ -167,8 +167,8 @@ class FileSearchIndexServiceTest {
     @Test
     @DisplayName("clearAllIndexes 清除所有用户索引")
     void clearAllIndexes_clearsAllUserIndexes() {
-        service.indexFile(UUID.randomUUID(), USER_A, "文件A", "内容A");
-        service.indexFile(UUID.randomUUID(), USER_B, "文件B", "内容B");
+        service.indexFile(UUID.randomUUID(), USER_A, "文件A", "内容A", "PERSONAL");
+        service.indexFile(UUID.randomUUID(), USER_B, "文件B", "内容B", "PERSONAL");
 
         int totalCleared = service.clearAllIndexes();
         assertThat(totalCleared).isEqualTo(2);
@@ -182,8 +182,8 @@ class FileSearchIndexServiceTest {
     @DisplayName("更新同 fileId 的文档后搜索返回最新内容")
     void indexFile_sameFileId_updatesExistingDocument() {
         UUID fileId = UUID.randomUUID();
-        service.indexFile(fileId, USER_A, "旧标题", "旧内容");
-        service.indexFile(fileId, USER_A, "新标题", "新内容");
+        service.indexFile(fileId, USER_A, "旧标题", "旧内容", "PERSONAL");
+        service.indexFile(fileId, USER_A, "新标题", "新内容", "PERSONAL");
 
         List<SearchResultDto> results = service.search(USER_A, "新标题", 50);
         assertThat(results).hasSize(1);
@@ -196,8 +196,8 @@ class FileSearchIndexServiceTest {
     @Test
     @DisplayName("每个用户索引目录在磁盘上独立创建")
     void indexFile_createsPerUserDirectoriesOnDisk() {
-        service.indexFile(UUID.randomUUID(), USER_A, "测试文件", "内容");
-        service.indexFile(UUID.randomUUID(), USER_B, "测试文件", "内容");
+        service.indexFile(UUID.randomUUID(), USER_A, "测试文件", "内容", "PERSONAL");
+        service.indexFile(UUID.randomUUID(), USER_B, "测试文件", "内容", "PERSONAL");
 
         Path userPathA = tempDir.resolve(USER_A.toString());
         Path userPathB = tempDir.resolve(USER_B.toString());
@@ -288,9 +288,9 @@ class FileSearchIndexServiceTest {
         service.close();
         service = new FileSearchIndexService(tempDir.toString(), 2);
         UUID firstFileId = UUID.randomUUID();
-        service.indexFile(firstFileId, USER_A, "持久索引", "缓存淘汰后仍可搜索");
-        service.indexFile(UUID.randomUUID(), USER_B, "用户B", "内容B");
-        service.indexFile(UUID.randomUUID(), UUID.randomUUID(), "用户C", "内容C");
+        service.indexFile(firstFileId, USER_A, "持久索引", "缓存淘汰后仍可搜索", "PERSONAL");
+        service.indexFile(UUID.randomUUID(), USER_B, "用户B", "内容B", "PERSONAL");
+        service.indexFile(UUID.randomUUID(), UUID.randomUUID(), "用户C", "内容C", "PERSONAL");
 
         assertThat(service.cachedUserIndexCount()).isLessThanOrEqualTo(2);
         assertThat(service.search(USER_A, "持久索引", 10))

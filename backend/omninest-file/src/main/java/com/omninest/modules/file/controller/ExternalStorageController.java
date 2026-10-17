@@ -2,6 +2,8 @@ package com.omninest.modules.file.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
@@ -56,14 +58,25 @@ public class ExternalStorageController {
         return ApiResponse.success(oauthService.start(ownerUserId, code, accountId));
     }
 
-    @Operation(summary = "OAuth 回调", description = "处理授权码并绑定 token")
-    @GetMapping("/api/v1/external-connectors/{code}/oauth/callback")
+    /**
+     * 三方授权回调。
+     *
+     * <p>授权码的查询参数名由 OAuth2 协议固定为 {@code code}，与路径上的连接器编码变量同名；
+     * 路径变量必须改名绑定，否则回调永远取不到授权码。端点由浏览器匿名回跳命中，靠
+     * {@code state} 关联本次授权会话并定位账户，因此不再要求 Bearer 令牌。</p>
+     */
+    @Operation(summary = "OAuth 回调", description = "处理授权码并绑定 token，浏览器匿名回跳")
+    @GetMapping("/api/v1/external-connectors/{providerCode}/oauth/callback")
     ApiResponse<Void> oauthCallback(
-            @PathVariable String code,
-            @RequestParam(required = false) String state,
-            @RequestParam(required = false) String oauthCode
+            @PathVariable("providerCode") String providerCode,
+            @RequestParam(value = "state", required = false) String state,
+            @RequestParam(value = "code", required = false) String authorizationCode,
+            @RequestParam(value = "error", required = false) String error
     ) {
-        oauthService.handleCallback(state, oauthCode);
+        if (error != null && !error.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "授权被第三方拒绝: " + error);
+        }
+        oauthService.handleCallback(state, authorizationCode);
         return ApiResponse.success();
     }
 

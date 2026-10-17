@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,8 +37,6 @@ import com.omninest.modules.user.repository.AuditLogAdminRepository;
 import com.omninest.modules.user.repository.TaskRecordAdminRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.AuthLoginAuditRepository;
-import com.omninest.modules.user.repository.AuthPermissionRepository;
-import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.user.port.ExternalStorageAccountSummary;
 import com.omninest.modules.user.port.ExternalStorageAdministration;
 import jakarta.persistence.NoResultException;
@@ -48,18 +45,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 class AdminOperationsServiceTest {
-    private final AuthRoleRepository authRoleRepository = mock(AuthRoleRepository.class);
     private final AuthUserRepository authUserRepository = mock(AuthUserRepository.class);
-    private final AuthPermissionRepository authPermissionRepository = mock(AuthPermissionRepository.class);
     private final ConfigCenterService configCenterService = mock(ConfigCenterService.class);
     private final AdminConsoleMetricsRepository metricsRepository = mock(AdminConsoleMetricsRepository.class);
     private final TaskRecordAdminRepository taskRecordRepository = mock(TaskRecordAdminRepository.class);
@@ -76,13 +69,10 @@ class AdminOperationsServiceTest {
     private final ActiveSessionRepository activeSessionRepository = mock(ActiveSessionRepository.class);
     private final AuthLoginAuditRepository loginAuditRepository = mock(AuthLoginAuditRepository.class);
     private final SessionRevocationService sessionRevocationService = mock(SessionRevocationService.class);
-    private final UserSessionRevocationService userSessionRevocationService =
-            mock(UserSessionRevocationService.class);
+    private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
     private final WorkerRuntimeRegistry workerRuntimeRegistry = availableWorkerRuntimeRegistry();
     private final AdminOperationsService service = new AdminOperationsService(
-            authRoleRepository,
             authUserRepository,
-            authPermissionRepository,
             configCenterService,
             metricsRepository,
             taskRecordRepository,
@@ -95,274 +85,24 @@ class AdminOperationsServiceTest {
             activeSessionRepository,
             loginAuditRepository,
             sessionRevocationService,
-            userSessionRevocationService,
+            adminActorGuard,
             workerRuntimeRegistry
     );
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
+    /**
+     * 具备全部待授予权限的操作者：超级管理员不受子集与内置角色约束，用于覆盖通用写入路径。
+     */
     private void givenFreshAdminActor() {
         AuthUser actor = new AuthUser();
         actor.setId(actorUserId);
         actor.setStatus("ACTIVE");
-        actor.getRoles().add(role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system")));
-        when(authUserRepository.findWithRolesAndPermissionsById(actorUserId)).thenReturn(Optional.of(actor));
-    }
-
-    @Test
-    void rolesReturnsRolePermissionDetails() {
-        AuthRole admin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
-        AuthPermission manageUsers = permission(Permissions.SYSTEM_USER_MANAGE, "system");
-        when(authRoleRepository.findAllWithPermissions(Sort.by(Sort.Direction.ASC, "code"))).thenReturn(List.of(admin));
-        when(authPermissionRepository.findAll(Sort.by(Sort.Direction.ASC, "module", "code")))
-                .thenReturn(List.of(manageUsers));
-
-        AdminOperationsDto.RoleManagementView view = service.roles();
-
-        assertThat(view.roles()).hasSize(1);
-        assertThat(view.roles().get(0).code()).isEqualTo(Roles.ADMIN);
-        assertThat(view.roles().get(0).permissions()).containsExactly(Permissions.SYSTEM_USER_READ);
-        assertThat(view.permissions()).extracting("code").containsExactly(Permissions.SYSTEM_USER_MANAGE);
-    }
-
-    @Test
-    void updateRolePermissionsReplacesMutableRolePermissions() {
-        givenFreshAdminActor();
-        AuthRole admin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
-        AuthPermission manageUsers = permission(Permissions.SYSTEM_USER_MANAGE, "system");
-        AuthUser affectedUser = new AuthUser();
-        affectedUser.setId(UUID.fromString("10000000-0000-0000-0000-000000000001"));
-        when(authRoleRepository.findByCode(Roles.ADMIN)).thenReturn(Optional.of(admin));
-        when(authPermissionRepository.findByCodeIn(Set.of(Permissions.SYSTEM_USER_MANAGE)))
-                .thenReturn(Set.of(manageUsers));
-        when(authUserRepository.findAllByRoles_Code(Roles.ADMIN)).thenReturn(List.of(affectedUser));
-
-        AdminOperationsDto.RoleDetail updated = service.updateRolePermissions(
-                actorUserId,
-                Roles.ADMIN,
-                new AdminOperationsDto.UpdateRolePermissionsRequest(Set.of(Permissions.SYSTEM_USER_MANAGE))
-        );
-
-        assertThat(updated.permissions()).containsExactly(Permissions.SYSTEM_USER_MANAGE);
-        assertThat(admin.getPermissions()).containsExactly(manageUsers);
-        verify(userSessionRevocationService).revokeAll(List.of(affectedUser.getId()), "管理员更新角色权限");
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
-        verify(auditLogService).recordWithPayload(
-                eq(actorUserId), eq("ADMIN_ROLE_PERMISSIONS_UPDATE"), eq("auth_roles"), eq(admin.getId()),
-                payloadCaptor.capture());
-        assertThat(payloadCaptor.getValue())
-                .containsEntry("oldValue", List.of(Permissions.SYSTEM_USER_READ))
-                .containsEntry("newValue", List.of(Permissions.SYSTEM_USER_MANAGE))
-                .containsEntry("changeBy", actorUserId.toString());
-    }
-
-    @Test
-    void updateRolePermissionsRejectsSuperAdmin() {
-        givenFreshAdminActor();
-        assertThatThrownBy(() -> service.updateRolePermissions(
-                actorUserId,
-                Roles.SUPER_ADMIN,
-                new AdminOperationsDto.UpdateRolePermissionsRequest(Set.of(Permissions.SYSTEM_USER_READ))
-        ))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
-    @Test
-    void updateRolePermissionsRejectsActorWithoutAdminRole() {
-        AuthUser actor = new AuthUser();
-        actor.setId(actorUserId);
-        actor.setStatus("ACTIVE");
-        actor.getRoles().add(role(Roles.MEMBER, permission(Permissions.SYSTEM_USER_READ, "system")));
-        when(authUserRepository.findWithRolesAndPermissionsById(actorUserId)).thenReturn(Optional.of(actor));
-
-        assertThatThrownBy(() -> service.updateRolePermissions(
-                actorUserId,
-                Roles.ADMIN,
-                new AdminOperationsDto.UpdateRolePermissionsRequest(Set.of(Permissions.SYSTEM_USER_MANAGE))
-        ))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
-    @Test
-    void createRoleClonesTemplatePermissionsAndWritesAudit() {
-        givenFreshAdminActor();
-        AuthPermission userRead = permission(Permissions.SYSTEM_USER_READ, "system");
-        AuthPermission userManage = permission(Permissions.SYSTEM_USER_MANAGE, "system");
-        AuthRole template = role(Roles.MEMBER, userRead, userManage);
-        when(authRoleRepository.existsByCode("ROLE_MEDIA_CURATOR")).thenReturn(false);
-        when(authRoleRepository.findWithPermissionsByCode(Roles.MEMBER)).thenReturn(Optional.of(template));
-
-        AdminOperationsDto.RoleDetail created = service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest(
-                        " role_media_curator ", "媒体策展人", "自定义角色", "member")
-        );
-
-        assertThat(created.code()).isEqualTo("ROLE_MEDIA_CURATOR");
-        assertThat(created.name()).isEqualTo("媒体策展人");
-        assertThat(created.builtIn()).isFalse();
-        assertThat(created.enabled()).isTrue();
-        assertThat(created.permissions())
-                .containsExactly(Permissions.SYSTEM_USER_MANAGE, Permissions.SYSTEM_USER_READ);
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
-        verify(auditLogService).recordWithPayload(
-                eq(actorUserId), eq("ADMIN_ROLE_CREATE"), eq("auth_roles"), isNull(),
-                payloadCaptor.capture());
-        assertThat(payloadCaptor.getValue())
-                .containsEntry("code", "ROLE_MEDIA_CURATOR")
-                .containsEntry("baseTemplate", "MEMBER")
-                .containsEntry("permissionCount", 2);
-    }
-
-    @Test
-    void createRoleSupportsNoneTemplate() {
-        givenFreshAdminActor();
-        when(authRoleRepository.existsByCode("ROLE_EMPTY")).thenReturn(false);
-
-        AdminOperationsDto.RoleDetail created = service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ROLE_EMPTY", "空角色", null, null)
-        );
-
-        assertThat(created.permissions()).isEmpty();
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
-        verify(auditLogService).recordWithPayload(
-                eq(actorUserId), eq("ADMIN_ROLE_CREATE"), eq("auth_roles"), isNull(),
-                payloadCaptor.capture());
-        assertThat(payloadCaptor.getValue())
-                .containsEntry("baseTemplate", "NONE")
-                .containsEntry("permissionCount", 0);
-    }
-
-    @Test
-    void createRoleRejectsInvalidCodeFormat() {
-        givenFreshAdminActor();
-
-        assertThatThrownBy(() -> service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ADMIN", "管理员", null, "none")))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ROLE_")
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.PARAM_ERROR);
-        assertThatThrownBy(() -> service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA-CURATOR", "非法字符", null, "none")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.PARAM_ERROR);
-        assertThatThrownBy(() -> service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ROLE_" + "X".repeat(64), "超长编码", null, "none")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.PARAM_ERROR);
-    }
-
-    @Test
-    void createRoleRejectsDuplicateCode() {
-        givenFreshAdminActor();
-        when(authRoleRepository.existsByCode("ROLE_MEDIA_CURATOR")).thenReturn(true);
-
-        assertThatThrownBy(() -> service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA_CURATOR", "媒体策展人", null, "none")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.CONFLICT);
-    }
-
-    @Test
-    void createRoleRejectsUnknownBaseTemplate() {
-        givenFreshAdminActor();
-
-        assertThatThrownBy(() -> service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA_CURATOR", "媒体策展人", null, "superadmin")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.PARAM_ERROR);
-    }
-
-    @Test
-    void createRoleRejectsMissingTemplateRole() {
-        givenFreshAdminActor();
-        when(authRoleRepository.existsByCode("ROLE_MEDIA_CURATOR")).thenReturn(false);
-        when(authRoleRepository.findWithPermissionsByCode(Roles.MEMBER)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.createRole(
-                actorUserId,
-                new AdminOperationsDto.CreateRoleRequest("ROLE_MEDIA_CURATOR", "媒体策展人", null, "member")))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.INTERNAL_ERROR);
-    }
-
-    @Test
-    void deleteRoleRemovesCustomRoleAndClearsPermissionBindings() {
-        givenFreshAdminActor();
-        AuthRole custom = role("ROLE_MEDIA_CURATOR",
+        actor.getRoles().add(role(Roles.SUPER_ADMIN,
                 permission(Permissions.SYSTEM_USER_READ, "system"),
-                permission(Permissions.SYSTEM_USER_MANAGE, "system"));
-        custom.setBuiltIn(false);
-        when(authRoleRepository.findWithPermissionsByCode("ROLE_MEDIA_CURATOR")).thenReturn(Optional.of(custom));
-        when(authUserRepository.existsByRoles_Code("ROLE_MEDIA_CURATOR")).thenReturn(false);
-
-        service.deleteRole(actorUserId, "role_media_curator");
-
-        assertThat(custom.getPermissions()).isEmpty();
-        verify(authRoleRepository).delete(custom);
-        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
-        verify(auditLogService).recordWithPayload(
-                eq(actorUserId), eq("ADMIN_ROLE_DELETE"), eq("auth_roles"), eq(custom.getId()),
-                payloadCaptor.capture());
-        assertThat(payloadCaptor.getValue())
-                .containsEntry("code", "ROLE_MEDIA_CURATOR")
-                .containsEntry("permissionCount", 2);
+                permission(Permissions.SYSTEM_USER_MANAGE, "system")));
+        when(authUserRepository.findWithRolesAndPermissionsById(actorUserId)).thenReturn(Optional.of(actor));
     }
 
-    @Test
-    void deleteRoleRejectsBuiltinRole() {
-        givenFreshAdminActor();
-        AuthRole builtin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
-        when(authRoleRepository.findWithPermissionsByCode(Roles.ADMIN)).thenReturn(Optional.of(builtin));
-
-        assertThatThrownBy(() -> service.deleteRole(actorUserId, Roles.ADMIN))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.FORBIDDEN);
-        verify(authRoleRepository, never()).delete(any(AuthRole.class));
-    }
-
-    @Test
-    void deleteRoleRejectsRoleWithBoundUsers() {
-        givenFreshAdminActor();
-        AuthRole custom = role("ROLE_MEDIA_CURATOR");
-        custom.setBuiltIn(false);
-        when(authRoleRepository.findWithPermissionsByCode("ROLE_MEDIA_CURATOR")).thenReturn(Optional.of(custom));
-        when(authUserRepository.existsByRoles_Code("ROLE_MEDIA_CURATOR")).thenReturn(true);
-
-        assertThatThrownBy(() -> service.deleteRole(actorUserId, "ROLE_MEDIA_CURATOR"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("解绑")
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.RESOURCE_IN_USE);
-        verify(authRoleRepository, never()).delete(any(AuthRole.class));
-    }
-
-    @Test
-    void deleteRoleRejectsMissingRole() {
-        givenFreshAdminActor();
-        when(authRoleRepository.findWithPermissionsByCode("ROLE_GONE")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.deleteRole(actorUserId, "ROLE_GONE"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.NOT_FOUND);
-    }
 
     @Test
     void operationsReturnTasksLogsStorageAndExternalStorageRows() {

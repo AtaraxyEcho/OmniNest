@@ -45,11 +45,14 @@ void main() {
       ),
     );
 
-    await api.twoFactorDisable(password: 'correct-password');
+    await api.twoFactorDisable(password: 'correct-password', code: '123456');
 
     expect(adapter.lastMethod, 'POST');
     expect(adapter.lastPath, '/me/2fa/disable');
-    expect(adapter.lastData, {'password': 'correct-password'});
+    expect(adapter.lastData, {
+      'password': 'correct-password',
+      'code': '123456',
+    });
   });
 
   test('更新资料走 PATCH /me 并仅携带提供的字段', () async {

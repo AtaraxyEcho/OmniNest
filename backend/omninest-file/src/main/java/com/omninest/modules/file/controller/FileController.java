@@ -519,18 +519,22 @@ public class FileController {
     @GetMapping("/api/v1/s/{token}")
     ApiResponse<FileShareAccessDto> accessShare(
             @PathVariable String token,
-            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken
+            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
+            HttpServletRequest request
     ) {
-        return ApiResponse.success(fileShareAccessService.shareAccessSession(token, sessionToken));
+        return ApiResponse.success(fileShareAccessService.shareAccessSession(
+                token, sessionToken, resolveClientIp(request)));
     }
 
     @Operation(summary = "预览分享文件", description = "通过分享令牌预览共享文件内容")
     @GetMapping("/api/v1/s/{token}/preview")
     ApiResponse<FileSharePreviewDto> previewShare(
             @PathVariable String token,
-            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken
+            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
+            HttpServletRequest request
     ) {
-        return ApiResponse.success(fileShareAccessService.previewShareSession(token, sessionToken));
+        return ApiResponse.success(fileShareAccessService.previewShareSession(
+                token, sessionToken, resolveClientIp(request)));
     }
 
     @Operation(summary = "接受分享", description = "接受共享文件，将其保存到自己的文件空间")
@@ -538,10 +542,12 @@ public class FileController {
     ApiResponse<Void> acceptShare(
             @PathVariable String token,
             @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
-            @RequestBody(required = false) AcceptShareRequest body
+            @RequestBody(required = false) AcceptShareRequest body,
+            HttpServletRequest request
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        fileShareAccessService.acceptShareSession(userId, token, sessionToken, body);
+        fileShareAccessService.acceptShareSession(
+                userId, token, sessionToken, resolveClientIp(request), body);
         return ApiResponse.success();
     }
 

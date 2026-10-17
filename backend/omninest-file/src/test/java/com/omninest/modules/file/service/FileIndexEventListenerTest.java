@@ -72,7 +72,7 @@ class FileIndexEventListenerTest {
         assertThat(inputs.get(0).fileNodeId()).isEqualTo(alive.getId());
         assertThat(inputs.get(0).title()).isEqualTo("报告.docx");
         assertThat(inputs.get(0).content()).isNull();
-        verify(indexService, never()).indexFile(any(), any(), any(), any());
+        verify(indexService, never()).indexFile(any(), any(), any(), any(), any());
     }
 
     @Test

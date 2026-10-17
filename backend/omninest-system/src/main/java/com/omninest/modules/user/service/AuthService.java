@@ -111,7 +111,9 @@ public class AuthService {
         if (twoFactorService.isEnabled(profile.getId())) {
             return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_VERIFY);
         }
-        if (twoFactorPolicyService.isRequired(profile) && !twoFactorService.hasCredential(profile.getId())) {
+        // 判定只认「已确认启用」：注册引导中途落库的 enabled=false 半成品凭据不得让
+        // 命中强制策略的用户在二次登录时跳过两步验证。
+        if (twoFactorPolicyService.isRequired(profile)) {
             return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_ENROLL);
         }
         log.info("用户登录成功: userId={}, platform={}, ip={}", profile.getId(), clientPlatform, ipAddress);
@@ -140,7 +142,7 @@ public class AuthService {
             String ipAddress,
             String userAgent
     ) {
-        UUID userId = consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
+        UUID userId = verifyChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-login", 5, Duration.ofMinutes(1));
         AuthUser profile = loadActiveUserWithRoles(userId);
         try {
@@ -150,8 +152,10 @@ public class AuthService {
                 auditLogin(profile, profile.getUsername(), clientPlatform, deviceId, deviceName,
                         ipAddress, userAgent, "FAILED", "两步验证码错误");
             }
+            // 验证码错误不核销 jti：单次输错不应作废整个登录挑战，防爆破由上面的按用户预算承担
             throw exception;
         }
+        consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
         log.info("用户两步验证登录成功: userId={}, platform={}, ip={}", userId, clientPlatform, ipAddress);
         return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
     }
@@ -165,7 +169,7 @@ public class AuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TwoFactorSetupResponse bootstrapTwoFactorSetup(String challengeToken, String password) {
-        UUID userId = consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        UUID userId = verifyChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-setup", 3, Duration.ofHours(1));
         return twoFactorService.startSetup(userId, password);
     }
@@ -179,9 +183,11 @@ public class AuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TwoFactorBootstrapEnableResponse bootstrapTwoFactorEnable(String challengeToken, String code) {
-        UUID userId = consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        UUID userId = verifyChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
         requireUserLoginAttemptBudget(userId, "user:%s:2fa-enable", 5, Duration.ofMinutes(1));
         List<String> backupCodes = twoFactorService.enable(userId, code);
+        // 注册引导的两个中间步共用同一挑战令牌，jti 只在绑定成功后核销
+        consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
         Instant now = Instant.now();
         String finalizeToken = encodeChallengeToken(
                 userId, TOKEN_USE_TWO_FACTOR_FINALIZE, now, now.plus(TWO_FACTOR_CHALLENGE_TTL));
@@ -247,13 +253,39 @@ public class AuthService {
     }
 
     /**
-     * 消费两步验证挑战令牌，校验签名、类型与有效期。
+     * 只读校验两步验证挑战令牌：签名、类型与有效期，不核销 jti。
+     *
+     * <p>注册引导是 setup → enable 两步向导，同一段令牌需要跨步复用，因此核销被推迟到
+     * 流程终态。中间步另各有按用户计的频率预算，且都必须出示令牌之外的秘密（登录密码或
+     * 动态验证码），仅持有挑战令牌无法推进流程。</p>
+     *
+     * @param rawToken 挑战令牌
+     * @param expectedUse 期望的 token_use
+     * @return 用户标识
+     */
+    public UUID verifyChallengeToken(String rawToken, String expectedUse) {
+        return parseUserId(decodeChallengeToken(rawToken, expectedUse).getSubject());
+    }
+
+    /**
+     * 校验并核销两步验证挑战令牌，用于流程终态。
      *
      * @param rawToken 挑战令牌
      * @param expectedUse 期望的 token_use
      * @return 用户标识
      */
     public UUID consumeChallengeToken(String rawToken, String expectedUse) {
+        Jwt jwt = decodeChallengeToken(rawToken, expectedUse);
+        // 挑战令牌一次性消费：同一 jti 在有效期内第二次出现即拒绝，阻断截获重放
+        String jti = jwt.getClaimAsString("jti");
+        if (jti != null && !rateLimitService.tryAcquire(
+                "omninest:2fa:challenge:" + jti, 1, TWO_FACTOR_CHALLENGE_TTL)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证已使用，请重新发起");
+        }
+        return parseUserId(jwt.getSubject());
+    }
+
+    private Jwt decodeChallengeToken(String rawToken, String expectedUse) {
         String token = normalizeToken(rawToken);
         Jwt jwt;
         try {
@@ -264,13 +296,7 @@ public class AuthService {
         if (!expectedUse.equals(jwt.getClaimAsString("token_use"))) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证无效");
         }
-        // 挑战令牌一次性消费：同一 jti 在有效期内第二次出现即拒绝，阻断截获重放
-        String jti = jwt.getClaimAsString("jti");
-        if (jti != null && !rateLimitService.tryAcquire(
-                "omninest:2fa:challenge:" + jti, 1, TWO_FACTOR_CHALLENGE_TTL)) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证已使用，请重新发起");
-        }
-        return parseUserId(jwt.getSubject());
+        return jwt;
     }
 
     private void requireUserLoginAttemptBudget(UUID userId, String keyPattern, int limit, Duration window) {

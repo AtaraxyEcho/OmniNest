@@ -12,6 +12,7 @@ import com.omninest.modules.photos.dto.PhotoDtos.EditRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoEditVersionDto;
 import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.AffineTransform;
@@ -21,7 +22,6 @@ import java.awt.image.ByteLookupTable;
 import java.awt.image.ConvolveOp;
 import java.awt.image.Kernel;
 import java.awt.image.LookupOp;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +51,7 @@ public class PhotoEditService {
     private final MediaSyncEventService syncEventService;
     private final PhotoSourceFileService sourceFileService;
     private final PhotoInputGuard inputGuard;
+    private final StorageQuotaService storageQuotaService;
     private final TransactionTemplate transactionTemplate;
     private final int maxHistoryVersions;
 
@@ -61,6 +62,7 @@ public class PhotoEditService {
             MediaSyncEventService syncEventService,
             PhotoSourceFileService sourceFileService,
             PhotoInputGuard inputGuard,
+            StorageQuotaService storageQuotaService,
             TransactionTemplate transactionTemplate,
             @Value("${photo.edit.max-history-versions:5}") int maxHistoryVersions) {
         this.editVersionRepository = editVersionRepository;
@@ -69,8 +71,20 @@ public class PhotoEditService {
         this.syncEventService = syncEventService;
         this.sourceFileService = sourceFileService;
         this.inputGuard = inputGuard;
+        this.storageQuotaService = storageQuotaService;
         this.transactionTemplate = transactionTemplate;
         this.maxHistoryVersions = maxHistoryVersions;
+    }
+
+    /**
+     * 编辑版本产生的派生文件计入所有者个人配额。
+     *
+     * <p>派生资产节点会进入每日配额对账并在彻底删除时扣减，写入时不加计会让实时用量长期
+     * 低于真实占用，管理员侧的配额重算才把差额补回去。</p>
+     */
+    private void chargeEditVersionQuota(UUID ownerUserId, long bytes) {
+        storageQuotaService.checkQuota(ownerUserId, bytes);
+        storageQuotaService.incrementUsage(ownerUserId, bytes);
     }
 
     /**
@@ -158,16 +172,32 @@ public class PhotoEditService {
 
         int nextVersion = (int) editVersionRepository.countByPhotoId(photoId) + 1;
         String fileName = photoId + "_v" + nextVersion + ".jpg";
+        inputGuard.validateFileSize(image.length, false);
 
-        UUID fileId = derivedAssetStorageService.store(
-                ownerUserId,
-                "PHOTO_ITEM",
-                photoId,
-                "EDIT_VERSION",
-                fileName,
-                "image/jpeg",
-                new ByteArrayInputStream(image)
-        );
+        UUID fileId;
+        Path staged = null;
+        try {
+            // 外部编辑器回传的字节未经任何内容校验：落对象存储前先按与 applyEdit 相同的
+            // 魔数与像素上限复核，否则客户端可以自称 image/jpeg 写入任意内容。
+            staged = Files.createTempFile("omninest-photo-edit-input-", ".jpg");
+            Files.write(staged, image);
+            PhotoInputGuard.ImageDimensions dimensions = inputGuard.inspectForDecode(staged, fileName);
+            inputGuard.validateDimensions(dimensions.width(), dimensions.height());
+            fileId = derivedAssetStorageService.store(
+                    ownerUserId,
+                    "PHOTO_ITEM",
+                    photoId,
+                    "EDIT_VERSION",
+                    fileName,
+                    "image/jpeg",
+                    staged
+            );
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
+        } finally {
+            deleteQuietly(staged);
+        }
+        chargeEditVersionQuota(ownerUserId, image.length);
 
         PhotoEditVersion version = new PhotoEditVersion();
         version.setOwnerUserId(ownerUserId);
@@ -250,7 +280,7 @@ public class PhotoEditService {
             if (!applyTransform(source.path(), editedFile, request.editType(), request.editParams())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑操作失败");
             }
-            return derivedAssetStorageService.store(
+            UUID fileId = derivedAssetStorageService.store(
                     ownerUserId,
                     "PHOTO_ITEM",
                     photoId,
@@ -259,6 +289,8 @@ public class PhotoEditService {
                     "image/jpeg",
                     editedFile
             );
+            chargeEditVersionQuota(ownerUserId, Files.size(editedFile));
+            return fileId;
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
         } finally {

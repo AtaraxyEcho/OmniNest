@@ -20,6 +20,7 @@ import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorEnableRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupRequest;
 import com.omninest.modules.user.service.TwoFactorPolicyService;
 import com.omninest.modules.user.service.TwoFactorService;
+import com.omninest.modules.user.service.UserSessionRevocationService;
 import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,8 @@ class TwoFactorControllerRateLimitTest {
     private final TwoFactorPolicyService twoFactorPolicyService = mock(TwoFactorPolicyService.class);
     private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
+    private final UserSessionRevocationService userSessionRevocationService =
+            mock(UserSessionRevocationService.class);
 
     private TwoFactorController controller;
     private UUID userId;
@@ -47,7 +50,8 @@ class TwoFactorControllerRateLimitTest {
                 twoFactorService,
                 twoFactorPolicyService,
                 currentUserContext,
-                rateLimitService
+                rateLimitService,
+                userSessionRevocationService
         );
         userId = UUID.randomUUID();
         when(currentUserContext.requireCurrentUserId()).thenReturn(userId);
@@ -97,12 +101,13 @@ class TwoFactorControllerRateLimitTest {
     }
 
     @Test
-    @DisplayName("关闭：按用户每小时 3 次计费，覆盖密码复核爆破")
+    @DisplayName("关闭：按用户每小时 3 次计费，覆盖密码复核爆破，并吊销其他会话")
     void disableChargesPerUserHourlyBudget() {
-        controller.disable(new TwoFactorDisableRequest("secret123"));
+        controller.disable(new TwoFactorDisableRequest("secret123", "123456"));
 
         verify(rateLimitService).tryAcquire("user:" + userId + ":2fa-disable", 3, Duration.ofHours(1));
-        verify(twoFactorService).disable(userId, "secret123");
+        verify(twoFactorService).disable(userId, "secret123", "123456");
+        verify(userSessionRevocationService).revokeAllExcept(userId, null, "TWO_FACTOR_DISABLED");
     }
 
     @Test
@@ -111,10 +116,21 @@ class TwoFactorControllerRateLimitTest {
         when(rateLimitService.tryAcquire(eq("user:" + userId + ":2fa-disable"), anyInt(), any(Duration.class)))
                 .thenReturn(false);
 
-        assertThatThrownBy(() -> controller.disable(new TwoFactorDisableRequest("secret123")))
+        assertThatThrownBy(() -> controller.disable(new TwoFactorDisableRequest("secret123", "123456")))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.RATE_LIMITED));
         verifyNoInteractions(twoFactorService);
+    }
+
+    @Test
+    @DisplayName("关闭：角色被策略强制时直接拒绝，不计费也不触碰凭据服务")
+    void disableRejectsForMandatoryRole() {
+        when(twoFactorPolicyService.isRequired(userId)).thenReturn(true);
+
+        assertThatThrownBy(() -> controller.disable(new TwoFactorDisableRequest("secret123", "123456")))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verifyNoInteractions(twoFactorService, rateLimitService, userSessionRevocationService);
     }
 
     @Test

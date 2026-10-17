@@ -825,7 +825,7 @@ public class ExternalImportExecutionService {
                 return;
             }
             if (SpaceType.SHARED == resolveSpaceType(task)) {
-                sharedSpaceQuotaService.increaseUsage(totalSize);
+                sharedSpaceQuotaService.increaseUsage(totalSize, fileCount);
             } else {
                 storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), totalSize);
             }
@@ -853,7 +853,7 @@ public class ExternalImportExecutionService {
         long importedBytes = task.getTransferredBytes();
         if (SpaceType.SHARED == resolveSpaceType(task)) {
             if (importedBytes > 0) {
-                sharedSpaceQuotaService.increaseUsage(importedBytes);
+                sharedSpaceQuotaService.increaseUsage(importedBytes, task.getCompletedFiles());
             }
             return;
         }

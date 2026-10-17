@@ -6,9 +6,9 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SharedSpaceUsage;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +35,7 @@ public class SharedSpaceQuotaService {
      */
     @Transactional(readOnly = true)
     public void checkQuota(long additionalBytes) {
-        long maxBytes = getConfigLong(CONFIG_MAX_BYTES, LEGACY_CONFIG_MAX_BYTES, DEFAULT_MAX_BYTES);
+        long maxBytes = configuredMaxBytes();
         if (maxBytes <= 0) {
             return;
         }
@@ -46,47 +46,50 @@ public class SharedSpaceQuotaService {
     }
 
     /**
-     * 增加共享空间用量（乐观锁重试）。
+     * 增加共享空间用量。
+     *
+     * <p>容量上限在同一条条件更新里判定，因此并发上传不会双双通过预检后把空间写超；
+     * 更新 0 行即表示本次增量放不下。</p>
+     *
+     * @param bytes 新增字节数
+     * @param files 新增文件数
      */
     @Transactional(rollbackFor = Exception.class)
-    public void increaseUsage(long bytes) {
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            try {
-                SharedSpaceUsage usage = getUsage();
-                usage.setUsedBytes(usage.getUsedBytes() + bytes);
-                usage.setFileCount(usage.getFileCount() + 1);
-                usageRepository.save(usage);
-                return;
-            } catch (ObjectOptimisticLockingFailureException e) {
-                if (attempt == 3) {
-                    log.error("共享空间用量更新失败（乐观锁冲突重试耗尽）", e);
-                    throw e;
-                }
-                log.info("共享空间用量更新乐观锁冲突，第{}次重试", attempt);
-            }
+    public void increaseUsage(long bytes, long files) {
+        if (bytes <= 0 && files <= 0) {
+            return;
+        }
+        SharedSpaceUsage usage = getUsage();
+        int updated = usageRepository.tryIncreaseUsage(
+                usage.getId(),
+                Math.max(bytes, 0),
+                Math.max(files, 0),
+                capacityCeiling(),
+                Instant.now()
+        );
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "共享空间容量不足");
         }
     }
 
     /**
-     * 减少共享空间用量（乐观锁重试）。
+     * 减少共享空间用量。
+     *
+     * @param bytes 释放字节数
+     * @param files 释放文件数，删除整个文件夹时必须传子树内的真实文件数
      */
     @Transactional(rollbackFor = Exception.class)
-    public void decreaseUsage(long bytes) {
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            try {
-                SharedSpaceUsage usage = getUsage();
-                usage.setUsedBytes(Math.max(0, usage.getUsedBytes() - bytes));
-                usage.setFileCount(Math.max(0, usage.getFileCount() - 1));
-                usageRepository.save(usage);
-                return;
-            } catch (ObjectOptimisticLockingFailureException e) {
-                if (attempt == 3) {
-                    log.error("共享空间用量更新失败（乐观锁冲突重试耗尽）", e);
-                    throw e;
-                }
-                log.info("共享空间用量更新乐观锁冲突，第{}次重试", attempt);
-            }
+    public void decreaseUsage(long bytes, long files) {
+        if (bytes <= 0 && files <= 0) {
+            return;
         }
+        SharedSpaceUsage usage = getUsage();
+        usageRepository.decreaseUsage(
+                usage.getId(),
+                Math.max(bytes, 0),
+                Math.max(files, 0),
+                Instant.now()
+        );
     }
 
     /**
@@ -95,7 +98,7 @@ public class SharedSpaceQuotaService {
     @Transactional(readOnly = true)
     public SharedSpaceUsageDto getUsageDto() {
         SharedSpaceUsage usage = getUsage();
-        long maxBytes = getConfigLong(CONFIG_MAX_BYTES, LEGACY_CONFIG_MAX_BYTES, DEFAULT_MAX_BYTES);
+        long maxBytes = configuredMaxBytes();
         return new SharedSpaceUsageDto(usage.getUsedBytes(), maxBytes, usage.getFileCount());
     }
 
@@ -114,6 +117,21 @@ public class SharedSpaceQuotaService {
                     }
                 })
                 .orElse(defaultValue);
+    }
+
+    /**
+     * 共享空间容量上限，配置为 0 或负值表示不限制。
+     */
+    private long configuredMaxBytes() {
+        return getConfigLong(CONFIG_MAX_BYTES, LEGACY_CONFIG_MAX_BYTES, DEFAULT_MAX_BYTES);
+    }
+
+    /**
+     * 条件更新用的容量天花板：不限时取足够大的值，避免 usedBytes + delta 溢出比较恒真。
+     */
+    private long capacityCeiling() {
+        long maxBytes = configuredMaxBytes();
+        return maxBytes <= 0 ? Long.MAX_VALUE / 4 : maxBytes;
     }
 
     private SharedSpaceUsage getUsage() {

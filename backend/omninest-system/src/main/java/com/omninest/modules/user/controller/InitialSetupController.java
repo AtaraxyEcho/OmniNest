@@ -4,6 +4,7 @@ import com.omninest.common.api.ApiResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.ClientIpResolver;
 import com.omninest.modules.user.dto.InitialSetupRequest;
 import com.omninest.modules.user.dto.InitialSetupResultDto;
 import com.omninest.modules.user.dto.InitialSetupStatusDto;
@@ -35,6 +36,7 @@ public class InitialSetupController {
 
     private final InitialSetupService initialSetupService;
     private final RateLimitService rateLimitService;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 查询首次安装状态。
@@ -60,7 +62,7 @@ public class InitialSetupController {
             @RequestBody(required = false) Map<String, String> body,
             HttpServletRequest servletRequest
     ) {
-        String remoteAddress = servletRequest.getRemoteAddr();
+        String remoteAddress = resolveClientIp(servletRequest);
         if (!rateLimitService.tryAcquire(
                 "setup:2fa:ip:" + remoteAddress,
                 10,
@@ -88,7 +90,7 @@ public class InitialSetupController {
             @Valid @RequestBody InitialSetupRequest request,
             HttpServletRequest servletRequest
     ) {
-        String remoteAddress = servletRequest.getRemoteAddr();
+        String remoteAddress = resolveClientIp(servletRequest);
         if (!rateLimitService.tryAcquire(
                 "setup:ip:" + remoteAddress,
                 5,
@@ -98,6 +100,18 @@ public class InitialSetupController {
         }
         return ApiResponse.success(
                 new InitialSetupResultDto(initialSetupService.createSuperAdmin(setupToken, request))
+        );
+    }
+
+    /**
+     * 反代部署下 {@code getRemoteAddr()} 恒为代理地址，直接用它限流会把所有外部访问者
+     * 合并进同一个桶，任一攻击者即可锁死整个安装入口；必须按可信代理边界解析真实客户端 IP。
+     */
+    private String resolveClientIp(HttpServletRequest request) {
+        return clientIpResolver.resolve(
+                request.getRemoteAddr(),
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP")
         );
     }
 }

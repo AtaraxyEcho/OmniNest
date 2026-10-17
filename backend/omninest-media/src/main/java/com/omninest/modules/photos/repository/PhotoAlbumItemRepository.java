@@ -50,6 +50,26 @@ public interface PhotoAlbumItemRepository extends JpaRepository<PhotoAlbumItem, 
     long countByAlbumId(UUID albumId);
 
     /**
+     * 统计相册内「未进回收站」的照片数量。
+     *
+     * <p>相册详情列表按活动照片过滤，卡片计数必须用同一口径，否则照片移入回收站后
+     * 影集卡片仍显示旧数量。判定条件与 {@code findActiveByOwnerUserIdAndIdIn} 保持一致。</p>
+     *
+     * @param albumId 相册 ID
+     * @return 活动照片数
+     */
+    @Query("""
+            SELECT COUNT(item.id)
+            FROM PhotoAlbumItem item
+            JOIN PhotoItem photo ON photo.id = item.photoId
+            JOIN FileNode file ON photo.fileNodeId = file.id
+            WHERE item.albumId = :albumId
+              AND file.deleted = false
+              AND photo.deletedAt IS NULL
+            """)
+    long countActivePhotosByAlbumId(@Param("albumId") UUID albumId);
+
+    /**
      * 按照片ID列表删除相册关联条目
      */
     void deleteByPhotoIdIn(List<UUID> photoIds);

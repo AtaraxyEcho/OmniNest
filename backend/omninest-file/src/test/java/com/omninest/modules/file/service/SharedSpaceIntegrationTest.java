@@ -229,7 +229,7 @@ class SharedSpaceIntegrationTest {
             assertThat(file.getUploadedBy()).isEqualTo(USER_A);
             assertThat(file.getOwnerUserId()).isEqualTo(USER_A); // ownerUserId 保持不变
             verify(storageQuotaService).decrementUsage(USER_A, 1024L);
-            verify(sharedSpaceQuotaService).increaseUsage(1024L);
+            verify(sharedSpaceQuotaService).increaseUsage(1024L, 1L);
         }
 
         @Test
@@ -245,7 +245,7 @@ class SharedSpaceIntegrationTest {
             assertThat(file.getSpaceType()).isEqualTo(SpaceType.PERSONAL);
             assertThat(file.getOwnerUserId()).isEqualTo(USER_A);
             assertThat(file.getUploadedBy()).isNull();
-            verify(sharedSpaceQuotaService).decreaseUsage(1024L);
+            verify(sharedSpaceQuotaService).decreaseUsage(1024L, 1L);
             verify(storageQuotaService).incrementUsage(USER_A, 1024L);
         }
 
@@ -331,7 +331,7 @@ class SharedSpaceIntegrationTest {
 
             assertThat(file.isDeleted()).isTrue();
             assertThat(file.getDeletedBy()).isEqualTo(USER_A);
-            verify(sharedSpaceQuotaService).decreaseUsage(1024L);
+            verify(sharedSpaceQuotaService).decreaseUsage(1024L, 1L);
         }
 
         @Test

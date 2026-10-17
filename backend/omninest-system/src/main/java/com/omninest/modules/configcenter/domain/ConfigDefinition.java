@@ -3,6 +3,7 @@ package com.omninest.modules.configcenter.domain;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -48,6 +49,12 @@ public record ConfigDefinition(
             "photo.ai.url",
             "weather.qweather.url"
     );
+
+    /**
+     * 逗号分隔的运行目录相对路径清单配置：写入时就拒绝绝对路径与目录逃逸，
+     * 避免直到清理任务执行才被发现配置根本无效。
+     */
+    private static final Set<String> RELATIVE_PATH_LIST_KEYS = Set.of("log-retention.scan-paths");
 
     public ConfigDefinition {
         allowedValues = List.copyOf(allowedValues);
@@ -107,6 +114,7 @@ public record ConfigDefinition(
      */
     public boolean superAdminOnly() {
         return "media.import.enabled".equals(key)
+                || "log-retention.scan-paths".equals(key)
                 || key.startsWith("media.tmdb.")
                 || key.startsWith("music.")
                 || key.startsWith("reader.gbooks.")
@@ -120,10 +128,37 @@ public record ConfigDefinition(
         if (!allowedValues.isEmpty() && allowedValues.stream().noneMatch(rawValue::equals)) {
             throw new IllegalArgumentException("配置值不在允许列表中");
         }
+        if (RELATIVE_PATH_LIST_KEYS.contains(key)) {
+            return normalizeRelativePathList(rawValue);
+        }
         if (!URL_KEYS.contains(key)) {
             return rawValue;
         }
         return normalizeUrl(rawValue);
+    }
+
+    /**
+     * 校验逗号分隔的相对路径清单：拒绝绝对路径、盘符、UNC 与 {@code ..} 逃逸。
+     *
+     * <p>保留清理会删除匹配到的文件，扫描根必须由部署确定而非由配置任意指定，
+     * 因此这里只接受相对运行目录的路径段，执行侧再按日志基目录做一次边界校验。</p>
+     */
+    private String normalizeRelativePathList(String rawValue) {
+        List<String> segments = Arrays.stream(rawValue.split(","))
+                .map(String::trim)
+                .filter(segment -> !segment.isEmpty())
+                .toList();
+        if (segments.isEmpty()) {
+            throw new IllegalArgumentException("路径清单不能为空");
+        }
+        for (String segment : segments) {
+            String normalized = segment.replace('\\', '/');
+            if (normalized.startsWith("/") || normalized.contains("..")
+                    || normalized.matches("^[A-Za-z]:.*") || normalized.indexOf('\0') >= 0) {
+                throw new IllegalArgumentException("路径必须是运行目录下的相对路径：" + segment);
+            }
+        }
+        return String.join(",", segments);
     }
 
     private String normalizeUrl(String rawValue) {

@@ -196,8 +196,10 @@ public class FileQueryService {
         node.setNormalizedPath(newPath);
         updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
-        // 更新 Lucene 搜索索引中的文件名
-        fileSearchIndexService.indexFile(saved.getId(), ownerUserId, saved.getName(), null);
+        // 更新 Lucene 搜索索引中的文件名，空间类型必须跟随节点本身，
+        // 否则共享文件重命名后会在索引里被写成个人空间。
+        fileSearchIndexService.indexFile(
+                saved.getId(), ownerUserId, saved.getName(), null, saved.getSpaceType().getValue());
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return toDto(saved);
     }

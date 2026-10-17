@@ -365,6 +365,52 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             """)
     List<Object[]> aggregateFileStatsByMimeType(@Param("ownerUserId") UUID ownerUserId);
 
+    /**
+     * 汇总个人空间某目录子树内的活跃文件字节数与文件数。
+     *
+     * <p>个人空间的规范化路径只在该用户名下唯一，不同用户可以持有同名前缀，
+     * 因此必须带 ownerUserId 过滤。</p>
+     *
+     * @param ownerUserId 空间所有者
+     * @param spaceType 空间类型
+     * @param prefix 已转义的父目录路径前缀（含结尾分隔符）
+     * @return 单行二元组：总字节数、文件数
+     */
+    @Query("""
+            select coalesce(sum(n.sizeBytes), 0), count(n.id)
+            from FileNode n
+            where n.ownerUserId = :ownerUserId and n.spaceType = :spaceType
+              and n.nodeType = 'FILE' and n.deleted = false
+              and n.normalizedPath like concat(:prefix, '%') escape '\\'
+            """)
+    List<Object[]> sumActiveFilesUnderPathByOwner(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
+     * 汇总共享空间某目录子树内的活跃文件字节数与文件数。
+     *
+     * <p>共享空间是一棵全体成员共用的树，目录内文件的所有者各不相同，
+     * 按创建者过滤会漏掉其他成员上传的字节，因此这里只按空间与前缀统计。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的父目录路径前缀（含结尾分隔符）
+     * @return 单行二元组：总字节数、文件数
+     */
+    @Query("""
+            select coalesce(sum(n.sizeBytes), 0), count(n.id)
+            from FileNode n
+            where n.spaceType = :spaceType
+              and n.nodeType = 'FILE' and n.deleted = false
+              and n.normalizedPath like concat(:prefix, '%') escape '\\'
+            """)
+    List<Object[]> sumActiveFilesUnderPathInSpace(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.shared = true AND n.ownerUserId != :userId AND n.deleted = false

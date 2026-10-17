@@ -413,7 +413,14 @@ public class MovieLibraryService {
             UUID seriesId,
             UpdateSeriesMetadataRequest request
     ) {
-        MediaTvSeries series = mediaContentAccessService.requireReadableSeries(ownerUserId, seriesId);
+        // 写操作按所有者取回，与 updateMetadata / deleteItem 同一口径：
+        // requireReadableSeries 对 LOCAL 共享库只校验可读，任何能浏览该库的成员
+        // 都能借此改掉别人创建的剧集标题与简介。
+        MediaTvSeries series = tvSeriesRepository.findByIdAndOwnerUserId(seriesId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MEDIA_NOT_FOUND,
+                        "媒体资源不存在"
+                ));
         String title = request.title() == null ? "" : request.title().trim();
         if (title.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "剧集标题不能为空");

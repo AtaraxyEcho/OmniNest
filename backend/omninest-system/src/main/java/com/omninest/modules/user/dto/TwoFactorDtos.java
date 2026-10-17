@@ -31,7 +31,8 @@ public final class TwoFactorDtos {
     /** 关闭两步验证请求。 */
     @Schema(description = "两步验证关闭请求")
     public record TwoFactorDisableRequest(
-            @Schema(description = "登录密码", example = "secret123") @NotBlank(message = "密码不能为空") String password
+            @Schema(description = "登录密码", example = "secret123") @NotBlank(message = "密码不能为空") String password,
+            @Schema(description = "当前 6 位验证码或一次性备份码", example = "123456") @NotBlank(message = "验证码不能为空") String code
     ) {
     }
 

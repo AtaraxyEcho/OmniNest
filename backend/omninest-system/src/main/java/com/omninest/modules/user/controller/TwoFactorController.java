@@ -14,6 +14,7 @@ import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorStatusResponse;
 import com.omninest.modules.user.service.TwoFactorPolicyService;
 import com.omninest.modules.user.service.TwoFactorService;
+import com.omninest.modules.user.service.UserSessionRevocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -47,6 +48,7 @@ public class TwoFactorController {
     private final TwoFactorPolicyService twoFactorPolicyService;
     private final CurrentUserContext currentUserContext;
     private final RateLimitService rateLimitService;
+    private final UserSessionRevocationService userSessionRevocationService;
 
     @Operation(summary = "两步验证状态", description = "返回当前用户是否已开启以及策略是否强制要求开启")
     @GetMapping("/api/v1/me/2fa/status")
@@ -76,13 +78,19 @@ public class TwoFactorController {
         return ApiResponse.success(new TwoFactorEnableResponse(twoFactorService.enable(userId, request.code())));
     }
 
-    @Operation(summary = "关闭两步验证", description = "密码复核后关闭并清除全部凭据与备份码")
+    @Operation(summary = "关闭两步验证", description = "密码与验证码复核后关闭并清除全部凭据与备份码；角色被策略强制时禁止关闭")
     @PostMapping("/api/v1/me/2fa/disable")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
     ApiResponse<Void> disable(@Valid @RequestBody TwoFactorDisableRequest request) {
         UUID userId = currentUserContext.requireCurrentUserId();
+        if (twoFactorPolicyService.isRequired(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "当前角色受安全策略强制要求两步验证，不能自行关闭");
+        }
         requireAttemptBudget(userId, "2fa-disable", 3, SETUP_WINDOW);
-        twoFactorService.disable(userId, request.password());
+        twoFactorService.disable(userId, request.password(), request.code());
+        // 关闭凭据后其他设备上的会话不能再被两步验证保护，一律吊销，仅保留当前会话
+        userSessionRevocationService.revokeAllExcept(
+                userId, currentUserContext.currentSessionId(), "TWO_FACTOR_DISABLED");
         return ApiResponse.success();
     }
 

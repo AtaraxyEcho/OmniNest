@@ -301,7 +301,7 @@ class FileIngressPromotionServiceTest {
 
         assertThat(session.getStatus()).isEqualTo("COMPLETED");
         verify(sharedSpaceQuotaService).checkQuota(512L);
-        verify(sharedSpaceQuotaService).increaseUsage(512L);
+        verify(sharedSpaceQuotaService).increaseUsage(512L, 1L);
         verify(storageQuotaService, never()).settleReservation(anyString(), any(UUID.class), anyLong());
         verify(storageQuotaService, never()).incrementUsage(any(UUID.class), anyLong());
     }

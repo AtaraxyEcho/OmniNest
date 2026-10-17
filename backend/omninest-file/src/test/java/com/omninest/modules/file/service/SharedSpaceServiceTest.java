@@ -113,7 +113,7 @@ class SharedSpaceServiceTest {
             service.moveToSharedSpace(FILE_ID, USER_A);
 
             verify(storageQuotaService).decrementUsage(USER_A, 2048L);
-            verify(sharedSpaceQuotaService).increaseUsage(2048L);
+            verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
         }
 
         @Test
@@ -269,7 +269,7 @@ class SharedSpaceServiceTest {
 
             service.moveToPersonalSpace(FILE_ID, USER_A);
 
-            verify(sharedSpaceQuotaService).decreaseUsage(2048L);
+            verify(sharedSpaceQuotaService).decreaseUsage(2048L, 1L);
             verify(storageQuotaService).incrementUsage(USER_A, 2048L);
         }
 
@@ -328,7 +328,7 @@ class SharedSpaceServiceTest {
 
             assertThat(file.isDeleted()).isTrue();
             assertThat(file.getDeletedBy()).isEqualTo(USER_A);
-            verify(sharedSpaceQuotaService).decreaseUsage(1024L);
+            verify(sharedSpaceQuotaService).decreaseUsage(1024L, 1L);
         }
 
         @Test

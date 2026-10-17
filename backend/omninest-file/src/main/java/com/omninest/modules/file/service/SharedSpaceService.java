@@ -113,8 +113,9 @@ public class SharedSpaceService {
     public FileNode createFolder(UUID parentFolderId, String folderName, UUID operatorId) {
         ensureSharedSpaceEnabled();
         validatePermission(operatorId, Action.CAN_CREATE_FOLDER);
+        String normalizedName = normalizeNodeName(folderName);
         boolean exists = fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
-                SpaceType.SHARED, parentFolderId, folderName);
+                SpaceType.SHARED, parentFolderId, normalizedName);
         if (exists) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件夹");
         }
@@ -123,9 +124,9 @@ public class SharedSpaceService {
         folder.setOwnerUserId(operatorId);
         folder.setUploadedBy(operatorId);
         folder.setParentId(parentFolderId);
-        folder.setName(folderName);
+        folder.setName(normalizedName);
         folder.setNodeType(NodeType.FOLDER.getValue());
-        folder.setNormalizedPath(buildSharedSpacePath(parentFolderId, folderName));
+        folder.setNormalizedPath(buildSharedSpacePath(parentFolderId, normalizedName));
         folder.setSizeBytes(0L);
         return fileNodeRepository.save(folder);
     }
@@ -214,9 +215,9 @@ public class SharedSpaceService {
         checkSharedSpaceNameConflict(node.getName(), null);
         revokeShareLinks(fileNodeId);
         revokeFilePermissions(fileNodeId);
-        long totalSize = calculateTotalSize(node);
+        SubtreeStats stats = calculateSubtreeStats(node);
         // 检查共享空间配额
-        sharedSpaceQuotaService.checkQuota(totalSize);
+        sharedSpaceQuotaService.checkQuota(stats.totalBytes());
         node.setSpaceType(SpaceType.SHARED);
         node.setUploadedBy(operatorId);
         // 移入共享空间根目录：规范化路径必须跟着父级重算，否则节点会以旧父级前缀
@@ -229,11 +230,10 @@ public class SharedSpaceService {
             batchMoveChildrenToShared(node.getId(), operatorId);
             rewriteSubtreePaths(previousPath, node.getNormalizedPath(), SpaceType.SHARED);
         }
-        if (totalSize > 0) {
-            storageQuotaService.decrementUsage(operatorId, totalSize);
-            sharedSpaceQuotaService.increaseUsage(totalSize);
-        }
-        log.info("文件从个人空间移入共享空间: fileId={}, operatorId={}, totalSize={}", fileNodeId, operatorId, totalSize);
+        storageQuotaService.decrementUsage(operatorId, stats.totalBytes());
+        sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount());
+        log.info("文件从个人空间移入共享空间: fileId={}, operatorId={}, totalSize={}, fileCount={}",
+                fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
 
     /**
@@ -250,9 +250,9 @@ public class SharedSpaceService {
         boolean isUploader = Objects.equals(node.getUploadedBy(), targetUserId);
         Action action = isUploader ? Action.CAN_MOVE_FROM : Action.CAN_DELETE_ANY;
         validatePermission(targetUserId, action);
-        long totalSize = calculateTotalSize(node);
+        SubtreeStats stats = calculateSubtreeStats(node);
         // 检查个人配额是否足够
-        storageQuotaService.checkQuota(targetUserId, totalSize);
+        storageQuotaService.checkQuota(targetUserId, stats.totalBytes());
         // 个人空间根目录同名会复用同一规范化路径前缀，先拦冲突再改空间与路径。
         if (fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
                 targetUserId, SpaceType.PERSONAL, node.getName())) {
@@ -271,11 +271,10 @@ public class SharedSpaceService {
             batchMoveChildrenToPersonal(node.getId(), targetUserId);
             rewriteSubtreePaths(previousPath, node.getNormalizedPath(), SpaceType.PERSONAL);
         }
-        if (totalSize > 0) {
-            sharedSpaceQuotaService.decreaseUsage(totalSize);
-            storageQuotaService.incrementUsage(targetUserId, totalSize);
-        }
-        log.info("文件从共享空间移入个人空间: fileId={}, targetUserId={}, totalSize={}", fileNodeId, targetUserId, totalSize);
+        sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
+        storageQuotaService.incrementUsage(targetUserId, stats.totalBytes());
+        log.info("文件从共享空间移入个人空间: fileId={}, targetUserId={}, totalSize={}, fileCount={}",
+                fileNodeId, targetUserId, stats.totalBytes(), stats.fileCount());
     }
 
     /**
@@ -296,7 +295,7 @@ public class SharedSpaceService {
         List<UUID> allIds = new ArrayList<>(collectAllDescendantIds(node.getId()));
         allIds.add(node.getId());
 
-        long totalSize = calculateTotalSize(node);
+        SubtreeStats stats = calculateSubtreeStats(node);
 
         // 批量软删除
         node.setDeleted(true);
@@ -307,14 +306,13 @@ public class SharedSpaceService {
             batchSoftDeleteChildren(node.getId(), operatorId);
         }
 
-        if (totalSize > 0) {
-            sharedSpaceQuotaService.decreaseUsage(totalSize);
-        }
+        sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
 
         // 进程内事件，ownerUserId 用上传者（非操作者），确保 MediaFileSyncService 查询正确
         UUID fileOwnerUserId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
         applicationEventPublisher.publishEvent(new FileNodesSoftDeletedEvent(fileOwnerUserId, allIds, Instant.now()));
-        log.info("共享空间文件删除: fileId={}, operatorId={}, totalSize={}", fileNodeId, operatorId, totalSize);
+        log.info("共享空间文件删除: fileId={}, operatorId={}, totalSize={}, fileCount={}",
+                fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
 
     /**
@@ -346,29 +344,45 @@ public class SharedSpaceService {
     }
 
     /**
-     * 计算文件或文件夹的总大小（递归）。
+     * 子树结算结果：字节数与文件数必须成对记账，删除整个文件夹时不能只扣一个文件。
+     *
+     * @param totalBytes 子树内活跃文件总字节数
+     * @param fileCount 子树内活跃文件数
      */
-    private long calculateTotalSize(FileNode node) {
+    private record SubtreeStats(long totalBytes, long fileCount) {
+    }
+
+    /**
+     * 汇总文件或文件夹子树的字节数与文件数。
+     *
+     * <p>共享空间目录内混有各成员上传的文件，按文件夹创建者的 ownerUserId 过滤会漏算
+     * 其他人上传的字节与文件，因此共享空间按空间类型加路径前缀统计，个人空间按所有者统计。</p>
+     */
+    private SubtreeStats calculateSubtreeStats(FileNode node) {
         if (NodeType.FILE.getValue().equals(node.getNodeType())) {
-            return node.getSizeBytes();
+            return new SubtreeStats(node.getSizeBytes(), 1L);
         }
-        List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        node.getOwnerUserId(),
-                        node.getSpaceType(),
-                        LikePatterns.escapeSpecials(node.getNormalizedPath() + "/"));
-        long total = 0;
-        for (FileNode descendant : descendants) {
-            if (NodeType.FILE.getValue().equals(descendant.getNodeType())) {
-                total += descendant.getSizeBytes();
-            }
+        String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
+        List<Object[]> rows = node.getSpaceType() == SpaceType.SHARED
+                ? fileNodeRepository.sumActiveFilesUnderPathInSpace(node.getSpaceType(), prefix)
+                : fileNodeRepository.sumActiveFilesUnderPathByOwner(
+                        node.getOwnerUserId(), node.getSpaceType(), prefix);
+        if (rows.isEmpty()) {
+            return new SubtreeStats(0L, 0L);
         }
-        return total;
+        Object[] row = rows.getFirst();
+        return new SubtreeStats(toLong(row[0]), toLong(row[1]));
+    }
+
+    private long toLong(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
     }
 
     private String normalizeNodeName(String name) {
         String normalized = name == null ? "" : name.trim();
-        if (normalized.isEmpty() || normalized.contains("/") || normalized.contains("\\")) {
+        if (normalized.isEmpty() || ".".equals(normalized) || "..".equals(normalized)
+                || normalized.contains("/") || normalized.contains("\\")
+                || normalized.indexOf('\0') >= 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "文件名称不合法");
         }
         return normalized;

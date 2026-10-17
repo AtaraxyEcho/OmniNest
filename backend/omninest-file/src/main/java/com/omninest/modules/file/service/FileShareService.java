@@ -83,7 +83,6 @@ public class FileShareService {
                 .map(FileShareRecipient::getShareLink)
                 .filter(Objects::nonNull)
                 .filter(share -> share.getDisabledAt() == null)
-                .filter(share -> NodeType.FILE.getValue().equals(share.getResourceType()))
                 .map(ShareLink::getResourceId)
                 .distinct()
                 .toList();
@@ -426,13 +425,17 @@ public class FileShareService {
                 .orElse("未知用户");
     }
 
+    /**
+     * 把一条接收记录映射为「收到的分享」条目。
+     *
+     * <p>文件夹分享同样入列：分页总数按接收记录计，若在此丢弃 FOLDER 条目，
+     * 列表条数会少于总数且前端统计的文件夹数恒为 0。</p>
+     */
     private List<FileSharedItemDto> toSharedItemDto(
             FileShareRecipient recipient,
             Map<UUID, FileNode> nodesById) {
         ShareLink share = recipient.getShareLink();
-        if (share == null
-                || share.getDisabledAt() != null
-                || !NodeType.FILE.getValue().equals(share.getResourceType())) {
+        if (share == null || share.getDisabledAt() != null) {
             return List.of();
         }
         FileNode file = nodesById.get(share.getResourceId());

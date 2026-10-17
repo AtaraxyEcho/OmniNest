@@ -30,12 +30,13 @@ class LogRetentionServiceTest {
     private final Instant now = Instant.parse("2026-09-18T10:00:00Z");
 
     @Test
-    void deletesOnlyExpiredFilesAndKeepsActiveLogAndSymlink() throws IOException {
+    void deletesOnlyExpiredLogsAndKeepsActiveLogSymlinkAndForeignTypes() throws IOException {
         Path logs = Files.createDirectories(workDir.resolve("logs"));
         Path activeLog = Files.createFile(logs.resolve("omninest.log"));
         Path oldArchive = aged(logs.resolve("omninest.log.2026-08-01.0.gz"), 30);
         Path freshArchive = aged(logs.resolve("omninest.log.2026-09-17.0.gz"), 1);
         Path oldStray = aged(logs.resolve("dump-2026-07.txt"), 40);
+        Path oldDatabase = aged(logs.resolve("keep-me.db"), 40);
         Path subdirectory = Files.createDirectories(logs.resolve("nested"));
         aged(subdirectory.resolve("nested-old.txt"), 60);
 
@@ -50,9 +51,10 @@ class LogRetentionServiceTest {
         LogRetentionService service = service(activeLog, Map.of());
         int deleted = service.cleanup(now);
 
-        assertThat(deleted).isEqualTo(2);
+        assertThat(deleted).isEqualTo(1);
         assertThat(oldArchive).doesNotExist();
-        assertThat(oldStray).doesNotExist();
+        assertThat(oldStray).exists();
+        assertThat(oldDatabase).exists();
         assertThat(freshArchive).exists();
         assertThat(activeLog).exists();
         assertThat(subdirectory.resolve("nested-old.txt")).exists();
@@ -79,10 +81,10 @@ class LogRetentionServiceTest {
     @Test
     void retentionDaysAndExtraScanPathsReadFromConfigCenter() throws IOException {
         Path logs = Files.createDirectories(workDir.resolve("logs"));
-        Path tmp = Files.createDirectories(workDir.resolve("tmp-derived"));
+        Path tmp = Files.createDirectories(logs.resolve("tmp-derived"));
         Path activeLog = Files.createFile(logs.resolve("omninest.log"));
         Path barelyOld = aged(logs.resolve("omninest.log.2026-09-16.0.gz"), 3);
-        Path oldTemp = aged(tmp.resolve("stale.bin"), 30);
+        Path oldTemp = aged(tmp.resolve("stale.tmp"), 30);
 
         Map<String, String> values = new HashMap<>();
         values.put("log-retention.retention-days", "2");
@@ -92,6 +94,50 @@ class LogRetentionServiceTest {
         assertThat(service.cleanup(now)).isEqualTo(2);
         assertThat(barelyOld).doesNotExist();
         assertThat(oldTemp).doesNotExist();
+    }
+
+    @Test
+    void scanPathOutsideLogBaseIsNeverDeleted() throws IOException {
+        Path logs = Files.createDirectories(workDir.resolve("logs"));
+        Path mediaLibrary = Files.createDirectories(workDir.resolve("var-lib-omninest"));
+        Path activeLog = Files.createFile(logs.resolve("omninest.log"));
+        Path oldLuceneSegment = aged(mediaLibrary.resolve("segments_4"), 40);
+        Path oldImport = aged(mediaLibrary.resolve("feature.log"), 40);
+
+        Map<String, String> values = new HashMap<>();
+        values.put("log-retention.retention-days", "1");
+        values.put("log-retention.scan-paths", mediaLibrary.toString());
+        LogRetentionService service = service(activeLog, values);
+
+        assertThat(service.cleanup(now)).isZero();
+        assertThat(oldLuceneSegment).exists();
+        assertThat(oldImport).exists();
+    }
+
+    @Test
+    void relativeEscapeIsResolvedAgainstBaseAndRejected() throws IOException {
+        Path logs = Files.createDirectories(workDir.resolve("logs"));
+        Path mediaLibrary = Files.createDirectories(workDir.resolve("var-lib-omninest"));
+        Path activeLog = Files.createFile(logs.resolve("omninest.log"));
+        Path oldImport = aged(mediaLibrary.resolve("import.log"), 40);
+
+        LogRetentionService service = service(activeLog, Map.of(
+                "log-retention.retention-days", "1",
+                "log-retention.scan-paths", "../var-lib-omninest"));
+
+        assertThat(service.cleanup(now)).isZero();
+        assertThat(oldImport).exists();
+    }
+
+    @Test
+    void whitelistAcceptsLogArchivesAndTmpOnly() {
+        assertThat(LogRetentionService.isDeletableLogFile("omninest.log")).isTrue();
+        assertThat(LogRetentionService.isDeletableLogFile("omninest.log.2026-08-01.0.gz")).isTrue();
+        assertThat(LogRetentionService.isDeletableLogFile("stale.tmp")).isTrue();
+        assertThat(LogRetentionService.isDeletableLogFile("segments_4")).isFalse();
+        assertThat(LogRetentionService.isDeletableLogFile("catalog.db")).isFalse();
+        assertThat(LogRetentionService.isDeletableLogFile("notes.logx")).isFalse();
+        assertThat(LogRetentionService.isDeletableLogFile("login.txt")).isFalse();
     }
 
     @Test

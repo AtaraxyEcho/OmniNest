@@ -50,6 +50,25 @@ class RedisTokenBucketRateLimiterTest {
     }
 
     @Test
+    @DisplayName("放行返回 0，拒绝返回的等待毫秒数下限钳到 1")
+    void scriptKeepsAllowedAndRejectedReturnValueRangesDisjoint() {
+        assertThat(RedisTokenBucketRateLimiter.TOKEN_BUCKET_SCRIPT)
+                .contains("return 0")
+                .contains("if wait_ms < 1 then");
+    }
+
+    @Test
+    @DisplayName("脚本返回 1 是等待 1ms 的拒绝，不得读成放行")
+    void classifiesOneMillisecondWaitAsRejection() {
+        TokenBucketRateLimiter.TokenBucketResult rejected =
+                RedisTokenBucketRateLimiter.toTokenBucketResult(1L);
+
+        assertThat(rejected.allowed()).isFalse();
+        assertThat(rejected.retryAfterMs()).isEqualTo(1);
+        assertThat(RedisTokenBucketRateLimiter.toTokenBucketResult(0L).allowed()).isTrue();
+    }
+
+    @Test
     @DisplayName("禁用限速时始终允许")
     void allowsWhenDisabled() {
         RateLimitProperties disabled = new RateLimitProperties(false, 120, null, "omninest:rate-limit");

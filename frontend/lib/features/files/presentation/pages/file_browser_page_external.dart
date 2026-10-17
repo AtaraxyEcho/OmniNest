@@ -568,6 +568,32 @@ Future<void> _startOAuthAuthorize(
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 child: Text(l10n.filesCancel),
               ),
+              if (kIsWeb)
+                FilledButton(
+                  // Web 由用户手势直接开新标签走授权；浏览器拦截弹窗时退回复制，
+                  // 不能让授权停在「只能手抄一段 URL」。
+                  onPressed: () async {
+                    if (openDownloadUrl(url)) {
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                      return;
+                    }
+                    final copied = await copyTextToClipboard(url);
+                    if (!dialogContext.mounted) {
+                      return;
+                    }
+                    showOmniFeedback(
+                      dialogContext,
+                      copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+                      severity:
+                          copied
+                              ? OmniFeedbackSeverity.success
+                              : OmniFeedbackSeverity.error,
+                    );
+                  },
+                  child: Text(l10n.filesOpen),
+                ),
               FilledButton(
                 onPressed: () async {
                   final copied = await copyTextToClipboard(url);

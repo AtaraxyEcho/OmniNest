@@ -198,14 +198,18 @@ public class GlobalExceptionHandler {
      * <p>StreamingResponseBody 在写出阶段抛出的 IOException 常常伴随
      * InterruptedException 包装（HttpClient 响应流被取消），此时响应头已固定为
      * 媒体类型，继续返回 ApiResponse 会触发转换器失败。</p>
+     *
+     * <p>非客户端断开的 IO 故障必须落到 5xx：静默返回会让请求以 HTTP 200 加空响应体
+     * 正常结束，前端把故障当成成功并在反序列化处报错。</p>
      */
     @ExceptionHandler(IOException.class)
-    void handleIoException(IOException exception) {
+    void handleIoException(IOException exception, HttpServletResponse response) throws IOException {
         if (isClientDisconnect(exception)) {
             log.debug("流式响应已中断: {}", exception.getMessage());
             return;
         }
-        log.warn("IO 异常: {}", exception.getMessage());
+        log.error("未处理的 IO 异常", exception);
+        writeInternalError(response);
     }
 
     /**
@@ -231,6 +235,16 @@ public class GlobalExceptionHandler {
             return;
         }
         log.error("未知系统异常", exception);
+        writeInternalError(response);
+    }
+
+    /**
+     * 写出统一的 5xx 内部错误响应。
+     *
+     * <p>响应已提交时不能再改状态码；流式接口预设媒体 Content-Type 时写 JSON 会触发
+     * 转换器异常，两种情况都只记日志并保持既有响应，不再追加错误体。</p>
+     */
+    private void writeInternalError(HttpServletResponse response) throws IOException {
         if (response.isCommitted()) {
             log.warn("响应已提交，跳过错误体写出: status={}", response.getStatus());
             return;

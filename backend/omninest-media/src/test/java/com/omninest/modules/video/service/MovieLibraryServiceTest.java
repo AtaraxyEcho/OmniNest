@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -49,6 +50,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -407,7 +409,7 @@ class MovieLibraryServiceTest {
         series.setId(SERIES_ID);
         series.setOwnerUserId(OWNER_ID);
         series.setTitle("Old Title");
-        when(mediaContentAccessService.requireReadableSeries(OWNER_ID, SERIES_ID)).thenReturn(series);
+        when(tvSeriesRepository.findByIdAndOwnerUserId(SERIES_ID, OWNER_ID)).thenReturn(Optional.of(series));
         when(tvSeriesRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(contentAssetService.primarySeriesAssets(OWNER_ID, List.of(SERIES_ID)))
                 .thenReturn(Map.of());
@@ -432,6 +434,19 @@ class MovieLibraryServiceTest {
                 any(),
                 any()
         );
+    }
+
+    @Test
+    @DisplayName("共享影视库的可读成员不得改掉别人创建的剧集元数据")
+    void updateSeriesMetadataRejectsSeriesOwnedByAnotherUser() {
+        when(tvSeriesRepository.findByIdAndOwnerUserId(SERIES_ID, OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                () -> movieLibraryService.updateSeriesMetadata(
+                        OWNER_ID, SERIES_ID, new UpdateSeriesMetadataRequest("越权标题", "越权简介")))
+                .isInstanceOf(BusinessException.class);
+        verify(tvSeriesRepository, never()).save(any());
+        verifyNoInteractions(syncEventService);
     }
 
     private MediaVideoItem movie(String title, String mediaType) {

@@ -129,6 +129,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/setup").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/music/playback/sessions/*/stream").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/music/playback/sessions/*/stream").permitAll()
+                        // 外部存储 OAuth 回调由浏览器从三方站点匿名回跳，带不上 Bearer 令牌；
+                        // 该端点靠一次性 state 关联授权会话并定位账户，不暴露任何账户数据。
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/external-connectors/*/oauth/callback"
+                        ).permitAll()
                         .requestMatchers("/ws/**").permitAll();
                     if (apiDocsEnabled) {
                         authorize.requestMatchers(

@@ -24,6 +24,7 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -155,13 +156,25 @@ public class PhotoAlbumService {
     }
 
     /**
-     * 向相册添加照片，自动去重
+     * 向相册添加照片，自动去重。
+     *
+     * <p>photoIds 必须先按所有者与未删除状态过滤：只校验相册归属会让调用方塞入别人的
+     * 或已进回收站的照片 ID，相册计数随之虚增且点开后可见照片数与计数不一致。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public void addPhotos(UUID ownerUserId, UUID albumId, List<UUID> photoIds) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
-        for (UUID photoId : photoIds) {
-            if (albumItemRepository.existsByAlbumIdAndPhotoId(albumId, photoId)) {
+        if (photoIds == null || photoIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> activePhotoIds = photoItemRepository
+                .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
+                .stream()
+                .map(PhotoItem::getId)
+                .collect(Collectors.toSet());
+        for (UUID photoId : photoIds.stream().filter(Objects::nonNull).distinct().toList()) {
+            if (!activePhotoIds.contains(photoId)
+                    || albumItemRepository.existsByAlbumIdAndPhotoId(albumId, photoId)) {
                 continue;
             }
             PhotoAlbumItem item = new PhotoAlbumItem();
@@ -190,7 +203,7 @@ public class PhotoAlbumService {
      */
     private void refreshPhotoCount(UUID albumId) {
         albumRepository.findById(albumId).ifPresent(album -> {
-            album.setPhotoCount((int) albumItemRepository.countByAlbumId(albumId));
+            album.setPhotoCount((int) albumItemRepository.countActivePhotosByAlbumId(albumId));
             albumRepository.save(album);
         });
     }

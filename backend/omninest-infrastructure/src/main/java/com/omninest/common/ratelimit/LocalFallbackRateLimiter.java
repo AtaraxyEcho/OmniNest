@@ -1,8 +1,9 @@
 package com.omninest.common.ratelimit;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -16,7 +17,33 @@ public final class LocalFallbackRateLimiter {
 
     private static final int MAX_TRACKED_KEYS = 10_000;
 
-    private static final ConcurrentMap<String, WindowCounter> COUNTERS = new ConcurrentHashMap<>();
+    /**
+     * 固定窗口计数器：条目在首次请求时创建，并按该次调用的窗口时长逐条过期。
+     *
+     * <p>键数量超过上限时按访问频率逐出个别条目，不得整表清空——清空会让正在受限的
+     * 账号与 IP 立刻恢复满额，等于把键膨胀变成绕过限流的开关。</p>
+     */
+    private static final Cache<String, WindowCounter> COUNTERS = Caffeine.newBuilder()
+            .maximumSize(MAX_TRACKED_KEYS)
+            .expireAfter(new Expiry<String, WindowCounter>() {
+                @Override
+                public long expireAfterCreate(String key, WindowCounter value, long currentTime) {
+                    return value.windowNanos;
+                }
+
+                @Override
+                public long expireAfterUpdate(
+                        String key, WindowCounter value, long currentTime, long currentDuration) {
+                    return currentDuration;
+                }
+
+                @Override
+                public long expireAfterRead(
+                        String key, WindowCounter value, long currentTime, long currentDuration) {
+                    return currentDuration;
+                }
+            })
+            .build();
 
     private LocalFallbackRateLimiter() {
     }
@@ -33,26 +60,16 @@ public final class LocalFallbackRateLimiter {
         if (key == null || limit <= 0 || window == null || window.isZero() || window.isNegative()) {
             return false;
         }
-        if (COUNTERS.size() > MAX_TRACKED_KEYS) {
-            COUNTERS.clear();
-        }
-        long now = System.nanoTime();
-        long windowNanos = window.toNanos();
-        WindowCounter counter = COUNTERS.compute(key, (k, existing) -> {
-            if (existing == null || now - existing.startNanos > windowNanos) {
-                return new WindowCounter(now);
-            }
-            return existing;
-        });
+        WindowCounter counter = COUNTERS.get(key, ignored -> new WindowCounter(window.toNanos()));
         return counter.count.incrementAndGet() <= limit;
     }
 
     private static final class WindowCounter {
-        private final long startNanos;
+        private final long windowNanos;
         private final AtomicInteger count = new AtomicInteger();
 
-        private WindowCounter(long startNanos) {
-            this.startNanos = startNanos;
+        private WindowCounter(long windowNanos) {
+            this.windowNanos = windowNanos;
         }
     }
 }

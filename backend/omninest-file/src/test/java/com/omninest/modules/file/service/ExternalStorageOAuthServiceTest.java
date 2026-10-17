@@ -126,6 +126,36 @@ class ExternalStorageOAuthServiceTest {
         verify(oauthAppRepository).findFirstByConnectorCodeAndEnabledTrue("DROPBOX");
     }
 
+    @Test
+    void buildAuthorizationUrlCarriesStateForEveryProvider() {
+        StorageConnectorOAuthApp app = new StorageConnectorOAuthApp();
+        app.setConnectorCode("GDRIVE");
+        app.setClientId("client-id");
+        app.setClientSecretEncrypted("secret");
+        app.setRedirectUri("http://localhost:8080/api/v1/external-connectors/GDRIVE/oauth/callback");
+        app.setEnabled(true);
+        when(oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue(anyString()))
+                .thenReturn(Optional.of(app));
+        when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
+                .thenReturn(Optional.of(buildAccount("{}")));
+
+        var response = service.start(OWNER_ID, "GDRIVE", ACCOUNT_ID);
+
+        assertThat(response.state()).isNotBlank();
+        assertThat(response.authorizationUrl())
+                .contains("state=" + response.state())
+                .contains("redirect_uri=");
+    }
+
+    @Test
+    void handleCallbackRejectsUnknownState() {
+        assertThatThrownBy(() -> service.handleCallback("never-issued", "authorization-code"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+
     private StorageExternalAccount buildAccount(String credentialsJson) {
         StorageExternalAccount account = new StorageExternalAccount();
         account.setId(ACCOUNT_ID);

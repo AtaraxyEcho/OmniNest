@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
@@ -147,7 +148,28 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.filesColors.surface,
-      body: _buildBody(),
+      // 本页挂在应用壳层之外：刘海/横屏会切到卡片，同时路由本身没有
+      // 任何返回入口，访客直达链接后会被困在此页。
+      body: SafeArea(
+        child: Column(
+          children: [_buildTopBar(context), Expanded(child: _buildBody())],
+        ),
+      ),
+    );
+  }
+
+  /// 顶部逃生控件：48dp 返回键，栈内 pop、直达链接兜底回门户。
+  Widget _buildTopBar(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: IconButton(
+          tooltip: AppLocalizations.of(context).coreBackToPortal,
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => exitDetailRoute(context, fallbackRoute: '/portal'),
+        ),
+      ),
     );
   }
 

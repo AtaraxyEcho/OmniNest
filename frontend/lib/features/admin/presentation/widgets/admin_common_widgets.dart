@@ -45,12 +45,22 @@ class AdminPageHeader extends StatelessWidget {
           ],
         );
 
-        if (!isWide || trailing == null) {
+        // 工具条（状态徽标 + 自动刷新分段控件等）有自身的内在最小宽度，
+        // 窄于视口时不得抛 RenderFlex 溢出：给它一条同向横向滚动通道，内容仍可触达。
+        final Widget? toolbar =
+            trailing == null
+                ? null
+                : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: trailing!,
+                );
+
+        if (toolbar == null || !isWide) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               titleBlock,
-              if (trailing != null) ...[const SizedBox(height: 18), trailing!],
+              if (toolbar != null) ...[const SizedBox(height: 18), toolbar],
             ],
           );
         }
@@ -60,7 +70,7 @@ class AdminPageHeader extends StatelessWidget {
           children: [
             Expanded(child: titleBlock),
             const SizedBox(width: 24),
-            trailing!,
+            Flexible(fit: FlexFit.loose, child: toolbar),
           ],
         );
       },

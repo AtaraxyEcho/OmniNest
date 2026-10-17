@@ -119,8 +119,10 @@ class PhotoBatchServiceTest {
                 eventCaptor.capture()
         );
         assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(OWNER_ID);
+        // 任务记录类型必须固定为 PHOTO_BATCH：GenericTaskRecoveryScheduler 按等值匹配扫描，
+        // 带子动作后缀会让中断的批量任务永远停在 PROCESSING 不被恢复。
         verify(taskRecordService).createQueuedTask(
-                any(UUID.class), eq(OWNER_ID), eq("PHOTO_BATCH_TAG"), any(), any());
+                any(UUID.class), eq(OWNER_ID), eq("PHOTO_BATCH"), any(), any());
     }
 
     @Test

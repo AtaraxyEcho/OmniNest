@@ -4,6 +4,7 @@ import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.FilePurgeTaskDto;
@@ -91,6 +92,7 @@ public class PhotoLibraryController {
     private final PhotoRelationService relationService;
     private final PhotoMotionRescanService motionRescanService;
     private final CurrentUserContext currentUserContext;
+    private final ClientIpResolver clientIpResolver;
 
     // ─── 浏览 ───
 
@@ -717,7 +719,7 @@ public class PhotoLibraryController {
             HttpServletRequest request
     ) {
         return ApiResponse.success(albumService.issueSharedAlbumSession(
-                token, body == null ? null : body.password(), request.getRemoteAddr()));
+                token, body == null ? null : body.password(), resolveClientIp(request)));
     }
 
     @Operation(summary = "访问分享相册", description = "通过短期分享会话分页访问共享相册")
@@ -768,7 +770,7 @@ public class PhotoLibraryController {
             HttpServletRequest request
     ) {
         return ApiResponse.success(albumService.issueSharedPhotoSession(
-                token, body == null ? null : body.password(), request.getRemoteAddr()));
+                token, body == null ? null : body.password(), resolveClientIp(request)));
     }
 
     @Operation(summary = "访问分享照片", description = "通过短期分享会话访问共享单张照片")
@@ -939,6 +941,18 @@ public class PhotoLibraryController {
     ApiResponse<PhotoRelationsDto> relations() {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(relationService.relations(userId));
+    }
+
+    /**
+     * 反代部署下 {@code getRemoteAddr()} 恒为代理地址，分享密码防爆破若用它计键，
+     * 所有访客会合并进同一个桶而被互相锁死。
+     */
+    private String resolveClientIp(HttpServletRequest request) {
+        return clientIpResolver.resolve(
+                request.getRemoteAddr(),
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP")
+        );
     }
 }
 

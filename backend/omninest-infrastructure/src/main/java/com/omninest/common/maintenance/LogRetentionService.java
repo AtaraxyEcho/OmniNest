@@ -9,6 +9,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -23,9 +24,13 @@ import org.springframework.stereotype.Component;
  *
  * <p>日志归档由 logback 滚动策略主闸管理；本任务作为兜底，每日清理
  * {@code log-retention.scan-paths} 目录（默认 {@code logs/}，相对工作目录）
- * 下超过保留期的普通文件，跳过当前活跃日志与符号链接。三个配置中心键
+ * 下超过保留期的日志文件，跳过当前活跃日志与符号链接。三个配置中心键
  * （log-retention.enabled / retention-days / scan-paths）支持热更新：
  * 调度每次执行时重新读取。</p>
+ *
+ * <p>删除范围有两条硬边界：扫描目录必须位于 {@code logging.file.name} 所在目录内，
+ * 且只有文件名形如日志归档（{@code *.log}、{@code *.log.gz}）或临时文件（{@code *.tmp}）
+ * 才会被删除。配置中心的扫描目录键只能由超级管理员修改。</p>
  *
  * @author OmniNest
  */
@@ -44,6 +49,11 @@ public class LogRetentionService {
     private final ConfigValueProvider configValueProvider;
     private final RuntimeConfigCache runtimeConfigCache;
     private final Path activeLogPath;
+    /**
+     * 允许清理的唯一基目录：应用自身写日志的目录。扫描路径必须落在其内，
+     * 否则配置中心一个值就能把删除范围指到 Lucene 索引或媒体导入目录。
+     */
+    private final Path logBaseDirectory;
 
     /**
      * 创建保留清理服务。
@@ -60,6 +70,8 @@ public class LogRetentionService {
         this.configValueProvider = configValueProvider;
         this.runtimeConfigCache = runtimeConfigCache;
         this.activeLogPath = Path.of(activeLogPath).toAbsolutePath().normalize();
+        Path parent = this.activeLogPath.getParent();
+        this.logBaseDirectory = parent == null ? Path.of(".").toAbsolutePath().normalize() : parent;
     }
 
     /**
@@ -94,6 +106,10 @@ public class LogRetentionService {
 
     private int cleanupDirectory(String rawPath, Instant cutoff) {
         Path dir = Path.of(rawPath).toAbsolutePath().normalize();
+        if (!dir.startsWith(logBaseDirectory)) {
+            log.warn("日志保留清理跳过越出日志基目录的扫描路径: path={}, base={}", rawPath, logBaseDirectory);
+            return 0;
+        }
         if (!Files.isDirectory(dir)) {
             return 0;
         }
@@ -109,6 +125,9 @@ public class LogRetentionService {
                 if (entry.toAbsolutePath().normalize().equals(activeLogPath)) {
                     continue;
                 }
+                if (!isDeletableLogFile(entry.getFileName().toString())) {
+                    continue;
+                }
                 if (isOlderThan(entry, cutoff)) {
                     try {
                         Files.deleteIfExists(entry);
@@ -122,6 +141,29 @@ public class LogRetentionService {
             log.warn("日志保留清理扫描失败: dir={}", rawPath, e);
         }
         return deleted;
+    }
+
+    /**
+     * 判定文件名是否属于可清理的日志归档或临时文件（{@code *.log}、{@code *.log.gz}、
+     * {@code *.log.<日期>}、{@code *.tmp}）。
+     *
+     * <p>基目录边界是主闸，这里是第二道：{@code logging.file.name} 被配成不含目录的文件名时
+     * 基目录会退化成整个工作目录，仅靠边界挡不住误删内容文件，因此白名单之外的文件一律不碰。</p>
+     *
+     * @param fileName 文件名
+     * @return 是否属于可清理文件
+     */
+    static boolean isDeletableLogFile(String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".tmp")) {
+            return true;
+        }
+        int index = lower.indexOf(".log");
+        if (index <= 0) {
+            return false;
+        }
+        int afterSuffix = index + ".log".length();
+        return afterSuffix == lower.length() || lower.charAt(afterSuffix) == '.';
     }
 
     private boolean isOlderThan(Path file, Instant cutoff) {

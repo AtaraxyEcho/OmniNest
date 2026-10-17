@@ -191,30 +191,42 @@ class _AdminBatchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 窄屏（360-390）两操作并存时单行 Row 会溢出，操作簇改用 Wrap 换行；
+    // 已选数量始终保持在首列。
     return Row(
       children: [
         Text(
           l10n.adminListSelectedCount('$count'),
           style: Theme.of(context).textTheme.labelLarge,
         ),
-        const Spacer(),
-        TextButton(
-          onPressed: onClear,
-          child: Text(l10n.adminBatchClearSelection),
-        ),
-        if (secondaryActionLabel != null && onSecondaryAction != null) ...[
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: onSecondaryAction,
-            icon: Icon(secondaryActionIcon ?? Icons.close_rounded, size: 18),
-            label: Text(secondaryActionLabel!),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton(
+                onPressed: onClear,
+                child: Text(l10n.adminBatchClearSelection),
+              ),
+              if (secondaryActionLabel != null && onSecondaryAction != null)
+                FilledButton.tonalIcon(
+                  onPressed: onSecondaryAction,
+                  icon: Icon(
+                    secondaryActionIcon ?? Icons.close_rounded,
+                    size: 18,
+                  ),
+                  label: Text(secondaryActionLabel!),
+                ),
+              FilledButton.icon(
+                onPressed: onAction,
+                icon: Icon(actionIcon, size: 18),
+                label: Text(actionLabel),
+              ),
+            ],
           ),
-        ],
-        const SizedBox(width: 8),
-        FilledButton.icon(
-          onPressed: onAction,
-          icon: Icon(actionIcon, size: 18),
-          label: Text(actionLabel),
         ),
       ],
     );

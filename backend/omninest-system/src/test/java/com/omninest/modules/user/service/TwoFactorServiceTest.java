@@ -282,9 +282,15 @@ class TwoFactorServiceTest {
     }
 
     @Test
-    @DisplayName("关闭：密码复核通过后清除全部凭据与备份码")
+    @DisplayName("关闭：密码与验证码复核通过后清除全部凭据与备份码")
     void disableRemovesAllCredentials() {
-        service.disable(userId, "secret123");
+        String secret = TotpUtil.generateSecret();
+        AuthTotpCredential credential = pendingCredential(secret);
+        credential.setEnabled(true);
+        credential.setLastUsedStep(null);
+        when(totpCredentialRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(Optional.of(credential));
+
+        service.disable(userId, "secret123", TotpUtil.currentCode(secret, Instant.now()));
 
         verify(totpCredentialRepository).deleteByUserId(userId);
         verify(backupCodeRepository).deleteByUserId(userId);
@@ -293,10 +299,25 @@ class TwoFactorServiceTest {
     @Test
     @DisplayName("关闭：密码错误被拒绝")
     void disableRejectsWrongPassword() {
-        assertThatThrownBy(() -> service.disable(userId, "wrong-pass"))
+        assertThatThrownBy(() -> service.disable(userId, "wrong-pass", "123456"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("密码错误");
         verify(totpCredentialRepository, never()).deleteByUserId(any());
+    }
+
+    @Test
+    @DisplayName("关闭：验证码错误被拒绝，不清除凭据")
+    void disableRejectsWrongCode() {
+        String secret = TotpUtil.generateSecret();
+        AuthTotpCredential credential = pendingCredential(secret);
+        credential.setEnabled(true);
+        when(totpCredentialRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(Optional.of(credential));
+
+        assertThatThrownBy(() -> service.disable(userId, "secret123", "000000"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("两步验证码错误");
+        verify(totpCredentialRepository, never()).deleteByUserId(any());
+        verify(backupCodeRepository, never()).deleteByUserId(any());
     }
 
     @Test

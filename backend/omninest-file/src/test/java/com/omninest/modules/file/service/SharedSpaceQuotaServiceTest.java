@@ -3,9 +3,12 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.config.ConfigValueProvider;
@@ -14,13 +17,14 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SharedSpaceUsage;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.mockito.ArgumentCaptor;
 
 /**
  * 共享空间配额服务测试。
@@ -111,51 +115,59 @@ class SharedSpaceQuotaServiceTest {
     class IncreaseUsageTests {
 
         @Test
-        @DisplayName("正常增加：usedBytes 和 fileCount 递增")
-        void increaseUsage_normal_increments() {
+        @DisplayName("正常增加：按容量上限守卫的单条原子更新")
+        void increaseUsage_appliesGuardedAtomicUpdate() {
             SharedSpaceUsage usage = usage(5000L, 5);
             when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
-            when(usageRepository.save(usage)).thenReturn(usage);
+            stubConfig("10000");
+            when(usageRepository.tryIncreaseUsage(
+                    eq(usage.getId()), eq(1024L), eq(2L), eq(10000L), any(Instant.class)))
+                    .thenReturn(1);
 
-            service.increaseUsage(1024L);
+            service.increaseUsage(1024L, 2L);
 
-            assertThat(usage.getUsedBytes()).isEqualTo(6024L);
-            assertThat(usage.getFileCount()).isEqualTo(6L);
-            verify(usageRepository).save(usage);
+            ArgumentCaptor<Instant> nowCaptor = ArgumentCaptor.captor();
+            verify(usageRepository).tryIncreaseUsage(
+                    eq(usage.getId()), eq(1024L), eq(2L), eq(10000L), nowCaptor.capture());
+            assertThat(nowCaptor.getValue()).isNotNull();
         }
 
         @Test
-        @DisplayName("乐观锁冲突：重试最多 3 次")
-        void increaseUsage_optimisticLock_retries() {
-            // 每次 findSingleton 返回新的实例，模拟数据库读取
-            when(usageRepository.findFirstBy())
-                    .thenReturn(Optional.of(usage(5000L, 5)))
-                    .thenReturn(Optional.of(usage(5000L, 5)))
-                    .thenReturn(Optional.of(usage(5000L, 5)));
-            when(usageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            // 前两次 save 抛出乐观锁异常
-            when(usageRepository.save(any()))
-                    .thenThrow(new ObjectOptimisticLockingFailureException(SharedSpaceUsage.class, 0))
-                    .thenThrow(new ObjectOptimisticLockingFailureException(SharedSpaceUsage.class, 0))
-                    .thenAnswer(inv -> inv.getArgument(0));
+        @DisplayName("未配置上限：用足够大的天花板代替无界比较，避免相加溢出")
+        void increaseUsage_unlimitedConfigUsesCeiling() {
+            SharedSpaceUsage usage = usage(5000L, 5);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+            stubConfig("0");
+            when(usageRepository.tryIncreaseUsage(any(), anyLong(), anyLong(), anyLong(), any()))
+                    .thenReturn(1);
 
-            service.increaseUsage(1024L);
+            service.increaseUsage(1024L, 1L);
 
-            verify(usageRepository, times(3)).save(any());
+            verify(usageRepository).tryIncreaseUsage(
+                    eq(usage.getId()), eq(1024L), eq(1L), eq(Long.MAX_VALUE / 4), any(Instant.class));
         }
 
         @Test
-        @DisplayName("乐观锁冲突 3 次后抛出异常")
-        void increaseUsage_optimisticLockExhausted_throws() {
-            SharedSpaceUsage usage = usage(5000L, 5);
+        @DisplayName("条件更新 0 行即容量不足，不再依赖读后写的乐观锁重试")
+        void increaseUsage_rejectedByGuardThrowsQuotaExceeded() {
+            SharedSpaceUsage usage = usage(9500L, 5);
             when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
-            when(usageRepository.save(usage))
-                    .thenThrow(new ObjectOptimisticLockingFailureException(SharedSpaceUsage.class, 0))
-                    .thenThrow(new ObjectOptimisticLockingFailureException(SharedSpaceUsage.class, 0))
-                    .thenThrow(new ObjectOptimisticLockingFailureException(SharedSpaceUsage.class, 0));
+            stubConfig("10000");
+            when(usageRepository.tryIncreaseUsage(any(), anyLong(), anyLong(), anyLong(), any()))
+                    .thenReturn(0);
 
-            assertThatThrownBy(() -> service.increaseUsage(1024L))
-                    .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+            assertThatThrownBy(() -> service.increaseUsage(1024L, 1L))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.FILE_QUOTA_EXCEEDED);
+        }
+
+        @Test
+        @DisplayName("零增量不触库")
+        void increaseUsage_zeroDeltaIsNoop() {
+            service.increaseUsage(0L, 0L);
+
+            verifyNoInteractions(usageRepository);
         }
     }
 
@@ -166,41 +178,22 @@ class SharedSpaceQuotaServiceTest {
     class DecreaseUsageTests {
 
         @Test
-        @DisplayName("正常减少：usedBytes 和 fileCount 递减")
-        void decreaseUsage_normal_decrements() {
+        @DisplayName("正常减少：按传入的字节与文件数原子扣减")
+        void decreaseUsage_appliesAtomicDecrease() {
             SharedSpaceUsage usage = usage(5000L, 5);
             when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
-            when(usageRepository.save(usage)).thenReturn(usage);
 
-            service.decreaseUsage(1024L);
+            service.decreaseUsage(1024L, 3L);
 
-            assertThat(usage.getUsedBytes()).isEqualTo(3976L);
-            assertThat(usage.getFileCount()).isEqualTo(4L);
+            verify(usageRepository).decreaseUsage(eq(usage.getId()), eq(1024L), eq(3L), any(Instant.class));
         }
 
         @Test
-        @DisplayName("下限为零：usedBytes 不变负数")
-        void decreaseUsage_belowZero_clampsToZero() {
-            SharedSpaceUsage usage = usage(500L, 1);
-            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
-            when(usageRepository.save(usage)).thenReturn(usage);
+        @DisplayName("零增量不触库")
+        void decreaseUsage_zeroDeltaIsNoop() {
+            service.decreaseUsage(0L, 0L);
 
-            service.decreaseUsage(1024L);
-
-            assertThat(usage.getUsedBytes()).isEqualTo(0L);
-            assertThat(usage.getFileCount()).isEqualTo(0L);
-        }
-
-        @Test
-        @DisplayName("fileCount 下限为零")
-        void decreaseUsage_fileCountBelowZero_clampsToZero() {
-            SharedSpaceUsage usage = usage(5000L, 0);
-            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
-            when(usageRepository.save(usage)).thenReturn(usage);
-
-            service.decreaseUsage(1024L);
-
-            assertThat(usage.getFileCount()).isEqualTo(0L);
+            verifyNoInteractions(usageRepository);
         }
     }
 

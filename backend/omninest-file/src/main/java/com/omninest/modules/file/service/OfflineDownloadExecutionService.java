@@ -395,7 +395,7 @@ public class OfflineDownloadExecutionService {
             FileNode importRoot = createImportRootIfNeeded(task, targetParent, status, completedFiles);
             FileNode completedNode = importFiles(task, taskDirectory, targetParent, importRoot, completedFiles);
             if (sharedTarget) {
-                sharedSpaceQuotaService.increaseUsage(totalSize);
+                sharedSpaceQuotaService.increaseUsage(totalSize, completedFiles.size());
             } else {
                 storageQuotaService.settleReservation("OFFLINE_DOWNLOAD", task.getId(), totalSize);
             }

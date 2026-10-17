@@ -42,7 +42,7 @@ public class FileIndexEventListener {
                         node.getId(),
                         node.getName(),
                         null,
-                        "PERSONAL"
+                        node.getSpaceType().getValue()
                 ))
                 .toList();
         if (!inputs.isEmpty()) {

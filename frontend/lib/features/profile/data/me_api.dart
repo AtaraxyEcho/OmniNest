@@ -68,12 +68,15 @@ class MeApi {
         : const <String>[];
   }
 
-  /// 关闭两步验证（密码复核）。后端为 Void 响应（data 为空），
+  /// 关闭两步验证（密码与验证码双重复核）。后端为 Void 响应（data 为空），
   /// 不得走要求 data 为对象的 _postData 解包。
-  Future<void> twoFactorDisable({required String password}) async {
+  Future<void> twoFactorDisable({
+    required String password,
+    required String code,
+  }) async {
     await _client.dio.post<Map<String, dynamic>>(
       '/me/2fa/disable',
-      data: {'password': password},
+      data: {'password': password, 'code': code},
     );
   }
 

@@ -8,6 +8,7 @@ import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.user.dto.AdminOperationsDto;
 import com.omninest.modules.user.service.AdminOperationsPagingService;
 import com.omninest.modules.user.service.AdminOperationsService;
+import com.omninest.modules.user.service.AdminRoleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,13 +32,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminOperationsController {
     private final AdminOperationsService adminOperationsService;
     private final AdminOperationsPagingService adminOperationsPagingService;
+    private final AdminRoleService adminRoleService;
     private final CurrentUserContext currentUserContext;
 
     @Operation(summary = "获取角色详情管理视图")
     @GetMapping("/api/v1/admin/roles/detail")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_READ + "')")
     ApiResponse<AdminOperationsDto.RoleManagementView> roles() {
-        return ApiResponse.success(adminOperationsService.roles());
+        return ApiResponse.success(adminRoleService.roles());
     }
 
     @Operation(summary = "更新角色权限配置")
@@ -48,7 +50,7 @@ public class AdminOperationsController {
             @Valid @RequestBody AdminOperationsDto.UpdateRolePermissionsRequest request
     ) {
         return ApiResponse.success(
-                adminOperationsService.updateRolePermissions(currentUserContext.requireCurrentUserId(), roleCode, request)
+                adminRoleService.updateRolePermissions(currentUserContext.requireCurrentUserId(), roleCode, request)
         );
     }
 
@@ -56,7 +58,7 @@ public class AdminOperationsController {
      * 创建自定义角色。
      *
      * <p>编码必须以 ROLE_ 开头且全局唯一；权限来自 none / member / admin 模板克隆，
-     * 详见 {@link AdminOperationsService#createRole}。</p>
+     * 详见 {@link AdminRoleService#createRole}。</p>
      */
     @Operation(summary = "创建自定义角色", description = "编码须以 ROLE_ 开头且唯一，权限按 none/member/admin 模板克隆，内置目录未初始化时返回业务错误")
     @PostMapping("/api/v1/admin/roles")
@@ -65,7 +67,7 @@ public class AdminOperationsController {
             @Valid @RequestBody AdminOperationsDto.CreateRoleRequest request
     ) {
         return ApiResponse.success(
-                adminOperationsService.createRole(currentUserContext.requireCurrentUserId(), request)
+                adminRoleService.createRole(currentUserContext.requireCurrentUserId(), request)
         );
     }
 
@@ -79,7 +81,7 @@ public class AdminOperationsController {
     @DeleteMapping("/api/v1/admin/roles/{roleCode}")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<Void> deleteRole(@PathVariable String roleCode) {
-        adminOperationsService.deleteRole(currentUserContext.requireCurrentUserId(), roleCode);
+        adminRoleService.deleteRole(currentUserContext.requireCurrentUserId(), roleCode);
         return ApiResponse.success(null);
     }
 

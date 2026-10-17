@@ -31,6 +31,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 配置中心应用服务。管理 API 只允许访问受控目录中的运行时配置。
@@ -330,7 +332,27 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         return configHistory;
     }
 
+    /**
+     * 广播配置刷新。
+     *
+     * <p>必须等数据库事务提交后再发：在事务体内广播时，其他节点的消费者会立刻清缓存并
+     * 回查数据库，读到提交前的旧值再写回共享缓存，配置看似已改却在各节点上停留在旧值，
+     * 直到下一次失效才自愈。无事务同步（如内置目录初始化）时按原样直接发送。</p>
+     */
     private void publishRefresh(String key) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishRefreshEvent(key);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publishRefreshEvent(key);
+            }
+        });
+    }
+
+    private void publishRefreshEvent(String key) {
         publisher.publishFanout(
                 QueueNames.CONFIG_REFRESH_EXCHANGE,
                 new ConfigRefreshEvent(UUID.randomUUID(), key, Instant.now())

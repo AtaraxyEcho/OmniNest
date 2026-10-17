@@ -297,9 +297,33 @@ public class PhotoLibraryService {
         }
         item.setDeletedAt(Instant.now());
         photoItemRepository.save(item);
+        refreshAlbumCountsForPhotos(ownerUserId, List.of(photoId));
         invalidateDashboardCache(ownerUserId);
         recordPhotoEvent(ownerUserId, photoId, SyncAction.DELETED, null, Map.of("trashed", true));
         log.info("照片已移入回收站: photoId={}, userId={}", photoId, ownerUserId);
+    }
+
+    /**
+     * 重算包含指定照片的相册计数。
+     *
+     * <p>相册卡片存的是落库的 photoCount，详情列表却按活动照片过滤；照片进回收站不删
+     * 相册关联条目，不在此重算就会让卡片数量长期高于点开后的实际数量。</p>
+     */
+    private void refreshAlbumCountsForPhotos(UUID ownerUserId, List<UUID> photoIds) {
+        if (photoIds.isEmpty()) {
+            return;
+        }
+        List<UUID> albumIds = albumItemRepository.findAlbumIdsByPhotoIdIn(photoIds);
+        if (albumIds.isEmpty()) {
+            return;
+        }
+        List<PhotoAlbum> albums = albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId);
+        for (PhotoAlbum album : albums) {
+            album.setPhotoCount((int) albumItemRepository.countActivePhotosByAlbumId(album.getId()));
+        }
+        if (!albums.isEmpty()) {
+            albumRepository.saveAll(albums);
+        }
     }
 
     /**
@@ -367,6 +391,7 @@ public class PhotoLibraryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "回收站中不存在该图片"));
         item.setDeletedAt(null);
         photoItemRepository.save(item);
+        refreshAlbumCountsForPhotos(ownerUserId, List.of(photoId));
         invalidateDashboardCache(ownerUserId);
         recordPhotoEvent(ownerUserId, photoId, SyncAction.RESTORED, null, Map.of("trashed", false));
         log.info("照片已从回收站恢复: photoId={}, userId={}", photoId, ownerUserId);

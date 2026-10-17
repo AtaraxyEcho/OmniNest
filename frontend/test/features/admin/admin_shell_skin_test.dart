@@ -8,6 +8,9 @@ import 'package:omninest/core/theme/workstation_skin.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
+import 'package:omninest/features/admin/domain/admin_section.dart';
+import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 
@@ -70,8 +73,13 @@ class _AdminSessionNotifier extends AuthSessionNotifier {
   }
 }
 
-Future<void> _pumpShell(WidgetTester tester, {bool light = false}) async {
-  tester.view.physicalSize = const Size(1440, 900);
+Future<void> _pumpShell(
+  WidgetTester tester, {
+  bool light = false,
+  Size size = const Size(1440, 900),
+  String? initialSectionSegment,
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -88,7 +96,7 @@ Future<void> _pumpShell(WidgetTester tester, {bool light = false}) async {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
-        home: const AdminDashboardPage(),
+        home: AdminDashboardPage(initialSectionSegment: initialSectionSegment),
       ),
     ),
   );
@@ -176,6 +184,45 @@ void main() {
     expect(
       scheme.surfaceContainer.computeLuminance(),
       greaterThan(scheme.surface.computeLuminance()),
+    );
+  });
+
+  for (final width in [360.0, 390.0]) {
+    testWidgets('窄屏 $width 顶栏保留通知与账号入口', (tester) async {
+      await _pumpShell(tester, size: Size(width, 844));
+
+      expect(find.byType(NotificationIcon), findsOneWidget);
+      expect(find.byType(UserAvatarMenu), findsOneWidget);
+      expect(
+        find.byTooltip(
+          AppLocalizations.of(
+            tester.element(find.byType(NotificationIcon)),
+          ).notificationTitle,
+        ),
+        findsWidgets,
+      );
+      expect(
+        find.byTooltip(
+          AppLocalizations.of(
+            tester.element(find.byType(UserAvatarMenu)),
+          ).coreProfile,
+        ),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('窄屏自带滚动的分区不再套外层同轴滚动容器', (tester) async {
+    await _pumpShell(tester, size: const Size(390, 844));
+
+    // 概览仍由外壳滚动（内容不自带滚动）。
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey(AdminSection.overview)),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsOneWidget,
     );
   });
 }

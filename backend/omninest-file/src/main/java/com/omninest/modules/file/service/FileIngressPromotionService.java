@@ -294,7 +294,7 @@ public class FileIngressPromotionService {
         if (session.getSpaceType() != SpaceType.PERSONAL) {
             // 共享空间无预留机制：晋升时按实际结算量复核容量并计入用量
             sharedSpaceQuotaService.checkQuota(session.getTotalSizeBytes());
-            sharedSpaceQuotaService.increaseUsage(session.getTotalSizeBytes());
+            sharedSpaceQuotaService.increaseUsage(session.getTotalSizeBytes(), 1);
             return;
         }
         if (session.getQuotaReservationId() == null) {

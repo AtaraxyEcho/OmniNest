@@ -148,17 +148,8 @@ public class FileSearchIndexService implements Closeable {
     /**
      * 索引文件文档，已存在同 fileId 文档则更新。
      *
-     * @param fileNodeId  文件节点 ID
-     * @param ownerUserId 拥有者用户 ID
-     * @param title       文件标题
-     * @param content     可选的文本内容
-     */
-    public void indexFile(UUID fileNodeId, UUID ownerUserId, String title, String content) {
-        indexFile(fileNodeId, ownerUserId, title, content, "PERSONAL");
-    }
-
-    /**
-     * 索引文件文档，已存在同 fileId 文档则更新。
+     * <p>空间类型必须由调用方显式给出：默认成 PERSONAL 会让共享空间文件在重命名或
+     * 恢复后把文档写成个人空间，空间过滤与按空间检索因此失真。</p>
      *
      * @param fileNodeId  文件节点 ID
      * @param ownerUserId 拥有者用户 ID
@@ -419,20 +410,23 @@ public class FileSearchIndexService implements Closeable {
                     }
                     IndexSearcher searcher = new IndexSearcher(reader);
                     QueryParser parser = new QueryParser(FIELD_TITLE, analyzer);
+                    parser.setDefaultOperator(QueryParser.Operator.OR);
                     String escaped = QueryParser.escape(queryStr);
-                    String fullQuery;
+                    // 标题与正文任一命中即可；空间过滤必须独立成 FILTER 子句。
+                    // 把 spaceType 拼进查询串会因默认 OR 退化成加分项，且 QueryParser
+                    // 经分词器得到的词项与写入时不分词的大写 StringField 术语对不上。
+                    Query keyword = parser.parse(FIELD_TITLE + ":\"" + escaped + "\" "
+                            + FIELD_CONTENT + ":\"" + escaped + "\"");
+                    BooleanQuery.Builder query = new BooleanQuery.Builder()
+                            .add(keyword, BooleanClause.Occur.MUST);
                     if (spaceType != null) {
-                        fullQuery = String.format("%s:\"%s\" %s:\"%s\" %s:\"%s\"",
-                                FIELD_TITLE, escaped, FIELD_CONTENT, escaped,
-                                FIELD_SPACE_TYPE, spaceType);
-                    } else {
-                        fullQuery = String.format("%s:\"%s\" %s:\"%s\"",
-                                FIELD_TITLE, escaped, FIELD_CONTENT, escaped);
+                        query.add(new TermQuery(new Term(FIELD_SPACE_TYPE, spaceType)),
+                                BooleanClause.Occur.FILTER);
                     }
-                    Query query = parser.parse(fullQuery);
+                    Query built = query.build();
                     // 超长文件分块后同一 fileId 会命中多条文档，放宽候选后再按文件去重。
                     int candidateLimit = Math.max(maxResults * 8, maxResults);
-                    TopDocs topDocs = searcher.search(query, candidateLimit);
+                    TopDocs topDocs = searcher.search(built, candidateLimit);
                     Map<UUID, Float> bestScores = new LinkedHashMap<>();
                     Map<UUID, String> titles = new LinkedHashMap<>();
                     for (ScoreDoc scoreDoc : topDocs.scoreDocs) {

@@ -181,13 +181,39 @@ class GlobalExceptionHandlerTest {
 
     @Test
     @DisplayName("流式响应中断的 IOException 不写入错误体")
-    void handleIoException_clientDisconnectDoesNotWriteResponse() {
+    void handleIoException_clientDisconnectDoesNotWriteResponse() throws IOException {
         IOException exception = new IOException(
                 "java.lang.InterruptedException",
                 new InterruptedException("sleep interrupted"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
 
-        Assertions.assertThatCode(() -> handler.handleIoException(exception))
-                .doesNotThrowAnyException();
+        handler.handleIoException(exception, response);
+
+        Assertions.assertThat(response.getContentAsString()).isEmpty();
+        Assertions.assertThat(response.getStatus()).isEqualTo(MockHttpServletResponse.SC_OK);
+    }
+
+    @Test
+    @DisplayName("非客户端断开的 IOException 必须落 500，不得以 200 空体结束")
+    void handleIoException_otherFailureWritesInternalServerError() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.handleIoException(new IOException("stream broke mid-write"), response);
+
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Assertions.assertThat(response.getContentAsString())
+                .contains(ErrorCode.INTERNAL_ERROR.getCode().toString());
+    }
+
+    @Test
+    @DisplayName("响应已提交时 IOException 不再改写状态码")
+    void handleIoException_committedResponseKeepsStatus() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setCommitted(true);
+
+        handler.handleIoException(new IOException("bucket unreachable"), response);
+
+        Assertions.assertThat(response.getContentAsString()).isEmpty();
     }
 
     @Test

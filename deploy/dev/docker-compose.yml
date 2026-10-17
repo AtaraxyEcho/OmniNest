@@ -165,15 +165,15 @@ services:
   rclone:
     image: rclone/rclone:1.74.2
     container_name: omninest-rclone
+    # 凭据只经环境（RCLONE_<FLAG> 等价于命令行开关）下发：写在 command: 里
+    # 会留在容器 argv（ps、docker inspect）中，与 prod 保持同一形态。
     environment:
-      RCLONE_RC_PASS: ${RCLONE_RC_PASS:-secret}
+      RCLONE_RC_PASS: ${RCLONE_RC_PASS:?RCLONE_RC_PASS 必须显式配置}
       RCLONE_RC_USER: ${RCLONE_RC_USER:-admin}
       TZ: Asia/Shanghai
     command: >
       rcd
       --rc-addr 0.0.0.0:5572
-      --rc-user ${RCLONE_RC_USER:-admin}
-      --rc-pass ${RCLONE_RC_PASS:-secret}
       --rc-job-expire-duration 5m
       --rc-server-read-timeout 1h
       --rc-server-write-timeout 1h

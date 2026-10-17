@@ -150,7 +150,8 @@ Future<void> _downloadFile(
     showOmniFeedback(
       context,
       copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
-      severity: OmniFeedbackSeverity.error,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
     );
   } catch (e) {
     if (!context.mounted) return;

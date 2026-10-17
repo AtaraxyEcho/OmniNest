@@ -7,12 +7,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ActiveSessionRegistry;
@@ -27,6 +30,7 @@ import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.dto.LoginRequest;
 import com.omninest.modules.user.dto.RegisterRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.notification.service.NotificationService;
@@ -397,7 +401,6 @@ class AuthServiceTest {
             user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
             when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
             when(twoFactorPolicyService.isRequired(user)).thenReturn(true);
-            when(twoFactorService.hasCredential(user.getId())).thenReturn(false);
 
             var token = service.login(
                     new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test");
@@ -409,20 +412,22 @@ class AuthServiceTest {
         }
 
         @Test
-        @DisplayName("强制角色已有凭据：不进注册引导，按未启用直通登录")
-        void loginSkipsEnrollmentWhenCredentialExists() {
+        @DisplayName("强制角色留有未确认的半成品凭据：二次登录仍进注册引导，不下发令牌")
+        void loginKeepsEnrollChallengeWhenCredentialUnconfirmed() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
             when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             when(twoFactorPolicyService.isRequired(user)).thenReturn(true);
-            when(twoFactorService.hasCredential(user.getId())).thenReturn(true);
 
             var token = service.login(
                     new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test");
 
-            assertThat(token.twoFactorRequired()).isNull();
-            assertThat(token.accessToken()).isEqualTo("access-token");
+            assertThat(token.twoFactorRequired()).isTrue();
+            assertThat(token.challengeType()).isEqualTo(AuthService.CHALLENGE_TYPE_ENROLL);
+            assertThat(token.accessToken()).isNull();
+            assertThat(token.refreshToken()).isNull();
+            verify(activeSessionRepository, never()).save(any(AuthActiveSession.class));
         }
 
         @Test
@@ -456,8 +461,7 @@ class AuthServiceTest {
         void completeTwoFactorLoginRejectsInvalidCodeAndAudits() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
-            org.mockito.Mockito.doThrow(new BusinessException(
-                    com.omninest.common.enums.ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误"))
+            doThrow(new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误"))
                     .when(twoFactorService).verifyCode(user.getId(), "000000");
 
             assertThatThrownBy(() -> service.completeTwoFactorLogin(
@@ -478,6 +482,91 @@ class AuthServiceTest {
                     "2fa-token", "123456", "web", null, null, "127.0.0.1", "test"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("两步验证尝试过于频繁");
+        }
+
+        @Test
+        @DisplayName("两步验证第二步：验证码错误不核销挑战令牌，随后输对仍可完成登录")
+        void completeTwoFactorLoginKeepsChallengeWhenCodeInvalid() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+            jtiByTokenUse.put("2fa", "challenge-jti");
+            doThrow(new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误"))
+                    .when(twoFactorService).verifyCode(user.getId(), "000000");
+
+            assertThatThrownBy(() -> service.completeTwoFactorLogin(
+                    "2fa-token", "000000", "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("两步验证码错误");
+            verify(rateLimitService, never())
+                    .tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), anyInt(), any(Duration.class));
+
+            var token = service.completeTwoFactorLogin(
+                    "2fa-token", "123456", "web", null, null, "127.0.0.1", "test");
+
+            assertThat(token.accessToken()).isEqualTo("access-token");
+            verify(rateLimitService)
+                    .tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), eq(1), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("两步验证第二步：挑战令牌已核销后重复提交被拒")
+        void completeTwoFactorLoginRejectsConsumedChallenge() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+            jtiByTokenUse.put("2fa", "challenge-jti");
+            when(rateLimitService.tryAcquire(eq("omninest:2fa:challenge:challenge-jti"), eq(1), any(Duration.class)))
+                    .thenReturn(true)
+                    .thenReturn(false);
+
+            service.completeTwoFactorLogin("2fa-token", "123456", "web", null, null, "127.0.0.1", "test");
+
+            assertThatThrownBy(() -> service.completeTwoFactorLogin(
+                    "2fa-token", "654321", "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("已使用");
+        }
+
+        @Test
+        @DisplayName("注册引导：同一挑战令牌可先取秘钥再确认启用")
+        void bootstrapSetupKeepsChallengeTokenUsable() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(twoFactorService.startSetup(user.getId(), "pass"))
+                    .thenReturn(new TwoFactorSetupResponse("SECRET", "otpauth://x"));
+            jtiByTokenUse.put(AuthService.TOKEN_USE_TWO_FACTOR_SETUP, "setup-jti");
+
+            service.bootstrapTwoFactorSetup("2fa-setup-token", "pass");
+            var setup = service.bootstrapTwoFactorSetup("2fa-setup-token", "pass");
+
+            assertThat(setup.secret()).isEqualTo("SECRET");
+            verify(twoFactorService, times(2)).startSetup(user.getId(), "pass");
+            verify(rateLimitService, never())
+                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), anyInt(), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("注册引导：启用失败不核销挑战令牌，成功后才核销")
+        void bootstrapEnableConsumesChallengeOnlyOnSuccess() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            jtiByTokenUse.put(AuthService.TOKEN_USE_TWO_FACTOR_SETUP, "setup-jti");
+            doThrow(new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误"))
+                    .when(twoFactorService).enable(user.getId(), "000000");
+
+            assertThatThrownBy(() -> service.bootstrapTwoFactorEnable("2fa-setup-token", "000000"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("两步验证码错误");
+            verify(rateLimitService, never())
+                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), anyInt(), any(Duration.class));
+
+            when(twoFactorService.enable(user.getId(), "123456")).thenReturn(List.of("ABCD-2345"));
+            var enableResponse = service.bootstrapTwoFactorEnable("2fa-setup-token", "123456");
+
+            assertThat(enableResponse.finalizeToken()).isEqualTo("2fa-finalize-token");
+            verify(rateLimitService)
+                    .tryAcquire(eq("omninest:2fa:challenge:setup-jti"), eq(1), any(Duration.class));
         }
 
         @Test

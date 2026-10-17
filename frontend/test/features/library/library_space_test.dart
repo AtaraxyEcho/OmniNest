@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,14 +9,19 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/library/presentation/pages/library_space_page.dart';
 import 'package:omninest/features/library/presentation/widgets/library_space_widgets.dart';
+import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/application/music_playback_session.dart';
+import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
@@ -333,6 +341,104 @@ void main() {
     expect(find.text('portal-root'), findsOneWidget, reason: '已在根才离站');
     expect(tester.takeException(), isNull);
   });
+
+  // 正在播放卡的进度来自播放器位置流，且只在卡片私有组件内重绘。
+  testWidgets('正在播放卡绑定真实播放位置，进度文本与比例随位置流更新', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(400, 1600);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final playback = _StreamingPlayback();
+    await tester.pumpWidget(
+      _hostLibrary(
+        playback: playback,
+        musicCenter: () => _PlayingLibraryMusicCenter(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('音乐'));
+    await tester.pumpAndSettle();
+
+    // 初始进度取播放器快照：12s / 播放器上报的 180s（不用元数据 200s）。
+    expect(find.text('0:12 / 3:00'), findsOneWidget);
+    final card = find.byType(SampleNowPlayingCard);
+    expect(
+      tester.widget<SampleNowPlayingCard>(card).progress,
+      closeTo(12 / 180, 0.001),
+    );
+
+    playback.positionController.add(const Duration(seconds: 90));
+    // 流事件在微任务中投递，第一帧只是标脏，再泵一次才看到新文案。
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('1:30 / 3:00'), findsOneWidget);
+    final bar = tester.widget<FractionallySizedBox>(
+      find.descendant(of: card, matching: find.byType(FractionallySizedBox)),
+    );
+    expect(bar.widthFactor, closeTo(0.5, 0.001));
+    expect(tester.takeException(), isNull);
+  });
+
+  // 卡片自建订阅必须随 Widget 销毁取消，否则离页后仍在回写已卸载的 State。
+  testWidgets('页面销毁时正在播放卡取消位置订阅', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(400, 1600);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final playback = _StreamingPlayback();
+    await tester.pumpWidget(
+      _hostLibrary(
+        playback: playback,
+        musicCenter: () => _PlayingLibraryMusicCenter(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('音乐'));
+    await tester.pumpAndSettle();
+    expect(playback.positionController.hasListener, isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(playback.positionController.hasListener, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// 媒体库宿主：仅注入本页需要的假体，播放会话用可推位置的流。
+Widget _hostLibrary({
+  required _StreamingPlayback playback,
+  required MusicCenterController Function() musicCenter,
+}) {
+  return ProviderScope(
+    overrides: [
+      appBackdropControllerProvider.overrideWith(_EmptyBackdropController.new),
+      photoDashboardProvider.overrideWith(_FakePhotoDashboard.new),
+      photoAlbumsProvider.overrideWith((ref) async => _albums),
+      movieDashboardProvider.overrideWith((ref) async => _movieDashboard),
+      musicCenterControllerProvider.overrideWith(musicCenter),
+      musicPlaybackSessionProvider.overrideWith(
+        () => _FakePlaybackSessionController(playback),
+      ),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('zh'),
+      theme: OmniNestTheme.from(AppThemePalette.dark),
+      routerConfig: GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const LibrarySpacePage(),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 const _albums = <PhotoAlbum>[
@@ -462,4 +568,127 @@ class _EmptyMusicCenter extends MusicCenterController {
 class _EmptyBackdropController extends AppBackdropController {
   @override
   Future<AppBackdropState> build() async => const AppBackdropState();
+}
+
+/// 带当前曲目的音乐中心：正在播放卡只在 activeTrack 非空时渲染。
+class _PlayingLibraryMusicCenter extends MusicCenterController {
+  @override
+  Future<MusicCenterState> build() async {
+    final item = MusicPlayableItem.local(_playingTrack);
+    return MusicCenterState(
+      dashboard: MusicDashboard.empty(),
+      tracks: [_playingTrack],
+      albums: const <MusicAlbum>[
+        MusicAlbum(
+          id: 'album-1',
+          title: 'Evening Drift',
+          artistName: 'Marconi Union',
+          trackCount: 8,
+        ),
+      ],
+      artists: const <MusicArtist>[],
+      playlists: const <MusicPlaylist>[],
+      currentItem: item,
+      isPlaying: true,
+      playbackItems: [item],
+      playbackIndex: 0,
+    );
+  }
+}
+
+const MusicTrack _playingTrack = MusicTrack(
+  id: 'track-1',
+  fileNodeId: 'file-1',
+  title: 'Slow Tide',
+  artistName: 'Lea Sen',
+  albumTitle: 'Evening Drift',
+  format: 'FLAC',
+  favorite: false,
+  durationSeconds: 200,
+);
+
+/// 可外部推入播放位置的播放器假体。
+class _StreamingPlayback implements MusicAudioPlayback {
+  final StreamController<Duration> positionController =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration> durationController =
+      StreamController<Duration>.broadcast();
+
+  @override
+  MusicAudioPlayerState get state => const MusicAudioPlayerState(
+    playing: true,
+    position: Duration(seconds: 12),
+    duration: Duration(seconds: 180),
+  );
+
+  @override
+  late final MusicAudioPlayerStreams stream = MusicAudioPlayerStreams(
+    position: positionController.stream,
+    duration: durationController.stream,
+    volume: const Stream<double>.empty(),
+    completed: const Stream<bool>.empty(),
+    log: const Stream<MusicAudioLog>.empty(),
+  );
+
+  @override
+  ValueListenable<MusicSpectrumFrame> get spectrum => const _SilentSpectrum();
+
+  @override
+  Future<void> openUrl(String url, {required bool play}) async {}
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> seek(Duration position) async {}
+
+  @override
+  void setVolume(double volume) {}
+
+  @override
+  void setRelativePlaySpeed(double speed) {}
+
+  @override
+  void setSpectrumTrack(MusicTrack? track) {}
+
+  @override
+  MusicSpectrumFrame? readSpectrumFrame({required MusicTrack track}) => null;
+
+  @override
+  Future<void> dispose() async {
+    await positionController.close();
+    await durationController.close();
+  }
+}
+
+class _FakePlaybackSessionController extends MusicPlaybackSessionController {
+  _FakePlaybackSessionController(this.player);
+
+  final MusicAudioPlayback player;
+
+  @override
+  MusicPlaybackSession build() {
+    return MusicPlaybackSession(player: player, lastError: null);
+  }
+
+  @override
+  Future<void> syncFromCenterState() async {
+    // 测试假体：不触碰真实同步链路。
+  }
+}
+
+class _SilentSpectrum implements ValueListenable<MusicSpectrumFrame> {
+  const _SilentSpectrum();
+
+  @override
+  MusicSpectrumFrame get value => MusicSpectrumFrame.silent();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }

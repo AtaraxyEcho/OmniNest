@@ -110,12 +110,14 @@ public class TwoFactorService {
      * 关闭两步验证并清除全部凭据与备份码。
      *
      * @param userId 用户标识
-     * @param password 登录密码（复核）
+     * @param password 登录密码（复核防会话劫持后偷偷关闭）
+     * @param code 当前动态验证码或一次性备份码（证明仍持有认证器）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void disable(UUID userId, String password) {
+    public void disable(UUID userId, String password, String code) {
         AuthUser user = requireUser(userId);
         requirePassword(user, password);
+        verifyCode(userId, code);
         clearCredentials(userId);
         log.info("两步验证已关闭: userId={}", userId);
     }
@@ -191,17 +193,6 @@ public class TwoFactorService {
     @Transactional(readOnly = true)
     public boolean isEnabled(UUID userId) {
         return totpCredentialRepository.existsByUserIdAndEnabledTrue(userId);
-    }
-
-    /**
-     * 判断用户是否存在 TOTP 凭据（含未确认），用于区分「未注册」与「注册未确认」。
-     *
-     * @param userId 用户标识
-     * @return 是否存在凭据
-     */
-    @Transactional(readOnly = true)
-    public boolean hasCredential(UUID userId) {
-        return totpCredentialRepository.findByUserId(userId).isPresent();
     }
 
     /**

@@ -7,8 +7,10 @@ import 'package:omninest/features/admin/application/admin_console_controller.dar
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
+import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
+import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 
@@ -169,6 +171,95 @@ void main() {
     // 普通用户不再查看任务队列，管理员要靠归属人把失败任务对到人。
     expect(find.text('归属人'), findsOneWidget);
     expect(find.text('member-0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // 窄屏批量操作条：两操作并存时单行会挤出 360-390 视口，改用 Wrap 换行。
+  testWidgets('360 宽任务页批量条操作簇落在 Wrap 内且不溢出', (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminTaskPageProvider.overrideWith(
+            (ref, argument) async => _fakePage(6),
+          ),
+          adminDlqProvider.overrideWith((ref) async => const <AdminDlqTask>[]),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const Scaffold(body: AdminTasksPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 表头全选：一次勾满可勾选行，批量条出现并进入两操作形态。
+    final headerCheck = find.byType(Checkbox).first;
+    await tester.ensureVisible(headerCheck);
+    await tester.pumpAndSettle();
+    await tester.tap(headerCheck);
+    await tester.pumpAndSettle();
+
+    final selectedLabel = find.textContaining('已选');
+    expect(selectedLabel, findsWidgets);
+    final cancel = find.text('取消选择');
+    expect(cancel, findsOneWidget);
+    expect(find.text('批量取消'), findsOneWidget);
+    expect(find.text('批量重试'), findsOneWidget);
+    final wrapFinder = find.ancestor(of: cancel, matching: find.byType(Wrap));
+    expect(wrapFinder, findsOneWidget, reason: '操作簇必须由 Wrap 承载才会换行');
+    // 已选数量始终在操作簇之前（同一行首列），换行只发生在操作簇内部。
+    final batchRow = tester.widget<Row>(
+      find.ancestor(of: wrapFinder, matching: find.byType(Row)).first,
+    );
+    expect((batchRow.children.first as Text).data, contains('已选'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('窄屏任务分区不再被外壳套第二层同轴滚动', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          consoleOverride,
+          authSessionProvider.overrideWith(_AdminSessionNotifier.new),
+          adminTaskPageProvider.overrideWith(
+            (ref, argument) async => _fakePage(3),
+          ),
+          adminDlqProvider.overrideWith((ref) async => const <AdminDlqTask>[]),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const AdminDashboardPage(initialSectionSegment: 'tasks'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 外壳内容键的祖先链上不得再出现滚动容器；页内自带滚动是唯一一层。
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey(AdminSection.tasks)),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsNothing,
+    );
+    // 页内滚动仍在。
+    expect(find.byType(SingleChildScrollView), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

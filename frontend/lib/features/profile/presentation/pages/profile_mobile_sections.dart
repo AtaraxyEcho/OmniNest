@@ -86,7 +86,7 @@ class _PmSecuritySectionState extends ConsumerState<_PmSecuritySection> {
 }
 
 /// 两步验证行：状态副题 + 启用开关（开启走向导：密码→扫码→备份码；
-/// 关闭走密码复核）；服务器强制必需时展示「必需」徽标不可关。
+/// 关闭走密码与验证码双重复核）；服务器强制必需时展示「必需」徽标不可关。
 class _PmTwoFactorRow extends ConsumerStatefulWidget {
   const _PmTwoFactorRow();
 

@@ -199,7 +199,9 @@ class _AdminShellBody extends StatelessWidget {
         ),
       ),
     );
-    if (_fillSections.contains(section) && isWide) {
+    // 自带滚动的分区（日志中心/任务队列）在任意宽度下都不再套外层滚动容器，
+    // 否则同轴嵌套滚动会让内层列表抢不到滚动手势。
+    if (_fillSections.contains(section)) {
       return Padding(padding: padding, child: content);
     }
     return SingleChildScrollView(padding: padding, child: content);
@@ -530,6 +532,12 @@ class _AdminTopBar extends ConsumerWidget {
               const SizedBox(width: 8),
               const UserAvatarMenu(),
             ] else ...[
+              // 窄屏顶栏保留逃生级入口：通知中心与账号菜单（切号/登出）
+              // 不能只存在于宽屏，否则手机上管理员无从读取通知与登出。
+              const NotificationIcon(size: 20),
+              const SizedBox(width: 4),
+              const UserAvatarMenu(),
+              const SizedBox(width: 4),
               IconButton(
                 onPressed: () => _showMobileSearch(context, ref),
                 icon: const Icon(Icons.search_rounded),

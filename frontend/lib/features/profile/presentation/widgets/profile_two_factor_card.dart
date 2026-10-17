@@ -136,7 +136,7 @@ class ProfileTwoFactorCard extends ConsumerWidget {
     );
   }
 
-  /// 关闭流程（密码复核）：供移动行开关复用。
+  /// 关闭流程（密码与验证码双重复核）：供移动行开关复用。
   static Future<void> showDisableWizard(BuildContext context) {
     return showWorkstationDialog<void>(
       context: context,
@@ -383,7 +383,8 @@ class _TwoFactorEnableDialogState
       showOmniFeedback(
         context,
         copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-        severity: OmniFeedbackSeverity.error,
+        severity:
+            copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
       );
     }
   }
@@ -400,6 +401,7 @@ class _TwoFactorDisableDialog extends ConsumerStatefulWidget {
 class _TwoFactorDisableDialogState
     extends ConsumerState<_TwoFactorDisableDialog> {
   final _passwordController = TextEditingController();
+  final _codeController = TextEditingController();
   bool _obscurePassword = true;
   bool _submitting = false;
   String? _error;
@@ -407,6 +409,7 @@ class _TwoFactorDisableDialogState
   @override
   void dispose() {
     _passwordController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -444,6 +447,19 @@ class _TwoFactorDisableDialogState
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const Key('profileTwoFactorDisableCodeField'),
+              controller: _codeController,
+              keyboardType: TextInputType.text,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: l10n.loginTwoFactorCodeLabel,
+                hintText: l10n.loginTwoFactorCodeHint,
+                helperText: l10n.loginTwoFactorUseBackupHint,
+                prefixIcon: const Icon(Icons.pin_outlined),
+              ),
+            ),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -476,7 +492,10 @@ class _TwoFactorDisableDialogState
     try {
       await ref
           .read(meApiProvider)
-          .twoFactorDisable(password: _passwordController.text);
+          .twoFactorDisable(
+            password: _passwordController.text,
+            code: _codeController.text,
+          );
       if (!mounted) {
         return;
       }

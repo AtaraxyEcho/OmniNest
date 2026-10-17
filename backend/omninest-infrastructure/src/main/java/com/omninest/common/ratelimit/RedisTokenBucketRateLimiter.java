@@ -26,7 +26,8 @@ public class RedisTokenBucketRateLimiter implements TokenBucketRateLimiter {
      * ARGV[2] = 每秒补充速率（乘以 1000 传入，避免浮点）
      * ARGV[3] = 当前时间戳毫秒
      * <p>
-     * 返回：1 = 允许, 0 = 拒绝, 拒绝时 HGET retry_after_ms
+     * 返回：0 = 允许（无需等待）；正整数 = 拒绝且表示建议等待的毫秒数。
+     * 放行与拒绝必须共用一个返回值域，否则 wait_ms 恰好为 1 的拒绝会被读成放行。
      */
     static final String TOKEN_BUCKET_SCRIPT = """
             local key = KEYS[1]
@@ -55,13 +56,16 @@ public class RedisTokenBucketRateLimiter implements TokenBucketRateLimiter {
               tokens = tokens - 1
               redis.call('HSET', key, 'tokens', tostring(tokens), 'last_refill', tostring(last_refill))
               redis.call('PEXPIRE', key, 60000)
-              return 1
+              return 0
             else
-              -- 计算需要等待的时间（毫秒）
+              -- 计算需要等待的时间（毫秒），至少 1ms，保证与放行的 0 不冲突
               local wait_ms = 1000
               if refill_rate_x1000 > 0 then
                 local deficit = 1 - tokens
                 wait_ms = math.ceil((deficit * 1000000) / refill_rate_x1000)
+              end
+              if wait_ms < 1 then
+                wait_ms = 1
               end
               redis.call('HSET', key, 'tokens', tostring(tokens), 'last_refill', tostring(last_refill))
               redis.call('PEXPIRE', key, 60000)
@@ -108,11 +112,21 @@ public class RedisTokenBucketRateLimiter implements TokenBucketRateLimiter {
                 )
         );
 
-        if (Long.valueOf(1L).equals(result)) {
+        return toTokenBucketResult(result);
+    }
+
+    /**
+     * 把 Lua 返回值翻译为限流结论：0 放行，正数即拒绝并给出等待毫秒数。
+     *
+     * <p>放行与拒绝必须落在不重叠的返回值域，否则 wait_ms 为 1 的拒绝会被读成放行。</p>
+     *
+     * @param scriptResult 脚本返回的等待毫秒数，0 表示无需等待
+     * @return 令牌消费结果
+     */
+    static TokenBucketResult toTokenBucketResult(long scriptResult) {
+        if (scriptResult == 0L) {
             return new TokenBucketResult(true, 0);
         }
-
-        // Lua 返回 wait_ms（>= 1000）表示拒绝
-        return new TokenBucketResult(false, result);
+        return new TokenBucketResult(false, scriptResult);
     }
 }

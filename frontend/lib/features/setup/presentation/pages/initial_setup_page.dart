@@ -344,7 +344,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
             showOmniFeedback(
               context,
               copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-              severity: OmniFeedbackSeverity.error,
+              severity:
+                  copied
+                      ? OmniFeedbackSeverity.success
+                      : OmniFeedbackSeverity.error,
             );
           },
           icon: const Icon(Icons.copy_rounded, size: 18),
@@ -419,7 +422,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                     showOmniFeedback(
                       context,
                       copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-                      severity: OmniFeedbackSeverity.error,
+                      severity:
+                          copied
+                              ? OmniFeedbackSeverity.success
+                              : OmniFeedbackSeverity.error,
                     );
                   },
                   icon: const Icon(Icons.copy_all_rounded, size: 18),

@@ -101,7 +101,10 @@ public class PhotoBatchService {
         taskRecordService.createQueuedTask(
                 taskId,
                 ownerUserId,
-                "PHOTO_BATCH_" + request.taskType(),
+                // 任务记录类型必须与 GenericTaskRecoveryScheduler 扫描的 PHOTO_BATCH 完全一致：
+                // 带子动作后缀会让容器重启中断的批量任务永远停在 PROCESSING 不被恢复，
+                // 子动作已随 payload.taskType 传递，投递也按 routing key 分支。
+                "PHOTO_BATCH",
                 QueueNames.PHOTO_BATCH_ROUTING_KEY,
                 payload);
         PhotoBatchTask task = new PhotoBatchTask();

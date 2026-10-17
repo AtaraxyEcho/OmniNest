@@ -441,7 +441,8 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
     showOmniFeedback(
       context,
       copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-      severity: OmniFeedbackSeverity.error,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
     );
   }
 }

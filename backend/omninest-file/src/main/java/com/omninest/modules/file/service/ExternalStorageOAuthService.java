@@ -129,7 +129,7 @@ public class ExternalStorageOAuthService {
                 "code", code
         ));
         oauthStates.put(state, payload);
-        return new OAuthStartResponse(buildAuthorizationUrl(code, app), state);
+        return new OAuthStartResponse(buildAuthorizationUrl(code, app, state), state);
     }
 
     /**
@@ -290,14 +290,29 @@ public class ExternalStorageOAuthService {
                 ));
     }
 
-    private String buildAuthorizationUrl(String code, StorageConnectorOAuthApp app) {
+    /**
+     * 构造三方授权地址。
+     *
+     * <p>{@code state} 必须随地址下发：回调处理器只认 state 命中的授权会话，且它是该
+     * 回调端点唯一的跨站请求伪造防线（端点本身匿名可访问）。此前生成并缓存了 state 却
+     * 从不拼接，三方回跳时不带该参数，授权流程必然停在「state 无效或已过期」。</p>
+     *
+     * @param code 连接器编码
+     * @param app 该连接器的 OAuth 应用配置
+     * @param state 本次授权的一次性状态串
+     * @return 授权地址
+     */
+    private String buildAuthorizationUrl(String code, StorageConnectorOAuthApp app, String state) {
         String encodedRedirect = URLEncoder.encode(app.getRedirectUri(), StandardCharsets.UTF_8);
+        String encodedState = URLEncoder.encode(state, StandardCharsets.UTF_8);
+        String stateParam = "&state=" + encodedState;
         return switch (code) {
             case "ONEDRIVE" -> "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
                     + "?client_id=" + URLEncoder.encode(app.getClientId(), StandardCharsets.UTF_8)
                     + "&response_type=code"
                     + "&redirect_uri=" + encodedRedirect
-                    + "&scope=" + URLEncoder.encode("Files.ReadWrite.All offline_access", StandardCharsets.UTF_8);
+                    + "&scope=" + URLEncoder.encode("Files.ReadWrite.All offline_access", StandardCharsets.UTF_8)
+                    + stateParam;
             case "GDRIVE", "GOOGLE_DRIVE" -> "https://accounts.google.com/o/oauth2/v2/auth"
                     + "?client_id=" + URLEncoder.encode(app.getClientId(), StandardCharsets.UTF_8)
                     + "&response_type=code"
@@ -305,12 +320,14 @@ public class ExternalStorageOAuthService {
                     + "&scope=" + URLEncoder.encode(
                             "https://www.googleapis.com/auth/drive", StandardCharsets.UTF_8)
                     + "&access_type=offline"
-                    + "&prompt=consent";
+                    + "&prompt=consent"
+                    + stateParam;
             case "DROPBOX" -> "https://www.dropbox.com/oauth2/authorize"
                     + "?client_id=" + URLEncoder.encode(app.getClientId(), StandardCharsets.UTF_8)
                     + "&response_type=code"
                     + "&redirect_uri=" + encodedRedirect
-                    + "&token_access_type=offline";
+                    + "&token_access_type=offline"
+                    + stateParam;
             default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接器暂不支持 OAuth");
         };
     }

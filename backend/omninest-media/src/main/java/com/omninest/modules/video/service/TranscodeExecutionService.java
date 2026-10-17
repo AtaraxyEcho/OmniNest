@@ -65,7 +65,9 @@ public class TranscodeExecutionService {
         String audioCodec = sourceItem.getAudioCodec();
         if (audioCodec != null && VideoStreamService.WEB_UNSUPPORTED_AUDIO.contains(
                 audioCodec.trim().toLowerCase(Locale.ROOT))) {
-            executeAudioTranscode(taskId, videoItemId, ownerUserId, false);
+            if (!executeAudioTranscode(taskId, videoItemId, ownerUserId, false)) {
+                return;
+            }
             sourceItem = videoItemRepository.findById(videoItemId).orElse(sourceItem);
         }
 
@@ -131,12 +133,14 @@ public class TranscodeExecutionService {
      * @param videoItemId 源视频条目 ID
      * @param ownerUserId 所有者用户 ID
      * @param markTaskCompleted 是否标记任务完成
+     * @return 音频阶段结束后任务仍可继续时为 true；失败或已取消时为 false，调用方必须终止
+     *         同一任务上的后续阶段，否则会在已作废的任务上跑完整 H265 转码并覆盖其状态
      */
-    public void executeAudioTranscode(UUID taskId, UUID videoItemId, UUID ownerUserId, boolean markTaskCompleted) {
+    public boolean executeAudioTranscode(UUID taskId, UUID videoItemId, UUID ownerUserId, boolean markTaskCompleted) {
         log.info("音频提取任务开始: taskId={}, videoItemId={}, ownerUserId={}", taskId, videoItemId, ownerUserId);
         MediaVideoItem sourceItem = findActiveSource(taskId, videoItemId, ownerUserId);
         if (sourceItem == null) {
-            return;
+            return false;
         }
 
         log.info("源视频信息: videoItemId={}, audioCodec={}, container={}, fileNodeId={}",
@@ -147,7 +151,7 @@ public class TranscodeExecutionService {
                 .findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(ownerUserId, videoItemId, "AUDIO_ONLY");
         if (existing.isPresent()) {
             log.info("音频缓存已存在，跳过: videoItemId={}, existingId={}", videoItemId, existing.get().getId());
-            return;
+            return true;
         }
 
         Path transcodedFile = null;
@@ -197,11 +201,13 @@ public class TranscodeExecutionService {
         } catch (BusinessException exception) {
             if (isLifecycleCancellation(exception)) {
                 cancelForLifecycle(taskId, videoItemId, ownerUserId, derivedFileNodeId);
-                return;
+                return false;
             }
             failAudioTask(taskId, videoItemId, ownerUserId, exception);
+            return false;
         } catch (Exception e) {
             failAudioTask(taskId, videoItemId, ownerUserId, e);
+            return false;
         } finally {
             if (transcodedFile != null) {
                 try {
@@ -211,6 +217,7 @@ public class TranscodeExecutionService {
                 }
             }
         }
+        return true;
     }
 
     /**

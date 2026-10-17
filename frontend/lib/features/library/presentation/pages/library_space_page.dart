@@ -18,6 +18,7 @@ import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/features/library/presentation/widgets/library_space_tier.dart';
 import 'package:omninest/features/library/presentation/widgets/library_space_widgets.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -327,14 +328,13 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
     if (track == null) {
       return const SizedBox.shrink();
     }
-    final duration = Duration(seconds: track.durationSeconds ?? 0);
-    return SampleNowPlayingCard(
+    return _LibraryNowPlayingCard(
       eyebrow: l10n.musicDeckNowPlaying,
       title: track.title,
       subtitle: track.artistName,
       imageUrl: track.coverUrl,
-      progress: 0,
-      progressText: '0:00 / ${_formatTrackDuration(duration)}',
+      trackId: track.id,
+      metadataDuration: Duration(seconds: track.durationSeconds ?? 0),
       onTap: () => context.push('/music/now-playing'),
     );
   }
@@ -379,12 +379,6 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
           ),
       ],
     );
-  }
-
-  String _formatTrackDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   /// 记忆横幅：优先最新相册，其次最新照片；两者皆无则隐藏。
@@ -640,6 +634,131 @@ class _LibrarySpacePageState extends ConsumerState<LibrarySpacePage> {
             ],
           ),
       ],
+    );
+  }
+}
+
+/// 曲目时钟文案：`分:秒`，秒位补零。
+String _formatTrackDuration(Duration duration) {
+  final minutes = duration.inMinutes;
+  final seconds = duration.inSeconds % 60;
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+/// 正在播放卡：真实播放位置的唯一持有者。
+///
+/// 播放位置按流自持节流刷新，只重建本卡片。不得把逐 tick 变化的位置写进
+/// 页面状态或整页监听的 Provider，否则每次 tick 都会重排整个媒体库列表。
+class _LibraryNowPlayingCard extends ConsumerStatefulWidget {
+  const _LibraryNowPlayingCard({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    required this.imageUrl,
+    required this.trackId,
+    required this.metadataDuration,
+    required this.onTap,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final String? imageUrl;
+
+  /// 当前曲目标识：切曲时用于归零并重新绑定播放器。
+  final String trackId;
+
+  /// 元数据时长：播放器尚未报出时长时的兜底总长。
+  final Duration metadataDuration;
+
+  final VoidCallback onTap;
+
+  @override
+  ConsumerState<_LibraryNowPlayingCard> createState() =>
+      _LibraryNowPlayingCardState();
+}
+
+class _LibraryNowPlayingCardState
+    extends ConsumerState<_LibraryNowPlayingCard> {
+  /// 重绘节流：位置流按帧推送，卡片只需秒级观感。
+  static const Duration _repaintInterval = Duration(milliseconds: 500);
+
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  Duration _position = Duration.zero;
+  Duration? _playerDuration;
+  DateTime _lastPaint = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _bindPlayer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LibraryNowPlayingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trackId == widget.trackId) {
+      return;
+    }
+    _bindPlayer();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_positionSubscription?.cancel());
+    unawaited(_durationSubscription?.cancel());
+    super.dispose();
+  }
+
+  void _bindPlayer() {
+    final player = ref.read(musicPlaybackSessionProvider).player;
+    unawaited(_positionSubscription?.cancel());
+    unawaited(_durationSubscription?.cancel());
+    _position = player.state.position;
+    _playerDuration = player.state.duration;
+    _lastPaint = DateTime.fromMillisecondsSinceEpoch(0);
+    _positionSubscription = player.stream.position.listen((position) {
+      final now = DateTime.now();
+      if (now.difference(_lastPaint) < _repaintInterval) {
+        return;
+      }
+      _lastPaint = now;
+      if (!mounted) {
+        return;
+      }
+      setState(() => _position = position);
+    });
+    _durationSubscription = player.stream.duration.listen((duration) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _playerDuration = duration);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reported = _playerDuration;
+    final total =
+        (reported != null && reported > Duration.zero)
+            ? reported
+            : widget.metadataDuration;
+    final position =
+        total > Duration.zero && _position > total ? total : _position;
+    final progress =
+        total.inMilliseconds <= 0
+            ? 0.0
+            : (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
+    return SampleNowPlayingCard(
+      eyebrow: widget.eyebrow,
+      title: widget.title,
+      subtitle: widget.subtitle,
+      imageUrl: widget.imageUrl,
+      progress: progress,
+      progressText:
+          '${_formatTrackDuration(position)} / ${_formatTrackDuration(total)}',
+      onTap: widget.onTap,
     );
   }
 }
