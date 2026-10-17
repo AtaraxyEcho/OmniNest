@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -86,6 +87,25 @@ public interface ReaderItemSourceRepository extends JpaRepository<ReaderItemSour
             order by item.updatedAt desc
             """)
     List<ReaderItem> findItemsBySourceContentHash(@Param("contentHash") String contentHash);
+
+    /**
+     * 分页取出带来源记录的漫画条目 ID，供排序元数据对账回正。
+     *
+     * <p>主文件已进回收站的条目不在范围内：那些条目的派生数据由清理链路负责。
+     */
+    @Query("""
+            select distinct source.readerItemId
+            from ReaderItemSource source
+            join ReaderItem item on source.readerItemId = item.id
+            join FileNode f on item.fileNodeId = f.id
+            where f.deleted = false
+              and item.contentKind = :contentKind
+            order by source.readerItemId
+            """)
+    List<UUID> findComicItemIds(
+            @Param("contentKind") String contentKind,
+            Pageable pageable
+    );
 
     /** 按阅读条目 ID 删除所有来源文件。 */
     void deleteByReaderItemId(UUID readerItemId);

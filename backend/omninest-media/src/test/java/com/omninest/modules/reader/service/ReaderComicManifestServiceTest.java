@@ -127,6 +127,25 @@ class ReaderComicManifestServiceTest {
             assertThat(apply("某动画 第2季.cbz").getSeasonNo()).isEqualTo(2);
         }
 
+        @Test
+        @DisplayName("回正旧行时新判据认不出也要清掉脏值")
+        void staleValuesFromOlderRules_areCleared() {
+            ReaderItemSource source = new ReaderItemSource();
+            // 过去 "Class1" 被无边界正则认成第 1 季留下的脏值，连同旧的卷/话/番外号。
+            source.setSeasonNo(1);
+            source.setVolumeNo(9);
+            source.setChapterStart(9);
+            source.setChapterEnd(9);
+            source.setExtraOrder(3);
+            service.applySourceSortMetadata(source, "Class1 Vol.1.cbz");
+
+            assertThat(source.getSeasonNo()).isNull();
+            assertThat(source.getVolumeNo()).isEqualTo(1);
+            assertThat(source.getChapterStart()).isNull();
+            assertThat(source.getChapterEnd()).isNull();
+            assertThat(source.getExtraOrder()).isNull();
+        }
+
         private ReaderItemSource apply(String fileName) {
             ReaderItemSource source = new ReaderItemSource();
             service.applySourceSortMetadata(source, fileName);

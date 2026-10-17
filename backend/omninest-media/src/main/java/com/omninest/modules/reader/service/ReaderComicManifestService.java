@@ -168,6 +168,9 @@ public class ReaderComicManifestService {
             source.setStatus(ReaderSourceStatus.PENDING);
             source.setErrorCode(null);
             source.setErrorMessage(null);
+            // 重排目录用的就是这几列，重解析时一并按当前规则回正，脏值才不会在
+            // SOURCE_ORDER 里继续把来源排到错误的季节点下。
+            applySourceSortMetadata(source, source.getSourceName());
             sourceRepository.save(source);
             enqueueParseTask(item, source, false);
             hasQueuedSource = true;
@@ -500,6 +503,14 @@ public class ReaderComicManifestService {
      */
     public void applySourceSortMetadata(ReaderItemSource source, String fileName) {
         source.setSourceSortKey(parseSourceSortKey(fileName));
+        // 先清空再赋值：这五个字段是按规则"命中才写"的，回正旧行时新判据认不出脏值
+        // （"Class1" 曾被认成第 1 季）就不会覆盖它，脏季号会永久留在行上，而
+        // SOURCE_ORDER 的第一档就是季号。
+        source.setSeasonNo(null);
+        source.setVolumeNo(null);
+        source.setChapterStart(null);
+        source.setChapterEnd(null);
+        source.setExtraOrder(null);
 
         if (fileName == null) {
             return;
