@@ -84,6 +84,29 @@ class ApplicationEnvironmentContractTest {
     }
 
     @Test
+    void schedulingPoolDefaultsAboveSingleThread() throws IOException {
+        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+        PropertySource<?> source = loader.load(
+                "application",
+                new ClassPathResource("application.yml")
+        ).getFirst();
+        String expression = (String) source.getProperty("spring.task.scheduling.pool.size");
+        assertThat(expression).isNotNull();
+
+        // Boot 默认只有一条调度线程，api 节点上 500ms 一次的任务/事件发件箱轮询会排在
+        // 每日维护型 cron 之后，长任务能把任务投递整体拖住。
+        StandardEnvironment defaultEnvironment = new StandardEnvironment();
+        assertThat(defaultEnvironment.resolvePlaceholders(expression)).isEqualTo("4");
+
+        StandardEnvironment tunedEnvironment = new StandardEnvironment();
+        tunedEnvironment.getPropertySources().addFirst(new MapPropertySource(
+                "pool-test",
+                Map.of("OMNINEST_SCHEDULING_POOL_SIZE", "8")
+        ));
+        assertThat(tunedEnvironment.resolvePlaceholders(expression)).isEqualTo("8");
+    }
+
+    @Test
     void environmentSpecificSettingsStayInProfileFiles() throws IOException {
         YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
         PropertySource<?> common = loader.load(
