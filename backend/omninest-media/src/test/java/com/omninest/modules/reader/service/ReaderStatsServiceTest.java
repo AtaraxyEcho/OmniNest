@@ -33,6 +33,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class ReaderStatsServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
@@ -42,8 +45,10 @@ class ReaderStatsServiceTest {
     private final ReaderItemRepository itemRepository = mock(ReaderItemRepository.class);
     private final ReaderProgressRepository progressRepository = mock(ReaderProgressRepository.class);
     private final ReaderItemService itemService = mock(ReaderItemService.class);
-    private final ReaderStatsService readerStatsService =
-            new ReaderStatsService(sessionRepository, itemRepository, progressRepository, itemService);
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final ReaderStatsService readerStatsService = new ReaderStatsService(
+            sessionRepository, itemRepository, progressRepository, itemService,
+            new TransactionTemplate(transactionManager));
 
     @Test
     void recordSessionIgnoresConcurrentClientSessionDuplicate() {
@@ -67,6 +72,10 @@ class ReaderStatsServiceTest {
 
         assertThatCode(() -> readerStatsService.recordSession(OWNER_ID, ITEM_ID, request)).doesNotThrowAnyException();
         verify(sessionRepository).saveAndFlush(any(ReaderReadingSession.class));
+        ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager).getTransaction(definition.capture());
+        assertThat(definition.getValue().getPropagationBehavior())
+                .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Test

@@ -32,7 +32,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 阅读统计服务：记录阅读会话并计算统计数据。
@@ -46,6 +48,7 @@ public class ReaderStatsService {
     private final ReaderItemRepository itemRepository;
     private final ReaderProgressRepository progressRepository;
     private final ReaderItemService itemService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 记录一次阅读会话。
@@ -78,7 +81,7 @@ public class ReaderStatsService {
         session.setEndedAt(request.endedAt());
         session.setDurationSeconds(request.durationSeconds());
         try {
-            sessionRepository.saveAndFlush(session);
+            saveInNewTransaction(session);
         } catch (DataIntegrityViolationException ex) {
             if (clientSessionId != null
                     && sessionRepository.existsByOwnerUserIdAndClientSessionId(ownerUserId, clientSessionId)) {
@@ -89,6 +92,20 @@ public class ReaderStatsService {
             throw ex;
         }
         log.debug("记录阅读会话: userId={}, itemId={}, duration={}s", ownerUserId, readerItemId, request.durationSeconds());
+    }
+
+    /**
+     * 在独立新事务中写入阅读会话。
+     *
+     * <p>与书架、书签、批注、笔记同一写法：唯一键冲突会把所在 PostgreSQL 事务标为
+     * aborted，冲突后还要在同一上下文里查一次是否重复，外层带事务时会直接抛
+     * "current transaction is aborted"。
+     */
+    private void saveInNewTransaction(ReaderReadingSession session) {
+        TransactionTemplate template = new TransactionTemplate(
+                transactionTemplate.getTransactionManager());
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.execute(status -> sessionRepository.saveAndFlush(session));
     }
 
     private String normalizeClientSessionId(String clientSessionId) {
