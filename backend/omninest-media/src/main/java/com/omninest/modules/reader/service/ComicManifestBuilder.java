@@ -668,12 +668,8 @@ public class ComicManifestBuilder {
         if (rawName == null || rawName.isBlank()) return meta;
         String lower = rawName.toLowerCase();
 
-        // 卷/季：先按窄正则填，再由 ComicVolumeParser 补齐它认得而这里认不出的写法
-        Matcher season = Pattern.compile("s(\\d+)|season\\s*(\\d+)|第(\\d+)季").matcher(lower);
-        if (season.find()) {
-            String num = season.group(1) != null ? season.group(1) : season.group(2) != null ? season.group(2) : season.group(3);
-            meta.seasonNo = Integer.parseInt(num);
-        }
+        // 季号：只认 ComicVolumeParser 的带边界判据，"Class1"/"Boss2" 里的 s+数字不算季
+        meta.seasonNo = ComicVolumeParser.parseSeasonNo(rawName);
 
         Matcher vol = Pattern.compile("vol\\.?\\s*(\\d+)|volume\\s*(\\d+)|第(\\d+)卷").matcher(lower);
         if (vol.find()) {
@@ -770,9 +766,7 @@ public class ComicManifestBuilder {
     }
 
     private String stripExtension(String fileName) {
-        if (fileName == null) return "";
-        int lastDot = fileName.lastIndexOf('.');
-        return lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+        return ComicVolumeParser.stripExtension(fileName);
     }
 
     private String getParentDir(String path) {

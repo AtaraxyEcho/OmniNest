@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,6 +103,34 @@ class ReaderComicManifestServiceTest {
         void numericPrefix_extractsNumber() throws Exception {
             String result = (String) parseSourceSortKeyMethod.invoke(service, "012.cbz");
             assertThat(result).isEqualTo("ch000012");
+        }
+    }
+
+    // ==================== applySourceSortMetadata ====================
+
+    @Nested
+    @DisplayName("applySourceSortMetadata 季号落库")
+    class ApplySourceSortMetadataTests {
+
+        @Test
+        @DisplayName("词尾 s+数字 不落季号（Class1 / Windows10）")
+        void wordEndingInSFollowedByDigits_doesNotSetSeasonNo() {
+            assertThat(apply("Class1 Vol.1.cbz").getSeasonNo()).isNull();
+            assertThat(apply("Windows10 第1卷.cbz").getSeasonNo()).isNull();
+            assertThat(apply("Class1 Vol.1.cbz").getVolumeNo()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("带边界的季号照常落库")
+        void boundedSeason_setsSeasonNo() {
+            assertThat(apply("某动画 S01.cbz").getSeasonNo()).isEqualTo(1);
+            assertThat(apply("某动画 第2季.cbz").getSeasonNo()).isEqualTo(2);
+        }
+
+        private ReaderItemSource apply(String fileName) {
+            ReaderItemSource source = new ReaderItemSource();
+            service.applySourceSortMetadata(source, fileName);
+            return source;
         }
     }
 

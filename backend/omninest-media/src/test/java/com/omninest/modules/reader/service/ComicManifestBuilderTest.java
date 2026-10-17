@@ -107,6 +107,39 @@ class ComicManifestBuilderTest {
             assertThat(metaInt("話001-010.cbz", "chapterStart")).isEqualTo(1);
             assertThat(metaInt("話001-010.cbz", "chapterEnd")).isEqualTo(10);
         }
+
+        @Test
+        @DisplayName("词尾 s+数字 不误判为季号（Class1 / Boss2 / Windows10）")
+        void wordEndingInSFollowedByDigits_doesNotCreateSeason() throws Exception {
+            assertThat(metaInt("Class1 Vol.1.cbz", "seasonNo")).isNull();
+            assertThat(metaInt("Class1 Vol.1.cbz", "volumeNo")).isEqualTo(1);
+            assertThat(metaInt("Boss2 第01话.cbz", "seasonNo")).isNull();
+            assertThat(metaInt("Boss2 第01话.cbz", "chapterStart")).isEqualTo(1);
+            assertThat(metaInt("Windows10 第1卷.cbz", "seasonNo")).isNull();
+            assertThat(metaInt("Windows10 第1卷.cbz", "volumeNo")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("带边界的季号仍认得出（S01 / Season 2 / 第一季）")
+        void boundedSeasonTokens_detected() throws Exception {
+            assertThat(metaInt("某动画 S01.cbz", "seasonNo")).isEqualTo(1);
+            assertThat(metaInt("某动画 Season 2.cbz", "seasonNo")).isEqualTo(2);
+            assertThat(metaInt("某动画 第一季.cbz", "seasonNo")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("无扩展名的 Vol.1 不被当成扩展名削掉")
+        void extensionlessVolumeSuffix_keepsNameAndVolume() throws Exception {
+            assertThat(metaString("葬送的芙莉莲 Vol.1", "sourceName")).isEqualTo("葬送的芙莉莲 Vol.1");
+            assertThat(metaInt("葬送的芙莉莲 Vol.1", "volumeNo")).isEqualTo(1);
+        }
+    }
+
+    private String metaString(String rawName, String fieldName) throws Exception {
+        Object meta = parseSourceMetaMethod.invoke(builder, UUID.randomUUID(), rawName);
+        Field field = meta.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return (String) field.get(meta);
     }
 
     private Integer metaInt(String rawName, String fieldName) throws Exception {

@@ -504,15 +504,12 @@ public class ReaderComicManifestService {
         if (fileName == null) {
             return;
         }
-        String name = fileName.toLowerCase(Locale.ROOT).replaceAll("\\.[^.]+$", "");
+        String name = ComicVolumeParser.stripExtension(fileName).toLowerCase(Locale.ROOT);
 
-        // 季号：S01、Season 1、第1季
-        Matcher season = Pattern.compile("s(\\d+)|season\\s*(\\d+)|第(\\d+)季").matcher(name);
-        if (season.find()) {
-            String num = season.group(1) != null ? season.group(1)
-                    : season.group(2) != null ? season.group(2)
-                    : season.group(3);
-            source.setSeasonNo(Integer.parseInt(num));
+        // 季号：只认 ComicVolumeParser 的带边界判据，"Class1"/"Boss2" 里的 s+数字不算季
+        Integer seasonNo = ComicVolumeParser.parseSeasonNo(fileName);
+        if (seasonNo != null) {
+            source.setSeasonNo(seasonNo);
         }
 
         // 卷/话/章等分卷信息：统一使用 ComicVolumeParser，兼容卷/册/目/話/繁简
@@ -553,7 +550,7 @@ public class ReaderComicManifestService {
      */
     private String parseSourceSortKey(String fileName) {
         if (fileName == null) return "";
-        String name = fileName.toLowerCase(Locale.ROOT).replaceAll("\\.[^.]+$", "");
+        String name = ComicVolumeParser.stripExtension(fileName).toLowerCase(Locale.ROOT);
 
         // 统一使用 ComicVolumeParser：覆盖卷/话/章/册/目/話区间/S01E02/繁简
         ComicVolumeParser.PartInfo part = ComicVolumeParser.parse(fileName);
@@ -574,19 +571,6 @@ public class ReaderComicManifestService {
         }
 
         return name;
-    }
-
-    /**
-     * 去除文件名的扩展名。
-     * 例如 "作品 001-010.cbz" → "作品 001-010"。
-     *
-     * @param fileName 文件名
-     * @return 去除扩展名后的名称
-     */
-    private String stripExtension(String fileName) {
-        if (fileName == null) return "";
-        int lastDot = fileName.lastIndexOf('.');
-        return lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
     }
 
     /**

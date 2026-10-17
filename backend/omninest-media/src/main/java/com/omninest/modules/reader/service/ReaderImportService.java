@@ -856,11 +856,7 @@ public class ReaderImportService {
      * 去除文件扩展名。
      */
     private String stripExtension(String fileName) {
-        if (fileName == null) {
-            return "";
-        }
-        int dotIndex = fileName.lastIndexOf('.');
-        return dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
+        return ComicVolumeParser.stripExtension(fileName);
     }
 
     /**

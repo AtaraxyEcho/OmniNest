@@ -404,7 +404,9 @@ public class ComicEpubParser {
             return "CHAPTER";
         }
         String lower = title.toLowerCase(Locale.ROOT);
-        if (lower.matches(".*(season|第.+季|s\\d+).*")) {
+        // 季号判据与目录构建同源：旧写法在整段标题里搜 "s+数字"，
+        // "class1" 里的 "s1" 也会被当成季号，给 EPUB 漫画目录挂出一层不存在的季节点。
+        if (ComicVolumeParser.parseSeasonNo(title) != null) {
             return "SEASON";
         }
         if (lower.matches(".*(volume|vol\\.?|第.+卷).*")) {

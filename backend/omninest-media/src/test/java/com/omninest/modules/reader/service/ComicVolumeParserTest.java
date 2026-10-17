@@ -105,4 +105,24 @@ class ComicVolumeParserTest {
         assertThat(ComicVolumeParser.hasPartSignal("白夜")).isFalse();
         assertThat(ComicVolumeParser.parse("白夜").matched()).isFalse();
     }
+
+    @Test
+    void stripsOnlyRealExtension() {
+        assertThat(ComicVolumeParser.stripExtension("作品 001-010.cbz")).isEqualTo("作品 001-010");
+        assertThat(ComicVolumeParser.stripExtension("葬送的芙莉莲 Vol.1")).isEqualTo("葬送的芙莉莲 Vol.1");
+        assertThat(ComicVolumeParser.stripExtension("白夜")).isEqualTo("白夜");
+        assertThat(ComicVolumeParser.stripExtension(null).isEmpty()).isTrue();
+    }
+
+    @Test
+    void seasonNeedsTokenBoundaries() {
+        assertThat(ComicVolumeParser.parseSeasonNo("某动画 S01E02.cbz")).isEqualTo(1);
+        assertThat(ComicVolumeParser.parseSeasonNo("某动画 _S02_ 第03话.cbz")).isEqualTo(2);
+        assertThat(ComicVolumeParser.parseSeasonNo("某动画 Season 3.cbz")).isEqualTo(3);
+        assertThat(ComicVolumeParser.parseSeasonNo("某动画 第十一季.cbz")).isEqualTo(11);
+        assertThat(ComicVolumeParser.parseSeasonNo("Class1 Vol.1.cbz")).isNull();
+        assertThat(ComicVolumeParser.parseSeasonNo("Boss2 第01话.cbz")).isNull();
+        assertThat(ComicVolumeParser.parseSeasonNo("Windows10 第1卷.cbz")).isNull();
+        assertThat(ComicVolumeParser.parseSeasonNo("白夜")).isNull();
+    }
 }

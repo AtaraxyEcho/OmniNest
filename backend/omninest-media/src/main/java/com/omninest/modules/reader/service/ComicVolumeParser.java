@@ -50,6 +50,29 @@ public final class ComicVolumeParser {
     // S01E02
     private static final Pattern SEASON_EP = Pattern.compile("\\bs(\\d{1,2})\\s*e(\\d{1,3})\\b",
             Pattern.CASE_INSENSITIVE);
+    // 季号信号：s+/数字必须前后不紧邻字母或数字，否则 "Class1"、"Boss2"、"Windows10" 里的
+    // "s1"/"s2"/"s10" 会被当成季号，目录树凭空多出一层季节点，来源排序也跟着走偏。
+    private static final Pattern SEASON_TOKEN = Pattern.compile(
+            "(?<![A-Za-z0-9])s(\\d{1,2})(?:\\s*e\\d{1,3})?(?![A-Za-z0-9])"
+                    + "|(?<![A-Za-z0-9])season\\s*(\\d{1,2})(?![A-Za-z0-9])"
+                    + "|第\\s*([0-9零一二三四五六七八九十百千万両两壹贰叁肆伍陆柒捌玖拾]+)\\s*季",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * 安全剥离真实扩展名。
+     *
+     * <p>只去掉"点 + 以字母开头的后缀"：以点加数字结尾（"Vol.1"、"第2期.3"）是分卷编号的一部分，
+     * 无条件去掉最后一段会把 "Vol.1" 削成 "Vol"，卷号与聚合节点一起丢失。
+     *
+     * @param fileName 文件名（含或不含扩展名均可）
+     * @return 剥离扩展名后的名称；入参为空时返回空串
+     */
+    public static String stripExtension(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "";
+        }
+        return fileName.replaceFirst("\\.[A-Za-z][A-Za-z0-9]{0,9}$", "");
+    }
 
     /**
      * 解析文件名中的分卷信息。
@@ -61,9 +84,7 @@ public final class ComicVolumeParser {
         if (fileName == null || fileName.isBlank()) {
             return new PartInfo(null, null, null, false);
         }
-        // 只剥真正的扩展名：以点加数字结尾（"Vol.1"、"第2期.3"）是分卷编号的一部分，
-        // 无条件去掉最后一段会把 "Vol.1" 削成 "Vol"，卷号与合并信号一起丢失。
-        String name = fileName.replaceFirst("\\.[A-Za-z][A-Za-z0-9]{0,9}$", "");
+        String name = stripExtension(fileName);
 
         // 季集：S01E02 优先级最高
         Matcher se = SEASON_EP.matcher(name);
@@ -123,6 +144,32 @@ public final class ComicVolumeParser {
      */
     public static boolean hasPartSignal(String fileName) {
         return parse(fileName).matched();
+    }
+
+    /**
+     * 从文件名中提取季号（S01 / S01E02 / Season 1 / 第1季 / 第一季）。
+     *
+     * <p>目录聚合与来源排序都用这一个判据，避免各写一份窄正则时把发布者标签里的
+     * "s+数字" 也认成季号。
+     *
+     * @param fileName 文件名（含或不含扩展名均可）
+     * @return 季号；未识别到季号信号时返回 null
+     */
+    public static Integer parseSeasonNo(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return null;
+        }
+        Matcher matcher = SEASON_TOKEN.matcher(stripExtension(fileName));
+        if (!matcher.find()) {
+            return null;
+        }
+        if (matcher.group(1) != null) {
+            return Integer.parseInt(matcher.group(1));
+        }
+        if (matcher.group(2) != null) {
+            return Integer.parseInt(matcher.group(2));
+        }
+        return parseNumber(matcher.group(3));
     }
 
     /**
