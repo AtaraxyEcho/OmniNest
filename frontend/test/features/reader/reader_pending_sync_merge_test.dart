@@ -261,4 +261,175 @@ void main() {
       reason: '更新遇到同一业务错误不能标成完成：那条内容只有本地这一份',
     );
   });
+
+  test('在途创建的标注已被删除时补发服务端删除，不复活也不留更新', () async {
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'local-ann-vanishing',
+        readerItemId: 'item-1',
+        startOffset: 10,
+        endOffset: 20,
+        note: '本地改过的备注',
+        color: '#FF0000',
+        createdAt: DateTime(2026, 7, 1),
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationCreate(
+      localId: 'local-ann-vanishing',
+      itemId: 'item-1',
+      startOffset: 10,
+      endOffset: 20,
+      note: '初始备注',
+      color: '#FFEB3B',
+    );
+    when(
+      () => api.createAnnotation(
+        itemId: any(named: 'itemId'),
+        chapterId: any(named: 'chapterId'),
+        startOffset: any(named: 'startOffset'),
+        endOffset: any(named: 'endOffset'),
+        highlightText: any(named: 'highlightText'),
+        note: any(named: 'note'),
+        color: any(named: 'color'),
+        clientOperationId: any(named: 'clientOperationId'),
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'server-ann-vanishing',
+        readerItemId: 'item-1',
+        startOffset: 10,
+        endOffset: 20,
+        note: '初始备注',
+        color: '#FFEB3B',
+        createdAt: DateTime(2026, 7, 2),
+      ),
+    );
+    when(() => api.deleteAnnotation(any())).thenAnswer((_) async {});
+
+    // 回包到达前用户把本地行删了。
+    await storage.deleteAnnotation('local-ann-vanishing');
+    await ReaderSyncQueue.flush(api: api);
+
+    expect(
+      await storage.loadAnnotationById('server-ann-vanishing'),
+      isNull,
+      reason: '回包不得把已删记录写回本地',
+    );
+    final pending = await ReaderSyncQueue.pendingMutations(
+      updateType: ReaderSyncQueue.opAnnotationUpdate,
+      deleteType: ReaderSyncQueue.opAnnotationDelete,
+      idField: 'annotationId',
+    );
+    expect(
+      pending.deletingIds,
+      contains('server-ann-vanishing'),
+      reason: '服务端那条要补发删除，否则永久残留',
+    );
+    expect(pending.updatingPayloads, isEmpty, reason: '不能再为一条已删记录排更新');
+  });
+
+  test('在途创建期间本地改过的标注，回包后按本地值补发更新', () async {
+    await storage.saveAnnotation(
+      ReaderAnnotation(
+        id: 'local-ann-edited',
+        readerItemId: 'item-1',
+        startOffset: 30,
+        endOffset: 40,
+        note: '本地改过的备注',
+        color: '#FF0000',
+        createdAt: DateTime(2026, 7, 1),
+      ),
+    );
+    await ReaderSyncQueue.enqueueAnnotationCreate(
+      localId: 'local-ann-edited',
+      itemId: 'item-1',
+      startOffset: 30,
+      endOffset: 40,
+      note: '初始备注',
+      color: '#FFEB3B',
+    );
+    when(
+      () => api.createAnnotation(
+        itemId: any(named: 'itemId'),
+        chapterId: any(named: 'chapterId'),
+        startOffset: any(named: 'startOffset'),
+        endOffset: any(named: 'endOffset'),
+        highlightText: any(named: 'highlightText'),
+        note: any(named: 'note'),
+        color: any(named: 'color'),
+        clientOperationId: any(named: 'clientOperationId'),
+      ),
+    ).thenAnswer(
+      (_) async => ReaderAnnotation(
+        id: 'server-ann-edited',
+        readerItemId: 'item-1',
+        startOffset: 30,
+        endOffset: 40,
+        note: '初始备注',
+        color: '#FFEB3B',
+        createdAt: DateTime(2026, 7, 2),
+      ),
+    );
+
+    await ReaderSyncQueue.flush(api: api);
+
+    expect(await storage.loadAnnotationById('server-ann-edited'), isNotNull);
+    final pending = await ReaderSyncQueue.pendingMutations(
+      updateType: ReaderSyncQueue.opAnnotationUpdate,
+      deleteType: ReaderSyncQueue.opAnnotationDelete,
+      idField: 'annotationId',
+    );
+    expect(pending.deletingIds, isEmpty);
+    expect(
+      pending.updatingPayloads['server-ann-edited']?['note'],
+      '本地改过的备注',
+      reason: '本地那一份才是用户的最新意图',
+    );
+    expect(pending.updatingPayloads['server-ann-edited']?['color'], '#FF0000');
+  });
+
+  test('在途创建的笔记已被删除时补发服务端删除', () async {
+    await storage.saveNote(
+      ReaderNote(
+        id: 'local-note-vanishing',
+        readerItemId: 'item-1',
+        content: '本地内容',
+        createdAt: DateTime(2026, 7, 1),
+      ),
+    );
+    await ReaderSyncQueue.enqueueNoteCreate(
+      localId: 'local-note-vanishing',
+      itemId: 'item-1',
+      content: '本地内容',
+    );
+    when(
+      () => api.createNote(
+        itemId: any(named: 'itemId'),
+        charOffset: any(named: 'charOffset'),
+        title: any(named: 'title'),
+        content: any(named: 'content'),
+        clientOperationId: any(named: 'clientOperationId'),
+      ),
+    ).thenAnswer(
+      (_) async => ReaderNote(
+        id: 'server-note-vanishing',
+        readerItemId: 'item-1',
+        content: '本地内容',
+        createdAt: DateTime(2026, 7, 2),
+      ),
+    );
+    when(() => api.deleteNote(any())).thenAnswer((_) async {});
+
+    await storage.deleteNote('local-note-vanishing');
+    await ReaderSyncQueue.flush(api: api);
+
+    expect(await storage.loadNoteById('server-note-vanishing'), isNull);
+    final pending = await ReaderSyncQueue.pendingMutations(
+      updateType: ReaderSyncQueue.opNoteUpdate,
+      deleteType: ReaderSyncQueue.opNoteDelete,
+      idField: 'noteId',
+    );
+    expect(pending.deletingIds, contains('server-note-vanishing'));
+    expect(pending.updatingPayloads, isEmpty);
+  });
 }

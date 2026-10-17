@@ -289,21 +289,23 @@ class ReaderLocalStorage {
     );
   }
 
-  /// 用服务端标注替换本地临时标注。
+  /// 用服务端标注替换本地临时标注，返回事务内读到的本地旧行。
   ///
-  /// 返回 false 表示本地临时行已经不在（用户在 HTTP 在途期间删了它）：此时不得
-  /// 把服务端刚创建的实体写回本地，调用方需补发一次服务端删除。
-  Future<bool> replaceAnnotationId({
+  /// 判存与替换同处一个事务：分成两次读时，"事务外读到了" 与 "事务内已经不在" 可以
+  /// 并存，调用方就会拿过期快照决定要不要补发服务端删除。返回 null 表示本地临时行
+  /// 已经不在，此时不得把服务端刚创建的实体写回本地，调用方需补发一次服务端删除。
+  Future<ReaderAnnotation?> replaceAnnotationId({
     required String localId,
     required ReaderAnnotation serverAnnotation,
   }) async {
     return _db.transaction(() async {
-      if (await loadAnnotationById(localId) == null) {
-        return false;
+      final local = await loadAnnotationById(localId);
+      if (local == null) {
+        return null;
       }
       await deleteAnnotation(localId);
       await saveAnnotation(serverAnnotation);
-      return true;
+      return local;
     });
   }
 
@@ -391,21 +393,22 @@ class ReaderLocalStorage {
     );
   }
 
-  /// 用服务端笔记替换本地临时笔记。
+  /// 用服务端笔记替换本地临时笔记，返回事务内读到的本地旧行。
   ///
-  /// 返回 false 表示本地临时行已经不在（用户在 HTTP 在途期间删了它）：此时不得
-  /// 把服务端刚创建的实体写回本地，调用方需补发一次服务端删除。
-  Future<bool> replaceNoteId({
+  /// 判存与替换同处一个事务，语义与 [replaceAnnotationId] 一致：返回 null 表示本地
+  /// 临时行已经不在，调用方需补发一次服务端删除。
+  Future<ReaderNote?> replaceNoteId({
     required String localId,
     required ReaderNote serverNote,
   }) async {
     return _db.transaction(() async {
-      if (await loadNoteById(localId) == null) {
-        return false;
+      final local = await loadNoteById(localId);
+      if (local == null) {
+        return null;
       }
       await deleteNote(localId);
       await saveNote(serverNote);
-      return true;
+      return local;
     });
   }
 

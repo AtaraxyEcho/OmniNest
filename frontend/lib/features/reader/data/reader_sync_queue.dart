@@ -761,25 +761,13 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == annotation.id) {
       return;
     }
-    final storage = _localStorage;
-    final local = await storage.loadAnnotationById(localId);
-    if (local == null) {
-      final replaced = await storage.replaceAnnotationId(
-        localId: localId,
-        serverAnnotation: annotation,
-      );
-      if (!replaced) {
-        await enqueueAnnotationDelete(annotationId: annotation.id);
-      }
-      return;
-    }
-    final replaced = await storage.replaceAnnotationId(
+    // 旧行由替换事务自己读出：本地行在 HTTP 在途期间被删时返回 null，
+    // 此时服务端刚创建的记录要补发删除，也不能再为一条已删记录排更新。
+    final local = await _localStorage.replaceAnnotationId(
       localId: localId,
       serverAnnotation: annotation,
     );
-    if (!replaced) {
-      // 读取与替换之间用户把这条删了：服务端刚创建的记录要补发删除，
-      // 也不能再为一条已删记录排更新。
+    if (local == null) {
       await enqueueAnnotationDelete(annotationId: annotation.id);
       return;
     }
@@ -798,25 +786,11 @@ class ReaderSyncQueue {
     if (localId == null || localId.isEmpty || localId == note.id) {
       return;
     }
-    final storage = _localStorage;
-    final local = await storage.loadNoteById(localId);
-    if (local == null) {
-      final replaced = await storage.replaceNoteId(
-        localId: localId,
-        serverNote: note,
-      );
-      if (!replaced) {
-        await enqueueNoteDelete(noteId: note.id);
-      }
-      return;
-    }
-    final replaced = await storage.replaceNoteId(
+    final local = await _localStorage.replaceNoteId(
       localId: localId,
       serverNote: note,
     );
-    if (!replaced) {
-      // 读取与替换之间用户把这条删了：服务端刚创建的记录要补发删除，
-      // 也不能再为一条已删记录排更新。
+    if (local == null) {
       await enqueueNoteDelete(noteId: note.id);
       return;
     }
