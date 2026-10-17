@@ -254,6 +254,37 @@ void main() {
       expect(adapter.lastPath, '/reader/items/item-5/bookshelf');
     });
 
+    /// 书架是用户主动写：服务端拒绝必须冒出来，否则控制器按服务端事实刷新后
+    /// 按钮翻回去且用户看不到任何原因（与书签/批注删除同一口径）。
+    ///
+    /// 用 404 而不是 403 取样：401/403 会被会话拦截器改写成 badResponse，
+    /// 拿不到可解析的业务信封；其余业务错误码（404/409…）才会走到信封校验。
+    test('toggleBookshelf 对业务错误信封抛 AppException 并带上稳定错误名', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: const {
+          'code': 6001,
+          'message': '阅读条目不存在',
+          'errorName': 'BOOK_NOT_FOUND',
+          'data': null,
+        },
+        statusCode: 404,
+      );
+      final api = ReaderApi(_apiClient(adapter));
+
+      await expectLater(
+        api.toggleBookshelf('item-5'),
+        throwsA(
+          isA<AppException>()
+              .having((error) => error.code, 'code', '6001')
+              .having(
+                (error) => error.details['errorName'],
+                'errorName',
+                'BOOK_NOT_FOUND',
+              ),
+        ),
+      );
+    });
+
     test('bookmarks sends GET to /reader/items/:id/bookmarks', () async {
       final adapter = _CapturingHttpClientAdapter(
         body: {

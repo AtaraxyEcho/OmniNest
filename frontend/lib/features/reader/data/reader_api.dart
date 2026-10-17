@@ -543,11 +543,15 @@ class ReaderApi {
   // ─── Bookshelf ───────────────────────────────────────────────
 
   /// 切换条目的书架状态（用户主动写）：无能力时抛 FORBIDDEN。
+  ///
+  /// 与书签/批注/笔记的删除同口径：Dio 放行 4xx，不读信封就等于把服务端的 403/404/409
+  /// 当成切换成功，控制器随后按服务端事实刷新，按钮翻过去又翻回来且没有任何提示。
   Future<void> toggleBookshelf(String itemId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/bookshelf',
     );
+    parseEnvelope(response.data);
   }
 
   // ─── Sessions ────────────────────────────────────────────────
