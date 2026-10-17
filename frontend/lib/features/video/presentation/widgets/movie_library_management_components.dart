@@ -56,7 +56,7 @@ class _VideoLibrarySourceDialogState
 
   bool _hasMountDirectPermission() {
     final permissions =
-        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        ref.watch(authSessionProvider).value?.user?.permissions ??
         const <String>[];
     return _mountDirectPermissions.every(permissions.contains);
   }

@@ -50,7 +50,7 @@ class ProfileCommandService {
 
 /// 当前用户资料 Provider（从 auth session 中提取）
 final userProfileProvider = Provider<UserProfile?>((ref) {
-  final session = ref.watch(authSessionProvider).asData?.value;
+  final session = ref.watch(authSessionProvider).value;
   if (session?.user == null) return null;
   return UserProfile.fromJson(session!.user!.toJson());
 });

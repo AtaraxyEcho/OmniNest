@@ -18,7 +18,7 @@ class _FileSidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     final canManageExternalStorage =
         user?.permissions.contains('system:config:manage') ?? false;
     return Container(

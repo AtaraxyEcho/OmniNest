@@ -167,7 +167,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
   ) {
     final width = MediaQuery.sizeOf(context).width;
     final layout = MusicDeckDesktopLayout.resolve(width);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     // 本地管理扫描按 ownerUserId 过滤，成员可维护自己的曲库
     final canManage = user?.permissions.contains('media:write') ?? false;
     return SafeArea(

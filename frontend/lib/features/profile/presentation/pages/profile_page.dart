@@ -212,7 +212,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     final displayName =
         user?.displayName ?? user?.username ?? l10n.profileUnknownUser;
     final username = user?.username ?? '';

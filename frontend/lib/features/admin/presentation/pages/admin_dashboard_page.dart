@@ -90,7 +90,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final permissions =
-        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        ref.watch(authSessionProvider).value?.user?.permissions ??
         const <String>{};
     if (!_section.isVisibleTo(permissions)) {
       return AdminShell(

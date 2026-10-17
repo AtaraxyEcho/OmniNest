@@ -232,7 +232,7 @@ class AdminSidebar extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final permissions =
-        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        ref.watch(authSessionProvider).value?.user?.permissions ??
         const <String>{};
     return Container(
       width: AppControlTokens.sidebarWidth,
@@ -745,7 +745,7 @@ class _MobileAdminSectionSheet extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final permissions =
-        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        ref.watch(authSessionProvider).value?.user?.permissions ??
         const <String>{};
     return Container(
       decoration: BoxDecoration(

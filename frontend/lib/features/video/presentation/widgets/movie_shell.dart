@@ -182,7 +182,7 @@ class _MovieShellState extends ConsumerState<MovieShell> {
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     final canManage = ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
     // 管理分区不再静默回退到电影：无权限时由内容区显示明确提示。
     final effectiveSection = widget.section;

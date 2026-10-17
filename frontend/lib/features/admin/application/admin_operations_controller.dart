@@ -345,7 +345,7 @@ class AdminOperationsActions {
 
   /// 角色权限变更影响当前用户所属角色时轮换本地 JWT，使 claims 与服务端一致。
   void _refreshSessionIfAffectsCurrentUser({String? roleCode, String? userId}) {
-    final user = ref.read(authSessionProvider).asData?.value.user;
+    final user = ref.read(authSessionProvider).value?.user;
     if (user == null) {
       return;
     }

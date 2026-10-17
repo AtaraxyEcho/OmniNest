@@ -259,7 +259,7 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
   @override
   Widget build(BuildContext context) {
     _ensureControllers(series);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     final canEdit = user?.permissions.contains('media:write') ?? false;
     final actionState = ref.watch(movieDetailActionProvider);
     final favoriteAsync = ref.watch(seriesFavoriteProvider(series.id));

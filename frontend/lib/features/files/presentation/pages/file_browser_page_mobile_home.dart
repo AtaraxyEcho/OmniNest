@@ -606,7 +606,7 @@ void showFileMoreSectionsSheet(
   ValueChanged<FileManagerSection> onOpen,
 ) {
   final l10n = AppLocalizations.of(context);
-  final user = ref.read(authSessionProvider).asData?.value.user;
+  final user = ref.read(authSessionProvider).value?.user;
   final canManageSystemConfig =
       user?.permissions.contains('system:config:manage') ?? false;
   const primarySections = <FileManagerSection>[

@@ -283,7 +283,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
   Future<void> updateUserRoles(String userId, Set<String> roles) async {
     await _api.updateUserRoles(userId, roles);
     // 修改自己所属角色时本地 JWT claims 已过期，轮换会话令牌。
-    final currentUser = ref.read(authSessionProvider).asData?.value.user;
+    final currentUser = ref.read(authSessionProvider).value?.user;
     if (currentUser != null && currentUser.id == userId) {
       unawaited(ref.read(authSessionProvider.notifier).refreshSession());
     }

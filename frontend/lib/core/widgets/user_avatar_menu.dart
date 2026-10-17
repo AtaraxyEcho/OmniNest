@@ -135,7 +135,7 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
         final themeMode = ref.watch(appearanceControllerProvider);
         final languageCode = ref.watch(localeControllerProvider);
         final user = ref.watch(
-          authSessionProvider.select((state) => state.asData?.value.user),
+          authSessionProvider.select((state) => state.value?.user),
         );
         final displayName = user?.displayName ?? user?.username ?? '?';
         final initial =

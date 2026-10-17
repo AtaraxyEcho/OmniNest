@@ -42,7 +42,7 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     final displayName =
         user?.displayName ?? user?.username ?? l10n.profileUnknownUser;
     final email = user?.email ?? l10n.profileEmailNotSet;
@@ -472,7 +472,7 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
   @override
   void initState() {
     super.initState();
-    final user = ref.read(authSessionProvider).asData?.value.user;
+    final user = ref.read(authSessionProvider).value?.user;
     _name = TextEditingController(
       text: user?.displayName ?? user?.username ?? '',
     );
@@ -571,7 +571,7 @@ class _PmAccountSectionState extends ConsumerState<_PmAccountSection> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final user = ref.watch(authSessionProvider).value?.user;
     final avatarUrl = user?.avatarUrl;
     final displayName =
         user?.displayName ?? user?.username ?? l10n.profileUnknownUser;
