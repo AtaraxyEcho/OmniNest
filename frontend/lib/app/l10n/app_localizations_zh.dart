@@ -1165,7 +1165,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get filesOfflineDownloadsDesc => '管理 HTTP、BT 和磁力链离线下载任务。';
+  String get filesOfflineDownloadsDesc => '管理 HTTP 与 BT 种子链接的离线下载任务。';
 
   @override
   String get filesExternalStorageDesc => '管理 OneDrive、WebDAV 等第三方存储挂载。';
@@ -1188,7 +1188,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesOfflineEmptyTitle => '还没有离线下载任务';
 
   @override
-  String get filesOfflineEmptyMessage => '用「新建离线下载」粘贴 HTTP、BT 或磁力链接开始。';
+  String get filesOfflineEmptyMessage => '用「新建离线下载」粘贴 HTTP 或 BT 种子链接开始。';
 
   @override
   String get filesOfflineFilterEmpty => '该状态下没有任务';
@@ -1936,7 +1936,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesDownloadLink => '下载链接';
 
   @override
-  String get filesOfflineDownloadHint => '支持 HTTP、BT 种子链接和 magnet 磁力链接';
+  String get filesOfflineDownloadHint => '支持 HTTP 直链与 BT 种子链接；磁力链接暂不支持';
 
   @override
   String get filesNewTask => '新建任务';

@@ -92,7 +92,11 @@ public class OfflineDownloadRequestService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OfflineDownloadTaskDto createTask(UUID ownerUserId, CreateOfflineDownloadRequest request) {
-        sourceResolver.resolve(request.sourceUri());
+        OfflineDownloadSourceResolver.ResolvedSource source = sourceResolver.resolve(request.sourceUri());
+        if (source.kind() == OfflineDownloadSourceResolver.SourceKind.MAGNET) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    OfflineDownloadExecutionService.MAGNET_UNSUPPORTED);
+        }
         String spaceType = resolveSpaceType(request.spaceType());
         if (SpaceType.SHARED.getValue().equals(spaceType)) {
             sharedSpaceService.requireSharedWrite(ownerUserId);

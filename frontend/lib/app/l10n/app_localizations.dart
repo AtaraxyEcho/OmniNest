@@ -2357,7 +2357,7 @@ abstract class AppLocalizations {
   /// No description provided for @filesOfflineDownloadsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Manage HTTP, BT and magnet offline download tasks.'**
+  /// **'Manage offline downloads from HTTP and BT torrent links.'**
   String get filesOfflineDownloadsDesc;
 
   /// No description provided for @filesExternalStorageDesc.
@@ -2399,7 +2399,7 @@ abstract class AppLocalizations {
   /// No description provided for @filesOfflineEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'Use New offline download and paste an HTTP, BT or magnet link to start.'**
+  /// **'Use New offline download and paste an HTTP or BT torrent link to start.'**
   String get filesOfflineEmptyMessage;
 
   /// No description provided for @filesOfflineFilterEmpty.
@@ -3772,7 +3772,7 @@ abstract class AppLocalizations {
   /// No description provided for @filesOfflineDownloadHint.
   ///
   /// In en, this message translates to:
-  /// **'Supports HTTP, BT torrent and magnet links'**
+  /// **'Supports HTTP and BT torrent links; magnet links are not supported'**
   String get filesOfflineDownloadHint;
 
   /// No description provided for @filesNewTask.

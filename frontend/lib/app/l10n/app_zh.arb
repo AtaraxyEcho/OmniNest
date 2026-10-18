@@ -414,7 +414,7 @@
   "@filesUploadQueueLoadMore": {
     "placeholders": { "loaded": { "type": "String" }, "total": { "type": "String" } }
   },
-  "filesOfflineDownloadsDesc": "管理 HTTP、BT 和磁力链离线下载任务。",
+  "filesOfflineDownloadsDesc": "管理 HTTP 与 BT 种子链接的离线下载任务。",
   "filesExternalStorageDesc": "管理 OneDrive、WebDAV 等第三方存储挂载。",
   "filesImportTasksDesc": "查看外部存储文件导入进度，支持取消排队中的任务。",
   "filesHostedItemCount": "共 {count} 项",
@@ -424,7 +424,7 @@
   "filesSharedWithMeEmptyTitle": "还没有人分享文件给你",
   "filesSharedWithMeEmptyMessage": "其他用户定向分享后，文件会列在这里并可直接预览。",
   "filesOfflineEmptyTitle": "还没有离线下载任务",
-  "filesOfflineEmptyMessage": "用「新建离线下载」粘贴 HTTP、BT 或磁力链接开始。",
+  "filesOfflineEmptyMessage": "用「新建离线下载」粘贴 HTTP 或 BT 种子链接开始。",
   "filesOfflineFilterEmpty": "该状态下没有任务",
   "filesExternalEmptyTitle": "还没有挂载存储",
   "filesExternalEmptyMessage": "添加 OneDrive、WebDAV 等来源后，可在这里浏览并导入文件。",
@@ -714,7 +714,7 @@
   "filesOfflineEmpty": "暂无离线下载任务",
   "filesNewOfflineDownload": "新建离线下载",
   "filesDownloadLink": "下载链接",
-  "filesOfflineDownloadHint": "支持 HTTP、BT 种子链接和 magnet 磁力链接",
+  "filesOfflineDownloadHint": "支持 HTTP 直链与 BT 种子链接；磁力链接暂不支持",
   "filesNewTask": "新建任务",
   "filesCancelTask": "取消任务",
   "filesTaskEnded": "任务已结束",

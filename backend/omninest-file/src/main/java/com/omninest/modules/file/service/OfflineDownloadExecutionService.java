@@ -73,6 +73,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class OfflineDownloadExecutionService {
     private static final int MAX_TORRENT_BYTES = 32 * 1024 * 1024;
     private static final int MAX_HTTP_REDIRECTS = 5;
+    /**
+     * 磁力链接的不支持口径，创建任务与执行任务两处共用：前者避免把注定失败的任务排进队列，
+     * 后者兜住已在队列里的历史任务。
+     */
+    static final String MAGNET_UNSUPPORTED = "磁力链接暂不支持：下载器只在即将开始下载前交出种子元数据，"
+            + "无法先校验种子内嵌地址再下载";
 
     private final DownloadOfflineTaskRepository offlineTaskRepository;
     private final FileNodeRepository fileNodeRepository;
@@ -128,7 +134,6 @@ public class OfflineDownloadExecutionService {
             downloadCompleted = true;
             List<Path> completedFiles = resolveCompletedFiles(taskDirectory, status);
             completedFiles = expandHttpTorrentPayload(task, source, taskDirectory, completedFiles);
-            completedFiles = expandMagnetMetadata(task, source, taskDirectory, completedFiles);
             if (completedFiles.isEmpty()) {
                 markFailed(task.getId(), "aria2 未生成可导入文件");
                 return;
@@ -187,10 +192,13 @@ public class OfflineDownloadExecutionService {
             return offlineDownloadGateway.submitUri(finalUri.toString(), options);
         }
         if (source.kind() == SourceKind.MAGNET) {
-            // 磁力链接可静态校验的只有链接里写明的 xt/an/tr/ws；种子的 announce 与 url-list
-            // 要等元数据到手才存在，无法在提交前校验。所以这一趟只取元数据，
-            // 拿到种子后过闸门，再由 expandMagnetMetadata 用校验过的内容重新提交。
-            options.put("bt-metadata-only", "true");
+            // aria2 的 `--bt-save-metadata` 定义是"在即将开始下载前"落盘种子文件，
+            // 而"先只取元数据、校验完再下载"要求这一趟绝不开始下载，两者互斥：
+            // 真机 swarm 实测（docs/2026-10-18/001 §17）元数据能拿到（infoHash 与 xt 一致、任务 complete），
+            // 但任务目录里不会出现任何 .torrent，因此没有可在提交前校验的元数据载体。
+            // 打开 follow-torrent 换元数据等于放行我们从未校验过的 announce/url-list，
+            // 所以这里明确失败，而不是让任务静默产出空结果。
+            throw new BusinessException(ErrorCode.PARAM_ERROR, MAGNET_UNSUPPORTED);
         }
         return offlineDownloadGateway.submitUri(source.uri().toString(), options);
     }
@@ -266,50 +274,6 @@ public class OfflineDownloadExecutionService {
         return completedFiles;
     }
 
-    /**
-     * 磁力链接的第二趟：第一趟只取回元数据，这里对种子内嵌地址过闸门，通过后才作为种子任务提交。
-     * 与直链种子的展开同一口径——闸门没过就抛业务错误，那批地址不会有任何请求；展开失败或任务被
-     * 取消时保留元数据文件本体，不丢已经拿到的成果。入库只收第二趟新产生的文件，元数据本身不入库。
-     * 包级可见同 {@link #expandHttpTorrentPayload}。
-     */
-    List<Path> expandMagnetMetadata(
-            DownloadOfflineTask task,
-            ResolvedSource source,
-            Path taskDirectory,
-            List<Path> completedFiles
-    ) {
-        if (source.kind() != SourceKind.MAGNET || completedFiles.isEmpty()) {
-            return completedFiles;
-        }
-        for (Path candidate : completedFiles) {
-            byte[] torrentBytes = readTorrentPayload(candidate);
-            if (torrentBytes == null) {
-                continue;
-            }
-            torrentAddressValidator.validate(torrentBytes);
-            String expandedGid = offlineDownloadGateway.submitTorrent(
-                    torrentBytes,
-                    aria2ValidatedTorrentOptions(taskDirectory)
-            );
-            updateAria2Gid(task.getId(), expandedGid);
-            TaskSnapshot expanded = waitForCompletion(task.getId(), expandedGid);
-            if (expanded == null) {
-                return completedFiles;
-            }
-            List<Path> expandedFiles = new ArrayList<>();
-            for (Path produced : resolveCompletedFiles(taskDirectory, expanded)) {
-                if (!completedFiles.contains(produced)) {
-                    expandedFiles.add(produced);
-                }
-            }
-            if (expandedFiles.isEmpty()) {
-                expandedFiles.add(candidate);
-            }
-            return expandedFiles;
-        }
-        return completedFiles;
-    }
-
     private byte[] readTorrentPayload(Path file) {
         try {
             long size = Files.size(file);
@@ -327,8 +291,9 @@ public class OfflineDownloadExecutionService {
 
     /**
      * 逐跳校验并解析 HTTP(S) 重定向，返回最终安全地址。
+     * 包级可见是为了让单测代跑这一步，不必为了断言投递顺序而发真实 HEAD 请求。
      */
-    private URI resolveFinalSafeHttpUri(URI uri) {
+    URI resolveFinalSafeHttpUri(URI uri) {
         URI current = uri;
         for (int redirect = 0; redirect <= MAX_HTTP_REDIRECTS; redirect++) {
             safeUrlValidator.requireSafeHost(current);

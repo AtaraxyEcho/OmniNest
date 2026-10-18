@@ -1222,7 +1222,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesOfflineDownloadsDesc =>
-      'Manage HTTP, BT and magnet offline download tasks.';
+      'Manage offline downloads from HTTP and BT torrent links.';
 
   @override
   String get filesExternalStorageDesc =>
@@ -1249,7 +1249,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesOfflineEmptyMessage =>
-      'Use New offline download and paste an HTTP, BT or magnet link to start.';
+      'Use New offline download and paste an HTTP or BT torrent link to start.';
 
   @override
   String get filesOfflineFilterEmpty => 'No tasks in this state';
@@ -2005,7 +2005,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesOfflineDownloadHint =>
-      'Supports HTTP, BT torrent and magnet links';
+      'Supports HTTP and BT torrent links; magnet links are not supported';
 
   @override
   String get filesNewTask => 'New Task';

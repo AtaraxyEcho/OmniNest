@@ -414,7 +414,7 @@
   "@filesUploadQueueLoadMore": {
     "placeholders": { "loaded": { "type": "String" }, "total": { "type": "String" } }
   },
-  "filesOfflineDownloadsDesc": "Manage HTTP, BT and magnet offline download tasks.",
+  "filesOfflineDownloadsDesc": "Manage offline downloads from HTTP and BT torrent links.",
   "filesExternalStorageDesc": "Manage OneDrive, WebDAV and other third-party storage mounts.",
   "filesImportTasksDesc": "View external storage file import progress, supports cancelling queued tasks.",
   "filesHostedItemCount": "{count} items",
@@ -424,7 +424,7 @@
   "filesSharedWithMeEmptyTitle": "Nobody has shared files with you",
   "filesSharedWithMeEmptyMessage": "Files others share with your account are listed here and open straight into preview.",
   "filesOfflineEmptyTitle": "No offline download tasks",
-  "filesOfflineEmptyMessage": "Use New offline download and paste an HTTP, BT or magnet link to start.",
+  "filesOfflineEmptyMessage": "Use New offline download and paste an HTTP or BT torrent link to start.",
   "filesOfflineFilterEmpty": "No tasks in this state",
   "filesExternalEmptyTitle": "No storage mounted",
   "filesExternalEmptyMessage": "Add a OneDrive, WebDAV or other source to browse and import files here.",
@@ -779,7 +779,7 @@
   "filesOfflineEmpty": "No offline download tasks",
   "filesNewOfflineDownload": "New Offline Download",
   "filesDownloadLink": "Download Link",
-  "filesOfflineDownloadHint": "Supports HTTP, BT torrent and magnet links",
+  "filesOfflineDownloadHint": "Supports HTTP and BT torrent links; magnet links are not supported",
   "filesNewTask": "New Task",
   "filesCancelTask": "Cancel Task",
   "filesTaskEnded": "Task Ended",

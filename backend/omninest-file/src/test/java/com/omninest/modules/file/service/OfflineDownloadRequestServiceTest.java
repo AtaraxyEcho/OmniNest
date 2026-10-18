@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,6 +94,25 @@ class OfflineDownloadRequestServiceTest {
                 eventCaptor.capture()
         );
         assertThat(eventCaptor.getValue().taskId()).isEqualTo(result.id());
+    }
+
+    /**
+     * 磁力链接不能排进队列：下载器只在即将开始下载前交出种子元数据，
+     * "先校验内嵌地址再决定下载"没有载体，排进去只会产生一个注定失败的任务。
+     */
+    @Test
+    void createTaskRejectsMagnetSourceWithoutQueuing() {
+        String sourceUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+        when(sourceResolver.resolve(sourceUri))
+                .thenReturn(new ResolvedSource(SourceKind.MAGNET, URI.create(sourceUri)));
+
+        assertThatThrownBy(() -> service.createTask(
+                OWNER_ID, new CreateOfflineDownloadRequest(sourceUri, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining(OfflineDownloadExecutionService.MAGNET_UNSUPPORTED);
+
+        verify(taskRecordService, never()).createQueuedTask(
+                any(), any(), any(), any(), any());
     }
 
     @Test
