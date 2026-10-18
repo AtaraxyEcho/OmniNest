@@ -412,7 +412,7 @@ class _SlowProfileAuthClient extends AuthClient {
   final Duration delay;
 
   @override
-  Future<UserProfile> currentUser() async {
+  Future<UserProfile> currentUser({String? accessToken}) async {
     await Future<void>.delayed(delay);
     return UserProfile(
       id: 'user-1',

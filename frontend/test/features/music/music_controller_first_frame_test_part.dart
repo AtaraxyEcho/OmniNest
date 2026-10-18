@@ -148,7 +148,7 @@ void registerMusicFirstFrameTieringTests() {
     final firstFrame = await container.read(
       musicCenterControllerProvider.future,
     );
-    expect(firstFrame.errorMessage, 'PLAYLIST_LOAD_FAILED');
+    expect(firstFrame.errorMessage, '歌单加载失败');
 
     container.read(musicCenterControllerProvider.notifier).clearError();
     api.secondaryGate!.complete();
@@ -156,7 +156,7 @@ void registerMusicFirstFrameTieringTests() {
 
     // 用户已关闭的必需请求错误不得被回填再弹一次；本轮新错误照常上报。
     final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.errorMessage, 'DASHBOARD_LOAD_FAILED');
+    expect(state.errorMessage, '统计加载失败');
   });
 }
 

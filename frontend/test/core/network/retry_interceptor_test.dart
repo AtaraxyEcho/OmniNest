@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
@@ -241,7 +243,64 @@ void main() {
       expect(handler.resolveCount + handler.nextCount, 1);
       expect(exception.requestOptions.extra['retryCount'], 1);
     });
+
+    test('retries 429 delivered as a normal response', () async {
+      final retryDio = Dio(
+        BaseOptions(
+          baseUrl: 'https://example.com',
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+      final adapter = _QueueHttpAdapter([
+        ResponseBody.fromString(
+          '{"code":429}',
+          429,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        ),
+        ResponseBody.fromString(
+          '{"code":200}',
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        ),
+      ]);
+      retryDio.httpClientAdapter = adapter;
+      final retry = RetryInterceptor(maxRetries: 1, baseDelay: Duration.zero);
+      retry.setDio(retryDio);
+      retryDio.interceptors.add(retry);
+
+      final response = await retryDio.get<dynamic>('/test');
+
+      // validateStatus < 500 时 429 不会触发 onError，必须由 onResponse 重试
+      expect(response.statusCode, 200);
+      expect(adapter.calls, 2);
+    });
   });
+}
+
+/// 按顺序返回预置响应的 HTTP 适配器。
+class _QueueHttpAdapter implements HttpClientAdapter {
+  _QueueHttpAdapter(this.responses);
+
+  final List<ResponseBody> responses;
+  int calls = 0;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    final index = calls < responses.length ? calls : responses.length - 1;
+    calls++;
+    return responses[index];
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
 
 /// 用于测试的 ErrorInterceptorHandler 替身。

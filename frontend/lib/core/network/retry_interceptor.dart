@@ -81,6 +81,44 @@ class RetryInterceptor extends Interceptor {
     }
   }
 
+  @override
+  Future<void> onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) async {
+    final statusCode = response.statusCode;
+    final request = response.requestOptions;
+    // ApiClient 的 validateStatus 接受 <500，408/429 不会进入 onError，
+    // 只有 onResponse 能对它们做退避重试；5xx 仍由 onError 处理。
+    if (statusCode == null ||
+        statusCode >= 500 ||
+        !_retryableStatusCodes.contains(statusCode) ||
+        request.extra[skipServerErrorRetryKey] == true ||
+        !_isRetrySafe(request)) {
+      handler.next(response);
+      return;
+    }
+    final retryCount = _currentRetryCount(request);
+    if (retryCount >= maxRetries) {
+      handler.next(response);
+      return;
+    }
+    await Future<void>.delayed(baseDelay * (1 << retryCount));
+    request.extra['retryCount'] = retryCount + 1;
+    try {
+      final dio = _dio;
+      if (dio == null) {
+        handler.next(response);
+        return;
+      }
+      handler.resolve(await dio.fetch<dynamic>(request));
+    } on DioException catch (error) {
+      handler.reject(error);
+    } on Exception catch (_) {
+      handler.next(response);
+    }
+  }
+
   /// 判断是否应该重试当前请求。
   bool _shouldRetry(DioException err) {
     final request = err.requestOptions;

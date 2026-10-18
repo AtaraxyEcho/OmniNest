@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
@@ -151,9 +152,10 @@ class MusicApi {
   }
 
   Future<void> deletePlaylist(String playlistId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/music/playlists/$playlistId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除歌单失败');
   }
 
   Future<List<MusicTrack>> playlistTracks(String playlistId) async {
@@ -250,17 +252,19 @@ class MusicApi {
   /// 收藏曲目（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> favorite(String trackId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/music/tracks/$trackId/favorite',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏失败');
   }
 
   /// 取消收藏曲目（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> removeFavorite(String trackId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/music/tracks/$trackId/favorite',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '取消收藏失败');
   }
 
   Future<TaskSubmission> deleteTrack(
@@ -284,7 +288,7 @@ class MusicApi {
     String? coverFileId,
     bool clearCover = false,
   }) async {
-    await apiClient.dio.put<Map<String, dynamic>>(
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/admin/music/tracks/$trackId',
       data: {
         if (title != null) 'title': title,
@@ -296,6 +300,7 @@ class MusicApi {
         if (clearCover) 'clearCover': true,
       },
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '更新曲目元数据失败');
   }
 
   Future<String> uploadCover({
@@ -697,10 +702,11 @@ class MusicApi {
   /// 标记为"服务端错误不重试"：断开连接是用户已确认的一次性动作，服务端 5xx 时
   /// 重试注定失败，却会把等待时间放大为退避之和（默认 2 次重试共 1s + 2s）。
   Future<void> platformLogout(String platform) async {
-    await apiClient.dio.delete(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/music/platforms/$platform/connection',
       options: Options(extra: <String, dynamic>{skipServerErrorRetryKey: true}),
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '断开平台连接失败');
   }
 
   /// 获取平台登录信息。
@@ -717,6 +723,17 @@ class MusicApi {
         return null;
       }
       return PlatformUserInfo.fromJson(data);
+    } on AppException catch (error) {
+      // 平台未连接/授权过期由业务码 5003/5004 表达，HTTP 层是 400；
+      // validateStatus < 500 使其不会落进 DioException 分支。
+      final errorName = error.details['errorName']?.toString();
+      if (error.code == 'MUSIC_PLATFORM_NOT_CONNECTED' ||
+          error.code == 'MUSIC_PLATFORM_AUTH_EXPIRED' ||
+          errorName == 'MUSIC_PLATFORM_NOT_CONNECTED' ||
+          errorName == 'MUSIC_PLATFORM_AUTH_EXPIRED') {
+        return null;
+      }
+      rethrow;
     } on DioException catch (error) {
       final statusCode = error.response?.statusCode;
       final errorName = _backendErrorName(error);
@@ -794,9 +811,14 @@ class MusicApi {
     }
     final code = body['code'];
     if (code != 200) {
+      final errorName = body['errorName']?.toString();
       throw AppException(
-        code: code?.toString() ?? 'MUSIC_ERROR',
+        code: errorName ?? code?.toString() ?? 'MUSIC_ERROR',
         message: body['message']?.toString() ?? '音乐操作失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          if (code != null) 'code': code.toString(),
+        },
       );
     }
     return body;

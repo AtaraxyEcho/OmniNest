@@ -15,8 +15,18 @@ class UserFacingError {
   final String message;
   final String? code;
 
-  String get displayMessage =>
-      code == null || code!.isEmpty ? message : '$message（$code）';
+  String get displayMessage {
+    if (code == null || code!.isEmpty || code == message) {
+      return message;
+    }
+    // 稳定符号（ErrorCode 枚举名）只用于映射与日志，不展示给用户；
+    // 仅保留旧数字码的括号后缀，便于排障。
+    final numericCode = code!;
+    if (int.tryParse(numericCode) == null) {
+      return message;
+    }
+    return '$message（$numericCode）';
+  }
 }
 
 /// 将异常映射为用户可见错误。
@@ -47,11 +57,12 @@ UserFacingError _describeAppException(
   AppException error,
   AppLocalizations? l10n,
 ) {
-  // 无 l10n 时写入稳定错误码，便于 application 状态存储与展示层再映射。
+  // 无 l10n 时保留服务端文案，稳定错误码只放进 code 供展示层再映射。
+  // 之前直接用 code 覆盖 message，导致未传 l10n 的页面只剩裸数字码。
   final message =
       l10n != null
           ? l10n.messageForErrorCode(error.code, fallback: error.message)
-          : (error.code.isNotEmpty ? error.code : error.message);
+          : (error.message.isNotEmpty ? error.message : error.code);
   return UserFacingError(
     title: l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed,
     message: message,

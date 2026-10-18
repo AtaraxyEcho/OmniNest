@@ -6,6 +6,7 @@ import 'package:omninest/features/admin/application/admin_console_controller.dar
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/application/admin_user_controller.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
+import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_daily_recommendation_controller.dart';
 import 'package:omninest/features/music/application/music_history_controller.dart';
@@ -18,6 +19,7 @@ import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 
@@ -98,6 +100,11 @@ final sessionResetCoordinatorProvider = Provider<void>((ref) {
     }
     // 静态进程内缓存不随 provider 销毁，换号必须显式清掉。
     ReaderCoverByteCache.clear();
+    // 会话级缓存只按文件/条目 ID 索引，不含账号归属：签名下载地址、文本预览、
+    // 照片详情（含原图签名地址）与 data URI 解码结果都必须随账号切换失效。
+    clearFileDownloadUrlCaches();
+    ref.read(photoDetailMemoryCacheProvider).clear();
+    clearReaderDataUriDecodeCache();
     // 先递增会话世代：已接入世代的 provider 以依赖变化语义重建，旧账号
     // 数据不会被当作可访问旧值渲染（失效清单中未接入世代的 provider 仍
     // 由下方 invalidate 兜底重建）。

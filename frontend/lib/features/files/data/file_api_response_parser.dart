@@ -163,10 +163,22 @@ class FileApiResponseParser {
     }
     final code = body['code'];
     if (code != 200) {
+      // errorName 是稳定的业务符号（ErrorCode 枚举名），数字码随模块漂移；
+      // 数字码保留在 details 供按状态分类的调用方兼容。
+      final errorName = body['errorName']?.toString();
+      final details = Map<String, Object?>.from(
+        _parseErrorDetails(body['details']),
+      );
+      if (errorName != null) {
+        details['errorName'] = errorName;
+      }
+      if (code != null) {
+        details['code'] = code.toString();
+      }
       throw AppException(
-        code: code?.toString() ?? 'FILE_ERROR',
+        code: errorName ?? code?.toString() ?? 'FILE_ERROR',
         message: body['message']?.toString() ?? AppErrorCodes.operationFailed,
-        details: _parseErrorDetails(body['details']),
+        details: details,
       );
     }
     return body;

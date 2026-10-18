@@ -97,6 +97,19 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
   /// 否则壳层仍停在来源空间，其 chrome 与环境档会从透明页底透出来。
   final bool hostedSurface;
 
+  /// 内容滚动区内边距。
+  ///
+  /// 托管态对齐样例 content-scroll（8px 20px 0）+ 收尾余量；非托管（桌面）
+  /// 维持工位缩进。页面自带滚动体（`childOwnScroll`）时必须自行套用同一份
+  /// 取值，否则两种滚动形态的内边距会漂移。
+  static EdgeInsets contentPaddingOf(BuildContext context) {
+    if (MobileShellScope.isHosted(context)) {
+      return const EdgeInsets.fromLTRB(20, 8, 20, 24);
+    }
+    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    return EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40);
+  }
+
   @override
   ConsumerState<ReaderPageScaffold> createState() => _ReaderPageScaffoldState();
 }
@@ -469,13 +482,7 @@ class _ReaderPageScrollArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final wide = MediaQuery.sizeOf(context).width >= 1024;
-    // 托管态内容区内边距对齐样例 content-scroll（8px 20px 0）+ 收尾余量；
-    // 非托管（桌面）维持工位缩进。
-    final hosted = MobileShellScope.isHosted(context);
-    final pagePadding =
-        hosted
-            ? const EdgeInsets.fromLTRB(20, 8, 20, 24)
-            : EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40);
+    final pagePadding = ReaderPageScaffold.contentPaddingOf(context);
     final Widget scroll;
     if (childOwnScroll) {
       scroll = child;

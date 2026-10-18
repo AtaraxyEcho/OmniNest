@@ -341,7 +341,7 @@ class MediaImportService {
     ImportProgressCallback? onProgress,
     MediaImportCancellationToken? cancellationToken,
   }) async {
-    if (error.code != '409') {
+    if (error.code != '409' && error.code != 'CONFLICT') {
       return null;
     }
     final details = error.details;
@@ -472,7 +472,7 @@ class MediaImportService {
       try {
         return await _fileApi.completeUploadSession(sessionId: sessionId);
       } on AppException catch (error) {
-        if (error.code != '409' ||
+        if ((error.code != '409' && error.code != 'CONFLICT') ||
             retryIndex >= _completionConflictRetryDelays.length) {
           rethrow;
         }

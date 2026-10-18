@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
@@ -154,15 +155,19 @@ class MovieApi {
   /// 删除指定观看历史（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> deleteHistoryItem(String historyId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/video/history/$historyId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除观看历史失败');
   }
 
   /// 清空观看历史（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> clearHistory() async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>('/video/history');
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/video/history',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '清空观看历史失败');
   }
 
   Future<List<MovieCollection>> collections() async {
@@ -316,9 +321,10 @@ class MovieApi {
   }
 
   Future<void> probeItem(String videoItemId) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/video/items/$videoItemId/probe',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '探测视频信息失败');
   }
 
   /// 收藏 / 取消收藏（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
@@ -368,25 +374,28 @@ class MovieApi {
     required String collectionId,
     required String videoItemId,
   }) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/video/collections/$collectionId/items',
       data: {'videoItemId': videoItemId},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '添加到合集失败');
   }
 
   Future<void> removeCollectionItem({
     required String collectionId,
     required String videoItemId,
   }) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/video/collections/$collectionId/items/$videoItemId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '从合集移除失败');
   }
 
   Future<void> deleteCollection(String collectionId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/video/collections/$collectionId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除合集失败');
   }
 
   Future<ScrapeTask> createTranscodeTask(
@@ -775,9 +784,10 @@ class MovieApi {
   /// 收藏 / 取消收藏剧集（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> toggleSeriesFavorite(String seriesId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/video/series/$seriesId/favorite',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏剧集失败');
   }
 
   Future<List<SubtitleTrack>> listSubtitles(String videoItemId) async {
@@ -824,9 +834,10 @@ class MovieApi {
   }
 
   Future<void> deleteSubtitle(String subtitleId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/video/subtitles/$subtitleId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除字幕失败');
   }
 
   Future<UploadSession> createUploadSession({
@@ -895,9 +906,14 @@ class MovieApi {
     }
     final code = body['code'];
     if (code != 200) {
+      final errorName = body['errorName']?.toString();
       throw AppException(
-        code: code?.toString() ?? 'MOVIE_ERROR',
+        code: errorName ?? code?.toString() ?? 'MOVIE_ERROR',
         message: body['message']?.toString() ?? '影视操作失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          if (code != null) 'code': code.toString(),
+        },
       );
     }
     return body;

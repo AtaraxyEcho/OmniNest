@@ -60,18 +60,16 @@ class AdminSyncHandler implements RealtimeScopeHandler {
     _auxiliaryRevisions.markCompleted(
       auxiliary.where((event) => !userListEvents.contains(event)),
     );
-    var refreshedMainModule = false;
     if (userListEvents.isNotEmpty && ref.exists(adminUserControllerProvider)) {
       await ref.read(adminUserControllerProvider.future);
       await ref.read(adminUserControllerProvider.notifier).refreshUsers();
-      refreshedMainModule = true;
     }
     if (ref.exists(adminConsoleControllerProvider)) {
       ref.invalidate(adminConsoleControllerProvider);
       await ref.read(adminConsoleControllerProvider.future);
-      refreshedMainModule = true;
     }
-    if (!refreshedMainModule) return false;
+    // 管理模块从未激活时无本地状态可刷，按已消费确认：页面首次打开自取最新
+    // 数据，不能因为从未挂载就无限重试。刷新抛错由分发器捕获并保持未完成。
     _auxiliaryRevisions.markCompleted(userListEvents);
     _auxiliaryRevisions.clear(invalidations);
     return true;

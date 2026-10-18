@@ -828,7 +828,7 @@ void registerMusicQueueTests() {
       expect(state.currentItem?.playableKey, 'local:track-1');
       expect(state.playbackItems, hasLength(2));
       expect(state.isPlaying, isFalse);
-      expect(state.errorMessage, contains('REQUEST_TIMEOUT'));
+      expect(state.errorMessage, contains('请求超时'));
     },
   );
 

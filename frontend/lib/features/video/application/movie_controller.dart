@@ -1069,6 +1069,19 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     );
   }
 
+  /// 确保收藏条目已加载。
+  ///
+  /// 收藏 chip 是电影分区内的本地视图，而收藏列表只在进入收藏分区时取数：
+  /// 从未访问过收藏分区时 [favoritesPaging] 的 page 仍是 -1，直接切视图只会
+  /// 得到空网格，且续页门闩为 false 永远不再请求。
+  Future<void> ensureFavoritesLoaded() async {
+    final current = state.asData?.value;
+    if (current == null || current.favoritesPaging.page >= 0) {
+      return;
+    }
+    await _loadSection(MovieSection.favorites);
+  }
+
   /// 收藏视频续页。
   Future<void> loadMoreFavorites() async {
     final current = state.asData?.value;

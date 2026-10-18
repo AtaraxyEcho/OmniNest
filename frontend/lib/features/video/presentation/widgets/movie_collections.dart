@@ -165,70 +165,14 @@ Future<void> _showCreateCollectionDialog(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final nameController = TextEditingController();
-  final descriptionController = TextEditingController();
-  final created = await showWorkstationDialog<bool>(
+  final draft = await showWorkstationDialog<_CollectionDraft>(
     context: context,
-    builder:
-        (dialogContext) => AlertDialog(
-          backgroundColor: context.videoColors.surfaceContainerHigh,
-          title: Text(AppLocalizations.of(context).videoNewCollection),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                style: TextStyle(
-                  color: context.videoColors.onSurface,
-                  fontSize: AppTypography.bodyLarge,
-                ),
-                decoration: movieInputDecoration(
-                  context,
-                  AppLocalizations.of(context).videoCollectionName,
-                ),
-              ),
-              SizedBox(height: 12),
-              TextField(
-                controller: descriptionController,
-                style: TextStyle(
-                  color: context.videoColors.onSurface,
-                  fontSize: AppTypography.bodyLarge,
-                ),
-                decoration: movieInputDecoration(
-                  context,
-                  AppLocalizations.of(context).videoDescription,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            SizedBox(
-              height: 44,
-              child: TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(AppLocalizations.of(context).videoCancel),
-              ),
-            ),
-            SizedBox(
-              height: 44,
-              child: FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(AppLocalizations.of(context).videoCreate),
-              ),
-            ),
-          ],
-        ),
+    builder: (dialogContext) => const _CreateCollectionDialog(),
   );
-  if (created != true || !context.mounted) {
-    nameController.dispose();
-    descriptionController.dispose();
+  if (draft == null || !context.mounted) {
     return;
   }
-  final name = nameController.text.trim();
-  final description = descriptionController.text.trim();
-  nameController.dispose();
-  descriptionController.dispose();
-  if (name.isEmpty) {
+  if (draft.name.isEmpty) {
     showMovieMessage(
       context,
       AppLocalizations.of(context).videoCollectionNameEmpty,
@@ -240,11 +184,97 @@ Future<void> _showCreateCollectionDialog(
     () => ref
         .read(movieCenterControllerProvider.notifier)
         .createCollection(
-          name: name,
-          description: description.isEmpty ? null : description,
+          name: draft.name,
+          description: draft.description.isEmpty ? null : draft.description,
         ),
     AppLocalizations.of(context).videoCollectionCreated,
   );
+}
+
+/// 新建合集弹窗的提交结果（已去除首尾空白）。
+class _CollectionDraft {
+  const _CollectionDraft({required this.name, required this.description});
+
+  final String name;
+  final String description;
+}
+
+/// 新建合集弹窗：输入框控制器由弹窗自己持有并随 `State.dispose` 释放。
+///
+/// 控制器不能由调用方在 `await showWorkstationDialog` 之后同步释放：退出动画
+/// 仍在渲染同一批 `TextField`，提前 dispose 会在动画帧里命中已销毁的控制器。
+class _CreateCollectionDialog extends ConsumerStatefulWidget {
+  const _CreateCollectionDialog();
+
+  @override
+  ConsumerState<_CreateCollectionDialog> createState() =>
+      _CreateCollectionDialogState();
+}
+
+class _CreateCollectionDialogState
+    extends ConsumerState<_CreateCollectionDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      backgroundColor: context.videoColors.surfaceContainerHigh,
+      title: Text(l10n.videoNewCollection),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameController,
+            style: TextStyle(
+              color: context.videoColors.onSurface,
+              fontSize: AppTypography.bodyLarge,
+            ),
+            decoration: movieInputDecoration(context, l10n.videoCollectionName),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _descriptionController,
+            style: TextStyle(
+              color: context.videoColors.onSurface,
+              fontSize: AppTypography.bodyLarge,
+            ),
+            decoration: movieInputDecoration(context, l10n.videoDescription),
+          ),
+        ],
+      ),
+      actions: [
+        SizedBox(
+          height: 44,
+          child: TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.videoCancel),
+          ),
+        ),
+        SizedBox(
+          height: 44,
+          child: FilledButton(
+            onPressed:
+                () => Navigator.of(context).pop(
+                  _CollectionDraft(
+                    name: _nameController.text.trim(),
+                    description: _descriptionController.text.trim(),
+                  ),
+                ),
+            child: Text(l10n.videoCreate),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 Future<void> _showCollectionItems(

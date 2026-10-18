@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
@@ -576,7 +577,7 @@ class FileApi {
         sessionToken ??
         _shareSessionTokens[token] ??
         await _ensureShareSession(token, password);
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/s/$token/accept',
       data: {
         if (targetParentId != null && targetParentId.isNotEmpty)
@@ -584,6 +585,7 @@ class FileApi {
       },
       options: Options(headers: {'X-OmniNest-Share-Session': issued}),
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '保存分享文件失败');
   }
 
   Future<String> _ensureShareSession(String token, String? password) async {

@@ -387,7 +387,7 @@ void main() {
 
       expect(state.currentItem?.playableKey, 'online:netease:temporary-song');
       expect(state.playbackPlan, isNull);
-      expect(state.errorMessage, contains('REQUEST_TIMEOUT'));
+      expect(state.errorMessage, contains('请求超时'));
       expect(api.playbackPlanTrackIds, isEmpty);
     },
   );

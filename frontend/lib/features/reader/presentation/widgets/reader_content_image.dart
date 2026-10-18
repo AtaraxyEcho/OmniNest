@@ -76,6 +76,9 @@ class ReaderContentImage extends StatelessWidget {
     required bool isDataUri,
     required bool isCachedImage,
   }) {
+    // 远程图片不自动加载（追踪像素与客户端侧 SSRF 风险），也不提供全屏预览：
+    // 预览同样只会走取图路径，点开等于换了个地方发起请求。
+    final canShowImage = isCachedImage || isDataUri;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Semantics(
@@ -83,15 +86,18 @@ class ReaderContentImage extends StatelessWidget {
         child: Column(
           children: [
             GestureDetector(
-              onTap: () {
-                onTap?.call(block.src);
-                ReaderImagePreview.show(
-                  context,
-                  block: block,
-                  itemId: itemId,
-                  retryCount: retryCount,
-                );
-              },
+              onTap:
+                  canShowImage
+                      ? () {
+                        onTap?.call(block.src);
+                        ReaderImagePreview.show(
+                          context,
+                          block: block,
+                          itemId: itemId,
+                          retryCount: retryCount,
+                        );
+                      }
+                      : null,
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
@@ -118,30 +124,7 @@ class ReaderContentImage extends StatelessWidget {
                             ? _buildCachedImage(slotHeight)
                             : isDataUri
                             ? _buildDataUriImage(slotHeight)
-                            : Image.network(
-                              retryCount > 0
-                                  ? '${block.src}#retry=$retryCount'
-                                  : block.src,
-                              key: ValueKey('${block.src}#$retryCount'),
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.medium,
-                              cacheWidth: 800,
-                              loadingBuilder: (context, child, progress) {
-                                if (progress == null) return child;
-                                return _slotPlaceholder(
-                                  slotHeight,
-                                  CircularProgressIndicator(
-                                    value:
-                                        progress.expectedTotalBytes == null
-                                            ? null
-                                            : progress.cumulativeBytesLoaded /
-                                                progress.expectedTotalBytes!,
-                                  ),
-                                );
-                              },
-                              errorBuilder:
-                                  (_, _, _) => _buildError(slotHeight),
-                            ),
+                            : _buildError(slotHeight),
                   ),
                 ),
               ),
@@ -165,15 +148,6 @@ class ReaderContentImage extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  /// 槽位内占位（加载中）：与最终图片同高，布局零漂移。
-  Widget _slotPlaceholder(double slotHeight, Widget child) {
-    return SizedBox(
-      height: slotHeight,
-      width: double.infinity,
-      child: Center(child: child),
     );
   }
 
@@ -323,13 +297,16 @@ class _LoadingSlot extends StatelessWidget {
 ///
 /// 遗留缓存数据里的内嵌图片会在滚动重渲染时反复 build；按字节预算
 /// 缓存解码结果，避免同一张大图每帧重新 base64 解码。
-class _DataUriDecodeCache {
-  static final _DataUriDecodeCache instance = _DataUriDecodeCache._();
+class ReaderDataUriDecodeCache {
+  ReaderDataUriDecodeCache._();
 
-  _DataUriDecodeCache._();
+  static final ReaderDataUriDecodeCache instance = ReaderDataUriDecodeCache._();
 
   static const _maxCacheBytes = FileSizeThresholds.readerImageCacheMaxBytes;
   final LinkedHashMap<String, Uint8List> _entries = LinkedHashMap();
+
+  /// 当前缓存条目数（用于验证账号切换后的失效）。
+  int get length => _entries.length;
 
   Uint8List decode(String dataUri, Uint8List Function() decode) {
     final cached = _entries.remove(dataUri);
@@ -347,6 +324,19 @@ class _DataUriDecodeCache {
     }
     return bytes;
   }
+
+  /// 清空全部解码结果。
+  void clear() {
+    _entries.clear();
+  }
 }
 
-final _dataUriDecodeCache = _DataUriDecodeCache.instance;
+final _dataUriDecodeCache = ReaderDataUriDecodeCache.instance;
+
+/// 清空 data URI 解码缓存。
+///
+/// 进程级缓存跨账号存活，登出/换号时必须显式失效，避免上一账号的图片字节
+/// 继续驻留内存。
+void clearReaderDataUriDecodeCache() {
+  _dataUriDecodeCache.clear();
+}

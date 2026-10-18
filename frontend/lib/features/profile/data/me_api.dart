@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 
@@ -21,8 +22,8 @@ class MeApi {
       data: formData,
     );
     final data = response.data;
-    if (data == null) throw Exception('头像上传失败');
-    return data['data']?.toString() ?? '';
+    ensureEnvelopeSuccess(data, fallbackMessage: '头像上传失败');
+    return data!['data']?.toString() ?? '';
   }
 
   /// 修改当前用户密码。
@@ -30,21 +31,23 @@ class MeApi {
     required String oldPassword,
     required String newPassword,
   }) async {
-    await _client.dio.put<Map<String, dynamic>>(
+    final response = await _client.dio.put<Map<String, dynamic>>(
       '/me/password',
       data: {'oldPassword': oldPassword, 'newPassword': newPassword},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '修改密码失败');
   }
 
   /// 更新当前用户基础资料（显示昵称 / 邮箱）；未提供的字段不变。
   Future<void> updateMe({String? displayName, String? email}) async {
-    await _client.dio.patch<Map<String, dynamic>>(
+    final response = await _client.dio.patch<Map<String, dynamic>>(
       '/me',
       data: {
         if (displayName != null) 'displayName': displayName,
         if (email != null) 'email': email,
       },
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '更新资料失败');
   }
 
   /// 查询两步验证状态（是否已开启、策略是否强制当前角色）。
@@ -74,10 +77,11 @@ class MeApi {
     required String password,
     required String code,
   }) async {
-    await _client.dio.post<Map<String, dynamic>>(
+    final response = await _client.dio.post<Map<String, dynamic>>(
       '/me/2fa/disable',
       data: {'password': password, 'code': code},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '关闭两步验证失败');
   }
 
   Future<Map<String, dynamic>> _getData(String path) async {
@@ -97,11 +101,11 @@ class MeApi {
   }
 
   Map<String, dynamic> _unwrap(Map<String, dynamic>? body) {
-    final data = body?['data'];
-    if (data is Map<String, dynamic>) {
-      return data;
-    }
-    throw Exception('响应格式不正确');
+    return requireEnvelopeData(
+      body,
+      fallbackMessage: '认证操作失败',
+      invalidMessage: '响应格式不正确',
+    );
   }
 
   /// 获取当前用户的活跃会话列表。
@@ -121,7 +125,10 @@ class MeApi {
 
   /// 撤销指定会话（主动登出其他设备）。
   Future<void> revokeSession(String sessionId) async {
-    await _client.dio.delete<void>('/me/sessions/$sessionId');
+    final response = await _client.dio.delete<Map<String, dynamic>>(
+      '/me/sessions/$sessionId',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '撤销会话失败');
   }
 
   /// 获取服务器配置的对外 Web 基址（分享链接用）；未配置时返回 null。

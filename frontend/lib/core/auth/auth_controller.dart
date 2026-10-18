@@ -7,6 +7,7 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_client.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/security/offline_data_lifecycle.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
@@ -145,7 +146,12 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       return;
     }
     try {
-      final profile = await ref.read(authClientProvider).currentUser();
+      // authClientProvider 是刻意不带拦截器的裸客户端（登录/刷新不能被会话
+      // 拦截器改写），因此这里必须显式附带当前访问令牌。
+      final token = ref.read(authSessionStoreProvider).readAccessToken();
+      final profile = await ref
+          .read(authClientProvider)
+          .currentUser(accessToken: token);
       if (!ref.mounted || _rejectSessionWrites) {
         return;
       }
@@ -364,6 +370,20 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       ).timeout(_restoreTimeout);
       await _saveSession(session);
       return SessionRefreshResult.ok(_toState(session));
+    } on AppException catch (error) {
+      // authClient 没有会话拦截器：validateStatus < 500 时服务端 4xx 以
+      // AppException 抛出。服务端明确拒绝按 invalid 处理，本地解析/存储
+      // 故障（EMPTY_RESPONSE/INVALID_RESPONSE）仍按瞬时失败保留会话。
+      final serverRejected =
+          int.tryParse(error.code) != null ||
+          error.details['errorName'] != null;
+      if (serverRejected) {
+        if (kDebugMode) {
+          devLog('会话刷新被服务端拒绝: ${error.code}');
+        }
+        return const SessionRefreshResult.invalid();
+      }
+      return const SessionRefreshResult.transient();
     } on DioException catch (error) {
       return _gradeRefreshFailure(error);
     } catch (error) {

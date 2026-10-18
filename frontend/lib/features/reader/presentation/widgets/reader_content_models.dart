@@ -266,6 +266,17 @@ class ImageBlock extends ContentBlock {
   final String? alt;
 }
 
+/// 图片引用是否为远程地址（`http`/`https`）。
+///
+/// 阅读器不自动抓取远程图片：EPUB 里的远程图片既可能是追踪像素，也可能把
+/// 客户端当作内网代理（Web 端 CSP 放行 http/https，原生端没有 CSP）。正文与
+/// 全屏预览统一按"不可加载"渲染占位，只有归档缓存占位符 `__IMG_` 与 `data:`
+/// URI 会被真正解码。
+bool isRemoteReaderImageSource(String src) {
+  final lower = src.trimLeft().toLowerCase();
+  return lower.startsWith('http://') || lower.startsWith('https://');
+}
+
 /// 分隔线内容块。
 class DividerBlock extends ContentBlock {}
 

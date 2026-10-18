@@ -163,7 +163,14 @@ class AdminOperationsApi {
 
   /// 重试死信队列任务
   Future<void> retryDlq(String taskId) async {
-    await apiClient.dio.post<Map<String, dynamic>>('/tasks/dlq/$taskId/retry');
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/tasks/dlq/$taskId/retry',
+    );
+    parseAdminEnvelope(
+      response.data,
+      defaultErrorCode: 'DLQ_RETRY_FAILED',
+      defaultMessage: '重试死信任务失败',
+    );
   }
 
   Future<AdminLogManagementView> logs() async {
@@ -278,8 +285,13 @@ class AdminOperationsApi {
   }
 
   Future<void> deleteStorageLocation(String id) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/admin/storage/locations/$id',
+    );
+    parseAdminEnvelope(
+      response.data,
+      defaultErrorCode: 'STORAGE_LOCATION_DELETE_FAILED',
+      defaultMessage: '删除存储位置失败',
     );
   }
 
@@ -418,8 +430,13 @@ class AdminOperationsApi {
   }
 
   Future<void> revokeSession(String sessionId) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/admin/sessions/$sessionId/revoke',
+    );
+    parseAdminEnvelope(
+      response.data,
+      defaultErrorCode: 'SESSION_REVOKE_FAILED',
+      defaultMessage: '撤销会话失败',
     );
   }
 

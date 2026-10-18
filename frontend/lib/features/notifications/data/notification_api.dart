@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
@@ -23,8 +24,8 @@ class NotificationApi {
       },
     );
     final data = response.data;
-    if (data == null) return (items: <NotificationDto>[], total: 0);
-    final envelope = data['data'] as Map<String, dynamic>?;
+    ensureEnvelopeSuccess(data, fallbackMessage: '通知列表加载失败');
+    final envelope = data!['data'] as Map<String, dynamic>?;
     if (envelope == null) return (items: <NotificationDto>[], total: 0);
     final list =
         (envelope['items'] as List<dynamic>? ?? [])
@@ -39,8 +40,8 @@ class NotificationApi {
       '/notifications/unread-count',
     );
     final data = response.data;
-    if (data == null) return 0;
-    return (data['data'] as num?)?.toInt() ?? 0;
+    ensureEnvelopeSuccess(data, fallbackMessage: '未读计数加载失败');
+    return (data!['data'] as num?)?.toInt() ?? 0;
   }
 
   /// 标记通知已读（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。

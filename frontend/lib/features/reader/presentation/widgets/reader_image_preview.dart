@@ -147,6 +147,11 @@ class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
     final block = widget.block;
     final cacheWidth = _decodeWidthLimit();
     final isDataUri = block.src.startsWith('data:');
+    if (isRemoteReaderImageSource(block.src)) {
+      // 远程图片不自动抓取（追踪像素与客户端侧 SSRF），预览同样只认本地缓存
+      // 占位符与 data URI；远程来源一律显示破图占位。
+      return _errorIcon();
+    }
     // 占位符必须两头都在且中间确有路径：只按前缀判定时，一个长度为 6 的
     // `__IMG_` 会让 substring 以负长度抛 RangeError，预览整页崩。
     final isCachedImage =
@@ -210,26 +215,9 @@ class _ReaderImagePreviewState extends ConsumerState<ReaderImagePreview> {
         return _errorIcon();
       }
     }
-    return Image.network(
-      block.src,
-      fit: BoxFit.contain,
-      cacheWidth: cacheWidth,
-      gaplessPlayback: true,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) {
-          return child;
-        }
-        return const SizedBox(
-          width: 48,
-          height: 48,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white54,
-          ),
-        );
-      },
-      errorBuilder: (_, _, _) => _errorIcon(),
-    );
+    // 远程图片不自动抓取（追踪像素与客户端侧 SSRF），预览同样只认本地缓存
+    // 占位符与 data URI；其余来源一律显示破图占位。
+    return _errorIcon();
   }
 
   Widget _errorIcon() {

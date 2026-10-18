@@ -164,7 +164,7 @@ void registerMusicQueueSourceTests() {
     expect(next.currentItem?.playableKey, 'local:bulk-97');
     expect(next.playbackItems, hasLength(100));
     expect(next.isPlaying, isFalse);
-    expect(next.errorMessage, contains('REQUEST_TIMEOUT'));
+    expect(next.errorMessage, contains('请求超时'));
   });
 
   test('clearQueue then nextTrack is a no-op', () async {

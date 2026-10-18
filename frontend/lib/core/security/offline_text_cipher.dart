@@ -69,6 +69,15 @@ class OfflineTextCipher {
     }
   }
 
+  /// 清除指定用户的派生列密钥缓存。
+  ///
+  /// 离线主密钥随用户数据清理被删除后，必须同步清掉这里的派生密钥：加密器是
+  /// 长生命周期实例，若继续用旧密钥写入，同进程重新登录派生出的新密钥将无法
+  /// 解开这些密文，重启后只能得到解密失败的空串。
+  void evictUser(String userId) {
+    _derivedKeys.remove(userId);
+  }
+
   Future<SecretKey> _columnKey(String userId) async {
     final cached = _derivedKeys[userId];
     if (cached != null) {

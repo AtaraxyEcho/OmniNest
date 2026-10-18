@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/session/session_reset_coordinator.dart';
@@ -5,11 +7,14 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
+import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/music/application/music_history_controller.dart';
+import 'package:omninest/features/photos/application/photo_detail_memory_cache.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/reader/domain/reader_item.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
 
 class _ControllableAuthSessionNotifier extends AuthSessionNotifier {
   @override
@@ -275,6 +280,56 @@ void main() {
       expect(oauthBuilds, 2);
     },
   );
+
+  test('sign-out clears session-scoped file and photo caches', () async {
+    final container = ProviderContainer.test(
+      overrides: [
+        authSessionProvider.overrideWith(_ControllableAuthSessionNotifier.new),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionResetCoordinatorProvider);
+    final auth =
+        container.read(authSessionProvider.notifier)
+            as _ControllableAuthSessionNotifier;
+    await container.read(authSessionProvider.future);
+
+    final photoCache = container.read(photoDetailMemoryCacheProvider);
+    photoCache.put(
+      PhotoItem(
+        id: 'photo-1',
+        fileNodeId: 'file-1',
+        title: '照片',
+        format: 'JPEG',
+        fileSize: 1024,
+        metadataStatus: 'READY',
+        favorite: false,
+        createdAt: DateTime(2026, 9, 20),
+        sourceUrl: 'https://signed.example/photo-1',
+      ),
+    );
+    prewarmDownloadUrl(
+      'file-1',
+      'https://signed.example/file-1',
+      DateTime.now(),
+    );
+    ReaderDataUriDecodeCache.instance.decode(
+      'data:image/png;base64,AAAA',
+      () => Uint8List.fromList(const [1, 2, 3]),
+    );
+
+    expect(photoCache.get('photo-1'), isNotNull);
+    expect(debugHasCachedDownloadUrl('file-1'), isTrue);
+    expect(ReaderDataUriDecodeCache.instance.length, 1);
+
+    auth.signInAs('user-a');
+    // 登出（用户→未认证）：会话级缓存不得跨账号存活。
+    auth.signOut();
+
+    expect(photoCache.get('photo-1'), isNull);
+    expect(debugHasCachedDownloadUrl('file-1'), isFalse);
+    expect(ReaderDataUriDecodeCache.instance.length, 0);
+  });
 
   test('account switch resets portal paged card caches', () async {
     var photosBuilds = 0;

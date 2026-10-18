@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
 
@@ -18,8 +19,8 @@ class SearchApi {
       cancelToken: cancelToken,
     );
     final data = response.data;
-    if (data == null) return [];
-    final items = data['data'] as List<dynamic>? ?? [];
+    ensureEnvelopeSuccess(data, fallbackMessage: '搜索失败');
+    final items = data!['data'] as List<dynamic>? ?? [];
     return items
         .map((e) => SearchResult.fromJson(e as Map<String, dynamic>))
         .toList();

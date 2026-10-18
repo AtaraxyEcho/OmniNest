@@ -238,7 +238,6 @@ class MovieCenterState {
   }
 
   List<MovieVideoItem> get filteredMovies {
-    final query = searchQuery.trim().toLowerCase();
     final source = switch (section) {
       MovieSection.movies =>
         movies.where((item) => item.mediaType == 'MOVIE').toList(),
@@ -261,6 +260,18 @@ class MovieCenterState {
       MovieSection.management => movies,
       _ => movies,
     };
+    return _applyMovieFilters(source);
+  }
+
+  /// 电影分区「收藏」视图的条目。
+  ///
+  /// 收藏视图不是独立数据源之外的另一套口径：状态筛选、类型/年份/评分筛选、
+  /// 排序与关键词检索都与主列表共用 [_applyMovieFilters]，避免两处规则漂移。
+  List<MovieVideoItem> get filteredFavoriteItems =>
+      _applyMovieFilters(favoriteItems);
+
+  List<MovieVideoItem> _applyMovieFilters(List<MovieVideoItem> source) {
+    final query = searchQuery.trim().toLowerCase();
     var filtered = switch (filter) {
       MovieLibraryFilter.all => source,
       MovieLibraryFilter.matched =>

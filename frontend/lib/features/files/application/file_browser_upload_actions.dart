@@ -382,27 +382,31 @@ extension FileBrowserUploadActions on FileBrowserController {
       if (runtime?.removed == true) {
         return _UploadFileResult.cancelled;
       }
-      // 检测软删除同名文件冲突
-      if (error is DioException) {
-        final conflict = SoftDeleteConflict.fromDioException(error);
-        if (conflict != null) {
-          final currentTask = _findLocalUploadTask(task.id) ?? task;
-          _upsertLocalUploadTask(
-            currentTask.copyWith(
-              status: 'CONFLICT',
-              messageCode: FileUploadTaskMessageCode.conflict,
-              messageArgument: conflict.fileName,
-            ),
-          );
-          _pendingConflicts[task.id] = (
-            conflict: conflict,
-            file: file,
-            fileName: fileName,
-            sizeBytes: sizeBytes,
-            mimeType: file.mimeType ?? 'application/octet-stream',
-          );
-          return _UploadFileResult.conflict;
-        }
+      // 检测软删除同名文件冲突：409 在 validateStatus < 500 下由信封解析抛
+      // AppException，只有旧路径才会是 DioException。
+      final conflict =
+          error is DioException
+              ? SoftDeleteConflict.fromDioException(error)
+              : error is AppException
+              ? SoftDeleteConflict.fromAppException(error)
+              : null;
+      if (conflict != null) {
+        final currentTask = _findLocalUploadTask(task.id) ?? task;
+        _upsertLocalUploadTask(
+          currentTask.copyWith(
+            status: 'CONFLICT',
+            messageCode: FileUploadTaskMessageCode.conflict,
+            messageArgument: conflict.fileName,
+          ),
+        );
+        _pendingConflicts[task.id] = (
+          conflict: conflict,
+          file: file,
+          fileName: fileName,
+          sizeBytes: sizeBytes,
+          mimeType: file.mimeType ?? 'application/octet-stream',
+        );
+        return _UploadFileResult.conflict;
       }
       final currentTask = _findLocalUploadTask(task.id) ?? task;
       _upsertLocalUploadTask(

@@ -7,7 +7,7 @@ import 'package:omninest/features/admin/application/admin_sync_handler.dart';
 final _handlerProvider = Provider<AdminSyncHandler>(AdminSyncHandler.new);
 
 void main() {
-  test('未进入管理模块时不会因全作用域重置请求管理接口', () async {
+  test('未进入管理模块时按已消费确认全作用域重置请求', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final handler = container.read(_handlerProvider);
@@ -21,7 +21,8 @@ void main() {
     );
 
     expect(handler.appliesTo(invalidation), isTrue);
-    expect(await handler.refresh([invalidation]), isFalse);
+    // 从未挂载说明没有本地状态可刷：必须确认消费，否则分发器会永久重试。
+    expect(await handler.refresh([invalidation]), isTrue);
 
     expect(container.exists(adminConsoleSummaryProvider), isFalse);
   });
@@ -52,6 +53,7 @@ void main() {
     final consumed = await handler.refresh([invalidation]);
 
     expect(builds, 2);
-    expect(consumed, isFalse);
+    // 已挂载的附属缓存刷新成功：即使管理主模块未挂载也必须确认消费。
+    expect(consumed, isTrue);
   });
 }

@@ -1,9 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/sync/preference_sync_handler.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
+import 'package:omninest/features/admin/application/admin_console_controller.dart';
+import 'package:omninest/features/admin/application/admin_operations_controller.dart';
+import 'package:omninest/features/admin/application/admin_sync_handler.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/application/file_sync_handler.dart';
+import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/application/task_sync_handler.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
@@ -15,14 +20,27 @@ final refHolderProvider = Provider<Ref>((ref) => ref);
 RealtimeInvalidation _invalidation({
   required RealtimeScope scope,
   String resourceType = '*',
+  String? resourceId,
 }) {
   return RealtimeInvalidation(
     key: 'inv-1',
     scope: scope,
     resourceType: resourceType,
+    resourceId: resourceId,
     revision: 1,
     createdAt: DateTime.utc(2026, 9, 16),
   );
+}
+
+/// 已挂载但远端刷新必然失败的阅读偏好控制器。
+class _ThrowingReaderPreferences extends ReaderPreferencesController {
+  @override
+  Future<Map<String, dynamic>> build() async => const <String, dynamic>{};
+
+  @override
+  Future<void> refreshFromRemote() async {
+    throw StateError('测试用远端偏好刷新失败');
+  }
 }
 
 class _SpyTaskListNotifier extends TaskListNotifier {
@@ -163,4 +181,82 @@ void main() {
       expect(container.exists(movieCenterControllerProvider), isFalse);
     },
   );
+
+  test(
+    'admin handler consumes invalidation when admin module never activated',
+    () async {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final handler = AdminSyncHandler(container.read(refHolderProvider));
+
+      final consumed = await handler.refresh([
+        _invalidation(scope: RealtimeScope.admin),
+      ]);
+
+      expect(consumed, isTrue);
+      expect(container.exists(adminConsoleControllerProvider), isFalse);
+    },
+  );
+
+  test('admin handler consumes invalidation when only auxiliary caches are '
+      'mounted', () async {
+    final container = ProviderContainer.test(
+      overrides: [
+        adminConnectorOAuthAppsProvider.overrideWith((ref) async => const []),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(adminConnectorOAuthAppsProvider.future);
+    final handler = AdminSyncHandler(container.read(refHolderProvider));
+
+    final consumed = await handler.refresh([
+      _invalidation(scope: RealtimeScope.admin),
+    ]);
+
+    // 已挂载的附属缓存刷新成功，管理主模块未挂载：事件必须确认消费。
+    expect(consumed, isTrue);
+    expect(container.exists(adminConsoleControllerProvider), isFalse);
+  });
+
+  test('preference handler consumes invalidation when preference target never '
+      'activated', () async {
+    final container = ProviderContainer.test();
+    addTearDown(container.dispose);
+    final handler = PreferenceSyncHandler(container.read(refHolderProvider));
+
+    final consumed = await handler.refresh([
+      _invalidation(
+        scope: RealtimeScope.preferences,
+        resourceType: readerPreferenceScope,
+        resourceId: readerPreferenceScope,
+      ),
+    ]);
+
+    expect(consumed, isTrue);
+    expect(container.exists(readerPreferencesProvider), isFalse);
+  });
+
+  test('preference handler keeps retrying when a mounted target refresh '
+      'throws', () async {
+    final container = ProviderContainer.test(
+      overrides: [
+        readerPreferencesProvider.overrideWith(_ThrowingReaderPreferences.new),
+      ],
+    );
+    addTearDown(container.dispose);
+    // 先挂载目标，模拟用户正停在依赖该偏好的页面。
+    await container.read(readerPreferencesProvider.future);
+    final handler = PreferenceSyncHandler(container.read(refHolderProvider));
+
+    await expectLater(
+      handler.refresh([
+        _invalidation(
+          scope: RealtimeScope.preferences,
+          resourceType: readerPreferenceScope,
+          resourceId: readerPreferenceScope,
+        ),
+      ]),
+      throwsA(isA<StateError>()),
+    );
+  });
 }

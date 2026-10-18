@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/photos/data/photo_batch_archive_downloader.dart';
@@ -60,15 +61,19 @@ class PhotoApi {
 
   /// 将照片移入回收站（软删除，保留 30 天，可恢复）。
   Future<void> movePhotoToTrash(String photoId) async {
-    await apiClient.dio.delete<void>('/photos/$photoId');
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/$photoId',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '移入回收站失败');
   }
 
   /// 批量将照片移入回收站。
   Future<void> movePhotosToTrash(List<String> photoIds) async {
-    await apiClient.dio.delete<void>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/batch',
       data: {'photoIds': photoIds},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '批量移入回收站失败');
   }
 
   /// 分页查询回收站照片。
@@ -82,12 +87,18 @@ class PhotoApi {
 
   /// 从回收站恢复照片。
   Future<void> restorePhoto(String photoId) async {
-    await apiClient.dio.post<void>('/photos/$photoId/restore');
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/photos/$photoId/restore',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '恢复照片失败');
   }
 
   /// 为有 GPS 坐标但缺少地名的照片补充逆地理编码。
   Future<void> backfillGeocode(String photoId) async {
-    await apiClient.dio.post<void>('/photos/$photoId/geocode');
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/photos/$photoId/geocode',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '补充地名失败');
   }
 
   /// 提交外部编辑器产出的整图字节，保存为新编辑版本。
@@ -167,7 +178,10 @@ class PhotoApi {
   /// 收藏照片（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> addFavorite(String photoId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.post<Map<String, dynamic>>('/photos/$photoId/favorite');
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/photos/$photoId/favorite',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏失败');
   }
 
   /// 分页获取可加入相册的候选照片，排除已在该相册内的照片。
@@ -207,9 +221,10 @@ class PhotoApi {
   /// 取消收藏（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> removeFavorite(String photoId) async {
     apiClient.requirePermission(activityWritePermission);
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/$photoId/favorite',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '取消收藏失败');
   }
 
   /// 获取相册列表
@@ -284,7 +299,10 @@ class PhotoApi {
 
   /// 删除相册
   Future<void> deleteAlbum(String albumId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>('/photos/albums/$albumId');
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/albums/$albumId',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除相册失败');
   }
 
   /// 添加照片到相册
@@ -292,10 +310,11 @@ class PhotoApi {
     required String albumId,
     required List<String> photoIds,
   }) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/photos/albums/$albumId/items',
       data: {'photoIds': photoIds},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '添加照片到相册失败');
   }
 
   /// 从相册移除照片
@@ -303,9 +322,10 @@ class PhotoApi {
     required String albumId,
     required String photoId,
   }) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/albums/$albumId/items/$photoId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '从相册移除照片失败');
   }
 
   /// 触发照片扫描任务
@@ -366,17 +386,19 @@ class PhotoApi {
 
   /// 添加标签
   Future<void> addTag(String photoId, String tag) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/photos/$photoId/tags',
       data: {'tag': tag},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '添加标签失败');
   }
 
   /// 移除标签
   Future<void> removeTag(String photoId, String tag) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/$photoId/tags/$tag',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '移除标签失败');
   }
 
   /// 查询所有标签
@@ -491,9 +513,10 @@ class PhotoApi {
 
   /// 回滚到指定版本
   Future<void> revertToVersion(String photoId, String versionId) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/photos/$photoId/versions/$versionId/revert',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '回滚照片版本失败');
   }
 
   /// 创建相册分享链接
@@ -667,9 +690,14 @@ class PhotoApi {
     final data = body ?? const <String, dynamic>{};
     final code = data['code'];
     if (code is num && code.toInt() >= 400) {
+      final errorName = data['errorName']?.toString();
       throw AppException(
-        code: code.toInt().toString(),
+        code: errorName ?? code.toInt().toString(),
         message: data['message']?.toString() ?? '照片中心请求失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          'code': code.toInt().toString(),
+        },
       );
     }
     return data;

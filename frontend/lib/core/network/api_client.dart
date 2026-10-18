@@ -232,6 +232,16 @@ class ApiClient {
         path.contains('/auth/refresh')) {
       return false;
     }
+    // 401/403 也承载业务级密码校验（分享访问密码、2FA 复核）。这类拒绝
+    // 与令牌无关，刷新只会轮换令牌并用同一错误密码重放请求。
+    final data = response.data;
+    if (data is Map) {
+      final errorName = data['errorName']?.toString();
+      if (errorName == 'PASSWORD_INVALID' ||
+          errorName == 'SHARE_PASSWORD_REQUIRED') {
+        return false;
+      }
+    }
     return response.requestOptions.extra[_retriedKey] != true;
   }
 

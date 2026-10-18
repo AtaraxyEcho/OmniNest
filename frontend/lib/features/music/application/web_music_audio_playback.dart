@@ -84,30 +84,29 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
     await _cancelPendingOpen();
     _openCompleter = Completer<void>();
     _openTimeoutTimer = Timer(_openTimeout, () {
-      _completePendingOpen(
-        StateError('音频打开超时: $normalized'),
-        playbackFailure: true,
-      );
+      _completePendingOpen(StateError('音频打开超时: $normalized'));
     });
     _url = normalized;
     _audio.src = normalized;
     _audio.load();
     try {
       await _openCompleter!.future;
-      // 走 `_updateState` 而不是直接改 `_state`：起播/暂停收敛点在那里。
-      _updateState(
-        playing: play,
-        position: Duration.zero,
-        duration: _elementDuration,
-      );
-      _durationController.add(_state.duration);
-      _positionController.add(Duration.zero);
-      if (play) {
-        await this.play();
-      }
-    } on Exception catch (error) {
+    } on Object catch (error) {
+      // 打开失败以 `StateError`（超时/加载错误）结束，它不是 `Exception`；
+      // 只捕获 `Exception` 会让失败静默逃逸。起播失败由 [play] 自己记录一次。
       _log('Web 音频打开失败: $error', playbackFailure: true);
       rethrow;
+    }
+    // 走 `_updateState` 而不是直接改 `_state`：起播/暂停收敛点在那里。
+    _updateState(
+      playing: play,
+      position: Duration.zero,
+      duration: _elementDuration,
+    );
+    _durationController.add(_state.duration);
+    _positionController.add(Duration.zero);
+    if (play) {
+      await this.play();
     }
   }
 
@@ -119,7 +118,8 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
     try {
       await _audio.play().toDart;
       _updateState(playing: true);
-    } on Exception catch (error) {
+    } on Object catch (error) {
+      // 浏览器拒绝自动播放时抛出的是 JS `DOMException`，不是 `Exception`。
       _log('Web 音频播放失败: $error', playbackFailure: true);
       rethrow;
     }
@@ -270,7 +270,6 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
         ((web.Event _) {
           _completePendingOpen(
             StateError('音频加载失败(${_audio.error?.code ?? 0}): $_url'),
-            playbackFailure: true,
           );
         }).toJS;
   }
@@ -286,7 +285,8 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
     _audio.onerror = null;
   }
 
-  void _completePendingOpen(Object? error, {bool playbackFailure = false}) {
+  /// 结束在途的打开请求；失败由 [openUrl] 的捕获分支统一记录，避免重复上报。
+  void _completePendingOpen(Object? error) {
     final completer = _openCompleter;
     _openCompleter = null;
     _openTimeoutTimer?.cancel();

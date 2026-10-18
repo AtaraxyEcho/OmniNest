@@ -85,6 +85,9 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
       child: ReaderPageScaffold(
         target: ReaderPageTarget.library,
         onRefresh: _onRefresh,
+        // 书库网格自带滚动体：续页只追加、不裁剪，必须交给视口惰性构建，
+        // 否则滚到第 6 页时同屏挂着 300 张卡片与 300 个封面请求。
+        childOwnScroll: true,
         // 托管态空间内不再渲染书库页头（搜索/分段页签）：全量书库经
         // 「书架」动作进入；桌面端维持完整页头。
         header:
@@ -118,16 +121,46 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
             child: stateAsync.when(
               data: _buildContent,
               error:
-                  (error, stackTrace) => AppErrorView(
-                    message: describeUserFacingError(error).displayMessage,
-                    onRetry:
-                        () => ref.invalidate(readerCenterControllerProvider),
-                  ),
-              loading: () => const AppLoading(),
+                  (error, stackTrace) => _buildScrollHost([
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: AppErrorView(
+                        message: describeUserFacingError(error).displayMessage,
+                        onRetry:
+                            () =>
+                                ref.invalidate(readerCenterControllerProvider),
+                      ),
+                    ),
+                  ]),
+              loading:
+                  () => _buildScrollHost([
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: AppLoading(),
+                    ),
+                  ]),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// 内容滚动体：页面自带滚动，骨架不再包一层 SingleChildScrollView。
+  ///
+  /// 内边距与骨架默认取值一致（[ReaderPageScaffold.contentPaddingOf]），
+  /// 所有内容以 sliver 形式交给同一个视口，网格只构建可见范围。
+  Widget _buildScrollHost(List<Widget> slivers) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      slivers: [
+        SliverPadding(
+          padding: ReaderPageScaffold.contentPaddingOf(context),
+          sliver: SliverMainAxisGroup(slivers: slivers),
+        ),
+      ],
     );
   }
 
@@ -140,63 +173,10 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
         data.librarySegment == ReaderLibrarySegment.all &&
         data.searchQuery.trim().isEmpty;
 
-    if (hosted) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (data.errorMessage != null)
-            MaterialBanner(
-              content: Text(data.errorMessage!),
-              actions: [
-                TextButton(
-                  onPressed:
-                      () =>
-                          ref
-                              .read(readerCenterControllerProvider.notifier)
-                              .clearError(),
-                  child: Text(l10n.readerClose),
-                ),
-              ],
-            ),
-          if (importJobs.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            for (final job in importJobs)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ImportJobRow(job: job),
-              ),
-          ],
-          if (!browseAll) ...[
-            // 检索/分段态：书库网格保留为结果视图。
-            const SizedBox(height: 28),
-            if (visibleItems.isEmpty)
-              EnvEmptyState(
-                icon: OmniIcons.book,
-                title: l10n.libraryEmptyBooksTitle,
-                message: l10n.libraryEmptyBooksMessage,
-              )
-            else
-              _LibraryGrid(
-                items: visibleItems,
-                onOpenItem: _onOpenItem,
-                onToggleBookshelf: _onToggleBookshelf,
-                onDeleteItem: _onDeleteItem,
-              ),
-          ] else ...[
-            _buildHostedSpace(data, visibleItems),
-          ],
-        ],
-      );
-    }
-
-    final showContinue = browseAll && data.continueItems.isNotEmpty;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (data.errorMessage != null)
-          MaterialBanner(
+    final slivers = <Widget>[
+      if (data.errorMessage != null)
+        SliverToBoxAdapter(
+          child: MaterialBanner(
             content: Text(data.errorMessage!),
             actions: [
               TextButton(
@@ -209,41 +189,86 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
               ),
             ],
           ),
-        if (importJobs.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          for (final job in importJobs)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ImportJobRow(job: job),
-            ),
-        ],
-        if (showContinue) ...[
-          const SizedBox(height: 12),
-          _ContinueSection(
-            items: data.continueItems.take(6).toList(),
-            onOpenItem: _openContinueReading,
+        ),
+      if (importJobs.isNotEmpty)
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              for (final job in importJobs)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ImportJobRow(job: job),
+                ),
+            ],
           ),
-        ],
-        const SizedBox(height: 32),
-        if (visibleItems.isEmpty)
-          ReaderEmptyState(
-            title: l10n.readerEmptyHint,
-            subtitle: l10n.readerEmptyHintDesc,
-            icon: Icons.library_books_outlined,
-            action: ReaderLibraryImportAction(
-              style: ImportButtonStyle.filledButton,
-              label: l10n.readerImportBooks,
+        ),
+    ];
+
+    if (hosted) {
+      if (!browseAll) {
+        // 检索/分段态：书库网格保留为结果视图。
+        slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 28)));
+        slivers.add(
+          visibleItems.isEmpty
+              ? SliverToBoxAdapter(
+                child: EnvEmptyState(
+                  icon: OmniIcons.book,
+                  title: l10n.libraryEmptyBooksTitle,
+                  message: l10n.libraryEmptyBooksMessage,
+                ),
+              )
+              : _LibraryGridSliver(
+                items: visibleItems,
+                onOpenItem: _onOpenItem,
+                onToggleBookshelf: _onToggleBookshelf,
+                onDeleteItem: _onDeleteItem,
+              ),
+        );
+      } else {
+        slivers.add(
+          SliverToBoxAdapter(child: _buildHostedSpace(data, visibleItems)),
+        );
+      }
+      return _buildScrollHost(slivers);
+    }
+
+    final showContinue = browseAll && data.continueItems.isNotEmpty;
+    if (showContinue) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _ContinueSection(
+              items: data.continueItems.take(6).toList(),
+              onOpenItem: _openContinueReading,
+            ),
+          ),
+        ),
+      );
+    }
+    slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 32)));
+    slivers.add(
+      visibleItems.isEmpty
+          ? SliverToBoxAdapter(
+            child: ReaderEmptyState(
+              title: l10n.readerEmptyHint,
+              subtitle: l10n.readerEmptyHintDesc,
+              icon: Icons.library_books_outlined,
+              action: ReaderLibraryImportAction(
+                style: ImportButtonStyle.filledButton,
+                label: l10n.readerImportBooks,
+              ),
             ),
           )
-        else
-          _LibraryGrid(
+          : _LibraryGridSliver(
             items: visibleItems,
             onOpenItem: _onOpenItem,
             onToggleBookshelf: _onToggleBookshelf,
             onDeleteItem: _onDeleteItem,
           ),
-      ],
     );
+    return _buildScrollHost(slivers);
   }
 
   /// 托管态 Reader 空间：样例 shelf 视图四段（特写/洞察/书轨/最近笔记）。
@@ -694,9 +719,12 @@ class _ContinueSection extends StatelessWidget {
   }
 }
 
-/// 书库网格：封面 + 标题作者，分页渲染防一次性构建过多。
-class _LibraryGrid extends StatefulWidget {
-  const _LibraryGrid({
+/// 书库网格 sliver：封面 + 标题作者，交给视口按需构建。
+///
+/// 条目由 controller 滚动续页累积（只追加不裁剪），因此这里必须是真正的
+/// `SliverGrid` 而不是 `shrinkWrap` 网格：后者会把已加载的全部条目一次实例化。
+class _LibraryGridSliver extends StatelessWidget {
+  const _LibraryGridSliver({
     required this.items,
     required this.onOpenItem,
     this.onToggleBookshelf,
@@ -709,42 +737,29 @@ class _LibraryGrid extends StatefulWidget {
   final ValueChanged<ReaderItem>? onDeleteItem;
 
   @override
-  State<_LibraryGrid> createState() => _LibraryGridState();
-}
-
-class _LibraryGridState extends State<_LibraryGrid> {
-  @override
   Widget build(BuildContext context) {
-    // 条目由 controller 滚动加载累积：本组件只渲染已加载窗口（builder 懒），
-    // 原本地 60 条“显示全部”窗口已被触底续页取代。
-    final items = widget.items;
-    return LayoutBuilder(
+    // 列数与卡片高度都由可用横向尺寸决定，sliver 约束直接给出该尺寸。
+    return SliverLayoutBuilder(
       builder: (context, constraints) {
-        final columns = _columnCount(constraints.maxWidth);
-        final grid = GridView.builder(
-          itemCount: items.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        final width = constraints.crossAxisExtent;
+        final columns = _columnCount(width);
+        return SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: 16,
             mainAxisSpacing: 20,
-            mainAxisExtent: _tileHeight(constraints.maxWidth, columns),
+            mainAxisExtent: _tileHeight(context, width, columns),
           ),
-          itemBuilder: (context, index) {
+          delegate: SliverChildBuilderDelegate((context, index) {
             final item = items[index];
             return ReaderLibraryGridCard(
               item: item,
-              onTap: () => widget.onOpenItem(item),
-              onToggleBookshelf: widget.onToggleBookshelf,
-              onDelete:
-                  widget.onDeleteItem == null
-                      ? null
-                      : () => widget.onDeleteItem!(item),
+              onTap: () => onOpenItem(item),
+              onToggleBookshelf: onToggleBookshelf,
+              onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
             );
-          },
+          }, childCount: items.length),
         );
-        return grid;
       },
     );
   }
@@ -757,7 +772,7 @@ class _LibraryGridState extends State<_LibraryGrid> {
     return 3;
   }
 
-  double _tileHeight(double width, int columns) {
+  double _tileHeight(BuildContext context, double width, int columns) {
     final tileWidth = (width - 16.0 * (columns - 1)) / columns;
     final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);
     // 恢复原先 2:3 封面比例；文字区略压（标题两行 + 作者一行）。

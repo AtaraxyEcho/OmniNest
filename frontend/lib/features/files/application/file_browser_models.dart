@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -31,6 +32,25 @@ class SoftDeleteConflict {
       softDeletedFileId: fileId,
       fileName: name,
       deletedAt: deleted ?? '',
+    );
+  }
+
+  /// 从信封解析出的业务错误中还原冲突信息。
+  ///
+  /// `ApiClient` 的 `validateStatus < 500` 使 HTTP 409 以正常响应返回，
+  /// 上传会话接口随后由 parseEnvelope 抛 AppException，冲突详情在 details 中，
+  /// 不会走 [fromDioException]。
+  static SoftDeleteConflict? fromAppException(AppException error) {
+    final fileId = error.details['softDeletedFileId'];
+    final name = error.details['fileName'];
+    if (fileId is! String || name is! String) {
+      return null;
+    }
+    final deleted = error.details['deletedAt'];
+    return SoftDeleteConflict(
+      softDeletedFileId: fileId,
+      fileName: name,
+      deletedAt: deleted is String ? deleted : '',
     );
   }
 }

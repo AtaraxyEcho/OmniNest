@@ -493,9 +493,17 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
       return;
     }
     final state = widget.state;
-    if (state.section != MovieSection.movies ||
-        !state.movieHasMore ||
-        state.movieLoadingMore) {
+    if (state.section != MovieSection.movies) {
+      return;
+    }
+    // 收藏视图有独立分页：主列表的 movieHasMore 与收藏页无关，按当前视图取门闩。
+    final hasMore =
+        _favoritesOnly ? state.favoritesPaging.hasMore : state.movieHasMore;
+    final loadingMore =
+        _favoritesOnly
+            ? state.favoritesPaging.isLoadingMore
+            : state.movieLoadingMore;
+    if (!hasMore || loadingMore) {
       return;
     }
     _requestingNextPage = true;
@@ -510,9 +518,12 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
 
   Future<void> _loadNextPage() async {
     try {
-      await ref
-          .read(movieCenterControllerProvider.notifier)
-          .loadNextLibraryPage();
+      final controller = ref.read(movieCenterControllerProvider.notifier);
+      if (_favoritesOnly) {
+        await controller.loadMoreFavorites();
+      } else {
+        await controller.loadNextLibraryPage();
+      }
     } finally {
       _requestingNextPage = false;
     }
@@ -524,9 +535,15 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(movieCenterControllerProvider.notifier);
     final hosted = MobileShellScope.isHosted(context);
-    // 收藏 chip 为移动本地展示态：直接切 favoriteItems 网格。
+    // 收藏 chip 为移动本地展示态：切到收藏条目，但筛选/排序口径不变。
     final filteredItems =
-        hosted && _favoritesOnly ? state.favoriteItems : state.filteredMovies;
+        hosted && _favoritesOnly
+            ? state.filteredFavoriteItems
+            : state.filteredMovies;
+    final loadingMore =
+        _favoritesOnly
+            ? state.favoritesPaging.isLoadingMore
+            : state.movieLoadingMore;
     final filters = [
       MovieRedesignChip(value: 'all', label: l10n.videoRedesignFilterAll),
       MovieRedesignChip(
@@ -588,8 +605,14 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
                       sortBy: state.sortBy,
                       onSortBy: controller.setSort,
                       favoritesOnly: _favoritesOnly,
-                      onFavoritesOnly:
-                          (value) => setState(() => _favoritesOnly = value),
+                      onFavoritesOnly: (value) {
+                        setState(() => _favoritesOnly = value);
+                        if (value) {
+                          // 收藏分区可能从未加载过：先取首屏，否则网格为空且
+                          // 续页门闩永远为 false。
+                          unawaited(controller.ensureFavoritesLoaded());
+                        }
+                      },
                       filter: state.filter,
                       onFilter: controller.setFilter,
                     )
@@ -658,7 +681,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
           sliver: SliverToBoxAdapter(
             child: Center(
               child:
-                  state.movieLoadingMore
+                  loadingMore
                       ? const SizedBox.square(
                         dimension: 24,
                         child: CircularProgressIndicator(strokeWidth: 2),

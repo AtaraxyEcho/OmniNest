@@ -80,7 +80,9 @@ Future<bool> _showConfirmation(
 }
 
 bool _isResourceInUse(AppException error) {
-  return error.code == '4006' || error.code == 'RESOURCE_IN_USE';
+  return error.code == '4006' ||
+      error.code == 'RESOURCE_IN_USE' ||
+      error.details['code'] == '4006';
 }
 
 class _PurgeImpact {

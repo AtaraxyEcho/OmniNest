@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 
@@ -16,6 +17,23 @@ void prewarmDownloadUrl(String fileId, String url, DateTime at) {
   _downloadUrlCacheAt[fileId] = at;
   _downloadUrlFailedAt.remove(fileId);
 }
+
+/// 清空下载地址、失败登记与文本预览的进程级缓存。
+///
+/// 这些缓存都以文件 ID 为键、不含账号归属：登出或换号后必须显式清空，
+/// 否则上一个账号的签名下载地址与纯文本预览仍会命中同一个 ID。
+void clearFileDownloadUrlCaches() {
+  _downloadUrlCache.clear();
+  _downloadUrlCacheAt.clear();
+  _downloadUrlFailedAt.clear();
+  _textPreviewCache.clear();
+  _textPreviewCacheAt.clear();
+}
+
+/// 测试用：某个文件 ID 是否仍持有未过期的下载地址缓存。
+@visibleForTesting
+bool debugHasCachedDownloadUrl(String fileId) =>
+    _cachedDownloadUrl(fileId) != null;
 
 final Map<String, String> _textPreviewCache = {};
 final Map<String, DateTime> _textPreviewCacheAt = {};

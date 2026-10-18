@@ -1,3 +1,4 @@
+import 'package:omninest/core/security/offline_column_cipher.dart';
 import 'package:omninest/core/security/offline_memory_cache.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/core/security/offline_data_lifecycle_base.dart';
@@ -16,10 +17,12 @@ Future<void> initializeOfflineDataLifecycle() {
 /// 创建当前平台的离线敏感数据生命周期实现。
 OfflineDataLifecycle createOfflineDataLifecycle({
   required LocalDatabase database,
+  OfflineTextCipher? textCipher,
 }) {
   return DatabaseOfflineDataLifecycle(
     delegate: platform_lifecycle.createOfflineDataLifecycle(),
     database: database,
+    textCipher: textCipher ?? sharedOfflineColumnCipher(),
   );
 }
 
@@ -29,11 +32,16 @@ class DatabaseOfflineDataLifecycle implements OfflineDataLifecycle {
   const DatabaseOfflineDataLifecycle({
     required OfflineDataLifecycle delegate,
     required LocalDatabase database,
+    OfflineTextCipher? textCipher,
   }) : _delegate = delegate,
-       _database = database;
+       _database = database,
+       _textCipher = textCipher;
 
   final OfflineDataLifecycle _delegate;
   final LocalDatabase _database;
+
+  /// 派生列密钥缓存所属的加密器；为空（Web 或未注入）时无需失效。
+  final OfflineTextCipher? _textCipher;
 
   @override
   Future<void> clearUser(String userId) async {
@@ -51,6 +59,9 @@ class DatabaseOfflineDataLifecycle implements OfflineDataLifecycle {
 
     await runStep(() => _delegate.clearUser(userId));
     OfflineMemoryCache.clearUser(userId);
+    // 主密钥已随平台清理删除，派生列密钥缓存必须同步失效：否则同一进程里
+    // 重新登录后会拿旧密钥加密，新会话再也解不开这些密文。
+    _textCipher?.evictUser(userId);
     await runStep(() => _database.clearUserData(userId));
 
     if (firstError != null) {

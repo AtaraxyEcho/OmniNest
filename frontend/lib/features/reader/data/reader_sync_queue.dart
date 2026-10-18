@@ -337,7 +337,7 @@ class ReaderSyncQueue {
           SyncOperationsCompanion.insert(
             userId: Value(_userId ?? ''),
             type: type,
-            payload: jsonEncode(data),
+            payload: await _serializePayload(data),
             createdAt: DateTime.now(),
           ),
         );
@@ -349,7 +349,7 @@ class ReaderSyncQueue {
   }) async {
     final operations = await _pendingCreateOperations(type);
     for (final operation in operations) {
-      final payload = _decodePayload(operation);
+      final payload = await _decodePayload(operation);
       if (payload?['localId'] != localId) {
         continue;
       }
@@ -365,14 +365,17 @@ class ReaderSyncQueue {
   }) async {
     final operations = await _pendingCreateOperations(type);
     for (final operation in operations) {
-      final payload = _decodePayload(operation);
+      final payload = await _decodePayload(operation);
       if (payload == null || payload['localId'] != localId) {
         continue;
       }
       update(payload);
-      await (_database.update(_database.syncOperations)..where(
-        (table) => table.id.equals(operation.id),
-      )).write(SyncOperationsCompanion(payload: Value(jsonEncode(payload))));
+      await (_database.update(_database.syncOperations)
+        ..where((table) => table.id.equals(operation.id))).write(
+        SyncOperationsCompanion(
+          payload: Value(await _serializePayload(payload)),
+        ),
+      );
     }
   }
 
@@ -424,7 +427,7 @@ class ReaderSyncQueue {
     final staleIds = <int>[];
     var hasNewerRow = false;
     for (final operation in operations) {
-      final payload = _decodePayload(operation);
+      final payload = await _decodePayload(operation);
       if (payload == null) {
         staleIds.add(operation.id);
         continue;
@@ -463,9 +466,34 @@ class ReaderSyncQueue {
     await _supersedePendingProgress(itemId, reportedAt: reportedAt);
   }
 
-  static Map<String, dynamic>? _decodePayload(SyncOperation operation) {
+  /// 序列化队列载荷。
+  ///
+  /// 笔记/批注的标题、正文与摘录属于敏感内容，SQLite 本身不加密且失败行会长期
+  /// 保留，因此落库前用列加密器加密；未注入加密器（Web）或未登录时保持明文，
+  /// 与 [ReaderLocalStorage] 的口径一致。
+  static Future<String> _serializePayload(Map<String, dynamic> data) async {
+    final encoded = jsonEncode(data);
+    final cipher = _textCipher;
+    final userId = _userId;
+    if (cipher == null || userId == null || userId.isEmpty) {
+      return encoded;
+    }
+    return cipher.encrypt(userId, encoded);
+  }
+
+  /// 反序列化队列载荷；解密或解析失败返回 null，由调用方按原语义处理。
+  static Future<Map<String, dynamic>?> _decodePayload(
+    SyncOperation operation,
+  ) async {
     try {
-      return jsonDecode(operation.payload) as Map<String, dynamic>;
+      final cipher = _textCipher;
+      final userId = _userId;
+      final stored = operation.payload;
+      final plain =
+          cipher == null || userId == null || userId.isEmpty
+              ? stored
+              : await cipher.decrypt(userId, stored);
+      return jsonDecode(plain) as Map<String, dynamic>;
     } on FormatException {
       return null;
     } on TypeError {
@@ -495,7 +523,7 @@ class ReaderSyncQueue {
     final deletingIds = <String>{};
     final updatingPayloads = <String, Map<String, dynamic>>{};
     for (final operation in operations) {
-      final payload = _decodePayload(operation);
+      final payload = await _decodePayload(operation);
       final targetId = payload?[idField] as String?;
       if (targetId == null) {
         continue;
@@ -610,7 +638,11 @@ class ReaderSyncQueue {
 
   /// 根据操作类型分发到对应的 API 调用。
   static Future<void> _dispatch(ReaderApi api, SyncOperation op) async {
-    final payload = jsonDecode(op.payload) as Map<String, dynamic>;
+    final payload = await _decodePayload(op);
+    if (payload == null) {
+      // 载荷损坏或无法解密：与旧实现一致走失败分支，不做任何远端写入。
+      throw const FormatException('同步载荷不可解析');
+    }
 
     switch (op.type) {
       case opProgress:

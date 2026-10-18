@@ -146,7 +146,15 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       return;
     }
     ref.invalidate(activeTaskSummaryProvider);
-    await ref.read(taskListProvider.notifier).load();
+    try {
+      await ref.read(taskListProvider.notifier).load();
+    } on Exception catch (error) {
+      // 任务列表是辅助状态：删除等业务动作已经成功，列表刷新失败不应把动作判失败；
+      // 列表自身保留上一次成功结果，下次刷新会自然重试。
+      if (kDebugMode) {
+        devLog('[MusicTask] 刷新任务列表失败: ${error.runtimeType}');
+      }
+    }
   }
 
   late final MusicPlaybackResolver _playbackResolver = MusicPlaybackResolver(

@@ -114,8 +114,16 @@ class AuthClient {
   }
 
   /// 拉取当前用户资料；头像/显示名在其他设备变更后的实时重拉入口。
-  Future<UserProfile> currentUser() async {
-    final response = await _dio.get<Map<String, dynamic>>('/me');
+  ///
+  /// [accessToken] 用于已登录后经无拦截器客户端读取资料；登录/刷新路径不传。
+  Future<UserProfile> currentUser({String? accessToken}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/me',
+      options:
+          accessToken == null || accessToken.isEmpty
+              ? null
+              : Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
     return UserProfile.fromJson(_unwrap(response.data));
   }
 

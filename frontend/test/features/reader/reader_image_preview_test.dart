@@ -7,7 +7,12 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 
 void main() {
   testWidgets('tapping content image opens fullscreen preview', (tester) async {
-    final block = ImageBlock(src: 'https://example.com/a.png', caption: '说明');
+    // 远程图片按隐私策略不再自动加载/提供预览，这里用可加载的 data URI 验证预览链路。
+    final block = ImageBlock(
+      src:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      caption: '说明',
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

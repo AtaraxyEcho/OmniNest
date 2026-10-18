@@ -275,7 +275,8 @@ void main() {
         api.toggleBookshelf('item-5'),
         throwsA(
           isA<AppException>()
-              .having((error) => error.code, 'code', '6001')
+              .having((error) => error.code, 'code', 'BOOK_NOT_FOUND')
+              .having((error) => error.details['code'], 'numeric code', '6001')
               .having(
                 (error) => error.details['errorName'],
                 'errorName',

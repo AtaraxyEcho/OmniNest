@@ -17,9 +17,14 @@ Map<String, dynamic> parseAdminEnvelope(
   }
   final code = body['code'];
   if (code != 200) {
+    final errorName = body['errorName']?.toString();
     throw AppException(
-      code: code?.toString() ?? defaultErrorCode,
+      code: errorName ?? code?.toString() ?? defaultErrorCode,
       message: body['message']?.toString() ?? defaultMessage,
+      details: {
+        if (errorName != null) 'errorName': errorName,
+        if (code != null) 'code': code.toString(),
+      },
     );
   }
   return body;

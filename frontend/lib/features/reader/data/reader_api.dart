@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/reader/data/reader_file_downloader.dart';
@@ -291,7 +292,12 @@ class ReaderApi {
   Future<Uint8List> getPageImage(String pageId) async {
     final response = await apiClient.dio.get<List<int>>(
       '/reader/pages/$pageId/image',
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        // bytes 响应没有信封：必须只接受 2xx，否则 4xx 错误 JSON 会被当成图片。
+        validateStatus:
+            (status) => status != null && status >= 200 && status < 300,
+      ),
     );
     final bytes = _asUint8List(response.data);
     if (bytes.isEmpty) {
@@ -583,9 +589,10 @@ class ReaderApi {
   /// 重试失败的漫画来源（异步，任务入队后立即返回）。
   Future<bool> retryComicSource(String itemId, String sourceId) async {
     try {
-      await apiClient.dio.post<Map<String, dynamic>>(
+      final response = await apiClient.dio.post<Map<String, dynamic>>(
         '/reader/items/$itemId/comic/sources/$sourceId/retry',
       );
+      ensureEnvelopeSuccess(response.data, fallbackMessage: '重试漫画来源失败');
       return true;
     } on Exception {
       return false;
@@ -594,9 +601,10 @@ class ReaderApi {
 
   /// 删除漫画来源及其页面。
   Future<void> deleteComicSource(String itemId, String sourceId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>(
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/reader/items/$itemId/comic/sources/$sourceId',
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '删除漫画来源失败');
   }
 
   /// 获取漫画清单（来源 + 目录 + 页面）。
@@ -667,10 +675,11 @@ class ReaderApi {
     required String itemId,
     required Map<String, dynamic> fields,
   }) async {
-    await apiClient.dio.put<Map<String, dynamic>>(
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/reader/items/$itemId/metadata',
       data: fields,
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '更新条目元数据失败');
   }
 
   /// 导入文件到阅读器
@@ -705,10 +714,11 @@ class ReaderApi {
     required String itemId,
     required String fileNodeId,
   }) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/cover/file',
       data: {'fileNodeId': fileNodeId},
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '设置封面失败');
   }
 
   /// 上传封面图片
@@ -720,10 +730,11 @@ class ReaderApi {
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(imageBytes, filename: fileName),
     });
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/cover',
       data: formData,
     );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '上传封面失败');
   }
 
   Uint8List _asUint8List(List<int>? bytes) {
@@ -774,9 +785,12 @@ class ReaderApi {
     if (code != 200) {
       final errorName = body['errorName']?.toString();
       throw AppException(
-        code: code?.toString() ?? 'READER_ERROR',
+        code: errorName ?? code?.toString() ?? 'READER_ERROR',
         message: body['message']?.toString() ?? '阅读器操作失败',
-        details: {if (errorName != null) 'errorName': errorName},
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          if (code != null) 'code': code.toString(),
+        },
       );
     }
     return body;

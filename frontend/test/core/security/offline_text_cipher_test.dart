@@ -31,6 +31,28 @@ class _InMemoryKeyStore implements OfflineKeyStore {
   }
 }
 
+/// 主密钥存储：删除后重新生成不同密钥，并统计派生读取次数。
+class _RotatingKeyStore implements OfflineKeyStore {
+  final Map<String, List<int>> _keys = {};
+  int reads = 0;
+  int _serial = 0;
+
+  @override
+  Future<void> delete(String userId) async {
+    _keys.remove(userId);
+  }
+
+  @override
+  Future<OfflineMasterKey> readOrCreate(String userId) async {
+    reads += 1;
+    final key = _keys.putIfAbsent(userId, () {
+      final serial = ++_serial;
+      return List<int>.generate(32, (index) => (index * 31 + serial) & 0xFF);
+    });
+    return OfflineMasterKey(keyId: 'test', bytes: Uint8List.fromList(key));
+  }
+}
+
 void main() {
   test('加密后可解密还原，密文带前缀且两次加密结果不同', () async {
     final cipher = OfflineTextCipher(keyStore: _InMemoryKeyStore());
@@ -71,5 +93,23 @@ void main() {
     final cipher = OfflineTextCipher(keyStore: _InMemoryKeyStore());
 
     expect(await cipher.encrypt('user-1', ''), equals(''));
+  });
+
+  test('evictUser 后重新派生使用新的主密钥', () async {
+    final keyStore = _RotatingKeyStore();
+    final cipher = OfflineTextCipher(keyStore: keyStore);
+    final before = await cipher.encrypt('user-1', '章节正文');
+    expect(keyStore.reads, 1);
+    expect(await cipher.decrypt('user-1', before), equals('章节正文'));
+
+    // 清理流程删掉主密钥后必须显式失效缓存，否则同一实例会继续沿用旧派生密钥。
+    await keyStore.delete('user-1');
+    cipher.evictUser('user-1');
+    final after = await cipher.encrypt('user-1', '章节正文');
+
+    expect(keyStore.reads, 2);
+    // 旧密钥加密的密文在新密钥下不可认证：按缓存未命中返回空串。
+    expect(await cipher.decrypt('user-1', before), equals(''));
+    expect(await cipher.decrypt('user-1', after), equals('章节正文'));
   });
 }

@@ -84,25 +84,28 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
       case localePreferenceScope:
         await ref.read(localeControllerProvider.notifier).refreshFromRemote();
         return true;
+      // 目标 Provider 未挂载时没有本地状态可刷，按已消费确认：页面首次打开
+      // 会自取最新偏好，不能因为那一页从未打开就永久重试（全作用域事件要求
+      // 七个目标全部完成，否则一个未打开页面就能卡住整条失效记录）。
       case weatherPreferenceScope:
-        if (!ref.exists(weatherLocationProvider)) return false;
+        if (!ref.exists(weatherLocationProvider)) return true;
         await ref.read(weatherLocationProvider.future);
         await ref.read(weatherLocationProvider.notifier).refreshFromRemote();
         return true;
       case readerPreferenceScope:
-        if (!ref.exists(readerPreferencesProvider)) return false;
+        if (!ref.exists(readerPreferencesProvider)) return true;
         await ref.read(readerPreferencesProvider.future);
         await ref.read(readerPreferencesProvider.notifier).refreshFromRemote();
         return true;
       case notificationPreferenceScope:
-        if (!ref.exists(notificationPreferencesProvider)) return false;
+        if (!ref.exists(notificationPreferencesProvider)) return true;
         await ref.read(notificationPreferencesProvider.future);
         await ref
             .read(notificationPreferencesProvider.notifier)
             .refreshFromRemote();
         return true;
       case musicVisualizerPreferenceScope:
-        if (!ref.exists(musicVisualizerPreferencesProvider)) return false;
+        if (!ref.exists(musicVisualizerPreferencesProvider)) return true;
         await ref.read(musicVisualizerPreferencesProvider.future);
         await ref
             .read(musicVisualizerPreferencesProvider.notifier)
