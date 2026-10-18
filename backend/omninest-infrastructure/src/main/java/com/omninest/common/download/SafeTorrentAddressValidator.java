@@ -24,6 +24,7 @@ public class SafeTorrentAddressValidator implements TorrentAddressValidator {
     private static final Set<String> TRACKER_GROUP_KEYS = Set.of("announce-list");
     private static final Set<String> WEB_SEED_KEYS = Set.of("url-list", "http-seed-list");
     private static final int MAX_DEPTH = 16;
+    private static final int PIECE_HASH_BYTES = 20;
     private static final String MALFORMED_MESSAGE = "种子文件格式不正确";
 
     private final SafeUrlValidator safeUrlValidator;
@@ -33,6 +34,7 @@ public class SafeTorrentAddressValidator implements TorrentAddressValidator {
      *
      * @param torrentBytes 种子文件字节
      */
+    @Override
     public void validate(byte[] torrentBytes) {
         List<String> trackers = new ArrayList<>();
         List<String> webSeeds = new ArrayList<>();
@@ -42,6 +44,26 @@ public class SafeTorrentAddressValidator implements TorrentAddressValidator {
         new Cursor(torrentBytes).readTopLevel(trackers, webSeeds);
         webSeeds.forEach(url -> EmbeddedTargetGuard.requireWebSeed(safeUrlValidator, url));
         trackers.forEach(tracker -> EmbeddedTargetGuard.requireTracker(safeUrlValidator, tracker));
+    }
+
+    /**
+     * 结构判定：顶层字典里有 info，且 info 带合法分片表，才认作种子。
+     * 与 validate 分开的理由是调用方要"先认种子、再校验地址"，不能拿校验异常当识别手段：
+     * 普通下载物（含以 d 开头的文本）必须原样入库，只有真种子才需要过内嵌地址闸门。
+     *
+     * @param candidate 待判定的字节
+     * @return 结构上是种子时为真
+     */
+    @Override
+    public boolean looksLikeTorrent(byte[] candidate) {
+        if (candidate == null || candidate.length == 0) {
+            return false;
+        }
+        try {
+            return new Cursor(candidate).hasBittorrentInfo();
+        } catch (BusinessException exception) {
+            return false;
+        }
     }
 
     /**
@@ -72,6 +94,46 @@ public class SafeTorrentAddressValidator implements TorrentAddressValidator {
                 }
             }
             position++;
+        }
+
+        /**
+         * 结构识别：顶层字典里有 info，且 info 里同时有 piece length 与长度对齐的 pieces。
+         */
+        private boolean hasBittorrentInfo() {
+            if (peek() != 'd') {
+                return false;
+            }
+            position++;
+            while (peek() != 'e') {
+                if (!"info".equals(readString())) {
+                    skipValue(1);
+                    continue;
+                }
+                return hasPieceFields();
+            }
+            return false;
+        }
+
+        private boolean hasPieceFields() {
+            if (peek() != 'd') {
+                return false;
+            }
+            position++;
+            boolean hasPieceLength = false;
+            boolean hasPieces = false;
+            while (peek() != 'e') {
+                String key = readString();
+                if ("piece length".equals(key)) {
+                    skipValue(2);
+                    hasPieceLength = true;
+                } else if ("pieces".equals(key)) {
+                    int piecesLength = readBytes().length;
+                    hasPieces = piecesLength > 0 && piecesLength % PIECE_HASH_BYTES == 0;
+                } else {
+                    skipValue(2);
+                }
+            }
+            return hasPieceLength && hasPieces;
         }
 
         private void collectStrings(int depth, List<String> sink) {
@@ -125,6 +187,10 @@ public class SafeTorrentAddressValidator implements TorrentAddressValidator {
         }
 
         private String readString() {
+            return new String(readBytes(), StandardCharsets.UTF_8);
+        }
+
+        private byte[] readBytes() {
             byte current = peek();
             if (current < '0' || current > '9') {
                 throw malformed();
@@ -147,7 +213,8 @@ public class SafeTorrentAddressValidator implements TorrentAddressValidator {
             if (position + size > data.length) {
                 throw malformed();
             }
-            String value = new String(data, position, size, StandardCharsets.UTF_8);
+            byte[] value = new byte[size];
+            System.arraycopy(data, position, value, 0, size);
             position += size;
             return value;
         }

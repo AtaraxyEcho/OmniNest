@@ -127,6 +127,7 @@ public class OfflineDownloadExecutionService {
             }
             downloadCompleted = true;
             List<Path> completedFiles = resolveCompletedFiles(taskDirectory, status);
+            completedFiles = expandHttpTorrentPayload(task, source, taskDirectory, completedFiles);
             if (completedFiles.isEmpty()) {
                 markFailed(task.getId(), "aria2 未生成可导入文件");
                 return;
@@ -173,16 +174,7 @@ public class OfflineDownloadExecutionService {
     }
 
     private String submitToAria2(ResolvedSource source, Path taskDirectory) {
-        Map<String, Object> options = new LinkedHashMap<>();
-        options.put("dir", taskDirectory.toString());
-        options.put("allow-overwrite", "false");
-        options.put("auto-file-renaming", "true");
-        options.put("bt-save-metadata", "true");
-        options.put("bt-metadata-only", "false");
-        options.put("seed-time", "0");
-        // mem 与 true 同样跟随种子内容，但种子本体不落下载目录：否则 resolveCompletedFiles
-        // 会把 .torrent 当成一个已完成文件导入用户空间。
-        options.put("follow-torrent", "mem");
+        Map<String, Object> options = aria2DownloadOptions(taskDirectory);
         if (source.kind() == SourceKind.TORRENT_FILE) {
             byte[] torrent = downloadTorrent(source.uri());
             return offlineDownloadGateway.submitTorrent(torrent, options);
@@ -194,6 +186,82 @@ public class OfflineDownloadExecutionService {
             return offlineDownloadGateway.submitUri(finalUri.toString(), options);
         }
         return offlineDownloadGateway.submitUri(source.uri().toString(), options);
+    }
+
+    private Map<String, Object> aria2DownloadOptions(Path taskDirectory) {
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("dir", taskDirectory.toString());
+        options.put("allow-overwrite", "false");
+        options.put("auto-file-renaming", "true");
+        options.put("bt-save-metadata", "true");
+        options.put("bt-metadata-only", "false");
+        options.put("seed-time", "0");
+        // false 才让下载器不把取回的内容当种子解析：实测（docs/2026-10-18/001 §9.1）true 与 mem
+        // 都会解析并立刻回连种子内嵌的 url-list / announce，那批地址我们从未校验过。
+        // 直链种子的展开改由 expandHttpTorrentPayload 在做完内嵌地址校验之后自己提交。
+        options.put("follow-torrent", "false");
+        return options;
+    }
+
+    /**
+     * 直链指向的其实是种子时的展开。
+     * {@code follow-torrent=false} 之后 aria2 只把种子本体取回来，这里先过一遍内嵌地址闸门，
+     * 再作为种子任务提交：功能与改参数前一致，但下载器不会拿我们没校验过的 url-list / announce 发请求。
+     * 只展开一层（种子内容里再出现的种子按普通文件入库）；展开失败或任务被取消时保留种子本体，
+     * 与"不跟随种子"的语义一致。
+     * 包级可见是为了让单测直接驱动展开顺序，不必为私有方法伪造一次 HTTP 逐跳探测。
+     */
+    List<Path> expandHttpTorrentPayload(
+            DownloadOfflineTask task,
+            ResolvedSource source,
+            Path taskDirectory,
+            List<Path> completedFiles
+    ) {
+        if (source.kind() != SourceKind.HTTP || completedFiles.isEmpty()) {
+            return completedFiles;
+        }
+        for (Path candidate : completedFiles) {
+            byte[] torrentBytes = readTorrentPayload(candidate);
+            if (torrentBytes == null) {
+                continue;
+            }
+            torrentAddressValidator.validate(torrentBytes);
+            String expandedGid = offlineDownloadGateway.submitTorrent(
+                    torrentBytes,
+                    aria2DownloadOptions(taskDirectory)
+            );
+            updateAria2Gid(task.getId(), expandedGid);
+            TaskSnapshot expanded = waitForCompletion(task.getId(), expandedGid);
+            if (expanded == null) {
+                return completedFiles;
+            }
+            List<Path> expandedFiles = new ArrayList<>();
+            for (Path produced : resolveCompletedFiles(taskDirectory, expanded)) {
+                if (!produced.equals(candidate)) {
+                    expandedFiles.add(produced);
+                }
+            }
+            if (expandedFiles.isEmpty()) {
+                expandedFiles.add(candidate);
+            }
+            return expandedFiles;
+        }
+        return completedFiles;
+    }
+
+    private byte[] readTorrentPayload(Path file) {
+        try {
+            long size = Files.size(file);
+            if (size <= 0L || size > MAX_TORRENT_BYTES) {
+                return null;
+            }
+            byte[] candidate = Files.readAllBytes(file);
+            return torrentAddressValidator.looksLikeTorrent(candidate) ? candidate : null;
+        } catch (IOException exception) {
+            log.warn("识别种子直链失败，按普通文件入库: fileName={}, errorType={}",
+                    file.getFileName(), exception.getClass().getSimpleName());
+            return null;
+        }
     }
 
     /**

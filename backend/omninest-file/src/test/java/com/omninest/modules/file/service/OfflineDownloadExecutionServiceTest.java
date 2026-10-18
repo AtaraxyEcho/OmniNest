@@ -1,10 +1,12 @@
 package com.omninest.modules.file.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 
 import com.omninest.common.download.OfflineDownloadGateway;
+import com.omninest.common.download.OfflineDownloadGateway.DownloadedFile;
 import com.omninest.common.download.OfflineDownloadGateway.TaskSnapshot;
 import com.omninest.common.download.OfflineDownloadSourceResolver;
 import com.omninest.common.download.OfflineDownloadSourceResolver.ResolvedSource;
@@ -37,12 +39,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -367,6 +372,108 @@ class OfflineDownloadExecutionServiceTest {
             trace.add(tag("notify"));
             return null;
         }).when(notificationService).notifyOrLog(any(), any(), any(), any(), any());
+        return task;
+    }
+
+    @Test
+    void aria2IsNeverToldToParseDownloadedTorrentsItself() throws IOException {
+        Path downloadRoot = Files.createTempDirectory("offline-follow-torrent");
+        Mockito.when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        Mockito.when(offlineDownloadGateway.downloadRoot()).thenReturn(downloadRoot);
+        Mockito.when(offlineDownloadGateway.pollIntervalSeconds()).thenReturn(1);
+        String magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+        Mockito.when(sourceResolver.resolve(magnet))
+                .thenReturn(new ResolvedSource(SourceKind.MAGNET, URI.create(magnet)));
+        Mockito.when(offlineDownloadGateway.submitUri(any(), any())).thenReturn("gid1");
+        Mockito.when(offlineDownloadGateway.queryStatus("gid1")).thenReturn(new TaskSnapshot(
+                "complete", 8L, 8L, 0L, List.of(), "probe", null));
+        DownloadOfflineTask task = newQueuedTask(magnet);
+        Mockito.when(offlineTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        Mockito.when(offlineTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.execute(new OfflineDownloadRequestedEvent(TASK_ID));
+
+        // 实测过：true 与 mem 都会让 aria2 解析取回的内容并立刻回连其中内嵌的 url-list / announce，
+        // 而那批地址从未过我们的闸门。展开必须由我们在校验之后自己提交。
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> options = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(offlineDownloadGateway).submitUri(Mockito.eq(magnet), options.capture());
+        assertThat(options.getValue()).containsEntry("follow-torrent", "false");
+    }
+
+    @Test
+    void torrentShapedDirectLinkIsValidatedBeforeItIsExpanded() throws IOException {
+        Path taskDirectory = Files.createTempDirectory("offline-torrent-expand");
+        Path payload = taskDirectory.resolve("payload");
+        Files.writeString(payload, "d8:announce0:e");
+        Mockito.when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        DownloadOfflineTask task = newQueuedTask("https://example.com/payload");
+        Mockito.when(offlineTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        Mockito.when(offlineTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Mockito.when(torrentAddressValidator.looksLikeTorrent(any())).thenReturn(true);
+        Mockito.doThrow(new BusinessException(ErrorCode.FILE_SECURITY_REJECTED, "种子内嵌地址不允许"))
+                .when(torrentAddressValidator)
+                .validate(any());
+
+        assertThatThrownBy(() -> service.expandHttpTorrentPayload(
+                task,
+                new ResolvedSource(SourceKind.HTTP, URI.create("https://example.com/payload")),
+                taskDirectory,
+                List.of(payload)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("种子内嵌地址不允许");
+
+        // 校验没过就不许把种子交给下载器：一次展开请求都不能发出去。
+        Mockito.verifyNoInteractions(offlineDownloadGateway);
+    }
+
+    @Test
+    void validatedTorrentLinkIsExpandedIntoItsOwnContentsAndTheSeedIsNotImported() throws IOException {
+        Path taskDirectory = Files.createTempDirectory("offline-torrent-expanded");
+        Path payload = taskDirectory.resolve("payload");
+        Files.writeString(payload, "d8:announce0:e");
+        Path video = taskDirectory.resolve("episode.mkv");
+        Files.writeString(video, "video-bytes");
+        Mockito.when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        Mockito.when(offlineDownloadGateway.pollIntervalSeconds()).thenReturn(1);
+        DownloadOfflineTask task = newQueuedTask("https://example.com/payload");
+        Mockito.when(offlineTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        Mockito.when(offlineTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Mockito.when(torrentAddressValidator.looksLikeTorrent(any())).thenReturn(true);
+        Mockito.when(offlineDownloadGateway.submitTorrent(any(), any())).thenReturn("gid2");
+        Mockito.when(offlineDownloadGateway.queryStatus("gid2")).thenReturn(new TaskSnapshot(
+                "complete", 11L, 11L, 0L,
+                List.of(new DownloadedFile(video.toString(), true)), "episode", null));
+
+        List<Path> result = service.expandHttpTorrentPayload(
+                task,
+                new ResolvedSource(SourceKind.HTTP, URI.create("https://example.com/payload")),
+                taskDirectory,
+                List.of(payload));
+
+        InOrder order = Mockito.inOrder(torrentAddressValidator, offlineDownloadGateway);
+        order.verify(torrentAddressValidator).validate(any());
+        order.verify(offlineDownloadGateway).submitTorrent(any(), any());
+        // 入库的是种子内容，不是那枚种子本体——与改参数之前的可见结果一致。
+        assertThat(result).containsExactly(video);
+    }
+
+    private DownloadOfflineTask newQueuedTask(String sourceUri) {
+        DownloadOfflineTask task = new DownloadOfflineTask();
+        task.setId(TASK_ID);
+        task.setOwnerUserId(UUID.randomUUID());
+        task.setSourceUri(sourceUri);
+        task.setFileName("probe");
+        task.setStatus(TaskStatus.QUEUED.getValue());
         return task;
     }
 
