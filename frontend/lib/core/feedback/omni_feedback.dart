@@ -141,7 +141,8 @@ void showOmniFeedback(
             )
             : null,
     showProgressBar: false,
-    closeOnClick: true,
+    // 带动作的提示（撤销/查看）不能整卡点按即关：误触外围会毁掉唯一的补救入口。
+    closeOnClick: !hasAction,
     dragToClose: true,
     pauseOnHover: true,
     applyBlurEffect: false,

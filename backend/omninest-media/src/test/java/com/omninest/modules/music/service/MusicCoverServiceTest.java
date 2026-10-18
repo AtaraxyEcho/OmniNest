@@ -97,9 +97,29 @@ class MusicCoverServiceTest {
         var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
 
         assertThat(descriptor.fileId()).isEqualTo(FILE_ID);
+        assertThat(descriptor.ownerUserId()).isEqualTo(OWNER_ID);
         assertThat(descriptor.contentType()).isEqualTo("image/png");
         assertThat(descriptor.sizeBytes()).isEqualTo(1024);
         verify(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_ID);
+    }
+
+    @Test
+    void sharedMemberDerivesThumbnailUnderCoverOwner() {
+        UUID memberId = UUID.randomUUID();
+        UUID thumbnailId = UUID.randomUUID();
+        when(fileLifecycleGuard.requireReadable(memberId, FILE_ID))
+                .thenReturn(imageDescriptor(FILE_ID, OWNER_ID, "image/png", 4096));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
+                .thenReturn(MusicCoverThumbnailService.ThumbnailResult.derived(thumbnailId));
+        when(fileMetadataQueryService.findActiveById(thumbnailId))
+                .thenReturn(Optional.of(imageDescriptor(thumbnailId, OWNER_ID, "image/jpeg", 900)));
+
+        var stream = coverService.prepareThumbnailStream(memberId, FILE_ID);
+
+        assertThat(stream.descriptor().fileId()).isEqualTo(thumbnailId);
+        // 派生键必须跟随封面内容所有者，共享成员不能在各自命名空间重复生成
+        verify(coverThumbnailService).ensureThumbnail(OWNER_ID, FILE_ID, 4096);
+        verify(coverThumbnailService, never()).ensureThumbnail(memberId, FILE_ID, 4096);
     }
 
     @Test
@@ -210,9 +230,18 @@ class MusicCoverServiceTest {
     }
 
     private FileDescriptor imageDescriptor(UUID fileId, String mimeType, long sizeBytes) {
+        return imageDescriptor(fileId, OWNER_ID, mimeType, sizeBytes);
+    }
+
+    private FileDescriptor imageDescriptor(
+            UUID fileId,
+            UUID ownerUserId,
+            String mimeType,
+            long sizeBytes
+    ) {
         return new FileDescriptor(
                 fileId,
-                OWNER_ID,
+                ownerUserId,
                 null,
                 "FILE",
                 "cover.png",
@@ -224,7 +253,7 @@ class MusicCoverServiceTest {
                 false,
                 false,
                 SpaceType.PERSONAL,
-                OWNER_ID,
+                ownerUserId,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Instant.parse("2026-01-01T00:00:00Z")
         );

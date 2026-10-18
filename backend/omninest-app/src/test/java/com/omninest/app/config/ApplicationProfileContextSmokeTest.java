@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import com.omninest.OmniNestApplication;
 import com.omninest.common.config.ClamAvProperties;
 import com.omninest.common.config.SecurityProperties;
+import com.omninest.modules.file.service.FileCleanupService;
 import com.omninest.modules.video.service.VideoProcessExecutor;
 import io.minio.MinioClient;
 import java.io.IOException;
@@ -45,7 +46,7 @@ abstract class ApplicationProfileContextSmokeSupport {
             .withPassword("omninest-smoke-0123456789");
 
     @Autowired
-    private ConfigurableApplicationContext applicationContext;
+    protected ConfigurableApplicationContext applicationContext;
 
     @Autowired
     private ClamAvProperties clamAvProperties;
@@ -141,6 +142,13 @@ abstract class ApplicationProfileContextSmokeSupport {
 @Testcontainers(disabledWithoutDocker = true)
 @Import(ApplicationProfileContextSmokeSupport.ExternalDependencyOverrides.class)
 class DevApplicationProfileContextSmokeTest extends ApplicationProfileContextSmokeSupport {
+
+    @Test
+    void embeddedSchedulerInstantiatesScheduleGatedBeans() {
+        assertThat(applicationContext.getBeanNamesForType(FileCleanupService.class))
+                .as("单进程 dev 必须内嵌调度器，否则回收与对账任务不会实例化")
+                .isNotEmpty();
+    }
 }
 
 /**
@@ -176,4 +184,11 @@ class DevApplicationProfileContextSmokeTest extends ApplicationProfileContextSmo
 @Testcontainers(disabledWithoutDocker = true)
 @Import(ApplicationProfileContextSmokeSupport.ExternalDependencyOverrides.class)
 class ProdApplicationProfileContextSmokeTest extends ApplicationProfileContextSmokeSupport {
+
+    @Test
+    void schedulerBeansStayDisabledWithApiRole() {
+        assertThat(applicationContext.getBeanNamesForType(FileCleanupService.class))
+                .as("prod 默认 role=api 且未开启内嵌调度器时，调度 Bean 不应实例化")
+                .isEmpty();
+    }
 }

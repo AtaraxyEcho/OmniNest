@@ -5,6 +5,28 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
 void main() {
+  testWidgets('行内图标钮在静息态暴露按钮语义与提示文案', (tester) async {
+    final handle = tester.ensureSemantics();
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileEnvInlineIconButton(
+            tooltip: '删除',
+            icon: Icons.delete_outline,
+            onTap: () => tapped = true,
+          ),
+        ),
+      ),
+    );
+
+    // Tooltip 只在展开时挂语义；静息态必须由外层 Semantics 提供名称
+    expect(find.bySemanticsLabel('删除'), findsOneWidget);
+    await tester.tap(find.byType(MobileEnvInlineIconButton));
+    expect(tapped, isTrue);
+    handle.dispose();
+  });
+
   testWidgets('移动端分段控件在窄屏下保持稳定并响应选择', (tester) async {
     var selected = 0;
     await tester.binding.setSurfaceSize(const Size(360, 800));

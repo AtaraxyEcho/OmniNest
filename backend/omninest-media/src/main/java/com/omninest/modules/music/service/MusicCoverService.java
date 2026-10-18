@@ -86,7 +86,9 @@ public class MusicCoverService {
         if (contentType == null || contentType.isBlank()) {
             contentType = "image/jpeg";
         }
-        return new CoverStreamDescriptor(ownerUserId, fileId, contentType, node.sizeBytes());
+        // 描述符携带内容所有者而不是请求者：共享空间成员读封面时，
+        // 缩略图派生与缓存登记都必须落在封面原图所属用户命名空间，否则会重复派生。
+        return new CoverStreamDescriptor(node.ownerUserId(), fileId, contentType, node.sizeBytes());
     }
 
     /**
@@ -123,14 +125,16 @@ public class MusicCoverService {
      * {@link ThumbnailStream#freshness()} 区分缓存策略：回退的原图既不能长期占住稳定
      * 缩略图路径，也不能按分钟反复下载。</p>
      *
-     * @param ownerUserId 所属用户标识
+     * @param ownerUserId 请求用户标识
      * @param fileId 封面原图文件标识
      * @return 缩略图或回退原图的流式读取结果
      */
     public ThumbnailStream prepareThumbnailStream(UUID ownerUserId, UUID fileId) {
         CoverStreamDescriptor source = prepareCoverStream(ownerUserId, fileId);
+        // 派生键跟随封面内容所有者，共享成员不会在各自命名空间重复生成同一张缩略图。
+        UUID catalogOwnerId = source.ownerUserId();
         MusicCoverThumbnailService.ThumbnailResult result = coverThumbnailService.ensureThumbnail(
-                ownerUserId,
+                catalogOwnerId,
                 fileId,
                 source.sizeBytes()
         );
@@ -149,7 +153,7 @@ public class MusicCoverService {
         }
         // 派生缩略图与原图同 owner，免二次归属校验；仍读元数据取 MIME 与字节数。
         return new ThumbnailStream(
-                prepareDerivedDescriptor(ownerUserId, thumbnailFileId),
+                prepareDerivedDescriptor(catalogOwnerId, thumbnailFileId),
                 ThumbnailFreshness.DERIVED,
                 fileId
         );

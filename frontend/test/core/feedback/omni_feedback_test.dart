@@ -140,6 +140,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('已移入回收站'), findsOneWidget);
+    // 带动作的提示不允许整卡点按关闭：误触外围会丢掉唯一补救入口。
+    await tester.tap(find.text('已移入回收站'));
+    await tester.pump();
+    expect(find.text('已移入回收站'), findsOneWidget);
     await tester.tap(find.text('撤销'));
     await tester.pump();
     expect(fired, isTrue);

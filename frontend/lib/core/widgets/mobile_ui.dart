@@ -518,14 +518,18 @@ class MobileEnvInlineIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: SizedBox.square(
-          dimension: 38,
-          child: Icon(icon, size: iconSize, color: context.env.inkMuted),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox.square(
+            dimension: 38,
+            child: Icon(icon, size: iconSize, color: context.env.inkMuted),
+          ),
         ),
       ),
     );
