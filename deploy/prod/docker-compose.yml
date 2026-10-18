@@ -303,6 +303,11 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # 双挂：default 保住宿主回环发布的 9001 与 nginx 反代的 9000，media 让独占 internal 网的
+    # ffmpeg 能取预签名地址。只挂 internal 会让发布端口静默失效（实测 Ports 为空）。
+    networks:
+      - default
+      - media
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER 必须显式配置}
@@ -324,6 +329,9 @@ services:
   ffmpeg:
     image: jrottenberg/ffmpeg:8-alpine
     container_name: omninest-ffmpeg
+    # 不发布任何端口，因此可以只挂 internal 的 media（见 networks 段的说明）。
+    networks:
+      - media
     environment:
       TZ: Asia/Shanghai
     entrypoint: ["sh", "-c", "while true; do sleep 86400; done"]
@@ -498,3 +506,13 @@ networks:
       config:
         - subnet: ${OMNINEST_EGRESS_SUBNET:-172.31.0.0/24}
           ip_range: ${OMNINEST_EGRESS_DYNAMIC_IP_RANGE:-172.31.0.128/25}
+  # ffmpeg 独占的 internal 网：容器模式下的探测/转码/截帧把预签名地址交给 `docker exec omninest-ffmpeg`，
+  # 而媒体内容里内嵌的远程引用（HLS/DASH 分片、concat 列表）是 ffmpeg 自己去取的，任何提交前的地址校验
+  # 都覆盖不到那批地址。这张网没有公网路由也不解析数据面服务名 ⇒ 二级出网在拓扑层封死；
+  # 顶层预签名地址靠 minio 双挂本网仍可达。internal 与发布端口互斥，所以挂进来的服务不得只靠本网发布端口。
+  media:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${OMNINEST_MEDIA_SUBNET:-172.33.0.0/24}
+          ip_range: ${OMNINEST_MEDIA_DYNAMIC_IP_RANGE:-172.33.0.128/25}

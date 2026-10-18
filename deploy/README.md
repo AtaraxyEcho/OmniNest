@@ -143,18 +143,28 @@ profile 是所有 Compose 子命令共同的筛选条件——`up -d` 没带上�
 
 ### 出网执行体的网络分区
 
-`aria2` 与 `rclone` 只挂在 `egress`，不在 `default`；backend 三种运行角色同时挂
-`default` 与 `egress`（既要调用它们，也要访问数据面）；其余服务一律只在 `default`。
-两条实测性质决定了这个形状：
+三张网的成员表（prod 与 dev 同形状）：
 
-- 跨 user-defined 网络既不互通也不解析，所以这两个执行体被不可信输入驱动去访问内网地址时
-  在拓扑层就走不通；
-- `internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、
-  宿主连不上），所以 `egress` 故意不设 `internal`，aria2 的 DHT/PEX 与 rclone 的外部存储仍需公网。
+| 网络 | 成员 | internal | 为什么 |
+| :-- | :-- | :-- | :-- |
+| `egress` | `aria2`、`rclone`，prod 还含 backend 三种运行角色 | 否 | 两者必须出公网（下载、DHT/PEX、外部存储），但不能碰数据面 |
+| `media` | `ffmpeg` 独占，`minio` 双挂 | **是** | 容器模式的探测/转码/截帧把预签名地址交给 `docker exec omninest-ffmpeg`，而媒体内容内嵌的远程引用是 ffmpeg 自己去取的，提交前的地址校验覆盖不到那批地址 |
+| `default` | 其余全部服务 | 否 | 数据面与宿主回环发布 |
+
+三条实测性质决定了这个形状：
+
+- 跨 user-defined 网络既不互通也不解析。dev 实测：`ffmpeg` 在 `media` 上取 minio 预签名地址成功，
+  而播放列表里内嵌的另一个网络上的分片地址报 `Failed to resolve hostname`，对照靶收到的请求为 0；
+  公网同样不可达。
+- `internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、宿主连不上）。
+  所以 `egress` 故意不设 `internal`；`media` 只给**不发布端口**的 `ffmpeg` 独占，
+  要发布 9001 的 `minio` 必须同时留在非 internal 的 `default` 上（实测宿主回环 9000=403、9001=200 不变）。
+- 只挂 internal 网的服务一旦加上 `ports:` 会静默失效，`ComposeNetworkTopologyTest` 对这条有专门断言。
 
 网络分区不依赖 `OMNINEST_DOCKER_SUBNET` 的取值，但改动子网时必须同步
-`OMNINEST_DOCKER_DYNAMIC_IP_RANGE` 与 nginx 固定地址。成员表由
-`ComposeNetworkTopologyTest` 逐字钉住，新增服务时该测试会要求同时决定它进不进 `egress`。
+`OMNINEST_DOCKER_DYNAMIC_IP_RANGE` 与 nginx 固定地址；`egress` 与 `media` 各自的
+`OMNINEST_EGRESS_SUBNET` / `OMNINEST_MEDIA_SUBNET` 不得与宿主局域网重叠。
+成员表由 `ComposeNetworkTopologyTest` 逐字钉住，新增服务时该测试会要求同时决定它进哪张网。
 
 应用后核对容器实际所在网络，不依赖 compose 文件推断：
 

@@ -6,6 +6,7 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -124,6 +125,15 @@ public class MinioFileContentProvider implements FileContentProvider {
     @Override
     public Optional<FileContentResource> findRangeResource(FileNode node) {
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<FileContentRange> openRange(FileNode node, long offset, long length) {
+        FileObject object = requireObject(node);
+        ObjectStorageKey key = new ObjectStorageKey(object.getBucketName(), object.getObjectKey());
+        return Optional.of(new FileContentRange(
+                objectStorageClient.getObject(key, offset, length),
+                object.getSizeBytes()));
     }
 
     private FileObject requireObject(FileNode node) {

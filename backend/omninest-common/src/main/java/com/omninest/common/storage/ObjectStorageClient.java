@@ -162,6 +162,19 @@ public interface ObjectStorageClient {
     InputStream getObject(ObjectStorageKey key);
 
     /**
+     * 获取对象指定字节区间的输入流。
+     *
+     * <p>用于只需要文件头部与尾部窗口的读取（例如媒体探测需要定位容器尾部索引），
+     * 避免为取几十字节元数据而传输整个对象。区间为闭区间 {@code [offset, offset + length - 1]}。</p>
+     *
+     * @param key 对象存储键
+     * @param offset 起始字节偏移，从 0 开始
+     * @param length 需要读取的字节数，必须大于 0
+     * @return 区间内容输入流，调用方负责关闭
+     */
+    InputStream getObject(ObjectStorageKey key, long offset, long length);
+
+    /**
      * 判断对象是否存在。
      *
      * @param key 对象存储键

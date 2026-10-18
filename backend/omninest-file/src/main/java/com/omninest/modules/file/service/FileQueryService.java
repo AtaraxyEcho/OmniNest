@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.UUID;
@@ -70,6 +71,7 @@ public class FileQueryService {
     private final UserSyncEventRecorder syncEventRecorder;
     private final UserNameDirectory userNameDirectory;
     private final MediaProbeService mediaProbeService;
+    private final MediaProbeSourceStager mediaProbeSourceStager;
     private final MediaCoverDirectory mediaCoverDirectory;
 
     @Transactional(readOnly = true)
@@ -624,8 +626,17 @@ public class FileQueryService {
     /**
      * 探测文件媒体元数据（时长/分辨率）：仅 FILE 且 video/* 或 image/*，
      * 结果按内容对象缓存；探测失败返回空对象而非报错。
+     *
+     * <p>探测输入先取成本地稀疏文件再交给 ffprobe，不吃预签名地址——输入形态决定的安全性质
+     * 见 {@link MediaProbeSourceStager}。暂存失败不写缓存，避免一次读取抖动把空结果钉两小时。
+     *
+     * <p>容器索引可能落在默认尾窗之外（非 faststart 的 MP4 把 {@code moov} 放文件末尾），
+     * 这种对象的探测只会得到空结果，此时用放大尾窗再试一次；两次窗口用不同缓存键，
+     * 否则第二次会直接读回第一次缓存的空结果。
+     *
+     * <p>本方法不加事务：暂存最坏是 2 MiB + 32 MiB 的网络读与磁盘写，事务包着它会长时间占住
+     * 连接池名额，而节点查询与对象元数据查询各自只需要一条标量读。
      */
-    @Transactional(readOnly = true)
     public FileMediaInfoDto mediaInfo(UUID ownerUserId, UUID fileId) {
         FileNode node = findActiveNode(ownerUserId, fileId);
         if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
@@ -638,8 +649,38 @@ public class FileQueryService {
         if (node.getCurrentObjectId() == null) {
             return new FileMediaInfoDto(null, null, null);
         }
-        FileDownloadUrlDto url = fileContentAccessService.createDownloadUrl(node);
-        return mediaProbeService.probe(node.getCurrentObjectId().toString(), url.downloadUrl());
+        return probeMediaInfo(node);
+    }
+
+    private FileMediaInfoDto probeMediaInfo(FileNode node) {
+        FileMediaInfoDto empty = new FileMediaInfoDto(null, null, null);
+        Optional<MediaProbeSourceStager.StagedSource> staged = mediaProbeSourceStager.stage(node);
+        if (staged.isEmpty()) {
+            return empty;
+        }
+        FileMediaInfoDto first;
+        boolean escalate;
+        try (MediaProbeSourceStager.StagedSource source = staged.get()) {
+            first = mediaProbeService.probe(
+                    probeCacheKey(node, MediaProbeSourceStager.DEFAULT_TAIL_BYTES), source.path());
+            escalate = first.isEmpty() && source.widerTailCouldHelp();
+        }
+        if (!escalate) {
+            return first;
+        }
+        Optional<MediaProbeSourceStager.StagedSource> wide = mediaProbeSourceStager
+                .stage(node, MediaProbeSourceStager.ESCALATED_TAIL_BYTES);
+        if (wide.isEmpty()) {
+            return first;
+        }
+        try (MediaProbeSourceStager.StagedSource source = wide.get()) {
+            return mediaProbeService.probe(
+                    probeCacheKey(node, MediaProbeSourceStager.ESCALATED_TAIL_BYTES), source.path());
+        }
+    }
+
+    private static String probeCacheKey(FileNode node, long tailBytes) {
+        return node.getCurrentObjectId() + ":tail=" + tailBytes;
     }
 
     private FileNode findActiveNode(UUID ownerUserId, UUID fileId) {

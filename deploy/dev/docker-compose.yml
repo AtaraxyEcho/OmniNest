@@ -1,15 +1,19 @@
 name: omninest-dev
 
 # 出网执行体与数据面分区（SEC-10 L3），形状与 deploy/prod/docker-compose.yml 一致：
-# 只有 aria2 与 rclone 移入 egress，其余服务留在 default；dev 的后端是宿主进程，
-# 经已发布的回环口访问两者，所以不需要加入 egress。
+# aria2 与 rclone 移入 egress；ffmpeg 独占 internal 的 media，minio 双挂 default+media 供它取预签名地址；
+# 其余服务留在 default。dev 的后端是宿主进程，经已发布的回环口访问两者，所以不需要加入 egress。
 # 两条实测前提：跨 user-defined 网络不互通也不解析；`internal: true` 网络的容器发布端口不生效
-# （{"80/tcp":[]}），而 dev 的数据面服务全要从宿主回环访问，因此这张网不设 internal。
+# （{"80/tcp":[]}），所以只挂 internal 网的服务一律不能发布端口——ffmpeg 不发布端口，成立；
+# minio 要发布 9000/9001，必须同时留在非 internal 的 default 上。
 networks:
   default:
     name: omninest-dev_default
   egress:
     name: omninest-dev-egress
+  media:
+    name: omninest-dev-media
+    internal: true
 
 services:
   postgres:
@@ -69,6 +73,10 @@ services:
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: omninest-minio
+    # 双挂：default 保住宿主回环发布的 9000/9001，media 让独占 internal 网的 ffmpeg 能取预签名地址。
+    networks:
+      - default
+      - media
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -160,6 +168,11 @@ services:
   ffmpeg:
     image: jrottenberg/ffmpeg:8-alpine
     container_name: omninest-ffmpeg
+    # 只挂 internal 网：内容里内嵌的远程引用（HLS/DASH 分片、concat 列表）由 ffmpeg 自己去取，
+    # 这张网没有公网路由，也不解析数据面服务名 ⇒ 二级出网在拓扑层封死；顶层预签名地址经 minio 双挂仍可达。
+    # 前提是该服务不发布任何端口（实测 internal 网的容器发布端口不生效）。
+    networks:
+      - media
     environment:
       TZ: Asia/Shanghai
     entrypoint: ["sh", "-c", "while true; do sleep 86400; done"]

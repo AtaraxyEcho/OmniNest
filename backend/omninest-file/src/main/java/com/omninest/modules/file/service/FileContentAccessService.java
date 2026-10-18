@@ -5,6 +5,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.MediaContentPurpose;
+import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -69,6 +71,18 @@ public class FileContentAccessService {
 
     public FileProcessInput createProcessInput(FileNode node) {
         return requireProvider(node).createProcessInput(node);
+    }
+
+    /**
+     * 按字节区间打开内容。提供者不支持区间读时返回空，调用方不得退化成整对象读取。
+     *
+     * @param node 已完成权限校验的文件节点
+     * @param offset 起始字节偏移，从 0 开始
+     * @param length 需要读取的字节数
+     * @return 区间内容与对象完整字节数
+     */
+    public Optional<FileContentRange> openRange(FileNode node, long offset, long length) {
+        return requireProvider(node).openRange(node, offset, length);
     }
 
     /**

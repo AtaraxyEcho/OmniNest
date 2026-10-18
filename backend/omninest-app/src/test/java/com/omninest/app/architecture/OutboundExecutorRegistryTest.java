@@ -77,7 +77,8 @@ class OutboundExecutorRegistryTest {
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/ExternalStorageOAuthService.java",
                     "提供方端点为常量；redirect_uri 只作表单字段不外连"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/MediaProbeService.java",
-                    "ffprobe 子进程；输入只取我们自己签名的地址（L2：待改本地暂存以杜绝播放列表二阶出网）"),
+                    "ffprobe 子进程；输入是 MediaProbeSourceStager 取出的本地稀疏文件，不吃预签名地址，"
+                            + "因此内容里内嵌的远程引用不会被跟随"),
             Map.entry("omninest-infrastructure/src/main/java/com/omninest/common/security/SsrfSafeUrlValidator.java",
                     "闸门本体"),
             Map.entry("omninest-media/src/main/java/com/omninest/modules/music/service/LrclibLyricsService.java",

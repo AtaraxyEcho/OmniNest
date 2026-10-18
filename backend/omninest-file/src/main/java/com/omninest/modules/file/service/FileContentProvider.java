@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -81,4 +82,19 @@ public interface FileContentProvider {
      * @return 本地资源，不支持时返回空
      */
     Optional<FileContentResource> findRangeResource(FileNode node);
+
+    /**
+     * 按字节区间打开内容。
+     *
+     * <p>只有内容需要跨网络取回的提供者实现它；返回空表示该提供者不提供区间读，
+     * 调用方必须放弃区间路径而不是退化成整对象读取。</p>
+     *
+     * @param node 已完成权限校验的文件节点
+     * @param offset 起始字节偏移，从 0 开始
+     * @param length 需要读取的字节数
+     * @return 区间内容与对象完整字节数，不支持时返回空
+     */
+    default Optional<FileContentRange> openRange(FileNode node, long offset, long length) {
+        return Optional.empty();
+    }
 }

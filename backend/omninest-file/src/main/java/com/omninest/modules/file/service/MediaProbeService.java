@@ -17,7 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 媒体元数据探测服务：对可寻址内容 URL 执行 ffprobe，解析时长与分辨率。
+ * 媒体元数据探测服务：对**本地探测输入**执行 ffprobe，解析时长与分辨率。
+ *
+ * <p>输入形态是安全边界的一部分：给 ffprobe 地址时，媒体内容里内嵌的远程引用会被它自己跟随，
+ * 那批地址不经过任何校验；本地文件输入下 ffmpeg 的默认协议集不含远程协议。
+ * 探测输入的取法见 {@link MediaProbeSourceStager}。
  *
  * <p>结果按内容地址缓存（同一内容版本只探测一次），任何失败（工具缺失、
  * 超时、解析异常）都收敛为空结果，绝不让探测失败影响业务请求。</p>
@@ -54,16 +58,16 @@ public class MediaProbeService {
      * 探测媒体内容；contentKey 为内容对象唯一键（含版本），用于缓存。
      *
      * @param contentKey 内容缓存键
-     * @param contentUrl 可直接访问的内容地址（presigned URL）
+     * @param probeInput 本地探测输入路径
      * @return 媒体元数据，失败为空对象
      */
-    public FileMediaInfoDto probe(String contentKey, String contentUrl) {
-        return cache.get(contentKey, key -> probeOnce(contentUrl));
+    public FileMediaInfoDto probe(String contentKey, Path probeInput) {
+        return cache.get(contentKey, key -> probeOnce(probeInput));
     }
 
-    private FileMediaInfoDto probeOnce(String contentUrl) {
+    private FileMediaInfoDto probeOnce(Path probeInput) {
         try {
-            String json = runFfprobe(contentUrl);
+            String json = runFfprobe(probeInput);
             return parseProbeJson(json);
         } catch (InterruptedException e) {
             // 中断位只在真被中断时回填：以前 IOException（工具缺失、超时）也一并置位，
@@ -87,12 +91,12 @@ public class MediaProbeService {
      * 的写法会阻塞在读上，进程挂起时超时根本到不了点；反过来先等再读，未取的管道又可能把
      * 子进程堵满。落临时文件两边都不占。
      *
-     * @param contentUrl 可直接访问的内容地址
+     * @param probeInput 本地探测输入路径
      * @return ffprobe 的 JSON 输出（超过上限按上限截断）
      * @throws IOException        进程启动失败、超时或读输出失败
      * @throws InterruptedException 等待期间线程被中断
      */
-    String runFfprobe(String contentUrl) throws IOException, InterruptedException {
+    String runFfprobe(Path probeInput) throws IOException, InterruptedException {
         Path outputFile = Files.createTempFile("omninest-ffprobe-", ".json");
         Process process = null;
         try {
@@ -102,7 +106,7 @@ public class MediaProbeService {
                     "-print_format", "json",
                     "-show_format",
                     "-show_streams",
-                    contentUrl), outputFile);
+                    probeInput.toAbsolutePath().normalize().toString()), outputFile);
             // 子进程不读标准输入，但管道要关，否则每次探测都留下一个空闲 fd。
             process.getOutputStream().close();
             if (!process.waitFor(PROCESS_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {

@@ -36,6 +36,9 @@ class MediaProbeServiceTest {
 
     private final MediaProbeService service = new MediaProbeService();
 
+    /** 假进程不会真的打开它，这里只需要一个本地路径形状。 */
+    private static final Path PROBE_INPUT = Path.of(System.getProperty("java.io.tmpdir"), "probe-fixture.bin");
+
     @Test
     void parsesVideoDurationAndResolution() {
         FileMediaInfoDto info = service.parseProbeJson(PROBE_JSON);
@@ -68,7 +71,7 @@ class MediaProbeServiceTest {
     }
 
     @Test
-    void probeCommandAsksFfprobeForJsonAndCarriesContentUrl() throws Exception {
+    void probeCommandAsksFfprobeForJsonAndCarriesLocalInput() throws Exception {
         AtomicReference<List<String>> command = new AtomicReference<>();
         MediaProbeService probing = new MediaProbeService((args, file) -> {
             command.set(args);
@@ -76,11 +79,31 @@ class MediaProbeServiceTest {
             return new FakeProcess(true, false, 0);
         });
 
-        probing.runFfprobe("http://example.test/clip.mp4");
+        probing.runFfprobe(PROBE_INPUT);
 
         assertThat(command.get()).containsExactly(
                 "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_format", "-show_streams", "http://example.test/clip.mp4");
+                "-show_format", "-show_streams", PROBE_INPUT.toAbsolutePath().normalize().toString());
+    }
+
+    /**
+     * 探测输入形态是这条链的安全边界：一旦把地址交给 ffprobe，内容里内嵌的远程引用就会被跟随。
+     * 这里把它钉成"末位参数必须是本地绝对路径"，改回 URL 立刻红。
+     */
+    @Test
+    void probeInputNeverBecomesAnAddress() throws Exception {
+        AtomicReference<List<String>> command = new AtomicReference<>();
+        MediaProbeService probing = new MediaProbeService((args, file) -> {
+            command.set(args);
+            Files.writeString(file, PROBE_JSON);
+            return new FakeProcess(true, false, 0);
+        });
+
+        probing.runFfprobe(PROBE_INPUT);
+
+        String input = command.get().get(command.get().size() - 1);
+        assertThat(input).doesNotContain("://");
+        assertThat(Path.of(input)).isAbsolute();
     }
 
     @Test
@@ -92,7 +115,7 @@ class MediaProbeServiceTest {
             return new FakeProcess(true, false, 0);
         });
 
-        String json = probing.runFfprobe("http://example.test/clip.mp4");
+        String json = probing.runFfprobe(PROBE_INPUT);
 
         assertThat(json).contains("\"duration\": \"742.500\"");
         assertThat(Files.exists(outputFile.get())).isFalse();
@@ -107,7 +130,7 @@ class MediaProbeServiceTest {
             return new FakeProcess(true, false, 0);
         });
 
-        String json = probing.runFfprobe("http://example.test/clip.mp4");
+        String json = probing.runFfprobe(PROBE_INPUT);
 
         assertThat(json).hasSize(MediaProbeService.MAX_OUTPUT_BYTES);
     }
@@ -117,7 +140,7 @@ class MediaProbeServiceTest {
         FakeProcess process = new FakeProcess(false, false, 0);
         MediaProbeService probing = new MediaProbeService((args, file) -> process);
 
-        assertThatThrownBy(() -> probing.runFfprobe("http://example.test/clip.mp4"))
+        assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("超时");
         assertThat(process.isAlive()).isFalse();
@@ -129,19 +152,19 @@ class MediaProbeServiceTest {
             throw new IOException("ffprobe 未安装");
         });
 
-        assertThat(probing.probe("missing-binary", "http://example.test/clip.mp4").isEmpty()).isTrue();
+        assertThat(probing.probe("missing-binary", PROBE_INPUT).isEmpty()).isTrue();
         assertThat(Thread.interrupted()).isFalse();
     }
 
     @Test
-    void outputTempFileIsDeletedWhenProcessCannotStart() {
+    void outputTempFileIsDeletedWhenProcessCannotStart() throws Exception {
         AtomicReference<Path> outputFile = new AtomicReference<>();
         MediaProbeService probing = new MediaProbeService((args, file) -> {
             outputFile.set(file);
             throw new IOException("ffprobe 未安装");
         });
 
-        assertThatThrownBy(() -> probing.runFfprobe("http://example.test/clip.mp4"))
+        assertThatThrownBy(() -> probing.runFfprobe(PROBE_INPUT))
                 .isInstanceOf(IOException.class);
         assertThat(Files.exists(outputFile.get())).isFalse();
     }
@@ -152,7 +175,7 @@ class MediaProbeServiceTest {
                 (args, file) -> new FakeProcess(true, true, 0));
 
         try {
-            assertThat(probing.probe("interrupted", "http://example.test/clip.mp4").isEmpty()).isTrue();
+            assertThat(probing.probe("interrupted", PROBE_INPUT).isEmpty()).isTrue();
             assertThat(Thread.interrupted()).isTrue();
         } finally {
             Thread.interrupted();

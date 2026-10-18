@@ -314,6 +314,18 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
      * {@inheritDoc}
      */
     @Override
+    public InputStream getObject(ObjectStorageKey key, long offset, long length) {
+        return s3Client.getObject(GetObjectRequest.builder()
+                .bucket(key.bucket())
+                .key(key.objectKey())
+                .range("bytes=" + offset + "-" + (offset + length - 1))
+                .build());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public boolean objectExists(ObjectStorageKey key) {
         try {
             s3Client.headObject(HeadObjectRequest.builder()

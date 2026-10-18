@@ -13,8 +13,11 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.repository.FileObjectRepository;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
@@ -79,12 +82,30 @@ class MinioFileContentProviderTest {
                 .allSatisfy(value -> assertThat(value).startsWith("attachment; filename*=UTF-8''"));
     }
 
+    @Test
+    @DisplayName("区间读把偏移与长度交给存储客户端，并回报对象完整长度")
+    void readsRangeAndReportsTotalObjectSize() throws IOException {
+        FileNode node = node("clip.mp4", "video/mp4");
+        when(objectStorageClient.getObject(any(ObjectStorageKey.class), eq(1_048_576L), eq(4L)))
+                .thenReturn(new ByteArrayInputStream(new byte[]{1, 2, 3, 4}));
+
+        FileContentRange range = provider.openRange(node, 1_048_576L, 4L).orElseThrow();
+
+        assertThat(range.totalBytes()).isEqualTo(9_000_000L);
+        assertThat(range.inputStream().readAllBytes()).containsExactly(1, 2, 3, 4);
+        ArgumentCaptor<ObjectStorageKey> key = ArgumentCaptor.forClass(ObjectStorageKey.class);
+        verify(objectStorageClient).getObject(key.capture(), eq(1_048_576L), eq(4L));
+        assertThat(key.getValue().bucket()).isEqualTo("user-files");
+        assertThat(key.getValue().objectKey()).isEqualTo("users/1/files/clip.mp4");
+    }
+
     private FileNode node(String name, String mimeType) {
         FileObject object = new FileObject();
         object.setId(OBJECT_ID);
         object.setBucketName("user-files");
         object.setObjectKey("users/1/files/" + name);
         object.setMimeType(mimeType);
+        object.setSizeBytes(9_000_000L);
         FileNode fileNode = new FileNode();
         fileNode.setId(NODE_ID);
         fileNode.setName(name);

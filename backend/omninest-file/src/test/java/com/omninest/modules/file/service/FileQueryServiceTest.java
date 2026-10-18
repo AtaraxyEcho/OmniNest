@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
@@ -23,6 +25,9 @@ import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.CreateFolderRequest;
+import com.omninest.modules.file.dto.FileContentRange;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileMediaInfoDto;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesDeletedEvent;
@@ -33,6 +38,8 @@ import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.search.service.FileSearchIndexService;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
+import java.io.ByteArrayInputStream;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -84,6 +91,7 @@ class FileQueryServiceTest {
             syncEventRecorder,
             userIds -> Map.of(),
             new MediaProbeService(),
+            new MediaProbeSourceStager(fileContentAccessService),
             (owner, ids) -> Map.of()
     );
 
@@ -822,6 +830,135 @@ class FileQueryServiceTest {
                 targetFolderId);
 
         assertThat(result).extracting("status").containsExactly("SKIPPED");
+    }
+
+    /**
+     * 探测输入形态是这条链的安全边界：交出预签名地址后，媒体内容里内嵌的远程引用会被
+     * ffprobe 自己跟随，那批地址不受任何校验。这里反向钉住"不索取下载地址"。
+     */
+    @Test
+    void mediaInfoNeverHandsFfprobeAPresignedAddress() {
+        UUID fileId = UUID.fromString("70000000-0000-0000-0000-000000000001");
+        UUID objectId = UUID.fromString("70000000-0000-0000-0000-000000000002");
+        FileNode video = node(OWNER_ID, null, "FILE", "clip.mp4", "/clip.mp4");
+        video.setMimeType("video/mp4");
+        video.setCurrentObjectId(objectId);
+        FileObject object = new FileObject();
+        object.setId(objectId);
+        object.setBucketName("user-files");
+        object.setObjectKey("users/1/clip.mp4");
+        object.setMimeType("video/mp4");
+        object.setSizeBytes(4096L);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, OWNER_ID))
+                .thenReturn(Optional.of(video));
+        when(fileObjectRepository.findById(objectId)).thenReturn(Optional.of(object));
+        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
+                .thenReturn(new ByteArrayInputStream(new byte[4096]));
+
+        FileMediaInfoDto info = fileQueryService.mediaInfo(OWNER_ID, fileId);
+
+        assertThat(info.isEmpty()).isTrue();
+        verify(objectStorageClient, never()).createDownloadUrl(any(ObjectStorageKey.class), any(Duration.class));
+        verify(objectStorageClient, never()).getObject(any(ObjectStorageKey.class), anyLong(), anyLong());
+    }
+
+    /**
+     * 非 faststart 的对象把容器索引放在尾窗之外时，默认窗只能回空；
+     * 这里验的是"确实再放大一档重试一次"，且两档用不同缓存键（否则会读回第一档缓存的空结果）。
+     */
+    @Test
+    void mediaInfoEscalatesTailWindowWhenIndexFallsOutside() {
+        FileContentAccessService access = Mockito.mock(FileContentAccessService.class);
+        MediaProbeService probeService = Mockito.mock(MediaProbeService.class);
+        FileQueryService service = new FileQueryService(
+                fileNodeRepository,
+                access,
+                filePermissionService,
+                fileLifecycleGuard,
+                eventPublisher,
+                fileSearchIndexService,
+                syncEventRecorder,
+                userIds -> Map.of(),
+                probeService,
+                new MediaProbeSourceStager(access),
+                (owner, ids) -> Map.of()
+        );
+
+        UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000001");
+        UUID objectId = UUID.fromString("80000000-0000-0000-0000-000000000002");
+        long headBytes = 2L * 1024 * 1024;
+        long total = 12L * 1024 * 1024;
+        FileNode video = node(OWNER_ID, null, "FILE", "long.mp4", "/long.mp4");
+        video.setMimeType("video/mp4");
+        video.setCurrentObjectId(objectId);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, OWNER_ID))
+                .thenReturn(Optional.of(video));
+        when(access.open(video)).thenReturn(new FileContentStream(
+                new ByteArrayInputStream(new byte[(int) headBytes]), "long.mp4", total, "video/mp4"));
+        when(access.openRange(ArgumentMatchers.<FileNode>any(), ArgumentMatchers.anyLong(),
+                ArgumentMatchers.anyLong()))
+                .thenAnswer(invocation -> {
+                    long length = invocation.getArgument(2);
+                    return Optional.of(new FileContentRange(
+                            new ByteArrayInputStream(new byte[(int) length]), total));
+                });
+
+        String narrowKey = objectId + ":tail=" + MediaProbeSourceStager.DEFAULT_TAIL_BYTES;
+        String wideKey = objectId + ":tail=" + MediaProbeSourceStager.ESCALATED_TAIL_BYTES;
+        when(probeService.probe(ArgumentMatchers.eq(narrowKey), ArgumentMatchers.any()))
+                .thenReturn(new FileMediaInfoDto(null, null, null));
+        when(probeService.probe(ArgumentMatchers.eq(wideKey), ArgumentMatchers.any()))
+                .thenReturn(new FileMediaInfoDto(5400.0, 1920, 1080));
+
+        FileMediaInfoDto info = service.mediaInfo(OWNER_ID, fileId);
+
+        assertThat(info.width()).isEqualTo(1920);
+        assertThat(info.durationSeconds()).isEqualTo(5400.0);
+        verify(probeService).probe(ArgumentMatchers.eq(narrowKey), ArgumentMatchers.any());
+        verify(probeService).probe(ArgumentMatchers.eq(wideKey), ArgumentMatchers.any());
+    }
+
+    /**
+     * 第一档就拿到元数据时不得再放大窗口，否则每次探测都多读 32 MiB。
+     */
+    @Test
+    void mediaInfoDoesNotEscalateWhenDefaultWindowSuffices() {
+        FileContentAccessService access = Mockito.mock(FileContentAccessService.class);
+        MediaProbeService probeService = Mockito.mock(MediaProbeService.class);
+        FileQueryService service = new FileQueryService(
+                fileNodeRepository,
+                access,
+                filePermissionService,
+                fileLifecycleGuard,
+                eventPublisher,
+                fileSearchIndexService,
+                syncEventRecorder,
+                userIds -> Map.of(),
+                probeService,
+                new MediaProbeSourceStager(access),
+                (owner, ids) -> Map.of()
+        );
+
+        UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000003");
+        UUID objectId = UUID.fromString("80000000-0000-0000-0000-000000000004");
+        long headBytes = 2L * 1024 * 1024;
+        long total = 12L * 1024 * 1024;
+        FileNode video = node(OWNER_ID, null, "FILE", "fast.mp4", "/fast.mp4");
+        video.setMimeType("video/mp4");
+        video.setCurrentObjectId(objectId);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, OWNER_ID))
+                .thenReturn(Optional.of(video));
+        when(access.open(video)).thenReturn(new FileContentStream(
+                new ByteArrayInputStream(new byte[(int) headBytes]), "fast.mp4", total, "video/mp4"));
+        when(access.openRange(ArgumentMatchers.<FileNode>any(), ArgumentMatchers.anyLong(),
+                ArgumentMatchers.anyLong()))
+                .thenAnswer(invocation -> Optional.of(new FileContentRange(
+                        new ByteArrayInputStream(new byte[(int) (long) invocation.getArgument(2)]), total)));
+        when(probeService.probe(ArgumentMatchers.anyString(), ArgumentMatchers.any()))
+                .thenReturn(new FileMediaInfoDto(60.0, 1280, 720));
+
+        assertThat(service.mediaInfo(OWNER_ID, fileId).height()).isEqualTo(720);
+        verify(probeService, times(1)).probe(ArgumentMatchers.anyString(), ArgumentMatchers.any());
     }
 
     private FileNode node(UUID ownerId, UUID parentId, String type, String name, String normalizedPath) {
