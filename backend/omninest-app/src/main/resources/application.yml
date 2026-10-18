@@ -165,6 +165,7 @@ omninest:
       session-audit-millis: 10000
       authentication-timeout-millis: 15000
       max-sessions-per-instance: 500
+      max-pending-sessions-per-instance: 64
   security:
     credential-encryption-key-version: 1
     access-token-ttl: 30m

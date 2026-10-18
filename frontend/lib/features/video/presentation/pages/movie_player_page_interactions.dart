@@ -120,7 +120,11 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
     if (_controlPanelOpen) {
       return;
     }
-    // 标准播放器手势：点击画面切换播放/暂停（有无控制栏均生效）。
+    if (isMobilePlatform) {
+      _toggleControlsVisibility();
+      return;
+    }
+    // 桌面与 Web 的既有习惯：点击画面切换播放/暂停（有无控制栏均生效）。
     unawaited(_requestPlayPause());
     _showControlsAndRestartTimer();
   }
@@ -374,6 +378,17 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
       _updateState(() => _showControls = true);
     }
     _startHideTimer();
+  }
+
+  /// 触屏手势档：单击画面只负责显隐控制栏，播放/暂停交给控制栏中央按钮，
+  /// 双击仍是左右半屏 ±10 秒。桌面/Web 保留"点画面切播放"的既有习惯。
+  void _toggleControlsVisibility() {
+    if (_showControls) {
+      _hideTimer?.cancel();
+      _updateState(() => _showControls = false);
+      return;
+    }
+    _showControlsAndRestartTimer();
   }
 }
 

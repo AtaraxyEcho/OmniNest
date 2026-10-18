@@ -54,5 +54,6 @@ public class SyncEventProperties {
         private long sessionAuditMillis = 10_000L;
         private long authenticationTimeoutMillis = 15_000L;
         private int maxSessionsPerInstance = 500;
+        private int maxPendingSessionsPerInstance = 64;
     }
 }

@@ -163,7 +163,7 @@ class RealtimeWebSocketSessionRegistryTest {
 
                 assertThat(activeSessionCount()).isEqualTo(capacity);
                 assertThat(acceptedConnections).hasValue((wave + 1) * capacity);
-                assertThat(rejectedSessionCount())
+                assertThat(rejectedSessionCount("capacity"))
                         .isEqualTo((double) (wave + 1) * (connectionsPerWave - capacity));
 
                 runConcurrently(
@@ -206,6 +206,61 @@ class RealtimeWebSocketSessionRegistryTest {
         assertThat(handler.closedConnections).hasValue(connectionCount);
     }
 
+    @Test
+    void unauthenticatedFloodCannotExhaustInstanceCapacity() throws Exception {
+        properties.getRealtime().setMaxSessionsPerInstance(8);
+        properties.getRealtime().setMaxPendingSessionsPerInstance(2);
+        registry.registerMetrics();
+        WebSocketHandler handler = Mockito.mock(WebSocketHandler.class);
+        WebSocketHandler decorated = registry.decorate(handler);
+        WebSocketSession first = session("pending-1");
+        WebSocketSession second = session("pending-2");
+        WebSocketSession third = session("pending-3");
+
+        decorated.afterConnectionEstablished(first);
+        decorated.afterConnectionEstablished(second);
+        decorated.afterConnectionEstablished(third);
+
+        // 未认证连接只受待认证配额约束：超出即拒，且一格实例容量都不许被它们占住。
+        assertThat(pendingSessionCount()).isEqualTo(2D);
+        assertThat(activeSessionCount()).isEqualTo(2D);
+        assertThat(rejectedSessionCount("pending")).isEqualTo(1D);
+        Mockito.verify(handler, Mockito.never()).afterConnectionEstablished(third);
+        Mockito.verify(third).close(Mockito.argThat(status -> status.getCode() == 1013));
+
+        registry.authorize("pending-1", UUID.randomUUID(), UUID.randomUUID(), Instant.now().plusSeconds(600));
+        // 晋升只归还自己那一格待认证配额，第二条连接仍占着剩下的那一格。
+        assertThat(pendingSessionCount()).isEqualTo(1D);
+
+        WebSocketSession fourth = session("pending-4");
+        decorated.afterConnectionEstablished(fourth);
+        Mockito.verify(handler).afterConnectionEstablished(fourth);
+        assertThat(activeSessionCount()).isEqualTo(3D);
+    }
+
+    @Test
+    void closingAuthorizedSessionDoesNotReturnPendingQuotaTwice() throws Exception {
+        properties.getRealtime().setMaxSessionsPerInstance(4);
+        properties.getRealtime().setMaxPendingSessionsPerInstance(1);
+        registry.registerMetrics();
+        WebSocketHandler handler = Mockito.mock(WebSocketHandler.class);
+        WebSocketHandler decorated = registry.decorate(handler);
+        WebSocketSession session = session("promoted-then-closed");
+
+        decorated.afterConnectionEstablished(session);
+        registry.authorize("promoted-then-closed", UUID.randomUUID(), UUID.randomUUID(),
+                Instant.now().plusSeconds(600));
+        decorated.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        // 晋升时已归还待认证配额，关闭时不能再扣一次：负数会把这道限流变成摆设。
+        assertThat(pendingSessionCount()).isZero();
+        assertThat(activeSessionCount()).isZero();
+
+        WebSocketSession next = session("next-after-close");
+        decorated.afterConnectionEstablished(next);
+        Mockito.verify(handler).afterConnectionEstablished(next);
+    }
+
     private void runConcurrently(
             ExecutorService executor,
             List<WebSocketSession> sessions,
@@ -229,9 +284,13 @@ class RealtimeWebSocketSessionRegistryTest {
         return meterRegistry.get("omninest.sync.realtime.sessions.active").gauge().value();
     }
 
-    private double rejectedSessionCount() {
+    private double pendingSessionCount() {
+        return meterRegistry.get("omninest.sync.realtime.sessions.pending").gauge().value();
+    }
+
+    private double rejectedSessionCount(String reason) {
         return meterRegistry.get("omninest.sync.realtime.sessions.rejected")
-                .tag("reason", "capacity")
+                .tag("reason", reason)
                 .counter()
                 .count();
     }
