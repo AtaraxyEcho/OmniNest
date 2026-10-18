@@ -83,7 +83,7 @@ server {
     # SPA 主文档与静态回退：补齐后端 SecurityHeaderFilter 同款安全响应头
     #（该 Filter 只覆盖 /api/ 响应，nginx 直发的主文档不经过后端）。
     # add_header 在 location 级不继承 server 级，两处必须写全。
-    location = /index.html {
+    location = ${OMNINEST_WEB_BASE_PATH}index.html {
         add_header Cache-Control "no-cache";
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
         add_header X-Content-Type-Options "nosniff";
@@ -93,7 +93,7 @@ server {
         try_files $uri =404;
     }
 
-    location = /flutter_service_worker.js {
+    location = ${OMNINEST_WEB_BASE_PATH}flutter_service_worker.js {
         add_header Cache-Control "no-cache";
         add_header X-Content-Type-Options "nosniff";
         try_files $uri =404;
@@ -102,7 +102,7 @@ server {
     location / {
         add_header Cache-Control "public, max-age=3600";
         add_header X-Content-Type-Options "nosniff";
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ ${OMNINEST_WEB_BASE_PATH}index.html;
     }
 }
 

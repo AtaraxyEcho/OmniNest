@@ -286,10 +286,7 @@ public class SharedSpaceService {
         validatePermission(operatorId, Action.CAN_BROWSE);
         FileNode node = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(fileNodeId, SpaceType.SHARED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-        // 删除权限：上传者可删自己的，管理员可删任何人的
-        boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
-        Action action = isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY;
-        validatePermission(operatorId, action);
+        validateSharedLifecycleOperator(operatorId, node);
 
         // 先收集所有后代 ID（软删除后查询会返回空）
         List<UUID> allIds = new ArrayList<>(collectAllDescendantIds(node.getId()));
@@ -344,12 +341,26 @@ public class SharedSpaceService {
     }
 
     /**
-     * 子树结算结果：字节数与文件数必须成对记账，删除整个文件夹时不能只扣一个文件。
+     * 校验共享空间节点的删除或恢复权限：上传者要求 CAN_DELETE_OWN，其他成员要求 CAN_DELETE_ANY。
      *
-     * @param totalBytes 子树内活跃文件总字节数
-     * @param fileCount 子树内活跃文件数
+     * <p>恢复与删除共用同一判定，否则管理员删除的文件会出现在其回收站中却无法恢复；
+     * 回收站列表按 deleted_by 展示，而节点 owner_user_id 仍指向上传者，两处必须对齐。</p>
+     *
+     * @param operatorId 操作用户 ID
+     * @param node 共享空间节点
      */
-    private record SubtreeStats(long totalBytes, long fileCount) {
+    public void validateSharedLifecycleOperator(UUID operatorId, FileNode node) {
+        boolean isUploader = Objects.equals(node.getUploadedBy(), operatorId);
+        validatePermission(operatorId, isUploader ? Action.CAN_DELETE_OWN : Action.CAN_DELETE_ANY);
+    }
+
+    /**
+     * 子树结算结果：字节数与文件数必须成对记账，删除或恢复整个文件夹时不能只记一个文件。
+     *
+     * @param totalBytes 子树内文件总字节数
+     * @param fileCount 子树内文件数
+     */
+    public record SubtreeStats(long totalBytes, long fileCount) {
     }
 
     /**
@@ -367,6 +378,29 @@ public class SharedSpaceService {
                 ? fileNodeRepository.sumActiveFilesUnderPathInSpace(node.getSpaceType(), prefix)
                 : fileNodeRepository.sumActiveFilesUnderPathByOwner(
                         node.getOwnerUserId(), node.getSpaceType(), prefix);
+        if (rows.isEmpty()) {
+            return new SubtreeStats(0L, 0L);
+        }
+        Object[] row = rows.getFirst();
+        return new SubtreeStats(toLong(row[0]), toLong(row[1]));
+    }
+
+    /**
+     * 汇总共享空间回收站子树恢复后应补记的用量。
+     *
+     * <p>口径与删除时一致：文件节点按自身字节计一个文件，目录按路径前缀汇总子树文件；
+     * 共享空间按空间类型加前缀统计，不按目录创建者过滤，否则会漏记其他成员上传的内容。
+     * 恢复前子树仍处于软删除状态，活跃口径的汇总只能得到零，因此这里读取已删除文件。</p>
+     *
+     * @param node 回收站中的共享空间节点
+     * @return 恢复后应补记的字节数与文件数
+     */
+    public SubtreeStats calculateRestoreSubtreeStats(FileNode node) {
+        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+            return new SubtreeStats(node.getSizeBytes(), 1L);
+        }
+        String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
+        List<Object[]> rows = fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, prefix);
         if (rows.isEmpty()) {
             return new SubtreeStats(0L, 0L);
         }

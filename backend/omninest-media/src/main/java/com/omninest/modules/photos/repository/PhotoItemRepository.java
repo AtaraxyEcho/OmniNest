@@ -422,7 +422,6 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                  WHERE p.owner_user_id = :ownerUserId
                    AND f.is_deleted = false
                    AND p.deleted_at IS NULL
-                   AND p.date_taken IS NOT NULL
             )
             SELECT r.year AS "year",
                    r.month AS "month",
@@ -446,7 +445,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    r.created_at AS "createdAt"
               FROM ranked r
              WHERE r.preview_rank <= 4
-             ORDER BY r.year DESC, r.month DESC, r.date_taken DESC, r.id ASC
+             ORDER BY r.year DESC, r.month DESC, COALESCE(r.date_taken, r.created_at) DESC, r.id ASC
             """, nativeQuery = true)
     List<PhotoTimelinePreviewProjection> findTimelinePreviewPage(
             @Param("ownerUserId") UUID ownerUserId,
@@ -457,6 +456,10 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
     /**
      * 统计用户照片时间线包含的月份数量。
      *
+     * <p>月份键必须与 findTimelinePreviewPage 完全一致
+     * （COALESCE(date_taken, created_at)），否则无 EXIF 照片会折叠进
+     * NULL 月份导致 totalElements 与分页内容双向不一致。</p>
+     *
      * @param ownerUserId 用户标识
      * @param zoneId 时间分组使用的时区
      * @return 月份分组总数
@@ -464,7 +467,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
     @Query(value = """
             SELECT COUNT(*)
               FROM (
-                  SELECT DATE_TRUNC('month', p.date_taken AT TIME ZONE :zoneId) AS month_start
+                  SELECT DATE_TRUNC('month', COALESCE(p.date_taken, p.created_at) AT TIME ZONE :zoneId) AS month_start
                     FROM omni.photo_items p
                     JOIN omni.file_nodes f ON f.id = p.file_node_id
                    WHERE p.owner_user_id = :ownerUserId

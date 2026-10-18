@@ -110,6 +110,17 @@ class StorageQuotaServiceTest {
     }
 
     @Test
+    @DisplayName("checkQuota: 配额为 0 表示无限制")
+    void checkQuotaTreatsZeroQuotaAsUnlimited() {
+        UserAccountSummary user = userWith(0, 4096);
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        service.checkQuota(USER_ID, Long.MAX_VALUE / 2);
+
+        verify(userAccountQuery).findById(USER_ID);
+    }
+
+    @Test
     @DisplayName("checkQuota: 用户不存在时抛出 UNAUTHORIZED")
     void checkQuotaUserNotFoundThrows() {
         when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.empty());
@@ -232,6 +243,23 @@ class StorageQuotaServiceTest {
     }
 
     @Test
+    @DisplayName("updateQuota: 已有用量的账号可以设置为 0（无限制）")
+    void updateQuotaAllowsZeroForUsedAccount() {
+        UserAccountSummary user = userWith(1000, 800);
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user));
+        UUID operatorId = UUID.randomUUID();
+
+        service.updateQuota(USER_ID, 0, operatorId);
+
+        verify(userStorageCommand).updateQuota(USER_ID, 0);
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
+        verify(auditRecorder).recordWithPayload(
+                eq(operatorId), eq("ADMIN_QUOTA_UPDATE"), eq("auth_users"), eq(USER_ID),
+                payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue()).containsEntry("newQuotaBytes", 0L);
+    }
+
+    @Test
     @DisplayName("updateQuota: 超级管理员不可修改")
     void updateQuotaRejectsSuperAdmin() {
         UserAccountSummary user = superAdminUser(0, 0);
@@ -321,6 +349,18 @@ class StorageQuotaServiceTest {
 
         assertThat(updated).isEqualTo(1);
         verify(userStorageCommand).updateQuota(USER_ID, 5000);
+    }
+
+    @Test
+    @DisplayName("batchUpdateQuota: 已有用量的账号可以批量设置为 0（无限制）")
+    void batchUpdateQuotaAllowsZeroForUsedAccount() {
+        UserAccountSummary normalUser = userWith(1000, 800);
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(normalUser));
+
+        int updated = service.batchUpdateQuota(List.of(USER_ID), 0, UUID.randomUUID());
+
+        assertThat(updated).isEqualTo(1);
+        verify(userStorageCommand).updateQuota(USER_ID, 0);
     }
 
     @Test

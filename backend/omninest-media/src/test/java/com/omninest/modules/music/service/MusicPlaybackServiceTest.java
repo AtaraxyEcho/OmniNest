@@ -3,13 +3,16 @@ package com.omninest.modules.music.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
@@ -32,12 +35,14 @@ class MusicPlaybackServiceTest {
 
     private final MusicTrackRepository trackRepository = mock(MusicTrackRepository.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final MusicPlatformService musicPlatformService = mock(MusicPlatformService.class);
     private final MusicPlaybackSessionService playbackSessionService = mock(MusicPlaybackSessionService.class);
     private final MediaPlaybackProgressService progressService = mock(MediaPlaybackProgressService.class);
     private final MusicPlaybackService playbackService = new MusicPlaybackService(
             trackRepository,
             fileQueryService,
+            fileLifecycleGuard,
             musicPlatformService,
             playbackSessionService,
             progressService
@@ -55,8 +60,8 @@ class MusicPlaybackServiceTest {
         track.setFormat("flac");
 
         Instant expiresAt = Instant.parse("2026-05-21T11:00:00Z");
-        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID)).thenReturn(Optional.of(track));
-        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(track));
+        when(fileQueryService.createDownloadUrlForShared(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
                 FILE_ID,
                 "night-drive.flac",
                 "http://localhost:9000/night-drive.flac",
@@ -158,8 +163,9 @@ class MusicPlaybackServiceTest {
     @Test
     @DisplayName("savePosition persists local progress without creating history rows")
     void savePosition_persistsLocalProgress() {
-        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID))
-                .thenReturn(Optional.of(new MusicTrack()));
+        MusicTrack track = new MusicTrack();
+        track.setOwnerUserId(OWNER_ID);
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(track));
         playbackService.savePosition(OWNER_ID, TRACK_ID, 90);
 
         verify(progressService).save(
@@ -222,8 +228,15 @@ class MusicPlaybackServiceTest {
 
     @Test
     void saveProgressRejectsLocalTrackOwnedByAnotherUser() {
-        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID))
-                .thenReturn(Optional.empty());
+        MusicTrack foreignTrack = new MusicTrack();
+        foreignTrack.setOwnerUserId(UUID.randomUUID());
+        foreignTrack.setFileNodeId(UUID.fromString("60000000-0000-0000-0000-000000000001"));
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(foreignTrack));
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"))
+                .when(fileLifecycleGuard).requireReadable(
+                        OWNER_ID,
+                        foreignTrack.getFileNodeId()
+                );
 
         assertThatThrownBy(() -> playbackService.saveProgress(
                 OWNER_ID,

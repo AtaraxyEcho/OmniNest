@@ -233,6 +233,7 @@ public class PhotoAiService {
             return List.of();
         }
         Map<UUID, PhotoItem> photosById = photoItemRepository.findAllById(photoIds).stream()
+                .filter(photo -> photo.getDeletedAt() == null)
                 .collect(Collectors.toMap(PhotoItem::getId, Function.identity()));
         Set<UUID> favoritePhotoIds = favoriteRepository
                 .findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds)

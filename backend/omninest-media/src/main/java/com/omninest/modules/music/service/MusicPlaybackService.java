@@ -3,6 +3,7 @@ package com.omninest.modules.music.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MusicPlaybackService {
     private final MusicTrackRepository trackRepository;
     private final FileQueryService fileQueryService;
+    private final FileLifecycleGuard fileLifecycleGuard;
     private final MusicPlatformService musicPlatformService;
     private final MusicPlaybackSessionService playbackSessionService;
     private final MediaPlaybackProgressService progressService;
@@ -46,9 +48,11 @@ public class MusicPlaybackService {
     @Transactional(readOnly = true)
     public MusicPlaybackPlanDto playbackPlan(UUID ownerUserId, UUID trackId) {
         log.info("生成播放计划: trackId={}, userId={}", trackId, ownerUserId);
-        MusicTrack track = trackRepository.findByIdAndOwnerUserId(trackId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
-        FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrl(ownerUserId, track.getFileNodeId());
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
+        FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrlForShared(
+                ownerUserId,
+                track.getFileNodeId()
+        );
         return playbackSessionService.createLocalPlan(
                 ownerUserId,
                 track.getId(),
@@ -209,7 +213,22 @@ public class MusicPlaybackService {
     }
 
     private void requireOwnedLocalTrack(UUID ownerUserId, UUID trackId) {
-        if (trackRepository.findByIdAndOwnerUserId(trackId, ownerUserId).isEmpty()) {
+        requireReadableTrack(ownerUserId, trackId);
+    }
+
+    /**
+     * 读取曲目：所有者本人，或共享空间可读成员；写操作仍由所有者服务校验。
+     */
+    private MusicTrack requireReadableTrack(UUID requesterUserId, UUID trackId) {
+        MusicTrack track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
+        if (track.getOwnerUserId().equals(requesterUserId)) {
+            return track;
+        }
+        try {
+            fileLifecycleGuard.requireReadable(requesterUserId, track.getFileNodeId());
+            return track;
+        } catch (BusinessException exception) {
             throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在");
         }
     }

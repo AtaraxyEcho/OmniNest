@@ -17,6 +17,8 @@ services:
     environment:
       # SpEL 条件：role==api 且 embedded-worker-enabled 时加载任务执行组件
       OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED: "true"
+      # 单实例没有独立 scheduler，必须同时内嵌调度器
+      OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED: "true"
       # 单实例需同时承担后台任务，堆与 mem_limit 略高于纯 API
       JAVA_OPTS: ${JAVA_OPTS_API_SINGLE:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
     mem_limit: ${BACKEND_API_MEM_LIMIT_SINGLE:-896m}

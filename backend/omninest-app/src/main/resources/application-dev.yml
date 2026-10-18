@@ -79,6 +79,8 @@ omninest:
   runtime:
     # 占位符桥接 .env 导入键（宽松绑定对大写下划线属性源不可靠），默认 dev 单进程内嵌 worker。
     embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:true}
+    # 单进程 dev 同时内嵌调度器，回收站清理、配额对账与保留期清理才可被实际执行。
+    embedded-scheduler-enabled: ${OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED:true}
   security:
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
     # 公开默认 JWT secret 在所有 profile 拒绝启动；dev 开箱即用依赖此显式豁免，

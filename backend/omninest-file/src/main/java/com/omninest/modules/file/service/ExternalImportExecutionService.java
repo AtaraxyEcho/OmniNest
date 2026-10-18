@@ -646,6 +646,7 @@ public class ExternalImportExecutionService {
         FileNode lastImported = null;
         long transferred = 0L;
         int completedFiles = 0;
+        long lastProgressWriteMillis = 0L;
         for (Path file : files) {
             if (isCancelled(taskId)) {
                 markCancelled(taskId);
@@ -655,7 +656,6 @@ public class ExternalImportExecutionService {
             UUID destinationParentId = isDirectoryTask(task)
                     ? ensureRelativeFolders(task, importRootId, relative.getParent(), folderCache)
                     : importRootId;
-            updateCurrentFile(taskId, relative.toString(), completedFiles);
             lastImported = importSingleFile(
                     task,
                     destinationParentId,
@@ -666,7 +666,13 @@ public class ExternalImportExecutionService {
             );
             transferred += fileSize(file);
             completedFiles++;
-            updateCompletedFile(taskId, relative.toString(), transferred, completedFiles);
+            // 进度落库按 1 秒窗口节流：大目录导入时逐文件写库会显著放大事务数，
+            // 而 UI 只需要近似实时；最后一件无条件写入，保证终态可见。
+            long now = System.currentTimeMillis();
+            if (now - lastProgressWriteMillis >= 1_000L || completedFiles == files.size()) {
+                updateCompletedFile(taskId, relative.toString(), transferred, completedFiles);
+                lastProgressWriteMillis = now;
+            }
         }
 
         UUID completedNodeId = isDirectoryTask(task)
@@ -787,15 +793,6 @@ public class ExternalImportExecutionService {
                 folder.setUploadedBy(currentTask.getOwnerUserId());
             }
             return fileNodeRepository.save(folder).getId();
-        });
-    }
-
-    private void updateCurrentFile(UUID taskId, String currentFileName, int completedFiles) {
-        transactionTemplate.executeWithoutResult(status -> {
-            StorageImportTask task = requireTask(taskId);
-            task.setCurrentFileName(currentFileName);
-            task.setCompletedFiles(completedFiles);
-            importTaskRepository.save(task);
         });
     }
 

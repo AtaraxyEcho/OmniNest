@@ -338,8 +338,13 @@ public class ExternalStorageService {
             return;
         }
 
-        // 如果 rclone job 正在运行，停止它
-        if (task.getRcloneJobId() != null && ImportTaskStatus.RUNNING.getValue().equals(status)) {
+        // 如果 rclone job 正在运行，停止它。
+        // RUNNING 仅用于兼容历史行；当前执行器只会写 SCANNING/TRANSFERRING/IMPORTING，
+        // 只判 RUNNING 会让传输中的任务依赖 Worker 的下一次轮询（约 2 秒）才停。
+        boolean rcloneActive = ImportTaskStatus.SCANNING.getValue().equals(status)
+                || ImportTaskStatus.TRANSFERRING.getValue().equals(status)
+                || ImportTaskStatus.RUNNING.getValue().equals(status);
+        if (task.getRcloneJobId() != null && rcloneActive) {
             try {
                 rcloneGateway.stopJob(task.getRcloneJobId());
             } catch (Exception e) {

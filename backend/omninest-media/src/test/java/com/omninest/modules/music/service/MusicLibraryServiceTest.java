@@ -2,8 +2,10 @@ package com.omninest.modules.music.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,6 +15,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -60,6 +63,7 @@ class MusicLibraryServiceTest {
     private final MusicPlayHistoryRepository playHistoryRepository = mock(MusicPlayHistoryRepository.class);
     private final FileDeletionService fileDeletionService = mock(FileDeletionService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final MusicLibraryProperties musicLibraryProperties = new MusicLibraryProperties();
@@ -71,6 +75,7 @@ class MusicLibraryServiceTest {
             playHistoryRepository,
             fileDeletionService,
             fileQueryService,
+            fileLifecycleGuard,
             readThroughCache,
             syncEventService,
             musicLibraryProperties
@@ -97,7 +102,7 @@ class MusicLibraryServiceTest {
     void getTrackReturnsFullProjectionWithLyrics() {
         MusicTrack track = track();
         track.setLyricsRaw("[00:01.00]Hello");
-        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID)).thenReturn(Optional.of(track));
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(track));
         when(favoriteRepository.existsByOwnerUserIdAndTrackId(OWNER_ID, TRACK_ID)).thenReturn(true);
 
         var dto = libraryService.getTrack(OWNER_ID, TRACK_ID);
@@ -108,8 +113,12 @@ class MusicLibraryServiceTest {
     }
 
     @Test
-    void getTrackRejectsTrackOfOtherOwner() {
-        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID)).thenReturn(Optional.empty());
+    void getTrackRejectsPrivateTrackOfOtherOwner() {
+        MusicTrack foreignTrack = track();
+        foreignTrack.setOwnerUserId(UUID.randomUUID());
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(foreignTrack));
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"))
+                .when(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_NODE_ID);
 
         assertThatThrownBy(() -> libraryService.getTrack(OWNER_ID, TRACK_ID))
                 .isInstanceOf(BusinessException.class)
@@ -484,5 +493,39 @@ class MusicLibraryServiceTest {
         assertThat(recent).hasSize(1);
         assertThat(recent.getFirst().playableKey()).isEqualTo("online:netease:song-2");
         assertThat(recent.getFirst().onlineTrack().title()).isEqualTo("Online Song");
+    }
+
+    @Test
+    void requireReadableTrackAllowsSharedReadableFileAndRejectsPrivate() {
+        MusicTrack sharedTrack = track();
+        sharedTrack.setOwnerUserId(UUID.randomUUID());
+        when(trackRepository.findById(TRACK_ID)).thenReturn(Optional.of(sharedTrack));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_NODE_ID)).thenReturn(null);
+
+        assertThat(libraryService.requireReadableTrack(OWNER_ID, TRACK_ID)).isSameAs(sharedTrack);
+
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"))
+                .when(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_NODE_ID);
+        assertThatThrownBy(() -> libraryService.requireReadableTrack(OWNER_ID, TRACK_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("音乐资源不存在");
+    }
+
+    @Test
+    void albumSortWhitelistUsesTitleAndFallsBackForUnknownNameField() {
+        when(albumRepository.findActiveByOwnerUserId(eq(OWNER_ID), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.<MusicAlbum>of(), PageRequest.of(0, 20), 0));
+
+        libraryService.albums(OWNER_ID, 0, 20, "title,asc");
+        libraryService.albums(OWNER_ID, 0, 20, "name");
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(albumRepository, times(2)).findActiveByOwnerUserId(eq(OWNER_ID), captor.capture());
+        List<Pageable> pageables = captor.getAllValues();
+        assertThat(pageables.get(0).getSort().getOrderFor("title")).isNotNull();
+        // MusicAlbum 没有 name 属性，旧白名单会把它直接交给 JPA 并抛 PropertyReferenceException
+        assertThat(pageables.get(1).getSort().getOrderFor("name")).isNull();
+        assertThat(pageables.get(1).getSort().getOrderFor("updatedAt").getDirection())
+                .isEqualTo(Sort.Direction.DESC);
     }
 }

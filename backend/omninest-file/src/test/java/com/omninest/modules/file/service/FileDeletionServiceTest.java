@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -41,6 +43,8 @@ class FileDeletionServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID FILE_NODE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID SECOND_FILE_NODE_ID = UUID.fromString("20000000-0000-0000-0000-000000000002");
+    private static final UUID UPLOADER_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER_MEMBER_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
 
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
@@ -238,8 +242,90 @@ class FileDeletionServiceTest {
         );
     }
 
+    @Test
+    void previewImpactLetsSharedSpaceDeleterResolveFromTrash() {
+        FileNode root = sharedDeletedRoot();
+        when(fileNodeRepository.findByIdAndOwnerUserId(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileQueryService.requireTrashOperatorNode(OWNER_ID, FILE_NODE_ID)).thenReturn(root);
+
+        var impact = fileDeletionService.previewImpact(OWNER_ID, FILE_NODE_ID, null);
+
+        assertThat(impact.fileNodeCount()).isEqualTo(1);
+        verify(fileQueryService).requireTrashOperatorNode(OWNER_ID, FILE_NODE_ID);
+    }
+
+    @Test
+    void deletePermanentlyLetsSharedSpaceDeleterPurgeFromTrash() {
+        FileNode root = sharedDeletedRoot();
+        when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileQueryService.requireTrashOperatorNode(OWNER_ID, FILE_NODE_ID)).thenReturn(root);
+        when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, UPLOADER_ID)).thenReturn(Optional.of(root));
+
+        UUID taskId = fileDeletionService.deletePermanently(OWNER_ID, FILE_NODE_ID);
+
+        assertThat(taskId).isNotNull();
+        verify(taskRecordService).createQueuedTask(
+                eq(taskId),
+                eq(UPLOADER_ID),
+                eq("FILE_PURGE"),
+                eq(QueueNames.FILE_PURGE_ROUTING_KEY),
+                eq("PLANNING"),
+                eq("FILE_NODE"),
+                eq(FILE_NODE_ID),
+                anyMap()
+        );
+        verify(fileNodeRepository).assignDeletedDescendantsToPurge(
+                eq(UPLOADER_ID),
+                eq(SpaceType.SHARED),
+                eq("/movie.mkv/"),
+                eq(taskId),
+                eq(FilePurgeState.QUEUED),
+                any()
+        );
+        ArgumentCaptor<FilePurgeRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(FilePurgeRequestedEvent.class);
+        verify(taskDispatchService).enqueue(
+                eq(taskId),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.FILE_PURGE_ROUTING_KEY),
+                eventCaptor.capture()
+        );
+        assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(UPLOADER_ID);
+    }
+
+    @Test
+    void deletePermanentlyRejectsSharedSpaceNonDeleterMember() {
+        when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OTHER_MEMBER_ID)).thenReturn(Optional.empty());
+        when(fileQueryService.requireTrashOperatorNode(OTHER_MEMBER_ID, FILE_NODE_ID))
+                .thenThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+
+        assertThatThrownBy(() -> fileDeletionService.deletePermanently(OTHER_MEMBER_ID, FILE_NODE_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.FILE_NOT_FOUND);
+        verify(taskRecordService, never()).createQueuedTask(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyMap()
+        );
+    }
+
     private FileNode deletedRoot() {
         return deletedRoot(FILE_NODE_ID, "/movie.mkv");
+    }
+
+    private FileNode sharedDeletedRoot() {
+        FileNode node = deletedRoot(FILE_NODE_ID, "/movie.mkv");
+        node.setOwnerUserId(UPLOADER_ID);
+        node.setUploadedBy(UPLOADER_ID);
+        node.setSpaceType(SpaceType.SHARED);
+        node.setDeletedBy(OWNER_ID);
+        return node;
     }
 
     private FileNode deletedRoot(UUID fileNodeId, String normalizedPath) {

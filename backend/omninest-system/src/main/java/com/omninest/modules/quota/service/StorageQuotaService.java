@@ -112,7 +112,9 @@ public class StorageQuotaService {
     public void checkQuota(UUID userId, long incomingBytes) {
         UserAccountSummary owner = userAccountQuery.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-        if (owner.superAdmin()) {
+        // 配额为 0 或负数表示无限制，必须与 RuntimeStorageQuotaPolicy.resolveStatus 的口径一致，
+        // 否则无限额账户的上传会在预检阶段被当成零配额拒绝。
+        if (owner.superAdmin() || owner.quotaBytes() <= 0) {
             return;
         }
         if (owner.usedBytes() + incomingBytes > owner.quotaBytes()) {
@@ -181,7 +183,8 @@ public class StorageQuotaService {
         if (user.superAdmin()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员配额不能通过管理端修改");
         }
-        if (newQuotaBytes < user.usedBytes()) {
+        // 0 表示无限制，允许在已有用量时改回无限额；只有正数配额需要拦住低于已用量的设置。
+        if (newQuotaBytes > 0 && newQuotaBytes < user.usedBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "新配额不能小于当前已使用空间（%d 字节）".formatted(user.usedBytes()));
         }
@@ -229,7 +232,8 @@ public class StorageQuotaService {
             if (user == null || user.superAdmin()) {
                 continue;
             }
-            if (newQuotaBytes < user.usedBytes()) {
+            // 0 表示无限制，批量修改同样允许已用账号切到无限额。
+            if (newQuotaBytes > 0 && newQuotaBytes < user.usedBytes()) {
                 continue;
             }
             long oldQuota = user.quotaBytes();

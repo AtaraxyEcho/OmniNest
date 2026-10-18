@@ -43,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -101,11 +102,22 @@ class PhotoBatchServiceTest {
     @BeforeEach
     void setUpTaskClaim() {
         when(taskRecordService.claimForExecution(any(UUID.class), any(String.class))).thenReturn(true);
+        // executeBatchTask 无外层事务，保存必须把携带推进后 version 的实例回传，
+        // 桩模拟 Hibernate merge 行为；修复前返回值被丢弃，收尾保存仍带旧版本。
+        when(batchTaskRepository.save(any(PhotoBatchTask.class))).thenAnswer(invocation -> {
+            PhotoBatchTask saved = invocation.getArgument(0);
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        });
     }
 
     @Test
     void createBatchTaskEnqueuesThroughOutbox() {
-        when(batchTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(batchTaskRepository.save(any())).thenAnswer(invocation -> {
+            PhotoBatchTask saved = invocation.getArgument(0);
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        });
 
         service.createBatchTask(
                 OWNER_ID,
@@ -137,7 +149,11 @@ class PhotoBatchServiceTest {
                 Map.of("photoIds", List.of(PHOTO_ID.toString()), "tag", "holiday")));
 
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-        when(batchTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(batchTaskRepository.save(any())).thenAnswer(invocation -> {
+            PhotoBatchTask saved = invocation.getArgument(0);
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        });
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID)))
                 .thenReturn(List.of());
         when(photoTagRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -202,6 +218,45 @@ class PhotoBatchServiceTest {
         assertThat(uploadedPath.get()).isNotNull();
         assertThat(Files.exists(uploadedPath.get())).isFalse();
         verify(taskRecordService).markCompleted(eq(TASK_ID), anyMap());
+    }
+
+    @Test
+    void executeDownloadTaskSavesCarryPostMergeVersionInOrder() {
+        PhotoBatchTask task = downloadTask();
+        FileDescriptor fileNode = fileNode();
+        FileObjectDescriptor fileObject = fileObject();
+        byte[] image = "image-data".getBytes(StandardCharsets.UTF_8);
+        List<Long> savedVersions = new ArrayList<>();
+
+        when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        doAnswer(invocation -> {
+            PhotoBatchTask saved = invocation.getArgument(0);
+            savedVersions.add(saved.getVersion());
+            // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        }).when(batchTaskRepository).save(any(PhotoBatchTask.class));
+        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID)).thenReturn(Optional.of(photo()));
+        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(fileNode));
+        when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(fileObject));
+        when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_NODE_ID)).thenReturn(contentStream(image));
+        when(derivedAssetStorageService.store(
+                eq(OWNER_ID),
+                eq("PHOTO_BATCH"),
+                eq(TASK_ID),
+                eq("DOWNLOAD"),
+                anyString(),
+                eq("application/zip"),
+                any(Path.class)
+        )).thenReturn(ZIP_FILE_ID);
+
+        service.executeBatchTask(TASK_ID, OWNER_ID);
+
+        // 修复前 save() 返回值被丢弃，RUNNING/进度/COMPLETED 三次保存都携带版本 0，
+        // 第二次起在真实 Hibernate 下必然触发乐观锁异常。
+        assertThat(savedVersions).containsExactly(0L, 1L, 2L);
+        assertThat(task.getVersion()).isEqualTo(3L);
+        assertThat(task.getStatus()).isEqualTo("COMPLETED");
     }
 
     @Test

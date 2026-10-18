@@ -422,6 +422,28 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("prefix") String prefix
     );
 
+    /**
+     * 汇总共享空间某目录子树内已软删除文件的字节数与文件数。
+     *
+     * <p>恢复共享空间文件夹时整棵子树仍处于删除状态，活跃口径的汇总只能得到零；
+     * 这里与 {@link #sumActiveFilesUnderPathInSpace} 对称，只把 deleted 条件反过来。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的父目录路径前缀（含结尾分隔符）
+     * @return 单行二元组：总字节数、文件数
+     */
+    @Query("""
+            select coalesce(sum(n.sizeBytes), 0), count(n.id)
+            from FileNode n
+            where n.spaceType = :spaceType
+              and n.nodeType = 'FILE' and n.deleted = true
+              and n.normalizedPath like concat(:prefix, '%') escape '\\'
+            """)
+    List<Object[]> sumDeletedFilesUnderPathInSpace(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.shared = true AND n.ownerUserId != :userId AND n.deleted = false

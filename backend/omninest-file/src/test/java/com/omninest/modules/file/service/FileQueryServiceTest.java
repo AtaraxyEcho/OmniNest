@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
@@ -28,6 +29,7 @@ import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileMediaInfoDto;
+import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesDeletedEvent;
@@ -71,6 +73,9 @@ class FileQueryServiceTest {
             Mockito.mock(FilePermissionService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
+    private final SharedSpaceService sharedSpaceService = Mockito.mock(SharedSpaceService.class);
+    private final SharedSpaceQuotaService sharedSpaceQuotaService =
+            Mockito.mock(SharedSpaceQuotaService.class);
     private final MinioFileContentProvider minioFileContentProvider = new MinioFileContentProvider(
             fileObjectRepository,
             objectStorageClient
@@ -92,7 +97,9 @@ class FileQueryServiceTest {
             userIds -> Map.of(),
             new MediaProbeService(),
             new MediaProbeSourceStager(fileContentAccessService),
-            (owner, ids) -> Map.of()
+            (owner, ids) -> Map.of(),
+            sharedSpaceService,
+            sharedSpaceQuotaService
     );
 
     @Test
@@ -519,6 +526,121 @@ class FileQueryServiceTest {
     }
 
     @Test
+    void restoreNodeAllowsSharedSpaceDeleterAndRechargesSharedQuota() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000020");
+        FileNode deleted = node(OTHER_OWNER_ID, null, "FILE", "movie.mkv", "/movie.mkv");
+        deleted.setId(fileId);
+        deleted.setSpaceType(SpaceType.SHARED);
+        deleted.setUploadedBy(OTHER_OWNER_ID);
+        deleted.setDeleted(true);
+        deleted.setDeletedBy(OWNER_ID);
+        deleted.setSizeBytes(4096L);
+        when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileNodeRepository.findById(fileId)).thenReturn(Optional.of(deleted));
+        when(sharedSpaceService.calculateRestoreSubtreeStats(deleted))
+                .thenReturn(new SharedSpaceService.SubtreeStats(4096L, 1L));
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                SpaceType.SHARED, "movie.mkv")).thenReturn(false);
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OTHER_OWNER_ID, SpaceType.SHARED, "/movie.mkv/")).thenReturn(List.of());
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        FileNodeDto result = fileQueryService.restoreNode(OWNER_ID, fileId);
+
+        assertThat(result.name()).isEqualTo("movie.mkv");
+        assertThat(deleted.isDeleted()).isFalse();
+        assertThat(deleted.getDeletedBy()).isNull();
+        verify(sharedSpaceService).validateSharedLifecycleOperator(OWNER_ID, deleted);
+        verify(sharedSpaceQuotaService).checkQuota(4096L);
+        verify(sharedSpaceQuotaService).increaseUsage(4096L, 1L);
+        ArgumentCaptor<FileNodesRestoredEvent> captor =
+                ArgumentCaptor.forClass(FileNodesRestoredEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().ownerUserId()).isEqualTo(OTHER_OWNER_ID);
+        assertThat(captor.getValue().fileNodeIds()).containsExactly(fileId);
+    }
+
+    @Test
+    void restoreNodeRejectsSharedSpaceNonDeleterNonUploader() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000021");
+        UUID memberId = UUID.fromString("90000000-0000-0000-0000-000000000001");
+        FileNode deleted = node(OTHER_OWNER_ID, null, "FILE", "movie.mkv", "/movie.mkv");
+        deleted.setId(fileId);
+        deleted.setSpaceType(SpaceType.SHARED);
+        deleted.setUploadedBy(OTHER_OWNER_ID);
+        deleted.setDeleted(true);
+        deleted.setDeletedBy(OWNER_ID);
+        when(fileNodeRepository.findByIdAndOwnerUserId(fileId, memberId)).thenReturn(Optional.empty());
+        when(fileNodeRepository.findById(fileId)).thenReturn(Optional.of(deleted));
+
+        assertThatThrownBy(() -> fileQueryService.restoreNode(memberId, fileId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.FILE_NOT_FOUND);
+        verifyNoInteractions(sharedSpaceQuotaService);
+    }
+
+    @Test
+    void restoreNodePersonalSpaceKeepsOwnerScopeAndSkipsSharedLedger() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000022");
+        FileNode deleted = node(OWNER_ID, null, "FILE", "old.txt", "/old.txt");
+        deleted.setId(fileId);
+        deleted.setDeleted(true);
+        deleted.setDeletedBy(OWNER_ID);
+        when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID)).thenReturn(Optional.of(deleted));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "old.txt")).thenReturn(false);
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "/old.txt/")).thenReturn(List.of());
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileQueryService.restoreNode(OWNER_ID, fileId);
+
+        assertThat(deleted.isDeleted()).isFalse();
+        verifyNoInteractions(sharedSpaceService, sharedSpaceQuotaService);
+        ArgumentCaptor<FileNodesRestoredEvent> captor =
+                ArgumentCaptor.forClass(FileNodesRestoredEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().ownerUserId()).isEqualTo(OWNER_ID);
+    }
+
+    @Test
+    void batchRestoreNodesRestoresSharedTrashAndChargesSharedQuota() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000023");
+        FileNode deleted = node(OTHER_OWNER_ID, null, "FILE", "clip.mp4", "/clip.mp4");
+        deleted.setId(fileId);
+        deleted.setSpaceType(SpaceType.SHARED);
+        deleted.setUploadedBy(OTHER_OWNER_ID);
+        deleted.setDeleted(true);
+        deleted.setDeletedBy(OWNER_ID);
+        deleted.setSizeBytes(2048L);
+        when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileNodeRepository.findById(fileId)).thenReturn(Optional.of(deleted));
+        when(sharedSpaceService.calculateRestoreSubtreeStats(deleted))
+                .thenReturn(new SharedSpaceService.SubtreeStats(2048L, 1L));
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                SpaceType.SHARED, "clip.mp4")).thenReturn(false);
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OTHER_OWNER_ID, SpaceType.SHARED, "/clip.mp4/")).thenReturn(List.of());
+        when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = fileQueryService.batchRestoreNodes(OWNER_ID, List.of(fileId));
+
+        assertThat(result).extracting("status").containsExactly("SUCCESS");
+        assertThat(deleted.isDeleted()).isFalse();
+        verify(sharedSpaceQuotaService).checkQuota(2048L);
+        verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
+        ArgumentCaptor<FileNodesRestoredEvent> captor =
+                ArgumentCaptor.forClass(FileNodesRestoredEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().ownerUserId()).isEqualTo(OTHER_OWNER_ID);
+        assertThat(captor.getValue().fileNodeIds()).containsExactly(fileId);
+    }
+
+    @Test
     void createDownloadUrlReturnsPresignedUrlForOwnedFile() {
         UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000007");
         UUID objectId = UUID.fromString("50000000-0000-0000-0000-000000000001");
@@ -881,7 +1003,9 @@ class FileQueryServiceTest {
                 userIds -> Map.of(),
                 probeService,
                 new MediaProbeSourceStager(access),
-                (owner, ids) -> Map.of()
+                (owner, ids) -> Map.of(),
+                sharedSpaceService,
+                sharedSpaceQuotaService
         );
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000001");
@@ -936,7 +1060,9 @@ class FileQueryServiceTest {
                 userIds -> Map.of(),
                 probeService,
                 new MediaProbeSourceStager(access),
-                (owner, ids) -> Map.of()
+                (owner, ids) -> Map.of(),
+                sharedSpaceService,
+                sharedSpaceQuotaService
         );
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000003");

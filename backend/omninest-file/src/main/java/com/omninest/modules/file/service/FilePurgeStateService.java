@@ -9,6 +9,7 @@ import com.omninest.modules.file.domain.FilePurgeEntry;
 import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.event.FileNodesDeletedEvent;
 import com.omninest.modules.file.event.FilePurgeRequestedEvent;
 import com.omninest.modules.file.repository.FileNodePermissionRepository;
@@ -388,6 +389,10 @@ public class FilePurgeStateService {
      * 加上该节点历史版本对象的占用：新版本上传按新对象加计、恢复只在当前对象与版本行之间换位，
      * 两者都不改变账本总量，所以删除必须一并释放，否则版本字节会永久留在 used_bytes 上。
      * 与所在节点当前对象同引用的版本行不重复计，同一节点内重复出现的对象标识也只计一次。
+     *
+     * <p>只释放 PERSONAL 空间节点：共享空间文件在软删除时已由
+     * {@code SharedSpaceService} 退还共享用量，个人账本从未计入它们；
+     * 派生资产等非个人节点同理。此处若一并释放，会从所有者个人用量中多扣。</p>
      */
     static long quotaReleaseBytes(
             List<FileNode> nodes,
@@ -396,10 +401,13 @@ public class FilePurgeStateService {
     ) {
         long released = 0L;
         Map<UUID, UUID> currentObjectByNodeId = new LinkedHashMap<>();
+        Set<UUID> personalNodeIds = new HashSet<>();
         for (FileNode node : nodes) {
-            if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
+            if (!NodeType.FILE.getValue().equals(node.getNodeType())
+                    || node.getSpaceType() != SpaceType.PERSONAL) {
                 continue;
             }
+            personalNodeIds.add(node.getId());
             released += node.getSizeBytes();
             if (node.getCurrentObjectId() != null) {
                 currentObjectByNodeId.put(node.getId(), node.getCurrentObjectId());
@@ -409,6 +417,9 @@ public class FilePurgeStateService {
         for (FileVersion version : versions) {
             UUID objectId = version.getObjectId();
             UUID nodeKey = version.getFileNodeId();
+            if (!personalNodeIds.contains(nodeKey)) {
+                continue;
+            }
             if (objectId == null || objectId.equals(currentObjectByNodeId.get(nodeKey))) {
                 continue;
             }

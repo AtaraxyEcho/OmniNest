@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SpaceType;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +34,23 @@ class FilePurgeStateServiceTest {
                 Map.of(OBJECT_A, 1000L));
 
         assertThat(released).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("共享空间节点不释放个人配额")
+    void doesNotReleaseSharedOrNonPersonalNodes() {
+        UUID shared = UUID.randomUUID();
+        UUID personal = UUID.randomUUID();
+        FileNode sharedNode = fileNode(shared, OBJECT_A, 1000L);
+        sharedNode.setSpaceType(SpaceType.SHARED);
+
+        long released = FilePurgeStateService.quotaReleaseBytes(
+                List.of(sharedNode, fileNode(personal, OBJECT_B, 300L)),
+                List.of(version(shared, OBJECT_A, 1), version(personal, OBJECT_C, 2)),
+                Map.of(OBJECT_A, 1000L, OBJECT_B, 300L, OBJECT_C, 200L));
+
+        // 共享文件在软删除时已退还共享用量，个人账本从未计入，不能二次扣减
+        assertThat(released).isEqualTo(500L);
     }
 
     @Test

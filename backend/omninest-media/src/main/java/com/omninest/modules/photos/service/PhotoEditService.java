@@ -4,7 +4,9 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoEditVersion;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -52,6 +54,7 @@ public class PhotoEditService {
     private final PhotoSourceFileService sourceFileService;
     private final PhotoInputGuard inputGuard;
     private final StorageQuotaService storageQuotaService;
+    private final FileMetadataQueryService fileMetadataQueryService;
     private final TransactionTemplate transactionTemplate;
     private final int maxHistoryVersions;
 
@@ -63,6 +66,7 @@ public class PhotoEditService {
             PhotoSourceFileService sourceFileService,
             PhotoInputGuard inputGuard,
             StorageQuotaService storageQuotaService,
+            FileMetadataQueryService fileMetadataQueryService,
             TransactionTemplate transactionTemplate,
             @Value("${photo.edit.max-history-versions:5}") int maxHistoryVersions) {
         this.editVersionRepository = editVersionRepository;
@@ -72,6 +76,7 @@ public class PhotoEditService {
         this.sourceFileService = sourceFileService;
         this.inputGuard = inputGuard;
         this.storageQuotaService = storageQuotaService;
+        this.fileMetadataQueryService = fileMetadataQueryService;
         this.transactionTemplate = transactionTemplate;
         this.maxHistoryVersions = maxHistoryVersions;
     }
@@ -498,15 +503,36 @@ public class PhotoEditService {
         List<PhotoEditVersion> toDelete = versions.subList(maxHistoryVersions, versions.size());
         // 同步清理已删除版本的派生文件，避免 MinIO 孤儿对象。
         for (PhotoEditVersion version : toDelete) {
-            if (version.getFileId() != null) {
-                try {
-                    derivedAssetStorageService.deleteOwned(ownerUserId, version.getFileId());
-                } catch (RuntimeException ex) {
-                    log.warn("旧编辑版本派生文件清理失败: versionId={}, fileId={}", version.getId(), version.getFileId(), ex);
-                }
-            }
+            refundDeletedVersionQuota(ownerUserId, version);
         }
         editVersionRepository.deleteAll(toDelete);
+    }
+
+    /**
+     * 物理删除超出保留上限的派生版本节点，并按写入时加计的字节退还配额。
+     *
+     * <p>写入时 {@code chargeEditVersionQuota} 对派生节点全额加计，节点被物理删除后
+     * 不再进入 {@code sumFileSizeForUsers} 重算基数；此处必须在节点确实删除成功后按同一
+     * 口径扣减，否则实时用量长期虚高。删除失败或节点缺失时不退还，避免与每日对账重复扣减。</p>
+     */
+    private void refundDeletedVersionQuota(UUID ownerUserId, PhotoEditVersion version) {
+        if (version.getFileId() == null) {
+            return;
+        }
+        long sizeBytes = fileMetadataQueryService.findById(version.getFileId())
+                .map(FileDescriptor::sizeBytes)
+                .orElse(0L);
+        boolean deleted;
+        try {
+            deleted = derivedAssetStorageService.deleteOwned(ownerUserId, version.getFileId());
+        } catch (RuntimeException ex) {
+            log.warn("旧编辑版本派生文件清理失败: versionId={}, fileId={}",
+                    version.getId(), version.getFileId(), ex);
+            return;
+        }
+        if (deleted && sizeBytes > 0) {
+            storageQuotaService.decrementUsage(ownerUserId, sizeBytes);
+        }
     }
 
     private PhotoEditVersionDto toDto(PhotoEditVersion version) {

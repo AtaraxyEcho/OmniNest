@@ -134,6 +134,11 @@ class ApplicationEnvironmentContractTest {
         StandardEnvironment devEmbeddedDefaultEnvironment = new StandardEnvironment();
         assertThat(devEmbeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(devEmbeddedWorker)))
                 .isEqualTo("true");
+        Object devEmbeddedScheduler = dev.getProperty("omninest.runtime.embedded-scheduler-enabled");
+        assertThat(devEmbeddedScheduler)
+                .isEqualTo("${OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED:true}");
+        assertThat(devEmbeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(devEmbeddedScheduler)))
+                .isEqualTo("true");
         Object devGeoImportDir = dev.getProperty("photo.geo.import.dir");
         assertThat(devGeoImportDir).isEqualTo("${OMNINEST_GEO_IMPORT_DIR:../data/geonames}");
         assertThat(devEmbeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(devGeoImportDir)))
@@ -143,6 +148,11 @@ class ApplicationEnvironmentContractTest {
         assertThat(prodEmbeddedWorker).isEqualTo("${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:false}");
         StandardEnvironment embeddedDefaultEnvironment = new StandardEnvironment();
         assertThat(embeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(prodEmbeddedWorker)))
+                .isEqualTo("false");
+        Object prodEmbeddedScheduler = prod.getProperty("omninest.runtime.embedded-scheduler-enabled");
+        assertThat(prodEmbeddedScheduler)
+                .isEqualTo("${OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED:false}");
+        assertThat(embeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(prodEmbeddedScheduler)))
                 .isEqualTo("false");
         Object prodGeoImportDir = prod.getProperty("photo.geo.import.dir");
         assertThat(prodGeoImportDir).isEqualTo("${OMNINEST_GEO_IMPORT_DIR:/var/lib/omninest/geonames}");

@@ -73,7 +73,9 @@ public class StorageQuotaReservationService {
 
         UserAccountSummary owner = userAccountQuery.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-        boolean quotaApplied = !owner.superAdmin();
+        // 配额为 0 或负数表示无限制，与 checkQuota 的口径一致：无需占用预留额度，
+        // 结算时直接按实际写入量记入 used_bytes。
+        boolean quotaApplied = !owner.superAdmin() && owner.quotaBytes() > 0;
         if (quotaApplied && !userStorageCommand.tryReserveStorage(userId, bytes)) {
             throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足");
         }

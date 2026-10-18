@@ -51,6 +51,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * PhotoLibraryService 单元测试。
@@ -80,6 +82,7 @@ class PhotoLibraryServiceTest {
     private MediaSyncEventService syncEventService;
     private PhotoContentAnalysisService contentAnalysisService;
     private PhotoGeoService photoGeoService;
+    private PhotoIndexTaskService photoIndexTaskService;
 
     private PhotoLibraryService service;
 
@@ -97,6 +100,7 @@ class PhotoLibraryServiceTest {
         syncEventService = mock(MediaSyncEventService.class);
         contentAnalysisService = mock(PhotoContentAnalysisService.class);
         photoGeoService = mock(PhotoGeoService.class);
+        photoIndexTaskService = mock(PhotoIndexTaskService.class);
 
         service = new PhotoLibraryService(
                 photoItemRepository,
@@ -110,7 +114,8 @@ class PhotoLibraryServiceTest {
                 readThroughCache,
                 syncEventService,
                 contentAnalysisService,
-                photoGeoService
+                photoGeoService,
+                photoIndexTaskService
         );
     }
 
@@ -501,6 +506,39 @@ class PhotoLibraryServiceTest {
                 eq(100L),
                 eq(100)
         );
+    }
+
+    @Test
+    void addTagTriggersPhotoIndexRefreshAfterCommit() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片");
+        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
+        when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "海边")).thenReturn(false);
+
+        service.addTag(OWNER_ID, PHOTO_ID_1, "海边");
+
+        // 索引不得在标签事务内直接写：由协作者统一挂到 afterCommit。
+        verify(photoIndexTaskService, never()).index(any(), any());
+        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
+    }
+
+    @Test
+    void removeTagTriggersPhotoIndexRefreshAfterCommit() {
+        service.removeTag(OWNER_ID, PHOTO_ID_1, "海边");
+
+        verify(photoIndexTaskService, never()).index(any(), any());
+        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
+    }
+
+    @Test
+    void addTagSchedulesIndexWithoutInlineIndexing() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片");
+        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
+        when(photoTagRepository.existsByOwnerUserIdAndPhotoIdAndTag(OWNER_ID, PHOTO_ID_1, "山")).thenReturn(false);
+
+        service.addTag(OWNER_ID, PHOTO_ID_1, "山");
+
+        verify(photoTagRepository).save(any(PhotoTag.class));
+        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
     }
 
     // ── 辅助方法 ──

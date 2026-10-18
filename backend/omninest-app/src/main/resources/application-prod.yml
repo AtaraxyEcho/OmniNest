@@ -81,6 +81,8 @@ omninest:
   runtime:
     # 默认三角色拆分；4C4G 单实例可用 OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED=true 在 API 进程内嵌 worker
     embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:false}
+    # 单实例还需内嵌调度器，否则回收站清理、配额对账、保留期清理等定时任务不会实例化
+    embedded-scheduler-enabled: ${OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED:false}
   security:
     # 生产必须注入独立密钥；默认值仅作文档占位，JwtSecretValidator/ProductionSecretsValidator 会拒绝。
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}

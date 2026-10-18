@@ -63,7 +63,7 @@ public class FileDeletionService {
     /**
      * 创建用户文件永久删除任务。
      *
-     * @param ownerUserId 文件所有者用户 ID
+     * @param ownerUserId 操作用户 ID；共享空间允许实际删除者清理自己的回收站
      * @param fileNodeId 文件节点 ID
      * @return 任务 ID
      */
@@ -74,7 +74,7 @@ public class FileDeletionService {
     /**
      * 创建带业务引用裁决的永久删除任务。
      *
-     * @param ownerUserId 文件所有者用户 ID
+     * @param ownerUserId 操作用户 ID；共享空间允许实际删除者清理自己的回收站
      * @param fileNodeId 文件节点 ID
      * @param cascade 是否允许级联清理额外业务引用
      * @param origin 请求来源业务资源
@@ -180,31 +180,64 @@ public class FileDeletionService {
     /**
      * 预览永久删除影响，不改变文件状态。
      *
-     * @param ownerUserId 文件所有者用户 ID
+     * @param operatorId 操作用户 ID
      * @param fileNodeId 文件节点 ID
      * @param origin 请求来源业务资源
      * @return 删除影响摘要
      */
-    public FilePurgeImpactDto previewImpact(UUID ownerUserId, UUID fileNodeId, FilePurgeOrigin origin) {
-        FileNode root = fileNodeRepository.findByIdAndOwnerUserId(fileNodeId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+    public FilePurgeImpactDto previewImpact(UUID operatorId, UUID fileNodeId, FilePurgeOrigin origin) {
+        FileNode root = resolvePurgePreviewRoot(operatorId, fileNodeId);
         List<FilePurgeOrigin> origins = origin == null ? List.of() : List.of(origin);
-        return calculateImpact(ownerUserId, List.of(root), origins);
+        return calculateImpact(root.getOwnerUserId(), List.of(root), origins);
+    }
+
+    /**
+     * 解析永久删除根节点并按所有者加锁。
+     *
+     * <p>个人空间仍只接受所有者；共享空间额外接受实际删除者（回收站按 deleted_by 展示），
+     * 权限复核与恢复共用同一判定。共享节点的 owner_user_id 是上传者，后续子树更新、
+     * 任务负载和事件都必须使用该 ID，不能使用删除者。</p>
+     */
+    private FileNode resolvePurgeRoot(UUID operatorId, UUID fileNodeId) {
+        Optional<FileNode> owned = fileNodeRepository.findOwnedForUpdate(fileNodeId, operatorId);
+        if (owned.isPresent()) {
+            FileNode root = owned.get();
+            fileQueryService.requireSharedLifecycleOperator(operatorId, root);
+            return root;
+        }
+        FileNode shared = fileQueryService.requireTrashOperatorNode(operatorId, fileNodeId);
+        return fileNodeRepository.findOwnedForUpdate(fileNodeId, shared.getOwnerUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+    }
+
+    /**
+     * 预览不需要行锁，个人空间按所有者读取，共享空间回退到删除者视图。
+     */
+    private FileNode resolvePurgePreviewRoot(UUID operatorId, UUID fileNodeId) {
+        Optional<FileNode> owned = fileNodeRepository.findByIdAndOwnerUserId(fileNodeId, operatorId);
+        if (owned.isPresent()) {
+            FileNode root = owned.get();
+            fileQueryService.requireSharedLifecycleOperator(operatorId, root);
+            return root;
+        }
+        return fileQueryService.requireTrashOperatorNode(operatorId, fileNodeId);
     }
 
     private UUID createTaskInTransaction(
-            UUID ownerUserId,
+            UUID operatorId,
             UUID fileNodeId,
             boolean cascade,
             FilePurgeOrigin origin,
             Long expectedVersion
     ) {
+        FileNode root = resolvePurgeRoot(operatorId, fileNodeId);
+        // 共享空间删除者不是上传者时，后续子树、任务与事件必须沿用节点所有者，
+        // 否则 Worker 会因任务归属与节点 owner_user_id 不一致而拒绝执行。
+        UUID ownerUserId = root.getOwnerUserId();
         TaskRecord activeTask = findActiveTask(ownerUserId, fileNodeId).orElse(null);
         if (activeTask != null) {
             return activeTask.getId();
         }
-        FileNode root = fileNodeRepository.findOwnedForUpdate(fileNodeId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         if (root.getPurgeState() != null && root.getPurgeState() != FilePurgeState.NONE) {
             throw new BusinessException(ErrorCode.CONFLICT, "文件已进入永久删除流程");
         }

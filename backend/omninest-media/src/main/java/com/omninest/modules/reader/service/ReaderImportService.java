@@ -113,14 +113,19 @@ public class ReaderImportService {
                 .filter(candidate -> isSameSpaceScope(ownerUserId, candidate, fileNode.spaceType()))
                 .findFirst();
         if (existingByFile.isPresent()) {
-            ReaderItem existing = applyExplicitComicOverride(
-                    ownerUserId,
-                    fileNodeId,
-                    existingByFile.get(),
-                    contentKindOverride);
-            if (FILE_TYPE_PDF.equals(fileType)) {
-                // 内容替换后重新提取页数与封面，避免派生元数据陈旧。
-                enrichPdfMetadata(existing, fileNode, true);
+            ReaderItem existing = existingByFile.get();
+            // 条目归属固定为文件所有者；成员复用共享条目时只加入自己的书架，
+            // 不得触发内容覆盖或 PDF 派生元数据重写。
+            if (existing.getOwnerUserId().equals(ownerUserId)) {
+                existing = applyExplicitComicOverride(
+                        ownerUserId,
+                        fileNodeId,
+                        existing,
+                        contentKindOverride);
+                if (FILE_TYPE_PDF.equals(fileType)) {
+                    // 内容替换后重新提取页数与封面，避免派生元数据陈旧。
+                    enrichPdfMetadata(existing, fileNode, true);
+                }
             }
             ensureOnBookshelf(ownerUserId, existing.getId());
             recordReaderItem(ownerUserId, existing, SyncAction.UPDATED);
@@ -161,7 +166,9 @@ public class ReaderImportService {
         }
 
         ReaderItem item = new ReaderItem();
-        item.setOwnerUserId(ownerUserId);
+        // 一条文件一条业务行，归属文件所有者；共享空间文件由上传者持有，
+        // 成员只是通过书架/进度等个人表参与，不再各自复制章节与页资产。
+        item.setOwnerUserId(fileNode.ownerUserId());
         item.setFileNodeId(fileNodeId);
         item.setContentHash(contentHash);
         item.setItemType(fileType);

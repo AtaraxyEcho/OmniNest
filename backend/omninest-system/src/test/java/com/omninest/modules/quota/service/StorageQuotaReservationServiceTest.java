@@ -3,7 +3,9 @@ package com.omninest.modules.quota.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +24,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -80,6 +83,48 @@ class StorageQuotaReservationServiceTest {
 
         assertThat(result).isEqualTo(RESERVATION_ID);
         verify(userStorageCommand).tryReserveStorage(USER_ID, 512L);
+    }
+
+    @Test
+    void unlimitedQuotaReservationSkipsAtomicQuotaUpdate() {
+        when(reservationRepository.findBySourceTypeAndSourceId("UPLOAD", SOURCE_ID))
+                .thenReturn(Optional.empty());
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(unlimitedUser()));
+        when(reservationRepository.save(any())).thenAnswer(invocation -> {
+            StorageQuotaReservation reservation = invocation.getArgument(0);
+            reservation.setId(RESERVATION_ID);
+            return reservation;
+        });
+
+        UUID result = service.reserve(
+                USER_ID,
+                "UPLOAD",
+                SOURCE_ID,
+                512L,
+                Instant.now().plusSeconds(600L)
+        );
+
+        assertThat(result).isEqualTo(RESERVATION_ID);
+        verify(userStorageCommand, never()).tryReserveStorage(any(), anyLong());
+        ArgumentCaptor<StorageQuotaReservation> captor =
+                ArgumentCaptor.forClass(StorageQuotaReservation.class);
+        verify(reservationRepository).save(captor.capture());
+        assertThat(captor.getValue().isQuotaApplied()).isFalse();
+    }
+
+    @Test
+    void unlimitedReservationSettlementChargesUsageWithoutQuotaRelease() {
+        StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 512L, false);
+        when(reservationRepository.findBySourceTypeAndSourceId("UPLOAD", SOURCE_ID))
+                .thenReturn(Optional.of(reservation));
+        when(reservationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.settle("UPLOAD", SOURCE_ID, 512L);
+
+        verify(userStorageCommand).incrementUsage(USER_ID, 512L);
+        verify(userStorageCommand, never()).settleStorageReservation(any(), anyLong(), anyLong());
+        assertThat(reservation.getStatus()).isEqualTo("COMMITTED");
+        assertThat(reservation.getCommittedBytes()).isEqualTo(512L);
     }
 
     @Test
@@ -154,6 +199,10 @@ class StorageQuotaReservationServiceTest {
 
     private UserAccountSummary user(boolean superAdmin) {
         return new UserAccountSummary(USER_ID, "owner", Set.of(), superAdmin, 1024L, 0L);
+    }
+
+    private UserAccountSummary unlimitedUser() {
+        return new UserAccountSummary(USER_ID, "owner", Set.of(), false, 0L, 4096L);
     }
 
     private StorageQuotaReservation reservation(

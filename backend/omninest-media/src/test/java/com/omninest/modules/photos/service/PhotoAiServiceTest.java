@@ -16,6 +16,7 @@ import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.photos.domain.PhotoFace;
+import com.omninest.modules.photos.domain.PhotoFaceCluster;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoFaceClusterRepository;
 import com.omninest.modules.photos.repository.PhotoFaceRepository;
@@ -27,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -391,5 +393,44 @@ class PhotoAiServiceTest {
 
     private ContentAnalysis emptyAnalysis() {
         return new ContentAnalysis(2, "content-analysis-v2", List.of());
+    }
+
+    @Test
+    void clusterListingExcludesTrashedPhotos() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID clusterId = UUID.randomUUID();
+        PhotoFaceCluster cluster = new PhotoFaceCluster();
+        cluster.setId(clusterId);
+        cluster.setOwnerUserId(ownerUserId);
+        Mockito.when(clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId))
+                .thenReturn(Optional.of(cluster));
+
+        UUID alivePhotoId = UUID.randomUUID();
+        UUID trashedPhotoId = UUID.randomUUID();
+        PhotoFace aliveFace = new PhotoFace();
+        aliveFace.setPhotoId(alivePhotoId);
+        PhotoFace trashedFace = new PhotoFace();
+        trashedFace.setPhotoId(trashedPhotoId);
+        Mockito.when(faceRepository.findByClusterId(clusterId)).thenReturn(List.of(aliveFace, trashedFace));
+
+        PhotoItem alive = new PhotoItem();
+        alive.setId(alivePhotoId);
+        alive.setOwnerUserId(ownerUserId);
+        PhotoItem trashed = new PhotoItem();
+        trashed.setId(trashedPhotoId);
+        trashed.setOwnerUserId(ownerUserId);
+        trashed.setDeletedAt(Instant.now());
+        List<UUID> photoIds = List.of(alivePhotoId, trashedPhotoId);
+        Mockito.when(photoItemRepository.findAllById(photoIds)).thenReturn(List.of(alive, trashed));
+        Mockito.when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds))
+                .thenReturn(List.of());
+        Mockito.when(tagRepository.findByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds))
+                .thenReturn(List.of());
+
+        var result = service.getPhotosByCluster(ownerUserId, clusterId);
+
+        // 相册回收站只写 media_photos.deleted_at，不移动 file_nodes，必须在此显式过滤
+        assertEquals(1, result.size());
+        assertEquals(alivePhotoId, result.getFirst().id());
     }
 }

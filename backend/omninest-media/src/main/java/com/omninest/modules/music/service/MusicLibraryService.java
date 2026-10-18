@@ -8,6 +8,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.service.FileDeletionService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FilePurgeOrigin;
@@ -67,7 +68,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MusicLibraryService {
     /** 曲库三端点允许的动态排序字段白名单。 */
     private static final Set<String> TRACK_SORT_FIELDS = Set.of("title", "artistName", "updatedAt");
-    private static final Set<String> ALBUM_SORT_FIELDS = Set.of("updatedAt", "name");
+    private static final Set<String> ALBUM_SORT_FIELDS = Set.of("updatedAt", "title");
     private static final Set<String> ARTIST_SORT_FIELDS = Set.of("name");
 
     private final MusicTrackRepository trackRepository;
@@ -77,6 +78,7 @@ public class MusicLibraryService {
     private final MusicPlayHistoryRepository playHistoryRepository;
     private final FileDeletionService fileDeletionService;
     private final FileQueryService fileQueryService;
+    private final FileLifecycleGuard fileLifecycleGuard;
     private final ReadThroughCache readThroughCache;
     private final MediaSyncEventService syncEventService;
     private final MusicLibraryProperties musicLibraryProperties;
@@ -361,7 +363,7 @@ public class MusicLibraryService {
     @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto favorite(UUID ownerUserId, UUID trackId) {
         log.info("收藏曲目: trackId={}, userId={}", trackId, ownerUserId);
-        MusicTrack track = requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
         boolean created = favoriteRepository.findByOwnerUserIdAndTrackId(ownerUserId, trackId).isEmpty();
         if (created) {
             MusicFavorite favorite = new MusicFavorite();
@@ -376,7 +378,7 @@ public class MusicLibraryService {
     @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto removeFavorite(UUID ownerUserId, UUID trackId) {
         log.info("取消收藏: trackId={}, userId={}", trackId, ownerUserId);
-        MusicTrack track = requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
         favoriteRepository.deleteByOwnerUserIdAndTrackId(ownerUserId, trackId);
         recordTrackEvent(ownerUserId, track, SyncAction.UPDATED, Map.of("favorite", false));
         return toTrackDto(track, false);
@@ -385,7 +387,7 @@ public class MusicLibraryService {
     @Transactional(rollbackFor = Exception.class)
     public void recordPlayHistory(UUID ownerUserId, UUID trackId, MusicPlayHistoryRequest request) {
         log.debug("记录播放历史: trackId={}, userId={}", trackId, ownerUserId);
-        MusicTrack track = requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
         MusicPlayHistory history = new MusicPlayHistory();
         history.setOwnerUserId(ownerUserId);
         history.setTrackId(trackId);
@@ -499,7 +501,7 @@ public class MusicLibraryService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "本地音乐播放键格式不正确");
         }
-        MusicTrack track = requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
         MusicPlayHistory history = new MusicPlayHistory();
         history.setOwnerUserId(ownerUserId);
         history.setTrackId(trackId);
@@ -623,6 +625,28 @@ public class MusicLibraryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
     }
 
+    /**
+     * 读取曲目：所有者本人，或共享空间内可读该文件的成员。
+     *
+     * <p>写操作（元数据、删除）仍走 {@link #requireTrack}，只有所有者可修改；
+     * 列表已按共享空间放行，详情/收藏/播放历史必须用同一口径，否则家庭共享的
+     * 曲目会在列表可见、点开 404。</p>
+     */
+    @Transactional(readOnly = true)
+    public MusicTrack requireReadableTrack(UUID requesterUserId, UUID trackId) {
+        MusicTrack track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在"));
+        if (track.getOwnerUserId().equals(requesterUserId)) {
+            return track;
+        }
+        try {
+            fileLifecycleGuard.requireReadable(requesterUserId, track.getFileNodeId());
+            return track;
+        } catch (BusinessException exception) {
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐资源不存在");
+        }
+    }
+
     public MusicTrackDto toTrackDto(MusicTrack track, boolean favorite) {
         return new MusicTrackDto(
                 track.getId(),
@@ -681,7 +705,7 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public MusicTrackDto getTrack(UUID ownerUserId, UUID trackId) {
-        MusicTrack track = requireTrack(ownerUserId, trackId);
+        MusicTrack track = requireReadableTrack(ownerUserId, trackId);
         boolean favorite = favoriteRepository.existsByOwnerUserIdAndTrackId(ownerUserId, trackId);
         return toTrackDto(track, favorite);
     }

@@ -152,13 +152,13 @@ class MusicAdminServiceTest {
         stubMusicPersistence();
         when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio, document));
         when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
-        when(trackRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, AUDIO_FILE_ID)).thenReturn(Optional.empty());
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
 
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
 
         verify(trackRepository).save(any(MusicTrack.class));
         verify(taskRecordService).markCompleted(eq(SCAN_JOB_ID), anyMap());
-        verify(trackRepository, never()).findByOwnerUserIdAndFileNodeId(OWNER_ID, document.id());
+        verify(trackRepository, never()).findByFileNodeId(document.id());
     }
 
     @Test
@@ -168,7 +168,7 @@ class MusicAdminServiceTest {
         stubMusicPersistence();
         when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
         when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
-        when(trackRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, AUDIO_FILE_ID)).thenReturn(Optional.empty());
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
 
         adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
 
@@ -184,7 +184,7 @@ class MusicAdminServiceTest {
         stubMusicPersistence();
         when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
         when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
-        when(trackRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, AUDIO_FILE_ID)).thenReturn(Optional.empty());
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
         byte[] audioBytes = id3Tag(
                 textFrame("TIT2", "Night Drive"),
                 textFrame("TPE1", "Omni Band"),
@@ -234,7 +234,7 @@ class MusicAdminServiceTest {
         stubMusicPersistence();
         when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
         when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
-        when(trackRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, AUDIO_FILE_ID)).thenReturn(Optional.empty());
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
         byte[] audioBytes = id3Tag(
                 textFrame("TIT2", "Night Drive"),
                 attachedPictureFrame("image/png", new byte[] {1, 2, 3, 4})
@@ -268,7 +268,7 @@ class MusicAdminServiceTest {
         stubMusicPersistence();
         when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio, lyric));
         when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
-        when(trackRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, AUDIO_FILE_ID)).thenReturn(Optional.empty());
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
         when(fileQueryService.openOwnedFileContent(OWNER_ID, AUDIO_FILE_ID))
                 .thenReturn(content("Night Drive.mp3", "audio/mpeg", new byte[] {0, 1, 2}));
         when(fileQueryService.openOwnedFileContent(OWNER_ID, lyricFileId))

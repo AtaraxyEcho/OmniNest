@@ -152,7 +152,10 @@ public class PhotoAdminService {
 
         job.setStatus(TaskStatus.RUNNING.getValue());
         job.setMessage("相册扫描中");
-        scanJobRepository.save(job);
+        // executeScanJob 无外层事务，job 为脱管实体：merge 返回的新受管实例
+        // 才携带推进后的 version；不接住返回值则收尾保存仍带旧版本，
+        // 必然触发 StaleObjectStateException（同 D-009）。
+        job = scanJobRepository.save(job);
 
         int imported = 0;
         try {
@@ -179,16 +182,25 @@ public class PhotoAdminService {
                 }
             }
 
-            job.setStatus(TaskStatus.COMPLETED.getValue());
-            job.setScannedFiles(imported);
-            job.setMessage("相册扫描完成，已处理 " + imported + " 个图片文件");
-            taskRecordService.markCompleted(jobId, Map.of("imported", imported));
-            syncEventService.invalidate(
-                    ownerUserId,
-                    SyncScope.PHOTOS,
-                    "PHOTO_LIBRARY",
-                    Map.of("source", "SCAN", "imported", imported)
-            );
+            final int importedCount = imported;
+            // 同步事件记录器要求外层事务（MANDATORY 传播），而 executeScanJob
+            // 本体刻意无事务（逐文件独立提交），此前裸调 invalidate 在完成边缘
+            // 触发 IllegalTransactionStateException（D-009）；收尾状态、失效事件
+            // 与终态保存改在独立短事务内原子提交。
+            final PhotoScanJob completedJob = job;
+            transactionTemplate.executeWithoutResult(status -> {
+                completedJob.setStatus(TaskStatus.COMPLETED.getValue());
+                completedJob.setScannedFiles(importedCount);
+                completedJob.setMessage("相册扫描完成，已处理 " + importedCount + " 个图片文件");
+                taskRecordService.markCompleted(jobId, Map.of("imported", importedCount));
+                syncEventService.invalidate(
+                        ownerUserId,
+                        SyncScope.PHOTOS,
+                        "PHOTO_LIBRARY",
+                        Map.of("source", "SCAN", "imported", importedCount)
+                );
+                scanJobRepository.save(completedJob);
+            });
             invalidateDashboardCache(ownerUserId);
             // 发送扫描完成通知
             notificationService.notifyOrLog(ownerUserId, "TASK_COMPLETED",
@@ -196,15 +208,18 @@ public class PhotoAdminService {
                     Map.of("jobId", jobId.toString()));
         } catch (Exception ex) {
             log.error("照片扫描任务执行失败: jobId={}", jobId, ex);
-            job.setStatus(TaskStatus.FAILED.getValue());
-            job.setMessage("扫描失败: " + ex.getMessage());
+            // 失败路径按 id 重新加载最新版本实体后再写终态，避免收尾保存
+            // 携带旧版本触发乐观锁异常，使任务行停留在 RUNNING。
+            PhotoScanJob failedJob = scanJobRepository.findById(jobId).orElse(job);
+            failedJob.setStatus(TaskStatus.FAILED.getValue());
+            failedJob.setMessage("扫描失败: " + ex.getMessage());
+            scanJobRepository.save(failedJob);
             taskRecordService.markFailed(jobId, ex.getMessage(), ThrowableDescriber.describe(ex));
             // 发送扫描失败通知
             notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
                     "照片扫描失败", "扫描失败: " + ex.getMessage(),
                     Map.of("jobId", jobId.toString()));
         }
-        scanJobRepository.save(job);
     }
 
     /**

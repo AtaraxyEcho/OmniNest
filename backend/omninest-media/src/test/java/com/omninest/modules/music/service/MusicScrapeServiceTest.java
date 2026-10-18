@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +18,7 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.service.FileDeletionService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.config.MusicLibraryProperties;
@@ -36,6 +40,7 @@ import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +48,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Pageable;
 
 class MusicScrapeServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
@@ -55,6 +61,7 @@ class MusicScrapeServiceTest {
     private final MusicPlayHistoryRepository playHistoryRepository = mock(MusicPlayHistoryRepository.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
     private final FileDeletionService fileDeletionService = mock(FileDeletionService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final MusicLibraryProperties musicLibraryProperties = new MusicLibraryProperties();
@@ -66,6 +73,7 @@ class MusicScrapeServiceTest {
             playHistoryRepository,
             fileDeletionService,
             fileQueryService,
+            fileLifecycleGuard,
             readThroughCache,
             syncEventService,
             musicLibraryProperties
@@ -200,5 +208,76 @@ class MusicScrapeServiceTest {
         assertThat(track.getCoverFileId()).isEqualTo(coverFileId);
         assertThat(track.getMetadataStatus()).isEqualTo("MATCHED");
         assertThat(track.getExternalIds()).containsEntry("musicbrainzRecordingId", "rec-1");
+    }
+
+    @Test
+    void executeScrapeLibraryReassignsPostMergeVersionOnEverySave() {
+        UUID jobId = UUID.fromString("70000000-0000-0000-0000-000000000001");
+        MusicScanJob job = queuedJob(jobId);
+        when(scanJobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        List<Long> savedVersions = new ArrayList<>();
+        doAnswer(invocation -> {
+            MusicScanJob saved = invocation.getArgument(0);
+            savedVersions.add(saved.getVersion());
+            // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        }).when(scanJobRepository).save(any(MusicScanJob.class));
+
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        when(trackRepository.countVisibleByOwnerUserId(OWNER_ID)).thenReturn(1L);
+        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID)).thenReturn(List.of());
+        when(trackRepository.findScrapePageAfter(eq(OWNER_ID), any(UUID.class), any(Pageable.class)))
+                .thenReturn(List.of(track));
+        when(metadataProvider.providerName()).thenReturn("MusicBrainz");
+        when(metadataProvider.search(any())).thenReturn(List.of());
+
+        scrapeService.executeScrapeLibrary(jobId, OWNER_ID, false);
+
+        // 修复前 save() 返回值被丢弃，三次保存都携带初始版本 0，
+        // 第二次起在真实 Hibernate 下必然触发乐观锁异常。
+        assertThat(savedVersions).containsExactly(0L, 1L, 2L);
+        assertThat(job.getStatus()).isEqualTo(TaskStatus.COMPLETED.getValue());
+    }
+
+    @Test
+    void executeScrapeLibraryFailurePathRewritesTerminalStateOnReloadedEntity() {
+        UUID jobId = UUID.fromString("70000000-0000-0000-0000-000000000002");
+        MusicScanJob job = queuedJob(jobId);
+        when(scanJobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        List<String> savedStatuses = new ArrayList<>();
+        doAnswer(invocation -> {
+            MusicScanJob saved = invocation.getArgument(0);
+            savedStatuses.add(saved.getStatus());
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        }).when(scanJobRepository).save(any(MusicScanJob.class));
+
+        when(trackRepository.countVisibleByOwnerUserId(OWNER_ID)).thenReturn(1L);
+        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
+                .thenThrow(new IllegalStateException("存储层不可用"));
+
+        try {
+            scrapeService.executeScrapeLibrary(jobId, OWNER_ID, false);
+            throw new AssertionError("失败路径必须向外抛出原始异常");
+        } catch (IllegalStateException expected) {
+            assertThat(expected.getMessage()).isEqualTo("存储层不可用");
+        }
+
+        // 失败收尾必须按 id 重新加载最新实体后写终态，保证任务行不停留在 RUNNING。
+        verify(scanJobRepository, times(2)).findById(jobId);
+        assertThat(savedStatuses).containsExactly(TaskStatus.RUNNING.getValue(), TaskStatus.FAILED.getValue());
+        verify(taskRecordService, never()).markCompleted(any(UUID.class), any());
+    }
+
+    private MusicScanJob queuedJob(UUID jobId) {
+        MusicScanJob job = new MusicScanJob();
+        job.setId(jobId);
+        job.setTaskId(jobId);
+        job.setOwnerUserId(OWNER_ID);
+        job.setStatus(TaskStatus.QUEUED.getValue());
+        return job;
     }
 }

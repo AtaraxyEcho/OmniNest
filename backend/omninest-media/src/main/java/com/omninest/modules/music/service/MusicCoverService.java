@@ -7,6 +7,7 @@ import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.music.dto.MusicDtos.MusicCoverUploadDto;
@@ -16,6 +17,7 @@ import java.io.InputStream;
 import java.io.PushbackInputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +44,7 @@ public class MusicCoverService {
     private final MediaProcessingLimitsProperties processingLimits;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
+    private final FileLifecycleGuard fileLifecycleGuard;
     private final FileMetadataQueryService fileMetadataQueryService;
     private final MusicCoverThumbnailService coverThumbnailService;
 
@@ -69,11 +72,14 @@ public class MusicCoverService {
      * @return 流式读取描述
      */
     public CoverStreamDescriptor prepareCoverStream(UUID ownerUserId, UUID fileId) {
-        fileQueryService.validateOwnedImage(ownerUserId, fileId);
-        FileDescriptor node = fileMetadataQueryService.findActiveById(fileId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
+        // 共享空间曲目的封面由文件所有者持有，成员读取时按文件可读权限放行，
+        // 不能沿用所有者专属校验，否则列表可见、封面 404。
+        FileDescriptor node = fileLifecycleGuard.requireReadable(ownerUserId, fileId);
+        String mimeType = node.mimeType();
         if (!NodeType.FILE.getValue().equals(node.nodeType())
-                || node.sizeBytes() > processingLimits.getMaxStreamCoverBytes()) {
+                || node.sizeBytes() > processingLimits.getMaxStreamCoverBytes()
+                || mimeType == null
+                || !mimeType.toLowerCase(Locale.ROOT).startsWith("image/")) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在");
         }
         String contentType = node.mimeType();

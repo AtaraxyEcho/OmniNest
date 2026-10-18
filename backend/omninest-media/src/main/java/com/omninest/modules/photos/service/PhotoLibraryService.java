@@ -93,6 +93,7 @@ public class PhotoLibraryService {
     private final MediaSyncEventService syncEventService;
     private final PhotoContentAnalysisService contentAnalysisService;
     private final PhotoGeoService photoGeoService;
+    private final PhotoIndexTaskService photoIndexTaskService;
 
     /**
      * 照片仪表盘，返回统计数据和近期/收藏照片（缓存 3 分钟）。
@@ -759,6 +760,7 @@ public class PhotoLibraryService {
         photoTag.setTag(tag);
         photoTagRepository.save(photoTag);
         recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
+        photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
     }
 
     /**
@@ -768,6 +770,7 @@ public class PhotoLibraryService {
     public void removeTag(UUID ownerUserId, UUID photoId, String tag) {
         photoTagRepository.deleteByOwnerUserIdAndPhotoIdAndTag(ownerUserId, photoId, tag);
         recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
+        photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
     }
 
     /**

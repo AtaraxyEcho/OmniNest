@@ -3264,6 +3264,10 @@ CREATE INDEX "idx_photo_album_items_album" ON "omni"."photo_album_items" USING b
 CREATE INDEX "idx_photo_album_items_photo" ON "omni"."photo_album_items" USING btree (
   "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_photo_album_items_owner" ON "omni"."photo_album_items" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
 
 ALTER TABLE "omni"."photo_album_items" ADD CONSTRAINT "uk_photo_album_items" UNIQUE ("album_id", "photo_id");
 
@@ -3506,7 +3510,7 @@ CREATE INDEX "idx_reader_items_owner_type" ON "omni"."reader_items" USING btree 
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
 
-ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "uniq_reader_items_owner_file" UNIQUE ("owner_user_id", "file_node_id");
+ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "uniq_reader_items_file" UNIQUE ("file_node_id");
 
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "ck_reader_items_genres_json_size" CHECK (octet_length(genres::text) <= 65536);
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "ck_reader_items_external_ids_json_size" CHECK (octet_length(external_ids::text) <= 65536);

@@ -209,7 +209,10 @@ public class MusicScrapeService {
         job.setStatus(TaskStatus.RUNNING.getValue());
         job.setMessage("MusicBrainz 刮削中");
         job.setDetails(scrapeDetails(force, 0, 0, 0, 0, 0));
-        scanJobRepository.save(job);
+        // executeScrapeLibrary 无外层事务，job 为脱管实体：merge 返回的新受管实例
+        // 才携带推进后的 version；不接住返回值则后续每次保存仍带旧版本，
+        // 必然触发乐观锁异常并使任务行停留在 RUNNING（同 D-009）。
+        job = scanJobRepository.save(job);
 
         int processed = 0;
         int matched = 0;
@@ -243,7 +246,7 @@ public class MusicScrapeService {
                         log.debug("[刮削] 跳过: trackId={}, status={}",
                                 track.getId(), track.getMetadataStatus());
                         skipped++;
-                        updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
+                        job = updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
                         continue;
                     }
                     processed++;
@@ -255,7 +258,7 @@ public class MusicScrapeService {
                             log.info("[刮削] 未命中: trackId={}, 候选数={}, 最佳score={} (阈值={})",
                                     track.getId(), candidates.size(), bestScore, AUTO_APPLY_THRESHOLD);
                             unmatched++;
-                            updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
+                            job = updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
                             continue;
                         }
                         log.info("[刮削] 命中: trackId={}, score={}", track.getId(), best.score());
@@ -269,7 +272,7 @@ public class MusicScrapeService {
                                 track.getId(), ex.getClass().getSimpleName());
                         failed++;
                     }
-                    updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
+                    job = updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
                 }
                 cursor = batch.getLast().getId();
                 if (batch.size() < SCRAPE_BATCH_SIZE) {
@@ -284,7 +287,7 @@ public class MusicScrapeService {
             job.setScannedFiles(processed);
             job.setMessage("MusicBrainz 刮削完成，已命中 " + matched + " 个条目");
             job.setDetails(scrapeDetails(force, processed, matched, skipped, unmatched, failed));
-            scanJobRepository.save(job);
+            job = scanJobRepository.save(job);
             taskRecordService.markCompleted(systemTaskId(job), new LinkedHashMap<>(Map.of(
                     "processed", processed,
                     "matched", matched,
@@ -299,10 +302,13 @@ public class MusicScrapeService {
                     Map.of("jobId", job.getId().toString(), "matched", matched));
         } catch (RuntimeException ex) {
             log.error("音乐刮削任务失败: jobId={}", jobId, ex);
-            job.setStatus(TaskStatus.FAILED.getValue());
-            job.setMessage("音乐刮削失败: " + ex.getMessage());
-            job.setDetails(scrapeDetails(force, processed, matched, skipped, unmatched, failed));
-            scanJobRepository.save(job);
+            // 失败路径按 id 重新加载最新版本实体后再写终态，避免此前保存抛出的
+            // 乐观锁异常在收尾时二次抛出、使任务行永久停留在 RUNNING。
+            MusicScanJob failedJob = scanJobRepository.findById(jobId).orElse(job);
+            failedJob.setStatus(TaskStatus.FAILED.getValue());
+            failedJob.setMessage("音乐刮削失败: " + ex.getMessage());
+            failedJob.setDetails(scrapeDetails(force, processed, matched, skipped, unmatched, failed));
+            scanJobRepository.save(failedJob);
             notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
                     "音乐刮削失败", "刮削失败: " + ex.getMessage(),
                     Map.of("jobId", job.getId().toString()));
@@ -310,7 +316,7 @@ public class MusicScrapeService {
         }
     }
 
-    private void updateScrapeProgress(
+    private MusicScanJob updateScrapeProgress(
             MusicScanJob job,
             long totalTracks,
             int visited,
@@ -326,8 +332,11 @@ public class MusicScrapeService {
         if (totalTracks > 0 && (visited == totalTracks || visited % 20 == 0)) {
             int progress = 10 + (int) Math.floor((visited * 80.0) / totalTracks);
             taskRecordService.updateExecution(systemTaskId(job), "SCRAPING", progress);
-            scanJobRepository.save(job);
+            // 脱管实体 merge 返回携带新版本号的实例，必须回传给调用方，
+            // 否则下一次保存仍携带旧版本触发乐观锁异常（同 D-009）。
+            return scanJobRepository.save(job);
         }
+        return job;
     }
 
     private UUID systemTaskId(MusicScanJob job) {

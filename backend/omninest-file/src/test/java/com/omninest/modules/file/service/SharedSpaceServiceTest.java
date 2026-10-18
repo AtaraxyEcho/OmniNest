@@ -483,6 +483,37 @@ class SharedSpaceServiceTest {
         }
     }
 
+    // ── calculateRestoreSubtreeStats ──────────────────────────────────
+
+    @Nested
+    @DisplayName("calculateRestoreSubtreeStats()")
+    class CalculateRestoreSubtreeStatsTests {
+
+        @Test
+        @DisplayName("文件节点按自身字节计一个文件")
+        void fileNodeUsesOwnSize() {
+            FileNode file = sharedFile(FILE_ID, USER_A, "movie.mkv", 2048L);
+
+            SharedSpaceService.SubtreeStats stats = service.calculateRestoreSubtreeStats(file);
+
+            assertThat(stats.totalBytes()).isEqualTo(2048L);
+            assertThat(stats.fileCount()).isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("目录节点汇总子树内已删除文件，不按目录创建者过滤")
+        void folderNodeAggregatesDeletedFilesInSpace() {
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "movies");
+            when(fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, "/movies/"))
+                    .thenReturn(List.<Object[]>of(new Object[]{4096L, 3L}));
+
+            SharedSpaceService.SubtreeStats stats = service.calculateRestoreSubtreeStats(folder);
+
+            assertThat(stats.totalBytes()).isEqualTo(4096L);
+            assertThat(stats.fileCount()).isEqualTo(3L);
+        }
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────
 
     /**

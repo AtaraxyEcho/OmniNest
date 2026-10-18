@@ -24,6 +24,7 @@ import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
@@ -70,6 +71,7 @@ class AuthServiceTest {
     private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
     private final TwoFactorPolicyService twoFactorPolicyService = mock(TwoFactorPolicyService.class);
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
+    private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final Map<String, String> jtiByTokenUse = new HashMap<>();
     private final FixedJwtEncoder jwtEncoder = new FixedJwtEncoder(jtiByTokenUse);
     private final FixedJwtDecoder jwtDecoder = new FixedJwtDecoder(jtiByTokenUse);
@@ -99,10 +101,10 @@ class AuthServiceTest {
                 notificationService,
                 twoFactorService,
                 twoFactorPolicyService,
-                rateLimitService
+                rateLimitService,
+                storageQuotaService
         );
     }
-
     private static ObjectStorageBuckets createObjectStorageBuckets() {
         ObjectStorageBuckets buckets = mock(ObjectStorageBuckets.class);
         when(buckets.derivedAssets()).thenReturn("derived-assets");
@@ -119,6 +121,7 @@ class AuthServiceTest {
         @DisplayName("注册成功：创建 MEMBER 用户并返回 token")
         void registerCreatesMemberUserAndReturnsToken() {
             when(authUserRepository.existsByUsername("newuser")).thenReturn(false);
+            when(storageQuotaService.getDefaultQuotaBytes()).thenReturn(7L * 1024 * 1024 * 1024);
             AuthRole memberRole = role(Roles.MEMBER, "file:read");
             when(authRoleRepository.findByCode(Roles.MEMBER)).thenReturn(Optional.of(memberRole));
             when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> {
@@ -143,6 +146,7 @@ class AuthServiceTest {
             assertThat(token.tokenType()).isEqualTo("Bearer");
             assertThat(token.user().username()).isEqualTo("newuser");
             assertThat(token.user().roles()).containsExactly(Roles.MEMBER);
+            assertThat(token.user().quotaBytes()).isEqualTo(7L * 1024 * 1024 * 1024);
             verify(activeSessionRepository).save(any(AuthActiveSession.class));
             verify(activeSessionRegistry).register(
                     any(UUID.class),

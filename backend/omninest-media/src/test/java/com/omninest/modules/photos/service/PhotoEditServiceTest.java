@@ -12,9 +12,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.config.PhotoMediaLimitsProperties;
+import com.omninest.modules.photos.domain.PhotoEditVersion;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.dto.PhotoDtos.EditRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoEditVersionDto;
@@ -26,6 +30,8 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
@@ -52,6 +58,7 @@ class PhotoEditServiceTest {
     private final PhotoSourceFileService sourceFileService = mock(PhotoSourceFileService.class);
     private final PhotoInputGuard inputGuard = new PhotoInputGuard(new PhotoMediaLimitsProperties());
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
+    private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
     private final TransactionTemplate transactionTemplate = new TransactionTemplate(txManager);
     private final PhotoEditService service = new PhotoEditService(
@@ -62,6 +69,7 @@ class PhotoEditServiceTest {
             sourceFileService,
             inputGuard,
             storageQuotaService,
+            fileMetadataQueryService,
             transactionTemplate,
             5
     );
@@ -175,6 +183,97 @@ class PhotoEditServiceTest {
         verify(storageService, never()).store(
                 any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
         verify(storageQuotaService, never()).incrementUsage(any(), anyLong());
+    }
+
+    @Test
+    void enforceMaxVersionsRefundsQuotaWhenNodePhysicallyDeleted() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID evictedFileId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        when(editVersionRepository.countByPhotoId(photoId)).thenReturn(6L);
+        when(editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId))
+                .thenReturn(versionsWithEvictedFile(photoId, ownerUserId, evictedFileId));
+        when(fileMetadataQueryService.findById(evictedFileId))
+                .thenReturn(Optional.of(descriptorWithSize(ownerUserId, evictedFileId, 4096L)));
+        when(storageService.deleteOwned(ownerUserId, evictedFileId)).thenReturn(true);
+        when(storageService.store(
+                eq(ownerUserId), anyString(), eq(photoId), anyString(), anyString(),
+                eq("image/jpeg"), any(Path.class)
+        )).thenReturn(UUID.randomUUID());
+
+        service.applyEditedImage(ownerUserId, photoId, jpegBytes());
+
+        // 节点行消失后必须按写入时口径退还字节，否则实时用量永久虚高。
+        verify(storageQuotaService).decrementUsage(ownerUserId, 4096L);
+    }
+
+    @Test
+    void enforceMaxVersionsDoesNotRefundWhenDeleteOwnedFails() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID evictedFileId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        when(editVersionRepository.countByPhotoId(photoId)).thenReturn(6L);
+        when(editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId))
+                .thenReturn(versionsWithEvictedFile(photoId, ownerUserId, evictedFileId));
+        when(fileMetadataQueryService.findById(evictedFileId))
+                .thenReturn(Optional.of(descriptorWithSize(ownerUserId, evictedFileId, 4096L)));
+        when(storageService.deleteOwned(ownerUserId, evictedFileId)).thenReturn(false);
+        when(storageService.store(
+                eq(ownerUserId), anyString(), eq(photoId), anyString(), anyString(),
+                eq("image/jpeg"), any(Path.class)
+        )).thenReturn(UUID.randomUUID());
+
+        service.applyEditedImage(ownerUserId, photoId, jpegBytes());
+
+        // 节点未消失时不得退款，避免与每日配额对账双重扣减。
+        verify(storageQuotaService, never()).decrementUsage(any(), anyLong());
+    }
+
+    private List<PhotoEditVersion> versionsWithEvictedFile(
+            UUID photoId, UUID ownerUserId, UUID evictedFileId) {
+        // 降序 6 行，上限 5：最后一行（版本 1）携带 evictedFileId，被逐出。
+        List<PhotoEditVersion> versions = new ArrayList<>();
+        for (int number = 6; number >= 1; number--) {
+            PhotoEditVersion version = new PhotoEditVersion();
+            version.setId(UUID.randomUUID());
+            version.setOwnerUserId(ownerUserId);
+            version.setPhotoId(photoId);
+            version.setVersionNumber(number);
+            version.setEditType("EXTERNAL");
+            version.setFileId(number == 1 ? evictedFileId : UUID.randomUUID());
+            version.setCreatedAt(Instant.now());
+            versions.add(version);
+        }
+        return versions;
+    }
+
+    private FileDescriptor descriptorWithSize(UUID ownerUserId, UUID fileId, long sizeBytes) {
+        return new FileDescriptor(
+                fileId,
+                ownerUserId,
+                null,
+                "FILE",
+                "edited.jpg",
+                "/.metadata/PHOTO_ITEM/" + fileId + "/EDIT_VERSION/edited.jpg",
+                "image/jpeg",
+                sizeBytes,
+                null,
+                "DERIVED",
+                false,
+                false,
+                SpaceType.PERSONAL,
+                ownerUserId,
+                Instant.now(),
+                Instant.now()
+        );
     }
 
     private byte[] jpegBytes() throws Exception {

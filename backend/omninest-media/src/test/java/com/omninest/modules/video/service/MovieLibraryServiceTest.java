@@ -314,7 +314,7 @@ class MovieLibraryServiceTest {
         MediaMovie logicalMovie = logicalMovie("旧标题");
         UUID posterFileId = UUID.fromString("40000000-0000-0000-0000-000000000001");
         UUID backdropFileId = UUID.fromString("50000000-0000-0000-0000-000000000001");
-        when(videoItemRepository.findByIdAndOwnerUserId(MOVIE_ID, OWNER_ID)).thenReturn(Optional.of(movie));
+        when(videoItemRepository.findById(MOVIE_ID)).thenReturn(Optional.of(movie));
         when(movieRepository.findById(LOGICAL_MOVIE_ID)).thenReturn(Optional.of(logicalMovie));
         when(movieRepository.save(any(MediaMovie.class))).thenAnswer(inv -> inv.getArgument(0));
         when(contentAssetService.setPrimaryFileAsset(any(), any(), any(), any(), any()))
@@ -409,7 +409,7 @@ class MovieLibraryServiceTest {
         series.setId(SERIES_ID);
         series.setOwnerUserId(OWNER_ID);
         series.setTitle("Old Title");
-        when(tvSeriesRepository.findByIdAndOwnerUserId(SERIES_ID, OWNER_ID)).thenReturn(Optional.of(series));
+        when(tvSeriesRepository.findById(SERIES_ID)).thenReturn(Optional.of(series));
         when(tvSeriesRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(contentAssetService.primarySeriesAssets(OWNER_ID, List.of(SERIES_ID)))
                 .thenReturn(Map.of());
@@ -439,7 +439,11 @@ class MovieLibraryServiceTest {
     @Test
     @DisplayName("共享影视库的可读成员不得改掉别人创建的剧集元数据")
     void updateSeriesMetadataRejectsSeriesOwnedByAnotherUser() {
-        when(tvSeriesRepository.findByIdAndOwnerUserId(SERIES_ID, OWNER_ID)).thenReturn(Optional.empty());
+        MediaTvSeries foreignSeries = new MediaTvSeries();
+        foreignSeries.setId(SERIES_ID);
+        foreignSeries.setOwnerUserId(UUID.randomUUID());
+        foreignSeries.setTitle("别人的剧集");
+        when(tvSeriesRepository.findById(SERIES_ID)).thenReturn(Optional.of(foreignSeries));
 
         assertThatThrownBy(
                 () -> movieLibraryService.updateSeriesMetadata(

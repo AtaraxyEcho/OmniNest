@@ -57,7 +57,8 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 **子路径部署**：默认挂在站点根。若必须由反代挂在子路径（如 `https://nas.example.com/omninest/`），构建镜像前设
 `OMNINEST_WEB_BASE_HREF=/omninest/`（值必须以 `/` 开头并以 `/` 结尾，否则构建失败）。镜像会按该 base-href 构建
 Flutter Web，并把产物摆到 `html/<前缀>/` 下；Canvaskit 与 SQLite WASM/Worker 都按页面基准解析，前端使用 hash
-路由，子路径下的深链不需要服务端 rewrite。
+路由，子路径下的深链不需要服务端 rewrite。镜像内置的 nginx 模板同样读取该变量：入口与 Service Worker 的
+no-cache/安全响应头、SPA 回退路径都按同一前缀生成；变量为 `/` 时与根部署完全一致。
 
 同一前缀会带进接口地址：Web 端从页面 `<base href>` 推导，API 变成 `https://nas.example.com/omninest/api/v1`、
 WS 变成 `https://nas.example.com/omninest/ws`；显式设置 `OMNINEST_API_BASE_URL`/`OMNINEST_WS_BASE_URL` 或管理端
@@ -177,8 +178,9 @@ docker compose ps --format '{{.Name}}' | xargs -r docker inspect --format '{{.Na
 默认仍是 **三角色**（API / Worker / Scheduler 各一进程），适合多人使用与故障隔离。
 
 内存紧张的个人自托管（4C4G）可叠加 `docker-compose.single.yml`：同一镜像只跑
-一个 `backend-api`，并设置 `OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED=true` 在 API
-进程内嵌 worker；独立 worker/scheduler 不会启动。
+一个 `backend-api`，并设置 `OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED=true` 与
+`OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED=true` 在 API 进程内嵌 worker 与
+调度器；独立 worker/scheduler 不会启动。
 
 ```bash
 cd deploy/prod

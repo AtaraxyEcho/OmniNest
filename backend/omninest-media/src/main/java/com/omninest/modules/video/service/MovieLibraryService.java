@@ -415,12 +415,9 @@ public class MovieLibraryService {
     ) {
         // 写操作按所有者取回，与 updateMetadata / deleteItem 同一口径：
         // requireReadableSeries 对 LOCAL 共享库只校验可读，任何能浏览该库的成员
-        // 都能借此改掉别人创建的剧集标题与简介。
-        MediaTvSeries series = tvSeriesRepository.findByIdAndOwnerUserId(seriesId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(
-                        ErrorCode.MEDIA_NOT_FOUND,
-                        "媒体资源不存在"
-                ));
+        // 都能借此改掉别人创建的剧集标题与简介。库来源条目的跨所有者维护
+        // 只放行持有 MEDIA_LIBRARY_MANAGE 的管理员，并仍经库来源校验。
+        MediaTvSeries series = requireWritableSeries(ownerUserId, seriesId);
         String title = request.title() == null ? "" : request.title().trim();
         if (title.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "剧集标题不能为空");
@@ -432,7 +429,7 @@ public class MovieLibraryService {
         series.setUpdatedAt(Instant.now());
         tvSeriesRepository.save(series);
         syncEventService.record(
-                ownerUserId,
+                series.getOwnerUserId(),
                 SyncScope.VIDEO,
                 "VIDEO_SERIES",
                 seriesId.toString(),
@@ -441,6 +438,30 @@ public class MovieLibraryService {
                 Map.of("manualEdited", true)
         );
         return toSeriesDtos(ownerUserId, List.of(series)).getFirst();
+    }
+
+    /**
+     * 解析可写的剧集：所有者本人，或可管理其媒体库来源的管理员。
+     *
+     * <p>媒体库条目的 {@code ownerUserId} 记录扫描执行者，并非唯一维护者；
+     * 跨所有者写入只允许经 {@code MEDIA_LIBRARY_MANAGE} 与库来源校验，
+     * 不得退回可读校验，否则会重新打开 53fccf59 修复的越权改写。</p>
+     */
+    private MediaTvSeries requireWritableSeries(UUID operatorUserId, UUID seriesId) {
+        MediaTvSeries series = tvSeriesRepository.findById(seriesId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在"));
+        if (series.getOwnerUserId().equals(operatorUserId)) {
+            return series;
+        }
+        if (series.getLibrarySourceId() != null) {
+            try {
+                mediaLibraryAccessService.requireManage(operatorUserId, series.getLibrarySourceId());
+                return series;
+            } catch (BusinessException exception) {
+                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+            }
+        }
+        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
     }
 
     @Transactional(readOnly = true)
@@ -509,11 +530,7 @@ public class MovieLibraryService {
 
     @Transactional(rollbackFor = Exception.class)
     public MovieVideoItemDto updateMetadata(UUID ownerUserId, UUID videoItemId, MovieMetadataUpdateRequest request) {
-        MediaVideoItem item = videoItemRepository.findByIdAndOwnerUserId(videoItemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(
-                        ErrorCode.MEDIA_NOT_FOUND,
-                        "媒体资源不存在"
-                ));
+        MediaVideoItem item = requireWritableVideo(ownerUserId, videoItemId);
         if (request.title() == null || request.title().isBlank()) {
             throw new BusinessException(
                     ErrorCode.PARAM_ERROR,
@@ -576,9 +593,35 @@ public class MovieLibraryService {
         // 同步 metadataStatus 到 VideoItem 本身
         item.setMetadataStatus(newStatus);
         videoItemRepository.save(item);
-        recordVideoEvent(ownerUserId, item, SyncAction.UPDATED);
-        invalidateDashboardCache(ownerUserId);
+        recordVideoEvent(item.getOwnerUserId(), item, SyncAction.UPDATED);
+        invalidateDashboardCache(item.getOwnerUserId());
+        if (!item.getOwnerUserId().equals(ownerUserId)) {
+            invalidateDashboardCache(ownerUserId);
+        }
         return videoItemDtoConverter.toVideoDto(ownerUserId, item);
+    }
+
+    /**
+     * 解析可写的视频条目：所有者本人，或可管理其媒体库来源的管理员。
+     *
+     * <p>同 {@link #requireWritableSeries}：媒体库条目的 owner 是扫描执行者，
+     * 跨所有者维护只能经 MEDIA_LIBRARY_MANAGE，不得放宽为可读权限。</p>
+     */
+    private MediaVideoItem requireWritableVideo(UUID operatorUserId, UUID videoItemId) {
+        MediaVideoItem item = videoItemRepository.findById(videoItemId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在"));
+        if (item.getOwnerUserId().equals(operatorUserId)) {
+            return item;
+        }
+        if (item.getLibrarySourceId() != null) {
+            try {
+                mediaLibraryAccessService.requireManage(operatorUserId, item.getLibrarySourceId());
+                return item;
+            } catch (BusinessException exception) {
+                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+            }
+        }
+        throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
     }
 
     /**

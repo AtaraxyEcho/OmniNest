@@ -10,11 +10,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
 import java.io.ByteArrayInputStream;
@@ -34,11 +36,13 @@ class MusicCoverServiceTest {
 
     private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final MusicCoverThumbnailService coverThumbnailService = mock(MusicCoverThumbnailService.class);
     private final MusicCoverService coverService = new MusicCoverService(new MediaProcessingLimitsProperties(),
             storageService,
             fileQueryService,
+            fileLifecycleGuard,
             fileMetadataQueryService,
             coverThumbnailService
     );
@@ -87,29 +91,31 @@ class MusicCoverServiceTest {
 
     @Test
     void prepareCoverStreamReturnsDescriptorForOwnedImage() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID)).thenReturn(Optional.of(imageDescriptor("image/png", 1024)));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 1024));
 
         var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
 
         assertThat(descriptor.fileId()).isEqualTo(FILE_ID);
         assertThat(descriptor.contentType()).isEqualTo("image/png");
         assertThat(descriptor.sizeBytes()).isEqualTo(1024);
-        verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
+        verify(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_ID);
     }
 
     @Test
-    void prepareCoverStreamFallsBackToJpegWhenMimeTypeMissing() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID)).thenReturn(Optional.of(imageDescriptor(null, 2048)));
+    void prepareCoverStreamRejectsMissingMimeType() {
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor(null, 2048));
 
-        var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
-
-        assertThat(descriptor.contentType()).isEqualTo("image/jpeg");
+        // 共享读取不再经过 validateOwnedImage，MIME 校验必须在本方法内完成
+        assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
     void prepareCoverStreamRejectsOversizedCover() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 33L * 1024 * 1024)));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 33L * 1024 * 1024));
 
         assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
                 .isInstanceOf(BusinessException.class);
@@ -117,8 +123,8 @@ class MusicCoverServiceTest {
 
     @Test
     void prepareCoverStreamAllowsScrapedCoverAboveUploadLimit() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 12L * 1024 * 1024)));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 12L * 1024 * 1024));
 
         var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
 
@@ -127,7 +133,8 @@ class MusicCoverServiceTest {
 
     @Test
     void prepareCoverStreamRejectsMissingNode() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID)).thenReturn(Optional.empty());
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
 
         assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
                 .isInstanceOf(BusinessException.class);
@@ -152,8 +159,8 @@ class MusicCoverServiceTest {
 
     @Test
     void prepareThumbnailStreamServesDerivedThumbnail() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 4096)));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 4096));
         when(fileMetadataQueryService.findActiveById(THUMBNAIL_ID))
                 .thenReturn(Optional.of(imageDescriptor(THUMBNAIL_ID, "image/jpeg", 900)));
         when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
@@ -165,16 +172,16 @@ class MusicCoverServiceTest {
         assertThat(stream.descriptor().fileId()).isEqualTo(THUMBNAIL_ID);
         assertThat(stream.descriptor().contentType()).isEqualTo("image/jpeg");
         assertThat(stream.sourceFileId()).isEqualTo(FILE_ID);
-        // 派生缩略图与原图同 owner：只校验原图归属，免二次 validateOwnedImage。
-        verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
-        verify(fileQueryService, never()).validateOwnedImage(OWNER_ID, THUMBNAIL_ID);
+        // 派生缩略图与原图同 owner：只校验原图可读，免二次校验。
+        verify(fileLifecycleGuard).requireReadable(OWNER_ID, FILE_ID);
+        verify(fileLifecycleGuard, never()).requireReadable(OWNER_ID, THUMBNAIL_ID);
         verify(fileMetadataQueryService).findActiveById(THUMBNAIL_ID);
     }
 
     @Test
     void prepareThumbnailStreamFallsBackForRetryableMiss() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 4096)));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 4096));
         when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
                 .thenReturn(new MusicCoverThumbnailService.ThumbnailResult(null, true));
 
@@ -186,8 +193,8 @@ class MusicCoverServiceTest {
 
     @Test
     void prepareThumbnailStreamMarksCoverWithoutThumbnailAsStableFallback() {
-        when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 12L * 1024 * 1024)));
+        when(fileLifecycleGuard.requireReadable(OWNER_ID, FILE_ID))
+                .thenReturn(imageDescriptor("image/png", 12L * 1024 * 1024));
         when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 12L * 1024 * 1024))
                 .thenReturn(new MusicCoverThumbnailService.ThumbnailResult(null, false));
 

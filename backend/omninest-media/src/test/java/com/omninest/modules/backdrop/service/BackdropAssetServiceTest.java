@@ -28,6 +28,8 @@ import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -403,6 +406,76 @@ class BackdropAssetServiceTest {
         assertThat(processing.getFileNodeId()).isNull();
         verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", processing.getId());
         verify(ingressStagingService, never()).markAvailable(any(), any());
+    }
+
+    @Test
+    void duplicateFailedAssetReuseReservesQuotaForExistingAssetId() throws IOException {
+        BackdropAsset failed = readyAsset();
+        failed.setStatus(BackdropAssetStatus.FAILED);
+        failed.setFailReason("原始对象缺失，对账标记");
+        when(backdropAssetRepository.findByOwnerUserIdAndSha256(any(), any()))
+                .thenReturn(Optional.of(failed));
+        when(ingressStagingService.stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
+                any(java.nio.file.Path.class))).thenReturn(UUID.randomUUID());
+        when(backdropScanTaskService.enqueueScanTask(any(), any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(UUID.randomUUID());
+
+        BackdropAssetDto dto = service.uploadAsset(OWNER_ID, pngUpload());
+
+        // 去重复活与全新上传同口径：必须按既有 assetId 预留配额，否则结算空转、字节不计账。
+        assertThat(dto.status()).isEqualTo("PROCESSING");
+        verify(storageQuotaService).reserve(eq(OWNER_ID), eq("BACKDROP_UPLOAD"), eq(failed.getId()),
+                anyLong(), any(Instant.class));
+        verify(storageQuotaService).extendReservation(eq("BACKDROP_UPLOAD"), eq(failed.getId()),
+                any(Instant.class));
+    }
+
+    @Test
+    void duplicateFailedAssetReuseEnforcesCountLimitBeforeRestaging() throws IOException {
+        BackdropAsset failed = readyAsset();
+        failed.setStatus(BackdropAssetStatus.FAILED);
+        when(backdropAssetRepository.findByOwnerUserIdAndSha256(any(), any()))
+                .thenReturn(Optional.of(failed));
+        when(backdropAssetRepository.countByOwnerUserIdAndStatusNot(any(), any())).thenReturn(30L);
+
+        assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, pngUpload()))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode().getCode()).isEqualTo(8003));
+
+        verify(storageQuotaService, never()).reserve(any(), anyString(), any(), anyLong(), any(Instant.class));
+        verify(ingressStagingService, never()).stage(any(), anyString(), any(), anyString(), anyString(),
+                any(java.nio.file.Path.class));
+        verify(derivedAssetStorageService, never()).deleteOwned(any(), any());
+        assertThat(failed.getStatus()).isEqualTo(BackdropAssetStatus.FAILED);
+    }
+
+    @Test
+    void completeStagedAssetCleansImageThumbnailTempFile() throws IOException {
+        BackdropAsset processing = readyAsset();
+        processing.setStatus(BackdropAssetStatus.PROCESSING);
+        processing.setFileNodeId(null);
+        processing.setThumbFileId(null);
+        UUID ingressItemId = UUID.randomUUID();
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("staged-test", ".png");
+        java.nio.file.Files.write(tempFile, pngBytes());
+        when(ingressStagingService.copyToTempFile(ingressItemId)).thenReturn(tempFile);
+        when(backdropAssetRepository.findById(processing.getId()))
+                .thenReturn(Optional.of(processing));
+        when(derivedAssetStorageService.store(
+                eq(OWNER_ID), anyString(), eq(processing.getId()), anyString(), anyString(), anyString(),
+                any(java.nio.file.Path.class)))
+                .thenReturn(UUID.randomUUID(), UUID.randomUUID());
+
+        service.completeStagedAsset(OWNER_ID, processing.getId(), ingressItemId, "original.png");
+
+        ArgumentCaptor<Path> pathCaptor = ArgumentCaptor.forClass(Path.class);
+        verify(derivedAssetStorageService, Mockito.times(2)).store(
+                eq(OWNER_ID), anyString(), eq(processing.getId()), anyString(), anyString(), anyString(),
+                pathCaptor.capture());
+        // 第二次存储为图片缩略图：backdrop-thumb-* 临时文件必须在存储后删除。
+        Path thumbnailPath = pathCaptor.getAllValues().get(1);
+        assertThat(thumbnailPath.getFileName().toString()).startsWith("backdrop-thumb-");
+        assertThat(Files.exists(thumbnailPath)).isFalse();
     }
 
     private UUID stubFreshInsert() {

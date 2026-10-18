@@ -343,19 +343,20 @@ public class MusicAdminService {
     public void importSingleAudioFile(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = fileMetadataQueryService.findActiveById(fileNodeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件不存在"));
-        // 查找同目录同名 .lrc 歌词文件
+        UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+        // 查找同目录同名 .lrc 歌词文件（以文件所有者目录为准，共享文件由上传者持有）
         String baseName = titleFromFileName(file.name());
         FileDescriptor sidecarLyrics = fileMetadataQueryService
-                .listOwnedActiveChildren(ownerUserId, file.parentId())
+                .listOwnedActiveChildren(catalogOwnerId, file.parentId())
                 .stream()
                 .filter(node -> isLrcFile(node) && titleFromFileName(node.name()).equals(baseName))
                 .findFirst()
                 .orElse(null);
-        importAudioFile(ownerUserId, file, sidecarLyrics);
+        importAudioFile(catalogOwnerId, file, sidecarLyrics);
         // 单曲导入改变音乐仪表盘统计与最近列表，需失效缓存。
-        readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
+        readThroughCache.invalidate("omninest:dashboard:music:" + catalogOwnerId);
         syncEventService.invalidate(
-                ownerUserId,
+                catalogOwnerId,
                 SyncScope.MUSIC,
                 "MUSIC_LIBRARY",
                 Map.of("source", "SINGLE_IMPORT")
@@ -363,13 +364,17 @@ public class MusicAdminService {
     }
 
     private void importAudioFile(UUID ownerUserId, FileDescriptor file, FileDescriptor sidecarLyrics) {
-        var existingTrack = trackRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id());
+        UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+        var existingTrack = trackRepository.findByFileNodeId(file.id());
         MusicTrack track = existingTrack.orElseGet(() -> {
             MusicTrack created = new MusicTrack();
-            created.setOwnerUserId(ownerUserId);
+            created.setOwnerUserId(catalogOwnerId);
             created.setFileNodeId(file.id());
             return created;
         });
+        if (!catalogOwnerId.equals(track.getOwnerUserId())) {
+            track.setOwnerUserId(catalogOwnerId);
+        }
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
         MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
@@ -380,8 +385,8 @@ public class MusicAdminService {
         String title = firstText(metadata.title(), firstText(fileNameGuess.title(), titleFromFileName(file.name())));
         String artistName = firstText(metadata.artistName(), firstText(fileNameGuess.artistName(), "Unknown Artist"));
         String albumTitle = firstText(metadata.albumTitle(), firstText(fileNameGuess.albumTitle(), "Unknown Album"));
-        MusicArtist artist = artist(ownerUserId, artistName);
-        MusicAlbum album = album(ownerUserId, albumTitle, artistName);
+        MusicArtist artist = artist(catalogOwnerId, artistName);
+        MusicAlbum album = album(catalogOwnerId, albumTitle, artistName);
         track.setTitle(title);
         track.setArtistName(artistName);
         track.setAlbumTitle(albumTitle);
@@ -407,10 +412,10 @@ public class MusicAdminService {
         if (metadata.discNumber() != null) {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
-        storeEmbeddedCover(ownerUserId, track, file, metadata.coverDataUrl());
+        storeEmbeddedCover(catalogOwnerId, track, file, metadata.coverDataUrl());
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
-        catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
+        catalogService.refreshStatistics(catalogOwnerId, previousArtistId, previousAlbumId, track);
     }
 
     /**
@@ -422,13 +427,20 @@ public class MusicAdminService {
             Map<String, MusicArtist> artistCache, Map<String, MusicAlbum> albumCache,
             Set<UUID> affectedArtistIds, Set<UUID> affectedAlbumIds
     ) {
-        var existingTrack = trackRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id());
+        // 曲目行归属固定为文件所有者：共享空间文件被成员扫描时也由上传者持有，
+        // 否则"谁先扫谁拥有"会让非所有者获得元数据写权限，且与唯一约束冲突。
+        UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+        var existingTrack = trackRepository.findByFileNodeId(file.id());
         MusicTrack track = existingTrack.orElseGet(() -> {
             MusicTrack created = new MusicTrack();
-            created.setOwnerUserId(ownerUserId);
+            created.setOwnerUserId(catalogOwnerId);
             created.setFileNodeId(file.id());
             return created;
         });
+        if (!catalogOwnerId.equals(track.getOwnerUserId())) {
+            // 开发期数据修正：把历史上按扫描者归属的行改回文件所有者。
+            track.setOwnerUserId(catalogOwnerId);
+        }
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
         MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
@@ -440,16 +452,16 @@ public class MusicAdminService {
         String albumTitle = firstText(metadata.albumTitle(), firstText(fileNameGuess.albumTitle(), "Unknown Album"));
 
         // 使用缓存的 artist/album 解析
-        String artistCacheKey = ownerUserId + "|" + artistName.toLowerCase(Locale.ROOT);
+        String artistCacheKey = catalogOwnerId + "|" + artistName.toLowerCase(Locale.ROOT);
         MusicArtist artist = artistCache.get(artistCacheKey);
         if (artist == null) {
-            artist = artist(ownerUserId, artistName);
+            artist = artist(catalogOwnerId, artistName);
             artistCache.put(artistCacheKey, artist);
         }
-        String albumCacheKey = ownerUserId + "|" + albumTitle.toLowerCase(Locale.ROOT);
+        String albumCacheKey = catalogOwnerId + "|" + albumTitle.toLowerCase(Locale.ROOT);
         MusicAlbum album = albumCache.get(albumCacheKey);
         if (album == null) {
-            album = album(ownerUserId, albumTitle, artistName);
+            album = album(catalogOwnerId, albumTitle, artistName);
             albumCache.put(albumCacheKey, album);
         }
 
@@ -478,15 +490,18 @@ public class MusicAdminService {
         if (metadata.discNumber() != null) {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
-        storeEmbeddedCover(ownerUserId, track, file, metadata.coverDataUrl());
+        storeEmbeddedCover(catalogOwnerId, track, file, metadata.coverDataUrl());
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
 
-        // 收集受影响的 ID（不逐个刷新，最后批量刷新）
-        if (previousArtistId != null) affectedArtistIds.add(previousArtistId);
-        affectedArtistIds.add(artist.getId());
-        if (previousAlbumId != null) affectedAlbumIds.add(previousAlbumId);
-        affectedAlbumIds.add(album.getId());
+        // 收集受影响的 ID（不逐个刷新，最后批量刷新）；共享文件属于文件所有者，
+        // 其统计由所有者下次扫描时刷新，不能记到扫描者账上。
+        if (catalogOwnerId.equals(ownerUserId)) {
+            if (previousArtistId != null) affectedArtistIds.add(previousArtistId);
+            affectedArtistIds.add(artist.getId());
+            if (previousAlbumId != null) affectedAlbumIds.add(previousAlbumId);
+            affectedAlbumIds.add(album.getId());
+        }
     }
 
     /**

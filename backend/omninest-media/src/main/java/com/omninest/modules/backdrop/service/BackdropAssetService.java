@@ -59,10 +59,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class BackdropAssetService {
 
     private static final String RESOURCE_TYPE = "BACKDROP";
-    private static final String ASSET_TYPE_ORIGINAL = "ORIGINAL";
+    // 包内共享：对账服务按派生路径定位原始节点回填引用。
+    static final String ASSET_TYPE_ORIGINAL = "ORIGINAL";
     private static final String ASSET_TYPE_PLAYBACK = "PLAYBACK";
     private static final String ASSET_TYPE_THUMBNAIL = "THUMBNAIL";
-    private static final String RESERVATION_SOURCE_TYPE = "BACKDROP_UPLOAD";
+    // 包内共享：对账服务自愈素材时需要按同一预留口径结算配额。
+    static final String RESERVATION_SOURCE_TYPE = "BACKDROP_UPLOAD";
     private static final String ORIGINAL_BASE_NAME = "original";
     private static final String THUMBNAIL_BASE_NAME = "thumbnail";
 
@@ -309,11 +311,23 @@ public class BackdropAssetService {
     }
 
     private BackdropAssetDto reuseExistingAsset(
-            UUID ownerUserId, BackdropAsset existing, Path stagingFile, DetectedMedia media) {
+            UUID ownerUserId, BackdropAsset existing, Path stagingFile, DetectedMedia media) throws IOException {
         if (existing.getStatus() == BackdropAssetStatus.READY
                 || existing.getStatus() == BackdropAssetStatus.PROCESSING) {
             return toDto(existing);
         }
+        long contentBytes = Files.size(stagingFile);
+        // sha256 去重复活 FAILED 行同样会转为可用素材，必须与全新上传同口径校验数量上限
+        // 并预留配额；此前直接复活既绕过 maxAssetsPerUser，又因缺少预留行使结算空转，
+        // 重复上传同一失败素材可无限绕过数量与配额约束。
+        long usableCount = backdropAssetRepository.countByOwnerUserIdAndStatusNot(
+                ownerUserId, BackdropAssetStatus.FAILED);
+        if (usableCount >= runtimeConfigService.maxAssetsPerUser()) {
+            throw new BusinessException(ErrorCode.BACKDROP_QUOTA_EXCEEDED, "背景素材数量已达上限");
+        }
+        storageQuotaService.reserve(
+                ownerUserId, RESERVATION_SOURCE_TYPE, existing.getId(),
+                contentBytes, Instant.now().plus(RESERVATION_TTL));
         UUID ingressItemId = null;
         try {
             deleteDerivedQuietly(ownerUserId, existing.getFileNodeId());
@@ -330,9 +344,12 @@ public class BackdropAssetService {
             backdropAssetRepository.save(existing);
             backdropScanTaskService.enqueueScanTask(
                     ownerUserId, existing.getId(), ingressItemId, originalFileName(media.extension()));
+            storageQuotaService.extendReservation(
+                    RESERVATION_SOURCE_TYPE, existing.getId(), Instant.now().plus(RESERVATION_TTL));
             log.info("背景素材重新受理安全扫描: userId={}, assetId={}", ownerUserId, existing.getId());
             return toDto(existing);
         } catch (RuntimeException ex) {
+            safeReleaseReservation(existing.getId());
             if (ingressItemId != null) {
                 ingressStagingService.releaseObject(ingressItemId);
             }
@@ -472,6 +489,14 @@ public class BackdropAssetService {
                     thumbnailMimeType(), thumbnailFile);
         } catch (IOException ex) {
             throw new UncheckedIOException("背景素材缩略图生成失败", ex);
+        } finally {
+            if (thumbnailFile != null) {
+                try {
+                    Files.deleteIfExists(thumbnailFile);
+                } catch (IOException ex) {
+                    log.debug("背景图片缩略图临时文件清理失败: {}", ex.getMessage());
+                }
+            }
         }
     }
 

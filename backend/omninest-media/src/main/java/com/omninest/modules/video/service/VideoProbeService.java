@@ -9,7 +9,9 @@ import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.video.domain.TrackKind;
 import com.omninest.modules.video.event.VideoProbeEvent;
+import com.omninest.modules.video.event.VideoSubtitleExtractEvent;
 import com.omninest.modules.video.repository.MediaSubtitleTrackRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.common.json.JsonSupport;
@@ -20,13 +22,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import tools.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -52,6 +60,8 @@ public class VideoProbeService {
     private static final Duration CLEANUP_TIMEOUT = Duration.ofSeconds(10);
     private static final String DOCKER_CONTAINER = "omninest-ffmpeg";
     private static final String DOCKER_PROBE_DIR = "/tmp/probe";
+    /** 同一时刻允许并行提取的字幕 ffmpeg 进程上限。 */
+    private static final int MAX_CONCURRENT_SUBTITLE_EXTRACTS = 2;
 
     private final FileQueryService fileQueryService;
     private final MediaVideoItemRepository videoItemRepository;
@@ -63,6 +73,17 @@ public class VideoProbeService {
     private final VideoProcessExecutor processExecutor;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final PlatformTransactionManager transactionManager;
+    private final ApplicationEventPublisher applicationEventPublisher;
+    private final MediaLibraryAccessService mediaLibraryAccessService;
+
+    /**
+     * 字幕提取槽位。
+     *
+     * <p>每路内嵌字幕都要在 ffmpeg 容器里做一遍 demux（上限 180 分钟），无上限时
+     * 并发探测多个视频会同时拉起多路容器进程打满宿主机。取不到槽位即跳过该轨道，
+     * 由下一次探测重试，而不是让既有提取一起阻塞。</p>
+     */
+    private final Semaphore subtitleExtractSlots = new Semaphore(MAX_CONCURRENT_SUBTITLE_EXTRACTS);
 
     /**
      * ffprobe 可用方式。
@@ -122,12 +143,40 @@ public class VideoProbeService {
         }
     }
 
+    /**
+     * 请求线程外的字幕提取入口：由 {@link #probeByVideoItemId} 发布事件触发，
+     * 复用 mediaAsyncExecutor 异步执行；无活动事务时 fallbackExecution 立即投递。
+     */
+    @Async("mediaAsyncExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onSubtitleExtractRequest(VideoSubtitleExtractEvent event) {
+        try {
+            extractEmbeddedSubtitles(event.item());
+        } catch (Exception e) {
+            log.warn("异步字幕提取失败: itemId={}", event.item().getId(), e);
+        }
+    }
+
     public void probeByVideoItemId(UUID ownerUserId, UUID videoItemId) {
-        MediaVideoItem item = videoItemRepository.findByIdAndOwnerUserId(videoItemId, ownerUserId)
+        MediaVideoItem item = videoItemRepository.findById(videoItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "视频条目不存在: " + videoItemId));
+        // 媒体库条目的 owner 是扫描执行者：其他管理员探测同一库来源时不能 404，
+        // 但跨所有者操作只放行 MEDIA_LIBRARY_MANAGE，不退回可读权限。
+        if (!item.getOwnerUserId().equals(ownerUserId)) {
+            if (item.getLibrarySourceId() == null) {
+                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "视频条目不存在: " + videoItemId);
+            }
+            try {
+                mediaLibraryAccessService.requireManage(ownerUserId, item.getLibrarySourceId());
+            } catch (BusinessException exception) {
+                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "视频条目不存在: " + videoItemId);
+            }
+        }
         probe(item);
-        // 探测事务提交后，提取内嵌字幕
-        extractEmbeddedSubtitles(item);
+        // 每路字幕提取都要在容器内跑一遍 ffmpeg demux（上限 180 分钟且无 Range 支持），
+        // 不得占用请求线程；轻量 ffprobe 保持同步，提取经既有 @Async + AFTER_COMMIT
+        // 机制发布事件在提交后异步执行。
+        applicationEventPublisher.publishEvent(new VideoSubtitleExtractEvent(item));
     }
 
     public void probe(MediaVideoItem item) {
@@ -234,11 +283,18 @@ public class VideoProbeService {
             if (track.getStreamIndex() == null || track.getFileNodeId() != null) {
                 continue;
             }
+            if (!subtitleExtractSlots.tryAcquire()) {
+                log.warn("字幕提取并发已达上限，跳过本轨道待下次探测重试: videoItemId={}, streamIndex={}, limit={}",
+                        videoItemId, track.getStreamIndex(), MAX_CONCURRENT_SUBTITLE_EXTRACTS);
+                continue;
+            }
             try {
                 extractSingleSubtitle(item, track);
             } catch (Exception e) {
                 log.warn("字幕提取失败: videoItemId={}, streamIndex={}, message={}",
                         videoItemId, track.getStreamIndex(), e.getMessage());
+            } finally {
+                subtitleExtractSlots.release();
             }
         }
     }
@@ -458,7 +514,6 @@ public class VideoProbeService {
                 }
             }
         }
-
         JsonNode format = probeResult.path("format");
         if (format.isObject()) {
             String formatName = format.path("format_name").asString(null);
@@ -476,8 +531,68 @@ public class VideoProbeService {
             }
         }
 
-        if (!embeddedSubtitles.isEmpty()) {
-            subtitleTrackRepository.saveAll(embeddedSubtitles);
+        syncEmbeddedSubtitleTracks(item, embeddedSubtitles);
+    }
+
+    /**
+     * 将探测得到的内嵌字幕轨道按 streamIndex 幂等合并。
+     *
+     * <p>合并基准为该条目下所有携带 streamIndex 的字幕行：既包含未提取的内嵌行
+     * （trackKind 为 SUBTITLE 且 fileNodeId 为空），也包含提取后被改写为 EXTERNAL
+     * 的行；若只按内嵌判据取基准，已提取行会被当作消失流删除并重新插入未提取行，
+     * 导致每次重探测都全量重跑提取。匹配行原位更新并保留 id、fileNodeId 与
+     * trackKind，消失流 bulk 删除，仅真正新增的流插入新行。</p>
+     */
+    private void syncEmbeddedSubtitleTracks(MediaVideoItem item, List<MediaSubtitleTrack> probedTracks) {
+        List<MediaSubtitleTrack> existingTracks = subtitleTrackRepository
+                .findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(item.getOwnerUserId(), item.getId())
+                .stream()
+                .filter(track -> track.getStreamIndex() != null)
+                .filter(track -> TrackKind.SUBTITLE.getValue().equals(track.getTrackKind())
+                        || (TrackKind.EXTERNAL.getValue().equals(track.getTrackKind())
+                                && track.getFileNodeId() != null))
+                .toList();
+        Map<Integer, MediaSubtitleTrack> primaryByStreamIndex = new LinkedHashMap<>();
+        for (MediaSubtitleTrack track : existingTracks) {
+            MediaSubtitleTrack previous = primaryByStreamIndex.get(track.getStreamIndex());
+            if (previous == null) {
+                primaryByStreamIndex.put(track.getStreamIndex(), track);
+            } else if (previous.getFileNodeId() == null && track.getFileNodeId() != null) {
+                // 同一流号遗留多行时优先保留已提取行作为合并基准。
+                primaryByStreamIndex.put(track.getStreamIndex(), track);
+            }
+        }
+
+        Set<UUID> keptIds = new HashSet<>();
+        List<MediaSubtitleTrack> toSave = new ArrayList<>();
+        for (MediaSubtitleTrack probed : probedTracks) {
+            MediaSubtitleTrack current = primaryByStreamIndex.get(probed.getStreamIndex());
+            if (current == null) {
+                toSave.add(probed);
+                continue;
+            }
+            // 复用原行标识与提取结果：已提取行保留 fileNodeId 与 trackKind，
+            // 避免重复提取；未提取行仅刷新探测得到的描述字段。
+            probed.setId(current.getId());
+            probed.setCreatedAt(current.getCreatedAt());
+            if (current.getFileNodeId() != null) {
+                probed.setFileNodeId(current.getFileNodeId());
+                probed.setTrackKind(current.getTrackKind());
+                probed.setLabel(current.getLabel());
+            }
+            keptIds.add(current.getId());
+            toSave.add(probed);
+        }
+        List<UUID> removedIds = existingTracks.stream()
+                .filter(track -> !keptIds.contains(track.getId()))
+                .map(MediaSubtitleTrack::getId)
+                .toList();
+        // 消失流与同流号遗留的重复行一并 bulk 删除。
+        if (!removedIds.isEmpty()) {
+            subtitleTrackRepository.deleteAllByIdIn(item.getOwnerUserId(), removedIds);
+        }
+        if (!toSave.isEmpty()) {
+            subtitleTrackRepository.saveAll(toSave);
         }
     }
 

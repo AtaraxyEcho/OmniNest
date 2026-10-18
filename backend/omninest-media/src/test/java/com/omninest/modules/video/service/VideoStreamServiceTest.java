@@ -27,9 +27,10 @@ class VideoStreamServiceTest {
     private final MediaVideoItemRepository videoItemRepository =
             mock(MediaVideoItemRepository.class);
     private final VideoSourceInputResolver sourceInputResolver = mock(VideoSourceInputResolver.class);
+    private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
 
     private final VideoStreamService service = new VideoStreamService(
-            videoItemRepository, sourceInputResolver
+            videoItemRepository, sourceInputResolver, mediaContentAccessService
     );
 
     @Test
@@ -78,6 +79,10 @@ class VideoStreamServiceTest {
     @Test
     void streamByAudioMode_usesCachedAudioWhenAvailable() {
         UUID audioFileNodeId = UUID.randomUUID();
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(OWNER_ID);
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, VIDEO_ITEM_ID)).thenReturn(item);
         MediaVideoItem cachedAudio = new MediaVideoItem();
         cachedAudio.setFileNodeId(audioFileNodeId);
         when(videoItemRepository.findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
@@ -102,6 +107,45 @@ class VideoStreamServiceTest {
                 VIDEO_ITEM_ID,
                 audioFileNodeId,
                 12L,
+                output
+        );
+    }
+
+    @Test
+    void streamByAudioModeResolvesCachedAudioUnderCatalogOwnerForSharedLibrary() {
+        UUID requester = UUID.randomUUID();
+        UUID catalogOwner = UUID.randomUUID();
+        UUID audioFileNodeId = UUID.randomUUID();
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(VIDEO_ITEM_ID);
+        item.setOwnerUserId(catalogOwner);
+        item.setLibrarySourceId(UUID.randomUUID());
+        when(mediaContentAccessService.requireReadableVideo(requester, VIDEO_ITEM_ID)).thenReturn(item);
+        MediaVideoItem cachedAudio = new MediaVideoItem();
+        cachedAudio.setFileNodeId(audioFileNodeId);
+        when(videoItemRepository.findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
+                catalogOwner,
+                VIDEO_ITEM_ID,
+                "AUDIO_ONLY"
+        )).thenReturn(Optional.of(cachedAudio));
+        VideoStreamService spyService = spy(service);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        doNothing().when(spyService).streamWithCachedAudio(
+                catalogOwner,
+                VIDEO_ITEM_ID,
+                audioFileNodeId,
+                0L,
+                output
+        );
+
+        spyService.streamByAudioMode(requester, VIDEO_ITEM_ID, 0L, "cached", output);
+
+        // 播放计划按源条目所有者宣告缓存，流端点必须用同一把钥匙查
+        verify(spyService).streamWithCachedAudio(
+                catalogOwner,
+                VIDEO_ITEM_ID,
+                audioFileNodeId,
+                0L,
                 output
         );
     }

@@ -4,6 +4,7 @@ import com.omninest.modules.backdrop.domain.BackdropAsset;
 import com.omninest.modules.backdrop.domain.BackdropAssetStatus;
 import com.omninest.modules.backdrop.repository.BackdropAssetRepository;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -19,7 +20,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>仅作为灾难恢复与进程异常后的兜底机制,不承担正常上传链路职责。三类检查:
  * 孤儿派生节点(MinIO/节点存在但素材行不存在)立即清理;素材行存在但原始对象缺失的标记 FAILED;
- * 卡死超过阈值且无进行中安全扫描任务的 PROCESSING 依据对象存在性自愈或标记 FAILED。
+ * 卡死超过阈值且无进行中安全扫描任务的 PROCESSING 依据 ORIGINAL 节点存在性自愈或标记 FAILED。
+ * 自愈必须能回填原始节点引用并结算预留配额,无法恢复时标记 FAILED 让用户重新上传,
+ * 不得留下 READY 但缺失内容引用的半愈数据。
  * 存在进行中扫描任务的素材一律跳过,避免把正在异步扫描的素材误判为卡死。</p>
  *
  * @author OmniNest
@@ -35,6 +38,7 @@ public class BackdropReconciliationService {
     private final BackdropAssetRepository backdropAssetRepository;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final BackdropScanTaskService backdropScanTaskService;
+    private final StorageQuotaService storageQuotaService;
 
     /**
      * 执行一轮对账。
@@ -72,14 +76,31 @@ public class BackdropReconciliationService {
                 return;
             }
             if (hasOriginalObject) {
+                UUID originalNodeId = findOriginalNodeId(asset.getId(), nodeRefs);
+                if (originalNodeId == null) {
+                    // 原始节点缺失（即使缩略图等派生对象存在）时不可恢复为可用素材：
+                    // 标记 FAILED 让用户按去重复活路径重新上传，而不是留下半愈数据。
+                    asset.setStatus(BackdropAssetStatus.FAILED);
+                    asset.setFailReason("原始对象缺失，对账标记");
+                    log.warn("背景素材卡死标记失败: assetId={} 原始节点引用无法回填", asset.getId());
+                    backdropAssetRepository.save(asset);
+                    return;
+                }
+                // 自愈必须留下可用数据：从既有 ORIGINAL 派生节点回填 fileNodeId，
+                // 否则素材会以 READY 但空引用的状态发布，内容 URL 无法生成；
+                // 回填后按上传口径结算预留配额，结算失败仅记日志，预留行由过期回收兜底。
+                asset.setFileNodeId(originalNodeId);
                 asset.setStatus(BackdropAssetStatus.READY);
-                log.info("背景素材卡死自愈: assetId={} 对象存在,恢复 READY", asset.getId());
+                asset.setFailReason(null);
+                backdropAssetRepository.save(asset);
+                settleReservationQuietly(asset);
+                log.info("背景素材卡死自愈: assetId={} 回填原始节点并恢复 READY", asset.getId());
             } else {
                 asset.setStatus(BackdropAssetStatus.FAILED);
                 asset.setFailReason("原始对象缺失，对账标记");
                 log.warn("背景素材卡死标记失败: assetId={} 对象不存在", asset.getId());
+                backdropAssetRepository.save(asset);
             }
-            backdropAssetRepository.save(asset);
             return;
         }
         if (asset.getStatus() == BackdropAssetStatus.READY && !hasOriginalObject) {
@@ -87,6 +108,31 @@ public class BackdropReconciliationService {
             asset.setFailReason("原始对象缺失，对账标记");
             log.warn("背景素材对象缺失标记失败: assetId={}", asset.getId());
             backdropAssetRepository.save(asset);
+        }
+    }
+
+    /**
+     * 按派生路径定位素材的 ORIGINAL 节点引用，用于卡死自愈回填。
+     *
+     * @param assetId 素材 ID
+     * @param nodeRefs 该用户的派生节点引用列表
+     * @return 原始节点 ID；不存在时返回 null
+     */
+    private UUID findOriginalNodeId(UUID assetId, List<DerivedAssetStorageService.DerivedNodeRef> nodeRefs) {
+        String originalMarker = "/" + assetId + "/" + BackdropAssetService.ASSET_TYPE_ORIGINAL + "/";
+        return nodeRefs.stream()
+                .filter(nodeRef -> nodeRef.normalizedPath().contains(originalMarker))
+                .map(DerivedAssetStorageService.DerivedNodeRef::fileNodeId)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void settleReservationQuietly(BackdropAsset asset) {
+        try {
+            storageQuotaService.settleReservation(
+                    BackdropAssetService.RESERVATION_SOURCE_TYPE, asset.getId(), asset.getFileSize());
+        } catch (RuntimeException ex) {
+            log.warn("背景素材自愈结算配额预留失败,预留行由过期回收兜底: assetId={}", asset.getId(), ex);
         }
     }
 

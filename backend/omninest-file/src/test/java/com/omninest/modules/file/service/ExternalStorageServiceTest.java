@@ -143,6 +143,27 @@ class ExternalStorageServiceTest {
         verify(taskRecordService).markCancelled(systemTaskId);
     }
 
+    @Test
+    void cancelImportTask_stopsRcloneWhileTransferring() {
+        UUID importTaskId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        UUID systemTaskId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        StorageImportTask task = new StorageImportTask();
+        task.setId(importTaskId);
+        task.setTaskId(systemTaskId);
+        task.setOwnerUserId(OWNER_ID);
+        task.setStatus("TRANSFERRING");
+        task.setRcloneJobId(77);
+        when(importTaskRepository.findByIdAndOwnerUserId(importTaskId, OWNER_ID))
+                .thenReturn(Optional.of(task));
+        when(importTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.cancelImportTask(OWNER_ID, importTaskId);
+
+        // 执行器只会写 TRANSFERRING；旧守卫只认 RUNNING，等于永远不主动停 job
+        verify(rcloneGateway).stopJob(77);
+        assertThat(task.getStatus()).isEqualTo("CANCELLED");
+    }
+
     /**
      * 构造测试用外部存储账户。
      */

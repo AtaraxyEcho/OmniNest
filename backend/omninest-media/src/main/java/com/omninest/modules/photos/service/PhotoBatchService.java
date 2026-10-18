@@ -185,26 +185,32 @@ public class PhotoBatchService {
 
         task.setStatus("RUNNING");
         task.setErrorMessage(null);
-        batchTaskRepository.save(task);
+        // executeBatchTask 无外层事务，task 为脱管实体：merge 返回的新受管实例
+        // 才携带推进后的 version；不接住返回值则后续每次保存仍带旧版本，
+        // 必然触发乐观锁异常并使任务行停留在 RUNNING（同 D-009）。
+        task = batchTaskRepository.save(task);
 
         try {
             List<UUID> photoIds = resolvePhotoIds(task);
             if ("DOWNLOAD".equals(task.getTaskType())) {
-                executeDownloadTask(ownerUserId, photoIds, task);
+                task = executeDownloadTask(ownerUserId, photoIds, task);
             } else {
                 executeMutationTask(ownerUserId, photoIds, task);
             }
             task.setStatus("COMPLETED");
             task.setProcessedItems(task.getTotalItems());
-            batchTaskRepository.save(task);
+            task = batchTaskRepository.save(task);
             taskRecordService.markCompleted(taskId, Map.of(
                     "processedItems", task.getProcessedItems(),
                     "result", task.getResult() == null ? "" : task.getResult()));
         } catch (Exception ex) {
             log.error("批量任务执行失败: taskId={}", taskId, ex);
-            task.setStatus("FAILED");
-            task.setErrorMessage(ex.getMessage());
-            batchTaskRepository.save(task);
+            // 失败路径按 id 重新加载最新版本实体后再写终态，避免此前保存抛出的
+            // 乐观锁异常在收尾时二次抛出、使任务行永久停留在 RUNNING。
+            PhotoBatchTask failedTask = batchTaskRepository.findById(taskId).orElse(task);
+            failedTask.setStatus("FAILED");
+            failedTask.setErrorMessage(ex.getMessage());
+            batchTaskRepository.save(failedTask);
             taskRecordService.markFailed(taskId, ex.getMessage(), ThrowableDescriber.describe(ex));
         }
     }
@@ -318,8 +324,10 @@ public class PhotoBatchService {
 
     /**
      * 批量下载：将选中照片打包为 ZIP 并存储到 MinIO，结果写入 task.result。
+     *
+     * @return 打包进度保存后携带最新版本号的批任务实体
      */
-    private void executeDownloadTask(UUID ownerUserId, List<UUID> photoIds, PhotoBatchTask task) {
+    private PhotoBatchTask executeDownloadTask(UUID ownerUserId, List<UUID> photoIds, PhotoBatchTask task) {
         if (photoIds.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "照片列表不能为空");
         }
@@ -336,7 +344,7 @@ public class PhotoBatchService {
         try {
             zipFile = Files.createTempFile("omninest-photo-batch-", ".zip");
             requireWorkspaceCapacity(zipFile, archivePlan.sourceBytes());
-            writeArchive(zipFile, archivePlan.sources(), task);
+            task = writeArchive(zipFile, archivePlan.sources(), task);
             forceFile(zipFile);
             taskRecordService.updateProgress(task.getId(), 90);
             String zipFileName = "photos_" + task.getId() + ".zip";
@@ -350,6 +358,7 @@ public class PhotoBatchService {
                     zipFile
             );
             task.setResult(zipFileId.toString());
+            return task;
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "ZIP 打包失败: " + exception.getMessage());
         } finally {
@@ -402,7 +411,7 @@ public class PhotoBatchService {
         return new PhotoArchivePlan(List.copyOf(sources), totalBytes);
     }
 
-    private void writeArchive(
+    private PhotoBatchTask writeArchive(
             Path zipFile,
             List<PhotoArchiveSource> sources,
             PhotoBatchTask task
@@ -420,9 +429,10 @@ public class PhotoBatchService {
                 } finally {
                     zipOutputStream.closeEntry();
                 }
-                updateDownloadProgress(task, index + 1, sources.size());
+                task = updateDownloadProgress(task, index + 1, sources.size());
             }
         }
+        return task;
     }
 
     private void copySource(
@@ -456,15 +466,18 @@ public class PhotoBatchService {
         }
     }
 
-    private void updateDownloadProgress(PhotoBatchTask task, int processedItems, int totalItems) {
+    private PhotoBatchTask updateDownloadProgress(PhotoBatchTask task, int processedItems, int totalItems) {
         int previousProgress = 10 + (int) Math.floor(70.0 * task.getProcessedItems() / totalItems);
         int progress = 10 + (int) Math.floor(70.0 * processedItems / totalItems);
         task.setProcessedItems(processedItems);
         if (processedItems < totalItems && previousProgress / 5 == progress / 5) {
-            return;
+            return task;
         }
-        batchTaskRepository.save(task);
-        taskRecordService.updateProgress(task.getId(), progress);
+        // 脱管实体 merge 返回携带新版本号的实例，必须回传给调用方，
+        // 否则收尾保存仍携带旧版本触发乐观锁异常（同 D-009）。
+        PhotoBatchTask saved = batchTaskRepository.save(task);
+        taskRecordService.updateProgress(saved.getId(), progress);
+        return saved;
     }
 
     private void requireWorkspaceCapacity(Path zipFile, long sourceBytes) throws IOException {

@@ -8,6 +8,7 @@ import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -76,6 +77,7 @@ public class AuthService {
     private final TwoFactorService twoFactorService;
     private final TwoFactorPolicyService twoFactorPolicyService;
     private final RateLimitService rateLimitService;
+    private final StorageQuotaService storageQuotaService;
 
     @Transactional(rollbackFor = Exception.class)
     public AuthTokenResponse register(
@@ -326,6 +328,9 @@ public class AuthService {
         profile.setPasswordHash(passwordEncoder.encode(request.password()));
         profile.setDisplayName(normalizeDisplayName(request.displayName(), username));
         profile.setEmail(normalizeEmail(request.email()));
+        // 注册默认配额与管理员创建用户同源读取配置中心，避免实体字段默认值绕过
+        // storage.quota.default（0 表示无限制）。
+        profile.setQuotaBytes(storageQuotaService.getDefaultQuotaBytes());
         profile.getRoles().add(defaultUserRole());
         return authUserRepository.save(profile);
     }

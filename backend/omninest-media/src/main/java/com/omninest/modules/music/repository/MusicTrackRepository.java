@@ -67,6 +67,17 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
 
     Optional<MusicTrack> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
 
+    /**
+     * 按文件节点查找曲目行。
+     *
+     * <p>表上已有 {@code uniq_music_tracks_file} 唯一约束：一行对应一个文件，
+     * 共享空间曲目也由文件所有者持有，扫描去重必须按文件而不是按扫描者。</p>
+     *
+     * @param fileNodeId 文件节点 ID
+     * @return 曲目行
+     */
+    Optional<MusicTrack> findByFileNodeId(UUID fileNodeId);
+
     List<MusicTrack> findByOwnerUserIdAndFileNodeIdIn(UUID ownerUserId, Collection<UUID> fileNodeIds);
 
     /**

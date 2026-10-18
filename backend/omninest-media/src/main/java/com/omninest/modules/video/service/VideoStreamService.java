@@ -40,6 +40,7 @@ public class VideoStreamService {
 
     private final MediaVideoItemRepository videoItemRepository;
     private final VideoSourceInputResolver sourceInputResolver;
+    private final MediaContentAccessService mediaContentAccessService;
 
     /**
      * 同一时刻允许的实时 ffmpeg 流数。
@@ -67,10 +68,12 @@ public class VideoStreamService {
 
     public VideoStreamService(
             MediaVideoItemRepository videoItemRepository,
-            VideoSourceInputResolver sourceInputResolver
+            VideoSourceInputResolver sourceInputResolver,
+            MediaContentAccessService mediaContentAccessService
     ) {
         this.videoItemRepository = videoItemRepository;
         this.sourceInputResolver = sourceInputResolver;
+        this.mediaContentAccessService = mediaContentAccessService;
     }
 
     /**
@@ -105,16 +108,18 @@ public class VideoStreamService {
             String audioMode,
             OutputStream output
     ) {
+        MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
+        UUID catalogOwnerId = sourceItem.getOwnerUserId();
         var audioCached = videoItemRepository
                 .findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
-                        ownerUserId,
+                        catalogOwnerId,
                         videoItemId,
                         "AUDIO_ONLY"
                 );
         if ("cached".equals(audioMode) && audioCached.isPresent()) {
             UUID audioFileNodeId = audioCached.get().getFileNodeId();
             log.info("使用缓存音频 mux: videoItemId={}, audioFileNodeId={}", videoItemId, audioFileNodeId);
-            streamWithCachedAudio(ownerUserId, videoItemId, audioFileNodeId, startSeconds, output);
+            streamWithCachedAudio(catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, output);
             return;
         }
         if ("cached".equals(audioMode)) {
@@ -122,7 +127,7 @@ public class VideoStreamService {
         } else {
             log.info("使用原始音频实时转码: videoItemId={}", videoItemId);
         }
-        streamAudioTranscoded(ownerUserId, videoItemId, startSeconds, output);
+        streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, output);
     }
 
     /**
@@ -196,7 +201,7 @@ public class VideoStreamService {
      * 将原始视频流 + 缓存的 AAC 音频流 mux 为 fMP4 推送给浏览器。
      * 视频流 copy（零编码开销），音频从缓存文件读取。
      *
-     * @param ownerUserId      所属用户
+     * @param ownerUserId      源条目的目录所有者（非请求者）
      * @param sourceVideoItemId 原始视频条目 ID（用于获取视频流）
      * @param audioFileNodeId  缓存 AAC 音频的 FileNode ID
      * @param startSeconds     起始秒数（用于 seek）

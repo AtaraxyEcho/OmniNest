@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -73,6 +74,8 @@ public class FileQueryService {
     private final MediaProbeService mediaProbeService;
     private final MediaProbeSourceStager mediaProbeSourceStager;
     private final MediaCoverDirectory mediaCoverDirectory;
+    private final SharedSpaceService sharedSpaceService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId) {
@@ -282,36 +285,62 @@ public class FileQueryService {
         return nodes.map(node -> toDto(node, uploaderNames, covers.get(node.getId())));
     }
 
+    /**
+     * 恢复回收站节点。
+     *
+     * <p>个人空间仍只允许所有者；共享空间允许上传者或实际删除者恢复。子树、父目录、
+     * 同名检查与事件统一使用节点所有者（共享空间为上传者），恢复成功后按删除时的口径
+     * 补记共享空间用量。</p>
+     *
+     * @param operatorId 操作用户 ID
+     * @param fileId 文件节点 ID
+     * @return 恢复后的文件节点
+     */
     @Transactional(rollbackFor = Exception.class)
-    public FileNodeDto restoreNode(UUID ownerUserId, UUID fileId) {
-        FileNode node = fileNodeRepository.findByIdAndOwnerUserId(fileId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+    public FileNodeDto restoreNode(UUID operatorId, UUID fileId) {
+        FileNode node = requireTrashOperatorNode(operatorId, fileId);
         requireManagedNode(node);
         if (!node.isDeleted()) {
             return toDto(node);
         }
-        fileLifecycleGuard.requireRestorable(ownerUserId, fileId);
-        ensureParentAvailable(ownerUserId, node);
-        if (sameNameExists(ownerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
+        // 子树、父目录、同名检查与事件都按节点所有者（共享空间为上传者）执行；
+        // 共享空间删除者可能不是上传者，不能把操作者当成所有者使用。
+        UUID nodeOwnerUserId = node.getOwnerUserId();
+        fileLifecycleGuard.requireRestorable(nodeOwnerUserId, fileId);
+        ensureParentAvailable(nodeOwnerUserId, node);
+        if (sameNameExists(nodeOwnerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
+        }
+        SharedSpaceService.SubtreeStats sharedStats = null;
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            sharedStats = sharedSpaceService.calculateRestoreSubtreeStats(node);
+            sharedSpaceQuotaService.checkQuota(sharedStats.totalBytes());
         }
 
         markRestored(node);
-        List<FileNode> descendants = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                ownerUserId,
-                node.getSpaceType(),
-                subtreePrefix(node)
-        );
+        List<FileNode> descendants = fileNodeRepository
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                        nodeOwnerUserId,
+                        node.getSpaceType(),
+                        subtreePrefix(node)
+                );
         descendants.forEach(this::markRestored);
         fileNodeRepository.saveAll(descendants);
         FileNode saved = fileNodeRepository.save(node);
+        if (sharedStats != null) {
+            sharedSpaceQuotaService.increaseUsage(sharedStats.totalBytes(), sharedStats.fileCount());
+        }
 
         // 发布恢复事件，触发 Lucene 重新索引
         List<UUID> restoredIds = new ArrayList<>();
         restoredIds.add(saved.getId());
         descendants.stream().map(FileNode::getId).forEach(restoredIds::add);
-        eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerUserId, List.copyOf(restoredIds), Instant.now()));
-        recordFileEvent(ownerUserId, saved.getId(), SyncAction.RESTORED);
+        eventPublisher.publishEvent(new FileNodesRestoredEvent(
+                nodeOwnerUserId,
+                List.copyOf(restoredIds),
+                Instant.now()
+        ));
+        recordFileEvent(nodeOwnerUserId, saved.getId(), SyncAction.RESTORED);
 
         return toDto(saved);
     }
@@ -361,30 +390,81 @@ public class FileQueryService {
     }
 
     /**
-     * 批量恢复已删除的文件节点及其后代
+     * 解析当前用户可操作的回收站节点并复核共享空间权限。
+     *
+     * <p>个人空间只接受节点所有者；共享空间节点的 {@code owner_user_id} 是上传者，而回收站
+     * 按 {@code deleted_by} 展示，因此上传者和实际删除者都必须能定位到同一节点。共享空间
+     * 权限与删除共用同一判定（上传者 CAN_DELETE_OWN，其他成员 CAN_DELETE_ANY），
+     * 非删除者、非上传者一律按文件不存在处理。</p>
+     *
+     * @param operatorId 操作用户 ID
+     * @param fileId 文件节点 ID
+     * @return 目标节点
+     */
+    public FileNode requireTrashOperatorNode(UUID operatorId, UUID fileId) {
+        FileNode node = fileNodeRepository.findByIdAndOwnerUserId(fileId, operatorId)
+                .or(() -> fileNodeRepository.findById(fileId)
+                        .filter(candidate -> candidate.getSpaceType() == SpaceType.SHARED
+                                && candidate.isDeleted()
+                                && Objects.equals(candidate.getDeletedBy(), operatorId)))
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        requireSharedLifecycleOperator(operatorId, node);
+        return node;
+    }
+
+    /**
+     * 按共享空间删除规则复核生命周期权限；个人空间节点不设共享权限。
+     *
+     * @param operatorId 操作用户 ID
+     * @param node 文件节点
+     */
+    public void requireSharedLifecycleOperator(UUID operatorId, FileNode node) {
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            sharedSpaceService.validateSharedLifecycleOperator(operatorId, node);
+        }
+    }
+
+    /**
+     * 批量恢复已删除的文件节点及其后代。
+     *
+     * <p>逐项沿用单节点恢复的解析、权限与共享空间补记账规则；事件按节点所有者分组发布，
+     * 避免把共享空间文件的重建索引通知发给删除者而不是上传者。</p>
+     *
+     * @param operatorId 操作用户 ID
+     * @param fileIds 文件节点 ID 列表
+     * @return 逐项恢复结果
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<BatchItemResult> batchRestoreNodes(UUID ownerUserId, List<UUID> fileIds) {
+    public List<BatchItemResult> batchRestoreNodes(UUID operatorId, List<UUID> fileIds) {
         List<BatchItemResult> results = new ArrayList<>();
         Instant restoredAt = Instant.now();
-        List<UUID> restoredIds = new ArrayList<>();
+        Map<UUID, List<UUID>> restoredIdsByOwner = new LinkedHashMap<>();
         List<FileNode> allToSave = new ArrayList<>();
+        List<SharedSpaceService.SubtreeStats> sharedCharges = new ArrayList<>();
         for (UUID fileId : fileIds) {
-            FileNode node = fileNodeRepository.findByIdAndOwnerUserId(fileId, ownerUserId).orElse(null);
-            if (node == null) {
-                results.add(BatchItemResult.failed(fileId, "FILE_NOT_FOUND", "文件不存在"));
+            FileNode node;
+            try {
+                node = requireTrashOperatorNode(operatorId, fileId);
+            } catch (BusinessException exception) {
+                results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
                 continue;
             }
             if (!node.isDeleted()) {
                 results.add(BatchItemResult.skipped(fileId, "文件未删除"));
                 continue;
             }
+            UUID nodeOwnerUserId = node.getOwnerUserId();
+            SharedSpaceService.SubtreeStats sharedStats = null;
             try {
                 requireManagedNode(node);
-                fileLifecycleGuard.requireRestorable(ownerUserId, node.getId());
-                ensureParentAvailable(ownerUserId, node);
-                if (sameNameExists(ownerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
+                fileLifecycleGuard.requireRestorable(nodeOwnerUserId, node.getId());
+                ensureParentAvailable(nodeOwnerUserId, node);
+                if (sameNameExists(nodeOwnerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
                     throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件: " + node.getName());
+                }
+                if (node.getSpaceType() == SpaceType.SHARED) {
+                    sharedStats = sharedSpaceService.calculateRestoreSubtreeStats(node);
+                    sharedSpaceQuotaService.checkQuota(sharedStats.totalBytes());
                 }
             } catch (BusinessException exception) {
                 results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
@@ -392,19 +472,28 @@ public class FileQueryService {
             }
             markRestored(node);
             allToSave.add(node);
-            restoredIds.add(node.getId());
+            restoredIdsByOwner.computeIfAbsent(nodeOwnerUserId, key -> new ArrayList<>()).add(node.getId());
             List<FileNode> descendants = fileNodeRepository
                     .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                            ownerUserId, node.getSpaceType(), subtreePrefix(node));
+                            nodeOwnerUserId, node.getSpaceType(), subtreePrefix(node));
             descendants.forEach(this::markRestored);
             allToSave.addAll(descendants);
-            descendants.stream().map(FileNode::getId).forEach(restoredIds::add);
+            List<UUID> ownerRestoredIds = restoredIdsByOwner.get(nodeOwnerUserId);
+            descendants.stream().map(FileNode::getId).forEach(ownerRestoredIds::add);
+            if (sharedStats != null) {
+                sharedCharges.add(sharedStats);
+            }
             results.add(BatchItemResult.success(fileId));
         }
         if (!allToSave.isEmpty()) {
             fileNodeRepository.saveAll(allToSave);
-            eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerUserId, List.copyOf(restoredIds), restoredAt));
-            recordLibraryInvalidation(ownerUserId, SyncAction.RESTORED, restoredIds.size());
+            // 共享账本在恢复写入成功后再补记，异常时整个批次回滚，避免只恢复节点不记账。
+            sharedCharges.forEach(stats ->
+                    sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount()));
+            restoredIdsByOwner.forEach((ownerId, ids) -> {
+                eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt));
+                recordLibraryInvalidation(ownerId, SyncAction.RESTORED, ids.size());
+            });
         }
         return results;
     }

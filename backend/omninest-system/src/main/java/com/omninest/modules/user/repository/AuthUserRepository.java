@@ -175,6 +175,9 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     /**
      * 在剩余配额足够时原子增加预留字节数。
      *
+     * <p>配额为 0 或负数表示无限制，与 {@code RuntimeStorageQuotaPolicy} 的口径一致；
+     * 无限额账户仍可原子累加预留，便于结算时按预留值回退。</p>
+     *
      * @param userId 用户 ID
      * @param bytes 预留字节数
      * @return 成功更新时为 1，否则为 0
@@ -185,7 +188,8 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
             SET user.reservedBytes = user.reservedBytes + :bytes,
                 user.version = user.version + 1
             WHERE user.id = :userId
-              AND user.usedBytes + user.reservedBytes + :bytes <= user.quotaBytes
+              AND (user.quotaBytes <= 0
+                   OR user.usedBytes + user.reservedBytes + :bytes <= user.quotaBytes)
             """)
     int reserveStorage(@Param("userId") UUID userId, @Param("bytes") long bytes);
 
