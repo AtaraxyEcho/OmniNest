@@ -26,7 +26,7 @@ import org.yaml.snakeyaml.Yaml;
  * compose 的"服务 → 网络"成员表逐字钉住，并钉三条实测出来的物理约束：</p>
  *
  * <ul>
- *   <li>出网执行体（aria2、rclone）只允许在 {@code egress}，数据面与 nginx 一律不得进 {@code egress}；</li>
+ *   <li>出网执行体（rclone）只允许在 {@code egress}，数据面与 nginx 一律不得进 {@code egress}；</li>
  *   <li>容器模式的 ffmpeg 独占 internal 的 {@code media}，minio 双挂 {@code default} 与 {@code media}
  *       供它取预签名地址——媒体内容里内嵌的远程引用由 ffmpeg 自己去取，这张网没有公网路由也不解析
  *       数据面服务名，二级出网才在拓扑层封死；</li>
@@ -50,15 +50,15 @@ class ComposeNetworkTopologyTest {
     /** 每张 compose 允许出现的全部服务，以及它们在 egress / media 上的成员；两者都不在的服务即留在 default。 */
     private static final Map<String, ExpectedTopology> FILES = Map.of(
             "deploy/dev/docker-compose.yml", new ExpectedTopology(
-                    Set.of("postgres", "redis", "rabbitmq", "minio", "aria2", "clamav", "netease-music-api",
+                    Set.of("postgres", "redis", "rabbitmq", "minio", "clamav", "netease-music-api",
                             "ffmpeg", "rclone", "ai-sidecar"),
-                    Set.of("aria2", "rclone"),
+                    Set.of("rclone"),
                     Set.of("ffmpeg", "minio")),
             "deploy/prod/docker-compose.yml", new ExpectedTopology(
                     Set.of("nginx", "certbot", "backend-api", "backend-worker", "backend-scheduler", "postgres",
-                            "redis", "rabbitmq", "minio", "ffmpeg", "aria2", "clamav", "netease-music-api",
+                            "redis", "rabbitmq", "minio", "ffmpeg", "clamav", "netease-music-api",
                             "rclone", "ai-sidecar"),
-                    Set.of("aria2", "rclone", "backend-api", "backend-worker", "backend-scheduler"),
+                    Set.of("rclone", "backend-api", "backend-worker", "backend-scheduler"),
                     Set.of("ffmpeg", "minio"))
     );
 
@@ -127,7 +127,7 @@ class ComposeNetworkTopologyTest {
             Object egress = ((Map<?, ?>) networks).get(EGRESS);
             if (egress instanceof Map<?, ?> body) {
                 assertTrue(!Boolean.TRUE.equals(body.get("internal")),
-                        file + " 的 " + EGRESS + " 被设成 internal：aria2 与 rclone 必须能出公网");
+                        file + " 的 " + EGRESS + " 被设成 internal：rclone 必须能出公网");
             }
             Object media = ((Map<?, ?>) networks).get(MEDIA);
             assertTrue(media instanceof Map<?, ?> body && Boolean.TRUE.equals(body.get("internal")),

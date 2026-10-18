@@ -95,7 +95,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   _pendingConflicts = {};
   Timer? _uploadQueuePollTimer;
   Timer? _importTaskPollTimer;
-  Timer? _offlineTaskPollTimer;
   int _externalBrowseRequestGeneration = 0;
 
   @override
@@ -107,8 +106,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       _uploadQueuePollTimer = null;
       _importTaskPollTimer?.cancel();
       _importTaskPollTimer = null;
-      _offlineTaskPollTimer?.cancel();
-      _offlineTaskPollTimer = null;
     });
     final filesPage = await _repository.listFilesPage();
     final stats = await _repository.storageStats();
@@ -506,8 +503,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         await showStorageStats();
       case FileManagerSection.uploadQueue:
         await showUploadQueue();
-      case FileManagerSection.offlineDownloads:
-        await showOfflineDownloads();
       case FileManagerSection.sharedSpace:
         await showSharedSpace();
       case FileManagerSection.externalStorage:
@@ -601,7 +596,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     }
     final meta = metaOf(current);
     // 续载守卫按「已载入条数 < 总数」判定，不用 meta.hasMore：后端
-    // 最近/收藏/离线这类列表整表返回却按请求 size 折算 totalPages，
+    // 最近/收藏这类列表整表返回却按请求 size 折算 totalPages，
     // hasMore 在数据已取全时仍然为真。
     if (listOf(current).length >= meta.totalElements) {
       return;
@@ -707,46 +702,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         ),
       );
     });
-  }
-
-  /// 离线下载滚动续载：下一页按任务 id 去重后追加，续载后继续轮询进度。
-  Future<void> loadMoreOfflineDownloads() async {
-    final current = state.asData?.value;
-    // 后端离线任务列表当前整表返回（page/size 不参与切片），条目取全后
-    // 不再发续页请求；守卫统一按已载入条数判定。
-    if (current == null ||
-        current.isBusy ||
-        current.offlineTasks.length >= current.offlineMeta.totalElements) {
-      return;
-    }
-    final meta = current.offlineMeta;
-    await _runAction(FileOperation.loadOfflineDownloads, () async {
-      final result = await _repository.listOfflineDownloadsPage(
-        page: meta.page + 1,
-        size: meta.size,
-      );
-      final latest = state.asData?.value;
-      if (latest == null || latest.offlineMeta.page != meta.page) {
-        return;
-      }
-      final loaded = latest.offlineTasks;
-      final seen = loaded.map((task) => task.id).toSet();
-      state = AsyncData(
-        latest.copyWith(
-          offlineTasks: <OfflineDownloadTask>[
-            ...loaded,
-            ...result.items.where((task) => seen.add(task.id)),
-          ],
-          offlineMeta: FilesSubPageMeta(
-            page: result.page,
-            size: result.size,
-            totalElements: result.totalElements,
-            totalPages: result.totalPages,
-          ),
-        ),
-      );
-    });
-    _startOfflineTaskPolling();
   }
 
   Future<void> showSharedWithMe({int? page, int? size}) async {
@@ -919,30 +874,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         ),
       );
     });
-  }
-
-  Future<void> showOfflineDownloads({int? page, int? size}) async {
-    _applySectionOptimistically(FileManagerSection.offlineDownloads);
-    await _runAction(FileOperation.loadOfflineDownloads, () async {
-      final current = state.asData?.value;
-      final meta = current?.offlineMeta ?? const FilesSubPageMeta();
-      final result = await _repository.listOfflineDownloadsPage(
-        page: page ?? 0,
-        size: size ?? meta.size,
-      );
-      state = AsyncData(
-        _liveOr(current).copyWith(
-          offlineTasks: result.items,
-          offlineMeta: FilesSubPageMeta(
-            page: result.page,
-            size: result.size,
-            totalElements: result.totalElements,
-            totalPages: result.totalPages,
-          ),
-        ),
-      );
-    });
-    _startOfflineTaskPolling();
   }
 
   Future<void> showExternalStorage() async {

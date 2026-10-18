@@ -117,9 +117,6 @@ class FileApiResponseParser {
   FileUploadQueueItem decodeUploadQueueItem(Map<String, dynamic> json) =>
       _parseUploadQueueItem(json);
 
-  OfflineDownloadTask decodeOfflineTask(Map<String, dynamic> json) =>
-      _parseOfflineTask(json);
-
   ImportTask decodeImportTask(Map<String, dynamic> json) =>
       parseImportTask(json);
 
@@ -127,16 +124,6 @@ class FileApiResponseParser {
     Map<String, dynamic>? body,
   ) {
     return parsePageItems(body).map(_parseUploadQueueItem).toList();
-  }
-
-  List<OfflineDownloadTask> parseOfflineTaskPageResponse(
-    Map<String, dynamic>? body,
-  ) {
-    return parsePageItems(body).map(_parseOfflineTask).toList();
-  }
-
-  OfflineDownloadTask parseOfflineTaskResponse(Map<String, dynamic>? body) {
-    return _parseOfflineTask(parseData(body));
   }
 
   List<ExternalStorageAccount> parseExternalStoragePageResponse(
@@ -342,29 +329,6 @@ class FileApiResponseParser {
       status: json['status']?.toString() ?? 'CREATED',
       expiresAt:
           DateTime.tryParse(json['expiresAt']?.toString() ?? '')?.toLocal(),
-      updatedAt:
-          DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
-    );
-  }
-
-  OfflineDownloadTask _parseOfflineTask(Map<String, dynamic> json) {
-    return OfflineDownloadTask(
-      id: json['id'].toString(),
-      sourceUri: json['sourceUri']?.toString() ?? '',
-      targetParentId: json['targetParentId']?.toString(),
-      taskId: json['taskId']?.toString(),
-      status: json['status']?.toString() ?? 'QUEUED',
-      aria2Gid: json['aria2Gid']?.toString(),
-      fileName: json['fileName']?.toString(),
-      totalBytes: asInt(json['totalBytes']),
-      completedBytes: asInt(json['completedBytes']),
-      downloadSpeedBytes: asInt(json['downloadSpeedBytes']),
-      errorSummary: json['errorSummary']?.toString(),
-      completedFileId: json['completedFileId']?.toString(),
-      completedAt:
-          DateTime.tryParse(json['completedAt']?.toString() ?? '')?.toLocal(),
-      createdAt:
-          DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
     );

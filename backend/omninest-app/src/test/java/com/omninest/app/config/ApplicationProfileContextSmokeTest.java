@@ -168,7 +168,6 @@ class DevApplicationProfileContextSmokeTest extends ApplicationProfileContextSmo
                 "omninest.minio.access-key=smoke-minio-access",
                 "omninest.minio.secret-key=smoke-minio-secret",
                 "omninest.rclone.password=smoke-rclone-password",
-                "omninest.aria2.rpc-secret=smoke-aria2-secret",
                 "photo.ai.secret=smoke-ai-sidecar-secret",
                 "omninest.setup.enabled=false"
         }

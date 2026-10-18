@@ -6,7 +6,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
-import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';

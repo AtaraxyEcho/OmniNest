@@ -58,7 +58,7 @@ deploy/ai-sidecar/ 图像分析侧车服务、模型适配与容器定义
 - MinIO 是用户上传、永久托管文件以及海报、背景图、缩略图、字幕等派生资产的默认存储。
 - File 模块拥有内容定位、Provider 选择、权限预检、流式读取、Range 读取和受控 staging 能力。
 - Video 首期允许管理员登记 `LOCAL_FILESYSTEM` 只读影视库来源；扫描建立 FileNode、内容引用和影视元数据，不复制大型原影片到 MinIO。
-- LOCAL 来源只读，不具备 FileManager 重命名、移动、删除、复制、分享、版本、备份和离线下载语义。用户显式永久导入后才转为 MinIO 托管能力。
+- LOCAL 来源只读，不具备 FileManager 重命名、移动、删除、复制、分享、版本和备份语义。用户显式永久导入后才转为 MinIO 托管能力。
 - Video、Music、Photos、Reader 等业务模块只持有业务 ID 和能力结果，不得直接使用 `Path`、MinIO Client、Rclone Gateway、bucket/object key 或客户端传入的绝对路径。例外：业务服务内通过 `Files.createTempFile` 创建的自有临时文件与 Lucene 本地索引目录不在此限。
 - 业务模块必须通过 File 模块的统一内容访问接口读取内容，并按 Provider 能力决定是否允许 Range、写入、分享、版本、备份和跨节点访问。
 - 本地来源只能由管理员通过部署白名单的 `mountKey` 创建。数据库、API 和客户端不得保存或暴露宿主机绝对路径。
@@ -97,7 +97,7 @@ deploy/ai-sidecar/ 图像分析侧车服务、模型适配与容器定义
 - 超级管理员只在数据库不存在 `SUPER_ADMIN` 时通过初始化流程写入；此后认证与授权完全依赖数据库。
 - 文件访问必须校验所有权、空间权限、分享权限或管理员权限。托管 MinIO bucket 必须私有，下载使用短期签名 URL。
 - MIME 判断必须结合魔数。所有逻辑路径必须 normalize 并校验允许前缀。
-- 离线下载、字幕下载、元数据刮削、URL 预览和外部资源抓取必须完成协议白名单、DNS 后 IP 校验、内网/loopback/link-local/metadata 拒绝，并在重定向后重新校验。
+- 字幕下载、元数据刮削、URL 预览和外部资源抓取必须完成协议白名单、DNS 后 IP 校验、内网/loopback/link-local/metadata 拒绝，并在重定向后重新校验。
 - 登录、注册、分享访问和高成本任务使用 Redis + Lua 限流；Redis 不可用时按风险 fail-closed 或使用极小本地限额。
 - 文件安全扫描应使用受控 ClamAV 服务或等价实现；扫描失败、威胁、隔离和放行必须是可区分状态，不能将“无法完成”误标为“检测到威胁”。
 

@@ -173,8 +173,6 @@ class ApplicationEnvironmentContractTest {
                 "omninest.security.registration-enabled",
                 "omninest.security.trusted-proxies",
                 "omninest.security.allowed-origins",
-                "omninest.aria2.rpc-url",
-                "omninest.aria2.download-root",
                 "omninest.clamav.enabled",
                 "omninest.clamav.host",
                 "omninest.clamav.port",
@@ -209,8 +207,6 @@ class ApplicationEnvironmentContractTest {
                 .isEqualTo("${OMNINEST_MINIO_SECRET_KEY:}");
         assertThat(prod.getProperty("omninest.rclone.password"))
                 .isEqualTo("${OMNINEST_RCLONE_RC_PASS:}");
-        assertThat(prod.getProperty("omninest.aria2.rpc-secret"))
-                .isEqualTo("${OMNINEST_ARIA2_RPC_SECRET:}");
         // 凭据加密密钥：dev 与 prod 均不提供回退默认值，需要外部存储凭据
         // 功能时显式注入；prod 运行时由 ProductionSecretsValidator 拒绝空值。
         assertThat(dev.getProperty("omninest.security.credential-encryption-key"))

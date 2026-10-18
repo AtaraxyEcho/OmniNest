@@ -215,8 +215,9 @@ class TaskQueryServiceTest {
             dlqTask.setId(taskId);
             dlqTask.setRetryCount(3);
             dlqTask.setErrorMessage("处理失败");
-            dlqTask.setRoutingKey(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY);
-            dlqTask.setPayload("{\"taskId\":\"" + taskId + "\"}");
+            dlqTask.setRoutingKey(QueueNames.PHOTO_BATCH_ROUTING_KEY);
+            dlqTask.setPayload("{\"taskId\":\"" + taskId + "\","
+                    + "\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\"}");
             when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(dlqTask));
 
             // Act
@@ -232,7 +233,7 @@ class TaskQueryServiceTest {
             verify(taskDispatchService).enqueue(
                     eq(taskId),
                     eq(QueueNames.TASK_EXCHANGE),
-                    eq(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY),
+                    eq(QueueNames.PHOTO_BATCH_ROUTING_KEY),
                     payloadCaptor.capture()
             );
             assertThat(payloadCaptor.getValue()).containsEntry("taskId", taskId.toString());

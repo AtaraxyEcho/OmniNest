@@ -106,11 +106,6 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    Queue offlineDownloadQueue() {
-        return durableQueue(QueueNames.OFFLINE_DOWNLOAD_QUEUE);
-    }
-
-    @Bean
     Queue videoTranscodeQueue() {
         return durableQueue(QueueNames.VIDEO_TRANSCODE_QUEUE);
     }
@@ -252,11 +247,6 @@ public class RabbitMqConfig {
     @Bean
     Binding mediaScanBinding(Queue mediaScanQueue, DirectExchange taskExchange) {
         return BindingBuilder.bind(mediaScanQueue).to(taskExchange).with(QueueNames.MEDIA_SCAN_ROUTING_KEY);
-    }
-
-    @Bean
-    Binding offlineDownloadBinding(Queue offlineDownloadQueue, DirectExchange taskExchange) {
-        return BindingBuilder.bind(offlineDownloadQueue).to(taskExchange).with(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY);
     }
 
     @Bean

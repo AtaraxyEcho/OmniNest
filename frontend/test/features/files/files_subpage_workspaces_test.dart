@@ -99,13 +99,6 @@ void main() {
       Size(1440, 900),
     ),
     (
-      FileManagerSection.offlineDownloads,
-      '离线下载',
-      '任务来源',
-      'offline-movie.mkv',
-      Size(1440, 900),
-    ),
-    (
       FileManagerSection.importTasks,
       '导入任务',
       '任务来源',
@@ -241,7 +234,7 @@ void main() {
   testWidgets('超宽视口下表格封顶 1560，主列不再被拉成大片留白', (tester) async {
     await pumpSection(
       tester,
-      FileManagerSection.offlineDownloads,
+      FileManagerSection.importTasks,
       const Size(2560, 1200),
     );
 
@@ -249,12 +242,12 @@ void main() {
     // 主列被约束在远低于视口的宽度内。
     final sourceLeft =
         tester
-            .renderObject<RenderBox>(find.text('offline-movie.mkv'))
+            .renderObject<RenderBox>(find.text('external-album.zip'))
             .localToGlobal(Offset.zero)
             .dx;
     final typeLeft =
         tester
-            .renderObject<RenderBox>(find.text('HTTPS'))
+            .renderObject<RenderBox>(find.text('FILE'))
             .localToGlobal(Offset.zero)
             .dx;
     expect(typeLeft - sourceLeft, lessThan(700), reason: '任务来源列在超宽视口下必须收束');
@@ -343,17 +336,6 @@ FileBrowserState _seededState(FileManagerSection section) {
         sizeBytes: 8192,
         uploadedBytes: 4096,
         status: 'RUNNING',
-      ),
-    ],
-    offlineTasks: const [
-      OfflineDownloadTask(
-        id: 'od-1',
-        sourceUri: 'https://example.com/movie.mkv',
-        fileName: 'offline-movie.mkv',
-        status: 'DOWNLOADING',
-        totalBytes: 1000,
-        completedBytes: 400,
-        downloadSpeedBytes: 100,
       ),
     ],
     externalAccounts: const [

@@ -112,7 +112,6 @@ public class TaskRedispatchService {
             case QueueNames.FILE_INDEX_ROUTING_KEY,
                     QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
                     QueueNames.THUMBNAIL_ROUTING_KEY -> fileUploadedPayload(payload);
-            case QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY -> Map.of("taskId", taskId.toString());
             case QueueNames.EXTERNAL_IMPORT_ROUTING_KEY -> Map.of(
                     "taskId", requiredUuid(payload, "importTaskId").toString()
             );

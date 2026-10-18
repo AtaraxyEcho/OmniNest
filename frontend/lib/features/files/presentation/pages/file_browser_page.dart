@@ -130,20 +130,18 @@ extension FileManagerSectionMeta on FileManagerSection {
       FileManagerSection.shareManagement => l10n.filesShareManagement,
       FileManagerSection.storageStats => l10n.filesStorageStats,
       FileManagerSection.uploadQueue => l10n.filesUploadQueue,
-      FileManagerSection.offlineDownloads => l10n.filesOfflineDownloads,
       FileManagerSection.externalStorage => l10n.filesExternalStorage,
       FileManagerSection.importTasks => l10n.filesImportTasks,
     };
   }
 
-  /// 样例 FeaturePage 承载的四个次级分区：页头给 `.feature-hero` 身份块，
+  /// 样例 FeaturePage 承载的三个次级分区：页头给 `.feature-hero` 身份块，
   /// 而不是 FolderView 的三档分段。
   bool get isSampleFeaturePage {
     return switch (this) {
       FileManagerSection.recent ||
       FileManagerSection.favorites ||
-      FileManagerSection.sharedWithMe ||
-      FileManagerSection.offlineDownloads => true,
+      FileManagerSection.sharedWithMe => true,
       _ => false,
     };
   }
@@ -171,7 +169,6 @@ extension FileManagerSectionMeta on FileManagerSection {
       FileManagerSection.shareManagement => l10n.filesShareManagementDesc,
       FileManagerSection.storageStats => l10n.filesStorageStatsDesc,
       FileManagerSection.uploadQueue => l10n.filesUploadQueueDesc,
-      FileManagerSection.offlineDownloads => l10n.filesOfflineDownloadsDesc,
       FileManagerSection.externalStorage => l10n.filesExternalStorageDesc,
       FileManagerSection.importTasks => l10n.filesImportTasksDesc,
     };
@@ -189,8 +186,6 @@ extension FileManagerSectionMeta on FileManagerSection {
       FileManagerSection.shareManagement => Icons.link_rounded,
       FileManagerSection.storageStats => Icons.pie_chart_outline_rounded,
       FileManagerSection.uploadQueue => Icons.cloud_upload_outlined,
-      FileManagerSection.offlineDownloads =>
-        Icons.download_for_offline_outlined,
       FileManagerSection.externalStorage => Icons.cloud_queue_rounded,
       FileManagerSection.importTasks => Icons.cloud_download_rounded,
     };
@@ -255,10 +250,7 @@ const Map<_FileSidebarGroup, List<FileManagerSection>> _fileSidebarGroups = {
     FileManagerSection.sharedWithMe,
     FileManagerSection.myShares,
   ],
-  _FileSidebarGroup.transfer: [
-    FileManagerSection.uploadQueue,
-    FileManagerSection.offlineDownloads,
-  ],
+  _FileSidebarGroup.transfer: [FileManagerSection.uploadQueue],
   _FileSidebarGroup.storage: [
     FileManagerSection.externalStorage,
     FileManagerSection.importTasks,
@@ -351,7 +343,7 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
     final hosted = MobileShellScope.isHosted(context);
     final narrow = MediaQuery.sizeOf(context).width < 1100;
     final current = ref.read(fileBrowserControllerProvider).asData?.value;
-    // 目录层级只在「全部文件」里成立：切到最近/收藏/共享/离线时 breadcrumbs
+    // 目录层级只在「全部文件」里成立：切到最近/收藏/共享时 breadcrumbs
     // 不会清空，拿它回退会把用户强切回全部文件（进不去也退不出的观感）。
     // 根是空列表不是根节点：一级目录 = length 1，必须一并处理，否则一级目录下
     // 返回会直接离站，再按一次就是分支首路由的 bubble → 引擎退出应用。

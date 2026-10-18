@@ -172,21 +172,6 @@ abstract interface class FileRepository {
 
   Future<void> cancelUploadSession(String uploadId);
 
-  Future<List<OfflineDownloadTask>> listOfflineDownloads();
-
-  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
-    int page = 0,
-    int size = 10,
-  });
-
-  Future<OfflineDownloadTask> createOfflineDownload({
-    required String sourceUri,
-    String? targetParentId,
-    String? spaceType,
-  });
-
-  Future<void> cancelOfflineDownload(String taskId);
-
   Future<List<ExternalStorageAccount>> listExternalStorages();
 
   Future<List<ExternalStorageConnector>> listExternalConnectors();

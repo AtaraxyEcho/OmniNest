@@ -66,7 +66,6 @@ enum FileManagerSection {
   shareManagement,
   storageStats,
   uploadQueue,
-  offlineDownloads,
   externalStorage,
   importTasks,
 }
@@ -150,7 +149,6 @@ class FileBrowserState {
     this.shareLinks = const [],
     this.sharesMeta = const FilesSubPageMeta(),
     this.uploadQueueMeta = const FilesSubPageMeta(),
-    this.offlineMeta = const FilesSubPageMeta(),
     this.importMeta = const FilesSubPageMeta(),
     this.externalMeta = const FilesSubPageMeta(),
     this.recentMeta = const FilesSubPageMeta(),
@@ -159,7 +157,6 @@ class FileBrowserState {
     this.shareScopeAll = false,
     this.uploadQueue = const [],
     this.localUploadTasks = const [],
-    this.offlineTasks = const [],
     this.externalAccounts = const [],
     this.externalFiles = const [],
     this.externalBrowsePath,
@@ -216,8 +213,6 @@ class FileBrowserState {
   final List<FileUploadQueueItem> uploadQueue;
   final FilesSubPageMeta uploadQueueMeta;
   final List<FileUploadClientTask> localUploadTasks;
-  final List<OfflineDownloadTask> offlineTasks;
-  final FilesSubPageMeta offlineMeta;
   final List<ExternalStorageAccount> externalAccounts;
   final List<ExternalFileItem> externalFiles;
   final String? externalBrowsePath;
@@ -395,8 +390,6 @@ class FileBrowserState {
     List<FileUploadQueueItem>? uploadQueue,
     FilesSubPageMeta? uploadQueueMeta,
     List<FileUploadClientTask>? localUploadTasks,
-    List<OfflineDownloadTask>? offlineTasks,
-    FilesSubPageMeta? offlineMeta,
     List<ExternalStorageAccount>? externalAccounts,
     List<ExternalFileItem>? externalFiles,
     Object? externalBrowsePath = _copyWithUnset,
@@ -459,8 +452,6 @@ class FileBrowserState {
       uploadQueue: uploadQueue ?? this.uploadQueue,
       uploadQueueMeta: uploadQueueMeta ?? this.uploadQueueMeta,
       localUploadTasks: localUploadTasks ?? this.localUploadTasks,
-      offlineTasks: offlineTasks ?? this.offlineTasks,
-      offlineMeta: offlineMeta ?? this.offlineMeta,
       externalAccounts: externalAccounts ?? this.externalAccounts,
       externalFiles: externalFiles ?? this.externalFiles,
       externalBrowsePath:

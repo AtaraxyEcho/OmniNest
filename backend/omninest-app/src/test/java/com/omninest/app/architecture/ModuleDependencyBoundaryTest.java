@@ -107,12 +107,6 @@ class ModuleDependencyBoundaryTest {
             "^import com\\.omninest\\.common\\.rclone\\.RcloneRcClient;",
             Pattern.MULTILINE
     );
-    private static final Pattern OFFLINE_DOWNLOAD_INFRASTRUCTURE_IMPORT_PATTERN = Pattern.compile(
-            "^import (com\\.omninest\\.common\\.config\\.Aria2Properties|"
-                    + "com\\.omninest\\.common\\.download\\.Aria2RpcClient|"
-                    + "com\\.omninest\\.common\\.download\\.SafeOfflineDownloadSourceResolver);",
-            Pattern.MULTILINE
-    );
     private static final Pattern CREDENTIAL_CIPHER_IMPLEMENTATION_IMPORT_PATTERN = Pattern.compile(
             "^import com\\.omninest\\.common\\.security\\.AesGcmCredentialCipher;",
             Pattern.MULTILINE
@@ -465,12 +459,6 @@ class ModuleDependencyBoundaryTest {
         if (isBusinessModule(module) && RCLONE_CLIENT_IMPORT_PATTERN.matcher(content).find()) {
             violations.add("BUSINESS_RCLONE_CLIENT " + relativePath
                     + " -> com.omninest.common.rclone.RcloneRcClient");
-        }
-
-        Matcher offlineDownloadMatcher = OFFLINE_DOWNLOAD_INFRASTRUCTURE_IMPORT_PATTERN.matcher(content);
-        if (isBusinessModule(module) && offlineDownloadMatcher.find()) {
-            violations.add("BUSINESS_OFFLINE_DOWNLOAD_INFRASTRUCTURE " + relativePath
-                    + " -> " + offlineDownloadMatcher.group(1));
         }
 
         if (isBusinessModule(module) && CREDENTIAL_CIPHER_IMPLEMENTATION_IMPORT_PATTERN.matcher(content).find()) {

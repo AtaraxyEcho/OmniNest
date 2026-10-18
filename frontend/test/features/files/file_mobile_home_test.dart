@@ -68,12 +68,11 @@ void main() {
   testWidgets('首页：存储条 + 分类格 + 空间页签 + 内联根列表', (tester) async {
     await pumpHost(tester);
 
-    // 原型 Files 首页结构：存储条、四分类格、我的文件/共享页签、内联列表。
+    // 原型 Files 首页结构：存储条、三分类格、我的文件/共享页签、内联列表。
     expect(find.text('存储用量'), findsOneWidget);
     expect(find.text('最近使用'), findsOneWidget);
     expect(find.text('我的收藏'), findsOneWidget);
     expect(find.text('共享给我'), findsOneWidget);
-    expect(find.text('离线下载'), findsOneWidget);
     expect(find.text('我的文件'), findsOneWidget);
     expect(find.text('共享空间'), findsOneWidget);
 

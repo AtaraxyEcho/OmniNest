@@ -454,7 +454,7 @@ Future<void> _showNameDialog({
   await _runFileAction(context, () => onSubmit(value));
 }
 
-/// 命名对话框（重命名/新建文件夹/离线下载等共用）。
+/// 命名对话框（重命名/新建文件夹等共用）。
 ///
 /// 输入控制器由弹窗组件自持：showFilesDialog 的 Future 在 pop 调用瞬间
 /// 完成，而路由退场动画期间组件仍在树上，此时外部 dispose 控制器会触发

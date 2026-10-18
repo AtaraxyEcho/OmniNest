@@ -5,7 +5,7 @@ part of 'file_browser_page.dart';
 ///
 /// 副题按分区取自己的口径：目录分区沿用样例 FolderView 的「路径 · 条数」，
 /// 其余分区给该分区自己的真实计数——原先统一复用工位列表的文件数，对最近/
-/// 收藏/共享/离线等分区是错数（冷入口为 0，从目录进则是上一个目录的条数）。
+/// 收藏/共享等分区是错数（冷入口为 0，从目录进则是上一个目录的条数）。
 class _MobileFolderHeader extends ConsumerWidget {
   const _MobileFolderHeader({
     required this.state,
@@ -54,8 +54,6 @@ class _MobileFolderHeader extends ConsumerWidget {
         return l10n.filesHostedItemCount(state.sharesMeta.totalElements);
       case FileManagerSection.uploadQueue:
         return l10n.filesHostedItemCount(state.uploadQueueMeta.totalElements);
-      case FileManagerSection.offlineDownloads:
-        return l10n.filesHostedItemCount(state.offlineMeta.totalElements);
       case FileManagerSection.externalStorage:
         return l10n.filesHostedItemCount(
           state.externalBrowseAccountId == null
@@ -72,18 +70,10 @@ class _MobileFolderHeader extends ConsumerWidget {
   List<Widget> _actionsOf(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return switch (state.section) {
-      // 样例 FeaturePage 四页不复用 FolderView 的上传圆钮；离线页把
-      // 「新建离线下载」从工作区计数条收进页头右钮。
+      // 样例 FeaturePage 三页不复用 FolderView 的上传圆钮。
       FileManagerSection.recent ||
       FileManagerSection.favorites ||
       FileManagerSection.sharedWithMe => const <Widget>[],
-      FileManagerSection.offlineDownloads => <Widget>[
-        MobileGlassIconButton(
-          tooltip: l10n.filesNewOfflineDownload,
-          icon: Icons.add_rounded,
-          onPressed: () => unawaited(showNewOfflineDownloadSheet(context, ref)),
-        ),
-      ],
       _ => <Widget>[
         if (_canCreateFolder(ref, state))
           MobileGlassIconButton(

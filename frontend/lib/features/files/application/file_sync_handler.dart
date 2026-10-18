@@ -76,8 +76,7 @@ class FileTaskSyncHandler implements RealtimeScopeHandler {
   @override
   bool appliesTo(RealtimeInvalidation invalidation) {
     return invalidation.resourceType == '*' ||
-        invalidation.resourceType == 'TASK_EXTERNAL_IMPORT' ||
-        invalidation.resourceType == 'TASK_OFFLINE_DOWNLOAD';
+        invalidation.resourceType == 'TASK_EXTERNAL_IMPORT';
   }
 
   @override
@@ -88,10 +87,6 @@ class FileTaskSyncHandler implements RealtimeScopeHandler {
     final section =
         ref.read(fileBrowserControllerProvider).asData?.value.section;
     final notifier = ref.read(fileBrowserControllerProvider.notifier);
-    if (section == FileManagerSection.offlineDownloads) {
-      await notifier.showOfflineDownloads();
-      return true;
-    }
     if (section == FileManagerSection.importTasks) {
       return notifier.refreshImportTasksForRealtime();
     }

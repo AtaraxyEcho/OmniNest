@@ -33,7 +33,6 @@ public class AdminUserContentGuardRepository {
             "视频合集",
             "分享",
             "背景素材",
-            "离线下载",
             "外部存储",
             "集成账号",
             "内容资产"
@@ -49,7 +48,6 @@ public class AdminUserContentGuardRepository {
               (select count(*) from omni.media_video_collections where owner_user_id = :userId),
               (select count(*) from omni.share_links where owner_user_id = :userId),
               (select count(*) from omni.backdrop_assets where owner_user_id = :userId),
-              (select count(*) from omni.download_offline_tasks where owner_user_id = :userId),
               (select count(*) from omni.storage_external_accounts where owner_user_id = :userId),
               (select count(*) from omni.integration_accounts where owner_user_id = :userId),
               (select count(*) from omni.content_assets where owner_user_id = :userId)

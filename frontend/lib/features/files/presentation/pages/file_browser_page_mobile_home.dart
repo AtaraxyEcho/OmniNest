@@ -27,7 +27,6 @@ class _FileMobileHome extends ConsumerWidget {
     FileManagerSection.recent,
     FileManagerSection.favorites,
     FileManagerSection.sharedWithMe,
-    FileManagerSection.offlineDownloads,
   ];
 
   @override
@@ -128,13 +127,14 @@ class _FileMobileHome extends ConsumerWidget {
     );
   }
 
-  String _hintOfCard(BuildContext context, FileManagerSection section) {
+  /// 分类格副标题：仅首页三张卡片有文案，其余分区无副标题。
+  String? _hintOfCard(BuildContext context, FileManagerSection section) {
     final l10n = AppLocalizations.of(context);
     return switch (section) {
       FileManagerSection.recent => l10n.filesHomeRecentHint,
       FileManagerSection.favorites => l10n.filesHomeFavoritesHint,
       FileManagerSection.sharedWithMe => l10n.filesSharedWithMeDesc,
-      _ => l10n.filesOfflineDownloadsDesc,
+      _ => null,
     };
   }
 }
@@ -293,7 +293,7 @@ class _ToolbarIconButton extends StatelessWidget {
   }
 }
 
-/// 更多分区钮：打开回收站/上传队列/离线等低频分区面板。
+/// 更多分区钮：打开回收站/上传队列等低频分区面板。
 class _ToolbarMoreButton extends ConsumerWidget {
   const _ToolbarMoreButton({
     required this.onOpenSection,
@@ -557,7 +557,6 @@ OmniIconsData _sectionGlyph(FileManagerSection? section) {
     FileManagerSection.recent => OmniIcons.clock,
     FileManagerSection.favorites => OmniIcons.heart,
     FileManagerSection.sharedWithMe => OmniIcons.share,
-    FileManagerSection.offlineDownloads => OmniIcons.download,
     FileManagerSection.recycleBin => OmniIcons.close,
     _ => OmniIcons.grid,
   };
@@ -572,7 +571,7 @@ class _HomeSectionCard extends StatelessWidget {
   });
 
   final FileManagerSection? section;
-  final String hint;
+  final String? hint;
   final VoidCallback onTap;
 
   @override
@@ -582,7 +581,7 @@ class _HomeSectionCard extends StatelessWidget {
     final glyph = _sectionGlyph(section);
     return Semantics(
       button: true,
-      label: '$title, $hint',
+      label: hint == null ? title : '$title, $hint',
       child: MobilePressable(
         semanticLabel: title,
         onTap: onTap,

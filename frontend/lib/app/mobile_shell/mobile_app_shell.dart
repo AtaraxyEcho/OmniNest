@@ -74,7 +74,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     final selectionActive = ref.watch(
       mobileShellSelectionActiveProvider(branch),
     );
-    // 子页态（如 Files 的最近使用/我的收藏/与我共享/离线下载）由页面自带
+    // 子页态（如 Files 的最近使用/我的收藏/与我共享）由页面自带
     // 90 高页头，壳层顶栏与底部 tab 让位；离线横幅不在此列，它只在壳层出一次。
     final subpageActive = ref.watch(mobileShellSubpageActiveProvider(branch));
     final offline = ref.watch(appOnlineStatusProvider).asData?.value == false;

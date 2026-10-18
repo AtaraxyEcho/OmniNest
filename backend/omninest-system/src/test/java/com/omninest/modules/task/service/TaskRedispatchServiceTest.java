@@ -38,8 +38,8 @@ class TaskRedispatchServiceTest {
 
     @Test
     void redispatchRecordRebuildsPayloadAndEnqueuesToTaskExchange() {
-        TaskRecord record = record(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY,
-                "{\"taskId\":\"" + TASK_ID + "\"}");
+        TaskRecord record = record(QueueNames.EXTERNAL_IMPORT_ROUTING_KEY,
+                "{\"importTaskId\":\"60000000-0000-0000-0000-000000000001\"}");
 
         redispatchService.redispatch(record);
 
@@ -48,10 +48,11 @@ class TaskRedispatchServiceTest {
         verify(taskDispatchService).enqueue(
                 eq(TASK_ID),
                 eq(QueueNames.TASK_EXCHANGE),
-                eq(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY),
+                eq(QueueNames.EXTERNAL_IMPORT_ROUTING_KEY),
                 payloadCaptor.capture()
         );
-        assertThat(payloadCaptor.getValue()).containsEntry("taskId", TASK_ID.toString());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("taskId", "60000000-0000-0000-0000-000000000001");
     }
 
     @Test
@@ -102,10 +103,10 @@ class TaskRedispatchServiceTest {
 
     @Test
     void rejectsInvalidPayloadJson() {
-        TaskRecord record = record(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY, "not-json");
+        TaskRecord record = record(QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY, "not-json");
 
         assertThatThrownBy(() -> redispatchService.rebuildPayload(
-                TASK_ID, "OFFLINE_DOWNLOAD", QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY, record.getPayload()))
+                TASK_ID, "PHOTO_THUMBNAILS", QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY, record.getPayload()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("任务载荷不是合法 JSON");
     }

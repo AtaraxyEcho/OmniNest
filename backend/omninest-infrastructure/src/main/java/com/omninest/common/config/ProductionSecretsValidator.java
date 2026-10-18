@@ -33,7 +33,6 @@ public class ProductionSecretsValidator implements ApplicationRunner {
             "CHANGE_ME_RABBITMQ_PASSWORD",
             "CHANGE_ME_MINIO_USER",
             "CHANGE_ME_MINIO_PASSWORD",
-            "CHANGE_ME_ARIA2_RPC_SECRET",
             "CHANGE_ME_RCLONE_RC_PASS",
             "CHANGE_ME_JWT_SECRET_AT_LEAST_32_BYTES",
             "CHANGE_ME_AI_SIDECAR_SECRET",
@@ -63,7 +62,6 @@ public class ProductionSecretsValidator implements ApplicationRunner {
         REQUIRED_SECRETS.put("omninest.minio.access-key", "OMNINEST_MINIO_ACCESS_KEY");
         REQUIRED_SECRETS.put("omninest.minio.secret-key", "OMNINEST_MINIO_SECRET_KEY");
         REQUIRED_SECRETS.put("omninest.rclone.password", "OMNINEST_RCLONE_RC_PASS");
-        REQUIRED_SECRETS.put("omninest.aria2.rpc-secret", "OMNINEST_ARIA2_RPC_SECRET");
         REQUIRED_SECRETS.put("omninest.security.credential-encryption-key", "OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY");
     }
 

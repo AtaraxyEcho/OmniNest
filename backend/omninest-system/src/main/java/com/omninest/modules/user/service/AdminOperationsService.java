@@ -358,7 +358,7 @@ public class AdminOperationsService {
                         "writable", true
                 )),
                 component("ClamAV", componentStatus("clamAv"), Map.of(
-                        "用途", "离线下载导入前病毒扫描",
+                        "用途", "上传与外部导入入库前病毒扫描",
                         "状态", componentDetail("clamAv")
                 )),
                 workerComponent()

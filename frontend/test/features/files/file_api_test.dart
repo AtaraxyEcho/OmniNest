@@ -479,37 +479,6 @@ void main() {
     expect(shares.single.status, 'ACTIVE');
   });
 
-  test('parses offline download progress response', () {
-    final tasks = fileApi.parseOfflineTaskPageResponse({
-      'code': 200,
-      'data': {
-        'items': [
-          {
-            'id': '55b17588-5475-4f8f-9b5d-89afd8f81dd6',
-            'sourceUri': 'magnet:?xt=urn:btih:0123456789abcdef',
-            'targetParentId': null,
-            'taskId': '55b17588-5475-4f8f-9b5d-89afd8f81dd6',
-            'status': 'RUNNING',
-            'aria2Gid': 'abcdef1234567890',
-            'fileName': 'movie.mkv',
-            'totalBytes': 100,
-            'completedBytes': 25,
-            'downloadSpeedBytes': 10,
-            'errorSummary': null,
-            'completedFileId': null,
-            'completedAt': null,
-            'createdAt': '2026-05-21T12:00:00Z',
-            'updatedAt': '2026-05-21T12:01:00Z',
-          },
-        ],
-      },
-    });
-
-    expect(tasks.single.fileName, 'movie.mkv');
-    expect(tasks.single.progress, 0.25);
-    expect(tasks.single.downloadSpeedBytes, 10);
-  });
-
   // ==================== 分享链接测试 ====================
 
   test('parseShareLink includes generatedPassword when present', () {

@@ -45,9 +45,6 @@ x-backend-environment: &backend-environment
   OMNINEST_RCLONE_LOCAL_HOST_PATH: /mnt/local
   OMNINEST_RCLONE_IMPORT_HOST_PATH: /mnt/imports
   OMNINEST_RCLONE_IMPORT_CONTAINER_PATH: /mnt/imports
-  OMNINEST_ARIA2_RPC_URL: http://aria2:6800/jsonrpc
-  OMNINEST_ARIA2_RPC_SECRET: ${RPC_SECRET:?RPC_SECRET 必须显式配置}
-  OMNINEST_ARIA2_DOWNLOAD_ROOT: /downloads
   OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:?OMNINEST_AI_SIDECAR_SECRET 必须显式配置}
   OMNINEST_SEARCH_INDEX_PATH: /var/lib/omninest/lucene
   OMNINEST_SEARCH_PHOTO_INDEX_PATH: /var/lib/omninest/lucene-photo
@@ -94,11 +91,9 @@ x-backend-service: &backend-service
     - omninest-geonames:/var/lib/omninest/geonames
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports
-    - omninest-aria2:/downloads
     - ${OMNINEST_LOCAL_MEDIA_ROOT:-../.omninest/local-media}:/mnt/local-media:ro
-  # 后端是 aria2 RPC 与 rclone RC 的唯一调用方（见 x-backend-environment 的
-  # OMNINEST_ARIA2_RPC_URL / OMNINEST_RCLONE_ENDPOINT），因此只有它同时挂在出网执行体所在的
-  # egress 上；数据面服务与 nginx 都不进 egress。
+  # 后端是 rclone RC 的唯一调用方（见 x-backend-environment 的 OMNINEST_RCLONE_ENDPOINT），
+  # 因此只有它同时挂在出网执行体所在的 egress 上；数据面服务与 nginx 都不进 egress。
   networks:
     - default
     - egress
@@ -348,33 +343,6 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
-  aria2:
-    # 以 digest 固定（上游只发布 latest 标签）；升级时重新解析并替换。
-    image: p3terx/aria2-pro@sha256:086d1a37c586edb07ec0fb956bf9edd89d1d38d138ad5309ff96d510c8c9a011
-    environment:
-      RPC_SECRET: ${RPC_SECRET:?RPC_SECRET 必须显式配置}
-      RPC_PORT: 6800
-      LISTEN_PORT: 6888
-      TZ: Asia/Shanghai
-    # 出网执行体：单独一张网，数据面（postgres/redis/rabbitmq/minio/ai-sidecar/clamav）与 nginx 都不在其中。
-    # 实测性质：跨 user-defined 网络既不互通也不解析，所以 aria2 被拿去打内网时在拓扑层就走不通；
-    # 它自己仍需公网（下载与 DHT/PEX），所以这张网不设 internal。
-    networks:
-      - egress
-    ports:
-      - "${ARIA2_LISTEN_PORT:-6888}:6888"
-      - "${ARIA2_LISTEN_PORT:-6888}:6888/udp"
-    volumes:
-      - omninest-aria2:/downloads
-    healthcheck:
-      test: ["CMD-SHELL", "curl --silent --show-error --output /dev/null http://127.0.0.1:$${RPC_PORT}/jsonrpc"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    mem_limit: ${ARIA2_MEM_LIMIT:-96m}
-    restart: unless-stopped
-    logging: *default-logging
-
   # 4C4G 默认不启动。启用：COMPOSE_PROFILES=clamav
   # 且 .env 设 OMNINEST_CLAMAV_ENABLED=true；否则上传会按扫描失败处理。
   clamav:
@@ -429,7 +397,7 @@ services:
       RCLONE_RC_PASS: ${RCLONE_RC_PASS:?RCLONE_RC_PASS 必须显式配置}
       RCLONE_RC_USER: ${RCLONE_RC_USER:-admin}
       TZ: Asia/Shanghai
-    # 同 aria2：出网执行体只在 egress。外部存储的 S3/MINIO endpoint 默认已被
+    # 出网执行体只在 egress。外部存储的 S3/MINIO endpoint 默认已被
     # ExternalStorageEndpointGuard 拒内网；即便管理员打开 allow-private-network，
     # 这张网上也没有通往数据面的路由，最坏只能打它本来就够得到的公网。
     networks:
@@ -483,7 +451,6 @@ volumes:
   omninest-rclone:
   omninest-rclone-local:
   omninest-rclone-imports:
-  omninest-aria2:
   omninest-ai-models:
   omninest-search:
   omninest-search-photo:
@@ -499,7 +466,7 @@ networks:
       config:
         - subnet: ${OMNINEST_DOCKER_SUBNET:-172.30.0.0/24}
           ip_range: ${OMNINEST_DOCKER_DYNAMIC_IP_RANGE:-172.30.0.128/25}
-  # 出网执行体专用网：aria2、rclone 与后端三角色。不设 internal（它们必须能出公网），
+  # 出网执行体专用网：rclone 与后端三角色。不设 internal（它们必须能出公网），
   # 但除后端外没有任何成员能路由到数据面——跨 user-defined 网络不互通也不解析（已实测）。
   egress:
     ipam:

@@ -64,7 +64,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 负责从外部存储（rclone remote）下载文件到本地临时目录，
  * 然后上传到 MinIO 并创建 FileNode/FileObject 业务记录。
  * <p>
- * 复用离线下载的导入模式：rclone sync/copy → 轮询进度 → 上传 MinIO → 创建文件树。
+ * 外部存储导入模式：rclone sync/copy → 轮询进度 → 上传 MinIO → 创建文件树。
  *
  * @author OmniNest
  */

@@ -91,10 +91,6 @@ omninest:
     registration-enabled: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:false}
     trusted-proxies: ${OMNINEST_SECURITY_TRUSTED_PROXIES:}
     allowed-origins: ${OMNINEST_SECURITY_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
-  aria2:
-    rpc-url: ${OMNINEST_ARIA2_RPC_URL:http://localhost:6800/jsonrpc}
-    rpc-secret: ${OMNINEST_ARIA2_RPC_SECRET:}
-    download-root: ${OMNINEST_ARIA2_DOWNLOAD_ROOT:${user.home}/.omninest/aria2}
   clamav:
     enabled: ${OMNINEST_CLAMAV_ENABLED:false}
     host: ${OMNINEST_CLAMAV_HOST:localhost}

@@ -31,9 +31,6 @@ class _FileSectionBody extends StatelessWidget {
             ? _HostedStorageStatsPage(stats: state.storageStats)
             : _FileNodeWorkspace(state: state),
       FileManagerSection.uploadQueue => _UploadQueueWorkspace(state: state),
-      FileManagerSection.offlineDownloads => _OfflineDownloadWorkspace(
-        state: state,
-      ),
       FileManagerSection.externalStorage => _ExternalStorageWorkspace(
         state: state,
       ),

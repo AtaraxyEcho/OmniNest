@@ -1121,9 +1121,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesUploadQueue => 'Upload Queue';
 
   @override
-  String get filesOfflineDownloads => 'Offline Downloads';
-
-  @override
   String get filesExternalStorage => 'External Storage';
 
   @override
@@ -1221,10 +1218,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get filesOfflineDownloadsDesc =>
-      'Manage offline downloads from HTTP and BT torrent links.';
-
-  @override
   String get filesExternalStorageDesc =>
       'Manage OneDrive, WebDAV and other third-party storage mounts.';
 
@@ -1243,16 +1236,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get filesSharedWithMeEmptyMessage =>
       'Files others share with your account are listed here and open straight into preview.';
-
-  @override
-  String get filesOfflineEmptyTitle => 'No offline download tasks';
-
-  @override
-  String get filesOfflineEmptyMessage =>
-      'Use New offline download and paste an HTTP or BT torrent link to start.';
-
-  @override
-  String get filesOfflineFilterEmpty => 'No tasks in this state';
 
   @override
   String get filesExternalEmptyTitle => 'No storage mounted';
@@ -1526,23 +1509,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesTaskCancel => 'Cancel Task';
 
   @override
-  String get filesOfflineSpeed => 'Speed';
-
-  @override
-  String get filesStatusDownloading => 'Downloading';
+  String get filesImportSpeed => 'Speed';
 
   @override
   String get filesStatusRunning => 'Running';
 
   @override
   String get filesStatusCompleted => 'Completed';
-
-  @override
-  String get filesOfflineCancelConfirm => 'Cancel offline download?';
-
-  @override
-  String get filesOfflineCancelMessage =>
-      'Task progress and resume state will be discarded.';
 
   @override
   String get filesImportCancelConfirm => 'Cancel import task?';
@@ -1995,19 +1968,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesStatusCancelling => 'Cancelling';
 
   @override
-  String get filesOfflineEmpty => 'No offline download tasks';
-
-  @override
-  String get filesNewOfflineDownload => 'New Offline Download';
-
-  @override
-  String get filesDownloadLink => 'Download Link';
-
-  @override
-  String get filesOfflineDownloadHint =>
-      'Supports HTTP and BT torrent links; magnet links are not supported';
-
-  @override
   String get filesNewTask => 'New Task';
 
   @override
@@ -2015,14 +1975,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesTaskEnded => 'Task Ended';
-
-  @override
-  String get filesCancelOfflineConfirm => 'Cancel Offline Download?';
-
-  @override
-  String filesCancelOfflineMessage(Object name) {
-    return '\"$name\" download will stop. Unfinished data won\'t be imported.';
-  }
 
   @override
   String get filesNoExternalStorage => 'No external storage';
@@ -2549,18 +2501,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesCleanAndRetry => 'Clean up and retry';
-
-  @override
-  String get filesOfflineQueued => 'Queued';
-
-  @override
-  String get filesOfflineRunning => 'Downloading';
-
-  @override
-  String get filesOfflineCancelling => 'Cancelling';
-
-  @override
-  String get filesOfflineCancelled => 'Cancelled';
 
   @override
   String get filesImportQueued => 'Queued';
@@ -9595,9 +9535,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesOpLoadUploadQueue => 'Load upload queue';
 
   @override
-  String get filesOpLoadOfflineDownloads => 'Load offline downloads';
-
-  @override
   String get filesOpLoadExternalStorage => 'Load external storage';
 
   @override
@@ -9671,12 +9608,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesOpDeleteUploadTask => 'Delete upload task';
-
-  @override
-  String get filesOpCreateOfflineDownload => 'Create offline download';
-
-  @override
-  String get filesOpCancelOfflineDownload => 'Cancel offline download';
 
   @override
   String get filesOpAddExternalStorage => 'Add external storage';
@@ -11172,10 +11103,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesHomeTrashHint => 'Deleted items';
-
-  @override
-  String get filesHomeMoreHint =>
-      'Upload queue, offline downloads and share management';
 
   @override
   String get errorInvalidResponse => 'Invalid response from server';

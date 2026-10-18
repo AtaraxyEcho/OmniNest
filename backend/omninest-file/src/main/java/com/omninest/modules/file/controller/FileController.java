@@ -19,7 +19,6 @@ import com.omninest.modules.file.dto.CopyFileRequest;
 import com.omninest.modules.file.dto.CreateExternalStorageRequest;
 import com.omninest.modules.file.dto.CreateFileUploadSessionRequest;
 import com.omninest.modules.file.dto.CreateFolderRequest;
-import com.omninest.modules.file.dto.CreateOfflineDownloadRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.ExternalStorageAccountDto;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -44,7 +43,6 @@ import com.omninest.modules.file.dto.FileUploadQueueItemDto;
 import com.omninest.modules.file.dto.FileUploadSessionDto;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.SaveFileVersionRequest;
-import com.omninest.modules.file.dto.OfflineDownloadTaskDto;
 import com.omninest.modules.file.dto.PermissionRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.dto.SharedFileDto;
@@ -60,7 +58,6 @@ import com.omninest.modules.file.service.FileStorageMetricsService;
 import com.omninest.modules.file.service.FileUploadQueueService;
 import com.omninest.modules.file.service.FileUploadSessionService;
 import com.omninest.modules.file.service.FileVersionService;
-import com.omninest.modules.file.service.OfflineDownloadRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -84,7 +81,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 文件、上传、分享和离线下载接口。
+ * 文件、上传与分享接口。
  *
  * @author OmniNest
  */
@@ -103,7 +100,6 @@ public class FileController {
     private final FileUploadQueueService fileUploadQueueService;
     private final ExternalStorageAccountService externalStorageAccountService;
     private final FileStorageMetricsService fileStorageMetricsService;
-    private final OfflineDownloadRequestService offlineDownloadRequestService;
     private final CurrentUserContext currentUserContext;
     private final ClientIpResolver clientIpResolver;
 
@@ -681,45 +677,6 @@ public class FileController {
     ApiResponse<FileUploadSessionDto> extendUploadSession(@PathVariable String uploadId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileUploadSessionService.extendSession(ownerUserId, uploadId));
-    }
-
-    @Operation(summary = "列出离线下载任务", description = "列出当前用户的离线下载任务")
-    @GetMapping("/api/v1/offline-downloads")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<OfflineDownloadTaskDto>> listOfflineDownloads(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "200") int size
-    ) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = offlineDownloadRequestService.listTasks(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
-    }
-
-    @Operation(summary = "查询离线下载任务", description = "按 ID 查询单个离线下载任务")
-    @GetMapping("/api/v1/offline-downloads/{taskId}")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<OfflineDownloadTaskDto> getOfflineDownload(@PathVariable UUID taskId) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(offlineDownloadRequestService.getTask(ownerUserId, taskId));
-    }
-
-    @Operation(summary = "创建离线下载任务", description = "提交离线下载任务，服务端异步下载文件")
-    @PostMapping("/api/v1/offline-downloads")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<OfflineDownloadTaskDto> createOfflineDownload(
-            @Valid @RequestBody CreateOfflineDownloadRequest body
-    ) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(offlineDownloadRequestService.createTask(ownerUserId, body));
-    }
-
-    @Operation(summary = "取消离线下载", description = "取消指定的离线下载任务")
-    @DeleteMapping("/api/v1/offline-downloads/{taskId}")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<Void> cancelOfflineDownload(@PathVariable UUID taskId) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        offlineDownloadRequestService.cancelTask(ownerUserId, taskId);
-        return ApiResponse.success();
     }
 
     @Operation(summary = "列出外部存储", description = "列出当前用户关联的外部存储账户")

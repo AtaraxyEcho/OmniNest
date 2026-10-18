@@ -103,13 +103,12 @@ class BaselineSchemaIntegrityFlywayMigrationTest {
                 FROM pg_indexes
                 WHERE schemaname = 'omni'
                   AND indexname IN (
-                    'idx_download_offline_tasks_task',
                     'idx_import_tasks_task',
                     'idx_music_scan_jobs_task',
                     'idx_photo_batch_tasks_task',
                     'idx_photo_scan_jobs_task'
                   )
-                """)).isEqualTo(5);
+                """)).isEqualTo(4);
     }
 
     @Test

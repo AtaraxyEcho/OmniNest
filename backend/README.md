@@ -87,7 +87,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | 本人账户 | `profile:read` / `profile:write` | 资料、会话、密码、头像、2FA |
 | 本人活动 | `activity:read` / `activity:write` | 进度、历史、队列、书签、收藏、任务摘要、通知已读 |
 | 本人偏好 | `preference:read` / `preference:write` | UI/播放/天气城市等偏好 |
-| 个人文件 | `file:read` / `file:write` | 文件、分享、离线下载、外部存储（内容贡献） |
+| 个人文件 | `file:read` / `file:write` | 文件、分享、外部存储（内容贡献） |
 | 个人媒体 | `media:read` / `media:write` | 影视、音乐、阅读内容读写（不含本人活动） |
 | 服务器媒体库 | `media:library:manage` | 影视库来源、扫描授权、库级元数据 |
 | 照片 | `photo:read` / `photo:write` / `photo:admin` | 个人相册 / 全站扫描与重生成 |
@@ -115,7 +115,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | Redis | 缓存、短期状态、限流和并发控制 |
 | Lucene | 可重建的嵌入式搜索索引 |
 
-业务模块不得直接操作 MinIO Client、Rclone、宿主机绝对路径或底层 `Path`。本地影视来源默认只读，不提供重命名、移动、删除、复制、分享、版本和离线下载语义；显式导入为受管内容后才具备托管存储能力。大型文件、媒体探测和派生输出必须使用流式或后台任务路径。
+业务模块不得直接操作 MinIO Client、Rclone、宿主机绝对路径或底层 `Path`。本地影视来源默认只读，不提供重命名、移动、删除、复制、分享、版本语义；显式导入为受管内容后才具备托管存储能力。大型文件、媒体探测和派生输出必须使用流式或后台任务路径。
 
 ## 安装与配置
 

@@ -1,9 +1,9 @@
 part of 'file_browser_page.dart';
 
 /// 托管移动态的次级分区通用件：计数眉标行 + 状态丸 + 原型 `.feature-list`
-/// 行。覆盖 与我共享 / 离线下载 / 外部存储 / 导入任务 四个原桌面工位分区；
-/// 与我共享与离线下载已按样例 FeaturePage 收到「页头计数 + 纯列表」形态，
-/// 计数眉标行只留给外部存储与导入任务。
+/// 行。覆盖 与我共享 / 外部存储 / 导入任务 三个原桌面工位分区；与我共享已按
+/// 样例 FeaturePage 收到「页头计数 + 纯列表」形态，计数眉标行只留给外部存储
+/// 与导入任务。
 ///
 /// 各区具体以 [ListView] 自带纵向滚动：宿主的正文插槽是 `Expanded` 下的
 /// 有界高度，纯 Column 的分区体在条目超过一屏时会 RenderFlex 溢出且无法
@@ -153,7 +153,6 @@ String _hostedStatusLabel(AppLocalizations l10n, String status) {
     'COMPLETED' => l10n.filesStatusCompleted,
     'FAILED' || 'ERROR' => l10n.filesStatusFailed,
     'RUNNING' => l10n.filesStatusRunning,
-    'DOWNLOADING' => l10n.filesStatusDownloading,
     'UPLOADING' => l10n.filesStatusUploading,
     'PAUSED' => l10n.filesStatusPaused,
     'PENDING' => l10n.filesStatusPending,
@@ -164,21 +163,6 @@ String _hostedStatusLabel(AppLocalizations l10n, String status) {
     'EXPIRED' => l10n.filesShareExpired,
     'REVOKED' => l10n.filesShareRevoked,
     _ => status,
-  };
-}
-
-/// 离线任务状态归档：桌面 chips 与托管分段共用同一口径。
-///
-/// 后端下行的是 `TaskStatus` 值（QUEUED/DOWNLOADING/RETRY_WAIT/COMPLETED/
-/// FAILED/CANCELLED），只按字面 'RUNNING' 匹配会把真正在下载的任务全部筛掉。
-enum _OfflineBucket { active, completed, failed, other }
-
-_OfflineBucket _offlineBucketOf(String status) {
-  return switch (status.toUpperCase()) {
-    'COMPLETED' => _OfflineBucket.completed,
-    'FAILED' || 'ERROR' || 'DLQ' || 'DISCARDED' => _OfflineBucket.failed,
-    'CANCELLED' || 'CANCELED' => _OfflineBucket.other,
-    _ => _OfflineBucket.active,
   };
 }
 
@@ -359,165 +343,6 @@ Future<void> _openHostedFeatureNode(
     return;
   }
   _openFilePreview(context, file);
-}
-
-/// 离线下载（hosted）：样例 `.segmented` 状态档 + `.feature-list` 行 + 状态丸。
-///
-/// 计数在页头副题、「新建离线下载」在页头右钮，正文不再挂工作区计数条。
-/// 状态档与桌面页共用 [_offlineBucketOf] 归档；分段吸顶、列表在其下滚动，
-/// 对应样例 `.segmented { position: sticky; top: 0 }`。
-///
-/// 档内筛选走客户端：`GET /api/v1/offline-downloads` 当前整表返回任务
-/// （page/size 不参与切片），所以列表里的就是全部任务。后端一旦改成真
-/// 分页，这里必须换成带状态参数的服务端筛选，否则切档只会覆盖已载入页。
-class _HostedOfflineDownloads extends StatefulWidget {
-  const _HostedOfflineDownloads({
-    required this.state,
-    required this.loadedCount,
-    required this.totalCount,
-    required this.onLoadNext,
-  });
-
-  final FileBrowserState state;
-  final int loadedCount;
-  final int totalCount;
-  final VoidCallback onLoadNext;
-
-  @override
-  State<_HostedOfflineDownloads> createState() =>
-      _HostedOfflineDownloadsState();
-}
-
-class _HostedOfflineDownloadsState extends State<_HostedOfflineDownloads> {
-  /// 档序与桌面 chips 一致；null 表示「全部」。
-  static const List<_OfflineBucket?> _buckets = <_OfflineBucket?>[
-    null,
-    _OfflineBucket.active,
-    _OfflineBucket.completed,
-    _OfflineBucket.failed,
-  ];
-
-  _OfflineBucket? _bucket;
-
-  static String _taskName(OfflineDownloadTask task) {
-    final fileName = task.fileName;
-    if (fileName != null && fileName.isNotEmpty) {
-      return fileName;
-    }
-    final uri = Uri.tryParse(task.sourceUri);
-    final last =
-        uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : null;
-    return (last == null || last.isEmpty) ? task.sourceUri : last;
-  }
-
-  String _taskDetail(OfflineDownloadTask task) {
-    final error = task.errorSummary;
-    if (error != null && error.isNotEmpty) {
-      return error;
-    }
-    if (task.totalBytes > 0) {
-      return '${formatFileSize(task.completedBytes)} / '
-          '${formatFileSize(task.totalBytes)}';
-    }
-    return task.sourceUri;
-  }
-
-  String _bucketLabel(AppLocalizations l10n, _OfflineBucket? bucket) {
-    return switch (bucket) {
-      null => l10n.filesStatusFilterAll,
-      _OfflineBucket.active => l10n.filesStatusDownloading,
-      _OfflineBucket.completed => l10n.filesStatusCompleted,
-      _OfflineBucket.failed || _OfflineBucket.other => l10n.filesStatusFailed,
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final tasks = widget.state.offlineTasks;
-    final visible =
-        _bucket == null
-            ? tasks
-            : tasks
-                .where((task) => _offlineBucketOf(task.status) == _bucket)
-                .toList(growable: false);
-    final showLoadMore = widget.loadedCount < widget.totalCount;
-    // 行改由 builder 懒建：续载是追加语义，children 形态会即时构建已加载的每一行。
-    final list = ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-      itemCount:
-          (visible.isEmpty ? 1 : visible.length + 1) + (showLoadMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (visible.isEmpty) {
-          if (index == 0) {
-            return EnvEmptyState(
-              icon: OmniIcons.download,
-              title:
-                  tasks.isEmpty
-                      ? l10n.filesOfflineEmptyTitle
-                      : l10n.filesOfflineFilterEmpty,
-              message: tasks.isEmpty ? l10n.filesOfflineEmptyMessage : null,
-            );
-          }
-          return _HostedLoadMorePill(
-            label: l10n.filesUploadQueueLoadMore(
-              '${widget.loadedCount}',
-              '${widget.totalCount}',
-            ),
-            onTap: widget.onLoadNext,
-          );
-        }
-        if (index == 0) {
-          // 样例 `.feature-list` 上沿一条发丝线。
-          return Container(height: 1, color: context.env.line07);
-        }
-        if (showLoadMore && index == visible.length + 1) {
-          return _HostedLoadMorePill(
-            label: l10n.filesUploadQueueLoadMore(
-              '${widget.loadedCount}',
-              '${widget.totalCount}',
-            ),
-            onTap: widget.onLoadNext,
-          );
-        }
-        final task = visible[index - 1];
-        return MobileFeatureListRow(
-          icon: OmniIcons.download,
-          title: _taskName(task),
-          detail: _taskDetail(task),
-          trailing: MobileStatusPill(
-            label: _hostedStatusLabel(l10n, task.status),
-            tone: _hostedStatusTone(task.status),
-          ),
-        );
-      },
-    );
-    if (tasks.isEmpty) {
-      // 一条任务都没有时不给筛选段。
-      return list;
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: MobileSegmentedControl<_OfflineBucket?>(
-              values: _buckets,
-              selected: _bucket,
-              labelBuilder: (bucket) => _bucketLabel(l10n, bucket),
-              onSelected: (bucket) => setState(() => _bucket = bucket),
-            ),
-          ),
-        ),
-        Expanded(child: list),
-      ],
-    );
-  }
 }
 
 /// 外部存储（hosted）：挂载账户行 + 添加挂载胶囊。

@@ -147,7 +147,7 @@ profile 是所有 Compose 子命令共同的筛选条件——`up -d` 没带上�
 
 | 网络 | 成员 | internal | 为什么 |
 | :-- | :-- | :-- | :-- |
-| `egress` | `aria2`、`rclone`，prod 还含 backend 三种运行角色 | 否 | 两者必须出公网（下载、DHT/PEX、外部存储），但不能碰数据面 |
+| `egress` | `rclone`，prod 还含 backend 三种运行角色 | 否 | 它必须出公网（外部存储读写），但不能碰数据面 |
 | `media` | `ffmpeg` 独占，`minio` 双挂 | **是** | 容器模式的探测/转码/截帧把预签名地址交给 `docker exec omninest-ffmpeg`，而媒体内容内嵌的远程引用是 ffmpeg 自己去取的，提交前的地址校验覆盖不到那批地址 |
 | `default` | 其余全部服务 | 否 | 数据面与宿主回环发布 |
 
@@ -224,7 +224,7 @@ VM 实测（仅 OmniNest、关闭 ClamAV）：三角色 available 约 1.2Gi；�
    ```
 
 3. **目标机只需从镜像加速源拉基础镜像**（postgres / redis / rabbitmq / minio /
-   ffmpeg / rclone / aria2 / certbot），并在 `deploy/prod` 目标机侧执行 `up -d`。
+   ffmpeg / rclone / certbot），并在 `deploy/prod` 目标机侧执行 `up -d`。
    目标机 Docker 需配置 `registry-mirrors`（daemon.json）。
 
 **项目名隔离**：同一台主机复用过 OmniNest 部署时，旧项目会残留 `omninest_*` 数据卷和
@@ -264,14 +264,6 @@ UPDATE omni.config_entries SET config_value = 'clamav' WHERE config_key = 'clama
 ```
 
 并清除运行时缓存（如 `omninest:config:clamav.host`）或重启 API/Worker。
-
-### 离线下载与 Aria2 路径（Docker）
-
-后端 `OMNINEST_ARIA2_DOWNLOAD_ROOT` 必须是 **Aria2 容器内路径**（如 `/downloads`，
-对应 dev 编排挂载 `../../.omninest/aria2:/downloads`）。在 **Windows 宿主机** 上若
-Java `Path` 把 `/downloads` 归一成 `D:\\downloads`，Aria2 会因权限/路径不存在失败
-（日志：`Failed to make the directory D:\\downloads\\...`）。Linux/macOS 宿主机无此
-问题；Windows 上离线下载与 Docker Aria2 组合需额外映射或改用 Linux 部署路径。
 
 ### Cloudflare 管理 HTTPS（无 certbot）
 
@@ -398,7 +390,7 @@ docker compose up -d --force-recreate nginx certbot backend-api backend-worker b
 
 ### 数据卷与网络
 
-本地影视目录以只读方式同时挂载给 backend 三种运行角色。Rclone、Aria2 和
+本地影视目录以只读方式同时挂载给 backend 三种运行角色。Rclone 和
 Lucene 使用命名卷在容器间共享所需内容；PostgreSQL、Redis、RabbitMQ 和 MinIO
 数据分别使用独立命名卷。
 
@@ -443,7 +435,6 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
 | Redis | `REDIS_PASSWORD` | 更新 redis 配置与 `.env`，重启 redis 与后端。 |
 | MinIO | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | 更新 MinIO 凭据与 `.env`，重启 minio 与后端。 |
 | Rclone RC | `RCLONE_RC_PASS` | 更新 `.env` 后重启 rclone 与后端；口令仅经环境注入，不写入 command 行。 |
-| Aria2 RPC | `RPC_SECRET` | 更新 `.env` 后重启 aria2 与后端。 |
 | AI Sidecar | `OMNINEST_AI_SIDECAR_SECRET` | 更新 `.env` 后重启 ai-sidecar 与后端（启用 photo-ai 时）。 |
 
 轮换后请确认：`docker compose config` 不再出现示例默认值；`ps`/`docker inspect` 中不残留旧口令明文。
@@ -459,8 +450,10 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
   `omninest.tasks.*` 交换机/队列。优先在管理界面（127.0.0.1:15672）逐个删除旧条目；
   仅在确认无保留价值时才考虑 `rabbitmqctl` 重置——重置会清空**全部**队列、
   用户与 vhost 定义，属于破坏性操作，必须在停机窗口执行。
-- **Aria2 端口**：6888 tcp/udp 是 BT/DHT 监听口（功能必需、默认映射到宿主机），
-  公网部署**必须**用防火墙限制来源网段（必做项，非建议）。
+- **离线下载队列清理**：2026-10-18 起离线下载功能与 Aria2 容器整体移除，已在跑的
+  broker 不会自动删除 `omni.task.offline-download`。确认无积压消息后手工执行
+  `docker exec omninest-rabbitmq rabbitmqctl delete_queue omni.task.offline-download`；
+  只删这一条队列，不要按前缀批量清理，避免误删 DLX 邻居。
 - **入口协议**：公网部署**必须**设置 `OMNINEST_HTTPS_ENABLED=true`（compose 已强制显式设置）；
   保持 false 时登录密码、JWT 与刷新 Cookie 全部明文传输。
 - **MinIO 发布面**：托管桶保持私有，下载只签发短期签名 URL；经 Nginx 发布时不开放

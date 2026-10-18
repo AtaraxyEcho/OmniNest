@@ -218,38 +218,6 @@ void main() {
     },
   );
 
-  test('canceling offline download marks task as canceled', () async {
-    final repository =
-        _FakeFileRepository()
-          ..offlineTasks = [
-            const OfflineDownloadTask(
-              id: 'offline-id',
-              sourceUri: 'https://example.com/movie.mp4',
-              status: 'QUEUED',
-            ),
-          ];
-    final container = ProviderContainer.test(
-      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
-    );
-    addTearDown(container.dispose);
-    final controller = container.read(fileBrowserControllerProvider.notifier);
-    await container.read(fileBrowserControllerProvider.future);
-    await controller.showOfflineDownloads();
-
-    await controller.cancelOfflineDownload(repository.offlineTasks.single);
-
-    expect(repository.cancelledOfflineDownloads, ['offline-id']);
-    expect(
-      container
-          .read(fileBrowserControllerProvider)
-          .value!
-          .offlineTasks
-          .single
-          .status,
-      'CANCELLED',
-    );
-  });
-
   test(
     'foreground file actions expose loading state until request finishes',
     () async {

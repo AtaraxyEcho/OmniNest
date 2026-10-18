@@ -6,7 +6,6 @@ mixin UploadTestPagedRepositoryFakes implements FileRepository {
   /// 宿主 fake 需提供的页数据字段与浏览错误桩。
   List<FileUploadQueueItem> get uploadQueue;
   Object? get externalBrowseError;
-  List<OfflineDownloadTask> get offlineTasks;
   List<ExternalFileItem> get externalFiles;
 
   @override
@@ -21,20 +20,6 @@ mixin UploadTestPagedRepositoryFakes implements FileRepository {
       totalElements: uploadQueue.length,
       totalPages:
           uploadQueue.isEmpty ? 0 : ((uploadQueue.length / size).ceil()),
-    );
-  }
-
-  @override
-  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
-    int page = 0,
-    int size = 10,
-  }) async {
-    return FilesSubPage(
-      items: offlineTasks,
-      page: page,
-      size: size,
-      totalElements: offlineTasks.length,
-      totalPages: offlineTasks.isEmpty ? 0 : 1,
     );
   }
 

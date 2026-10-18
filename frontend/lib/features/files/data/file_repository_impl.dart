@@ -359,37 +359,6 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
-  Future<List<OfflineDownloadTask>> listOfflineDownloads() {
-    return fileApi.listOfflineDownloads();
-  }
-
-  @override
-  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
-    int page = 0,
-    int size = 10,
-  }) {
-    return fileApi.listOfflineDownloadsPage(page: page, size: size);
-  }
-
-  @override
-  Future<OfflineDownloadTask> createOfflineDownload({
-    required String sourceUri,
-    String? targetParentId,
-    String? spaceType,
-  }) {
-    return fileApi.createOfflineDownload(
-      sourceUri: sourceUri,
-      targetParentId: targetParentId,
-      spaceType: spaceType,
-    );
-  }
-
-  @override
-  Future<void> cancelOfflineDownload(String taskId) {
-    return fileApi.cancelOfflineDownload(taskId);
-  }
-
-  @override
   Future<List<ExternalStorageAccount>> listExternalStorages() {
     return fileApi.listExternalStorages();
   }

@@ -105,7 +105,6 @@ class ProductionSecretsValidatorTest {
                         "omninest.minio.access-key", "minio-access",
                         "omninest.minio.secret-key", "minio-secret-0123456789abcd",
                         "omninest.rclone.password", "rclone-secret-0123456789ab",
-                        "omninest.aria2.rpc-secret", "aria2-secret-0123456789abcd",
                         "omninest.security.credential-encryption-key",
                                 "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
                         "omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!"
@@ -129,7 +128,6 @@ class ProductionSecretsValidatorTest {
         environment.setProperty("omninest.minio.access-key", "minio-access");
         environment.setProperty("omninest.minio.secret-key", "minio-secret-0123456789abcd");
         environment.setProperty("omninest.rclone.password", "rclone-secret-0123456789ab");
-        environment.setProperty("omninest.aria2.rpc-secret", "aria2-secret-0123456789abcd");
         environment.setProperty("omninest.security.credential-encryption-key",
                 "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
         environment.setProperty("omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!");

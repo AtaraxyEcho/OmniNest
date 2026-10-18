@@ -375,47 +375,6 @@ COMMENT ON COLUMN "omni"."content_assets"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."content_assets"."version" IS '乐观锁版本号';
 COMMENT ON TABLE "omni"."content_assets" IS '通用内容资源表，保存影视、音乐、阅读等模块的海报、封面、背景图、歌词、字幕和NFO等资源索引';
 
-CREATE TABLE "omni"."download_offline_tasks" (
-  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
-  "owner_user_id" uuid NOT NULL,
-  "source_uri" text NOT NULL,
-  "target_parent_id" uuid,
-  "space_type" varchar(16) NOT NULL DEFAULT 'PERSONAL'::character varying,
-  "task_id" uuid,
-  "aria2_gid" varchar(32),
-  "file_name" varchar(255),
-  "total_bytes" int8 NOT NULL DEFAULT 0,
-  "completed_bytes" int8 NOT NULL DEFAULT 0,
-  "download_speed_bytes" int8 NOT NULL DEFAULT 0,
-  "error_summary" text,
-  "completed_file_id" uuid,
-  "completed_at" timestamptz(6),
-  "status" varchar(32) NOT NULL DEFAULT 'QUEUED'::character varying,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "version" int8 NOT NULL DEFAULT 0
-)
-;
-COMMENT ON COLUMN "omni"."download_offline_tasks"."id" IS '任务唯一标识，主键';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."owner_user_id" IS '所属用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."source_uri" IS '离线下载源地址';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."target_parent_id" IS '目标父级文件夹ID，关联file_nodes';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."space_type" IS '目标空间：PERSONAL 或 SHARED';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."task_id" IS '系统任务ID，关联sys_tasks';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."aria2_gid" IS 'aria2 RPC任务GID';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."file_name" IS '下载结果显示名称';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."total_bytes" IS '总字节数';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."completed_bytes" IS '已完成字节数';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."download_speed_bytes" IS '当前下载速度（字节/秒）';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."error_summary" IS '失败摘要';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."completed_file_id" IS '导入完成后的文件或文件夹节点ID，关联file_nodes';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."completed_at" IS '完成时间';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."status" IS '状态';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."created_at" IS '创建时间';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."updated_at" IS '更新时间';
-COMMENT ON COLUMN "omni"."download_offline_tasks"."version" IS '乐观锁版本号';
-COMMENT ON TABLE "omni"."download_offline_tasks" IS '离线下载任务表，记录远程资源下载到文件空间的任务';
-
 CREATE TABLE "omni"."file_access_records" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "owner_user_id" uuid NOT NULL,
@@ -660,7 +619,7 @@ CREATE TABLE "omni"."file_ingress_items" (
 COMMENT ON TABLE "omni"."file_ingress_items" IS '文件安全入库状态表，记录隔离、扫描和发布结果';
 COMMENT ON COLUMN "omni"."file_ingress_items"."id" IS '安全入库记录唯一标识，主键';
 COMMENT ON COLUMN "omni"."file_ingress_items"."owner_user_id" IS '文件所属用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."file_ingress_items"."source_type" IS '来源类型：UPLOAD / EXTERNAL / OFFLINE / SYSTEM';
+COMMENT ON COLUMN "omni"."file_ingress_items"."source_type" IS '来源类型：UPLOAD / EXTERNAL / BACKDROP';
 COMMENT ON COLUMN "omni"."file_ingress_items"."source_task_id" IS '来源异步任务ID，无任务来源时为空';
 COMMENT ON COLUMN "omni"."file_ingress_items"."upload_session_id" IS '上传会话ID，非上传来源时为空';
 COMMENT ON COLUMN "omni"."file_ingress_items"."quarantine_bucket" IS '扫描前对象所在的隔离存储桶';
@@ -2384,7 +2343,7 @@ CREATE TABLE "omni"."storage_quota_reservations" (
 ;
 COMMENT ON COLUMN "omni"."storage_quota_reservations"."owner_user_id" IS '预留所属用户ID';
 COMMENT ON COLUMN "omni"."storage_quota_reservations"."id" IS '配额预留唯一标识，主键';
-COMMENT ON COLUMN "omni"."storage_quota_reservations"."source_type" IS '来源类型：UPLOAD / EXTERNAL_IMPORT / OFFLINE_DOWNLOAD';
+COMMENT ON COLUMN "omni"."storage_quota_reservations"."source_type" IS '来源类型：UPLOAD / EXTERNAL_IMPORT / BACKDROP_UPLOAD';
 COMMENT ON COLUMN "omni"."storage_quota_reservations"."source_id" IS '来源业务记录ID';
 COMMENT ON COLUMN "omni"."storage_quota_reservations"."reserved_bytes" IS '预留字节数';
 COMMENT ON COLUMN "omni"."storage_quota_reservations"."committed_bytes" IS '最终结算为实际用量的字节数';
@@ -2732,16 +2691,6 @@ ALTER TABLE "omni"."content_assets" ADD CONSTRAINT "chk_content_assets_size" CHE
 ALTER TABLE "omni"."content_assets" ADD CONSTRAINT "chk_content_assets_resource_type" CHECK (resource_type::text = ANY (ARRAY['VIDEO_ITEM'::character varying::text, 'TV_SERIES'::character varying::text, 'TV_SEASON'::character varying::text, 'EPISODE'::character varying::text, 'MOVIE'::character varying::text, 'MUSIC_TRACK'::character varying::text, 'MUSIC_ALBUM'::character varying::text, 'MUSIC_ARTIST'::character varying::text, 'READER_ITEM'::character varying::text, 'READER_COLLECTION'::character varying::text]));
 
 ALTER TABLE "omni"."content_assets" ADD CONSTRAINT "content_assets_pkey" PRIMARY KEY ("id");
-
-CREATE INDEX "idx_download_offline_tasks_owner_status" ON "omni"."download_offline_tasks" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  "status" "pg_catalog"."text_ops" ASC NULLS LAST
-);
-CREATE INDEX "idx_download_offline_tasks_task" ON "omni"."download_offline_tasks" USING btree (
-  "task_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-
-ALTER TABLE "omni"."download_offline_tasks" ADD CONSTRAINT "download_offline_tasks_pkey" PRIMARY KEY ("id");
 
 CREATE INDEX "idx_file_access_records_owner_time" ON "omni"."file_access_records" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,

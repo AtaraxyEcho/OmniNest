@@ -17,10 +17,10 @@ import org.junit.jupiter.api.Test;
 /**
  * 出网执行体登记守卫。
  *
- * <p>本项目"会被不可信输入驱动出网"的位置不是一处，而是三类：aria2 下载器、rclone 远端、
- * 以及后端自己起的 ffmpeg/ffprobe 子进程与 JVM HTTP 客户端。SEC-10 的教训是：只盯住 aria2
- * 会漏掉另外两类（ffprobe 会跟随媒体内容里的播放列表引用出网，rclone 会跟随重定向），
- * 而新增第 4 个出网点时没有任何东西会提醒开发者它需要闸门。</p>
+ * <p>本项目"会被不可信输入驱动出网"的位置不是一处，而是两类：rclone 远端，
+ * 以及后端自己起的 ffmpeg/ffprobe 子进程与 JVM HTTP 客户端。SEC-10 的教训是：
+ * 只盯住某一处出网点会漏掉其余位置（ffprobe 会跟随媒体内容里的播放列表引用出网，
+ * rclone 会跟随重定向），而新增下一个出网点时没有任何东西会提醒开发者它需要闸门。</p>
  *
  * <p>本测试要求每个出网位置都在登记表里写明它的闸门；闸门说明缺失、或出现未登记的新出网位置，
  * 都让构建变红。登记表只覆盖主源码，测试与端口接口不参与。</p>
@@ -33,13 +33,12 @@ class OutboundExecutorRegistryTest {
     private static final Pattern OUTBOUND_MARKER = Pattern.compile(
             "^import java\\.net\\.http\\.HttpClient;|HttpClient\\.(newBuilder|newHttpClient)"
                     + "|new ProcessBuilder|VideoProcessExecutor|\\.exec\\("
-                    + "|OfflineDownloadGateway|RcloneGateway|RcloneRcClient",
+                    + "|RcloneGateway|RcloneRcClient",
             Pattern.MULTILINE
     );
 
     /** 地址可由数据（而非硬编码常量）决定的位置：必须声明一个真实的地址闸门。 */
     private static final Set<String> DATA_ADDRESSED_SOURCES = Set.of(
-            "omninest-file/src/main/java/com/omninest/modules/file/service/OfflineDownloadExecutionService.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/DerivedAssetStorageService.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/ExternalStorageService.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/ExternalImportExecutionService.java",
@@ -48,26 +47,18 @@ class OutboundExecutorRegistryTest {
 
     private static final Set<String> ADDRESS_GATES = Set.of(
             "SafeUrlValidator",
-            "SafeOfflineDownloadSourceResolver",
-            "SafeTorrentAddressValidator",
             "ExternalStorageEndpointGuard",
             "MusicOnlineSourceUrlPolicy",
             "OutboundEndpointRules"
     );
 
     private static final Map<String, String> REGISTERED_OUTBOUND_SOURCES = Map.ofEntries(
-            Map.entry("omninest-common/src/main/java/com/omninest/common/download/OfflineDownloadGateway.java",
-                    "端口：唯一实现是 Aria2RpcClient，出网目标全部来自离线下载任务"),
             Map.entry("omninest-common/src/main/java/com/omninest/common/rclone/RcloneGateway.java",
                     "端口：唯一实现是 RcloneRcClient，远端地址由外部存储账户凭证决定"),
-            Map.entry("omninest-infrastructure/src/main/java/com/omninest/common/download/Aria2RpcClient.java",
-                    "只连配置里的内网 RPC 端点，不承载用户地址"),
             Map.entry("omninest-infrastructure/src/main/java/com/omninest/common/rclone/RcloneRcClient.java",
                     "RC 端点来自配置；远端地址在文件模块过 ExternalStorageEndpointGuard"),
             Map.entry("omninest-infrastructure/src/main/java/com/omninest/common/ai/AiSidecarClient.java",
                     "端点来自 config-center 的 superAdminOnly 键，自持内网 sidecar 属认可形态"),
-            Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/OfflineDownloadExecutionService.java",
-                    "SafeOfflineDownloadSourceResolver 逐跳校验 + SafeTorrentAddressValidator 校验种子内嵌地址 + aria2 follow-torrent=false"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/DerivedAssetStorageService.java",
                     "SafeUrlValidator.requireSafeHttpUrl 逐跳校验后取回派生资源"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/ExternalStorageService.java",

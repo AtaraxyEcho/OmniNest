@@ -1076,9 +1076,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesUploadQueue => '上传队列';
 
   @override
-  String get filesOfflineDownloads => '离线下载';
-
-  @override
   String get filesExternalStorage => '外部存储';
 
   @override
@@ -1165,9 +1162,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get filesOfflineDownloadsDesc => '管理 HTTP 与 BT 种子链接的离线下载任务。';
-
-  @override
   String get filesExternalStorageDesc => '管理 OneDrive、WebDAV 等第三方存储挂载。';
 
   @override
@@ -1183,15 +1177,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesSharedWithMeEmptyMessage => '其他用户定向分享后，文件会列在这里并可直接预览。';
-
-  @override
-  String get filesOfflineEmptyTitle => '还没有离线下载任务';
-
-  @override
-  String get filesOfflineEmptyMessage => '用「新建离线下载」粘贴 HTTP 或 BT 种子链接开始。';
-
-  @override
-  String get filesOfflineFilterEmpty => '该状态下没有任务';
 
   @override
   String get filesExternalEmptyTitle => '还没有挂载存储';
@@ -1461,22 +1446,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesTaskCancel => '取消任务';
 
   @override
-  String get filesOfflineSpeed => '速率';
-
-  @override
-  String get filesStatusDownloading => '下载中';
+  String get filesImportSpeed => '速率';
 
   @override
   String get filesStatusRunning => '执行中';
 
   @override
   String get filesStatusCompleted => '已完成';
-
-  @override
-  String get filesOfflineCancelConfirm => '取消离线下载？';
-
-  @override
-  String get filesOfflineCancelMessage => '任务进度与断点将被清理，且不可恢复。';
 
   @override
   String get filesImportCancelConfirm => '取消导入任务？';
@@ -1927,18 +1903,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesStatusCancelling => '取消中';
 
   @override
-  String get filesOfflineEmpty => '暂无离线下载任务';
-
-  @override
-  String get filesNewOfflineDownload => '新建离线下载';
-
-  @override
-  String get filesDownloadLink => '下载链接';
-
-  @override
-  String get filesOfflineDownloadHint => '支持 HTTP 直链与 BT 种子链接；磁力链接暂不支持';
-
-  @override
   String get filesNewTask => '新建任务';
 
   @override
@@ -1946,14 +1910,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesTaskEnded => '任务已结束';
-
-  @override
-  String get filesCancelOfflineConfirm => '取消离线下载？';
-
-  @override
-  String filesCancelOfflineMessage(Object name) {
-    return '\"$name\" 的下载任务会停止，未完成的数据不会导入文件库。';
-  }
 
   @override
   String get filesNoExternalStorage => '暂无外部存储';
@@ -2469,18 +2425,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesCleanAndRetry => '清理并重试';
-
-  @override
-  String get filesOfflineQueued => '排队中';
-
-  @override
-  String get filesOfflineRunning => '下载中';
-
-  @override
-  String get filesOfflineCancelling => '取消中';
-
-  @override
-  String get filesOfflineCancelled => '已取消';
 
   @override
   String get filesImportQueued => '排队中';
@@ -9311,9 +9255,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesOpLoadUploadQueue => '加载上传队列';
 
   @override
-  String get filesOpLoadOfflineDownloads => '加载离线下载';
-
-  @override
   String get filesOpLoadExternalStorage => '加载外部存储';
 
   @override
@@ -9387,12 +9328,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesOpDeleteUploadTask => '删除上传任务';
-
-  @override
-  String get filesOpCreateOfflineDownload => '新建离线下载';
-
-  @override
-  String get filesOpCancelOfflineDownload => '取消离线下载';
 
   @override
   String get filesOpAddExternalStorage => '添加外部存储';
@@ -10831,9 +10766,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesHomeTrashHint => '已删除的项目';
-
-  @override
-  String get filesHomeMoreHint => '上传队列、离线下载与分享管理';
 
   @override
   String get errorInvalidResponse => '服务端返回的数据格式不正确';

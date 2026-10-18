@@ -136,7 +136,6 @@ void main() {
     for (final duplicate in const [
       '最近使用',
       '我的收藏',
-      '离线下载',
       '存储统计',
       '外部存储',
       '导入任务',

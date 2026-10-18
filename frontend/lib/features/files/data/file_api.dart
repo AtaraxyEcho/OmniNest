@@ -738,51 +738,6 @@ class FileApi {
     parseEmptyResponse(response.data);
   }
 
-  Future<List<OfflineDownloadTask>> listOfflineDownloads() async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/offline-downloads',
-    );
-    return parseOfflineTaskPageResponse(response.data);
-  }
-
-  /// 分页获取离线下载任务：子表页码控件消费。
-  Future<FilesSubPage<OfflineDownloadTask>> listOfflineDownloadsPage({
-    int page = 0,
-    int size = 10,
-  }) async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/offline-downloads',
-      queryParameters: {'page': page, 'size': size},
-    );
-    return FilesSubPage.fromJson(
-      parseData(response.data),
-      _responseParser.decodeOfflineTask,
-    );
-  }
-
-  Future<OfflineDownloadTask> createOfflineDownload({
-    required String sourceUri,
-    String? targetParentId,
-    String? spaceType,
-  }) async {
-    final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/offline-downloads',
-      data: {
-        'sourceUri': sourceUri,
-        'targetParentId': targetParentId,
-        if (spaceType != null) 'spaceType': spaceType,
-      },
-    );
-    return parseOfflineTaskResponse(response.data);
-  }
-
-  Future<void> cancelOfflineDownload(String taskId) async {
-    final response = await apiClient.dio.delete<Map<String, dynamic>>(
-      '/offline-downloads/$taskId',
-    );
-    parseEmptyResponse(response.data);
-  }
-
   Future<List<ExternalStorageAccount>> listExternalStorages() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/external-storages',
@@ -1042,16 +997,6 @@ class FileApi {
     Map<String, dynamic>? body,
   ) {
     return _responseParser.parseUploadQueuePageResponse(body);
-  }
-
-  List<OfflineDownloadTask> parseOfflineTaskPageResponse(
-    Map<String, dynamic>? body,
-  ) {
-    return _responseParser.parseOfflineTaskPageResponse(body);
-  }
-
-  OfflineDownloadTask parseOfflineTaskResponse(Map<String, dynamic>? body) {
-    return _responseParser.parseOfflineTaskResponse(body);
   }
 
   List<ExternalStorageAccount> parseExternalStoragePageResponse(

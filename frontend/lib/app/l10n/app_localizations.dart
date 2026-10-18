@@ -2180,12 +2180,6 @@ abstract class AppLocalizations {
   /// **'Upload Queue'**
   String get filesUploadQueue;
 
-  /// No description provided for @filesOfflineDownloads.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline Downloads'**
-  String get filesOfflineDownloads;
-
   /// No description provided for @filesExternalStorage.
   ///
   /// In en, this message translates to:
@@ -2354,12 +2348,6 @@ abstract class AppLocalizations {
   /// **'Load more ({loaded} of {total})'**
   String filesUploadQueueLoadMore(String loaded, String total);
 
-  /// No description provided for @filesOfflineDownloadsDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Manage offline downloads from HTTP and BT torrent links.'**
-  String get filesOfflineDownloadsDesc;
-
   /// No description provided for @filesExternalStorageDesc.
   ///
   /// In en, this message translates to:
@@ -2389,24 +2377,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Files others share with your account are listed here and open straight into preview.'**
   String get filesSharedWithMeEmptyMessage;
-
-  /// No description provided for @filesOfflineEmptyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'No offline download tasks'**
-  String get filesOfflineEmptyTitle;
-
-  /// No description provided for @filesOfflineEmptyMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Use New offline download and paste an HTTP or BT torrent link to start.'**
-  String get filesOfflineEmptyMessage;
-
-  /// No description provided for @filesOfflineFilterEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No tasks in this state'**
-  String get filesOfflineFilterEmpty;
 
   /// No description provided for @filesExternalEmptyTitle.
   ///
@@ -2900,17 +2870,11 @@ abstract class AppLocalizations {
   /// **'Cancel Task'**
   String get filesTaskCancel;
 
-  /// No description provided for @filesOfflineSpeed.
+  /// No description provided for @filesImportSpeed.
   ///
   /// In en, this message translates to:
   /// **'Speed'**
-  String get filesOfflineSpeed;
-
-  /// No description provided for @filesStatusDownloading.
-  ///
-  /// In en, this message translates to:
-  /// **'Downloading'**
-  String get filesStatusDownloading;
+  String get filesImportSpeed;
 
   /// No description provided for @filesStatusRunning.
   ///
@@ -2923,18 +2887,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Completed'**
   String get filesStatusCompleted;
-
-  /// No description provided for @filesOfflineCancelConfirm.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancel offline download?'**
-  String get filesOfflineCancelConfirm;
-
-  /// No description provided for @filesOfflineCancelMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Task progress and resume state will be discarded.'**
-  String get filesOfflineCancelMessage;
 
   /// No description provided for @filesImportCancelConfirm.
   ///
@@ -3751,30 +3703,6 @@ abstract class AppLocalizations {
   /// **'Cancelling'**
   String get filesStatusCancelling;
 
-  /// No description provided for @filesOfflineEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No offline download tasks'**
-  String get filesOfflineEmpty;
-
-  /// No description provided for @filesNewOfflineDownload.
-  ///
-  /// In en, this message translates to:
-  /// **'New Offline Download'**
-  String get filesNewOfflineDownload;
-
-  /// No description provided for @filesDownloadLink.
-  ///
-  /// In en, this message translates to:
-  /// **'Download Link'**
-  String get filesDownloadLink;
-
-  /// No description provided for @filesOfflineDownloadHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Supports HTTP and BT torrent links; magnet links are not supported'**
-  String get filesOfflineDownloadHint;
-
   /// No description provided for @filesNewTask.
   ///
   /// In en, this message translates to:
@@ -3792,18 +3720,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Task Ended'**
   String get filesTaskEnded;
-
-  /// No description provided for @filesCancelOfflineConfirm.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancel Offline Download?'**
-  String get filesCancelOfflineConfirm;
-
-  /// No description provided for @filesCancelOfflineMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'\"{name}\" download will stop. Unfinished data won\'t be imported.'**
-  String filesCancelOfflineMessage(Object name);
 
   /// No description provided for @filesNoExternalStorage.
   ///
@@ -4776,30 +4692,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clean up and retry'**
   String get filesCleanAndRetry;
-
-  /// No description provided for @filesOfflineQueued.
-  ///
-  /// In en, this message translates to:
-  /// **'Queued'**
-  String get filesOfflineQueued;
-
-  /// No description provided for @filesOfflineRunning.
-  ///
-  /// In en, this message translates to:
-  /// **'Downloading'**
-  String get filesOfflineRunning;
-
-  /// No description provided for @filesOfflineCancelling.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancelling'**
-  String get filesOfflineCancelling;
-
-  /// No description provided for @filesOfflineCancelled.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancelled'**
-  String get filesOfflineCancelled;
 
   /// No description provided for @filesImportQueued.
   ///
@@ -17495,12 +17387,6 @@ abstract class AppLocalizations {
   /// **'Load upload queue'**
   String get filesOpLoadUploadQueue;
 
-  /// No description provided for @filesOpLoadOfflineDownloads.
-  ///
-  /// In en, this message translates to:
-  /// **'Load offline downloads'**
-  String get filesOpLoadOfflineDownloads;
-
   /// No description provided for @filesOpLoadExternalStorage.
   ///
   /// In en, this message translates to:
@@ -17650,18 +17536,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete upload task'**
   String get filesOpDeleteUploadTask;
-
-  /// No description provided for @filesOpCreateOfflineDownload.
-  ///
-  /// In en, this message translates to:
-  /// **'Create offline download'**
-  String get filesOpCreateOfflineDownload;
-
-  /// No description provided for @filesOpCancelOfflineDownload.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancel offline download'**
-  String get filesOpCancelOfflineDownload;
 
   /// No description provided for @filesOpAddExternalStorage.
   ///
@@ -20325,12 +20199,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deleted items'**
   String get filesHomeTrashHint;
-
-  /// No description provided for @filesHomeMoreHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Upload queue, offline downloads and share management'**
-  String get filesHomeMoreHint;
 
   /// No description provided for @errorInvalidResponse.
   ///

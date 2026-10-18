@@ -1,7 +1,7 @@
 name: omninest-dev
 
 # 出网执行体与数据面分区（SEC-10 L3），形状与 deploy/prod/docker-compose.yml 一致：
-# aria2 与 rclone 移入 egress；ffmpeg 独占 internal 的 media，minio 双挂 default+media 供它取预签名地址；
+# rclone 移入 egress；ffmpeg 独占 internal 的 media，minio 双挂 default+media 供它取预签名地址；
 # 其余服务留在 default。dev 的后端是宿主进程，经已发布的回环口访问两者，所以不需要加入 egress。
 # 两条实测前提：跨 user-defined 网络不互通也不解析；`internal: true` 网络的容器发布端口不生效
 # （{"80/tcp":[]}），所以只挂 internal 网的服务一律不能发布端口——ffmpeg 不发布端口，成立；
@@ -92,29 +92,6 @@ services:
       retries: 5
     volumes:
       - omninest-minio:/data
-    restart: unless-stopped
-
-  aria2:
-    # 以 digest 固定（上游只发布 latest 标签），与 prod 保持一致；升级时重新解析并替换。
-    image: p3terx/aria2-pro@sha256:086d1a37c586edb07ec0fb956bf9edd89d1d38d138ad5309ff96d510c8c9a011
-    container_name: omninest-aria2
-    networks: [egress]
-    environment:
-      RPC_SECRET: ${RPC_SECRET:-omninest}
-      RPC_PORT: 6800
-      LISTEN_PORT: 6888
-      TZ: Asia/Shanghai
-    ports:
-      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6800:6800"
-      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6888:6888"
-      - "${OMNINEST_DEV_BIND:-127.0.0.1}:6888:6888/udp"
-    healthcheck:
-      test: ["CMD-SHELL", "curl --silent --show-error --output /dev/null http://127.0.0.1:$${RPC_PORT}/jsonrpc"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - ../../.omninest/aria2:/downloads
     restart: unless-stopped
 
   clamav:

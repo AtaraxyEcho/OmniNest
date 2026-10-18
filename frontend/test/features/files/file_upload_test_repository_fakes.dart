@@ -9,8 +9,6 @@ class _FakeFileRepository
   Future<FileMediaInfo> mediaInfo(String fileId) async => const FileMediaInfo();
   @override
   List<FileUploadQueueItem> uploadQueue = const [];
-  @override
-  List<OfflineDownloadTask> offlineTasks = const [];
   List<ExternalStorageAccount> externalAccounts = const [];
   @override
   List<ExternalFileItem> externalFiles = const [];
@@ -21,7 +19,6 @@ class _FakeFileRepository
   final completedPartNumbers = <int>[];
   final completedSessions = <String>[];
   final cancelledUploadSessions = <String>[];
-  final cancelledOfflineDownloads = <String>[];
   final deletedFileIds = <String>[];
   final deletedSharedFileIds = <String>[];
   final createdSharedFolderNames = <String>[];
@@ -176,18 +173,6 @@ class _FakeFileRepository
   Future<FileNode> addFavorite(String fileId) => throw UnimplementedError();
 
   @override
-  Future<void> cancelOfflineDownload(String taskId) async {
-    cancelledOfflineDownloads.add(taskId);
-    offlineTasks =
-        offlineTasks
-            .map(
-              (task) =>
-                  task.id == taskId ? task.copyWith(status: 'CANCELLED') : task,
-            )
-            .toList();
-  }
-
-  @override
   Future<ExternalStorageAccount> createExternalStorage({
     required String provider,
     required String displayName,
@@ -197,13 +182,6 @@ class _FakeFileRepository
   @override
   Future<FileNode> createFolder({String? parentId, required String name}) =>
       throw UnimplementedError();
-
-  @override
-  Future<OfflineDownloadTask> createOfflineDownload({
-    required String sourceUri,
-    String? targetParentId,
-    String? spaceType,
-  }) => throw UnimplementedError();
 
   @override
   Future<void> testExternalStorageConnection(String accountId) =>
@@ -303,10 +281,6 @@ class _FakeFileRepository
 
   @override
   Future<List<FileShareLink>> listMyShares() => throw UnimplementedError();
-
-  @override
-  Future<List<OfflineDownloadTask>> listOfflineDownloads() async =>
-      offlineTasks;
 
   @override
   Future<List<FileNode>> listRecentFiles() => throw UnimplementedError();

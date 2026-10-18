@@ -1,7 +1,7 @@
-// 托管态分区（离线下载 / 外部存储 / 导入任务 / 与我共享）：原型
+// 托管态分区（外部存储 / 导入任务 / 与我共享）：原型
 // `.feature-list` 形态——计数 + 状态丸行 + 环境空态 + 「加载更多」，
-// 不出现工位表格与分页条。与我共享与离线下载按样例 FeaturePage 只留
-// 页头计数与纯列表（离线的新建动作在页头圆钮），外部存储与导入任务
+// 不出现工位表格与分页条。与我共享按样例 FeaturePage 只留
+// 页头计数与纯列表，外部存储与导入任务
 // 仍挂计数眉标条。
 //
 // 走 `FileBrowserPage(initialSection:)` 的深链入口：控制器 build 先交首页态，
@@ -19,7 +19,6 @@ import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/workstation_pagination_bar.dart';
@@ -83,7 +82,6 @@ class _SectionsController extends FileBrowserController {
   /// 需要直接把目标态作为起始态交出去。
   final FileBrowserState? _startState;
 
-  int? offlinePage;
   int? sharedPage;
   int? wentToBreadcrumb;
   bool wentToRoot = false;
@@ -117,19 +115,8 @@ class _SectionsController extends FileBrowserController {
   }
 
   @override
-  Future<void> showOfflineDownloads({int? page, int? size}) async {
-    offlinePage = page;
-  }
-
-  @override
   Future<void> showSharedWithMe({int? page, int? size}) async {
     sharedPage = page;
-  }
-
-  @override
-  Future<void> loadMoreOfflineDownloads() async {
-    // 托管态「加载更多」走追加语义：记录并入的下一页。
-    offlinePage = sectionState.offlineMeta.page + 1;
   }
 
   @override
@@ -220,132 +207,6 @@ Future<_SectionsController> _pump(
 }
 
 void main() {
-  testWidgets('离线下载：状态丸行 + 页头计数与新建钮 + 列表尾加载更多', (tester) async {
-    final controller = await _pump(
-      tester,
-      const FileBrowserState(
-        files: <FileNode>[],
-        recycleBin: <FileNode>[],
-        section: FileManagerSection.offlineDownloads,
-        offlineTasks: <OfflineDownloadTask>[
-          OfflineDownloadTask(
-            id: 'o1',
-            sourceUri: 'https://example.test/files/spring.zip',
-            fileName: 'spring.zip',
-            status: 'DOWNLOADING',
-            totalBytes: 4000000,
-            completedBytes: 1000000,
-          ),
-          OfflineDownloadTask(
-            id: 'o2',
-            sourceUri: 'https://example.test/files/quiet.mkv',
-            fileName: 'quiet.mkv',
-            status: 'FAILED',
-            errorSummary: '远端拒绝连接',
-          ),
-        ],
-        offlineMeta: FilesSubPageMeta(
-          page: 0,
-          size: 20,
-          totalElements: 30,
-          totalPages: 2,
-        ),
-      ),
-    );
-
-    expect(tester.takeException(), isNull);
-    expect(find.byType(MobileFeatureListRow), findsNWidgets(2));
-    expect(find.byType(MobileStatusPill), findsNWidgets(2));
-    expect(find.text('spring.zip'), findsOneWidget);
-    expect(find.text('远端拒绝连接'), findsOneWidget);
-    expect(find.byType(WorkstationPaginationBar), findsNothing);
-    // 计数在页头副题；「新建离线下载」从工作区计数条收进页头右钮。
-    expect(find.text('共 30 项'), findsOneWidget);
-    expect(find.byTooltip('新建离线下载'), findsOneWidget);
-    expect(find.byTooltip('上传'), findsNothing);
-
-    await tester.tap(find.textContaining('加载更多'));
-    await tester.pumpAndSettle(const Duration(milliseconds: 400));
-    expect(controller.offlinePage, 1);
-  });
-
-  // 样例 `.segmented` 落在离线页 hero 之下：状态档取后端真实归档
-  // （QUEUED/DOWNLOADING/RUNNING/RETRY_WAIT 都算进行中），不是字面
-  // 'RUNNING' 匹配。
-  testWidgets('离线下载：状态分段筛选进行中/已完成/空档', (tester) async {
-    await _pump(
-      tester,
-      const FileBrowserState(
-        files: <FileNode>[],
-        recycleBin: <FileNode>[],
-        section: FileManagerSection.offlineDownloads,
-        offlineTasks: <OfflineDownloadTask>[
-          OfflineDownloadTask(
-            id: 'a',
-            sourceUri: 'https://example.test/a.zip',
-            fileName: 'active.zip',
-            status: 'DOWNLOADING',
-            totalBytes: 4000000,
-            completedBytes: 1000000,
-          ),
-          OfflineDownloadTask(
-            id: 'q',
-            sourceUri: 'https://example.test/q.zip',
-            fileName: 'queued.zip',
-            status: 'QUEUED',
-          ),
-          OfflineDownloadTask(
-            id: 'c',
-            sourceUri: 'https://example.test/c.zip',
-            fileName: 'done.zip',
-            status: 'COMPLETED',
-          ),
-        ],
-      ),
-    );
-
-    Finder segment(String label) => find.descendant(
-      of: find.byType(MobileSlidingSegmentRow),
-      matching: find.text(label),
-    );
-
-    expect(find.byType(MobileFeatureListRow), findsNWidgets(3));
-
-    await tester.tap(segment('下载中'));
-    await tester.pumpAndSettle(const Duration(milliseconds: 400));
-    expect(find.text('active.zip'), findsOneWidget);
-    expect(find.text('queued.zip'), findsOneWidget);
-    expect(find.text('done.zip'), findsNothing);
-
-    await tester.tap(segment('已完成'));
-    await tester.pumpAndSettle(const Duration(milliseconds: 400));
-    expect(find.text('done.zip'), findsOneWidget);
-    expect(find.text('active.zip'), findsNothing);
-
-    await tester.tap(segment('失败'));
-    await tester.pumpAndSettle(const Duration(milliseconds: 400));
-    // 档内为空给筛选空态，不是「还没有离线下载任务」。
-    expect(find.text('该状态下没有任务'), findsOneWidget);
-    expect(find.text('还没有离线下载任务'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('离线下载无任务时不给筛选段', (tester) async {
-    await _pump(
-      tester,
-      const FileBrowserState(
-        files: <FileNode>[],
-        recycleBin: <FileNode>[],
-        section: FileManagerSection.offlineDownloads,
-        offlineTasks: <OfflineDownloadTask>[],
-      ),
-    );
-
-    expect(find.byType(MobileSlidingSegmentRow), findsNothing);
-    expect(find.text('还没有离线下载任务'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('外部存储账户列表态：条目行 + 添加挂载，无工位表格', (tester) async {
     await _pump(
       tester,
@@ -686,9 +547,9 @@ void main() {
 
   // 宿主正文插槽是 Expanded 下的有界高度：分区体不带 Scrollable 时，
   // 条目超过一屏会 RenderFlex 溢出且尾部内容不可达。
-  for (final (name, state) in <(String, FileBrowserState)>[
-    (
-      '与我共享',
+  testWidgets('与我共享 长列表：正文自带滚动且不溢出', (tester) async {
+    await _pump(
+      tester,
       FileBrowserState(
         files: const <FileNode>[],
         recycleBin: const <FileNode>[],
@@ -703,46 +564,23 @@ void main() {
             ),
         ],
       ),
-    ),
-    (
-      '离线下载',
-      FileBrowserState(
-        files: const <FileNode>[],
-        recycleBin: const <FileNode>[],
-        section: FileManagerSection.offlineDownloads,
-        offlineTasks: <OfflineDownloadTask>[
-          for (var i = 0; i < 20; i++)
-            OfflineDownloadTask(
-              id: 'o$i',
-              sourceUri: 'https://example.test/file-$i.zip',
-              fileName: 'offline-$i.zip',
-              status: 'COMPLETED',
-            ),
-        ],
-      ),
-    ),
-  ]) {
-    testWidgets('$name 长列表：正文自带滚动且不溢出', (tester) async {
-      await _pump(tester, state);
-      final last = name == '与我共享' ? 'shared-19.mov' : 'offline-19.zip';
+    );
 
-      expect(tester.takeException(), isNull);
-      expect(find.byType(Scrollable), findsWidgets);
-      // 纵向正文列表的 Scrollable：离线页的分段器自带横向滚动视图，
-      // 直接取 Scrollable 会挑错目标。
-      await tester.scrollUntilVisible(
-        find.text(last),
-        260,
-        scrollable: find.descendant(
-          of: find.byType(ListView),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-      expect(find.text(last), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  }
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Scrollable), findsWidgets);
+    // 纵向正文列表的 Scrollable：直接取 Scrollable 会挑错目标。
+    await tester.scrollUntilVisible(
+      find.text('shared-19.mov'),
+      260,
+      scrollable: find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    expect(find.text('shared-19.mov'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('最近使用给 .feature-hero 身份块', (tester) async {
     await _expectHero(tester, FileManagerSection.recent);
@@ -754,10 +592,6 @@ void main() {
 
   testWidgets('与我共享给 .feature-hero 身份块', (tester) async {
     await _expectHero(tester, FileManagerSection.sharedWithMe);
-  });
-
-  testWidgets('离线下载给 .feature-hero 身份块', (tester) async {
-    await _expectHero(tester, FileManagerSection.offlineDownloads);
   });
 
   testWidgets('文件夹分区不给身份块，仍是三档分段', (tester) async {

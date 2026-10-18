@@ -24,7 +24,6 @@ public final class AdminOperationDescription {
             case "FILE_INDEX" -> "更新文件搜索索引";
             case "TEXT_EXTRACTION" -> "提取文件文本内容";
             case "THUMBNAIL" -> "生成文件缩略图";
-            case "OFFLINE_DOWNLOAD" -> "执行离线下载";
             case "EXTERNAL_IMPORT" -> "导入外部存储文件";
             case "MUSIC_SCAN" -> "扫描音乐资料库";
             case "PHOTO_SCAN" -> "扫描照片资料库";

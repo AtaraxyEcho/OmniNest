@@ -228,9 +228,6 @@ omninest:
   upload:
     url-ttl: 4h
     session-ttl: 24h
-  aria2:
-    poll-interval-seconds: 5
-    rpc-timeout-seconds: 15
   clamav:
     timeout: 120s
   rclone:

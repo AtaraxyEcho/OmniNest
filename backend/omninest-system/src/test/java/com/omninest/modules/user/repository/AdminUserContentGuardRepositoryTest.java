@@ -31,7 +31,7 @@ class AdminUserContentGuardRepositoryTest {
     void countOwnedContentReturnsOnlyPositiveColumnsWithLabels() {
         UUID userId = UUID.fromString("10000000-0000-0000-0000-000000000001");
         Mockito.when(query.getSingleResult()).thenReturn(new Object[]{
-                2L, 0L, 0L, 1L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
+                2L, 0L, 0L, 1L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
         });
 
         var owned = repository.countOwnedContent(userId);
@@ -44,7 +44,7 @@ class AdminUserContentGuardRepositoryTest {
     @Test
     void countOwnedContentReturnsEmptyMapForEmptyAccount() {
         Mockito.when(query.getSingleResult()).thenReturn(new Object[]{
-                0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
+                0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
         });
 
         assertThat(repository.countOwnedContent(UUID.randomUUID())).isEmpty();

@@ -38,7 +38,7 @@ Select the runtime with `OMNINEST_ROLE` or a Spring profile. API, Worker, and Sc
 
 Business modules keep business IDs and content capabilities. They do not directly use the MinIO client, Rclone, host absolute paths, or low-level `Path` values. The File module owns content access, permission prechecks, Range reads, staging, and Provider capability decisions.
 
-Video may use administrator-registered read-only `LOCAL_FILESYSTEM` sources. Such sources do not provide rename, move, delete, copy, share, version, or offline-download semantics. Explicitly importing content into managed storage is required before those capabilities apply. Large content and derived files must use streaming or background-task paths.
+Video may use administrator-registered read-only `LOCAL_FILESYSTEM` sources. Such sources do not provide rename, move, delete, copy, share, or version semantics. Explicitly importing content into managed storage is required before those capabilities apply. Large content and derived files must use streaming or background-task paths.
 
 ## Configuration
 
@@ -75,7 +75,7 @@ For an empty database, Flyway applies `V001__init_schema.sql` and `V002__builtin
 - Identity comes from the local JWT `sub` mapped to a database user. Authorization uses database-backed roles, permissions, and mappings.
 - Work that continues across requests is persisted before it is published to RabbitMQ after transaction commit. Task state, retries, and dead-letter records remain queryable.
 - MinIO buckets are private by default. Downloads and media streams use controlled access or short-lived signed URLs.
-- External URL fetching, offline downloads, subtitles, and metadata requests must validate protocols, DNS results, IP ranges, and redirects.
+- External URL fetching, subtitles, and metadata requests must validate protocols, DNS results, IP ranges, and redirects.
 
 ## Verification
 
