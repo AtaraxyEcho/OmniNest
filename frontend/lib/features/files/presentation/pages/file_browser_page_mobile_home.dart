@@ -54,59 +54,73 @@ class _FileMobileHome extends ConsumerWidget {
         });
         return false;
       },
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: [
             if (!inFolder) ...[
-              _HomeStorageStrip(
-                stats: state.storageStats,
-                onTap: () => onOpenSection(FileManagerSection.storageStats),
+              SliverToBoxAdapter(
+                child: _HomeStorageStrip(
+                  stats: state.storageStats,
+                  onTap: () => onOpenSection(FileManagerSection.storageStats),
+                ),
               ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  for (
-                    var index = 0;
-                    index < _cardSections.length;
-                    index++
-                  ) ...[
-                    if (index > 0) const SizedBox(width: 7),
-                    Expanded(
-                      child: _HomeSectionCard(
-                        section: _cardSections[index],
-                        hint: _hintOfCard(context, _cardSections[index]),
-                        onTap: () => onOpenSection(_cardSections[index]),
+              const SliverToBoxAdapter(child: SizedBox(height: 22)),
+              SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    for (
+                      var index = 0;
+                      index < _cardSections.length;
+                      index++
+                    ) ...[
+                      if (index > 0) const SizedBox(width: 7),
+                      Expanded(
+                        child: _HomeSectionCard(
+                          section: _cardSections[index],
+                          hint: _hintOfCard(context, _cardSections[index]),
+                          onTap: () => onOpenSection(_cardSections[index]),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-              const SizedBox(height: 20),
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ] else ...[
-              _InlineGoUpBar(state: state, controller: controller),
-              const SizedBox(height: 4),
+              SliverToBoxAdapter(
+                child: _InlineGoUpBar(state: state, controller: controller),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 4)),
             ],
-            _HomeToolbar(
+            SliverToBoxAdapter(
+              child: _HomeToolbar(
+                state: state,
+                controller: controller,
+                onOpenSection: onOpenSection,
+                onEnterWorkspace: onEnterWorkspace,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            ..._HomeInlineList(
               state: state,
               controller: controller,
-              onOpenSection: onOpenSection,
-              onEnterWorkspace: onEnterWorkspace,
-            ),
-            const SizedBox(height: 8),
-            _HomeInlineList(
-              state: state,
-              controller: controller,
               onEnterWorkspace: onEnterWorkspace,
               onOpenSection: onOpenSection,
-            ),
+            ).slivers(context),
             if (!inFolder) ...[
-              _HomeToolsLabel(label: l10n.filesHomeWorkspaceTools),
-              _HomeToolShortcuts(state: state, onOpenSection: onOpenSection),
+              SliverToBoxAdapter(
+                child: _HomeToolsLabel(label: l10n.filesHomeWorkspaceTools),
+              ),
+              SliverToBoxAdapter(
+                child: _HomeToolShortcuts(
+                  state: state,
+                  onOpenSection: onOpenSection,
+                ),
+              ),
             ],
           ],
         ),
@@ -310,7 +324,10 @@ class _ToolbarMoreButton extends ConsumerWidget {
 }
 
 /// 内联根列表：按当前视图模式渲染前若干条；进文件夹入工作区、点文件预览。
-class _HomeInlineList extends StatelessWidget {
+///
+/// 产出 sliver 而非整块 Widget：原地展开态不截断条数，一次性构建会把整个目录
+/// 的行全部实例化（实测 300 项建 300 行），交给视口决定建多少。
+class _HomeInlineList {
   const _HomeInlineList({
     required this.state,
     required this.controller,
@@ -323,32 +340,35 @@ class _HomeInlineList extends StatelessWidget {
   final VoidCallback onEnterWorkspace;
   final ValueChanged<FileManagerSection> onOpenSection;
 
-  @override
-  Widget build(BuildContext context) {
+  List<Widget> slivers(BuildContext context) {
     final files = state.files;
     final l10n = AppLocalizations.of(context);
     if (files.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 24),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            OmniIcon(
-              icon: OmniIcons.folder,
-              size: 22,
-              color: context.env.white46,
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OmniIcon(
+                  icon: OmniIcons.folder,
+                  size: 22,
+                  color: context.env.white46,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  l10n.filesEmpty,
+                  style: TextStyle(
+                    color: context.env.inkMuted,
+                    fontSize: AppTypography.bodyMedium,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Text(
-              l10n.filesEmpty,
-              style: TextStyle(
-                color: context.env.inkMuted,
-                fontSize: AppTypography.bodyMedium,
-              ),
-            ),
-          ],
+          ),
         ),
-      );
+      ];
     }
     // 目录原地展开态：不再截断预览条数（续载由外层滚动监听负责），
     // 也不渲染「查看全部」。
@@ -357,59 +377,56 @@ class _HomeInlineList extends StatelessWidget {
         state.breadcrumbs.isNotEmpty;
     final visible =
         inFolder
-            ? files.toList(growable: false)
-            : files.take(_FileMobileHome._inlinePreviewLimit).toList();
-    final Widget content;
+            ? files
+            : files
+                .take(_FileMobileHome._inlinePreviewLimit)
+                .toList(growable: false);
+    final slivers = <Widget>[];
     if (state.viewMode == FileBrowserViewMode.grid) {
-      // 高度按实际列宽精确换算（宽/1.62 为瓦片高），避免固定 112 的
-      // 累计误差造成底部裁切或溢出。
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final tileWidth = (constraints.maxWidth - 9) / 2;
-          final tileHeight = tileWidth / 1.62;
-          final rows = (visible.length / 2).ceil();
-          return SizedBox(
-            height: rows * tileHeight + (rows - 1) * 9.0,
-            child: GridView.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: 9,
-              crossAxisSpacing: 9,
-              childAspectRatio: 1.62,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                for (final file in visible)
-                  FileEnvTile(
-                    file: file,
-                    selected: false,
-                    favorite: state.favoriteIdSet.contains(file.id),
-                    onTap: () => _activate(context, file),
-                  ),
-              ],
-            ),
-          );
-        },
+      slivers.add(
+        SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 9,
+            crossAxisSpacing: 9,
+            childAspectRatio: 1.62,
+          ),
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final file = visible[index];
+            return FileEnvTile(
+              file: file,
+              selected: false,
+              favorite: state.favoriteIdSet.contains(file.id),
+              onTap: () => _activate(context, file),
+            );
+          }, childCount: visible.length),
+        ),
       );
     } else {
-      content = Column(
-        children: [
-          for (var index = 0; index < visible.length; index++) ...[
-            FileEnvRow(
-              file: visible[index],
-              selected: false,
-              onTap: () => _activate(context, visible[index]),
-            ),
-            if (index + 1 < visible.length)
-              Divider(height: 1, color: context.env.line07),
-          ],
-        ],
+      slivers.add(
+        SliverList(
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final file = visible[index];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FileEnvRow(
+                  file: file,
+                  selected: false,
+                  onTap: () => _activate(context, file),
+                ),
+                if (index + 1 < visible.length)
+                  Divider(height: 1, color: context.env.line07),
+              ],
+            );
+          }, childCount: visible.length),
+        ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        content,
-        if (!inFolder && files.length > _FileMobileHome._inlinePreviewLimit)
-          Padding(
+    if (!inFolder && files.length > _FileMobileHome._inlinePreviewLimit) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: TextButton(
               onPressed: () => onOpenSection(FileManagerSection.allFiles),
@@ -420,8 +437,10 @@ class _HomeInlineList extends StatelessWidget {
               child: Text(l10n.portalMobileViewAll),
             ),
           ),
-      ],
-    );
+        ),
+      );
+    }
+    return slivers;
   }
 
   void _activate(BuildContext context, FileNode file) {

@@ -133,6 +133,35 @@ docker compose up -d
 图片分析侧车凭据，以及公开地址。模板保留默认值用于单机 HTTP 验证，不会通过
 Compose 的 required 语法阻止启动。
 
+**Profile 服务必须显式选中**：`certbot`、`clamav`、`photo-ai` 挂在 Compose profile 下。
+profile 是所有 Compose 子命令共同的筛选条件——`up -d` 没带上某个已启用的 profile 时，
+该服务既不创建也不重建，已存在的容器会保留它当初加入的网络，静默停在当前声明的拓扑之外；
+而它仍挂在旧网络上时，Compose 也不会删除那张网络。优先在 `.env` 用
+`COMPOSE_PROFILES=certbot,clamav,photo-ai` 按实际启用的组合声明（该变量对每个子命令都生效，
+比逐条命令补 `--profile` 更不容易漏），执行前用 `docker compose config --services`
+核对本次真正会操作到的服务清单。
+
+### 出网执行体的网络分区
+
+`aria2` 与 `rclone` 只挂在 `egress`，不在 `default`；backend 三种运行角色同时挂
+`default` 与 `egress`（既要调用它们，也要访问数据面）；其余服务一律只在 `default`。
+两条实测性质决定了这个形状：
+
+- 跨 user-defined 网络既不互通也不解析，所以这两个执行体被不可信输入驱动去访问内网地址时
+  在拓扑层就走不通；
+- `internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、
+  宿主连不上），所以 `egress` 故意不设 `internal`，aria2 的 DHT/PEX 与 rclone 的外部存储仍需公网。
+
+网络分区不依赖 `OMNINEST_DOCKER_SUBNET` 的取值，但改动子网时必须同步
+`OMNINEST_DOCKER_DYNAMIC_IP_RANGE` 与 nginx 固定地址。成员表由
+`ComposeNetworkTopologyTest` 逐字钉住，新增服务时该测试会要求同时决定它进不进 `egress`。
+
+应用后核对容器实际所在网络，不依赖 compose 文件推断：
+
+```bash
+docker compose ps --format '{{.Name}}' | xargs -r docker inspect --format '{{.Name}} {{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+```
+
 ### 4C4G 单实例（可选覆盖）
 
 默认仍是 **三角色**（API / Worker / Scheduler 各一进程），适合多人使用与故障隔离。

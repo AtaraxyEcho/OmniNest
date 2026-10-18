@@ -1,5 +1,16 @@
 name: omninest-dev
 
+# 出网执行体与数据面分区（SEC-10 L3），形状与 deploy/prod/docker-compose.yml 一致：
+# 只有 aria2 与 rclone 移入 egress，其余服务留在 default；dev 的后端是宿主进程，
+# 经已发布的回环口访问两者，所以不需要加入 egress。
+# 两条实测前提：跨 user-defined 网络不互通也不解析；`internal: true` 网络的容器发布端口不生效
+# （{"80/tcp":[]}），而 dev 的数据面服务全要从宿主回环访问，因此这张网不设 internal。
+networks:
+  default:
+    name: omninest-dev_default
+  egress:
+    name: omninest-dev-egress
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -79,6 +90,7 @@ services:
     # 以 digest 固定（上游只发布 latest 标签），与 prod 保持一致；升级时重新解析并替换。
     image: p3terx/aria2-pro@sha256:086d1a37c586edb07ec0fb956bf9edd89d1d38d138ad5309ff96d510c8c9a011
     container_name: omninest-aria2
+    networks: [egress]
     environment:
       RPC_SECRET: ${RPC_SECRET:-omninest}
       RPC_PORT: 6800
@@ -165,6 +177,7 @@ services:
   rclone:
     image: rclone/rclone:1.74.2
     container_name: omninest-rclone
+    networks: [egress]
     # 凭据只经环境（RCLONE_<FLAG> 等价于命令行开关）下发：写在 command: 里
     # 会留在容器 argv（ps、docker inspect）中，与 prod 保持同一形态。
     environment:
