@@ -4,6 +4,7 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
 class FileRepositoryImpl implements FileRepository {
@@ -186,6 +187,21 @@ class FileRepositoryImpl implements FileRepository {
     int size = 10,
   }) {
     return fileApi.listSharedWithMePage(page: page, size: size);
+  }
+
+  @override
+  Future<FilesSubPage<ShareChild>> listSharedFolderChildren({
+    required String shareId,
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) {
+    return fileApi.listSharedFolderChildren(
+      shareId: shareId,
+      parentId: parentId,
+      page: page,
+      size: size,
+    );
   }
 
   @override

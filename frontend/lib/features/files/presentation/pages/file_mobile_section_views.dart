@@ -276,11 +276,20 @@ class _HostedSharedWithMe extends StatelessWidget {
             onTap: onLoadNext,
           );
         }
-        final file = items[index - 1].file;
+        final item = items[index - 1];
+        final file = item.file;
         return FileEnvRow(
           file: file,
           selected: false,
-          onTap: () => _openFilePreview(context, file),
+          // 分享来的文件夹不在本人空间里，不能按自有节点去开预览页。
+          onTap:
+              file.isFolder
+                  ? () => showSharedFolderBrowser(
+                    context,
+                    shareId: item.shareId,
+                    folderName: file.name,
+                  )
+                  : () => _openFilePreview(context, file),
         );
       },
     );

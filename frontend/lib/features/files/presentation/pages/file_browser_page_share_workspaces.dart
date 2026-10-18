@@ -127,7 +127,11 @@ class _SharedWithMeWorkspaceState
                   _SubRow(
                     onTap:
                         item.file.isFolder
-                            ? null
+                            ? () => showSharedFolderBrowser(
+                              context,
+                              shareId: item.shareId,
+                              folderName: item.file.name,
+                            )
                             : () => _openFilePreview(context, item.file),
                     cells: [
                       _SubNameCell(
@@ -166,10 +170,17 @@ class _SharedWithMeWorkspaceState
                       Align(
                         alignment: Alignment.centerRight,
                         child: _SubAction(
-                          label: l10n.filesPreview,
+                          label:
+                              item.file.isFolder
+                                  ? l10n.filesOpen
+                                  : l10n.filesPreview,
                           onTap:
                               item.file.isFolder
-                                  ? null
+                                  ? () => showSharedFolderBrowser(
+                                    context,
+                                    shareId: item.shareId,
+                                    folderName: item.file.name,
+                                  )
                                   : () => _openFilePreview(context, item.file),
                         ),
                       ),

@@ -14,6 +14,10 @@ void main() {
     final service = PublicShareService(repository);
 
     await service.preview('share-token', password: 'secret');
+    final children = await service.listChildren(
+      'share-token',
+      parentId: 'folder-1',
+    );
     await service.accept(
       'share-token',
       password: 'secret',
@@ -24,6 +28,12 @@ void main() {
     expect(repository.acceptCalls, 1);
     expect(repository.lastPassword, 'secret');
     expect(repository.lastAuthToken, 'access-token');
+    expect(repository.childrenCalls, 1);
+    expect(repository.lastParentId, 'folder-1');
+    expect(
+      (children as ShareChildrenSuccess).items.map((child) => child.name),
+      ['a.txt'],
+    );
   });
 
   testWidgets('分享页面初始预览只请求一次', (tester) async {
@@ -54,8 +64,27 @@ void main() {
 class _FakePublicShareRepository implements PublicShareRepository {
   int previewCalls = 0;
   int acceptCalls = 0;
+  int childrenCalls = 0;
   String? lastPassword;
   String? lastAuthToken;
+  String? lastParentId;
+
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    childrenCalls += 1;
+    lastParentId = parentId;
+    return const ShareChildrenSuccess(
+      items: [
+        ShareChild(id: 'c-1', name: 'a.txt', nodeType: 'FILE', sizeBytes: 8),
+      ],
+      total: 1,
+    );
+  }
 
   @override
   Future<SharePreviewResult> preview(String token, {String? password}) async {

@@ -323,6 +323,14 @@ class _FakeFileRepository
   Future<List<SharedFileItem>> listSharedWithMe() => throw UnimplementedError();
 
   @override
+  Future<FilesSubPage<ShareChild>> listSharedFolderChildren({
+    required String shareId,
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) => throw UnimplementedError();
+
+  @override
   Future<TaskSubmission> purgeFile(String fileId) async {
     purgedFileIds.add(fileId);
     return const TaskSubmission(taskId: 'purge-task', status: 'QUEUED');

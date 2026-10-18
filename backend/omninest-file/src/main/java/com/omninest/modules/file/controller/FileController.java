@@ -30,6 +30,7 @@ import com.omninest.modules.file.dto.FilePermissionDto;
 import com.omninest.modules.file.dto.FilePurgeImpactDto;
 import com.omninest.modules.file.dto.FilePurgeTaskDto;
 import com.omninest.modules.file.dto.FileShareAccessDto;
+import com.omninest.modules.file.dto.FileShareChildDto;
 import com.omninest.modules.file.dto.FileShareLinkDto;
 import com.omninest.modules.file.dto.FileSharePreviewDto;
 import com.omninest.modules.file.dto.FileVersionDto;
@@ -69,6 +70,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -468,6 +470,22 @@ public class FileController {
                 items.getTotalElements()));
     }
 
+    @Operation(summary = "浏览定向分享给我的文件夹", description = "接收人逐级查看被定向分享给自己的文件夹内容")
+    @GetMapping("/api/v1/files/shared-with-me/{shareId}/children")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<PageResponse<FileShareChildDto>> sharedWithMeChildren(
+            @PathVariable UUID shareId,
+            @RequestParam(required = false) UUID parentId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<FileShareChildDto> items = fileShareAccessService.shareChildrenForRecipient(
+                userId, shareId, parentId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                items.getContent(), items.getNumber(), items.getSize(), items.getTotalElements()));
+    }
+
     @Operation(summary = "列出我的分享链接", description = "列出当前用户创建的所有分享链接")
     @GetMapping("/api/v1/files/shares")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
@@ -535,6 +553,22 @@ public class FileController {
     ) {
         return ApiResponse.success(fileShareAccessService.previewShareSession(
                 token, sessionToken, resolveClientIp(request)));
+    }
+
+    @Operation(summary = "浏览分享文件夹", description = "分享访客逐级查看被分享文件夹的内容，需短期会话；只返回分享子树内的节点")
+    @GetMapping("/api/v1/s/{token}/children")
+    ApiResponse<PageResponse<FileShareChildDto>> shareChildren(
+            @PathVariable String token,
+            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
+            @RequestParam(required = false) UUID parentId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            HttpServletRequest request
+    ) {
+        Page<FileShareChildDto> items = fileShareAccessService.shareChildrenSession(
+                token, sessionToken, resolveClientIp(request), parentId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                items.getContent(), items.getNumber(), items.getSize(), items.getTotalElements()));
     }
 
     @Operation(summary = "接受分享", description = "接受共享文件，将其保存到自己的文件空间")

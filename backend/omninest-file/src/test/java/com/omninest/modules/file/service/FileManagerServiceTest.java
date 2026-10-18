@@ -127,7 +127,7 @@ class FileManagerServiceTest {
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
     private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
-            fileNodeRepository, shareLinkRepository, passwordEncoder, rateLimitService,
+            fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder, rateLimitService,
             notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
                 storageQuotaService, syncEventRecorder);
     private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
@@ -865,7 +865,7 @@ class FileManagerServiceTest {
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
                 filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
         FileShareAccessService realAccessService = new FileShareAccessService(
-                fileNodeRepository, shareLinkRepository, realEncoder, rateLimitService,
+                fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
                 storageQuotaService, syncEventRecorder);
 
@@ -962,7 +962,7 @@ class FileManagerServiceTest {
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
                 filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
         FileShareAccessService realAccessService = new FileShareAccessService(
-                fileNodeRepository, shareLinkRepository, realEncoder, rateLimitService,
+                fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
                 storageQuotaService, syncEventRecorder);
 

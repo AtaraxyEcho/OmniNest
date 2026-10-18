@@ -13,6 +13,20 @@ class PublicShareService {
     return _repository.preview(token, password: password);
   }
 
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) {
+    return _repository.listChildren(
+      token,
+      parentId: parentId,
+      page: page,
+      size: size,
+    );
+  }
+
   Future<ShareAcceptResult> accept(
     String token, {
     String? password,

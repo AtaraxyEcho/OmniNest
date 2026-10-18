@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
@@ -6,6 +8,8 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -38,6 +42,11 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   String? _error;
   bool _loading = true;
   bool _saving = false;
+  List<_ShareFolderCrumb> _trail = const [];
+  List<ShareChild> _children = const [];
+  int _childTotal = 0;
+  bool _childrenLoading = false;
+  String? _childrenError;
 
   @override
   void initState() {
@@ -53,6 +62,9 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _trail = const [];
+      _children = const [];
+      _childTotal = 0;
     });
 
     final result = await _service.preview(widget.token, password: _password);
@@ -74,6 +86,80 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
           _error = message;
       }
     });
+
+    if (_preview?.resourceType == 'FOLDER' && !_needPassword) {
+      await _loadChildren(null);
+    }
+  }
+
+  /// 逐级读取分享子树；服务端只放行根目录之下的节点，越界一律按不存在处理。
+  Future<void> _loadChildren(String? parentId) async {
+    setState(() {
+      _childrenLoading = true;
+      _childrenError = null;
+    });
+
+    final result = await _service.listChildren(
+      widget.token,
+      parentId: parentId,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _childrenLoading = false;
+      switch (result) {
+        case ShareChildrenSuccess(:final items, :final total):
+          _children = items;
+          _childTotal = total;
+        case ShareChildrenFailure(:final message):
+          _children = const [];
+          _childTotal = 0;
+          _childrenError = message;
+      }
+    });
+  }
+
+  String? get _currentFolderId => _trail.isEmpty ? null : _trail.last.id;
+
+  Future<void> _descend(ShareChild folder) async {
+    setState(() {
+      _trail = [..._trail, _ShareFolderCrumb(folder.id, folder.name)];
+    });
+    await _loadChildren(folder.id);
+  }
+
+  Future<void> _ascend() async {
+    if (_trail.isEmpty) return;
+    setState(() {
+      _trail = _trail.sublist(0, _trail.length - 1);
+    });
+    await _loadChildren(_currentFolderId);
+  }
+
+  Future<void> _openChild(ShareChild child) async {
+    final l10n = AppLocalizations.of(context);
+    final url = child.downloadUrl;
+    if (url == null || url.isEmpty) {
+      return;
+    }
+    // 与文件页同一口径：Web 直接开新标签，桌面与移动退回复制链接。
+    if (openDownloadUrl(url)) {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        l10n.filesDownloadOpened,
+        severity: OmniFeedbackSeverity.success,
+      );
+      return;
+    }
+    final copied = await copyTextToClipboard(url);
+    if (!mounted) return;
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+    );
   }
 
   Future<void> _onPasswordSubmit(String password) async {
@@ -193,10 +279,135 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
 
     if (_preview == null) return const SizedBox.shrink();
 
+    if (_preview!.resourceType == 'FOLDER') {
+      return _buildFolderView(context);
+    }
+
     return _PreviewCard(
       preview: _preview!,
       saving: _saving,
       onAccept: _acceptShare,
+    );
+  }
+
+  /// 文件夹分享：顶部是面包屑与当前目录，中部是可滚动的子项列表，底部保留整份保存入口。
+  Widget _buildFolderView(BuildContext context) {
+    return Column(
+      children: [
+        _buildTrailBar(context),
+        Expanded(child: _buildChildList(context)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: _SaveToMyFilesButton(saving: _saving, onAccept: _acceptShare),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrailBar(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final currentName = _trail.isEmpty ? _preview!.fileName : _trail.last.name;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: context.filesColors.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (_trail.isNotEmpty)
+            IconButton(
+              tooltip: l10n.coreBack,
+              icon: const Icon(Icons.arrow_upward_rounded, size: 20),
+              onPressed: _ascend,
+            ),
+          Expanded(
+            child: Text(
+              currentName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.titleMedium,
+                fontWeight: FontWeight.w700,
+                color: context.filesColors.onSurface,
+              ),
+            ),
+          ),
+          if (!_childrenLoading && _childrenError == null)
+            Text(
+              l10n.filesShareItemCount(_childTotal),
+              style: TextStyle(
+                fontSize: AppTypography.labelMedium,
+                color: context.filesColors.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChildList(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (_childrenLoading) {
+      return const AppLoading();
+    }
+    if (_childrenError != null) {
+      return _buildErrorView(
+        l10n.messageForErrorCode(_childrenError!, fallback: _childrenError),
+      );
+    }
+    if (_children.isEmpty) {
+      return Center(
+        child: Text(
+          l10n.filesFolderEmpty,
+          style: TextStyle(
+            fontSize: AppTypography.bodyMedium,
+            color: context.filesColors.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      itemCount: _children.length,
+      itemBuilder:
+          (context, index) => _buildChildRow(context, _children[index]),
+    );
+  }
+
+  Widget _buildChildRow(BuildContext context, ShareChild child) {
+    return ListTile(
+      onTap: () {
+        if (child.isFolder) {
+          unawaited(_descend(child));
+          return;
+        }
+        unawaited(_openChild(child));
+      },
+      leading: Icon(
+        child.isFolder
+            ? Icons.folder_rounded
+            : Icons.insert_drive_file_outlined,
+        size: 22,
+        color: context.filesColors.primary,
+      ),
+      title: Text(
+        child.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.bodyLarge,
+          color: context.filesColors.onSurface,
+        ),
+      ),
+      trailing: Text(
+        child.isFolder ? '' : formatFileSize(child.sizeBytes),
+        style: TextStyle(
+          fontSize: AppTypography.labelMedium,
+          color: context.filesColors.onSurfaceVariant,
+        ),
+      ),
     );
   }
 
@@ -362,6 +573,34 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
   }
 }
 
+/// 保存到"我的文件"的主操作按钮；文件态与文件夹态共用一份，
+/// 避免同一页面出现两处内联转圈。
+class _SaveToMyFilesButton extends StatelessWidget {
+  const _SaveToMyFilesButton({required this.saving, required this.onAccept});
+
+  final bool saving;
+  final VoidCallback onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: saving ? null : onAccept,
+        icon:
+            saving
+                ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(Icons.save_alt),
+        label: Text(AppLocalizations.of(context).filesSaveToMyFiles),
+      ),
+    );
+  }
+}
+
 /// 预览卡片内容。
 class _PreviewCard extends StatelessWidget {
   const _PreviewCard({
@@ -431,21 +670,7 @@ class _PreviewCard extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             // 保存按钮
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: saving ? null : onAccept,
-                icon:
-                    saving
-                        ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.save_alt),
-                label: Text(AppLocalizations.of(context).filesSaveToMyFiles),
-              ),
-            ),
+            _SaveToMyFilesButton(saving: saving, onAccept: onAccept),
             const SizedBox(height: 12),
             Text(
               'Powered by OmniNest',
@@ -476,4 +701,12 @@ class _PreviewCard extends StatelessWidget {
   }
 
   String _formatSize(int bytes) => formatFileSize(bytes);
+}
+
+/// 访客进入分享子树的路径节点，只保留标识与目录名。
+class _ShareFolderCrumb {
+  const _ShareFolderCrumb(this.id, this.name);
+
+  final String id;
+  final String name;
 }

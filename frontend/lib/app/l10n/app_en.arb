@@ -754,6 +754,16 @@
   "filesRootDirectory": "Root Directory",
   "filesGoToParent": "Go to parent folder",
   "filesFolderEmpty": "This folder is empty",
+  "filesShareItemCount": "{count} items",
+  "@filesShareItemCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "filesSharedFolderRoot": "Shared folder root",
+  "@filesSharedFolderRoot": {
+    "description": "Location label shown when browsing the top level of a directed shared folder"
+  },
   "filesMoveToFolder": "Move to \"{name}\"",
   "@filesMoveToFolder": {
     "placeholders": {

@@ -405,6 +405,37 @@ class OfflineDownloadExecutionServiceTest {
     }
 
     @Test
+    void magnetIsFirstAllowedToFetchOnlyTheMetadata() throws IOException {
+        Path downloadRoot = Files.createTempDirectory("offline-magnet-metadata");
+        Mockito.when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        Mockito.when(offlineDownloadGateway.downloadRoot()).thenReturn(downloadRoot);
+        Mockito.when(offlineDownloadGateway.pollIntervalSeconds()).thenReturn(1);
+        String magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+        Mockito.when(sourceResolver.resolve(magnet))
+                .thenReturn(new ResolvedSource(SourceKind.MAGNET, URI.create(magnet)));
+        Mockito.when(offlineDownloadGateway.submitUri(any(), any())).thenReturn("gid1");
+        Mockito.when(offlineDownloadGateway.queryStatus("gid1")).thenReturn(new TaskSnapshot(
+                "complete", 0L, 0L, 0L, List.of(), "probe", null));
+        DownloadOfflineTask task = newQueuedTask(magnet);
+        Mockito.when(offlineTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        Mockito.when(offlineTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.execute(new OfflineDownloadRequestedEvent(TASK_ID));
+
+        // 磁力链接里能静态校验的只有 xt/an/tr/ws：种子的 announce 与 url-list 要等元数据到手才存在。
+        // 第一趟必须停在元数据，并把种子落盘交给我们校验，内容下载由第二趟重新提交。
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> options = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(offlineDownloadGateway).submitUri(Mockito.eq(magnet), options.capture());
+        assertThat(options.getValue())
+                .containsEntry("bt-metadata-only", "true")
+                .containsEntry("bt-save-metadata", "true");
+    }
+
+    @Test
     void torrentShapedDirectLinkIsValidatedBeforeItIsExpanded() throws IOException {
         Path taskDirectory = Files.createTempDirectory("offline-torrent-expand");
         Path payload = taskDirectory.resolve("payload");
@@ -464,6 +495,79 @@ class OfflineDownloadExecutionServiceTest {
         order.verify(torrentAddressValidator).validate(any());
         order.verify(offlineDownloadGateway).submitTorrent(any(), any());
         // 入库的是种子内容，不是那枚种子本体——与改参数之前的可见结果一致。
+        assertThat(result).containsExactly(video);
+    }
+
+    /**
+     * 磁力第一趟取回的元数据没过闸门时，一个下载请求都不许发出。
+     */
+    @Test
+    void magnetMetadataIsValidatedBeforeItsContentsAreDownloaded() throws IOException {
+        String magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+        Path taskDirectory = Files.createTempDirectory("offline-magnet-rejected");
+        Path metadata = taskDirectory.resolve("0123456789abcdef0123456789abcdef01234567.torrent");
+        Files.writeString(metadata, "d8:announce0:e");
+        Mockito.when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        DownloadOfflineTask task = newQueuedTask(magnet);
+        Mockito.when(offlineTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        Mockito.when(offlineTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Mockito.when(torrentAddressValidator.looksLikeTorrent(any())).thenReturn(true);
+        Mockito.doThrow(new BusinessException(ErrorCode.FILE_SECURITY_REJECTED, "种子内嵌地址不允许"))
+                .when(torrentAddressValidator)
+                .validate(any());
+
+        assertThatThrownBy(() -> service.expandMagnetMetadata(
+                task,
+                new ResolvedSource(SourceKind.MAGNET, URI.create(magnet)),
+                taskDirectory,
+                List.of(metadata)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("种子内嵌地址不允许");
+
+        Mockito.verifyNoInteractions(offlineDownloadGateway);
+    }
+
+    @Test
+    void validatedMagnetMetadataExpandsIntoItsContentsAndTheMetadataIsNotImported() throws IOException {
+        String magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+        Path taskDirectory = Files.createTempDirectory("offline-magnet-expanded");
+        Path metadata = taskDirectory.resolve("0123456789abcdef0123456789abcdef01234567.torrent");
+        Files.writeString(metadata, "d8:announce0:e");
+        Path video = taskDirectory.resolve("episode.mkv");
+        Files.writeString(video, "video-bytes");
+        Mockito.when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        Mockito.when(offlineDownloadGateway.pollIntervalSeconds()).thenReturn(1);
+        DownloadOfflineTask task = newQueuedTask(magnet);
+        Mockito.when(offlineTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        Mockito.when(offlineTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Mockito.when(torrentAddressValidator.looksLikeTorrent(any())).thenReturn(true);
+        Mockito.when(offlineDownloadGateway.submitTorrent(any(), any())).thenReturn("gid2");
+        Mockito.when(offlineDownloadGateway.queryStatus("gid2")).thenReturn(new TaskSnapshot(
+                "complete", 11L, 11L, 0L,
+                List.of(new DownloadedFile(video.toString(), true)), "episode", null));
+
+        List<Path> result = service.expandMagnetMetadata(
+                task,
+                new ResolvedSource(SourceKind.MAGNET, URI.create(magnet)),
+                taskDirectory,
+                List.of(metadata));
+
+        InOrder order = Mockito.inOrder(torrentAddressValidator, offlineDownloadGateway);
+        order.verify(torrentAddressValidator).validate(any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> options = ArgumentCaptor.forClass(Map.class);
+        order.verify(offlineDownloadGateway).submitTorrent(any(), options.capture());
+        // 第二趟我们已持有校验过的种子内容：不再让下载器另存元数据，否则会多出一枚混进入库的种子文件。
+        assertThat(options.getValue())
+                .containsEntry("bt-save-metadata", "false")
+                .containsEntry("bt-metadata-only", "false")
+                .containsEntry("follow-torrent", "false");
         assertThat(result).containsExactly(video);
     }
 

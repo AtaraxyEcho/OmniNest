@@ -3697,6 +3697,18 @@ abstract class AppLocalizations {
   /// **'This folder is empty'**
   String get filesFolderEmpty;
 
+  /// No description provided for @filesShareItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String filesShareItemCount(Object count);
+
+  /// Location label shown when browsing the top level of a directed shared folder
+  ///
+  /// In en, this message translates to:
+  /// **'Shared folder root'**
+  String get filesSharedFolderRoot;
+
   /// No description provided for @filesMoveToFolder.
   ///
   /// In en, this message translates to:

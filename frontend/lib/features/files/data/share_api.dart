@@ -75,6 +75,59 @@ class ShareApi implements PublicShareRepository {
     }
   }
 
+  /// 浏览分享文件夹的子项。
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    try {
+      final sessionToken = await _ensureSession(token, null);
+      if (sessionToken == null) {
+        return ShareChildrenResult.error(AppErrorCodes.needPassword);
+      }
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/s/$token/children',
+        queryParameters: {
+          if (parentId != null && parentId.isNotEmpty) 'parentId': parentId,
+          'page': page,
+          'size': size,
+        },
+        options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
+      );
+      final body = response.data;
+      if (body == null || body['code'] != 200) {
+        return ShareChildrenResult.error(
+          body?['message']?.toString() ?? AppErrorCodes.operationFailed,
+        );
+      }
+      final data = body['data'] as Map<String, dynamic>?;
+      final raw = data?['items'];
+      if (raw is! List) {
+        return ShareChildrenResult.error(AppErrorCodes.emptyResponse);
+      }
+      return ShareChildrenResult.success(
+        items: raw
+            .whereType<Map<String, dynamic>>()
+            .map(ShareChild.fromJson)
+            .toList(growable: false),
+        total: (data?['totalElements'] as num?)?.toInt() ?? raw.length,
+      );
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      if (body is Map<String, dynamic>) {
+        return ShareChildrenResult.error(
+          body['message']?.toString() ?? AppErrorCodes.operationFailed,
+        );
+      }
+      return ShareChildrenResult.error(_networkErrorCode(e));
+    } on Object catch (e) {
+      return ShareChildrenResult.error('${AppErrorCodes.unknown}: $e');
+    }
+  }
+
   /// 接受分享，保存文件到当前用户。
   @override
   Future<ShareAcceptResult> accept(

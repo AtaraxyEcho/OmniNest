@@ -17,10 +17,13 @@ import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FileShareAccessDto;
+import com.omninest.modules.file.dto.FileShareChildDto;
 import com.omninest.modules.file.dto.FileSharePreviewDto;
 import com.omninest.modules.file.dto.ShareAccessSessionDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import java.time.Duration;
@@ -31,6 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FileShareAccessService {
     private final FileNodeRepository fileNodeRepository;
     private final ShareLinkRepository shareLinkRepository;
+    private final FileShareRecipientRepository shareRecipientRepository;
     private final PasswordEncoder passwordEncoder;
     private final RateLimitService rateLimitService;
     private final NotificationPublisher notificationService;
@@ -258,6 +263,131 @@ public class FileShareAccessService {
                 link.getId(), node.getName(), node.getMimeType(), node.getSizeBytes(),
                 link.getResourceType(), link.getPasswordHash() != null
         );
+    }
+
+    /**
+     * 使用短期会话浏览被分享的文件夹子树。
+     *
+     * <p>访客只能从分享根目录逐级进入：请求的节点必须属于链接所有者且未删除，并且路径落在根目录子树内，
+     * 越界一律按"不存在"处理，不能让一条分享链接变成遍历其他目录的凭据。派生资产与只读影视库来源
+     * 沿用文件列表的可见性口径，不出现在子项里；文件按页批量签发短期下载地址，与单文件分享一致。</p>
+     *
+     * @param rawToken      分享明文 token
+     * @param sessionToken  短期会话 token
+     * @param clientAddress 客户端地址，用于按访问者计限流键
+     * @param parentId      要浏览的目录 ID，空表示分享根目录
+     * @param page          页码
+     * @param size          每页数量
+     * @return 子项分页结果
+     */
+    @Transactional(readOnly = true)
+    public Page<FileShareChildDto> shareChildrenSession(
+            String rawToken,
+            String sessionToken,
+            String clientAddress,
+            UUID parentId,
+            int page,
+            int size
+    ) {
+        String tokenHash = FileShareService.sha256(rawToken);
+        requireShareRateLimit(tokenHash, clientAddress);
+        resourceShareLinkService.requireAnySession(rawToken, sessionToken);
+        return childrenOfShareLink(findShareLinkCached(tokenHash), parentId, page, size);
+    }
+
+    /**
+     * 定向分享的接收人浏览被分享的文件夹子树。
+     *
+     * <p>授权依据是"接收人 ↔ 分享链接"这层关系：{@code createShare} 只写接收人记录，
+     * 既不写 FilePermission、也不给后代打 shared 标记，所以这里不能借用文件权限解析，
+     * 也不能要求节点 shared。链接被撤销或过期后不得继续可逛。</p>
+     *
+     * @param userId   当前用户（接收人）ID
+     * @param shareId  分享链接 ID
+     * @param parentId 要浏览的目录 ID，空表示分享根目录
+     * @param page     页码
+     * @param size     每页数量
+     * @return 子项分页结果
+     */
+    @Transactional(readOnly = true)
+    public Page<FileShareChildDto> shareChildrenForRecipient(
+            UUID userId,
+            UUID shareId,
+            UUID parentId,
+            int page,
+            int size
+    ) {
+        if (!shareRecipientRepository.existsByShareLink_IdAndRecipientUserId(shareId, userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "该分享不是分享给你的");
+        }
+        ShareLink link = shareLinkRepository.findById(shareId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "分享链接不存在"));
+        if (link.getDisabledAt() != null) {
+            throw new BusinessException(ErrorCode.CONFLICT, "分享链接已撤销");
+        }
+        if (link.getExpiresAt() != null && Instant.now().isAfter(link.getExpiresAt())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "分享链接已过期");
+        }
+        return childrenOfShareLink(link, parentId, page, size);
+    }
+
+    private Page<FileShareChildDto> childrenOfShareLink(
+            ShareLink link,
+            UUID parentId,
+            int page,
+            int size
+    ) {
+        if (!NodeType.FOLDER.getValue().equals(link.getResourceType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "该分享链接不是文件夹");
+        }
+        FileNode root = requireShareOwnerNode(link, link.getResourceId(), "分享的文件夹不存在或已被删除");
+        FileNode parent = parentId == null || parentId.equals(root.getId())
+                ? root
+                : requireInsideSharedSubtree(link, root, parentId);
+        Page<FileNodeDto> nodes = fileQueryService.listFilesPage(
+                link.getOwnerUserId(), parent.getId(), null, page, size);
+        Map<UUID, String> downloadUrls = signShareChildUrls(link.getOwnerUserId(), nodes.getContent());
+        return nodes.map(node -> new FileShareChildDto(
+                node.id(),
+                node.parentId(),
+                node.nodeType(),
+                node.name(),
+                node.mimeType(),
+                node.sizeBytes(),
+                node.updatedAt(),
+                downloadUrls.get(node.id())
+        ));
+    }
+
+    private FileNode requireShareOwnerNode(ShareLink link, UUID nodeId, String message) {
+        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(nodeId, link.getOwnerUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, message));
+    }
+
+    private FileNode requireInsideSharedSubtree(ShareLink link, FileNode root, UUID nodeId) {
+        FileNode node = requireShareOwnerNode(link, nodeId, "文件夹不存在或已被删除");
+        // 前缀带尾斜杠：/docs 不能把 /documentation 也算进子树。
+        if (!node.getNormalizedPath().startsWith(root.getNormalizedPath() + "/")) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件夹不存在或已被删除");
+        }
+        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件没有子目录");
+        }
+        return node;
+    }
+
+    private Map<UUID, String> signShareChildUrls(UUID ownerUserId, List<FileNodeDto> nodes) {
+        List<UUID> fileIds = nodes.stream()
+                .filter(node -> NodeType.FILE.getValue().equals(node.nodeType()))
+                .map(FileNodeDto::id)
+                .toList();
+        if (fileIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> urls = new LinkedHashMap<>();
+        fileQueryService.createDownloadUrls(ownerUserId, fileIds)
+                .forEach((nodeId, downloadUrl) -> urls.put(nodeId, downloadUrl.downloadUrl()));
+        return urls;
     }
 
     /**

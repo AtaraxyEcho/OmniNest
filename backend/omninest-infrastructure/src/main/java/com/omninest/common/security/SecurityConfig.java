@@ -67,6 +67,7 @@ public class SecurityConfig {
                         "/api/v1/s/*",
                         "/api/v1/s/*/authorize",
                         "/api/v1/s/*/preview",
+                        "/api/v1/s/*/children",
                         "/share/**",
                         "/api/v1/external-connectors/*/oauth/callback"
                 )

@@ -83,6 +83,34 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('文件夹分享列出子项，点进子目录后可返回上一级', (tester) async {
+    await tester.pumpWidget(
+      _host(PublicShareService(_FolderShareRepository())),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('共 2 项'), findsOneWidget);
+    expect(find.text('videos'), findsOneWidget);
+    expect(find.text('a.mkv'), findsOneWidget);
+    expect(find.text('保存到我的文件'), findsOneWidget);
+
+    await tester.tap(find.text('videos'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('b.mkv'), findsOneWidget);
+    expect(find.text('a.mkv'), findsNothing);
+    expect(find.text('共 1 项'), findsOneWidget);
+
+    await tester.tap(
+      find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('a.mkv'), findsOneWidget);
+    expect(find.text('videos'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _host(PublicShareService service) {
@@ -127,6 +155,79 @@ class _OkShareRepository implements PublicShareRepository {
   }
 
   @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    return const ShareChildrenSuccess(items: [], total: 0);
+  }
+
+  @override
+  Future<ShareAcceptResult> accept(
+    String token, {
+    String? password,
+    String? authToken,
+  }) async {
+    return ShareAcceptResult.success();
+  }
+}
+
+/// 文件夹分享：根目录两项，进入子目录后只剩一项。
+class _FolderShareRepository implements PublicShareRepository {
+  @override
+  Future<SharePreviewResult> preview(String token, {String? password}) async {
+    return const SharePreviewSuccess(
+      fileName: 'trip',
+      sizeBytes: 0,
+      resourceType: 'FOLDER',
+      hasPassword: false,
+    );
+  }
+
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    if (parentId == null) {
+      return const ShareChildrenSuccess(
+        items: [
+          ShareChild(
+            id: 'f-1',
+            name: 'videos',
+            nodeType: 'FOLDER',
+            sizeBytes: 0,
+          ),
+          ShareChild(
+            id: 'a-1',
+            name: 'a.mkv',
+            nodeType: 'FILE',
+            sizeBytes: 1024,
+            downloadUrl: 'https://signed/a.mkv',
+          ),
+        ],
+        total: 2,
+      );
+    }
+    return const ShareChildrenSuccess(
+      items: [
+        ShareChild(
+          id: 'b-1',
+          name: 'b.mkv',
+          nodeType: 'FILE',
+          sizeBytes: 2048,
+          downloadUrl: 'https://signed/b.mkv',
+        ),
+      ],
+      total: 1,
+    );
+  }
+
+  @override
   Future<ShareAcceptResult> accept(
     String token, {
     String? password,
@@ -143,6 +244,16 @@ class _PasswordShareRepository implements PublicShareRepository {
   }
 
   @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    return const ShareChildrenFailure('SHARE_NEED_PASSWORD');
+  }
+
+  @override
   Future<ShareAcceptResult> accept(
     String token, {
     String? password,
@@ -156,6 +267,16 @@ class _FailingShareRepository implements PublicShareRepository {
   @override
   Future<SharePreviewResult> preview(String token, {String? password}) async {
     return const SharePreviewError('SHARE_EXPIRED');
+  }
+
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    return const ShareChildrenFailure('SHARE_EXPIRED');
   }
 
   @override

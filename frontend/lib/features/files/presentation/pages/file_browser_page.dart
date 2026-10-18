@@ -63,6 +63,7 @@ import 'package:omninest/features/files/presentation/pages/file_preview_page.dar
 import 'package:omninest/features/files/presentation/widgets/file_drop_upload_surface.dart';
 import 'package:omninest/features/files/presentation/widgets/external_storage_account_dialog.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/features/files/presentation/widgets/shared_folder_browser.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
 import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/features/files/presentation/widgets/files_table_view.dart';

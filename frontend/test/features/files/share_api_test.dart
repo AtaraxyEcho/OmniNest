@@ -362,6 +362,63 @@ void main() {
     );
 
     test(
+      'listChildren maps the paged share subtree response',
+      () async {
+        final adapter = _ShareCapturingAdapter(
+          body: {
+            'code': 200,
+            'message': 'success',
+            'data': {
+              'items': [
+                {
+                  'id': 'f-1',
+                  'parentId': 'r-1',
+                  'nodeType': 'FOLDER',
+                  'name': 'videos',
+                  'sizeBytes': 0,
+                },
+                {
+                  'id': 'a-1',
+                  'parentId': 'r-1',
+                  'nodeType': 'FILE',
+                  'name': 'a.mkv',
+                  'mimeType': 'video/x-matroska',
+                  'sizeBytes': 4096,
+                  'downloadUrl': 'https://signed/a.mkv',
+                },
+              ],
+              'page': 0,
+              'size': 50,
+              'totalElements': 2,
+              'totalPages': 1,
+            },
+          },
+        );
+        final api = _createShareApi(adapter);
+
+        final result = await api.listChildren('token-abc', parentId: 'r-1');
+
+        expect(adapter.lastMethod, 'GET');
+        expect(adapter.lastPath, '/s/token-abc/children');
+        expect(
+          adapter.lastQueryParams,
+          {'parentId': 'r-1', 'page': 0, 'size': 50},
+        );
+        expect(
+          adapter.lastHeaders?['X-OmniNest-Share-Session'],
+          'session-test',
+        );
+        final success = result as ShareChildrenSuccess;
+        expect(success.total, 2);
+        expect(success.items.map((child) => child.name), ['videos', 'a.mkv']);
+        // 文件夹没有下载语义：服务端不给地址，模型也不该凭空造一个。
+        expect(success.items.first.isFolder, isTrue);
+        expect(success.items.first.downloadUrl, isNull);
+        expect(success.items.last.downloadUrl, 'https://signed/a.mkv');
+      },
+    );
+
+    test(
       'preview omits password from preview request when not provided',
       () async {
         final adapter = _ShareCapturingAdapter(

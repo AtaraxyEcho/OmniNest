@@ -2,6 +2,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
 abstract interface class FileRepository {
@@ -88,6 +89,14 @@ abstract interface class FileRepository {
   Future<FilesSubPage<SharedFileItem>> listSharedWithMePage({
     int page = 0,
     int size = 10,
+  });
+
+  /// 分页浏览定向分享给当前用户的文件夹子树。
+  Future<FilesSubPage<ShareChild>> listSharedFolderChildren({
+    required String shareId,
+    String? parentId,
+    int page = 0,
+    int size = 50,
   });
 
   Future<List<FileShareLink>> listMyShares();

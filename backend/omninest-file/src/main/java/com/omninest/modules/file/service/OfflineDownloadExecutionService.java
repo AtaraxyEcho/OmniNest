@@ -128,6 +128,7 @@ public class OfflineDownloadExecutionService {
             downloadCompleted = true;
             List<Path> completedFiles = resolveCompletedFiles(taskDirectory, status);
             completedFiles = expandHttpTorrentPayload(task, source, taskDirectory, completedFiles);
+            completedFiles = expandMagnetMetadata(task, source, taskDirectory, completedFiles);
             if (completedFiles.isEmpty()) {
                 markFailed(task.getId(), "aria2 未生成可导入文件");
                 return;
@@ -185,6 +186,12 @@ public class OfflineDownloadExecutionService {
             options.put("max-redirect", "0");
             return offlineDownloadGateway.submitUri(finalUri.toString(), options);
         }
+        if (source.kind() == SourceKind.MAGNET) {
+            // 磁力链接可静态校验的只有链接里写明的 xt/an/tr/ws；种子的 announce 与 url-list
+            // 要等元数据到手才存在，无法在提交前校验。所以这一趟只取元数据，
+            // 拿到种子后过闸门，再由 expandMagnetMetadata 用校验过的内容重新提交。
+            options.put("bt-metadata-only", "true");
+        }
         return offlineDownloadGateway.submitUri(source.uri().toString(), options);
     }
 
@@ -200,6 +207,16 @@ public class OfflineDownloadExecutionService {
         // 都会解析并立刻回连种子内嵌的 url-list / announce，那批地址我们从未校验过。
         // 直链种子的展开改由 expandHttpTorrentPayload 在做完内嵌地址校验之后自己提交。
         options.put("follow-torrent", "false");
+        return options;
+    }
+
+    /**
+     * 种子内容已经由我们持有并校验过的第二趟提交：不再让下载器另存一份元数据文件，
+     * 否则那枚 {@code .torrent} 会混进入库结果。
+     */
+    private Map<String, Object> aria2ValidatedTorrentOptions(Path taskDirectory) {
+        Map<String, Object> options = aria2DownloadOptions(taskDirectory);
+        options.put("bt-save-metadata", "false");
         return options;
     }
 
@@ -228,7 +245,7 @@ public class OfflineDownloadExecutionService {
             torrentAddressValidator.validate(torrentBytes);
             String expandedGid = offlineDownloadGateway.submitTorrent(
                     torrentBytes,
-                    aria2DownloadOptions(taskDirectory)
+                    aria2ValidatedTorrentOptions(taskDirectory)
             );
             updateAria2Gid(task.getId(), expandedGid);
             TaskSnapshot expanded = waitForCompletion(task.getId(), expandedGid);
@@ -238,6 +255,50 @@ public class OfflineDownloadExecutionService {
             List<Path> expandedFiles = new ArrayList<>();
             for (Path produced : resolveCompletedFiles(taskDirectory, expanded)) {
                 if (!produced.equals(candidate)) {
+                    expandedFiles.add(produced);
+                }
+            }
+            if (expandedFiles.isEmpty()) {
+                expandedFiles.add(candidate);
+            }
+            return expandedFiles;
+        }
+        return completedFiles;
+    }
+
+    /**
+     * 磁力链接的第二趟：第一趟只取回元数据，这里对种子内嵌地址过闸门，通过后才作为种子任务提交。
+     * 与直链种子的展开同一口径——闸门没过就抛业务错误，那批地址不会有任何请求；展开失败或任务被
+     * 取消时保留元数据文件本体，不丢已经拿到的成果。入库只收第二趟新产生的文件，元数据本身不入库。
+     * 包级可见同 {@link #expandHttpTorrentPayload}。
+     */
+    List<Path> expandMagnetMetadata(
+            DownloadOfflineTask task,
+            ResolvedSource source,
+            Path taskDirectory,
+            List<Path> completedFiles
+    ) {
+        if (source.kind() != SourceKind.MAGNET || completedFiles.isEmpty()) {
+            return completedFiles;
+        }
+        for (Path candidate : completedFiles) {
+            byte[] torrentBytes = readTorrentPayload(candidate);
+            if (torrentBytes == null) {
+                continue;
+            }
+            torrentAddressValidator.validate(torrentBytes);
+            String expandedGid = offlineDownloadGateway.submitTorrent(
+                    torrentBytes,
+                    aria2ValidatedTorrentOptions(taskDirectory)
+            );
+            updateAria2Gid(task.getId(), expandedGid);
+            TaskSnapshot expanded = waitForCompletion(task.getId(), expandedGid);
+            if (expanded == null) {
+                return completedFiles;
+            }
+            List<Path> expandedFiles = new ArrayList<>();
+            for (Path produced : resolveCompletedFiles(taskDirectory, expanded)) {
+                if (!completedFiles.contains(produced)) {
                     expandedFiles.add(produced);
                 }
             }

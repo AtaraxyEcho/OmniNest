@@ -1896,6 +1896,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesFolderEmpty => '此文件夹为空';
 
   @override
+  String filesShareItemCount(Object count) {
+    return '共 $count 项';
+  }
+
+  @override
+  String get filesSharedFolderRoot => '分享根目录';
+
+  @override
   String filesMoveToFolder(Object name) {
     return '移动到「$name」';
   }

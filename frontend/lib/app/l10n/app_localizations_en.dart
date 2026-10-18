@@ -1964,6 +1964,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesFolderEmpty => 'This folder is empty';
 
   @override
+  String filesShareItemCount(Object count) {
+    return '$count items';
+  }
+
+  @override
+  String get filesSharedFolderRoot => 'Shared folder root';
+
+  @override
   String filesMoveToFolder(Object name) {
     return 'Move to \"$name\"';
   }

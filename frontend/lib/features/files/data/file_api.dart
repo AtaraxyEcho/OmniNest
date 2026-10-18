@@ -13,6 +13,7 @@ import 'package:omninest/features/files/application/file_download_url_provider.d
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
 class FileApi {
@@ -448,6 +449,27 @@ class FileApi {
       parseData(response.data),
       _responseParser.decodeSharedItem,
     );
+  }
+
+  /// 分页浏览定向分享给当前用户的文件夹子树。
+  ///
+  /// 接收人拿不到分享明文 token，只能按分享标识走鉴权链；服务端以"接收人 ↔ 分享链接"
+  /// 关系授权，并把可见范围钉在分享根目录子树内。
+  Future<FilesSubPage<ShareChild>> listSharedFolderChildren({
+    required String shareId,
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/shared-with-me/$shareId/children',
+      queryParameters: {
+        if (parentId != null && parentId.isNotEmpty) 'parentId': parentId,
+        'page': page,
+        'size': size,
+      },
+    );
+    return FilesSubPage.fromJson(parseData(response.data), ShareChild.fromJson);
   }
 
   Future<List<FileShareLink>> listMyShares() async {

@@ -2,11 +2,77 @@
 abstract interface class PublicShareRepository {
   Future<SharePreviewResult> preview(String token, {String? password});
 
+  /// 逐级浏览被分享的文件夹；`parentId` 为空表示分享根目录。
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page,
+    int size,
+  });
+
   Future<ShareAcceptResult> accept(
     String token, {
     String? password,
     String? authToken,
   });
+}
+
+/// 分享文件夹的子项。
+class ShareChild {
+  const ShareChild({
+    required this.id,
+    required this.name,
+    required this.nodeType,
+    required this.sizeBytes,
+    this.parentId,
+    this.mimeType,
+    this.downloadUrl,
+  });
+
+  factory ShareChild.fromJson(Map<String, dynamic> json) => ShareChild(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    nodeType: json['nodeType']?.toString() ?? 'FILE',
+    sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
+    parentId: json['parentId']?.toString(),
+    mimeType: json['mimeType']?.toString(),
+    downloadUrl: json['downloadUrl']?.toString(),
+  );
+
+  final String id;
+  final String name;
+  final String nodeType;
+  final int sizeBytes;
+  final String? parentId;
+  final String? mimeType;
+  final String? downloadUrl;
+
+  bool get isFolder => nodeType == 'FOLDER';
+}
+
+/// 分享文件夹子项的分页结果。
+sealed class ShareChildrenResult {
+  const ShareChildrenResult();
+
+  factory ShareChildrenResult.success({
+    required List<ShareChild> items,
+    required int total,
+  }) = ShareChildrenSuccess;
+
+  factory ShareChildrenResult.error(String message) = ShareChildrenFailure;
+}
+
+class ShareChildrenSuccess extends ShareChildrenResult {
+  const ShareChildrenSuccess({required this.items, required this.total});
+
+  final List<ShareChild> items;
+  final int total;
+}
+
+class ShareChildrenFailure extends ShareChildrenResult {
+  const ShareChildrenFailure(this.message);
+
+  final String message;
 }
 
 /// 公开分享预览结果。

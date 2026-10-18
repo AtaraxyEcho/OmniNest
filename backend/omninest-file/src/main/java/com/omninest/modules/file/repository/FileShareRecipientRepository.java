@@ -30,6 +30,15 @@ public interface FileShareRecipientRepository extends JpaRepository<FileShareRec
      */
     List<FileShareRecipient> findByShareLink_Id(UUID shareLinkId);
 
+    /**
+     * 判断某条分享是否定向给过该用户，作为接收人浏览子项的授权依据。
+     *
+     * @param shareLinkId      分享标识
+     * @param recipientUserId  接收人用户标识
+     * @return 是否存在接收人关系
+     */
+    boolean existsByShareLink_IdAndRecipientUserId(UUID shareLinkId, UUID recipientUserId);
+
     void deleteByShareLink_Id(UUID shareLinkId);
 
     void deleteByShareLink_IdIn(Collection<UUID> shareLinkIds);

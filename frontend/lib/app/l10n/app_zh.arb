@@ -694,6 +694,16 @@
   "filesRootDirectory": "根目录",
   "filesGoToParent": "返回上级目录",
   "filesFolderEmpty": "此文件夹为空",
+  "filesShareItemCount": "共 {count} 项",
+  "@filesShareItemCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "filesSharedFolderRoot": "分享根目录",
+  "@filesSharedFolderRoot": {
+    "description": "定向分享文件夹浏览时，处于顶层目录的位置标签"
+  },
   "filesMoveToFolder": "移动到「{name}」",
   "filesStatusQueued": "等待中",
   "filesStatusUploading": "上传中",
