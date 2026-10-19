@@ -254,6 +254,51 @@ class ModuleDependencyBoundaryTest {
         );
     }
 
+    /**
+     * 允许直接持有照片索引 {@code IndexWriter} 的单写侧服务。
+     *
+     * <p>API 与 Worker 共挂同一 Lucene 卷时，第二个写者会抢不到 {@code write.lock}；
+     * 因此请求进程只能通过 Outbox 投递 {@code PHOTO_INDEX} 消息，由 Worker 串行写入。</p>
+     */
+    private static final Set<String> PHOTO_INDEX_WRITER_SOURCES = Set.of(
+            "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoIndexTaskService.java",
+            "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoFileCleanupService.java"
+    );
+
+    @Test
+    void photoIndexWritesMustStayInSingleWriterServices() throws IOException {
+        Path root = findBackendRoot();
+        Pattern writerCall = Pattern.compile(
+                "photoSearchIndexService\\.(indexPhoto|deletePhoto|deletePhotos)\\s*\\(");
+        Set<String> violations = new TreeSet<>();
+        for (String module : MODULES) {
+            Path sourceRoot = root.resolve(module).resolve("src/main/java");
+            if (!Files.isDirectory(sourceRoot)) {
+                continue;
+            }
+            try (Stream<Path> paths = Files.walk(sourceRoot)) {
+                for (Path path : paths.filter(this::isJavaSource).toList()) {
+                    String relative = normalize(root.relativize(path));
+                    if (PHOTO_INDEX_WRITER_SOURCES.contains(relative)
+                            || relative.endsWith("PhotoSearchIndexService.java")) {
+                        continue;
+                    }
+                    try (Stream<String> lines = Files.lines(path)) {
+                        if (lines.anyMatch(line -> writerCall.matcher(line).find())) {
+                            violations.add(relative);
+                        }
+                    }
+                }
+            }
+        }
+
+        assertTrue(
+                violations.isEmpty(),
+                () -> "照片索引写入只能由单写进程执行，请求侧请改为投递 PHOTO_INDEX 消息：\n"
+                        + String.join("\n", violations)
+        );
+    }
+
     private Set<String> scanBusinessViolations() throws IOException {
         Path root = findBackendRoot();
         Set<String> violations = new HashSet<>();

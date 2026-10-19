@@ -189,7 +189,7 @@ public class FileSearchIndexService implements Closeable {
                     fileNodeId, ownerUserId, title, spaceType
             );
         } catch (Exception e) {
-            log.warn("Lucene 索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+            log.error("Lucene 索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
         }
     }
 
@@ -237,7 +237,7 @@ public class FileSearchIndexService implements Closeable {
             });
             log.debug("删除索引: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId);
         } catch (Exception e) {
-            log.warn("Lucene 索引删除失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+            log.error("Lucene 索引删除失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
         }
     }
 
@@ -261,7 +261,7 @@ public class FileSearchIndexService implements Closeable {
             });
             log.debug("批量删除索引: count={}, ownerUserId={}", fileNodeIds.size(), ownerUserId);
         } catch (Exception e) {
-            log.warn("Lucene 索引批量删除失败: count={}, ownerUserId={}", fileNodeIds.size(), ownerUserId, e);
+            log.error("Lucene 索引批量删除失败: count={}, ownerUserId={}", fileNodeIds.size(), ownerUserId, e);
         }
     }
 
@@ -309,7 +309,7 @@ public class FileSearchIndexService implements Closeable {
             });
             log.debug("批量索引文件: count={}, ownerUserId={}", docs.size(), ownerUserId);
         } catch (Exception e) {
-            log.warn("Lucene 索引批量写入失败: count={}, ownerUserId={}", docs.size(), ownerUserId, e);
+            log.error("Lucene 索引批量写入失败: count={}, ownerUserId={}", docs.size(), ownerUserId, e);
         }
     }
 
@@ -359,7 +359,7 @@ public class FileSearchIndexService implements Closeable {
                     fileNodeId, ownerUserId, chunks.size(), spaceType
             );
         } catch (Exception e) {
-            log.warn("Lucene 分块索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+            log.error("Lucene 分块索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
         }
     }
 
@@ -456,7 +456,7 @@ public class FileSearchIndexService implements Closeable {
                 return results;
             });
         } catch (Exception e) {
-            log.warn("Lucene 搜索失败: ownerUserId={}, queryLength={}, errorType={}",
+            log.error("Lucene 搜索失败: ownerUserId={}, queryLength={}, errorType={}",
                     ownerUserId, queryStr.length(), e.getClass().getSimpleName());
             return new ArrayList<>();
         }

@@ -41,6 +41,26 @@ class PhotoSearchIndexServiceTest {
     }
 
     @Test
+    @DisplayName("只读实例能读到另一个写者提交的段（API 读、Worker 写同一卷）")
+    void readOnlyInstanceSeesCommitsFromAnotherWriter() throws Exception {
+        UUID photoId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        try (PhotoSearchIndexService writer = new PhotoSearchIndexService(indexDir.toString());
+             PhotoSearchIndexService readerSide = new PhotoSearchIndexService(indexDir.toString())) {
+            // 写侧打开 IndexWriter 并提交，读侧实例从未写过，只能靠重新打开目录读到新段。
+            writer.indexPhoto(photoId, ownerUserId, "sunset", "sunset", List.of("sunset"));
+            // 同一照片重复索引必须替换文档，不能累积成多份命中。
+            writer.indexPhoto(photoId, ownerUserId, "sunset", "sunset", List.of("sunset", "sea"));
+            assertThat(writer.search(ownerUserId, "sunset", 10)).as("写侧自身可读且未重复").containsExactly(photoId);
+            assertThat(readerSide.search(ownerUserId, "sunset", 10)).as("只读实例可见").containsExactly(photoId);
+
+            // 只有写者能提交删除；只读实例随后必须看到删除后的空结果。
+            writer.deletePhoto(photoId);
+            assertThat(readerSide.search(ownerUserId, "sunset", 10)).isEmpty();
+        }
+    }
+
+    @Test
     @DisplayName("独占索引卷时写入与删除正常完成")
     void writesAndDeletesWhenHoldingTheIndexExclusively() throws Exception {
         PhotoSearchIndexService service = new PhotoSearchIndexService(indexDir.toString());

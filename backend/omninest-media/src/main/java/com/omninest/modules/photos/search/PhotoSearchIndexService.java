@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
@@ -64,14 +65,16 @@ public class PhotoSearchIndexService implements Closeable {
     }
 
     private synchronized DirectoryReader getReader() throws IOException {
+        // 首次读取必须先打开目录：openIfChanged(null) 会直接 NPE，而 search 把异常吞成
+        // 空结果，表现为"新进程里照片搜索永远搜不到"。
+        if (reader == null) {
+            reader = DirectoryReader.open(directory);
+            return reader;
+        }
         DirectoryReader newReader = DirectoryReader.openIfChanged(reader);
         if (newReader != null) {
-            if (reader != null) {
-                reader.close();
-            }
+            reader.close();
             reader = newReader;
-        } else if (reader == null) {
-            reader = DirectoryReader.open(directory);
         }
         return reader;
     }
@@ -83,7 +86,10 @@ public class PhotoSearchIndexService implements Closeable {
         try {
             IndexWriter w = getWriter();
             Document doc = new Document();
-            doc.add(new TextField(FIELD_PHOTO_ID, photoId.toString(), Field.Store.YES));
+            // photoId 用 StringField：TextField 会被分析器按 UUID 连字符切分，
+            // updateDocument/deleteDocuments 的精确 Term 永远匹配不到，表现为删除不生效、
+            // 同一照片重复索引出多份文档。与 FileSearchIndexService 的 fileId 同口径。
+            doc.add(new StringField(FIELD_PHOTO_ID, photoId.toString(), Field.Store.YES));
             doc.add(new TextField(FIELD_OWNER_USER_ID, ownerUserId.toString(), Field.Store.YES));
             doc.add(new TextField(FIELD_TITLE, title != null ? title : "", Field.Store.YES));
             if (description != null && !description.isBlank()) {
@@ -175,7 +181,8 @@ public class PhotoSearchIndexService implements Closeable {
                 results.add(photoId);
             }
         } catch (Exception e) {
-            log.warn("Lucene 照片搜索失败: queryLength={}, errorType={}",
+            // 搜索异常若只记 warn 会表现为"搜不到"，与索引写失败同属必须可见的故障。
+            log.error("Lucene 照片搜索失败: queryLength={}, errorType={}",
                     queryStr.length(), e.getClass().getSimpleName());
         }
         return results;
