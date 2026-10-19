@@ -597,6 +597,32 @@ class PhotoApi {
     return PhotoShareLink.fromJson(parseData(response.data));
   }
 
+  /// 原地更新照片分享链接的可变属性；令牌不变，已发出的地址继续可用。
+  ///
+  /// 除密码外按"整体替换可变属性"解释请求体，因此可变量必须全部显式提交：
+  /// `expiresAt` 传 null 表示永久有效。口令只存哈希、调用方无法回读，
+  /// 所以 `password` 传 null 表示保持原密码不变，传空串才是显式清除。
+  Future<PhotoShareLink> updatePhotoShare(
+    String shareId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+    required bool includeLocation,
+    required bool originalQuality,
+  }) async {
+    final response = await apiClient.dio.patch<Map<String, dynamic>>(
+      '/photos/share/$shareId',
+      data: {
+        'password': password,
+        'expiresAt': expiresAt?.toUtc().toIso8601String(),
+        'maxAccessCount': maxAccessCount,
+        'includeLocation': includeLocation,
+        'originalQuality': originalQuality,
+      },
+    );
+    return PhotoShareLink.fromJson(parseData(response.data));
+  }
+
   /// 列出单张照片分享链接
   Future<List<PhotoShareLink>> listPhotoShares(String photoId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(

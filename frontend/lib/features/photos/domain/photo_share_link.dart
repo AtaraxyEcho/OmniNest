@@ -13,6 +13,7 @@ class PhotoShareLink {
     this.maxAccessCount,
     this.includeLocation = true,
     this.originalQuality = true,
+    this.passwordProtected = false,
   });
 
   final String id;
@@ -30,6 +31,10 @@ class PhotoShareLink {
   /// 公开访问是否签发原图。
   final bool originalQuality;
 
+  /// 该链接是否设置了访问密码。密码本身不可逆，服务端只回传状态；
+  /// 面板据此如实显示密码开关，而不是把"未知"当成"未设置"。
+  final bool passwordProtected;
+
   factory PhotoShareLink.fromJson(Map<String, dynamic> json) {
     return PhotoShareLink(
       id: json['id']?.toString() ?? '',
@@ -45,6 +50,7 @@ class PhotoShareLink {
           json['accessCount'] is num ? (json['accessCount'] as num).toInt() : 0,
       includeLocation: json['includeLocation'] != false,
       originalQuality: json['originalQuality'] != false,
+      passwordProtected: json['passwordProtected'] == true,
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
     );

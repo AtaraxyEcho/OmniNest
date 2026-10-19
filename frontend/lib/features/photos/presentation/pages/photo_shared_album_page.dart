@@ -9,7 +9,7 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
-import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
@@ -56,8 +56,9 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
     }
     _loadingMore = true;
     try {
-      final controller = ref.read(photoCenterControllerProvider.notifier);
-      final next = await controller.accessSharedAlbum(
+      // 分享访客页绕开照片中心控制器，见 photo_shared_item_page 同处注释。
+      final repo = ref.read(photoRepositoryProvider);
+      final next = await repo.accessSharedAlbum(
         widget.token,
         sessionToken: sessionToken,
         page: album.page + 1,
@@ -94,14 +95,14 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
       _error = null;
     });
     try {
-      final controller = ref.read(photoCenterControllerProvider.notifier);
-      final sessionToken = await controller.authorizeSharedAlbum(
+      final repo = ref.read(photoRepositoryProvider);
+      final sessionToken = await repo.authorizeSharedAlbum(
         widget.token,
         password: _password,
       );
       if (!mounted || generation != _loadGeneration) return;
       _sessionToken = sessionToken;
-      final album = await controller.accessSharedAlbum(
+      final album = await repo.accessSharedAlbum(
         widget.token,
         sessionToken: sessionToken,
         page: 0,

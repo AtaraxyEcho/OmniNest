@@ -76,22 +76,8 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
           ),
         ),
         const SizedBox(height: 8),
-        // 两条规范槽位：永久与限时。各自独立创建/删除，互不撤销。
-        _buildSlotRow(
-          l10n,
-          permanent: true,
-          label: l10n.photosShareSlotPermanent,
-          share: _permanentShare,
-          url: _permanentUrl,
-        ),
-        const SizedBox(height: 8),
-        _buildSlotRow(
-          l10n,
-          permanent: false,
-          label: l10n.photosShareSlotTimed,
-          share: _timedShare,
-          url: _timedUrl,
-        ),
+        _buildLinkField(l10n),
+        _buildSummaryRow(l10n),
         if (_error != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -102,168 +88,185 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
             ),
           ),
         ],
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _openManageDialog,
-          child: Text(
-            l10n.photosShareManage,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.40),
-              fontSize: AppTypography.labelSmall,
+        // 第二条及以后的链接只在摘要里计数，管理入口负责列出与撤销：
+        // 面板始终只编辑一条，避免同一件事出现第二个编辑对象。
+        if (_otherShareCount > 0) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: _busy ? null : _openManageDialog,
+              icon: Icon(
+                Icons.tune_rounded,
+                size: 16,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+              label: Text(
+                l10n.photosShareManage,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.55),
+                  fontSize: AppTypography.labelSmall,
+                  letterSpacing: 0.04,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
 
-  /// 单个槽位行：有链接时展示地址与复制/删除，无链接时提供显式创建入口。
-  Widget _buildSlotRow(
-    AppLocalizations l10n, {
-    required bool permanent,
-    required String label,
-    required PhotoShareLink? share,
-    required String? url,
-  }) {
-    final copied = _copied && url != null && url == _activeUrl;
-    final hasLink = share != null && url != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.45),
-            fontSize: AppTypography.labelSmall,
-            letterSpacing: 0.04,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: Text(
-                  url ?? l10n.photosShareSlotEmpty,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50),
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (hasLink) ...[
-              TextButton(
-                onPressed:
-                    _creating
-                        ? null
-                        : () => unawaited(_copyToClipboard(url: url)),
-                style: TextButton.styleFrom(
-                  backgroundColor:
-                      copied
-                          ? SeverityColors.goodSoft
-                          : Colors.white.withValues(alpha: 0.10),
-                  foregroundColor:
-                      copied
-                          ? SeverityColors.good
-                          : Colors.white.withValues(alpha: 0.80),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(
-                      color:
-                          copied
-                              ? SeverityColors.goodMuted
-                              : Colors.white.withValues(alpha: 0.10),
-                    ),
-                  ),
-                  minimumSize: const Size(56, 36),
-                ),
-                child: Text(
-                  copied ? l10n.photosShareCopied : l10n.photosShareCopy,
-                  style: const TextStyle(
-                    fontSize: AppTypography.bodySmall,
-                    letterSpacing: 0.04,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: l10n.coreDelete,
-                onPressed:
-                    _creating
-                        ? null
-                        : () => unawaited(_removeSlot(permanent: permanent)),
-                icon: Icon(
-                  Icons.delete_outline,
-                  size: 18,
-                  color: Colors.white.withValues(alpha: 0.45),
-                ),
-              ),
-            ] else
-              TextButton(
-                onPressed:
-                    _creating
-                        ? null
-                        : () => unawaited(
-                          _createOrReplaceSlot(permanent: permanent),
-                        ),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.10),
-                  foregroundColor: Colors.white.withValues(alpha: 0.80),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
-                  ),
-                  minimumSize: const Size(56, 36),
-                ),
-                child: Text(
-                  permanent
-                      ? l10n.photosShareSlotCreatePermanent
-                      : l10n.photosShareSlotCreateTimed,
-                  style: const TextStyle(
-                    fontSize: AppTypography.bodySmall,
-                    letterSpacing: 0.04,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        // 设置（密码/有效期/隐私）变更后按当前设置重建该槽链接。
-        if (hasLink && _settingsDirty)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed:
-                  _creating
-                      ? null
-                      : () =>
-                          unawaited(_createOrReplaceSlot(permanent: permanent)),
+  /// 链接字段：地址在左、动作作为框内后缀，中间一条分隔线。
+  ///
+  /// 动作贴着它操作的对象，且"有链接/未创建"两态共用同一高度，面板上下
+  /// 各区块因此不会在创建前后跳动。
+  Widget _buildLinkField(AppLocalizations l10n) {
+    final url = _shareUrl;
+    final hasLink = _share != null && url != null;
+    final copied = _copied && hasLink;
+    return Container(
+      height: 40,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                l10n.photosShareLinkUpdate,
+                url ?? l10n.photosShareNoLinkYet,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.60),
-                  fontSize: AppTypography.labelSmall,
+                  color:
+                      hasLink
+                          ? Colors.white.withValues(alpha: 0.70)
+                          : Colors.white.withValues(alpha: 0.32),
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             ),
           ),
-      ],
+          if (hasLink)
+            Container(
+              width: 1,
+              height: 40,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+          TextButton(
+            onPressed:
+                _busy
+                    ? null
+                    : () => unawaited(
+                      hasLink ? _copyToClipboard(url: url) : _createShare(),
+                    ),
+            style: TextButton.styleFrom(
+              backgroundColor:
+                  copied
+                      ? SeverityColors.goodSoft
+                      : Colors.white.withValues(alpha: 0.06),
+              foregroundColor:
+                  copied
+                      ? SeverityColors.good
+                      : Colors.white.withValues(alpha: 0.78),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.zero,
+              ),
+              minimumSize: const Size(64, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              hasLink
+                  ? (copied ? l10n.photosShareCopied : l10n.photosShareCopy)
+                  : (_creating
+                      ? l10n.photosShareCreating
+                      : l10n.photosCreateLink),
+              style: const TextStyle(
+                fontSize: AppTypography.bodySmall,
+                letterSpacing: 0.04,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  /// 链接状态摘要行：有效期 · 提取码 · 访问量（还有其他链接时附计数），
+  /// 右端放撤销。摘要让"这条链接现在是什么状态"不必打开管理就能读到。
+  Widget _buildSummaryRow(AppLocalizations l10n) {
+    final share = _share;
+    if (share == null) {
+      return const SizedBox.shrink();
+    }
+    final segments = <String>[
+      _expirySummary(l10n, share),
+      if (_passwordProtected) l10n.photosShareSummaryPassword,
+      l10n.photosShareAccessCount(share.accessCount),
+      if (_otherShareCount > 0)
+        l10n.photosShareOtherLinksHint(_otherShareCount),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              segments.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.40),
+                fontSize: AppTypography.labelSmall,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _busy ? null : () => unawaited(_removeShare()),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white.withValues(alpha: 0.40),
+              minimumSize: const Size(0, 20),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              l10n.coreDelete,
+              style: const TextStyle(
+                fontSize: AppTypography.labelSmall,
+                letterSpacing: 0.04,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 有效期摘要文案，与"管理已有链接"对话框保持同一措辞。
+  String _expirySummary(AppLocalizations l10n, PhotoShareLink share) {
+    if (share.isExpired) {
+      return l10n.photosShareLinkExpired;
+    }
+    final expiresAt = share.expiresAt;
+    if (expiresAt == null) {
+      return l10n.photosShareLinkNoExpiry;
+    }
+    final month = expiresAt.month.toString().padLeft(2, '0');
+    final day = expiresAt.day.toString().padLeft(2, '0');
+    return l10n.photosShareLinkExpiresOn('${expiresAt.year}-$month-$day');
   }
 
   Widget _buildShareToGrid(AppLocalizations l10n) {
@@ -313,7 +316,7 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
                   targets[i].$2,
                   targets[i].$3,
                   targets[i].$4,
-                  enabled: _activeUrl != null,
+                  enabled: _shareUrl != null,
                 ),
               ),
             ],
@@ -365,12 +368,13 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
     );
   }
 
-  Widget _buildOptions(AppLocalizations l10n, String? location) {
+  /// 链接设置：任一改动都即时写回已有链接，尚未创建时作为创建参数暂存。
+  Widget _buildSettings(AppLocalizations l10n, String? location) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          l10n.photosShareOptionsEyebrow,
+          l10n.photosShareSettingsEyebrow,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.30),
             fontSize: AppTypography.labelSmall,
@@ -378,25 +382,24 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
           ),
         ),
         const SizedBox(height: 12),
-        _ShareSelectRow(
-          label: l10n.photosShareExpiryOption,
+        _ShareExpiryChips(
           value: _expiryOption,
+          enabled: !_busy,
           onSelected: (value) {
             if (value == _expiryOption) return;
-            _update(() {
-              _expiryOption = value;
-              _settingsDirty = true;
-            });
+            _update(() => _expiryOption = value);
+            unawaited(_applySettings());
           },
         ),
         const SizedBox(height: 8),
         _ShareToggleRow(
           label: l10n.photosSharePasswordOption,
           sublabel:
-              _password != null
+              _passwordProtected
                   ? l10n.photosSharePasswordOn
                   : l10n.photosSharePasswordNone,
-          value: _password != null,
+          value: _passwordProtected,
+          enabled: !_busy,
           onChanged: (on) => unawaited(_togglePassword(on, l10n)),
         ),
         const SizedBox(height: 8),
@@ -404,12 +407,11 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
           label: l10n.photosShareOptionLocation,
           sublabel: location ?? '—',
           value: _includeLocation,
+          enabled: !_busy,
           onChanged: (v) {
             if (v == _includeLocation) return;
-            _update(() {
-              _includeLocation = v;
-              _settingsDirty = true;
-            });
+            _update(() => _includeLocation = v);
+            unawaited(_applySettings());
           },
         ),
         const SizedBox(height: 8),
@@ -417,12 +419,11 @@ extension _PhotoSharePanelBuilders on _PhotoSharePanelState {
           label: l10n.photosShareOptionOriginal,
           sublabel: l10n.photosShareOptionOriginalFull,
           value: _originalQuality,
+          enabled: !_busy,
           onChanged: (v) {
             if (v == _originalQuality) return;
-            _update(() {
-              _originalQuality = v;
-              _settingsDirty = true;
-            });
+            _update(() => _originalQuality = v);
+            unawaited(_applySettings());
           },
         ),
       ],

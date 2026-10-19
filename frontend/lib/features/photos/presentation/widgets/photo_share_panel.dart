@@ -25,11 +25,13 @@ import 'package:omninest/core/feedback/omni_feedback.dart';
 part 'photo_share_panel_builders.dart';
 part 'photo_share_panel_rows.dart';
 
-/// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
+/// 照片分享侧栏：分享眉题 + 预览卡 + 链接 + 分享渠道 + 链接设置。
 ///
-/// 打开时撤销该照片旧有效链并新建；链接创建后自动复制。渠道按平台取用：
-/// 移动端「微信」按钮走 [photoShareChannel] 系统分享（不可用降级复制），
-/// 桌面/Web 展示二维码扫码进手机；复制全平台可用。
+/// 面板只编辑一条链接，地址在链接存续期间保持不变：改有效期、密码或可见范围
+/// 走 PATCH 原地写回，不再"撤销 + 重建"，否则已经发出去的地址会当场失效。
+/// 尚未创建链接时，设置只作为创建参数暂存。渠道按平台取用：移动端「微信」按钮
+/// 走 [photoShareChannel] 系统分享（不可用降级复制），桌面/Web 展示二维码扫码
+/// 进手机；复制全平台可用。
 class PhotoSharePanel extends ConsumerStatefulWidget {
   const PhotoSharePanel({
     required this.visible,
@@ -55,21 +57,35 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   bool _includeLocation = true;
   bool _originalQuality = true;
 
-  /// 分享设置：有效期档位（1d/7d/30d/never）与访问密码。
-  /// 变更只置脏，不再自动重建链接——由用户点击创建/更新链接时生效。
+  /// 分享设置：有效期档位（1d/7d/30d/never）与待写入的访问密码。
+  /// 已有链接时改动即时写回；尚未创建链接时只作为创建参数暂存。
   String _expiryOption = '30d';
+
+  /// 待写入的明文口令，只在"还没有链接、等待创建"时留存；写回成功后立即清空。
   String? _password;
+
+  /// 链接是否受口令保护。口令只存哈希、读不回明文，界面因此只能显示状态，
+  /// 不能把"未知"当成"未设置"。
+  bool _passwordProtected = false;
+
   Timer? _copyResetTimer;
 
-  /// 两条规范槽位（按链接的 expiresAt 区分）：永久与限时。
-  /// 各自独立存在，创建某槽不撤销另一槽；空值表示该槽尚未创建。
-  PhotoShareLink? _permanentShare;
-  PhotoShareLink? _timedShare;
-  String? _permanentUrl;
-  String? _timedUrl;
+  /// 面板编辑的唯一链接及其地址。
+  ///
+  /// 后端允许同一照片存在多条链接，但"有效期"必须是这根链接的属性而不是
+  /// 切换编辑对象——否则改一次档位就换一条 URL，等于让已经发出去的地址失效。
+  /// 其余链接只在"管理已有链接"里呈现与撤销。
+  PhotoShareLink? _share;
+  String? _shareUrl;
 
-  /// 设置已变更、尚未应用到链接。
-  bool _settingsDirty = false;
+  /// 设置改动正在写回后端，期间禁用设置控件避免并发覆盖。
+  bool _saving = false;
+
+  /// 除当前编辑对象外仍有效的链接数，用于提示用户去管理入口查看。
+  int _otherShareCount = 0;
+
+  /// 创建或写回进行中：期间所有可提交入口统一禁用。
+  bool get _busy => _creating || _saving;
 
   @override
   void initState() {
@@ -90,13 +106,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       unawaited(_loadShareState());
     }
     if (widget.photo.id != oldWidget.photo.id) {
-      _permanentShare = null;
-      _timedShare = null;
-      _permanentUrl = null;
-      _timedUrl = null;
-      _settingsDirty = false;
-      _error = null;
-      _copied = false;
+      _resetState();
       if (widget.visible) {
         unawaited(_loadShareState());
       }
@@ -109,14 +119,31 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     super.dispose();
   }
 
+  /// 切换照片时丢弃上一张照片的编辑对象与暂存设置。
+  ///
+  /// 由 didUpdateWidget 调用，处于 build 阶段，不得触发 setState。
+  void _resetState() {
+    _share = null;
+    _shareUrl = null;
+    _password = null;
+    _passwordProtected = false;
+    _otherShareCount = 0;
+    _expiryOption = '30d';
+    _includeLocation = true;
+    _originalQuality = true;
+    _error = null;
+    _copied = false;
+  }
+
   /// 打开/切换照片时加载分享状态。
   ///
-  /// 打开面板不创建链接：已有仍有效的链接按槽位复用展示（令牌由后端解密
-  /// 回传，可长期复制同一地址），空槽由用户显式点击创建。
+  /// 打开面板不创建链接：已有仍有效的链接直接复用展示（令牌由后端解密回传，
+  /// 可长期复制同一地址），没有链接时由用户点击创建。
   Future<void> _loadShareState() async {
     final photoId = widget.photo.id;
     setState(() {
       _creating = false;
+      _saving = false;
       _error = null;
     });
     List<PhotoShareLink> shares;
@@ -132,84 +159,86 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       return;
     }
     if (!mounted || photoId != widget.photo.id) return;
-    final permanent = _pickReusableShare(shares, permanent: true);
-    final timed = _pickReusableShare(shares, permanent: false);
+    final live =
+        shares
+            .where((share) => !share.isExpired && !share.isExhausted)
+            .toList();
+    final share = _pickEditableShare(live);
     setState(() {
-      _settingsDirty = false;
-      _permanentShare = permanent;
-      _timedShare = timed;
-      _permanentUrl = null;
-      _timedUrl = null;
+      _share = share;
+      _shareUrl = null;
+      _otherShareCount = share == null ? live.length : live.length - 1;
+      if (share != null) {
+        _password = null;
+        _passwordProtected = share.passwordProtected;
+        _expiryOption = _expiryOptionFor(share.expiresAt);
+        _includeLocation = share.includeLocation;
+        _originalQuality = share.originalQuality;
+      }
     });
-    final permanentUrl =
-        permanent == null ? null : await _buildShareUrl(permanent.token);
+    final token = share?.token;
+    if (token == null || token.isEmpty) return;
+    final shareUrl = await _buildShareUrl(token);
     if (!mounted || photoId != widget.photo.id) return;
-    final timedUrl = timed == null ? null : await _buildShareUrl(timed.token);
-    if (!mounted || photoId != widget.photo.id) return;
-    setState(() {
-      _permanentUrl = permanentUrl;
-      _timedUrl = timedUrl;
-    });
+    setState(() => _shareUrl = shareUrl);
   }
 
-  /// 从列表中挑选某槽位可复用的链接：未过期、未耗尽且带明文令牌的最新一条。
+  /// 从仍有效的链接里挑面板编辑对象：带明文令牌的最新一条。
   ///
-  /// 槽位按链接是否设置过期时间区分：永久槽对应 expiresAt 为空。
-  PhotoShareLink? _pickReusableShare(
-    List<PhotoShareLink> shares, {
-    required bool permanent,
-  }) {
-    for (final share in shares) {
-      if (share.isExpired || share.isExhausted) {
-        continue;
+  /// 后端未回传令牌的历史链接无法展示地址，不作为编辑对象，只计入"另有"。
+  PhotoShareLink? _pickEditableShare(List<PhotoShareLink> live) {
+    PhotoShareLink? newest;
+    for (final share in live) {
+      if (share.token.isEmpty) continue;
+      final created = share.createdAt;
+      final newestCreated = newest?.createdAt;
+      if (newest == null ||
+          (created != null &&
+              newestCreated != null &&
+              created.isAfter(newestCreated))) {
+        newest = share;
       }
-      if ((share.expiresAt == null) != permanent) {
-        continue;
-      }
-      // 后端未回传令牌（历史链接）时无法展示地址，视为不可复用。
-      if (share.token.isEmpty) {
-        continue;
-      }
-      return share;
     }
-    return null;
+    return newest;
   }
 
-  /// 创建或更新指定槽位的链接。
+  /// 由链接的过期时刻反推档位，把已有链接映射回有效期选择器。
   ///
-  /// 只在用户显式点击时触发；仅替换同一槽位的既有链接，另一槽位不受影响，
-  /// 因此不需要"清空全部"即可维持一永久一限时两条链接。
-  Future<void> _createOrReplaceSlot({required bool permanent}) async {
+  /// 档位是相对时长、落库是绝对时刻，只能按剩余时长归到最近的一档；
+  /// 改档时会写入新的绝对时刻，因此不会累积跨档歧义。
+  String _expiryOptionFor(DateTime? expiresAt) {
+    if (expiresAt == null) return 'never';
+    final remaining = expiresAt.difference(DateTime.now());
+    if (remaining <= const Duration(days: 1)) return '1d';
+    if (remaining <= const Duration(days: 7)) return '7d';
+    return '30d';
+  }
+
+  /// 按当前设置创建链接。已有链接时设置改动直接写回，不进入此方法。
+  Future<void> _createShare() async {
     final photoId = widget.photo.id;
     setState(() {
       _creating = true;
       _error = null;
     });
     try {
-      final controller = ref.read(photoCenterControllerProvider.notifier);
-      final existing = permanent ? _permanentShare : _timedShare;
-      if (existing != null) {
-        await controller.revokeAlbumShare(existing.id);
-      }
-      final link = await controller.createPhotoShare(
-        photoId,
-        password: _password,
-        expiresAt: permanent ? null : resolveShareExpiry(_expiryOption),
-        includeLocation: _includeLocation,
-        originalQuality: _originalQuality,
-      );
+      final link = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .createPhotoShare(
+            photoId,
+            password: _password,
+            expiresAt: resolveShareExpiry(_expiryOption),
+            includeLocation: _includeLocation,
+            originalQuality: _originalQuality,
+          );
       if (!mounted || photoId != widget.photo.id) return;
       final shareUrl = await _buildShareUrl(link.token);
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
-        if (permanent) {
-          _permanentShare = link;
-          _permanentUrl = shareUrl;
-        } else {
-          _timedShare = link;
-          _timedUrl = shareUrl;
-        }
-        _settingsDirty = false;
+        _share = link;
+        _shareUrl = shareUrl;
+        _password = null;
+        _passwordProtected = link.passwordProtected;
         _creating = false;
       });
     } on Exception catch (error) {
@@ -221,44 +250,85 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     }
   }
 
-  /// 删除指定槽位的链接（撤销后该槽回到未创建态）。
-  Future<void> _removeSlot({required bool permanent}) async {
+  /// 把当前设置原地写回已有链接：令牌不变，已发出的地址改完仍可用。
+  ///
+  /// `password` 只在用户本次改了口令时传值（空串表示清除），其余情况传 null
+  /// 保持原密码——服务端只存哈希，回读不到明文，跟着全量提交会抹掉提取码。
+  /// 访问次数上限面板不编辑，按链接现值回填，避免被"整体替换"清零。
+  /// 写回失败时把设置回滚到服务端状态，否则界面会显示一个并未生效的档位。
+  Future<void> _applySettings({String? password}) async {
+    final share = _share;
+    if (share == null) return;
     final photoId = widget.photo.id;
-    final existing = permanent ? _permanentShare : _timedShare;
-    if (existing == null) {
-      return;
-    }
-    setState(() => _creating = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
-      await ref
+      final link = await ref
           .read(photoCenterControllerProvider.notifier)
-          .revokeAlbumShare(existing.id);
+          .updatePhotoShare(
+            share.id,
+            password: password,
+            expiresAt: resolveShareExpiry(_expiryOption),
+            maxAccessCount: share.maxAccessCount,
+            includeLocation: _includeLocation,
+            originalQuality: _originalQuality,
+          );
+      if (!mounted || photoId != widget.photo.id) return;
+      setState(() {
+        _share = link;
+        _password = null;
+        _passwordProtected = link.passwordProtected;
+        _saving = false;
+      });
     } on Exception catch (error) {
       if (!mounted) return;
       setState(() {
-        _creating = false;
-        _error = describeShareError(error);
+        _saving = false;
+        _error = describeUpdateError(error);
+        _syncSettingsFromShare();
+      });
+    }
+  }
+
+  void _syncSettingsFromShare() {
+    final share = _share;
+    if (share == null) return;
+    _expiryOption = _expiryOptionFor(share.expiresAt);
+    _includeLocation = share.includeLocation;
+    _originalQuality = share.originalQuality;
+    _password = null;
+    _passwordProtected = share.passwordProtected;
+  }
+
+  /// 撤销当前链接。撤销后重新加载：另一条仍有效的链接会顶上编辑位。
+  Future<void> _removeShare() async {
+    final share = _share;
+    if (share == null) return;
+    final photoId = widget.photo.id;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .revokeAlbumShare(share.id);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = describeUpdateError(error);
       });
       return;
     }
     if (!mounted || photoId != widget.photo.id) return;
-    setState(() {
-      if (permanent) {
-        _permanentShare = null;
-        _permanentUrl = null;
-      } else {
-        _timedShare = null;
-        _timedUrl = null;
-      }
-      _creating = false;
-    });
+    await _loadShareState();
   }
 
-  /// 渠道分享/二维码使用的地址：优先限时槽，其次永久槽。
-  String? get _activeUrl => _timedUrl ?? _permanentUrl;
-
   Future<void> _copyToClipboard({String? url}) async {
-    final target = url ?? _activeUrl;
+    final target = url ?? _shareUrl;
     if (target == null || target.isEmpty) return;
     final copied = await copyTextToClipboard(target);
     if (!mounted) return;
@@ -279,14 +349,19 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     });
   }
 
-  /// 开关密码：只修改设置并置脏，由用户点击创建/更新链接时生效。
+  /// 口令开关：已有链接时立即写回（关闭提交空串表示清除），
+  /// 还没有链接时只暂存待创建的值。
   Future<void> _togglePassword(bool enable, AppLocalizations l10n) async {
     if (!enable) {
-      if (_password == null) return;
-      setState(() {
-        _password = null;
-        _settingsDirty = true;
-      });
+      if (!_passwordProtected) return;
+      if (_share == null) {
+        setState(() {
+          _password = null;
+          _passwordProtected = false;
+        });
+        return;
+      }
+      await _applySettings(password: '');
       return;
     }
     final password = await showFramePromptDialog(
@@ -297,14 +372,24 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       confirmLabel: l10n.coreConfirm,
     );
     if (!mounted || password == null || password.isEmpty) return;
-    setState(() {
-      _password = password;
-      _settingsDirty = true;
-    });
+    if (_share == null) {
+      setState(() {
+        _password = password;
+        _passwordProtected = true;
+      });
+      return;
+    }
+    await _applySettings(password: password);
   }
 
   String describeShareError(Object error) {
     return AppLocalizations.of(context).photosShareLinkFailed;
+  }
+
+  /// 原地写回/撤销失败的文案：不能复用"创建失败"，否则用户以为链接没建成，
+  /// 实际是设置没生效、旧地址仍然可用。
+  String describeUpdateError(Object error) {
+    return AppLocalizations.of(context).photosShareUpdateFailed;
   }
 
   /// 分享页为独立静态页（share.html，原生 JS 调公开 API），
@@ -368,7 +453,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                 const SizedBox(height: 24),
                 _buildShareToGrid(l10n),
                 const SizedBox(height: 24),
-                _buildOptions(l10n, location),
+                _buildSettings(l10n, location),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
@@ -427,15 +512,19 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     );
     if (!mounted) return;
     if (result == null) {
-      // 对话框内可能已撤销/清空链接：重新加载槽位状态。
+      // 对话框内可能已撤销或清空链接：重新加载，编辑位由剩余链接顶上。
       await _loadShareState();
       return;
     }
     // 在管理对话框里新建了链接（密码留空 = 显式创建无密码链接）：
-    // 按"限时"语义创建并归入限时槽，刷新面板显示。
+    // 创建后重新加载，新链接按"最新一条"接管编辑位并自动复制地址。
     final (password, expiryOption) = result;
+    setState(() {
+      _creating = true;
+      _error = null;
+    });
     try {
-      final link = await ref
+      await ref
           .read(photoCenterControllerProvider.notifier)
           .createPhotoShare(
             widget.photo.id,
@@ -444,25 +533,21 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
             includeLocation: _includeLocation,
             originalQuality: _originalQuality,
           );
-      if (!mounted) return;
-      final shareUrl = await _buildShareUrl(link.token);
-      if (!mounted) return;
-      setState(() {
-        _timedShare = link;
-        _timedUrl = shareUrl;
-        _error = null;
-      });
-      await _copyToClipboard(url: shareUrl);
     } on Exception {
       if (!mounted) return;
       setState(() {
+        _creating = false;
         _error = AppLocalizations.of(context).photosShareLinkFailed;
       });
+      return;
     }
+    if (!mounted) return;
+    await _loadShareState();
+    await _copyToClipboard();
   }
 
   Future<void> _shareViaSystem(AppLocalizations l10n) async {
-    final url = _activeUrl;
+    final url = _shareUrl;
     if (url == null || url.isEmpty) {
       return;
     }
@@ -493,7 +578,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   void _showQrCode(AppLocalizations l10n) {
-    final url = _activeUrl;
+    final url = _shareUrl;
     if (!mounted) {
       return;
     }

@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_message.dart';
 
@@ -58,5 +60,34 @@ void main() {
     // transformTimeout 与其它超时类型一致，message 为稳定错误码 NETWORK_TIMEOUT。
     expect(message.message, 'NETWORK_TIMEOUT');
     expect(message.code, 'REQUEST_TIMEOUT');
+  });
+
+  testWidgets('带本地化时未知连接失败不回显裸错误码', (tester) async {
+    late AppLocalizations l10n;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('zh'),
+        home: Builder(
+          builder: (context) {
+            l10n = AppLocalizations.of(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final message = describeUserFacingError(
+      DioException(
+        requestOptions: RequestOptions(path: '/files'),
+        type: DioExceptionType.unknown,
+      ),
+      l10n: l10n,
+    );
+
+    // 导入弹窗此前漏传 l10n，网络失败被兜底成裸码 OPERATION_FAILED 直接给用户看。
+    expect(message.displayMessage, isNotEmpty);
+    expect(message.displayMessage, isNot('OPERATION_FAILED'));
   });
 }

@@ -367,12 +367,33 @@ public final class PhotoDtos {
             Instant expiresAt,
             Integer maxAccessCount,
             int accessCount,
+            boolean passwordProtected,
             boolean includeLocation,
             boolean originalQuality,
             Instant createdAt
     ) {}
 
     public record CreateAlbumShareRequest(
+            String password,
+            Instant expiresAt,
+            Integer maxAccessCount,
+            Boolean includeLocation,
+            Boolean originalQuality
+    ) {}
+
+    /**
+     * 原地更新分享链接的可变属性。
+     *
+     * <p>按"整体替换可变属性"解释，因此两个可见范围开关必须显式传值：缺省会被
+     * 反序列化成 {@code false}，静默收紧访客可见范围。令牌与归属不可通过本请求修改。
+     *
+     * @param password 新访问密码，null 表示保持原密码不变，空白表示清除
+     * @param expiresAt 新过期时间，null 表示永久有效
+     * @param maxAccessCount 新访问次数上限，null 表示不限
+     * @param includeLocation 访客可见是否包含位置，必填
+     * @param originalQuality 访客可见是否签发原图，必填
+     */
+    public record UpdatePhotoShareRequest(
             String password,
             Instant expiresAt,
             Integer maxAccessCount,

@@ -17,6 +17,7 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDto;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoShareLinkDto;
+import com.omninest.modules.photos.dto.PhotoDtos.UpdatePhotoShareRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoSharedAlbumDto;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
@@ -258,6 +259,35 @@ public class PhotoAlbumService {
     }
 
     /**
+     * 原地更新分享链接的有效期、密码与可见范围，令牌保持不变。
+     *
+     * <p>与撤销后重建不同，已发出的地址在改设置后仍然可用。归属校验由
+     * {@link ResourceShareLinkService#update} 按所有者完成，与
+     * {@link #revokeAlbumShare} 同一口径。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public PhotoShareLinkDto updatePhotoShare(
+            UUID ownerUserId,
+            UUID shareId,
+            UpdatePhotoShareRequest request) {
+        if (request.includeLocation() == null || request.originalQuality() == null) {
+            throw new BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "includeLocation 与 originalQuality 必须显式传值"
+            );
+        }
+        return toShareDto(resourceShareLinkService.update(
+                ownerUserId,
+                shareId,
+                request.password(),
+                request.expiresAt(),
+                request.maxAccessCount(),
+                request.includeLocation(),
+                request.originalQuality()
+        ));
+    }
+
+    /**
      * 一次性撤销相册的全部有效分享链接。
      *
      * @param ownerUserId 所有者用户 ID
@@ -441,6 +471,7 @@ public class PhotoAlbumService {
                 share.expiresAt(),
                 share.maxAccessCount(),
                 share.accessCount(),
+                share.passwordProtected(),
                 share.includeLocation(),
                 share.originalQuality(),
                 share.createdAt()

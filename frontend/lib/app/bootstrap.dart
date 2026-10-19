@@ -21,10 +21,6 @@ import 'package:omninest/app/bootstrap_stub.dart'
 typedef AppBootstrapLoader = Future<AppBootstrapData> Function();
 
 void bootstrap(Widget Function(AppBootstrapData data) builder) {
-  if (kIsWeb) {
-    impl.suppressCanvasKitErrors();
-  }
-
   FlutterError.onError = (details) {
     if (_isBootstrapRouteNoise(details.exception) ||
         impl.isEngineNoise(details.exception)) {

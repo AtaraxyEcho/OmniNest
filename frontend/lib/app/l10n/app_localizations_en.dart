@@ -8713,7 +8713,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareDone => 'Done';
 
   @override
-  String get photosShareOptionsEyebrow => 'OPTIONS';
+  String get photosShareSettingsEyebrow => 'LINK SETTINGS';
 
   @override
   String get photosShareExpiryOption => 'Expiry';
@@ -8789,25 +8789,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get photosShareCreating => 'Creating';
+
+  @override
   String get photosCreateLink => 'Create Link';
 
   @override
-  String get photosShareLinkUpdate => 'Update link';
+  String get photosShareNoLinkYet => 'No link yet';
 
   @override
-  String get photosShareSlotPermanent => 'Permanent link';
+  String photosShareOtherLinksHint(Object count) {
+    return '$count other links';
+  }
 
   @override
-  String get photosShareSlotTimed => 'Timed link';
-
-  @override
-  String get photosShareSlotEmpty => 'Not created';
-
-  @override
-  String get photosShareSlotCreatePermanent => 'Create permanent';
-
-  @override
-  String get photosShareSlotCreateTimed => 'Create timed';
+  String get photosShareSummaryPassword => 'Password set';
 
   @override
   String photosShareLinkCreated(Object link) {
@@ -8816,6 +8812,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photosShareLinkFailed => 'Failed to create share link';
+
+  @override
+  String get photosShareUpdateFailed => 'Failed to update share link';
 
   @override
   String get photosRemoveFromAlbum => 'Remove from Album';

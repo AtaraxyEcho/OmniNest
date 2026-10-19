@@ -15917,11 +15917,11 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get photosShareDone;
 
-  /// No description provided for @photosShareOptionsEyebrow.
+  /// No description provided for @photosShareSettingsEyebrow.
   ///
   /// In en, this message translates to:
-  /// **'OPTIONS'**
-  String get photosShareOptionsEyebrow;
+  /// **'LINK SETTINGS'**
+  String get photosShareSettingsEyebrow;
 
   /// No description provided for @photosShareExpiryOption.
   ///
@@ -16055,47 +16055,35 @@ abstract class AppLocalizations {
   /// **'Expires {date}'**
   String photosShareLinkExpiresOn(Object date);
 
+  /// No description provided for @photosShareCreating.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating'**
+  String get photosShareCreating;
+
   /// No description provided for @photosCreateLink.
   ///
   /// In en, this message translates to:
   /// **'Create Link'**
   String get photosCreateLink;
 
-  /// No description provided for @photosShareLinkUpdate.
+  /// No description provided for @photosShareNoLinkYet.
   ///
   /// In en, this message translates to:
-  /// **'Update link'**
-  String get photosShareLinkUpdate;
+  /// **'No link yet'**
+  String get photosShareNoLinkYet;
 
-  /// No description provided for @photosShareSlotPermanent.
+  /// No description provided for @photosShareOtherLinksHint.
   ///
   /// In en, this message translates to:
-  /// **'Permanent link'**
-  String get photosShareSlotPermanent;
+  /// **'{count} other links'**
+  String photosShareOtherLinksHint(Object count);
 
-  /// No description provided for @photosShareSlotTimed.
+  /// No description provided for @photosShareSummaryPassword.
   ///
   /// In en, this message translates to:
-  /// **'Timed link'**
-  String get photosShareSlotTimed;
-
-  /// No description provided for @photosShareSlotEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'Not created'**
-  String get photosShareSlotEmpty;
-
-  /// No description provided for @photosShareSlotCreatePermanent.
-  ///
-  /// In en, this message translates to:
-  /// **'Create permanent'**
-  String get photosShareSlotCreatePermanent;
-
-  /// No description provided for @photosShareSlotCreateTimed.
-  ///
-  /// In en, this message translates to:
-  /// **'Create timed'**
-  String get photosShareSlotCreateTimed;
+  /// **'Password set'**
+  String get photosShareSummaryPassword;
 
   /// No description provided for @photosShareLinkCreated.
   ///
@@ -16108,6 +16096,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to create share link'**
   String get photosShareLinkFailed;
+
+  /// No description provided for @photosShareUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update share link'**
+  String get photosShareUpdateFailed;
 
   /// No description provided for @photosRemoveFromAlbum.
   ///

@@ -8,7 +8,7 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 /// 公开共享单张照片页面（无需登录）
@@ -44,13 +44,15 @@ class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
       _error = null;
     });
     try {
-      final controller = ref.read(photoCenterControllerProvider.notifier);
-      final sessionToken = await controller.authorizeSharedPhoto(
+      // 分享访客页必须绕开照片中心控制器：读它的 notifier 会触发整个
+      // 集合 build，替匿名访客发出 dashboard/listPhotos 等鉴权请求。
+      final repo = ref.read(photoRepositoryProvider);
+      final sessionToken = await repo.authorizeSharedPhoto(
         widget.token,
         password: _password,
       );
       if (!mounted || generation != _loadGeneration) return;
-      final photo = await controller.accessSharedPhoto(
+      final photo = await repo.accessSharedPhoto(
         widget.token,
         sessionToken: sessionToken,
       );

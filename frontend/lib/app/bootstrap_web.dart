@@ -4,35 +4,8 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 import 'package:omninest/core/errors/error_message.dart';
 
-/// JavaScript 层面抑制 CanvasKit engine 断言错误。
-///
-/// 默认静默白名单命中；将 `window.OMNINEST_LOG_ENGINE_NOISE = true` 可在
-/// console 保留被吞消息，便于排查是否误伤真实回归。
-void suppressCanvasKitErrors() {
-  try {
-    // ignore: avoid_web_libraries_in_flutter
-    final script = web.document.createElement('script');
-    script.textContent = '''
-      (function() {
-        var orig = window.onerror;
-        window.onerror = function(msg, src, line, col, err) {
-          if (typeof msg === 'string' && (msg.indexOf('_handledContextLostEvent') !== -1 || msg.indexOf('LateInitializationError') !== -1)) {
-            if (window.OMNINEST_LOG_ENGINE_NOISE) {
-              console.warn('[omninest-engine-noise]', msg);
-            }
-            return true;
-          }
-          if (orig) return orig.apply(this, arguments);
-          return false;
-        };
-      })();
-    ''';
-    // ignore: avoid_web_libraries_in_flutter
-    web.document.body?.append(script);
-  } catch (error) {
-    log('suppressCanvasKitErrors failed', error: error);
-  }
-}
+/// CanvasKit 引擎层 JS 报错的白名单由 `web/js/omninest-engine-noise.js` 在
+/// 文档解析阶段接管；后端 CSP 禁止内联脚本，Dart 侧不再注入 `<script>`。
 
 /// 等待浏览器字体加载完成，避免首帧中文字符显示为豆腐块
 Future<void> waitForFonts() async {

@@ -55,6 +55,8 @@ class ApiClient {
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
               options.extra[_requestTokenKey] = token;
+              // 带上令牌即视为会话已重建，恢复刷新尝试。
+              _refreshRejected = false;
             }
           }
           handler.next(options);
@@ -89,6 +91,10 @@ class ApiClient {
             }
 
             if (!refreshed) {
+              final sessionToken = _currentAccessToken();
+              if (sessionToken == null || sessionToken.isEmpty) {
+                _refreshRejected = true;
+              }
               if (isForbidden) {
                 // 刷新不可用时的 403 多为真实权限拒绝，不清除会话，
                 // 原样上抛由业务层呈现无权限反馈。
@@ -176,6 +182,12 @@ class ApiClient {
   String? _manualAccessToken;
   Future<bool>? _refreshing;
 
+  /// 刷新已被确定拒绝且本地无访问令牌时挂起后续刷新尝试。
+  ///
+  /// 否则退出登录后每个轮询请求都会再触发一次注定 401 的 `/auth/refresh`，
+  /// 与业务请求成对刷屏。重新登录带上令牌后由 [dio] 的请求拦截解除。
+  bool _refreshRejected = false;
+
   /// 当前会话是否持有指定权限码。
   ///
   /// data 层 API 用它在发请求前做能力预检（autoSkip 静默跳过 / strict 抛
@@ -218,6 +230,11 @@ class ApiClient {
   }
 
   bool _shouldRefresh(Response<dynamic> response) {
+    // 会话已确定失效且尚未重新登录时不再尝试刷新，避免退出登录后
+    // 轮询请求成对刷出 /auth/refresh + 业务接口的 401。
+    if (_refreshRejected) {
+      return false;
+    }
     // 401 表示令牌过期；403 可能是本地 JWT 缺少最新授权 claim（角色权限
     // 变更后服务端不重发令牌），两者都值得刷新会话后重试一次。
     final statusCode = response.statusCode;

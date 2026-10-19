@@ -13,6 +13,7 @@ import java.util.UUID;
  * @param expiresAt 过期时间
  * @param maxAccessCount 最大访问次数
  * @param accessCount 已访问次数
+ * @param passwordProtected 该链接是否设置了访问密码（密码本身不可逆，只回传状态）
  * @param includeLocation 公开访问是否包含位置（仅 PHOTO_* 解释）
  * @param originalQuality 公开访问是否签发原图（仅 PHOTO_* 解释）
  * @param createdAt 创建时间
@@ -26,6 +27,7 @@ public record ResourceShareLinkDto(
         Instant expiresAt,
         Integer maxAccessCount,
         int accessCount,
+        boolean passwordProtected,
         boolean includeLocation,
         boolean originalQuality,
         Instant createdAt

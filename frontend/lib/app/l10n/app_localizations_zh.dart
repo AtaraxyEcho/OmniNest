@@ -8462,7 +8462,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosShareDone => '完成';
 
   @override
-  String get photosShareOptionsEyebrow => '选项';
+  String get photosShareSettingsEyebrow => '链接设置';
 
   @override
   String get photosShareExpiryOption => '有效期';
@@ -8537,25 +8537,21 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get photosShareCreating => '创建中';
+
+  @override
   String get photosCreateLink => '创建链接';
 
   @override
-  String get photosShareLinkUpdate => '更新链接';
+  String get photosShareNoLinkYet => '尚未创建链接';
 
   @override
-  String get photosShareSlotPermanent => '永久链接';
+  String photosShareOtherLinksHint(Object count) {
+    return '另有 $count 条链接';
+  }
 
   @override
-  String get photosShareSlotTimed => '限时链接';
-
-  @override
-  String get photosShareSlotEmpty => '未创建';
-
-  @override
-  String get photosShareSlotCreatePermanent => '创建永久';
-
-  @override
-  String get photosShareSlotCreateTimed => '创建限时';
+  String get photosShareSummaryPassword => '已设密码';
 
   @override
   String photosShareLinkCreated(Object link) {
@@ -8564,6 +8560,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosShareLinkFailed => '创建分享链接失败';
+
+  @override
+  String get photosShareUpdateFailed => '更新分享链接失败';
 
   @override
   String get photosRemoveFromAlbum => '从相册移除';

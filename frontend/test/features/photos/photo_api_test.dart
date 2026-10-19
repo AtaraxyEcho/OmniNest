@@ -467,6 +467,71 @@ void main() {
         ),
       );
     });
+
+    test('updatePhotoShare sends PATCH with the full mutable state', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {
+            'id': 'share-1',
+            'token': 'tok-1',
+            'resourceType': 'PHOTO_ITEM',
+            'resourceId': 'photo-1',
+            'accessCount': 2,
+            'passwordProtected': true,
+            'includeLocation': false,
+            'originalQuality': true,
+            'createdAt': '2024-11-12T00:00:00Z',
+          },
+        },
+      );
+      final api = PhotoApi(_apiClient(adapter));
+
+      final link = await api.updatePhotoShare(
+        'share-1',
+        password: null,
+        expiresAt: DateTime.utc(2026, 1, 2),
+        maxAccessCount: 5,
+        includeLocation: false,
+        originalQuality: true,
+      );
+
+      expect(adapter.lastMethod, 'PATCH');
+      expect(adapter.lastPath, '/photos/share/share-1');
+      final data = adapter.lastData as Map<String, dynamic>;
+      // 未改口令时 password 必须显式为 null：后端按"缺省＝保持原密码"解释，
+      // 省略键与传 null 在 JSON 层无法区分，因此这里不能按创建那样省掉键。
+      expect(data.containsKey('password'), isTrue);
+      expect(data['password'], isNull);
+      expect(data['expiresAt'], '2026-01-02T00:00:00.000Z');
+      expect(data['maxAccessCount'], 5);
+      expect(data['includeLocation'], isFalse);
+      expect(data['originalQuality'], isTrue);
+      expect(link.passwordProtected, isTrue);
+      expect(link.accessCount, 2);
+    });
+
+    test(
+      'updatePhotoShare sends empty password and null expiry to clear both',
+      () async {
+        final adapter = _CapturingHttpClientAdapter();
+        final api = PhotoApi(_apiClient(adapter));
+
+        await api.updatePhotoShare(
+          'share-1',
+          password: '',
+          expiresAt: null,
+          includeLocation: true,
+          originalQuality: true,
+        );
+
+        final data = adapter.lastData as Map<String, dynamic>;
+        expect(data['password'], isEmpty);
+        expect(data['expiresAt'], isNull);
+        expect(data.containsKey('maxAccessCount'), isTrue);
+      },
+    );
   });
 }
 

@@ -59,6 +59,46 @@ void main() {
       expect(find.byType(FilesCheckMark), findsOneWidget);
     });
 
+    testWidgets('浅色主题勾选态不再实底反白', (tester) async {
+      late ColorScheme scheme;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: Brightness.light, useMaterial3: true),
+          home: Scaffold(
+            body: FilesWorkstationScope(
+              child: Center(
+                child: Builder(
+                  builder: (context) {
+                    scheme = Theme.of(context).colorScheme;
+                    return FilesCheckMark(value: true, onChanged: (_) {});
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final decoration =
+          tester
+                  .widget<AnimatedContainer>(
+                    find.descendant(
+                      of: find.byType(FilesCheckMark),
+                      matching: find.byType(AnimatedContainer),
+                    ),
+                  )
+                  .decoration!
+              as BoxDecoration;
+      expect(decoration.color, scheme.surfaceContainerHighest);
+      expect(decoration.color, isNot(scheme.onSurface));
+      final border = decoration.border! as Border;
+      expect(border.top.color, scheme.onSurface);
+      expect(
+        tester.widget<Text>(find.text('✔')).style?.color,
+        scheme.onSurface,
+      );
+    });
+
     testWidgets('禁用态不响应点按', (tester) async {
       var calls = 0;
       await tester.pumpWidget(

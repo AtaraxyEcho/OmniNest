@@ -3718,7 +3718,7 @@
   "photosShareOptionOriginalFull": "原始分辨率",
   "photosShareManage": "管理已有链接",
   "photosShareDone": "完成",
-  "photosShareOptionsEyebrow": "选项",
+  "photosShareSettingsEyebrow": "链接设置",
   "photosShareExpiryOption": "有效期",
   "photosSharePasswordOption": "密码保护",
   "photosSharePasswordNone": "未设置",
@@ -3756,13 +3756,11 @@
       "date": {}
     }
   },
+  "photosShareCreating": "创建中",
   "photosCreateLink": "创建链接",
-  "photosShareLinkUpdate": "更新链接",
-  "photosShareSlotPermanent": "永久链接",
-  "photosShareSlotTimed": "限时链接",
-  "photosShareSlotEmpty": "未创建",
-  "photosShareSlotCreatePermanent": "创建永久",
-  "photosShareSlotCreateTimed": "创建限时",
+  "photosShareNoLinkYet": "尚未创建链接",
+  "photosShareOtherLinksHint": "另有 {count} 条链接",
+  "photosShareSummaryPassword": "已设密码",
   "photosShareLinkCreated": "分享链接已创建: {link}",
   "@photosShareLinkCreated": {
     "placeholders": {
@@ -3770,6 +3768,7 @@
     }
   },
   "photosShareLinkFailed": "创建分享链接失败",
+  "photosShareUpdateFailed": "更新分享链接失败",
   "photosRemoveFromAlbum": "从相册移除",
   "photosRemoveFromAlbumConfirm": "确定要将「{title}」从相册中移除吗？照片本身不会被删除。",
   "@photosRemoveFromAlbumConfirm": {

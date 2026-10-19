@@ -34,6 +34,7 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoListItemDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTrashResultDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoScanJobDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoShareLinkDto;
+import com.omninest.modules.photos.dto.PhotoDtos.UpdatePhotoShareRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoSharedAlbumDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
@@ -62,6 +63,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -701,6 +703,21 @@ public class PhotoLibraryController {
         UUID userId = currentUserContext.requireCurrentUserId();
         albumService.revokeAlbumShare(userId, shareId);
         return ApiResponse.success();
+    }
+
+    @Operation(
+            summary = "更新分享链接设置",
+            description = "原地更新分享链接的有效期、访问密码与可见范围；"
+                    + "令牌保持不变，已发出的地址在修改后仍然可用"
+    )
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PatchMapping("/api/v1/photos/share/{shareId}")
+    ApiResponse<PhotoShareLinkDto> updatePhotoShare(
+            @PathVariable UUID shareId,
+            @Valid @RequestBody UpdatePhotoShareRequest body
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(albumService.updatePhotoShare(userId, shareId, body));
     }
 
     @Operation(summary = "清空相册分享链接", description = "撤销该相册全部有效分享链接，返回撤销条数")

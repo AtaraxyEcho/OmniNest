@@ -220,6 +220,19 @@ abstract interface class PhotoRepository {
     bool originalQuality = true,
   });
 
+  /// 原地更新照片分享链接的可变属性，令牌不变、已发出的地址继续可用。
+  ///
+  /// 后端按整体替换可变属性解释，可变量必须全部显式提交；
+  /// `password` 传 null 表示保持原密码，传空串才清除。
+  Future<PhotoShareLink> updatePhotoShare(
+    String shareId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+    required bool includeLocation,
+    required bool originalQuality,
+  });
+
   /// 列出单张照片分享链接
   Future<List<PhotoShareLink>> listPhotoShares(String photoId);
 

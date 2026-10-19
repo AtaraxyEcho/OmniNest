@@ -222,6 +222,15 @@ class _FrameViewContent extends ConsumerWidget {
   Widget _buildGrid(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final isFavorites = state.tab == PhotoTab.favorites;
+    // 取不到不等于没有：集合请求失败时列表为空，继续渲染空状态会把
+    // "加载失败"说成"还没有照片"，用户以为数据丢了。
+    if (state.visiblePhotos.isEmpty && state.errorMessage != null) {
+      return AppErrorView(
+        message: state.errorMessage!,
+        onRetry:
+            () => ref.read(photoCenterControllerProvider.notifier).refresh(),
+      );
+    }
     // 托管 Library 段（样例 photos-overlay Library）：工具行 + 马赛克 +
     // 相册轨 + 时刻行；收藏页签与桌面仍走瀑布网格。
     if (compact &&

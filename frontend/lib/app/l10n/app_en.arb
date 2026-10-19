@@ -3844,7 +3844,7 @@
   "photosShareOptionOriginalFull": "Full resolution",
   "photosShareManage": "Manage existing links",
   "photosShareDone": "Done",
-  "photosShareOptionsEyebrow": "OPTIONS",
+  "photosShareSettingsEyebrow": "LINK SETTINGS",
   "photosShareExpiryOption": "Expiry",
   "photosSharePasswordOption": "Password protection",
   "photosSharePasswordNone": "Not set",
@@ -3882,13 +3882,11 @@
       "date": {}
     }
   },
+  "photosShareCreating": "Creating",
   "photosCreateLink": "Create Link",
-  "photosShareLinkUpdate": "Update link",
-  "photosShareSlotPermanent": "Permanent link",
-  "photosShareSlotTimed": "Timed link",
-  "photosShareSlotEmpty": "Not created",
-  "photosShareSlotCreatePermanent": "Create permanent",
-  "photosShareSlotCreateTimed": "Create timed",
+  "photosShareNoLinkYet": "No link yet",
+  "photosShareOtherLinksHint": "{count} other links",
+  "photosShareSummaryPassword": "Password set",
   "photosShareLinkCreated": "Share link created: {link}",
   "@photosShareLinkCreated": {
     "placeholders": {
@@ -3896,6 +3894,7 @@
     }
   },
   "photosShareLinkFailed": "Failed to create share link",
+  "photosShareUpdateFailed": "Failed to update share link",
   "photosRemoveFromAlbum": "Remove from Album",
   "photosRemoveFromAlbumConfirm": "Are you sure you want to remove \"{title}\" from the album? The photo itself will not be deleted.",
   "@photosRemoveFromAlbumConfirm": {

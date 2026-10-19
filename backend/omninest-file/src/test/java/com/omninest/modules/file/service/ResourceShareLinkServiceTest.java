@@ -218,6 +218,174 @@ class ResourceShareLinkServiceTest {
         assertThat(result).extracting(dto -> dto.token()).containsExactly((String) null);
     }
 
+    /**
+     * 验证原地更新只替换可变属性：令牌哈希与密文不变，因此已发出的地址继续可用。
+     */
+    @Test
+    void updateKeepsTokenAndReplacesMutableAttributes() {
+        ShareLink existing = updatableShareLink();
+        String originalHash = existing.getTokenHash();
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(existing));
+        when(credentialCipher.decrypt("v1:cipher")).thenReturn("raw-token");
+        when(passwordEncoder.encode("new-secret")).thenReturn("re-encoded");
+        when(shareLinkRepository.save(any(ShareLink.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.update(
+                OWNER_ID,
+                SHARE_ID,
+                "new-secret",
+                Instant.parse("2026-12-31T00:00:00Z"),
+                5,
+                false,
+                true
+        );
+
+        ArgumentCaptor<ShareLink> captor = ArgumentCaptor.forClass(ShareLink.class);
+        verify(shareLinkRepository).save(captor.capture());
+        ShareLink saved = captor.getValue();
+        assertThat(saved.getTokenHash()).isEqualTo(originalHash);
+        assertThat(saved.getTokenCipher()).isEqualTo("v1:cipher");
+        assertThat(saved.getPasswordHash()).isEqualTo("re-encoded");
+        assertThat(saved.getExpiresAt()).isEqualTo(Instant.parse("2026-12-31T00:00:00Z"));
+        assertThat(saved.getMaxAccessCount()).isEqualTo(5);
+        assertThat(saved.isIncludeLocation()).isFalse();
+        assertThat(result.token()).isEqualTo("raw-token");
+        verify(readThroughCache).invalidate("omninest:share:link:" + originalHash);
+    }
+
+    /**
+     * 验证空白密码表示清除访问密码，而不是保留原值。
+     */
+    @Test
+    void updateClearsPasswordWhenBlank() {
+        ShareLink existing = updatableShareLink();
+        existing.setPasswordHash("encoded");
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(existing));
+        when(credentialCipher.decrypt("v1:cipher")).thenReturn("raw-token");
+        when(shareLinkRepository.save(any(ShareLink.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.update(OWNER_ID, SHARE_ID, "   ", null, null, true, true);
+
+        ArgumentCaptor<ShareLink> captor = ArgumentCaptor.forClass(ShareLink.class);
+        verify(shareLinkRepository).save(captor.capture());
+        assertThat(captor.getValue().getPasswordHash()).isNull();
+        assertThat(captor.getValue().getExpiresAt()).isNull();
+        verify(passwordEncoder, never()).encode(any(CharSequence.class));
+    }
+
+    /**
+     * 验证密码缺省（null）保持原口令不变：调用方无法回读明文，
+     * 若把缺省当清除，则改有效期会顺带抹掉已经发出去的提取码。
+     */
+    @Test
+    void updateKeepsPasswordWhenOmitted() {
+        ShareLink existing = updatableShareLink();
+        existing.setPasswordHash("encoded");
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(existing));
+        when(credentialCipher.decrypt("v1:cipher")).thenReturn("raw-token");
+        when(shareLinkRepository.save(any(ShareLink.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.update(
+                OWNER_ID,
+                SHARE_ID,
+                null,
+                Instant.parse("2026-12-31T00:00:00Z"),
+                null,
+                false,
+                false
+        );
+
+        ArgumentCaptor<ShareLink> captor = ArgumentCaptor.forClass(ShareLink.class);
+        verify(shareLinkRepository).save(captor.capture());
+        assertThat(captor.getValue().getPasswordHash()).isEqualTo("encoded");
+        assertThat(captor.getValue().getExpiresAt()).isEqualTo(Instant.parse("2026-12-31T00:00:00Z"));
+        assertThat(captor.getValue().isIncludeLocation()).isFalse();
+        assertThat(result.passwordProtected()).isTrue();
+        verify(passwordEncoder, never()).encode(any(CharSequence.class));
+    }
+
+    /**
+     * 验证过期时间早于当前时间被拒绝，避免更新出即刻失效的链接。
+     */
+    @Test
+    void updateRejectsPastExpiry() {
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(updatableShareLink()));
+
+        assertThatThrownBy(() -> service.update(
+                OWNER_ID,
+                SHARE_ID,
+                null,
+                Instant.parse("2020-01-01T00:00:00Z"),
+                null,
+                true,
+                true
+        )).isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+        verify(shareLinkRepository, never()).save(any(ShareLink.class));
+    }
+
+    /**
+     * 验证访问次数上限不得低于已访问次数，否则链接会立即被判耗尽。
+     */
+    @Test
+    void updateRejectsAccessCountBelowUsage() {
+        ShareLink existing = updatableShareLink();
+        existing.setAccessCount(7);
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.update(
+                OWNER_ID, SHARE_ID, null, null, 3, true, true
+        )).isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    /**
+     * 验证非所有者按不存在处理，已撤销链接按业务错误拒绝。
+     */
+    @Test
+    void updateRejectsUnknownOwnerAndRevokedLink() {
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.update(
+                OWNER_ID, SHARE_ID, null, null, null, true, true
+        )).isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.NOT_FOUND);
+
+        ShareLink revoked = updatableShareLink();
+        revoked.setDisabledAt(Instant.parse("2026-07-20T00:00:00Z"));
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(revoked));
+        assertThatThrownBy(() -> service.update(
+                OWNER_ID, SHARE_ID, null, null, null, true, true
+        )).isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.BAD_REQUEST);
+    }
+
+    /** 构造一条可更新的分享链接夹具：带令牌哈希、密文与既有密码。 */
+    private ShareLink updatableShareLink() {
+        ShareLink share = shareLink(SHARE_ID, null);
+        share.setTokenHash("token-hash");
+        share.setTokenCipher("v1:cipher");
+        share.setPasswordHash("encoded");
+        share.setExpiresAt(Instant.parse("2026-08-19T00:00:00Z"));
+        share.setAccessCount(2);
+        share.setIncludeLocation(true);
+        share.setOriginalQuality(true);
+        return share;
+    }
+
     private ShareLink shareLink(UUID id, Instant disabledAt) {
         ShareLink share = new ShareLink();
         share.setId(id);

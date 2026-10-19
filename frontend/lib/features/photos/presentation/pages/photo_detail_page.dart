@@ -803,6 +803,8 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                     ),
           ),
         // 分享侧栏：与幻灯片共用组件，scrim 在面板之下。
+        // 面板必须常驻由 visible 驱动，条件挂载会让 AnimatedSlide 失去
+        // 起止两态，表现为瞬间出现、瞬间消失。
         if (_showSharePanel)
           Positioned.fill(
             child: GestureDetector(
@@ -810,12 +812,11 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               onTap: () => setState(() => _showSharePanel = false),
             ),
           ),
-        if (_showSharePanel)
-          PhotoSharePanel(
-            visible: true,
-            photo: currentFresh,
-            onDone: () => setState(() => _showSharePanel = false),
-          ),
+        PhotoSharePanel(
+          visible: _showSharePanel,
+          photo: currentFresh,
+          onDone: () => setState(() => _showSharePanel = false),
+        ),
       ],
     );
   }

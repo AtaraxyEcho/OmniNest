@@ -24,6 +24,7 @@ import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
@@ -812,5 +813,21 @@ void main() {
             .round();
     expect(tester.binding.imageCache.maximumSizeBytes, expected);
     expect(expected, greaterThan(before), reason: '宽屏档位的解码工作集应超过默认预算并触发抬高');
+  });
+
+  testWidgets('分享侧栏常驻树中并由 visible 驱动开合', (tester) async {
+    tester.view.physicalSize = const Size(2560, 1600);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_harness(scope: scope).child);
+    await tester.pump();
+    await tester.pump();
+
+    // 条件挂载会让 PhotoPanelHost 的 AnimatedSlide 失去起止两态，
+    // 侧栏表现为瞬间出现、瞬间消失。
+    final panel = tester.widget<PhotoSharePanel>(find.byType(PhotoSharePanel));
+    expect(panel.visible, isFalse);
   });
 }

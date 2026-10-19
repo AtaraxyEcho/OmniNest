@@ -367,7 +367,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
           final failureSuffix =
               result.failures.isEmpty
                   ? ''
-                  : ' (${result.failures.take(2).map(_failureSummary).join('; ')})';
+                  : ' (${result.failures.take(2).map((f) => _failureSummary(f, l10n)).join('; ')})';
           _showSnack(
             '${l10n.importProcessing(result.imported.length)}$failureSuffix',
           );
@@ -383,7 +383,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       final failureSuffix =
           result.failures.isEmpty
               ? ''
-              : ' (${result.failures.take(2).map(_failureSummary).join('; ')})';
+              : ' (${result.failures.take(2).map((f) => _failureSummary(f, l10n)).join('; ')})';
       _showSnack(
         '${l10n.importComplete(result.imported.length)}$failureSuffix',
       );
@@ -393,8 +393,9 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     }
   }
 
-  String _failureSummary(MediaImportFailure failure) {
-    final message = describeUserFacingError(failure.error).displayMessage;
+  String _failureSummary(MediaImportFailure failure, AppLocalizations l10n) {
+    final message =
+        describeUserFacingError(failure.error, l10n: l10n).displayMessage;
     return '${failure.fileName}: $message';
   }
 
@@ -556,7 +557,14 @@ class _ImportProgressContentState extends State<_ImportProgressContent> {
       if (mounted) widget.onClose();
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error).displayMessage);
+        setState(
+          () =>
+              _error =
+                  describeUserFacingError(
+                    error,
+                    l10n: widget.l10n,
+                  ).displayMessage,
+        );
       }
     }
   }
@@ -567,7 +575,7 @@ class _ImportProgressContentState extends State<_ImportProgressContent> {
         .take(3)
         .map(
           (failure) =>
-              '${failure.fileName}: ${describeUserFacingError(failure.error).displayMessage}',
+              '${failure.fileName}: ${describeUserFacingError(failure.error, l10n: widget.l10n).displayMessage}',
         )
         .join('\n');
     final suffix = result.failures.length > 3 ? '\n...' : '';

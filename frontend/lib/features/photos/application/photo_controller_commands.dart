@@ -227,6 +227,23 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     originalQuality: originalQuality,
   );
 
+  /// 原地更新照片分享链接的可变属性，令牌不变。
+  Future<PhotoShareLink> updatePhotoShare(
+    String shareId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+    required bool includeLocation,
+    required bool originalQuality,
+  }) => _repo.updatePhotoShare(
+    shareId,
+    password: password,
+    expiresAt: expiresAt,
+    maxAccessCount: maxAccessCount,
+    includeLocation: includeLocation,
+    originalQuality: originalQuality,
+  );
+
   /// 列出单张照片分享链接
   Future<List<PhotoShareLink>> listPhotoShares(String photoId) =>
       _repo.listPhotoShares(photoId);

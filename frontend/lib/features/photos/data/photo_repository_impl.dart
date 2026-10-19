@@ -279,6 +279,23 @@ class PhotoRepositoryImpl implements PhotoRepository {
   );
 
   @override
+  Future<PhotoShareLink> updatePhotoShare(
+    String shareId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+    required bool includeLocation,
+    required bool originalQuality,
+  }) => _api.updatePhotoShare(
+    shareId,
+    password: password,
+    expiresAt: expiresAt,
+    maxAccessCount: maxAccessCount,
+    includeLocation: includeLocation,
+    originalQuality: originalQuality,
+  );
+
+  @override
   Future<List<PhotoShareLink>> listPhotoShares(String photoId) =>
       _api.listPhotoShares(photoId);
 

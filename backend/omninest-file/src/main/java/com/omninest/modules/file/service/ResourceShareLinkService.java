@@ -261,6 +261,73 @@ public class ResourceShareLinkService {
     }
 
     /**
+     * 原地更新分享链接的可变属性，令牌保持不变。
+     *
+     * <p>分享链接的地址是身份而不是凭据：有效期、密码与可见范围都属于这条链接的
+     * 可变属性。改设置若走"撤销 + 重建"会更换令牌，等于让所有者已经发出去的地址
+     * 当场失效，因此本方法只改属性、不换身份。
+     *
+     * <p>除密码外，入参按"整体替换可变属性"解释，不做字段缺省判断：
+     * {@code expiresAt} 为 null 表示永久有效，{@code maxAccessCount} 为 null 表示
+     * 不限访问次数。调用方必须持有该链接的完整当前设置，避免漏传字段被静默重置。
+     *
+     * <p>密码单独走缺省语义：口令只存哈希，调用方无法回读明文，若把"未携带"当成
+     * "清除"，则改有效期或可见范围会顺带抹掉已发出的提取码。因此 {@code password}
+     * 为 null 表示保持原密码不变，空白串才是显式清除。
+     *
+     * <p>已通过的访客会话不落库且最长 10 分钟自然过期（见
+     * {@link ShareAccessSessionService}），因此改密后的残留访问窗口由该 TTL
+     * 兜住，不额外维护按令牌撤销的反向索引。分享链接本体带 5 分钟读缓存，
+     * 更新后必须失效，否则旧密码与旧有效期仍会继续生效一段时间。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param shareId 分享链接 ID
+     * @param password 新访问密码，null 表示保持不变，空白表示清除
+     * @param expiresAt 新过期时间，null 表示永久有效
+     * @param maxAccessCount 新访问次数上限，null 表示不限
+     * @param includeLocation 公开访问是否包含位置
+     * @param originalQuality 公开访问是否签发原图
+     * @return 更新后的分享链接描述符，含可供重新复制的明文令牌
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ResourceShareLinkDto update(
+            UUID ownerUserId,
+            UUID shareId,
+            String password,
+            Instant expiresAt,
+            Integer maxAccessCount,
+            boolean includeLocation,
+            boolean originalQuality) {
+        ShareLink share = shareLinkRepository.findByIdAndOwnerUserId(shareId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
+        if (share.getDisabledAt() != null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "分享链接已撤销");
+        }
+        if (expiresAt != null && expiresAt.isBefore(Instant.now())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "过期时间必须晚于当前时间");
+        }
+        if (maxAccessCount != null && maxAccessCount <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "访问次数上限必须大于 0");
+        }
+        if (maxAccessCount != null && share.getAccessCount() > maxAccessCount) {
+            throw new BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "访问次数上限不能低于已访问次数 " + share.getAccessCount()
+            );
+        }
+        share.setExpiresAt(expiresAt);
+        share.setMaxAccessCount(maxAccessCount);
+        share.setIncludeLocation(includeLocation);
+        share.setOriginalQuality(originalQuality);
+        if (password != null) {
+            share.setPasswordHash(password.isBlank() ? null : passwordEncoder.encode(password));
+        }
+        ShareLink saved = shareLinkRepository.save(share);
+        readThroughCache.invalidate("omninest:share:link:" + saved.getTokenHash());
+        return toDto(saved, revealToken(saved));
+    }
+
+    /**
      * 撤销所有者的分享链接。
      *
      * @param ownerUserId 所有者用户 ID
@@ -379,6 +446,7 @@ public class ResourceShareLinkService {
                 share.getExpiresAt(),
                 share.getMaxAccessCount(),
                 share.getAccessCount(),
+                share.getPasswordHash() != null && !share.getPasswordHash().isBlank(),
                 share.isIncludeLocation(),
                 share.isOriginalQuality(),
                 share.getCreatedAt()

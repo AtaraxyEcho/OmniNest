@@ -443,11 +443,10 @@ class _WorkstationCheckMarkState extends State<WorkstationCheckMark> {
                 height: widget.size,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  // 勾选=实底反白 ✔；未勾选悬停=底色微升提示可点。
+                  // 勾选=弱抬升底 + 强边框 + 同色 ✔，与工位分段控件的选中口径一致；
+                  // 实底反白在浅色主题下会变成黑块配浅色勾。
                   color:
-                      value
-                          ? scheme.onSurface
-                          : _hovering && interactive
+                      value || (_hovering && interactive)
                           ? scheme.surfaceContainerHighest
                           : Colors.transparent,
                   border: Border.all(color: borderColor, width: 1),
@@ -474,7 +473,7 @@ class _WorkstationCheckMarkState extends State<WorkstationCheckMark> {
                               fontSize: widget.size * 0.72,
                               height: 1,
                               fontWeight: FontWeight.w700,
-                              color: scheme.surface,
+                              color: scheme.onSurface,
                             ),
                           ),
                         )

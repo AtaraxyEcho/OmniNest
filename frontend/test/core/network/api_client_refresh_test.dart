@@ -169,6 +169,41 @@ void main() {
     final response = await client.dio.get<Map<String, dynamic>>('/secure');
     expect(response.data?['code'], 200);
   });
+
+  test('刷新被拒且本地无令牌后停止重复刷新，重新带令牌即恢复', () async {
+    String? accessToken;
+    var refreshCount = 0;
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => accessToken,
+      refreshSession: () async {
+        refreshCount++;
+        return false;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    await expectLater(
+      client.dio.get<Map<String, dynamic>>('/secure'),
+      throwsA(isA<DioException>()),
+    );
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final response = await client.dio.get<Map<String, dynamic>>('/secure');
+      expect(response.data?['code'], 401);
+    }
+    expect(refreshCount, 1);
+
+    accessToken = 'stale-token';
+    await expectLater(
+      client.dio.get<Map<String, dynamic>>('/secure'),
+      throwsA(isA<DioException>()),
+    );
+    expect(refreshCount, 2);
+  });
 }
 
 class _ReplayAdapter implements HttpClientAdapter {
