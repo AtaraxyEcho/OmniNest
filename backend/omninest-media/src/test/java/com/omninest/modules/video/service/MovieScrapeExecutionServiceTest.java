@@ -146,10 +146,46 @@ class MovieScrapeExecutionServiceTest {
 
         assertThat(item.getMovieId()).isNotNull();
         assertThat(item.getMetadataStatus()).isEqualTo("MATCHED");
-        verify(movieRepository, atLeast(2)).save(any(MediaMovie.class));
+        // 资产同步未产出对象时不再重复保存电影行。
+        verify(movieRepository).save(any(MediaMovie.class));
         verify(contentAssetService).syncPrimaryMovieAssets(any(), eq(OWNER_ID), eq(candidate));
         verify(taskRecordService).markCompleted(eq(TASK_ID), argThat(result ->
                 "local-inception-2010".equals(result.get("externalId"))));
+    }
+
+    @Test
+    void persistsMovieAssetRefsAfterOutOfTransactionImageFetch() {
+        when(configService.metadataProvidersEnabled()).thenReturn(true);
+        MediaVideoItem item = pendingItem();
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(item));
+        when(provider.providerName()).thenReturn("TMDB");
+        ScrapeCandidateDto candidate = new ScrapeCandidateDto(
+                "TMDB", "12345", "Inception", null, null, 2010, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
+        );
+        when(provider.search(new FileNameGuess("Inception", 2010, null, null))).thenReturn(List.of(candidate));
+        when(movieRepository.findByTmdbIdAndOwnerUserId(any(), eq(OWNER_ID))).thenReturn(Optional.empty());
+        when(movieRepository.save(any(MediaMovie.class))).thenAnswer(invocation -> {
+            MediaMovie saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
+        UUID posterFileId = UUID.fromString("70000000-0000-0000-0000-000000000007");
+        // 图片本地化发生在两段短事务之间，回填时按主键重新读取电影行。
+        when(contentAssetService.syncPrimaryMovieAssets(any(), eq(OWNER_ID), eq(candidate)))
+                .thenReturn(new ContentAssetService.MovieAssetResult(posterFileId, null));
+        MediaMovie created = new MediaMovie();
+        created.setId(UUID.randomUUID());
+        created.setOwnerUserId(OWNER_ID);
+        created.setTitle("Inception");
+        when(movieRepository.findByIdAndOwnerUserId(any(), eq(OWNER_ID))).thenReturn(Optional.of(created));
+
+        executionService.execute(event("Inception", 2010));
+
+        assertThat(created.getPosterFileId()).isEqualTo(posterFileId);
+        verify(movieRepository).findByIdAndOwnerUserId(any(), eq(OWNER_ID));
     }
 
     @Test

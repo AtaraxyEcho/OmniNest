@@ -16,6 +16,7 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -94,8 +95,8 @@ public class PhotoSearchIndexService implements Closeable {
             w.updateDocument(new Term(FIELD_PHOTO_ID, photoId.toString()), doc);
             w.commit();
             log.debug("索引照片: photoId={}", photoId);
-        } catch (Exception e) {
-            log.warn("Lucene 照片索引写入失败: photoId={}", photoId, e);
+        } catch (Exception exception) {
+            throw indexFailure("写入", photoId, exception);
         }
     }
 
@@ -108,9 +109,24 @@ public class PhotoSearchIndexService implements Closeable {
             w.deleteDocuments(new Term(FIELD_PHOTO_ID, photoId.toString()));
             w.commit();
             log.debug("删除照片索引: photoId={}", photoId);
-        } catch (Exception e) {
-            log.warn("Lucene 照片索引删除失败: photoId={}", photoId, e);
+        } catch (Exception exception) {
+            throw indexFailure("删除", photoId, exception);
         }
+    }
+
+    /**
+     * 索引写入失败必须可见：单写进程假设被打破时（卷被其他进程持有 {@code write.lock}）
+     * 或磁盘异常时，只留一条 warn 会让搜索静默停留在旧数据，交由消费侧重试并进 DLQ。
+     */
+    private RuntimeException indexFailure(String action, UUID photoId, Exception exception) {
+        if (exception instanceof LockObtainFailedException) {
+            log.error("Lucene 索引卷写入锁冲突，照片索引{}失败: photoId={}", action, photoId, exception);
+        } else {
+            log.error("Lucene 照片索引{}失败: photoId={}", action, photoId, exception);
+        }
+        return exception instanceof RuntimeException runtimeException
+                ? runtimeException
+                : new IllegalStateException("照片索引" + action + "失败", exception);
     }
 
     /**
@@ -128,7 +144,9 @@ public class PhotoSearchIndexService implements Closeable {
             w.commit();
             log.debug("批量删除照片索引: count={}", photoIds.size());
         } catch (Exception e) {
-            log.warn("Lucene 照片索引批量删除失败: count={}", photoIds.size(), e);
+            // 永久删除流程里文档已随业务行消失，搜索侧还会用活动照片二次过滤，
+            // 残留文档不会露出；此处只记日志，不让索引失败把清理任务打成 DLQ。
+            log.error("Lucene 照片索引批量删除失败: count={}", photoIds.size(), e);
         }
     }
 

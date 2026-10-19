@@ -105,7 +105,13 @@ public class ContentAssetService {
         return primaryAssets(ownerUserId, ResourceType.VIDEO_ITEM.getValue(), videoItemIds);
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 同步电影主海报/背景图。
+     *
+     * <p>刻意不加 {@code @Transactional}：外部图片下载与入库是分钟级网络 I/O，事务会整段
+     * 占住数据库连接；两条派生写入各自带事务（{@code DerivedAssetStorageService} 用
+     * REQUIRES_NEW，仓储保存各自成事务），调用方若已有事务仍会照常加入。</p>
+     */
     public SeriesAssetResult syncPrimarySeriesAssets(UUID ownerUserId, UUID seriesId, ScrapeCandidateDto candidate) {
         if (ownerUserId == null || seriesId == null || candidate == null) {
             return new SeriesAssetResult(null, null);
@@ -121,7 +127,9 @@ public class ContentAssetService {
         return new SeriesAssetResult(posterFileId, backdropFileId);
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 同步系列主海报/背景图，事务口径同 {@link #syncPrimarySeriesAssets}。
+     */
     public MovieAssetResult syncPrimaryMovieAssets(UUID movieId, UUID ownerUserId, ScrapeCandidateDto candidate) {
         if (ownerUserId == null || movieId == null || candidate == null) {
             return new MovieAssetResult(null, null);

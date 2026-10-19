@@ -147,27 +147,109 @@ public class MovieScrapeExecutionService {
 
         log.info("匹配到元数据: taskId={}, provider={}, externalId={}, title={}, originalTitle={}, releaseDate={}, runtime={}",
                 event.taskId(), candidate.provider(), candidate.externalId(), candidate.title(),
-                candidate.originalTitle(), candidate.releaseDate(), candidate.runtimeMinutes());
+                candidate.originalTitle(), candidate.runtimeMinutes());
 
         boolean isEpisode = MediaType.EPISODE.getValue().equals(item.getMediaType());
-        if (isEpisode) {
-            executeEpisode(item, candidate);
-        } else {
-            executeMovie(item, candidate);
-        }
+        ScrapeAssetPlan plan = transactionTemplate.execute(status -> isEpisode
+                ? prepareEpisodeTargets(item, candidate)
+                : prepareMovieTargets(item, candidate));
 
-        // 文件级信息仍写入 video_item
-        fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
-        videoItemRepository.save(item);
-        applicationEventPublisher.publishEvent(new VideoProbeEvent(item));
-        taskRecordService.markCompleted(event.taskId(), resultMap("元数据刮削完成", candidate));
-        recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.UPDATED);
+        // 海报与背景图是 TMDB 图片下载 + MinIO 入库（单张读取超时 30 秒、最多跟随 5 次重定向），
+        // 必须落在两次短事务之间：Worker 的数据库连接池很小，外部网络整段占住会拖垮其他消费者。
+        ScrapeAssetRefs refs = fetchAssetRefs(plan, candidate);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            applyAssetRefs(plan, refs);
+            // 文件级信息仍写入 video_item
+            fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
+            videoItemRepository.save(item);
+            applicationEventPublisher.publishEvent(new VideoProbeEvent(item));
+            taskRecordService.markCompleted(event.taskId(), resultMap("元数据刮削完成", candidate));
+            recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.UPDATED);
+        });
+
         log.info("刮削完成: taskId={}, itemId={}, mediaType={}, provider={}",
                 event.taskId(), item.getId(), item.getMediaType(), candidate.provider());
         // 发送刮削完成通知
         notificationService.notifyOrLog(event.ownerUserId(), "TASK_COMPLETED",
                 "视频刮削完成", "《" + candidate.title() + "》元数据已更新",
                 Map.of("taskId", event.taskId().toString(), "itemId", item.getId().toString()));
+    }
+
+    /**
+     * 下载并入库主海报/背景图；返回全空表示本次不需要同步或同步未产出可用对象。
+     */
+    private ScrapeAssetRefs fetchAssetRefs(ScrapeAssetPlan plan, ScrapeCandidateDto candidate) {
+        if (plan == null || !plan.requireAssets()) {
+            return ScrapeAssetRefs.empty();
+        }
+        if (plan.series()) {
+            ContentAssetService.SeriesAssetResult assets =
+                    contentAssetService.syncPrimarySeriesAssets(plan.ownerUserId(), plan.resourceId(), candidate);
+            return new ScrapeAssetRefs(assets.posterFileId(), assets.backdropFileId());
+        }
+        ContentAssetService.MovieAssetResult assets =
+                contentAssetService.syncPrimaryMovieAssets(plan.resourceId(), plan.ownerUserId(), candidate);
+        return new ScrapeAssetRefs(assets.posterFileId(), assets.backdropFileId());
+    }
+
+    /**
+     * 把已入库的资产引用回填到电影或系列行上。
+     */
+    private void applyAssetRefs(ScrapeAssetPlan plan, ScrapeAssetRefs refs) {
+        if (refs.posterFileId() == null && refs.backdropFileId() == null) {
+            return;
+        }
+        if (plan.series()) {
+            MediaTvSeries series = tvSeriesRepository
+                    .findByIdAndOwnerUserId(plan.resourceId(), plan.ownerUserId())
+                    .orElse(null);
+            if (series == null) {
+                return;
+            }
+            if (refs.posterFileId() != null) {
+                series.setPosterFileId(refs.posterFileId());
+            }
+            if (refs.backdropFileId() != null) {
+                series.setBackdropFileId(refs.backdropFileId());
+            }
+            tvSeriesRepository.save(series);
+            return;
+        }
+        MediaMovie movie = movieRepository
+                .findByIdAndOwnerUserId(plan.resourceId(), plan.ownerUserId())
+                .orElse(null);
+        if (movie == null) {
+            return;
+        }
+        if (refs.posterFileId() != null) {
+            movie.setPosterFileId(refs.posterFileId());
+        }
+        if (refs.backdropFileId() != null) {
+            movie.setBackdropFileId(refs.backdropFileId());
+        }
+        movieRepository.save(movie);
+    }
+
+    /**
+     * 层级落库后的资产同步计划：{@code resourceId} 是电影 ID 或系列 ID。
+     */
+    private record ScrapeAssetPlan(
+            UUID ownerUserId,
+            UUID resourceId,
+            boolean series,
+            boolean requireAssets
+    ) {
+    }
+
+    /**
+     * 外部图片本地化后的资产引用。
+     */
+    private record ScrapeAssetRefs(UUID posterFileId, UUID backdropFileId) {
+
+        static ScrapeAssetRefs empty() {
+            return new ScrapeAssetRefs(null, null);
+        }
     }
 
     private void recordVideoUpdated(UUID ownerUserId, MediaVideoItem item, SyncAction action) {
@@ -184,7 +266,7 @@ public class MovieScrapeExecutionService {
         );
     }
 
-    private void executeMovie(MediaVideoItem item, ScrapeCandidateDto candidate) {
+    private ScrapeAssetPlan prepareMovieTargets(MediaVideoItem item, ScrapeCandidateDto candidate) {
         // 扫描已经建立电影实体时直接补充该实体，避免同一个本地文件形成两部电影。
         MediaMovie movie = item.getMovieId() == null
                 ? findOrCreateMovie(item.getOwnerUserId(), candidate)
@@ -199,36 +281,15 @@ public class MovieScrapeExecutionService {
         if (item.getVersionLabel() == null || item.getVersionLabel().isBlank()) {
             item.setVersionLabel(buildVersionLabel(item));
         }
-
-        // 同步海报到 movie
-        var movieAssetResult = contentAssetService.syncPrimaryMovieAssets(movie.getId(), item.getOwnerUserId(), candidate);
-        if (movieAssetResult.posterFileId() != null) {
-            movie.setPosterFileId(movieAssetResult.posterFileId());
-        }
-        if (movieAssetResult.backdropFileId() != null) {
-            movie.setBackdropFileId(movieAssetResult.backdropFileId());
-        }
-        movieRepository.save(movie);
+        return new ScrapeAssetPlan(item.getOwnerUserId(), movie.getId(), false, true);
     }
 
-    private void executeEpisode(MediaVideoItem item, ScrapeCandidateDto candidate) {
+    private ScrapeAssetPlan prepareEpisodeTargets(MediaVideoItem item, ScrapeCandidateDto candidate) {
         // 扫描阶段已经建立 Series/Season/Episode 层级，刮削只更新 Series，不按 Episode 再次搜索。
         MediaTvSeries series = resolveSeries(item, candidate);
-        boolean seriesAlreadyExisted = series.getPosterFileId() != null;
-
+        // 只有还没有海报的系列才需要外部图片；判断必须在落库前取，资产同步在事务外进行。
+        boolean seriesNeedsAssets = series.getPosterFileId() == null;
         applySeriesCandidate(series, candidate);
-
-        // 为缺少海报的系列同步资产
-        if (!seriesAlreadyExisted) {
-            var assetResult = contentAssetService.syncPrimarySeriesAssets(item.getOwnerUserId(), series.getId(), candidate);
-            if (assetResult.posterFileId() != null) {
-                series.setPosterFileId(assetResult.posterFileId());
-            }
-            if (assetResult.backdropFileId() != null) {
-                series.setBackdropFileId(assetResult.backdropFileId());
-            }
-            tvSeriesRepository.save(series);
-        }
         tvSeriesRepository.save(series);
 
         // 查找或创建 MediaTvSeason
@@ -257,17 +318,27 @@ public class MovieScrapeExecutionService {
         linkOrphanedEpisodes(item.getOwnerUserId(), series.getId());
 
         // 一个 Series 的外部元数据由所有分集复用；Episode 只维持文件与层级关联。
-        List<MediaVideoItem> seriesItems = videoItemRepository
+        // 本次条目自身排除在外：它的行由完成事务落库，同批保存会让那份实体版本失效。
+        List<MediaVideoItem> otherSeriesItems = videoItemRepository
                 .findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAscEpisodeNumberAsc(
-                        item.getOwnerUserId(), series.getId());
-        for (MediaVideoItem seriesItem : seriesItems) {
+                        item.getOwnerUserId(), series.getId())
+                .stream()
+                .filter(seriesItem -> !seriesItem.getId().equals(item.getId()))
+                .toList();
+        for (MediaVideoItem seriesItem : otherSeriesItems) {
             seriesItem.setMetadataStatus(MetadataStatus.MATCHED.getValue());
             if (seriesItem.getVersionLabel() == null || seriesItem.getVersionLabel().isBlank()) {
                 seriesItem.setVersionLabel(buildVersionLabel(seriesItem));
             }
         }
-        videoItemRepository.saveAll(seriesItems);
+        if (!otherSeriesItems.isEmpty()) {
+            videoItemRepository.saveAll(otherSeriesItems);
+        }
         item.setMetadataStatus(MetadataStatus.MATCHED.getValue());
+        if (item.getVersionLabel() == null || item.getVersionLabel().isBlank()) {
+            item.setVersionLabel(buildVersionLabel(item));
+        }
+        return new ScrapeAssetPlan(item.getOwnerUserId(), series.getId(), true, seriesNeedsAssets);
     }
 
     private MediaMovie findOrCreateMovie(UUID ownerUserId, ScrapeCandidateDto candidate) {
