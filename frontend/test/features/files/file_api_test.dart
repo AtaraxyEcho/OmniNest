@@ -432,6 +432,61 @@ void main() {
     expect(response.data, isA<List<int>>());
   });
 
+  test('listExternalConnectors unwraps the object envelope', () async {
+    final adapter = _CapturingHttpClientAdapter(
+      body: {
+        'code': 200,
+        'message': 'success',
+        'data': [
+          {
+            'code': 'GD',
+            'displayName': 'Google Drive',
+            'authMode': 'OAUTH',
+            'availability': 'READY',
+          },
+          {'code': '', 'displayName': '跳过空编码'},
+        ],
+      },
+    );
+    final api = FileApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    final connectors = await api.listExternalConnectors();
+
+    expect(adapter.lastMethod, 'GET');
+    expect(adapter.lastPath, '/external-connectors');
+    expect(connectors, hasLength(1));
+    expect(connectors.first.code, 'GD');
+    expect(connectors.first.displayName, 'Google Drive');
+  });
+
+  test('listExternalConnectors throws on a business error envelope', () async {
+    final adapter = _CapturingHttpClientAdapter(
+      body: {'code': 403, 'errorName': 'FORBIDDEN', 'message': '无权访问连接器'},
+    );
+    final api = FileApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    expect(
+      () => api.listExternalConnectors(),
+      throwsA(isA<AppException>().having((e) => e.code, 'code', 'FORBIDDEN')),
+    );
+  });
+
   test('parses storage stats response', () {
     final stats = fileApi.parseStorageStatsResponse({
       'code': 200,

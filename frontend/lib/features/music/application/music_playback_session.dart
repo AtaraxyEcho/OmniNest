@@ -294,7 +294,13 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     try {
       final response = await dio.get<List<int>>(
         resolveApiAbsoluteUrl(dio, url),
-        options: Options(responseType: ResponseType.bytes),
+        options: Options(
+          responseType: ResponseType.bytes,
+          // bytes 响应没有信封：共享 Dio 的 validateStatus 放到 <500，
+          // 非 2xx 时错误 JSON 会被当成图片字节交给系统面板。
+          validateStatus:
+              (status) => status != null && status >= 200 && status < 300,
+        ),
       );
       final bytes = response.data;
       return bytes == null ? null : Uint8List.fromList(bytes);

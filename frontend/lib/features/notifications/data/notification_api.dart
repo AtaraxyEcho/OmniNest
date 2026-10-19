@@ -89,13 +89,20 @@ class NotificationApi {
     final data = error.response?.data;
     if (data is Map) {
       final code = data['code'];
+      final errorName = data['errorName']?.toString();
       final message = data['message']?.toString();
       return AppException(
+        // errorName 是稳定业务符号，数字码只作为 details 里的兼容位。
         code:
+            errorName ??
             code?.toString() ??
             error.response?.statusCode?.toString() ??
             'NOTIFICATION_ERROR',
         message: message?.isNotEmpty == true ? message! : '通知操作失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          if (code != null) 'code': code.toString(),
+        },
       );
     }
     return AppException(
@@ -108,9 +115,14 @@ class NotificationApi {
     final envelope = body ?? const <String, dynamic>{};
     final code = envelope['code'];
     if (code is num && code.toInt() >= 400) {
+      final errorName = envelope['errorName']?.toString();
       throw AppException(
-        code: code.toInt().toString(),
+        code: errorName ?? code.toInt().toString(),
         message: envelope['message']?.toString() ?? '通知操作失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          'code': code.toInt().toString(),
+        },
       );
     }
   }

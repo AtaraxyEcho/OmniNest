@@ -426,6 +426,47 @@ void main() {
         ),
       );
     });
+
+    test('revokeAllPhotoShares reads the scalar revoked count', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {'code': 200, 'message': 'success', 'data': 2},
+      );
+      final api = PhotoApi(_apiClient(adapter));
+
+      final count = await api.revokeAllPhotoShares('photo-1');
+
+      expect(adapter.lastMethod, 'DELETE');
+      expect(adapter.lastPath, '/photos/photo-1/share');
+      expect(count, 2);
+    });
+
+    test('revokeAllAlbumShares reads the scalar revoked count', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {'code': 200, 'message': 'success', 'data': 0},
+      );
+      final api = PhotoApi(_apiClient(adapter));
+
+      final count = await api.revokeAllAlbumShares('album-1');
+
+      expect(adapter.lastPath, '/photos/albums/album-1/share');
+      expect(count, 0);
+    });
+
+    test('revokeAllPhotoShares surfaces a business error envelope', () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {'code': 404, 'errorName': 'NOT_FOUND', 'message': '无权撤销该分享'},
+      );
+      final api = PhotoApi(_apiClient(adapter));
+
+      expect(
+        () => api.revokeAllPhotoShares('photo-1'),
+        throwsA(
+          isA<AppException>()
+              .having((e) => e.code, 'code', 'NOT_FOUND')
+              .having((e) => e.message, 'message', contains('无权')),
+        ),
+      );
+    });
   });
 }
 

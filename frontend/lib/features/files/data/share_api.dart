@@ -57,17 +57,10 @@ class ShareApi implements PublicShareRepository {
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
-        final code = body['code'];
-        final msg =
-            body['message']?.toString() ?? AppErrorCodes.operationFailed;
-        if (code == 401 || (code == 400 && msg == AppErrorCodes.needPassword)) {
-          return SharePreviewResult.needPassword(
-            msg == AppErrorCodes.operationFailed
-                ? AppErrorCodes.needPassword
-                : msg,
-          );
+        if (_isPasswordPrompt(body)) {
+          return SharePreviewResult.needPassword(_messageOf(body));
         }
-        return SharePreviewResult.error(msg);
+        return SharePreviewResult.error(_messageOf(body));
       }
       return SharePreviewResult.error(_networkErrorCode(e));
     } on Object catch (e) {
@@ -119,7 +112,9 @@ class ShareApi implements PublicShareRepository {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
         return ShareChildrenResult.error(
-          body['message']?.toString() ?? AppErrorCodes.operationFailed,
+          _isPasswordPrompt(body)
+              ? AppErrorCodes.needPassword
+              : _messageOf(body),
         );
       }
       return ShareChildrenResult.error(_networkErrorCode(e));
@@ -156,10 +151,11 @@ class ShareApi implements PublicShareRepository {
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
-        final code = body['code'];
-        final msg =
-            body['message']?.toString() ?? AppErrorCodes.operationFailed;
-        if (code == 409) {
+        final msg = _messageOf(body);
+        if (_isPasswordPrompt(body)) {
+          return ShareAcceptResult.error(AppErrorCodes.needPassword);
+        }
+        if (_isConflict(body)) {
           return ShareAcceptResult.duplicate(msg);
         }
         return ShareAcceptResult.error(msg);
@@ -181,13 +177,10 @@ class ShareApi implements PublicShareRepository {
     );
     final body = response.data;
     if (body == null || body['code'] != 200) {
-      final code = body?['code'];
-      final message =
-          body?['message']?.toString() ?? AppErrorCodes.operationFailed;
-      if (code == 401 || message == AppErrorCodes.needPassword) {
+      if (body != null && _isPasswordPrompt(body)) {
         return null;
       }
-      throw StateError(message);
+      throw StateError(_messageOf(body));
     }
     final data = body['data'] as Map<String, dynamic>?;
     final session = data?['sessionToken']?.toString();
@@ -196,6 +189,32 @@ class ShareApi implements PublicShareRepository {
     }
     _sessionTokens[token] = session;
     return session;
+  }
+
+  /// 判断业务信封是否需要用户补密码或提示密码错误。
+  ///
+  /// 后端的 `code` 是业务码（需要密码 9006、密码错误 9004），HTTP 状态才是 401，
+  /// 因此判据以 `errorName` 为准、业务码兜底，不能拿 401 当业务码比较。
+  bool _isPasswordPrompt(Map<String, dynamic> body) {
+    final errorName = body['errorName']?.toString();
+    if (errorName == AppErrorCodes.sharePasswordRequired ||
+        errorName == AppErrorCodes.passwordInvalid) {
+      return true;
+    }
+    final code = body['code'];
+    return code == 9006 || code == 9004;
+  }
+
+  bool _isConflict(Map<String, dynamic> body) {
+    final errorName = body['errorName']?.toString();
+    if (errorName == 'CONFLICT' || errorName == 'FILE_LIFECYCLE_CONFLICT') {
+      return true;
+    }
+    return body['code'] == 409;
+  }
+
+  String _messageOf(Map<String, dynamic>? body) {
+    return body?['message']?.toString() ?? AppErrorCodes.operationFailed;
   }
 
   String _networkErrorCode(DioException exception) {

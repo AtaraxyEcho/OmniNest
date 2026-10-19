@@ -32,7 +32,7 @@ class _ShareSelectRow extends StatelessWidget {
     );
     return PopupMenuButton<String>(
       onSelected: onSelected,
-      tooltip: '',
+      tooltip: label,
       color: PhotosChromeColors.sharePanelBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -122,45 +122,47 @@ class _ShareToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      fontSize: AppTypography.bodySmall,
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: label,
+      child: GestureDetector(
+        onTap: () => onChanged(!value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: AppTypography.bodySmall,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    sublabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.30),
-                      fontSize: AppTypography.labelSmall,
+                    const SizedBox(height: 1),
+                    Text(
+                      sublabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.30),
+                        fontSize: AppTypography.labelSmall,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => onChanged(!value),
-              child: AnimatedContainer(
+              const SizedBox(width: 12),
+              AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 width: 36,
                 height: 22,
@@ -193,8 +195,8 @@ class _ShareToggleRow extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

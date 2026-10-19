@@ -361,62 +361,57 @@ void main() {
       },
     );
 
-    test(
-      'listChildren maps the paged share subtree response',
-      () async {
-        final adapter = _ShareCapturingAdapter(
-          body: {
-            'code': 200,
-            'message': 'success',
-            'data': {
-              'items': [
-                {
-                  'id': 'f-1',
-                  'parentId': 'r-1',
-                  'nodeType': 'FOLDER',
-                  'name': 'videos',
-                  'sizeBytes': 0,
-                },
-                {
-                  'id': 'a-1',
-                  'parentId': 'r-1',
-                  'nodeType': 'FILE',
-                  'name': 'a.mkv',
-                  'mimeType': 'video/x-matroska',
-                  'sizeBytes': 4096,
-                  'downloadUrl': 'https://signed/a.mkv',
-                },
-              ],
-              'page': 0,
-              'size': 50,
-              'totalElements': 2,
-              'totalPages': 1,
-            },
+    test('listChildren maps the paged share subtree response', () async {
+      final adapter = _ShareCapturingAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {
+            'items': [
+              {
+                'id': 'f-1',
+                'parentId': 'r-1',
+                'nodeType': 'FOLDER',
+                'name': 'videos',
+                'sizeBytes': 0,
+              },
+              {
+                'id': 'a-1',
+                'parentId': 'r-1',
+                'nodeType': 'FILE',
+                'name': 'a.mkv',
+                'mimeType': 'video/x-matroska',
+                'sizeBytes': 4096,
+                'downloadUrl': 'https://signed/a.mkv',
+              },
+            ],
+            'page': 0,
+            'size': 50,
+            'totalElements': 2,
+            'totalPages': 1,
           },
-        );
-        final api = _createShareApi(adapter);
+        },
+      );
+      final api = _createShareApi(adapter);
 
-        final result = await api.listChildren('token-abc', parentId: 'r-1');
+      final result = await api.listChildren('token-abc', parentId: 'r-1');
 
-        expect(adapter.lastMethod, 'GET');
-        expect(adapter.lastPath, '/s/token-abc/children');
-        expect(
-          adapter.lastQueryParams,
-          {'parentId': 'r-1', 'page': 0, 'size': 50},
-        );
-        expect(
-          adapter.lastHeaders?['X-OmniNest-Share-Session'],
-          'session-test',
-        );
-        final success = result as ShareChildrenSuccess;
-        expect(success.total, 2);
-        expect(success.items.map((child) => child.name), ['videos', 'a.mkv']);
-        // 文件夹没有下载语义：服务端不给地址，模型也不该凭空造一个。
-        expect(success.items.first.isFolder, isTrue);
-        expect(success.items.first.downloadUrl, isNull);
-        expect(success.items.last.downloadUrl, 'https://signed/a.mkv');
-      },
-    );
+      expect(adapter.lastMethod, 'GET');
+      expect(adapter.lastPath, '/s/token-abc/children');
+      expect(adapter.lastQueryParams, {
+        'parentId': 'r-1',
+        'page': 0,
+        'size': 50,
+      });
+      expect(adapter.lastHeaders?['X-OmniNest-Share-Session'], 'session-test');
+      final success = result as ShareChildrenSuccess;
+      expect(success.total, 2);
+      expect(success.items.map((child) => child.name), ['videos', 'a.mkv']);
+      // 文件夹没有下载语义：服务端不给地址，模型也不该凭空造一个。
+      expect(success.items.first.isFolder, isTrue);
+      expect(success.items.first.downloadUrl, isNull);
+      expect(success.items.last.downloadUrl, 'https://signed/a.mkv');
+    });
 
     test(
       'preview omits password from preview request when not provided',
@@ -449,19 +444,64 @@ void main() {
       },
     );
 
-    test('preview returns needPassword when server returns 401', () async {
-      final adapter = _ShareCapturingAdapter(
-        body: {'code': 401, 'message': '密码错误', 'data': null},
-        httpStatusCode: 401,
-      );
-      final api = _createShareApi(adapter);
+    test(
+      'preview returns needPassword when the share requires a password',
+      () async {
+        final adapter = _ShareCapturingAdapter(
+          body: {
+            'code': 9006,
+            'errorName': 'SHARE_PASSWORD_REQUIRED',
+            'message': '需要访问密码',
+            'data': null,
+          },
+          httpStatusCode: 401,
+        );
+        final api = _createShareApi(adapter);
 
-      final result = await api.preview('token-abc', password: 'wrong');
+        final result = await api.preview('token-abc');
 
-      expect(result, isA<SharePreviewNeedPassword>());
-      final needPwd = result as SharePreviewNeedPassword;
-      expect(needPwd.message, '密码错误');
-    });
+        expect(result, isA<SharePreviewNeedPassword>());
+        final needPwd = result as SharePreviewNeedPassword;
+        expect(needPwd.message, '需要访问密码');
+      },
+    );
+
+    test(
+      'preview returns needPassword when the submitted password is wrong',
+      () async {
+        final adapter = _ShareCapturingAdapter(
+          body: {
+            'code': 9004,
+            'errorName': 'PASSWORD_INVALID',
+            'message': '密码错误',
+            'data': null,
+          },
+          httpStatusCode: 401,
+        );
+        final api = _createShareApi(adapter);
+
+        final result = await api.preview('token-abc', password: 'wrong');
+
+        expect(result, isA<SharePreviewNeedPassword>());
+        final needPwd = result as SharePreviewNeedPassword;
+        expect(needPwd.message, '密码错误');
+      },
+    );
+
+    test(
+      'preview still maps an unlabelled 401 without a business code to error',
+      () async {
+        final adapter = _ShareCapturingAdapter(
+          body: {'message': '未认证', 'data': null},
+          httpStatusCode: 401,
+        );
+        final api = _createShareApi(adapter);
+
+        final result = await api.preview('token-abc');
+
+        expect(result, isA<SharePreviewError>());
+      },
+    );
 
     test('preview returns error when server returns non-200', () async {
       final adapter = _ShareCapturingAdapter(
@@ -674,9 +714,7 @@ class _ShareCapturingAdapter implements HttpClientAdapter {
     lastQueryParams = Map<String, dynamic>.from(options.queryParameters);
     lastData = options.data;
     lastHeaders = Map<String, dynamic>.from(options.headers);
-    if (options.path.endsWith('/authorize') &&
-        body['code'] != 401 &&
-        body['code'] != 404) {
+    if (options.path.endsWith('/authorize') && httpStatusCode == 200) {
       lastAuthorizeData = options.data;
       return ResponseBody.fromString(
         jsonEncode({

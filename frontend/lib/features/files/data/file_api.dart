@@ -392,7 +392,12 @@ class FileApi {
     return apiClient.dio.post<List<int>>(
       '/files/batch/download',
       data: {'fileIds': fileIds},
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        // bytes 响应没有信封：非 2xx 时错误 JSON 会被当成 zip 字节返回。
+        validateStatus:
+            (status) => status != null && status >= 200 && status < 300,
+      ),
     );
   }
 
@@ -749,10 +754,15 @@ class FileApi {
 
   /// 列出可用连接器目录。
   Future<List<ExternalStorageConnector>> listExternalConnectors() async {
-    final response = await apiClient.dio.get<List<dynamic>>(
+    // 后端返回 ApiResponse<List<...>> 对象信封，按 List 声明响应类型会让 Dio
+    // 在 cast 时抛错，调用方的 catch 把它降级成空列表。
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/external-connectors',
     );
-    final items = response.data ?? const [];
+    final items = parseEnvelope(response.data)['data'];
+    if (items is! List) {
+      return const [];
+    }
     return items
         .whereType<Map<String, dynamic>>()
         .map(

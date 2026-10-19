@@ -59,13 +59,17 @@ class UserPreferencesApi {
     final data = body ?? const <String, dynamic>{};
     final code = data['code'];
     if (code is num && code.toInt() >= 400) {
+      // errorName 是稳定业务符号，数字码只作为 details 里的兼容位。
+      final errorName = data['errorName']?.toString();
       throw AppException(
-        code: code.toInt().toString(),
+        code: errorName ?? code.toInt().toString(),
         message: data['message']?.toString() ?? '偏好设置请求失败',
-        details:
-            data['details'] is Map
-                ? Map<String, Object?>.from(data['details'] as Map)
-                : const {},
+        details: {
+          if (data['details'] is Map)
+            ...Map<String, Object?>.from(data['details'] as Map),
+          if (errorName != null) 'errorName': errorName,
+          'code': code.toInt().toString(),
+        },
       );
     }
     return data;

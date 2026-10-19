@@ -13,6 +13,16 @@ class PreferenceSyncService {
        _localStore = localStore;
 
   static const _versionConflictCode = '7001';
+  static const _versionConflictName = 'PREFERENCE_VERSION_CONFLICT';
+
+  /// 偏好版本冲突判定：信封解析优先给出稳定符号，本地兜底仍是数字码。
+  static bool _isVersionConflict(AppException error) {
+    if (error.code == _versionConflictCode ||
+        error.code == _versionConflictName) {
+      return true;
+    }
+    return error.details['code'] == _versionConflictCode;
+  }
 
   final UserPreferencesApi _api;
   final PreferenceLocalStore _localStore;
@@ -212,7 +222,7 @@ class PreferenceSyncService {
     try {
       await _api.delete(scope: scope, baseVersion: baseVersion);
     } on AppException catch (error) {
-      if (error.code != _versionConflictCode) {
+      if (!_isVersionConflict(error)) {
         rethrow;
       }
       final latest = await _api.getSnapshot(scope);
@@ -267,7 +277,7 @@ class PreferenceSyncService {
         await _localStore.clearPending(userId, scope);
         return saved;
       } on AppException catch (error) {
-        if (error.code != _versionConflictCode) {
+        if (!_isVersionConflict(error)) {
           rethrow;
         }
         final latest = await _api.getSnapshot(scope);

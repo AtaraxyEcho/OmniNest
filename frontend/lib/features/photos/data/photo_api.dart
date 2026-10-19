@@ -485,7 +485,12 @@ class PhotoApi {
   Future<Uint8List> rawPreview(String photoId) async {
     final response = await apiClient.dio.get<List<int>>(
       '/photos/$photoId/raw-preview',
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        // bytes 响应没有信封：非 2xx 时错误 JSON 会被当成图片字节返回。
+        validateStatus:
+            (status) => status != null && status >= 200 && status < 300,
+      ),
     );
     return Uint8List.fromList(response.data ?? []);
   }
@@ -559,7 +564,7 @@ class PhotoApi {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/$photoId/share',
     );
-    return (parseData(response.data) as num?)?.toInt() ?? 0;
+    return revokedShareCount(response.data);
   }
 
   /// 清空指定相册的全部有效分享链接，返回撤销条数。
@@ -567,7 +572,7 @@ class PhotoApi {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/albums/$albumId/share',
     );
-    return (parseData(response.data) as num?)?.toInt() ?? 0;
+    return revokedShareCount(response.data);
   }
 
   /// 创建单张照片分享链接
@@ -669,6 +674,12 @@ class PhotoApi {
       );
     }
     return data;
+  }
+
+  /// 撤销分享返回的是 `ApiResponse<Integer>` 标量条数，不能走只接受对象的 parseData。
+  int revokedShareCount(Map<String, dynamic>? body) {
+    final data = parseEnvelope(body)['data'];
+    return data is num ? data.toInt() : 0;
   }
 
   List<Map<String, dynamic>> parseList(Map<String, dynamic>? body) {

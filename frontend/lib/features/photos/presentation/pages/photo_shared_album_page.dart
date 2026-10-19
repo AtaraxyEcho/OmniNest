@@ -379,9 +379,10 @@ class _SharedAlbumContent extends StatelessWidget {
                 ),
               ),
               Text(
-                AppLocalizations.of(
-                  context,
-                ).photosPhotoCount(album.photos.length),
+                // 分享相册分页加载，标题数量必须取服务端总数，否则只显示当前页长度。
+                AppLocalizations.of(context).photosPhotoCount(
+                  album.total > 0 ? album.total : album.photos.length,
+                ),
                 style: TextStyle(
                   color: context.photosColors.onSurfaceVariant,
                   fontSize: AppTypography.bodyMedium,

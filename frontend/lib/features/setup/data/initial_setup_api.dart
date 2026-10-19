@@ -82,9 +82,15 @@ class InitialSetupApi {
     final envelope = body ?? const <String, dynamic>{};
     final code = envelope['code'];
     if (code is num && code.toInt() >= 400) {
+      // errorName 是稳定业务符号，数字码只作为 details 里的兼容位。
+      final errorName = envelope['errorName']?.toString();
       throw AppException(
-        code: code.toInt().toString(),
+        code: errorName ?? code.toInt().toString(),
         message: envelope['message']?.toString() ?? '安装请求失败',
+        details: {
+          if (errorName != null) 'errorName': errorName,
+          'code': code.toInt().toString(),
+        },
       );
     }
     return envelope;
