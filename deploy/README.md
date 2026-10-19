@@ -75,9 +75,11 @@ location /omninest/ws {
 }
 location /omninest/ {
   root /usr/share/nginx/html;
-  try_files $uri $uri/ /omninest/index.html;
+  try_files $uri /omninest/index.html;
 }
 ```
+
+回退只写 `$uri`，不要再加 `$uri/`：构建产物里存在 `css/`、`js/`、`assets/`、`canvaskit/` 等真实目录，`$uri/` 会优先命中目录索引，而 `autoindex` 关闭时这类请求直接 403，不再回到主文档。`deploy/prod/nginx/templates` 同时把 `flutter_bootstrap.js` 与 `version.json` 设为 `no-cache`——它们决定客户端加载哪一份构建产物，缓存住就会在发版后继续跑旧版。
 
 若反代本来就在站点根暴露 `/api/v1` 与 `/ws`，则把 API/WS 地址显式配成根路径即可，不必让接口跟前缀。
 

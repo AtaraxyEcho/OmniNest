@@ -99,10 +99,26 @@ server {
         try_files $uri =404;
     }
 
+    # 引导脚本与版本清单决定客户端加载哪一份构建产物，缓存会让发版后继续跑旧版：
+    # flutter_bootstrap.js 内嵌 service worker 版本号，version.json 是构建版本清单。
+    location = ${OMNINEST_WEB_BASE_PATH}flutter_bootstrap.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff";
+        try_files $uri =404;
+    }
+
+    location = ${OMNINEST_WEB_BASE_PATH}version.json {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff";
+        try_files $uri =404;
+    }
+
     location / {
         add_header Cache-Control "public, max-age=3600";
         add_header X-Content-Type-Options "nosniff";
-        try_files $uri $uri/ ${OMNINEST_WEB_BASE_PATH}index.html;
+        # 不回退到 $uri/：构建产物里的 assets/canvaskit/css 等真实目录会命中目录索引，
+        # autoindex 关闭时直接 403，而前端路由需要的是主文档。
+        try_files $uri ${OMNINEST_WEB_BASE_PATH}index.html;
     }
 }
 

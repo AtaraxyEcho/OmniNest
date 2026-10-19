@@ -75,10 +75,23 @@ server {
         try_files $uri =404;
     }
 
+    location = ${OMNINEST_WEB_BASE_PATH}flutter_bootstrap.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff";
+        try_files $uri =404;
+    }
+
+    location = ${OMNINEST_WEB_BASE_PATH}version.json {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header X-Content-Type-Options "nosniff";
+        try_files $uri =404;
+    }
+
     location / {
         add_header Cache-Control "public, max-age=3600";
         add_header X-Content-Type-Options "nosniff";
-        try_files $uri $uri/ ${OMNINEST_WEB_BASE_PATH}index.html;
+        # 不回退到 $uri/：构建产物里的真实目录会命中目录索引并 403，前端路由需要的是主文档。
+        try_files $uri ${OMNINEST_WEB_BASE_PATH}index.html;
     }
 }
 
