@@ -19,11 +19,12 @@ import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.util.AuthUserMapper;
+import com.omninest.modules.user.util.UserAvatarObjectKeys;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,7 +37,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -60,6 +63,13 @@ public class CurrentUserService {
     private final ReadThroughCache readThroughCache;
     private final MalwareScanGateway malwareScanGateway;
     private final UserSyncEventRecorder syncEventRecorder;
+    private final PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactionTemplate;
+
+    @PostConstruct
+    void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     private static final long MAX_AVATAR_SIZE = 5L * 1024 * 1024;
 
@@ -126,57 +136,57 @@ public class CurrentUserService {
     /**
      * 上传当前用户头像。
      *
+     * <p>校验、ClamAV 扫描与 MinIO 上传都在事务外执行：它们串起来可达数秒，放在
+     * {@code @Transactional} 里会让 API 的数据库连接整段被占住。落库与同步事件放在
+     * 一个短事务内，同步事件记录器要求外层事务（MANDATORY 传播）。</p>
+     *
      * @param userId 用户 ID
      * @param file 图片文件（jpg/png/webp，≤5MB）
      * @return presigned 下载 URL
      */
-    @Transactional(rollbackFor = Exception.class)
     public String uploadAvatar(UUID userId, MultipartFile file) {
         if (file == null || file.isEmpty() || file.getSize() <= 0 || file.getSize() > MAX_AVATAR_SIZE) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "头像文件大小不能超过 5MB");
         }
         String contentType = requireSafeAvatar(file);
 
-        // 生成对象 key（覆盖式更新）
-        String ext = switch (contentType) {
-            case "image/jpeg" -> "jpg";
-            case "image/png" -> "png";
-            case "image/webp" -> "webp";
-            default -> "bin";
-        };
-        String bucket = objectStorageBuckets.derivedAssets();
-        String objectKey = "avatars/" + userId + "/avatar." + ext;
-        ObjectStorageKey storageKey = new ObjectStorageKey(bucket, objectKey);
-
-        // 上传到 MinIO
+        AuthUser user = authUserRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        // 每次上传换一个新标识，对象键随之改变：旧头像对象既不会被读到，也不会因浏览器
+        // 按同键缓存而停留在旧图。
+        UUID avatarFileId = UUID.randomUUID();
+        ObjectStorageKey storageKey = new ObjectStorageKey(
+                objectStorageBuckets.derivedAssets(),
+                UserAvatarObjectKeys.objectKey(userId, avatarFileId)
+        );
         try {
             objectStorageClient.putObject(storageKey, file.getInputStream(), file.getSize(), contentType);
-        } catch (IOException e) {
-            log.warn("读取头像上传内容失败: userId={}, errorType={}", userId, e.getClass().getSimpleName());
+        } catch (IOException exception) {
+            log.warn("读取头像上传内容失败: userId={}, errorType={}",
+                    userId, exception.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.BAD_REQUEST, "头像上传失败");
         }
 
-        // 保存 avatarFileId（使用 objectKey 的 hashCode 作为标识）
-        AuthUser user = authUserRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-        user.setAvatarFileId(UUID.nameUUIDFromBytes(objectKey.getBytes(StandardCharsets.UTF_8)));
-        authUserRepository.save(user);
+        transactionTemplate.executeWithoutResult(status -> {
+            AuthUser managed = authUserRepository.findById(userId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+            managed.setAvatarFileId(avatarFileId);
+            authUserRepository.save(managed);
+            // 同一用户其他设备的会话资料（头像/显示名）经偏好作用域事件即时重拉。
+            syncEventRecorder.record(new SyncEventCommand(
+                    userId,
+                    SyncScope.PREFERENCES,
+                    "USER_PROFILE",
+                    "USER_PROFILE",
+                    SyncAction.UPDATED,
+                    null,
+                    Map.of()
+            ));
+        });
         readThroughCache.invalidate("omninest:user:profile:" + userId);
 
         log.info("头像已上传: userId={}, assetType=AVATAR", userId);
 
-        // 同一用户其他设备的会话资料（头像/显示名）经偏好作用域事件即时重拉。
-        syncEventRecorder.record(new SyncEventCommand(
-                userId,
-                SyncScope.PREFERENCES,
-                "USER_PROFILE",
-                "USER_PROFILE",
-                SyncAction.UPDATED,
-                null,
-                Map.of()
-        ));
-
-        // 返回 presigned 下载 URL
         return objectStorageClient.createDownloadUrl(storageKey, Duration.ofHours(24)).toString();
     }
 

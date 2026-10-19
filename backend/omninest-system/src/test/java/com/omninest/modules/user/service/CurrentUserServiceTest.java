@@ -1,13 +1,23 @@
 package com.omninest.modules.user.service;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URI;
 import java.util.function.Supplier;
+import javax.imageio.ImageIO;
+import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.security.CurrentUserContext;
@@ -28,7 +38,17 @@ import com.omninest.modules.user.repository.AuthUserRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.web.multipart.MultipartFile;
+import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.modules.user.util.UserAvatarObjectKeys;
+import java.net.URI;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -55,10 +75,18 @@ class CurrentUserServiceTest {
     });
     private final MalwareScanGateway malwareScanGateway = mock(MalwareScanGateway.class);
     private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final CurrentUserService service = new CurrentUserService(
             authUserRepository, activeSessionRepository, currentUserContext, passwordEncoder,
             new PasswordPolicy(), objectStorageClient, objectStorageBuckets, notificationService, sessionRevocationService,
-            userSessionRevocationService, readThroughCache, malwareScanGateway, syncEventRecorder);
+            userSessionRevocationService, readThroughCache, malwareScanGateway, syncEventRecorder,
+            transactionManager);
+
+    @BeforeEach
+    void setUpTransactionTemplate() {
+        service.initTransactionTemplate();
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+    }
 
     @Test
     void returnsCurrentUserFromSecurityContextUserId() {
@@ -291,5 +319,52 @@ class CurrentUserServiceTest {
         role.setName(code);
         role.getPermissions().add(permission);
         return role;
+    }
+
+    @Test
+    void uploadAvatarStoresObjectUnderAvatarFileIdKeyInsideShortTransaction() throws IOException {
+        UUID userId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        AuthUser existing = new AuthUser();
+        existing.setId(userId);
+        existing.setUsername("root");
+        byte[] png = pngBytes();
+        when(malwareScanGateway.scan(any(), anyLong()))
+                .thenReturn(new MalwareScanGateway.ScanResult(MalwareScanGateway.Status.CLEAN, null));
+        when(authUserRepository.findById(userId)).thenReturn(Optional.of(existing));
+        when(authUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectStorageClient.createDownloadUrl(any(), any()))
+                .thenReturn(URI.create("https://minio/signed-avatar"));
+
+        String url = service.uploadAvatar(userId, multipartPng(png));
+
+        assertThat(url).isEqualTo("https://minio/signed-avatar");
+        UUID avatarFileId = existing.getAvatarFileId();
+        assertThat(avatarFileId).isNotNull();
+        // 对象键由头像标识决定：读取侧无需按扩展名探测，旧格式头像也不可能再遮蔽新头像。
+        ArgumentCaptor<ObjectStorageKey> keyCaptor = ArgumentCaptor.forClass(ObjectStorageKey.class);
+        verify(objectStorageClient).putObject(keyCaptor.capture(), any(), anyLong(), eq("image/png"));
+        assertThat(keyCaptor.getValue().objectKey())
+                .isEqualTo(UserAvatarObjectKeys.objectKey(userId, avatarFileId));
+        // 落库与同步事件必须落在同一事务边界内（同步事件记录器是 MANDATORY 传播）。
+        InOrder order = inOrder(transactionManager, authUserRepository, syncEventRecorder);
+        order.verify(transactionManager).getTransaction(any());
+        order.verify(authUserRepository).save(existing);
+        order.verify(syncEventRecorder).record(any());
+        order.verify(transactionManager).commit(any());
+    }
+
+    private static MultipartFile multipartPng(byte[] content) throws IOException {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getSize()).thenReturn((long) content.length);
+        when(file.getInputStream()).thenReturn(new ByteArrayInputStream(content));
+        return file;
+    }
+
+    private static byte[] pngBytes() throws IOException {
+        BufferedImage image = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", out);
+        return out.toByteArray();
     }
 }

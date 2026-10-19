@@ -75,6 +75,7 @@ class PhotoBatchServiceTest {
     private final PhotoBatchTaskRepository batchTaskRepository = mock(PhotoBatchTaskRepository.class);
     private final PhotoItemRepository photoItemRepository = mock(PhotoItemRepository.class);
     private final PhotoTagRepository photoTagRepository = mock(PhotoTagRepository.class);
+    private final PhotoIndexTaskService photoIndexTaskService = mock(PhotoIndexTaskService.class);
     private final PhotoAlbumService albumService = mock(PhotoAlbumService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
@@ -88,6 +89,7 @@ class PhotoBatchServiceTest {
             batchTaskRepository,
             photoItemRepository,
             photoTagRepository,
+            photoIndexTaskService,
             albumService,
             taskDispatchService,
             fileMetadataQueryService,
@@ -174,6 +176,38 @@ class PhotoBatchServiceTest {
                 isNull(),
                 eq(Map.of()));
         verify(taskRecordService).markCompleted(eq(TASK_ID), anyMap());
+    }
+
+    @Test
+    void executeTagTaskDispatchesIndexRefreshForTaggedPhotos() {
+        PhotoBatchTask task = new PhotoBatchTask();
+        task.setId(TASK_ID);
+        task.setTaskId(TASK_ID);
+        task.setOwnerUserId(OWNER_ID);
+        task.setTaskType("TAG");
+        task.setTotalItems(1);
+        task.setParams(JsonSupport.toJson(
+                Map.of("photoIds", List.of(PHOTO_ID.toString()), "tag", "holiday")));
+
+        when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        when(batchTaskRepository.save(any())).thenAnswer(invocation -> {
+            PhotoBatchTask saved = invocation.getArgument(0);
+            saved.setVersion(saved.getVersion() + 1);
+            return saved;
+        });
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID)))
+                .thenReturn(List.of());
+        when(photoTagRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            Consumer<TransactionStatus> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+
+        service.executeBatchTask(TASK_ID, OWNER_ID);
+
+        // 标签参与索引字段，批量打标后必须投递索引事件，否则搜索查不到新标签。
+        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID);
     }
 
     @Test
@@ -449,6 +483,7 @@ class PhotoBatchServiceTest {
                 batchTaskRepository,
                 photoItemRepository,
                 photoTagRepository,
+                photoIndexTaskService,
                 albumService,
                 taskDispatchService,
                 fileMetadataQueryService,

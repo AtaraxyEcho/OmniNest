@@ -94,6 +94,17 @@ public class StorageQuotaService {
     }
 
     /**
+     * 查询来源预留最终结算进用量的字节数，供删除时按真实加计量退还。
+     *
+     * @param sourceType 来源类型
+     * @param sourceId 来源 ID
+     * @return 已结算字节数，无预留记录时返回 0
+     */
+    public long settledBytes(String sourceType, UUID sourceId) {
+        return reservationService.settledBytes(sourceType, sourceId);
+    }
+
+    /**
      * 回收一批过期预留。
      *
      * @return 回收数量

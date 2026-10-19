@@ -5,14 +5,11 @@ import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
-import com.omninest.common.sync.SyncScope;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
-import com.omninest.modules.media.service.MediaSyncEventService;
-import com.omninest.modules.photos.domain.PhotoAlbum;
 import com.omninest.modules.photos.domain.PhotoAlbumItem;
 import com.omninest.modules.photos.domain.PhotoFavorite;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -27,7 +24,6 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoTrashResultDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoYearGroup;
-import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoGroupPreviewProjection;
@@ -84,13 +80,12 @@ public class PhotoLibraryService {
     private final PhotoItemRepository photoItemRepository;
     private final PhotoFavoriteRepository favoriteRepository;
     private final PhotoAlbumRepository albumRepository;
-    private final PhotoAlbumItemRepository albumItemRepository;
+    private final PhotoChangeSideEffects sideEffects;
     private final PhotoTagRepository photoTagRepository;
     private final PhotoSearchIndexService photoSearchIndexService;
     private final FileDeletionService fileDeletionService;
     private final FileQueryService fileQueryService;
     private final ReadThroughCache readThroughCache;
-    private final MediaSyncEventService syncEventService;
     private final PhotoContentAnalysisService contentAnalysisService;
     private final PhotoGeoService photoGeoService;
     private final PhotoIndexTaskService photoIndexTaskService;
@@ -291,44 +286,17 @@ public class PhotoLibraryService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void movePhotoToTrash(UUID ownerUserId, UUID photoId) {
-        PhotoItem item = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
-        if (item.getDeletedAt() != null) {
-            return;
-        }
-        item.setDeletedAt(Instant.now());
-        photoItemRepository.save(item);
-        refreshAlbumCountsForPhotos(ownerUserId, List.of(photoId));
-        invalidateDashboardCache(ownerUserId);
-        recordPhotoEvent(ownerUserId, photoId, SyncAction.DELETED, null, Map.of("trashed", true));
-        log.info("照片已移入回收站: photoId={}, userId={}", photoId, ownerUserId);
-    }
-
-    /**
-     * 重算包含指定照片的相册计数。
-     *
-     * <p>相册卡片存的是落库的 photoCount，详情列表却按活动照片过滤；照片进回收站不删
-     * 相册关联条目，不在此重算就会让卡片数量长期高于点开后的实际数量。</p>
-     */
-    private void refreshAlbumCountsForPhotos(UUID ownerUserId, List<UUID> photoIds) {
-        if (photoIds.isEmpty()) {
-            return;
-        }
-        List<UUID> albumIds = albumItemRepository.findAlbumIdsByPhotoIdIn(photoIds);
-        if (albumIds.isEmpty()) {
-            return;
-        }
-        List<PhotoAlbum> albums = albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId);
-        for (PhotoAlbum album : albums) {
-            album.setPhotoCount((int) albumItemRepository.countActivePhotosByAlbumId(album.getId()));
-        }
-        if (!albums.isEmpty()) {
-            albumRepository.saveAll(albums);
+        PhotoTrashResultDto result = movePhotosToTrash(ownerUserId, List.of(photoId)).getFirst();
+        if (!result.success()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, result.message());
         }
     }
 
     /**
      * 批量将照片移入回收站，返回逐项处理结果。
+     *
+     * <p>一次批量读、一次批量写、一次相册重算与看板失效：逐张调用会把这三项放大成 N 倍。
+     * 照片进回收站不删相册关联条目，也不在请求进程写索引，统一投递给单写进程消费。</p>
      *
      * @param ownerUserId 当前用户 ID
      * @param photoIds 照片 ID 列表
@@ -339,15 +307,34 @@ public class PhotoLibraryService {
         List<UUID> distinctPhotoIds = photoIds == null
                 ? List.of()
                 : photoIds.stream().distinct().toList();
+        if (distinctPhotoIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, PhotoItem> itemsById = photoItemRepository.findByOwnerUserIdAndIdIn(ownerUserId, distinctPhotoIds)
+                .stream()
+                .collect(Collectors.toMap(PhotoItem::getId, item -> item));
+        Instant trashedAt = Instant.now();
+        List<PhotoItem> changed = new ArrayList<>();
         List<PhotoTrashResultDto> results = new ArrayList<>();
         for (UUID photoId : distinctPhotoIds) {
-            try {
-                movePhotoToTrash(ownerUserId, photoId);
-                results.add(new PhotoTrashResultDto(photoId, true, null));
-            } catch (BusinessException ex) {
-                results.add(new PhotoTrashResultDto(photoId, false, ex.getMessage()));
+            PhotoItem item = itemsById.get(photoId);
+            if (item == null) {
+                results.add(new PhotoTrashResultDto(photoId, false, "图片不存在"));
+                continue;
             }
+            if (item.getDeletedAt() == null) {
+                item.setDeletedAt(trashedAt);
+                changed.add(item);
+            }
+            results.add(new PhotoTrashResultDto(photoId, true, null));
         }
+        if (changed.isEmpty()) {
+            return results;
+        }
+        photoItemRepository.saveAll(changed);
+        sideEffects.afterTrashChange(ownerUserId,
+                changed.stream().map(PhotoItem::getId).toList(),
+                SyncAction.DELETED, Map.of("trashed", true));
         return results;
     }
 
@@ -392,9 +379,8 @@ public class PhotoLibraryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "回收站中不存在该图片"));
         item.setDeletedAt(null);
         photoItemRepository.save(item);
-        refreshAlbumCountsForPhotos(ownerUserId, List.of(photoId));
-        invalidateDashboardCache(ownerUserId);
-        recordPhotoEvent(ownerUserId, photoId, SyncAction.RESTORED, null, Map.of("trashed", false));
+        sideEffects.afterTrashChange(ownerUserId, List.of(photoId),
+                SyncAction.RESTORED, Map.of("trashed", false));
         log.info("照片已从回收站恢复: photoId={}, userId={}", photoId, ownerUserId);
     }
 
@@ -514,8 +500,8 @@ public class PhotoLibraryService {
         fav.setOwnerUserId(ownerUserId);
         fav.setPhotoId(photoId);
         favoriteRepository.save(fav);
-        invalidateDashboardCache(ownerUserId);
-        recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("favorite", true));
+        sideEffects.invalidateDashboardCache(ownerUserId);
+        sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("favorite", true));
     }
 
     /**
@@ -524,8 +510,8 @@ public class PhotoLibraryService {
     @Transactional(rollbackFor = Exception.class)
     public void removeFavorite(UUID ownerUserId, UUID photoId) {
         favoriteRepository.deleteByOwnerUserIdAndPhotoId(ownerUserId, photoId);
-        invalidateDashboardCache(ownerUserId);
-        recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("favorite", false));
+        sideEffects.invalidateDashboardCache(ownerUserId);
+        sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("favorite", false));
     }
 
     /**
@@ -759,7 +745,7 @@ public class PhotoLibraryService {
         photoTag.setPhotoId(photoId);
         photoTag.setTag(tag);
         photoTagRepository.save(photoTag);
-        recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
+        sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
         photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
     }
 
@@ -769,7 +755,7 @@ public class PhotoLibraryService {
     @Transactional(rollbackFor = Exception.class)
     public void removeTag(UUID ownerUserId, UUID photoId, String tag) {
         photoTagRepository.deleteByOwnerUserIdAndPhotoIdAndTag(ownerUserId, photoId, tag);
-        recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
+        sideEffects.recordPhotoEvent(ownerUserId, photoId, SyncAction.UPDATED, null, Map.of("tagsChanged", true));
         photoIndexTaskService.scheduleIndexAfterCommit(ownerUserId, photoId);
     }
 
@@ -1128,10 +1114,6 @@ public class PhotoLibraryService {
         return urls.get(fileId);
     }
 
-    private void invalidateDashboardCache(UUID ownerUserId) {
-        readThroughCache.invalidate("omninest:dashboard:photo:" + ownerUserId);
-    }
-
     private String resolveSourceUrl(UUID ownerUserId, UUID fileNodeId) {
         try {
             return fileQueryService.createDownloadUrl(ownerUserId, fileNodeId).downloadUrl();
@@ -1176,24 +1158,6 @@ public class PhotoLibraryService {
                 null,
                 item.motionState(),
                 null
-        );
-    }
-
-    private void recordPhotoEvent(
-            UUID ownerUserId,
-            UUID photoId,
-            SyncAction action,
-            Long version,
-            Map<String, Object> hints
-    ) {
-        syncEventService.record(
-                ownerUserId,
-                SyncScope.PHOTOS,
-                "PHOTO_ITEM",
-                photoId.toString(),
-                action,
-                version,
-                hints
         );
     }
 }

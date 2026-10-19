@@ -57,6 +57,7 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
               and n.spaceType = :spaceType
               and n.deleted = false
               and n.nodeType = 'FOLDER'
+              and (n.sourceType is null or n.sourceType not in ('DERIVED', 'LOCAL_FILESYSTEM'))
             """)
     long countFoldersByOwnerUserIdAndSpaceType(
             @Param("ownerUserId") UUID ownerUserId,
@@ -77,6 +78,7 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
               and n.spaceType = :spaceType
               and n.deleted = false
               and n.nodeType = 'FILE'
+              and (n.sourceType is null or n.sourceType not in ('DERIVED', 'LOCAL_FILESYSTEM'))
             """)
     long countFilesByOwnerUserIdAndSpaceType(
             @Param("ownerUserId") UUID ownerUserId,
@@ -97,6 +99,7 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
               and n.spaceType = :spaceType
               and n.deleted = false
               and n.nodeType = 'FILE'
+              and (n.sourceType is null or n.sourceType not in ('DERIVED', 'LOCAL_FILESYSTEM'))
             group by n.mimeType
             """)
     List<Object[]> aggregateFileStatsByMimeTypeAndSpaceType(
@@ -105,10 +108,21 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
     );
 
     /**
-     * 按指定用户汇总个人空间的实际存储用量，口径与配额账本一致。
-     * 回收站节点在彻底删除前仍然占用配额，历史版本在上传时按新对象全额加计，
+     * 按指定用户汇总个人空间的实际存储用量，口径与配额写入侧一致。
+     *
+     * <p>写入侧只对用户内容加计配额（上传、转存、复制、背景图原片、照片编辑版本），
+     * 系统可重建的派生资产与只读本地影视库索引节点从不加计，因此重算基数必须同样排除，
+     * 否则一次夜间对账就会把缩略图、转码与挂载影片全额塞进个人已用配额。</p>
+     *
+     * <p>两个例外按派生资源路径识别，它们写入时已全额加计：背景图原片
+     * {@code /.metadata/BACKDROP/{id}/ORIGINAL/...} 与照片编辑版本
+     * {@code /.metadata/PHOTO_ITEM/{id}/EDIT_VERSION/...}。排除它们会让已计费字节在
+     * 夜间被抹去，而淘汰/删除时还会再次扣减。谓词与
+     * {@code FilePurgeStateService#isQuotaCountedNode} 必须保持同一口径。</p>
+     *
+     * <p>回收站节点在彻底删除前仍然占用配额，历史版本在上传时按新对象全额加计，
      * 两者都必须计入重算基数；与节点当前对象同引用的版本行不重复计，
-     * 因为恢复只在当前对象与版本行之间换位，不产生新的加计。
+     * 因为恢复只在当前对象与版本行之间换位，不产生新的加计。</p>
      *
      * @param ownerUserIds 用户标识集合
      * @return 用户存储用量投影列表
@@ -120,6 +134,11 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
                 where n.node_type = 'FILE'
                   and n.space_type = 'PERSONAL'
                   and n.owner_user_id in (:ownerUserIds)
+                  and (n.source_type is null
+                       or n.source_type not in ('DERIVED', 'LOCAL_FILESYSTEM')
+                       or (n.source_type = 'DERIVED' and (
+                              n.normalized_path like '/.metadata/BACKDROP/%/ORIGINAL/%'
+                           or n.normalized_path like '/.metadata/PHOTO_ITEM/%/EDIT_VERSION/%')))
             ),
             version_usage as (
                 select distinct v.file_node_id as node_id, v.object_id as object_id
@@ -127,6 +146,11 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
                 join omni.file_nodes n on n.id = v.file_node_id
                 where n.space_type = 'PERSONAL'
                   and n.owner_user_id in (:ownerUserIds)
+                  and (n.source_type is null
+                       or n.source_type not in ('DERIVED', 'LOCAL_FILESYSTEM')
+                       or (n.source_type = 'DERIVED' and (
+                              n.normalized_path like '/.metadata/BACKDROP/%/ORIGINAL/%'
+                           or n.normalized_path like '/.metadata/PHOTO_ITEM/%/EDIT_VERSION/%')))
                   and (n.current_object_id is null or n.current_object_id <> v.object_id)
             )
             select u.user_id as "userId", coalesce(sum(u.bytes), 0) as "totalBytes"

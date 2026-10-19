@@ -3,6 +3,8 @@ package com.omninest.modules.photos.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.file.service.ResourceShareLinkService;
@@ -75,7 +77,7 @@ class PhotoAlbumServiceTest {
     void albumDetail_returnsOnlyFirstPageOfPhotos() {
         when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
                 .thenReturn(Optional.of(album()));
-        when(albumItemRepository.findPhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
+        when(albumItemRepository.findActivePhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
                 .thenReturn(List.of(PHOTO_1));
         when(libraryService.listPhotosByIds(OWNER, List.of(PHOTO_1)))
                 .thenReturn(List.of(photoDto(PHOTO_1)));
@@ -90,8 +92,8 @@ class PhotoAlbumServiceTest {
     void albumPhotosPage_preservesAlbumOrderAndTotal() {
         when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
                 .thenReturn(Optional.of(album()));
-        when(albumItemRepository.countByAlbumId(ALBUM_ID)).thenReturn(2L);
-        when(albumItemRepository.findPhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
+        when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(2L);
+        when(albumItemRepository.findActivePhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
                 .thenReturn(List.of(PHOTO_1, PHOTO_2));
         when(libraryService.listPhotosByIds(OWNER, List.of(PHOTO_1, PHOTO_2)))
                 .thenReturn(List.of(photoDto(PHOTO_2), photoDto(PHOTO_1)));
@@ -101,6 +103,24 @@ class PhotoAlbumServiceTest {
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent()).extracting(PhotoItemDto::id)
                 .containsExactly(PHOTO_1, PHOTO_2);
+    }
+
+    @Test
+    void albumPhotosPageCountsOnlyActivePhotos() {
+        when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
+                .thenReturn(Optional.of(album()));
+        when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(1L);
+        when(albumItemRepository.findActivePhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class)))
+                .thenReturn(List.of(PHOTO_1));
+        when(libraryService.listPhotosByIds(OWNER, List.of(PHOTO_1)))
+                .thenReturn(List.of(photoDto(PHOTO_1)));
+
+        Page<PhotoItemDto> page = service.albumPhotosPage(OWNER, ALBUM_ID, 0, 50);
+
+        // 照片进回收站不删相册关联：总数与分页都必须走活动口径，否则总数虚高、末页留洞。
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        verify(albumItemRepository, never()).countByAlbumId(ALBUM_ID);
+        verify(albumItemRepository, never()).findPhotoIdsByAlbumId(eq(ALBUM_ID), any(PageRequest.class));
     }
 
     @Test

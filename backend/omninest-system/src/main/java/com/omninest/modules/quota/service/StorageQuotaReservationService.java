@@ -62,23 +62,33 @@ public class StorageQuotaReservationService {
                 .findBySourceTypeAndSourceId(normalizedSourceType, sourceId)
                 .orElse(null);
         if (existing != null) {
-            if (existing.getReservedBytes() != bytes) {
-                throw new BusinessException(ErrorCode.CONFLICT, "同一来源的配额预留大小不一致");
+            boolean reusableFinishedRow = (RELEASED.equals(existing.getStatus())
+                    || EXPIRED.equals(existing.getStatus()))
+                    && existing.getCommittedBytes() == 0L;
+            if (!reusableFinishedRow) {
+                if (existing.getReservedBytes() != bytes) {
+                    throw new BusinessException(ErrorCode.CONFLICT, "同一来源的配额预留大小不一致");
+                }
+                if (RESERVED.equals(existing.getStatus()) || COMMITTED.equals(existing.getStatus())) {
+                    return existing.getId();
+                }
+                throw new BusinessException(ErrorCode.CONFLICT, "该来源的配额预留已经结束");
             }
-            if (RESERVED.equals(existing.getStatus()) || COMMITTED.equals(existing.getStatus())) {
-                return existing.getId();
-            }
-            throw new BusinessException(ErrorCode.CONFLICT, "该来源的配额预留已经结束");
+            // 失败重试会复用同一业务来源（如背景素材去重复活原行）。RELEASED/EXPIRED 且
+            // 未结算任何用量表示上一次预留已完整退回，必须重新激活原记录，否则受
+            // (source_type, source_id) 唯一约束限制，该来源永远无法再次预留。
+            UserAccountSummary owner = requireAccount(userId);
+            boolean quotaApplied = reserveAgainstAccount(owner, bytes);
+            existing.setReservedBytes(bytes);
+            existing.setCommittedBytes(0L);
+            existing.setQuotaApplied(quotaApplied);
+            existing.setStatus(RESERVED);
+            existing.setExpiresAt(expiresAt == null ? Instant.now().plusSeconds(86_400L) : expiresAt);
+            return reservationRepository.save(existing).getId();
         }
 
-        UserAccountSummary owner = userAccountQuery.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
-        // 配额为 0 或负数表示无限制，与 checkQuota 的口径一致：无需占用预留额度，
-        // 结算时直接按实际写入量记入 used_bytes。
-        boolean quotaApplied = !owner.superAdmin() && owner.quotaBytes() > 0;
-        if (quotaApplied && !userStorageCommand.tryReserveStorage(userId, bytes)) {
-            throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足");
-        }
+        UserAccountSummary owner = requireAccount(userId);
+        boolean quotaApplied = reserveAgainstAccount(owner, bytes);
 
         StorageQuotaReservation reservation = new StorageQuotaReservation();
         reservation.setOwnerUserId(userId);
@@ -90,6 +100,43 @@ public class StorageQuotaReservationService {
         reservation.setStatus(RESERVED);
         reservation.setExpiresAt(expiresAt == null ? Instant.now().plusSeconds(86_400L) : expiresAt);
         return reservationRepository.save(reservation).getId();
+    }
+
+    /**
+     * 查询来源预留最终结算进用量的字节数。
+     *
+     * <p>删除素材等退还要按真实加计量处理，不能按申报大小：扫描失败的预留从未转入
+     * used_bytes，按文件大小扣减会凭空减少用户已用配额。</p>
+     *
+     * @param sourceType 来源类型
+     * @param sourceId 来源业务 ID
+     * @return 已结算字节数，无预留记录时返回 0
+     */
+    @Transactional(readOnly = true)
+    public long settledBytes(String sourceType, UUID sourceId) {
+        return reservationRepository
+                .findBySourceTypeAndSourceId(normalizeSourceType(sourceType), sourceId)
+                .map(StorageQuotaReservation::getCommittedBytes)
+                .orElse(0L);
+    }
+
+    private UserAccountSummary requireAccount(UUID userId) {
+        return userAccountQuery.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+    }
+
+    /**
+     * 占用预留额度并返回本次是否受配额约束。
+     *
+     * <p>配额为 0 或负数表示无限制，与 checkQuota 的口径一致：无需占用预留额度，
+     * 结算时直接按实际写入量记入 used_bytes。</p>
+     */
+    private boolean reserveAgainstAccount(UserAccountSummary owner, long bytes) {
+        boolean quotaApplied = !owner.superAdmin() && owner.quotaBytes() > 0;
+        if (quotaApplied && !userStorageCommand.tryReserveStorage(owner.id(), bytes)) {
+            throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足");
+        }
+        return quotaApplied;
     }
 
     /**

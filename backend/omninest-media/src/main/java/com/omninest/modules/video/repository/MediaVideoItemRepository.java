@@ -286,6 +286,18 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
 
     Optional<MediaVideoItem> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
 
+    /**
+     * 按文件节点查询业务行。
+     *
+     * <p>{@code media_video_items} 上 {@code UNIQUE(file_node_id)} 保证一个文件只有一行，
+     * 行 owner 是文件所有者；跨用户可见（共享空间、公共影视库）时必须用本方法定位，
+     * 按 (请求者, 文件) 查会查不到既有行并尝试插入，直接撞唯一索引。</p>
+     *
+     * @param fileNodeId 文件节点 ID
+     * @return 视频业务行
+     */
+    Optional<MediaVideoItem> findByFileNodeId(UUID fileNodeId);
+
     List<MediaVideoItem> findByOwnerUserIdAndMovieId(UUID ownerUserId, UUID movieId);
 
     List<MediaVideoItem> findByOwnerUserIdAndEpisodeId(UUID ownerUserId, UUID episodeId);

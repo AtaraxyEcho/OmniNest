@@ -55,6 +55,7 @@ public class MovieScrapeService {
     private final List<MetadataProvider> metadataProviders;
     private final TaskDispatchService taskDispatchService;
     private final FilePermissionService filePermissionService;
+    private final MediaLibraryAccessService mediaLibraryAccessService;
     private final ReadThroughCache readThroughCache;
 
     /**
@@ -68,13 +69,46 @@ public class MovieScrapeService {
     public MediaVideoItem registerPendingVideo(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = resolveVideoFile(ownerUserId, fileNodeId);
         FileNameGuess guess = fileNameParser.parse(file.name());
-        return videoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId)
-                .orElseGet(() -> {
-                    MediaVideoItem created = videoItemRepository.save(pendingVideo(ownerUserId, file, guess));
-                    // 新登记条目改变影视库统计，需失效 dashboard 缓存。
-                    readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
-                    return created;
-                });
+        // 一个文件只有一条业务行，行 owner 是文件所有者：先按 fileNodeId 定位再判写权限。
+        // 按 (请求者, 文件) 查会查不到既有行并尝试插入，直接撞 uniq_media_video_items_file。
+        MediaVideoItem existing = videoItemRepository.findByFileNodeId(fileNodeId).orElse(null);
+        if (existing != null) {
+            requireScrapeWritable(ownerUserId, existing);
+            return existing;
+        }
+        requireFileWritableForScrape(ownerUserId, file);
+        UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
+        MediaVideoItem created = videoItemRepository.save(pendingVideo(catalogOwnerId, file, guess));
+        // 新登记条目改变影视库统计，需失效 dashboard 缓存。
+        readThroughCache.invalidate("omninest:dashboard:video:" + catalogOwnerId);
+        return created;
+    }
+
+    /**
+     * 刮削写入只认行所有者；公共影视库条目额外接受该来源的管理员。
+     */
+    private void requireScrapeWritable(UUID requesterUserId, MediaVideoItem item) {
+        if (item.getOwnerUserId().equals(requesterUserId)) {
+            return;
+        }
+        if (item.getLibrarySourceId() != null) {
+            mediaLibraryAccessService.requireManage(requesterUserId, item.getLibrarySourceId());
+            return;
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN, "只有文件所有者能刮削该条目");
+    }
+
+    /**
+     * 尚无业务行时按文件写权限判定：所有者，或共享空间内具备编辑权限的成员。
+     */
+    private void requireFileWritableForScrape(UUID requesterUserId, FileDescriptor file) {
+        if (file.ownerUserId() == null || file.ownerUserId().equals(requesterUserId)) {
+            return;
+        }
+        FilePermission permission = filePermissionService.resolvePermission(file.id(), requesterUserId);
+        if (!permission.allowEdit()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权限刮削该文件");
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -170,7 +204,7 @@ public class MovieScrapeService {
     public List<ScrapeCandidateDto> candidates(UUID ownerUserId, UUID fileNodeId) {
         FileDescriptor file = resolveVideoFile(ownerUserId, fileNodeId);
         FileNameGuess fileGuess = fileNameParser.parse(file.name());
-        FileNameGuess guess = videoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId)
+        FileNameGuess guess = videoItemRepository.findByFileNodeId(fileNodeId)
                 .map(item -> scrapeGuess(item, fileGuess))
                 .orElse(fileGuess);
         // 网络 IO 在事务外执行，避免长时间占用 DB 连接

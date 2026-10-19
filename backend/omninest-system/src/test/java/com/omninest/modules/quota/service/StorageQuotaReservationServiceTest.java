@@ -197,6 +197,48 @@ class StorageQuotaReservationServiceTest {
         assertThat(retained.getStatus()).isEqualTo("RESERVED");
     }
 
+    @Test
+    void reactivatesFinishedReservationWhenRetryingSameSource() {
+        StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 512L, true);
+        reservation.setStatus("RELEASED");
+        when(reservationRepository.findBySourceTypeAndSourceId("BACKDROP_UPLOAD", SOURCE_ID))
+                .thenReturn(Optional.of(reservation));
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user(false)));
+        when(userStorageCommand.tryReserveStorage(USER_ID, 512L)).thenReturn(true);
+        when(reservationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UUID result = service.reserve(
+                USER_ID,
+                "BACKDROP_UPLOAD",
+                SOURCE_ID,
+                512L,
+                Instant.now().plusSeconds(600L)
+        );
+
+        assertThat(result).isEqualTo(reservation.getId());
+        assertThat(reservation.getStatus()).isEqualTo("RESERVED");
+        assertThat(reservation.getCommittedBytes()).isZero();
+        verify(userStorageCommand).tryReserveStorage(USER_ID, 512L);
+    }
+
+    @Test
+    void rejectsFinishedSourceThatAlreadySettledUsage() {
+        StorageQuotaReservation reservation = reservation(USER_ID, SOURCE_ID, 512L, true);
+        reservation.setStatus("RELEASED");
+        reservation.setCommittedBytes(300L);
+        when(reservationRepository.findBySourceTypeAndSourceId("UPLOAD", SOURCE_ID))
+                .thenReturn(Optional.of(reservation));
+
+        assertThatThrownBy(() -> service.reserve(
+                USER_ID,
+                "UPLOAD",
+                SOURCE_ID,
+                512L,
+                Instant.now().plusSeconds(600L)
+        )).isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.errorCode()).isEqualTo(ErrorCode.CONFLICT));
+    }
+
     private UserAccountSummary user(boolean superAdmin) {
         return new UserAccountSummary(USER_ID, "owner", Set.of(), superAdmin, 1024L, 0L);
     }

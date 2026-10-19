@@ -30,7 +30,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * 动态视频提取服务单元测试：偏移定位、尾部回扫、失败标记与幂等路径。
@@ -57,6 +60,7 @@ class PhotoMotionVideoServiceTest {
     private DerivedAssetStorageService derivedAssetStorageService;
     private FileLifecycleGuard fileLifecycleGuard;
     private MediaSyncEventService syncEventService;
+    private PlatformTransactionManager transactionManager;
     private PhotoMotionVideoService service;
 
     @BeforeEach
@@ -65,13 +69,18 @@ class PhotoMotionVideoServiceTest {
         derivedAssetStorageService = Mockito.mock(DerivedAssetStorageService.class);
         fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
         syncEventService = Mockito.mock(MediaSyncEventService.class);
+        transactionManager = Mockito.mock(PlatformTransactionManager.class);
         service = new PhotoMotionVideoService(
                 photoItemRepository,
                 derivedAssetStorageService,
                 fileLifecycleGuard,
                 syncEventService,
-                new PhotoExifExtractor()
+                new PhotoExifExtractor(),
+                transactionManager
         );
+        service.initTransactionTemplate();
+        lenient().when(transactionManager.getTransaction(any()))
+                .thenReturn(Mockito.mock(TransactionStatus.class));
         lenient().when(fileLifecycleGuard.isOwnedProcessable(any(), any())).thenReturn(true);
     }
 
@@ -97,6 +106,30 @@ class PhotoMotionVideoServiceTest {
         assertThat(photo.getMotionVideoFileNodeId()).isEqualTo(videoNodeId);
         assertThat(motion(photo).get("videoSizeBytes")).isEqualTo(MP4_LENGTH);
         verify(syncEventService).invalidate(eq(ownerId), eq(SyncScope.PHOTOS), eq("PHOTO_LIBRARY"), any());
+    }
+
+    @Test
+    void commitsReadyStateAndSyncEventInOneTransaction() throws IOException {
+        UUID ownerId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        int padding = 4096;
+        Path source = tempDir.resolve("motion-tx.jpg");
+        Files.write(source, concat(jpegBody(), new byte[padding], MP4_HEAD, MP4_BODY));
+        PhotoItem photo = photo(ownerId, fileNodeId, "MICRO_VIDEO", MP4_LENGTH);
+        when(photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerId, fileNodeId))
+                .thenReturn(Optional.of(photo));
+        when(derivedAssetStorageService.store(
+                eq(ownerId), anyString(), eq(fileNodeId), anyString(), anyString(), anyString(), any(Path.class)))
+                .thenReturn(UUID.randomUUID());
+
+        service.extractAndStore(ownerId, fileNodeId, source);
+
+        // 同步事件记录器是 MANDATORY 传播，状态写入与失效事件必须落在同一事务边界内。
+        InOrder inOrder = Mockito.inOrder(transactionManager, photoItemRepository, syncEventService);
+        inOrder.verify(transactionManager).getTransaction(any());
+        inOrder.verify(photoItemRepository).save(photo);
+        inOrder.verify(syncEventService).invalidate(eq(ownerId), eq(SyncScope.PHOTOS), eq("PHOTO_LIBRARY"), any());
+        inOrder.verify(transactionManager).commit(any());
     }
 
     @Test

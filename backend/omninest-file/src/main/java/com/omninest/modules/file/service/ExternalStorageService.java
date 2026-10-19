@@ -22,6 +22,7 @@ import com.omninest.modules.file.dto.ImportTaskDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
@@ -58,6 +59,7 @@ public class ExternalStorageService {
     private final ExternalStorageImportProperties importProperties;
     private final ExternalStorageOAuthService oauthService;
     private final ExternalStorageEndpointGuard endpointGuard;
+    private final StorageQuotaService storageQuotaService;
 
     // ========== Remote 生命周期 ==========
 
@@ -333,6 +335,9 @@ public class ExternalStorageService {
                 || ImportTaskStatus.CANCELLED.getValue().equals(status);
 
         if (isFinished) {
+            // 在途 Worker 尚未结算时，删除任务行会让它再也结算不了（requireTask 抛错进 DLQ），
+            // 预留停留在 RESERVED。删除前无条件释放：对已结算/已过期的预留是空操作。
+            storageQuotaService.releaseReservation("EXTERNAL_IMPORT", taskId);
             importTaskRepository.delete(task);
             log.info("导入任务已删除: taskId={}", taskId);
             return;

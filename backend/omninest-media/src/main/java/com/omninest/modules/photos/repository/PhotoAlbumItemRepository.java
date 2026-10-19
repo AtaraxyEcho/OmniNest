@@ -45,6 +45,32 @@ public interface PhotoAlbumItemRepository extends JpaRepository<PhotoAlbumItem, 
     List<UUID> findPhotoIdsByAlbumId(@Param("albumId") UUID albumId, Pageable pageable);
 
     /**
+     * 查询相册内活动照片标识（分页），口径与 {@code countActivePhotosByAlbumId} 相同。
+     *
+     * <p>相册关联条目在照片移入回收站时不删除（恢复后还要回到原相册），因此必须在查询里
+     * 过滤软删除照片：先分页取全部关联再在内存过滤，会让每页实际数量不足 size、
+     * 整页为空，总数也会虚高。</p>
+     *
+     * @param albumId 相册 ID
+     * @param pageable 分页参数
+     * @return 活动照片标识
+     */
+    @Query("""
+            SELECT ai.photoId
+            FROM PhotoAlbumItem ai
+            JOIN PhotoItem photo ON photo.id = ai.photoId
+            JOIN FileNode file ON photo.fileNodeId = file.id
+            WHERE ai.albumId = :albumId
+              AND file.deleted = false
+              AND photo.deletedAt IS NULL
+            ORDER BY ai.sortOrder ASC
+            """)
+    List<UUID> findActivePhotoIdsByAlbumId(
+            @Param("albumId") UUID albumId,
+            Pageable pageable
+    );
+
+    /**
      * 统计相册中的照片数量
      */
     long countByAlbumId(UUID albumId);

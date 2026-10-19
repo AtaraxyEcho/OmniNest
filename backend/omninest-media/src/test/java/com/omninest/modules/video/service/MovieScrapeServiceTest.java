@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.error.BusinessException;
@@ -53,16 +55,19 @@ class MovieScrapeServiceTest {
     private final FilePermissionService filePermissionService =
             Mockito.mock(FilePermissionService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
+    private final MediaLibraryAccessService mediaLibraryAccessService =
+            Mockito.mock(MediaLibraryAccessService.class);
     private final MovieScrapeService scrapeService =
             new MovieScrapeService(fileMetadataQueryService, taskRecordService, videoItemRepository,
                     tvSeriesRepository, tvSeasonRepository, fileNameParser, List.of(),
-                    taskDispatchService, filePermissionService, readThroughCache);
+                    taskDispatchService, filePermissionService, mediaLibraryAccessService,
+                    readThroughCache);
 
     @Test
     void createsScrapeTaskForVideoFile() {
         when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
                 .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+        when(videoItemRepository.findByFileNodeId(FILE_ID))
                 .thenReturn(Optional.empty());
         when(videoItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -116,7 +121,7 @@ class MovieScrapeServiceTest {
         activeTask.setStatus("RUNNING");
         when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
                 .thenReturn(Optional.of(file("Foundation.S01E02.mkv", "video/x-matroska")));
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+        when(videoItemRepository.findByFileNodeId(FILE_ID))
                 .thenReturn(Optional.of(episode));
         when(tvSeriesRepository.findById(SERIES_ID)).thenReturn(Optional.of(series));
         when(taskRecordService.findActiveResourceTask(
@@ -132,6 +137,89 @@ class MovieScrapeServiceTest {
     }
 
     @Test
+    void libraryManagerScrapeReusesOwnerRowInsteadOfDuplicatingFileNode() {
+        UUID uploaderId = UUID.fromString("90000000-0000-0000-0000-000000000009");
+        UUID librarySourceId = UUID.fromString("90000000-0000-0000-0000-000000000099");
+        MediaVideoItem existing = new MediaVideoItem();
+        existing.setOwnerUserId(uploaderId);
+        existing.setLibrarySourceId(librarySourceId);
+        existing.setFileNodeId(FILE_ID);
+        existing.setMediaType(MediaType.MOVIE.getValue());
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID)).thenReturn(Optional.empty());
+        when(fileMetadataQueryService.findActiveById(FILE_ID))
+                .thenReturn(Optional.of(sharedFile(uploaderId)));
+        when(filePermissionService.resolvePermission(FILE_ID, OWNER_ID))
+                .thenReturn(new FilePermission(true, true, false, true));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(existing));
+
+        MediaVideoItem result = scrapeService.registerPendingVideo(OWNER_ID, FILE_ID);
+
+        // 一个文件一条业务行：命中既有行必须复用，再插入会撞 uniq_media_video_items_file。
+        assertThat(result).isSameAs(existing);
+        verify(mediaLibraryAccessService).requireManage(OWNER_ID, librarySourceId);
+        Mockito.verify(videoItemRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void fileOwnerScrapeReusesExistingRowForSameFileNode() {
+        MediaVideoItem existing = new MediaVideoItem();
+        existing.setOwnerUserId(OWNER_ID);
+        existing.setFileNodeId(FILE_ID);
+        existing.setMediaType(MediaType.MOVIE.getValue());
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(existing));
+
+        MediaVideoItem result = scrapeService.registerPendingVideo(OWNER_ID, FILE_ID);
+
+        assertThat(result).isSameAs(existing);
+        Mockito.verify(videoItemRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void memberWithoutLibraryManageCannotScrapeForeignRow() {
+        UUID uploaderId = UUID.fromString("90000000-0000-0000-0000-000000000010");
+        MediaVideoItem existing = new MediaVideoItem();
+        existing.setOwnerUserId(uploaderId);
+        existing.setFileNodeId(FILE_ID);
+        existing.setMediaType(MediaType.MOVIE.getValue());
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID)).thenReturn(Optional.empty());
+        when(fileMetadataQueryService.findActiveById(FILE_ID))
+                .thenReturn(Optional.of(sharedFile(uploaderId)));
+        when(filePermissionService.resolvePermission(FILE_ID, OWNER_ID))
+                .thenReturn(new FilePermission(true, false, false, false));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> scrapeService.registerPendingVideo(OWNER_ID, FILE_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void newRowForSharedFileIsOwnedByFileOwnerNotRequester() {
+        UUID uploaderId = UUID.fromString("90000000-0000-0000-0000-000000000011");
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID)).thenReturn(Optional.empty());
+        when(fileMetadataQueryService.findActiveById(FILE_ID))
+                .thenReturn(Optional.of(sharedFile(uploaderId)));
+        when(filePermissionService.resolvePermission(FILE_ID, OWNER_ID))
+                .thenReturn(new FilePermission(true, true, false, true));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.empty());
+        when(videoItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MediaVideoItem created = scrapeService.registerPendingVideo(OWNER_ID, FILE_ID);
+
+        // 行 owner 必须是文件所有者：按请求者落行会让非所有者拿到写权限。
+        assertThat(created.getOwnerUserId()).isEqualTo(uploaderId);
+    }
+
+    private FileDescriptor sharedFile(UUID uploaderId) {
+        return new FileDescriptor(
+                FILE_ID, uploaderId, null, "FILE", "Inception.2010.1080p.mkv",
+                "/Movies/Inception.2010.1080p.mkv", "video/x-matroska", 1024, null,
+                "LOCAL", false, true, SpaceType.SHARED, uploaderId, null, null);
+    }
+
+    @Test
     void reusesActiveFileNodeTaskOnRepeatedScrape() {
         MediaVideoItem item = new MediaVideoItem();
         item.setOwnerUserId(OWNER_ID);
@@ -142,7 +230,7 @@ class MovieScrapeServiceTest {
         activeTask.setStatus("QUEUED");
         when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
                 .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+        when(videoItemRepository.findByFileNodeId(FILE_ID))
                 .thenReturn(Optional.of(item));
         when(taskRecordService.findActiveResourceTask(
                 eq(OWNER_ID), eq("MEDIA_SCRAPE"), eq("FILE_NODE"), eq(FILE_ID), any()))
@@ -171,7 +259,7 @@ class MovieScrapeServiceTest {
         activeTask.setStatus("RUNNING");
         when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
                 .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+        when(videoItemRepository.findByFileNodeId(FILE_ID))
                 .thenReturn(Optional.of(item));
         when(taskRecordService.findActiveResourceTask(
                 eq(OWNER_ID), eq("MEDIA_SCRAPE"), eq("MEDIA_MOVIE"), eq(movieId), any()))
@@ -188,7 +276,7 @@ class MovieScrapeServiceTest {
     void outboxFailureAbortsTaskCreationAtomically() {
         when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
                 .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+        when(videoItemRepository.findByFileNodeId(FILE_ID))
                 .thenReturn(Optional.empty());
         when(videoItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         Mockito.doThrow(new IllegalStateException("broker down"))

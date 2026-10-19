@@ -127,7 +127,7 @@ public class PhotoAlbumService {
     @Transactional(readOnly = true)
     public PhotoAlbumDetailDto albumDetail(UUID ownerUserId, UUID albumId) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
-        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
+        List<UUID> photoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
                 albumId, PageRequest.of(0, DEFAULT_PAGE_SIZE));
         List<PhotoItemDto> photos = libraryService.listPhotosByIds(ownerUserId, photoIds);
         PhotoAlbumDto albumDto = toDto(album);
@@ -142,8 +142,9 @@ public class PhotoAlbumService {
         requireAlbum(ownerUserId, albumId);
         int safePage = Math.max(0, page);
         int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
-        long total = albumItemRepository.countByAlbumId(albumId);
-        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
+        // 总数与分页必须同一谓词：countByAlbumId 含回收站照片会让总数虚高、末页缺口。
+        long total = albumItemRepository.countActivePhotosByAlbumId(albumId);
+        List<UUID> photoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
                 albumId, PageRequest.of(safePage, safeSize));
         Map<UUID, PhotoItemDto> byId = libraryService.listPhotosByIds(ownerUserId, photoIds)
                 .stream()
@@ -420,7 +421,7 @@ public class PhotoAlbumService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "相册不存在"));
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), 100);
-        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
+        List<UUID> photoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
                 albumId, PageRequest.of(safePage, safeSize));
         List<PhotoItemDto> photos = libraryService.listPhotosByIds(album.getOwnerUserId(), photoIds)
                 .stream()
@@ -428,7 +429,7 @@ public class PhotoAlbumService {
                 .toList();
         return new PhotoSharedAlbumDto(
                 album.getName(), album.getDescription(), photos,
-                safePage, safeSize, albumItemRepository.countByAlbumId(albumId));
+                safePage, safeSize, albumItemRepository.countActivePhotosByAlbumId(albumId));
     }
 
     private PhotoShareLinkDto toShareDto(ResourceShareLinkDto share) {
@@ -475,7 +476,7 @@ public class PhotoAlbumService {
         }
         // 只为取第一张封面而加载整个相册的照片 ID 列表，会在大相册上按相册数量线性放大；
         // 复用已有的分页重载，一条 SQL 只回一行。
-        List<UUID> firstPhotoIds = albumItemRepository.findPhotoIdsByAlbumId(
+        List<UUID> firstPhotoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
                 album.getId(), PageRequest.of(0, 1));
         if (!firstPhotoIds.isEmpty()) {
             try {

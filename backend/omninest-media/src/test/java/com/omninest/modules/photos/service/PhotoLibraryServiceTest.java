@@ -83,6 +83,7 @@ class PhotoLibraryServiceTest {
     private PhotoContentAnalysisService contentAnalysisService;
     private PhotoGeoService photoGeoService;
     private PhotoIndexTaskService photoIndexTaskService;
+    private PhotoChangeSideEffects sideEffects;
 
     private PhotoLibraryService service;
 
@@ -101,18 +102,25 @@ class PhotoLibraryServiceTest {
         contentAnalysisService = mock(PhotoContentAnalysisService.class);
         photoGeoService = mock(PhotoGeoService.class);
         photoIndexTaskService = mock(PhotoIndexTaskService.class);
+        // 副作用组件按真实装配注入：既有断言继续验证相册计数重算、同步事件与索引投递。
+        sideEffects = new PhotoChangeSideEffects(
+                albumRepository,
+                albumItemRepository,
+                photoIndexTaskService,
+                syncEventService,
+                readThroughCache
+        );
 
         service = new PhotoLibraryService(
                 photoItemRepository,
                 favoriteRepository,
                 albumRepository,
-                albumItemRepository,
+                sideEffects,
                 photoTagRepository,
                 photoSearchIndexService,
                 fileDeletionService,
                 fileQueryService,
                 readThroughCache,
-                syncEventService,
                 contentAnalysisService,
                 photoGeoService,
                 photoIndexTaskService
@@ -123,12 +131,13 @@ class PhotoLibraryServiceTest {
     void deletePhotoMovesPhotoIntoTrashInsteadOfPurging() {
         PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "待删除照片");
         photo.setDeletedAt(null);
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1)).thenReturn(Optional.of(photo));
+        when(photoItemRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
+                .thenReturn(List.of(photo));
 
         service.movePhotoToTrash(OWNER_ID, PHOTO_ID_1);
 
         assertThat(photo.getDeletedAt()).isNotNull();
-        verify(photoItemRepository).save(photo);
+        verify(photoItemRepository).saveAll(List.of(photo));
         verify(fileDeletionService, Mockito.never()).deletePermanently(
                 any(), any(), anyBoolean(), any(), any()
         );
@@ -179,10 +188,9 @@ class PhotoLibraryServiceTest {
     void movePhotosToTrashMarksEachPhotoDeleted() {
         PhotoItem firstPhoto = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "第一张照片");
         PhotoItem secondPhoto = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "第二张照片");
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1))
-                .thenReturn(Optional.of(firstPhoto));
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_2))
-                .thenReturn(Optional.of(secondPhoto));
+        when(photoItemRepository.findByOwnerUserIdAndIdIn(
+                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of(firstPhoto, secondPhoto));
 
         List<PhotoTrashResultDto> results = service.movePhotosToTrash(
                 OWNER_ID,
@@ -193,10 +201,32 @@ class PhotoLibraryServiceTest {
         assertThat(results.stream().allMatch(PhotoTrashResultDto::success)).isTrue();
         assertThat(firstPhoto.getDeletedAt()).isNotNull();
         assertThat(secondPhoto.getDeletedAt()).isNotNull();
-        verify(photoItemRepository, Mockito.times(2)).save(any(PhotoItem.class));
+        // 批量入口一次读、一次写：逐张 save 会把相册重算与缓存失效放大成 N 倍。
+        verify(photoItemRepository).saveAll(List.of(firstPhoto, secondPhoto));
+        verify(photoItemRepository, never()).save(any(PhotoItem.class));
+        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_1);
+        verify(photoIndexTaskService).scheduleIndexAfterCommit(OWNER_ID, PHOTO_ID_2);
         verify(fileDeletionService, Mockito.never()).deletePermanentlyBatch(
                 any(), any(), anyBoolean(), any()
         );
+    }
+
+    @Test
+    void movePhotosToTrashReportsMissingPhotosWithoutFailingBatch() {
+        PhotoItem existing = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "第一张照片");
+        when(photoItemRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
+                .thenReturn(List.of(existing));
+
+        List<PhotoTrashResultDto> results = service.movePhotosToTrash(
+                OWNER_ID,
+                List.of(PHOTO_ID_1, PHOTO_ID_2)
+        );
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).success()).isTrue();
+        assertThat(results.get(1).success()).isFalse();
+        assertThat(existing.getDeletedAt()).isNotNull();
+        verify(photoItemRepository).saveAll(List.of(existing));
     }
 
     @Test

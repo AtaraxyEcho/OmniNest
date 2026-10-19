@@ -23,6 +23,7 @@ import com.omninest.modules.file.dto.ExternalFileListDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
@@ -56,11 +57,13 @@ class ExternalStorageServiceTest {
             new com.omninest.modules.file.config.ExternalStorageImportProperties();
     private final ExternalStorageOAuthService oauthService = mock(ExternalStorageOAuthService.class);
     private final ExternalStorageEndpointGuard endpointGuard = mock(ExternalStorageEndpointGuard.class);
+    private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
 
     private final ExternalStorageService service = new ExternalStorageService(
             rcloneGateway, accountRepository,
             importTaskRepository, taskDispatchService, taskRecordService,
-            credentialService, sharedSpaceService, importProperties, oauthService, endpointGuard
+            credentialService, sharedSpaceService, importProperties, oauthService, endpointGuard,
+            storageQuotaService
     );
 
     @org.junit.jupiter.api.BeforeEach
@@ -162,6 +165,23 @@ class ExternalStorageServiceTest {
         // 执行器只会写 TRANSFERRING；旧守卫只认 RUNNING，等于永远不主动停 job
         verify(rcloneGateway).stopJob(77);
         assertThat(task.getStatus()).isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void cancelImportTask_releasesReservationBeforeDeletingFinishedTask() {
+        UUID importTaskId = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        StorageImportTask task = new StorageImportTask();
+        task.setId(importTaskId);
+        task.setOwnerUserId(OWNER_ID);
+        task.setStatus("CANCELLED");
+        when(importTaskRepository.findByIdAndOwnerUserId(importTaskId, OWNER_ID))
+                .thenReturn(Optional.of(task));
+
+        service.cancelImportTask(OWNER_ID, importTaskId);
+
+        // 删除任务行会让在途 Worker 无法结算，预留必须先释放。
+        verify(storageQuotaService).releaseReservation("EXTERNAL_IMPORT", importTaskId);
+        verify(importTaskRepository).delete(task);
     }
 
     /**

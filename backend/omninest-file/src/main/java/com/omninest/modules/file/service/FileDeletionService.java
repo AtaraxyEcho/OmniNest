@@ -23,7 +23,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -302,11 +304,28 @@ public class FileDeletionService {
     }
 
     private UUID createBatchTaskInTransaction(
-            UUID ownerUserId,
+            UUID operatorId,
             List<UUID> fileNodeIds,
             boolean cascade,
             List<FilePurgeOrigin> origins
     ) {
+        // 与单文件路径同一判定：个人空间只认所有者，共享空间还接受实际删除者，
+        // 否则回收站里「自己删除、他人上传」的共享文件在批量彻底删除时一律 404。
+        List<FileNode> roots = fileNodeIds.stream()
+                .map(fileNodeId -> resolvePurgeRoot(operatorId, fileNodeId))
+                .toList();
+        Set<UUID> nodeOwners = roots.stream()
+                .map(FileNode::getOwnerUserId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (nodeOwners.size() != 1) {
+            throw new BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "批量永久删除只能包含同一所有者的文件"
+            );
+        }
+        // 后续子树归属、任务记录与事件都必须使用节点所有者：共享节点的 owner_user_id 是上传者。
+        UUID ownerUserId = nodeOwners.iterator().next();
+
         for (UUID fileNodeId : fileNodeIds) {
             if (findActiveTask(ownerUserId, fileNodeId).isPresent()) {
                 throw new BusinessException(
@@ -316,10 +335,6 @@ public class FileDeletionService {
             }
         }
 
-        List<FileNode> roots = fileNodeIds.stream()
-                .map(fileNodeId -> fileNodeRepository.findOwnedForUpdate(fileNodeId, ownerUserId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在")))
-                .toList();
         boolean lifecycleConflict = roots.stream().anyMatch(root ->
                 root.getPurgeState() != null && root.getPurgeState() != FilePurgeState.NONE);
         if (lifecycleConflict) {

@@ -37,6 +37,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import jakarta.annotation.PostConstruct;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,7 +46,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 影视元数据刮削任务执行服务。
@@ -71,15 +73,30 @@ public class MovieScrapeExecutionService {
     private final MediaSyncEventService syncEventService;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final ReadThroughCache readThroughCache;
+    private final PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactionTemplate;
 
-    @Transactional(rollbackFor = Exception.class)
+    @PostConstruct
+    void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    /**
+     * 执行刮削任务。
+     *
+     * <p>元数据检索是外部 HTTP（连接/读取超时可达十秒以上），必须在事务外发起；写库与
+     * 同步事件集中在一个短事务里，边界与拆分前的整方法事务一致。同步事件记录器要求
+     * 外层事务（MANDATORY 传播），因此 {@code recordVideoUpdated} 只能在事务内调用。</p>
+     */
     public void execute(MediaScrapeRequestedEvent event) {
         if (!taskRecordService.claimForExecution(event.taskId(), "SCRAPING")) {
             return;
         }
         fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
 
-        Optional<MediaVideoItem> itemOpt = videoItemRepository.findByOwnerUserIdAndFileNodeId(event.ownerUserId(), event.fileNodeId());
+        // 一个文件只有一条业务行，行 owner 是文件所有者：按 fileNodeId 定位，
+        // 否则请求者与所有者不同时会查不到而行，甚至重复插入撞 uniq_media_video_items_file。
+        Optional<MediaVideoItem> itemOpt = videoItemRepository.findByFileNodeId(event.fileNodeId());
         if (itemOpt.isEmpty()) {
             log.warn("媒体条目不存在: taskId={}, fileNodeId={}", event.taskId(), event.fileNodeId());
             taskRecordService.markFailed(event.taskId(), "媒体条目不存在");
@@ -106,18 +123,26 @@ public class MovieScrapeExecutionService {
                 })
                 .findFirst();
         if (candidateOpt.isEmpty()) {
-            log.warn("未匹配到元数据: taskId={}, title={}, year={}", event.taskId(), guess.title(), guess.year());
-            item.setMetadataStatus(MetadataStatus.FAILED.getValue());
-            videoItemRepository.save(item);
-            recordVideoUpdated(event.ownerUserId(), item, SyncAction.FAILED);
-            taskRecordService.markFailed(event.taskId(), "没有匹配到元数据");
-            // 发送刮削失败通知
-            notificationService.notifyOrLog(event.ownerUserId(), "TASK_FAILED",
-                    "视频刮削失败", "未找到《" + guess.title() + "》的元数据",
-                    Map.of("taskId", event.taskId().toString(), "title", guess.title()));
+            transactionTemplate.executeWithoutResult(status -> finishUnmatched(event, item, guess));
             return;
         }
         ScrapeCandidateDto candidate = candidateOpt.get();
+        transactionTemplate.executeWithoutResult(status -> finishMatched(event, item, candidate));
+    }
+
+    private void finishUnmatched(MediaScrapeRequestedEvent event, MediaVideoItem item, FileNameGuess guess) {
+        log.warn("未匹配到元数据: taskId={}, title={}, year={}", event.taskId(), guess.title(), guess.year());
+        item.setMetadataStatus(MetadataStatus.FAILED.getValue());
+        videoItemRepository.save(item);
+        recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.FAILED);
+        taskRecordService.markFailed(event.taskId(), "没有匹配到元数据");
+        // 发送刮削失败通知
+        notificationService.notifyOrLog(event.ownerUserId(), "TASK_FAILED",
+                "视频刮削失败", "未找到《" + guess.title() + "》的元数据",
+                Map.of("taskId", event.taskId().toString(), "title", guess.title()));
+    }
+
+    private void finishMatched(MediaScrapeRequestedEvent event, MediaVideoItem item, ScrapeCandidateDto candidate) {
         fileLifecycleGuard.requireReadable(event.ownerUserId(), event.fileNodeId());
 
         log.info("匹配到元数据: taskId={}, provider={}, externalId={}, title={}, originalTitle={}, releaseDate={}, runtime={}",
@@ -136,7 +161,7 @@ public class MovieScrapeExecutionService {
         videoItemRepository.save(item);
         applicationEventPublisher.publishEvent(new VideoProbeEvent(item));
         taskRecordService.markCompleted(event.taskId(), resultMap("元数据刮削完成", candidate));
-        recordVideoUpdated(event.ownerUserId(), item, SyncAction.UPDATED);
+        recordVideoUpdated(item.getOwnerUserId(), item, SyncAction.UPDATED);
         log.info("刮削完成: taskId={}, itemId={}, mediaType={}, provider={}",
                 event.taskId(), item.getId(), item.getMediaType(), candidate.provider());
         // 发送刮削完成通知

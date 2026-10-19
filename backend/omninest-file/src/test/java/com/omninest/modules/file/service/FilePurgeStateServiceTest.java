@@ -54,6 +54,47 @@ class FilePurgeStateServiceTest {
     }
 
     @Test
+    @DisplayName("系统派生与只读本地库节点写入时未加计，彻底删除不得扣减个人配额")
+    void doesNotReleaseUnchargedDerivedAndLocalFilesystemNodes() {
+        UUID uploadId = UUID.randomUUID();
+        UUID thumbnailId = UUID.randomUUID();
+        UUID localMovieId = UUID.randomUUID();
+        FileNode thumbnail = fileNode(thumbnailId, OBJECT_B, 30_000L);
+        thumbnail.setSourceType("DERIVED");
+        thumbnail.setNormalizedPath("/.metadata/PHOTO_ITEM/" + thumbnailId + "/THUMBNAIL/thumb.jpg");
+        FileNode localMovie = fileNode(localMovieId, OBJECT_C, 5_000_000L);
+        localMovie.setSourceType("LOCAL_FILESYSTEM");
+        localMovie.setNormalizedPath("/.metadata/LOCAL_MEDIA/" + localMovieId + "/SOURCE.mkv");
+
+        long released = FilePurgeStateService.quotaReleaseBytes(
+                List.of(fileNode(uploadId, OBJECT_A, 1000L), thumbnail, localMovie),
+                List.of(),
+                Map.of(OBJECT_A, 1000L, OBJECT_B, 30_000L, OBJECT_C, 5_000_000L));
+
+        assertThat(released).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("背景图原片与编辑版本写入时已加计，彻底删除必须照常释放")
+    void releasesChargedDerivedNodes() {
+        UUID backdropId = UUID.randomUUID();
+        UUID editVersionId = UUID.randomUUID();
+        FileNode backdrop = fileNode(backdropId, OBJECT_A, 4_000_000L);
+        backdrop.setSourceType("DERIVED");
+        backdrop.setNormalizedPath("/.metadata/BACKDROP/" + backdropId + "/ORIGINAL/wallpaper.png");
+        FileNode editVersion = fileNode(editVersionId, OBJECT_B, 800_000L);
+        editVersion.setSourceType("DERIVED");
+        editVersion.setNormalizedPath("/.metadata/PHOTO_ITEM/" + editVersionId + "/EDIT_VERSION/edited.jpg");
+
+        long released = FilePurgeStateService.quotaReleaseBytes(
+                List.of(backdrop, editVersion),
+                List.of(),
+                Map.of(OBJECT_A, 4_000_000L, OBJECT_B, 800_000L));
+
+        assertThat(released).isEqualTo(4_800_000L);
+    }
+
+    @Test
     @DisplayName("历史版本对象一并释放，否则版本字节永久留在已用配额上")
     void releasesRetainedVersionObjects() {
         UUID nodeId = UUID.randomUUID();

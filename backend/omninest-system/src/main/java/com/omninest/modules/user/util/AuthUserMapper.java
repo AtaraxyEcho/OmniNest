@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 public final class AuthUserMapper {
 
     private static final Duration AVATAR_URL_TTL = Duration.ofHours(24);
-    private static final List<String> AVATAR_EXTENSIONS = List.of("jpg", "png", "webp");
 
     private AuthUserMapper() {
         // 工具类不可实例化
@@ -94,12 +93,14 @@ public final class AuthUserMapper {
 
     /**
      * 解析用户头像的 presigned 下载 URL。
-     * 依次尝试 jpg / png / webp 扩展名，返回第一个存在的对象 URL。
+     *
+     * <p>对象键由 {@code avatarFileId} 唯一确定，直接预签名即可；按扩展名逐个探测会让
+     * 每次映射多发几次对象存储 HEAD，还会在用户换过一次头像格式后被旧对象永久遮蔽。</p>
      *
      * @param user               用户实体
      * @param objectStorageClient 对象存储客户端
      * @param objectStorageBuckets 对象存储桶名称
-     * @return 头像 URL，未找到时返回 null
+     * @return 头像 URL，未设置头像时返回 null
      */
     public static String resolveAvatarUrl(AuthUser user,
                                           ObjectStorageClient objectStorageClient,
@@ -107,15 +108,11 @@ public final class AuthUserMapper {
         if (user.getAvatarFileId() == null) {
             return null;
         }
-        String bucket = objectStorageBuckets.derivedAssets();
-        for (String ext : AVATAR_EXTENSIONS) {
-            String objectKey = "avatars/" + user.getId() + "/avatar." + ext;
-            ObjectStorageKey key = new ObjectStorageKey(bucket, objectKey);
-            if (objectStorageClient.objectExists(key)) {
-                return objectStorageClient.createDownloadUrl(key, AVATAR_URL_TTL).toString();
-            }
-        }
-        return null;
+        ObjectStorageKey key = new ObjectStorageKey(
+                objectStorageBuckets.derivedAssets(),
+                UserAvatarObjectKeys.objectKey(user.getId(), user.getAvatarFileId())
+        );
+        return objectStorageClient.createDownloadUrl(key, AVATAR_URL_TTL).toString();
     }
 
     /**

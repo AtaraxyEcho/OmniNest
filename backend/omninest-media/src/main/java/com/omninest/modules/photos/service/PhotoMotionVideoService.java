@@ -10,6 +10,7 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -24,6 +25,9 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 动态照片运动视频提取服务。
@@ -59,6 +63,16 @@ public class PhotoMotionVideoService {
     private final FileLifecycleGuard fileLifecycleGuard;
     private final MediaSyncEventService syncEventService;
     private final PhotoExifExtractor exifExtractor;
+    private final PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactionTemplate;
+
+    @PostConstruct
+    void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(
+                TransactionDefinition.PROPAGATION_REQUIRES_NEW
+        );
+    }
 
     /**
      * 提取动态照片内嵌运动视频并存储为派生资产。
@@ -111,13 +125,17 @@ public class PhotoMotionVideoService {
             motion.remove("failReason");
             photo.setMotionState(STATE_READY);
             photo.setMotionVideoFileNodeId(videoFileNodeId);
-            photoItemRepository.save(photo);
-            syncEventService.invalidate(
-                    ownerUserId,
-                    SyncScope.PHOTOS,
-                    "PHOTO_LIBRARY",
-                    Map.of("source", "MOTION", "fileNodeId", fileNodeId.toString())
-            );
+            // 同步事件记录器要求外层事务（MANDATORY 传播），而派生资产存储与流拷贝
+            // 刻意留在事务外；状态写入与失效事件改在独立短事务内原子提交（D-009）。
+            transactionTemplate.executeWithoutResult(status -> {
+                photoItemRepository.save(photo);
+                syncEventService.invalidate(
+                        ownerUserId,
+                        SyncScope.PHOTOS,
+                        "PHOTO_LIBRARY",
+                        Map.of("source", "MOTION", "fileNodeId", fileNodeId.toString())
+                );
+            });
             log.info("动态视频提取完成: fileNodeId={}, videoFileNodeId={}, videoSize={}",
                     fileNodeId, videoFileNodeId, videoSize);
             return videoFileNodeId;

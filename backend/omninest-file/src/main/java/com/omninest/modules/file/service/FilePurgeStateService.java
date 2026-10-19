@@ -385,14 +385,15 @@ public class FilePurgeStateService {
 
     /**
      * 计算彻底删除应释放的字节数，口径与配额记账一致。
-     * 每个个人文件节点的占用＝节点自身大小（上传或转存时全额加计），
+     * 每个记账的个人文件节点的占用＝节点自身大小（上传或转存时全额加计），
      * 加上该节点历史版本对象的占用：新版本上传按新对象加计、恢复只在当前对象与版本行之间换位，
      * 两者都不改变账本总量，所以删除必须一并释放，否则版本字节会永久留在 used_bytes 上。
      * 与所在节点当前对象同引用的版本行不重复计，同一节点内重复出现的对象标识也只计一次。
      *
-     * <p>只释放 PERSONAL 空间节点：共享空间文件在软删除时已由
-     * {@code SharedSpaceService} 退还共享用量，个人账本从未计入它们；
-     * 派生资产等非个人节点同理。此处若一并释放，会从所有者个人用量中多扣。</p>
+     * <p>只释放 PERSONAL 空间且计入配额的节点：共享空间文件在软删除时已由
+     * {@code SharedSpaceService} 退还共享用量，个人账本从未计入它们；系统可重建的派生资产
+     * 与只读本地影视库索引节点写入时从未加计，删除时同样不能扣减，否则每删一张照片都会
+     * 把用户的 used_bytes 多扣掉缩略图/转码的体积。判定见 {@link #isQuotaCountedNode}。</p>
      */
     static long quotaReleaseBytes(
             List<FileNode> nodes,
@@ -404,7 +405,8 @@ public class FilePurgeStateService {
         Set<UUID> personalNodeIds = new HashSet<>();
         for (FileNode node : nodes) {
             if (!NodeType.FILE.getValue().equals(node.getNodeType())
-                    || node.getSpaceType() != SpaceType.PERSONAL) {
+                    || node.getSpaceType() != SpaceType.PERSONAL
+                    || !isQuotaCountedNode(node)) {
                 continue;
             }
             personalNodeIds.add(node.getId());
@@ -436,6 +438,40 @@ public class FilePurgeStateService {
         Map<UUID, Long> sizes = new LinkedHashMap<>();
         objects.forEach(object -> sizes.put(object.getId(), object.getSizeBytes()));
         return sizes;
+    }
+
+    /**
+     * 判断派生节点是否计入个人配额。
+     *
+     * <p>写入侧只对用户上传的内容与两类不可重建的派生写入加计配额：背景图原片与照片编辑
+     * 版本（分别落在 {@code /.metadata/BACKDROP/{id}/ORIGINAL/...} 与
+     * {@code /.metadata/PHOTO_ITEM/{id}/EDIT_VERSION/...}）。其余派生资产和只读本地影视库
+     * 索引节点从不加计。谓词与 {@code FileMetricsRepository#sumFileSizeForUsers} 必须同一口径，
+     * 否则夜间对账与彻底删除释放会互相抵消。</p>
+     */
+    private static boolean isQuotaCountedNode(FileNode node) {
+        String sourceType = node.getSourceType();
+        if (sourceType == null) {
+            return true;
+        }
+        if (!"DERIVED".equals(sourceType)) {
+            return !"LOCAL_FILESYSTEM".equals(sourceType);
+        }
+        return isChargedDerivedPath(node.getNormalizedPath());
+    }
+
+    private static boolean isChargedDerivedPath(String normalizedPath) {
+        if (normalizedPath == null) {
+            return false;
+        }
+        String[] segments = normalizedPath.split("/");
+        if (segments.length < 6 || !".metadata".equals(segments[1])) {
+            return false;
+        }
+        if ("BACKDROP".equals(segments[2])) {
+            return "ORIGINAL".equals(segments[4]);
+        }
+        return "PHOTO_ITEM".equals(segments[2]) && "EDIT_VERSION".equals(segments[4]);
     }
 
     /**

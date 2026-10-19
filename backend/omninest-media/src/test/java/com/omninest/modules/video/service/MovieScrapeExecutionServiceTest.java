@@ -36,6 +36,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
@@ -66,6 +68,8 @@ class MovieScrapeExecutionServiceTest {
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
+    private final PlatformTransactionManager transactionManager =
+            Mockito.mock(PlatformTransactionManager.class);
     private final MovieScrapeExecutionService executionService =
             new MovieScrapeExecutionService(
                     configService,
@@ -82,19 +86,22 @@ class MovieScrapeExecutionServiceTest {
                     derivedAssetStorageService,
                     syncEventService,
                     fileLifecycleGuard,
-                    readThroughCache
+                    readThroughCache,
+                    transactionManager
             );
 
     @BeforeEach
     void setUpTaskClaim() {
         when(taskRecordService.claimForExecution(any(UUID.class), any(String.class))).thenReturn(true);
+        executionService.initTransactionTemplate();
+        when(transactionManager.getTransaction(any())).thenReturn(Mockito.mock(TransactionStatus.class));
     }
 
     @Test
     void completesTaskWithoutMetadataLookupWhenProvidersDisabled() {
         when(configService.metadataProvidersEnabled()).thenReturn(false);
         MediaVideoItem item = pendingItem();
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID)).thenReturn(Optional.of(item));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(item));
 
         executionService.execute(event("Inception", 2010));
 
@@ -108,7 +115,7 @@ class MovieScrapeExecutionServiceTest {
     void createsMediaMovieAndLinksToVideoItemOnSuccessfulScrape() {
         when(configService.metadataProvidersEnabled()).thenReturn(true);
         MediaVideoItem item = pendingItem();
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID)).thenReturn(Optional.of(item));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(item));
         when(provider.providerName()).thenReturn("LOCAL");
         ScrapeCandidateDto candidate = new ScrapeCandidateDto(
                 "LOCAL",
@@ -149,7 +156,7 @@ class MovieScrapeExecutionServiceTest {
     void storesSeriesCastAndCrewWithProfileAssetsOnEpisodeScrape() {
         when(configService.metadataProvidersEnabled()).thenReturn(true);
         MediaVideoItem item = pendingEpisodeItem();
-        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID)).thenReturn(Optional.of(item));
+        when(videoItemRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(item));
         when(provider.providerName()).thenReturn("TMDB");
         UUID profileFileNodeId = UUID.fromString("70000000-0000-0000-0000-000000000001");
         when(derivedAssetStorageService.storeRemote(any(DerivedAssetRequest.class))).thenReturn(profileFileNodeId);

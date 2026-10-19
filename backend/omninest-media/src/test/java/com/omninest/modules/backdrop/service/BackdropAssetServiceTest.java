@@ -300,6 +300,8 @@ class BackdropAssetServiceTest {
         BackdropAsset asset = readyAsset();
         when(backdropAssetRepository.findByIdAndOwnerUserId(asset.getId(), OWNER_ID))
                 .thenReturn(Optional.of(asset));
+        when(storageQuotaService.settledBytes("BACKDROP_UPLOAD", asset.getId()))
+                .thenReturn(asset.getFileSize());
 
         service.deleteAsset(OWNER_ID, asset.getId());
 
@@ -308,6 +310,21 @@ class BackdropAssetServiceTest {
         verify(storageQuotaService, never()).releaseReservation(anyString(), any());
         verify(derivedAssetStorageService).deleteOwned(OWNER_ID, asset.getFileNodeId());
         verify(derivedAssetStorageService).deleteOwned(OWNER_ID, asset.getThumbFileId());
+    }
+
+    @Test
+    void deleteFailedAssetWithoutSettledUsageKeepsQuotaLedgerUntouched() {
+        BackdropAsset asset = readyAsset();
+        asset.setStatus(BackdropAssetStatus.FAILED);
+        when(backdropAssetRepository.findByIdAndOwnerUserId(asset.getId(), OWNER_ID))
+                .thenReturn(Optional.of(asset));
+        // 扫描失败时预留已按 0 结算，used_bytes 从未加计，删除不能再扣。
+        when(storageQuotaService.settledBytes("BACKDROP_UPLOAD", asset.getId())).thenReturn(0L);
+
+        service.deleteAsset(OWNER_ID, asset.getId());
+
+        verify(userStorageCommand, never()).decrementUsage(any(), anyLong());
+        verify(storageQuotaService, never()).releaseReservation(anyString(), any());
     }
 
     @Test
@@ -342,6 +359,7 @@ class BackdropAssetServiceTest {
                 .thenReturn(Optional.of(first));
         when(backdropAssetRepository.findByIdAndOwnerUserId(second.getId(), OWNER_ID))
                 .thenReturn(Optional.of(second));
+        when(storageQuotaService.settledBytes(anyString(), any())).thenReturn(1024L);
 
         BackdropAssetService.DeleteAllResult result = service.deleteAllAssets(OWNER_ID);
 

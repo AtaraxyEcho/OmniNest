@@ -19,6 +19,7 @@ import com.omninest.modules.file.service.SharedSpaceQuotaService;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
+import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -102,6 +103,8 @@ class SharedSpaceLedgerIT {
 
     @Autowired
     private PhotoAlbumItemRepository photoAlbumItemRepository;
+    @Autowired
+    private PhotoItemRepository photoItemRepository;
 
     @Autowired
     private MusicTrackRepository musicTrackRepository;
@@ -201,6 +204,43 @@ class SharedSpaceLedgerIT {
     }
 
     @Test
+    @DisplayName("关系图谱聚合排除回收站照片，且全部图谱 SQL 可在真实库执行")
+    void relationGraphAggregationsExcludeTrashedPhotos() {
+        UUID owner = UUID.randomUUID();
+        UUID firstAlbum = insertAlbum(owner, 0);
+        UUID secondAlbum = insertAlbum(owner, 0);
+        UUID activePhoto = insertPhoto(owner, "graph-active.jpg", 1_024L, null);
+        UUID trashedPhoto = insertPhoto(owner, "graph-trashed.jpg", 2_048L, Instant.now());
+        for (UUID albumId : List.of(firstAlbum, secondAlbum)) {
+            insertAlbumItem(owner, albumId, activePhoto);
+            insertAlbumItem(owner, albumId, trashedPhoto);
+        }
+
+        var edges = photoItemRepository.findAlbumAlbumRelationEdges(owner, 50);
+
+        // 共享照片是再次关联的唯一依据：回收站照片不能贡献边权重。
+        assertThat(edges).hasSize(1);
+        assertThat(edges.getFirst().getWeight()).isEqualTo(1L);
+        // 未写入 date_taken 的照片不进时间维度；位置维度按“未知位置”聚合，
+        // 权重必须等于活动照片数，否则回收站照片会继续给图谱加权。
+        assertThat(photoItemRepository.findAlbumTimeRelationEdges(owner, "UTC", 50)).isEmpty();
+        assertThat(photoItemRepository.findTimeLocationRelationEdges(owner, "UTC", 50)).isEmpty();
+        assertThat(photoItemRepository.findTimeRelationNodes(owner, "UTC", 50)).isEmpty();
+        assertThat(photoItemRepository.findAlbumLocationRelationEdges(owner, 50)).hasSize(2)
+                .allSatisfy(edge -> assertThat(edge.getWeight()).isEqualTo(1L));
+        // 没有人脸数据时人物维度为空，但同样要能在真实 PostgreSQL 上执行。
+        assertThat(photoItemRepository.findPersonTimeRelationEdges(owner, "UTC", 50)).isEmpty();
+        assertThat(photoItemRepository.findPersonLocationRelationEdges(owner, 50)).isEmpty();
+        assertThat(photoItemRepository.findAlbumPersonRelationEdges(owner, 50)).isEmpty();
+        assertThat(photoItemRepository.findPersonRelationNodes(owner, 50)).isEmpty();
+        assertThat(photoItemRepository.findAlbumRelationNodes(owner, 50)).hasSize(2);
+        var locationNodes = photoItemRepository.findLocationRelationNodes(owner, 50);
+        assertThat(locationNodes).hasSize(1);
+        // 未知位置只有一组，权重必须等于活动照片数（软删照片被排除后不再+1）。
+        assertThat(locationNodes.getFirst().getWeight()).isEqualTo(1L);
+    }
+
+    @Test
     @DisplayName("曲目分页的内容与总数共用同一谓词，软删文件两边都不算")
     void albumTracksPageSharesPredicateBetweenContentAndCount() {
         UUID owner = UUID.randomUUID();
@@ -250,12 +290,24 @@ class SharedSpaceLedgerIT {
                 insertObject("/u/trash.bin", 400L), true);
         // 共享空间节点不进个人账本。
         insertSharedNode(sharedOwner, "/shared.bin", "FILE", 5000L, false);
+        // 系统派生与只读本地库节点写入时从未加计，重算基数必须同样排除，
+        // 否则一次夜间对账就把缩略图与挂载影片全额塞进个人已用配额。
+        insertPersonalFileNodeWithSource(UUID.randomUUID(), owner,
+                "/.metadata/PHOTO_ITEM/" + nodeId + "/THUMBNAIL/thumb.jpg", 30_000L, "DERIVED");
+        insertPersonalFileNodeWithSource(UUID.randomUUID(), owner,
+                "/.metadata/LOCAL_MEDIA/" + nodeId + "/SOURCE.mkv", 7_000_000L, "LOCAL_FILESYSTEM");
+        // 例外：背景图原片与编辑版本写入时已加计，必须留在基数内，否则夜间被抹掉而删除时再扣一次。
+        insertPersonalFileNodeWithSource(UUID.randomUUID(), owner,
+                "/.metadata/BACKDROP/" + nodeId + "/ORIGINAL/wallpaper.png", 2_500L, "DERIVED");
+        insertPersonalFileNodeWithSource(UUID.randomUUID(), owner,
+                "/.metadata/PHOTO_ITEM/" + nodeId + "/EDIT_VERSION/edited.jpg", 120L, "DERIVED");
 
         Map<UUID, Long> usage = new LinkedHashMap<>();
         fileMetricsRepository.sumFileSizeForUsers(List.of(owner, sharedOwner))
                 .forEach(row -> usage.put(row.getUserId(), row.getTotalBytes()));
 
-        assertThat(usage.get(owner)).isEqualTo(1000L + 700L + 300L + 50L + 60L + 400L);
+        assertThat(usage.get(owner))
+                .isEqualTo(1000L + 700L + 300L + 50L + 60L + 400L + 2_500L + 120L);
         assertThat(usage).doesNotContainKey(sharedOwner);
     }
 
@@ -432,6 +484,27 @@ class SharedSpaceLedgerIT {
                 """, nodeId, ownerUserId,
                 normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1),
                 normalizedPath, sizeBytes, currentObjectId, deleted,
+                Timestamp.from(now), Timestamp.from(now));
+        return nodeId;
+    }
+
+    private UUID insertPersonalFileNodeWithSource(
+            UUID nodeId,
+            UUID ownerUserId,
+            String normalizedPath,
+            long sizeBytes,
+            String sourceType
+    ) {
+        Instant now = Instant.now();
+        UUID objectId = insertObject(normalizedPath, sizeBytes);
+        jdbcTemplate.update("""
+                INSERT INTO omni.file_nodes
+                    (id, owner_user_id, node_type, name, normalized_path, size_bytes,
+                     current_object_id, is_deleted, space_type, source_type, created_at, updated_at, version)
+                VALUES (?, ?, 'FILE', ?, ?, ?, ?, false, 'PERSONAL', ?, ?, ?, 0)
+                """, nodeId, ownerUserId,
+                normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1),
+                normalizedPath, sizeBytes, objectId, sourceType,
                 Timestamp.from(now), Timestamp.from(now));
         return nodeId;
     }

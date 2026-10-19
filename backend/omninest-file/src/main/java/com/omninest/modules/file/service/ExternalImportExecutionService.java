@@ -640,6 +640,10 @@ public class ExternalImportExecutionService {
         StorageImportTask task = requireTask(taskId);
         long totalSize = files.stream().mapToLong(this::fileSize).sum();
         prepareImportPhase(taskId, totalSize, files.size());
+        if (isCancelled(taskId)) {
+            markCancelled(taskId);
+            return;
+        }
 
         UUID importRootId = isDirectoryTask(task) ? createImportRoot(task) : task.getTargetParentId();
         Map<String, UUID> folderCache = new HashMap<>();
@@ -664,6 +668,12 @@ public class ExternalImportExecutionService {
                     totalSize,
                     transferred
             );
+            if (lastImported == null) {
+                // 返回 null 只可能是该文件上传途中被取消：末个文件（或单文件导入）也会走这里，
+                // 必须按取消结算，否则会累加进度、漏退预留并向用户误报“导入完成”。
+                markCancelled(taskId);
+                return;
+            }
             transferred += fileSize(file);
             completedFiles++;
             // 进度落库按 1 秒窗口节流：大目录导入时逐文件写库会显著放大事务数，
@@ -679,14 +689,16 @@ public class ExternalImportExecutionService {
                 ? importRootId
                 : lastImported == null ? null : lastImported.getId();
         markCompleted(taskId, completedNodeId, totalSize, files.size());
-        log.info("外部存储导入完成: taskId={}, files={}, totalBytes={}", taskId, files.size(), totalSize);
         // 发送完成通知
         StorageImportTask completedTask = importTaskRepository.findById(taskId).orElse(null);
-        if (completedTask != null) {
-            notificationService.notifyOrLog(completedTask.getOwnerUserId(), "TASK_COMPLETED",
-                    "文件导入完成", "外部存储导入已完成",
-                    Map.of("taskId", taskId.toString()));
+        if (completedTask == null
+                || !ImportTaskStatus.COMPLETED.getValue().equals(completedTask.getStatus())) {
+            return;
         }
+        log.info("外部存储导入完成: taskId={}, files={}, totalBytes={}", taskId, files.size(), totalSize);
+        notificationService.notifyOrLog(completedTask.getOwnerUserId(), "TASK_COMPLETED",
+                "文件导入完成", "外部存储导入已完成",
+                Map.of("taskId", taskId.toString()));
     }
 
     private void prepareImportPhase(UUID taskId, long totalSize, int totalFiles) {
@@ -804,6 +816,9 @@ public class ExternalImportExecutionService {
     ) {
         transactionTemplate.executeWithoutResult(status -> {
             StorageImportTask task = requireTask(taskId);
+            if (ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
+                return;
+            }
             task.setCurrentFileName(currentFileName);
             task.setTransferredBytes(transferredBytes);
             task.setCompletedFiles(completedFiles);

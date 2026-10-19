@@ -84,8 +84,11 @@ public class PhotoEditService {
     /**
      * 编辑版本产生的派生文件计入所有者个人配额。
      *
-     * <p>派生资产节点会进入每日配额对账并在彻底删除时扣减，写入时不加计会让实时用量长期
-     * 低于真实占用，管理员侧的配额重算才把差额补回去。</p>
+     * <p>派生资产默认不计个人配额，每日对账与彻底删除释放都排除
+     * {@code source_type = 'DERIVED'}；编辑版本是用户显式生成且写入时已全额加计的例外，
+     * 因此必须留在账本基数内，否则实时用量会长期高于重算结果、并在夜间被抹掉。
+     * 该例外与 {@code FileMetricsRepository#sumFileSizeForUsers} 和
+     * {@code FilePurgeStateService#isQuotaCountedNode} 的派生路径判定同源，三处必须同口径。</p>
      */
     private void chargeEditVersionQuota(UUID ownerUserId, long bytes) {
         storageQuotaService.checkQuota(ownerUserId, bytes);

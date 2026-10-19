@@ -1,7 +1,7 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.modules.user.repository.AuthUserRepository;
-import java.nio.charset.StandardCharsets;
+import com.omninest.modules.user.util.UserAvatarObjectKeys;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,12 +20,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class UserAvatarObjectReferenceQueryService implements UserAvatarObjectReferenceQuery {
-    private static final String AVATAR_PREFIX = "avatars/";
 
     private final AuthUserRepository authUserRepository;
 
     /**
      * 查询候选对象键中仍被用户头像引用的键。
+     *
+     * <p>头像对象键是 {@code avatars/{userId}/{avatarFileId}}，末段就是
+     * {@code auth_users.avatar_file_id}；不符合该形状（含旧的 {@code avatar.{ext}}）的键
+     * 不再被视为在用，交给孤儿清理回收。</p>
      *
      * @param objectKeys 候选对象键
      * @return 已引用对象键
@@ -38,11 +41,10 @@ public class UserAvatarObjectReferenceQueryService implements UserAvatarObjectRe
         }
         Map<UUID, String> objectKeysByAvatarId = new HashMap<>();
         for (String objectKey : objectKeys) {
-            if (objectKey == null || !objectKey.startsWith(AVATAR_PREFIX)) {
-                continue;
+            UUID avatarFileId = UserAvatarObjectKeys.parseAvatarFileId(objectKey);
+            if (avatarFileId != null) {
+                objectKeysByAvatarId.put(avatarFileId, objectKey);
             }
-            UUID avatarFileId = UUID.nameUUIDFromBytes(objectKey.getBytes(StandardCharsets.UTF_8));
-            objectKeysByAvatarId.put(avatarFileId, objectKey);
         }
         if (objectKeysByAvatarId.isEmpty()) {
             return Set.of();

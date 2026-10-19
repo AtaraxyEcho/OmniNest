@@ -660,6 +660,18 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
     );
 
     /**
+     * 批量查询用户拥有的照片，含已在回收站的照片（批量移入回收站需要逐项判定幂等）。
+     *
+     * @param ownerUserId 用户标识
+     * @param ids 照片标识
+     * @return 该用户拥有的照片
+     */
+    List<PhotoItem> findByOwnerUserIdAndIdIn(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("ids") Collection<UUID> ids
+    );
+
+    /**
      * 按用户和文件节点ID查询照片
      */
     Optional<PhotoItem> findByOwnerUserIdAndFileNodeId(UUID ownerUserId, UUID fileNodeId);
@@ -990,6 +1002,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                         ON a2.photo_id = a1.photo_id AND a2.owner_user_id = a1.owner_user_id
                      WHERE a1.owner_user_id = :ownerUserId
                        AND a2.album_id > a1.album_id
+                       AND EXISTS (SELECT 1 FROM omni.photo_items pi WHERE pi.id = a1.photo_id AND pi.deleted_at IS NULL)
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1012,6 +1025,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                         ON ai.photo_id = f.photo_id AND ai.owner_user_id = f.owner_user_id
                      WHERE f.owner_user_id = :ownerUserId
                        AND f.cluster_id IS NOT NULL
+                       AND EXISTS (SELECT 1 FROM omni.photo_items pi WHERE pi.id = f.photo_id AND pi.deleted_at IS NULL)
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1034,6 +1048,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                         ON p.id = ai.photo_id AND p.owner_user_id = ai.owner_user_id
                      WHERE ai.owner_user_id = :ownerUserId
                        AND p.date_taken IS NOT NULL
+                       AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1056,6 +1071,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                       JOIN omni.photo_items p
                         ON p.id = ai.photo_id AND p.owner_user_id = ai.owner_user_id
                      WHERE ai.owner_user_id = :ownerUserId
+                       AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1079,6 +1095,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                      WHERE f.owner_user_id = :ownerUserId
                        AND f.cluster_id IS NOT NULL
                        AND p.date_taken IS NOT NULL
+                       AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1102,6 +1119,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                         ON p.id = f.photo_id AND p.owner_user_id = f.owner_user_id
                      WHERE f.owner_user_id = :ownerUserId
                        AND f.cluster_id IS NOT NULL
+                       AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1122,6 +1140,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                       FROM omni.photo_items p
                      WHERE p.owner_user_id = :ownerUserId
                        AND p.date_taken IS NOT NULL
+                       AND p.deleted_at IS NULL
                      GROUP BY 1, 2
                    ) e
              ORDER BY e.weight DESC, e.source_key ASC, e.target_key ASC
@@ -1165,6 +1184,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
               FROM omni.photo_items p
              WHERE p.owner_user_id = :ownerUserId
                AND p.date_taken IS NOT NULL
+               AND p.deleted_at IS NULL
              GROUP BY 1
              ORDER BY 1 ASC
              LIMIT :limit
@@ -1180,6 +1200,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    COUNT(*) AS "weight"
               FROM omni.photo_items p
              WHERE p.owner_user_id = :ownerUserId
+               AND p.deleted_at IS NULL
              GROUP BY 1
              ORDER BY 3 DESC, 1 ASC
              LIMIT :limit

@@ -253,7 +253,12 @@ public class BackdropAssetService {
             if (asset.getStatus() == BackdropAssetStatus.PROCESSING) {
                 safeReleaseReservation(assetId);
             } else {
-                userStorageCommand.decrementUsage(ownerUserId, asset.getFileSize());
+                // 只退还真正结算进 used_bytes 的部分：扫描失败的素材预留已释放且从未加计，
+                // 按 fileSize 扣减会凭空减少用户已用配额。
+                long settledBytes = storageQuotaService.settledBytes(RESERVATION_SOURCE_TYPE, assetId);
+                if (settledBytes > 0) {
+                    userStorageCommand.decrementUsage(ownerUserId, settledBytes);
+                }
             }
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
