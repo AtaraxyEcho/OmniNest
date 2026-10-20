@@ -148,6 +148,21 @@ public class FileQueryService {
     }
 
     /**
+     * 取子树内待恢复的软删除节点。
+     *
+     * <p>共享空间按空间取（不限所有者），个人空间按所有者取：前者若仍按单个所有者过滤，
+     * 别人上传的子文件不会随父目录恢复，而共享配额按整棵子树补记，账实不符。</p>
+     */
+    private List<FileNode> deletedSubtreeNodes(FileNode node) {
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            return fileNodeRepository.findDeletedBySpaceTypeAndNormalizedPathStartingWith(
+                    SpaceType.SHARED, subtreePrefix(node));
+        }
+        return fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                node.getOwnerUserId(), node.getSpaceType(), subtreePrefix(node));
+    }
+
+    /**
      * 路径前缀的 LIKE 字面量。
      *
      * <p>这几个调用点都是"按子树读出来再写回去"：批量软删、批量还原、改名时的子树路径重写，
@@ -318,12 +333,7 @@ public class FileQueryService {
         }
 
         markRestored(node);
-        List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                        nodeOwnerUserId,
-                        node.getSpaceType(),
-                        subtreePrefix(node)
-                );
+        List<FileNode> descendants = deletedSubtreeNodes(node);
         descendants.forEach(this::markRestored);
         fileNodeRepository.saveAll(descendants);
         FileNode saved = fileNodeRepository.save(node);
@@ -331,14 +341,18 @@ public class FileQueryService {
             sharedSpaceQuotaService.increaseUsage(sharedStats.totalBytes(), sharedStats.fileCount());
         }
 
-        // 发布恢复事件，触发 Lucene 重新索引
-        List<UUID> restoredIds = new ArrayList<>();
-        restoredIds.add(saved.getId());
-        descendants.stream().map(FileNode::getId).forEach(restoredIds::add);
-        eventPublisher.publishEvent(new FileNodesRestoredEvent(
-                nodeOwnerUserId,
-                List.copyOf(restoredIds),
-                Instant.now()
+        // 发布恢复事件，触发 Lucene 重新索引：按节点真实所有者分组投递，
+        // 共享子树里别人上传的子文件不能挂到操作者名下重建索引。
+        Map<UUID, List<UUID>> restoredIdsByOwner = new LinkedHashMap<>();
+        restoredIdsByOwner
+                .computeIfAbsent(saved.getOwnerUserId(), key -> new ArrayList<>())
+                .add(saved.getId());
+        descendants.forEach(descendant -> restoredIdsByOwner
+                .computeIfAbsent(descendant.getOwnerUserId(), key -> new ArrayList<>())
+                .add(descendant.getId()));
+        Instant restoredAt = Instant.now();
+        restoredIdsByOwner.forEach((ownerId, ids) -> eventPublisher.publishEvent(
+                new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt)
         ));
         recordFileEvent(nodeOwnerUserId, saved.getId(), SyncAction.RESTORED);
 
@@ -473,13 +487,13 @@ public class FileQueryService {
             markRestored(node);
             allToSave.add(node);
             restoredIdsByOwner.computeIfAbsent(nodeOwnerUserId, key -> new ArrayList<>()).add(node.getId());
-            List<FileNode> descendants = fileNodeRepository
-                    .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                            nodeOwnerUserId, node.getSpaceType(), subtreePrefix(node));
+            List<FileNode> descendants = deletedSubtreeNodes(node);
             descendants.forEach(this::markRestored);
             allToSave.addAll(descendants);
-            List<UUID> ownerRestoredIds = restoredIdsByOwner.get(nodeOwnerUserId);
-            descendants.stream().map(FileNode::getId).forEach(ownerRestoredIds::add);
+            // 共享子树的子孙可能属于其他上传者，索引事件按真实所有者分组投递。
+            descendants.forEach(descendant -> restoredIdsByOwner
+                    .computeIfAbsent(descendant.getOwnerUserId(), key -> new ArrayList<>())
+                    .add(descendant.getId()));
             if (sharedStats != null) {
                 sharedCharges.add(sharedStats);
             }

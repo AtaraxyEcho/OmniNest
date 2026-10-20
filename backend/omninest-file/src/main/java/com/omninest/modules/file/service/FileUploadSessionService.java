@@ -121,26 +121,32 @@ public class FileUploadSessionService {
 
         requireActiveSessionBudget(ownerUserId);
 
+        String fileName = normalizeFileName(request.fileName());
+        UUID asVersionOfFileId = request.asVersionOfFileId();
+        if (asVersionOfFileId != null) {
+            FileNode versionTarget = fileNodeRepository
+                    .findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, ownerUserId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件不存在"));
+            // 版本继承目标节点所在空间：客户端漏传或误传 spaceType 会把共享空间文件的
+            // 新版本记进上传者个人配额，而删除共享文件时又按共享跳过个人扣减。
+            spaceType = versionTarget.getSpaceType();
+        }
         if (spaceType == SpaceType.SHARED) {
             // 共享空间上传必须具备 CAN_UPLOAD 角色能力并受共享空间容量约束
             sharedSpaceService.requireSharedWrite(ownerUserId);
             sharedSpaceQuotaService.checkQuota(request.sizeBytes());
         }
 
-        String fileName = normalizeFileName(request.fileName());
         FileNode parent = resolveParent(ownerUserId, request.parentId(), spaceType);
-        UUID asVersionOfFileId = request.asVersionOfFileId();
-        if (asVersionOfFileId != null) {
-            fileNodeRepository
-                    .findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, ownerUserId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件不存在"));
-        } else if (spaceType == SpaceType.SHARED) {
-            if (sameNameExists(ownerUserId, spaceType, request.parentId(), fileName)) {
-                throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
+        if (asVersionOfFileId == null) {
+            if (spaceType == SpaceType.SHARED) {
+                if (sameNameExists(ownerUserId, spaceType, request.parentId(), fileName)) {
+                    throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
+                }
+            } else {
+                checkActiveNameConflict(ownerUserId, spaceType, request.parentId(), fileName);
+                checkSoftDeletedConflict(ownerUserId, spaceType, request.parentId(), fileName);
             }
-        } else {
-            checkActiveNameConflict(ownerUserId, spaceType, request.parentId(), fileName);
-            checkSoftDeletedConflict(ownerUserId, spaceType, request.parentId(), fileName);
         }
 
         String mimeType = normalizeMimeType(request.mimeType(), fileName);

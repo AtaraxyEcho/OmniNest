@@ -208,10 +208,12 @@ public class MusicFileCleanupService implements
         }
         List<UUID> trackIds = tracks.stream().map(MusicTrack::getId).toList();
         List<String> musicKeys = trackIds.stream().map(id -> "local:" + id).toList();
-        playbackCleanupService.deleteOwned(ownerUserId, MediaPlaybackType.MUSIC, musicKeys);
-        favoriteRepository.deleteByOwnerUserIdAndTrackIdIn(ownerUserId, trackIds);
-        playHistoryRepository.deleteByOwnerUserIdAndTrackIdIn(ownerUserId, trackIds);
-        playlistItemRepository.deleteByOwnerUserIdAndTrackIdIn(ownerUserId, trackIds);
+        // 曲目一旦被物理清除，所有成员名下的关联行都要跟着消失：按上传者过滤会留下
+        // 指向不存在曲目的孤儿收藏/历史/歌单条目。仪表盘计数的短暂偏差由缓存 TTL 自愈。
+        playbackCleanupService.deleteAllUsers(MediaPlaybackType.MUSIC, musicKeys);
+        favoriteRepository.deleteByTrackIdIn(trackIds);
+        playHistoryRepository.deleteByTrackIdIn(trackIds);
+        playlistItemRepository.deleteByTrackIdIn(trackIds);
 
         Set<UUID> albumIds = new HashSet<>();
         Set<UUID> artistIds = new HashSet<>();

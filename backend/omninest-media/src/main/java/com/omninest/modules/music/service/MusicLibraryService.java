@@ -253,7 +253,7 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds));
     }
 
     @Transactional(readOnly = true)
@@ -271,7 +271,7 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds));
     }
 
     /**
@@ -298,7 +298,7 @@ public class MusicLibraryService {
                 .filter(trackId -> trackId != null)
                 .toList();
         Map<UUID, MusicTrack> localTracks = trackRepository
-                .findByOwnerUserIdAndIdIn(ownerUserId, localTrackIds)
+                .findTracksVisibleToUserByIds(ownerUserId, localTrackIds)
                 .stream()
                 .collect(Collectors.toMap(MusicTrack::getId, track -> track));
         Set<UUID> favoriteTrackIds = favoriteTrackIds(ownerUserId, localTrackIds);
@@ -461,7 +461,7 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return Map.of();
         }
-        return trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds)
+        return trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds)
                 .stream()
                 .collect(Collectors.toMap(MusicTrack::getId, track -> track));
     }
@@ -727,7 +727,12 @@ public class MusicLibraryService {
         );
     }
 
-    private List<MusicTrackDto> toTrackSummaryDtos(UUID ownerUserId, List<MusicTrack> tracks) {
+    /**
+     * 批量转列表 DTO，并按当前用户回查收藏标记。
+     *
+     * <p>歌单等非曲库入口也需要这一口径，否则调用方只能把收藏状态写死成 false。</p>
+     */
+    public List<MusicTrackDto> toTrackSummaryDtos(UUID ownerUserId, List<MusicTrack> tracks) {
         Set<UUID> favoriteTrackIds = favoriteTrackIds(ownerUserId, tracks.stream().map(MusicTrack::getId).toList());
         return tracks.stream()
                 .map(track -> toTrackSummaryDto(track, favoriteTrackIds.contains(track.getId())))

@@ -8,6 +8,7 @@ import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FilePurgeImpactDto;
 import com.omninest.modules.file.event.FilePurgeRequestedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -262,14 +263,7 @@ public class FileDeletionService {
         Instant requestedAt = Instant.now();
         markPurgeQueued(root, taskId, requestedAt);
         fileNodeRepository.save(root);
-        fileNodeRepository.assignDeletedDescendantsToPurge(
-                ownerUserId,
-                root.getSpaceType(),
-                subtreePrefix(root),
-                taskId,
-                FilePurgeState.QUEUED,
-                requestedAt
-        );
+        assignSubtreeToPurge(ownerUserId, root, taskId, requestedAt);
         int cancelledTaskCount = cancelRelatedTasksInBatches(ownerUserId, taskId);
         if (cancelledTaskCount > 0) {
             log.info("永久删除任务已冻结关联任务: fileNodeId={}, cancelledTaskCount={}",
@@ -363,14 +357,7 @@ public class FileDeletionService {
         Instant requestedAt = Instant.now();
         roots.forEach(root -> markPurgeQueued(root, taskId, requestedAt));
         fileNodeRepository.saveAll(roots);
-        roots.forEach(root -> fileNodeRepository.assignDeletedDescendantsToPurge(
-                ownerUserId,
-                root.getSpaceType(),
-                subtreePrefix(root),
-                taskId,
-                FilePurgeState.QUEUED,
-                requestedAt
-        ));
+        roots.forEach(root -> assignSubtreeToPurge(ownerUserId, root, taskId, requestedAt));
         int cancelledTaskCount = cancelRelatedTasksInBatches(ownerUserId, taskId);
         if (cancelledTaskCount > 0) {
             log.info("批量永久删除任务已冻结关联任务: taskId={}, cancelledTaskCount={}",
@@ -534,6 +521,33 @@ public class FileDeletionService {
      * 兄弟目录的已删除文件会被同一 {@code taskId} 认领并物理清除。配套查询必须声明
      * {@code escape '\'}。</p>
      */
+    /**
+     * 把子树内已软删除节点挂到粉碎任务上。
+     *
+     * <p>共享空间按空间认领，个人空间按所有者认领：前者若仍限制所有者，
+     * 别人上传的子文件不会进入物理清除清单，父目录粉碎后这些节点永久悬挂。</p>
+     */
+    private void assignSubtreeToPurge(UUID ownerUserId, FileNode root, UUID taskId, Instant requestedAt) {
+        if (root.getSpaceType() == SpaceType.SHARED) {
+            fileNodeRepository.assignDeletedDescendantsToPurgeInSpace(
+                    SpaceType.SHARED,
+                    subtreePrefix(root),
+                    taskId,
+                    FilePurgeState.QUEUED,
+                    requestedAt
+            );
+            return;
+        }
+        fileNodeRepository.assignDeletedDescendantsToPurge(
+                ownerUserId,
+                root.getSpaceType(),
+                subtreePrefix(root),
+                taskId,
+                FilePurgeState.QUEUED,
+                requestedAt
+        );
+    }
+
     private String subtreePrefix(FileNode root) {
         return LikePatterns.escapeSpecials(root.getNormalizedPath() + "/");
     }

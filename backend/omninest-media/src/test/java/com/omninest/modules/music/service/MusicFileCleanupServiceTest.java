@@ -72,14 +72,11 @@ class MusicFileCleanupServiceTest {
         service.finalizePurge(purgeContext());
 
         List<String> musicKeys = List.of("local:" + TRACK_ID);
-        Mockito.verify(playbackCleanupService).deleteOwned(
-                OWNER_ID,
-                MediaPlaybackType.MUSIC,
-                musicKeys
-        );
-        Mockito.verify(favoriteRepository).deleteByOwnerUserIdAndTrackIdIn(OWNER_ID, List.of(TRACK_ID));
-        Mockito.verify(playHistoryRepository).deleteByOwnerUserIdAndTrackIdIn(OWNER_ID, List.of(TRACK_ID));
-        Mockito.verify(playlistItemRepository).deleteByOwnerUserIdAndTrackIdIn(OWNER_ID, List.of(TRACK_ID));
+        // 共享曲目被物理清除时，所有成员的关联行都要消失：按上传者过滤会留下孤儿行。
+        Mockito.verify(playbackCleanupService).deleteAllUsers(MediaPlaybackType.MUSIC, musicKeys);
+        Mockito.verify(favoriteRepository).deleteByTrackIdIn(List.of(TRACK_ID));
+        Mockito.verify(playHistoryRepository).deleteByTrackIdIn(List.of(TRACK_ID));
+        Mockito.verify(playlistItemRepository).deleteByTrackIdIn(List.of(TRACK_ID));
         Mockito.verify(trackRepository).deleteAllInBatch(List.of(track));
         // 曲目行删掉后，它指向的封面与缩略图必须一起进入回收，否则成为无主派生资产。
         Mockito.verify(coverRetentionService).releaseUnreferenced(OWNER_ID, Set.of(COVER_FILE_ID));

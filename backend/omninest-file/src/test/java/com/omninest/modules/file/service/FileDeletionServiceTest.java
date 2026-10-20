@@ -274,8 +274,9 @@ class FileDeletionServiceTest {
                 eq(FILE_NODE_ID),
                 anyMap()
         );
-        verify(fileNodeRepository).assignDeletedDescendantsToPurge(
-                eq(UPLOADER_ID),
+        // 共享空间的子树认领必须按空间而不是按上传者：B 上传的子文件也要进物理清除清单，
+        // 否则父目录粉碎后它们永久悬挂（列表看不到、字节仍占桶）。
+        verify(fileNodeRepository).assignDeletedDescendantsToPurgeInSpace(
                 eq(SpaceType.SHARED),
                 eq("/movie.mkv/"),
                 eq(taskId),

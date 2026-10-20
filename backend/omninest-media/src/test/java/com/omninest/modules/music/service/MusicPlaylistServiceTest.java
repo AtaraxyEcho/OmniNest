@@ -146,10 +146,16 @@ class MusicPlaylistServiceTest {
         when(playlistRepository.findByIdAndOwnerUserId(PLAYLIST_ID, OWNER_ID)).thenReturn(Optional.of(playlist));
         when(playlistItemRepository.findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(OWNER_ID, PLAYLIST_ID))
                 .thenReturn(List.of(first, second));
-        when(trackRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of(FIRST_TRACK_ID, SECOND_TRACK_ID)))
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, List.of(FIRST_TRACK_ID, SECOND_TRACK_ID)))
                 .thenReturn(List.of(secondTrack, firstTrack));
-        when(musicLibraryService.toTrackSummaryDto(firstTrack, false)).thenReturn(dto(FIRST_TRACK_ID, "First"));
-        when(musicLibraryService.toTrackSummaryDto(secondTrack, false)).thenReturn(dto(SECOND_TRACK_ID, "Second"));
+        // 服务改为批量转 DTO（收藏标记一并回填），桩按传入顺序回显，保留顺序断言的意义。
+        when(musicLibraryService.toTrackSummaryDtos(eq(OWNER_ID), anyList()))
+                .thenAnswer(invocation -> {
+                    List<MusicTrack> ordered = invocation.getArgument(1);
+                    return ordered.stream()
+                            .map(item -> dto(item.getId(), item.getTitle()))
+                            .toList();
+                });
 
         var result = playlistService.playlistTracks(OWNER_ID, PLAYLIST_ID);
 
@@ -173,7 +179,7 @@ class MusicPlaylistServiceTest {
                 OWNER_ID,
                 List.of(PLAYLIST_ID)
         )).thenReturn(List.of(first));
-        when(trackRepository.findByOwnerUserIdAndIdIn(
+        when(trackRepository.findTracksVisibleToUserByIds(
                 eq(OWNER_ID),
                 anyList()
         )).thenReturn(List.of(firstTrack));
@@ -203,8 +209,8 @@ class MusicPlaylistServiceTest {
                 OWNER_ID,
                 PLAYLIST_ID
         )).thenReturn(Optional.of(remaining));
-        when(trackRepository.findByIdAndOwnerUserId(SECOND_TRACK_ID, OWNER_ID))
-                .thenReturn(Optional.of(secondTrack));
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, List.of(SECOND_TRACK_ID)))
+                .thenReturn(List.of(secondTrack));
         when(musicLibraryService.toTrackSummaryDto(secondTrack, false))
                 .thenReturn(dto(SECOND_TRACK_ID, "Second", "https://example.com/second.jpg"));
 

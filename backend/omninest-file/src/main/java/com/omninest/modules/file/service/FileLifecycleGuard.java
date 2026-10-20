@@ -5,6 +5,8 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FilePurgeState;
+import com.omninest.modules.file.domain.SharedSpacePermission.Action;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import java.util.Optional;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FileLifecycleGuard {
     private final FileNodeRepository fileNodeRepository;
     private final FilePermissionService filePermissionService;
+    private final SharedSpaceService sharedSpaceService;
 
     /**
      * 校验当前用户可以读取活动文件。
@@ -35,12 +38,30 @@ public class FileLifecycleGuard {
     public FileDescriptor requireReadable(UUID userId, UUID fileNodeId) {
         FileNode node = requireActiveNode(fileNodeId);
         if (!node.getOwnerUserId().equals(userId)) {
-            FilePermission permission = filePermissionService.resolvePermission(fileNodeId, userId);
-            if (!node.isShared() || !permission.allowView()) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
-            }
+            requireReadableByNonOwner(userId, node);
         }
         return toDescriptor(node);
+    }
+
+    /**
+     * 非所有者读取节点的两种合法来源：共享空间成员，或节点被显式共享并授予查看权限。
+     *
+     * <p>共享空间按成员角色矩阵授权，判据与目录浏览同为 {@code CAN_BROWSE}：能列出
+     * 文件名的节点必须能读出内容，否则缩略图与媒体详情都会空白。历史"文件共享"
+     * 开关（{@code shared} 标志 + 逐用户 FilePermission）走另一条判定，两者互不影响。</p>
+     *
+     * <p>此前这里只认后者，导致共享空间里别人上传的文件"能看见却打不开"：
+     * 音乐收藏与播放、影视详情、阅读正文都在这一步被拒。</p>
+     */
+    private void requireReadableByNonOwner(UUID userId, FileNode node) {
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            sharedSpaceService.validatePermission(userId, Action.CAN_BROWSE);
+            return;
+        }
+        FilePermission permission = filePermissionService.resolvePermission(node.getId(), userId);
+        if (!node.isShared() || !permission.allowView()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
+        }
     }
 
     /**

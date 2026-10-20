@@ -148,16 +148,18 @@ public class MusicPlaylistService {
             return List.of();
         }
         Map<UUID, MusicTrack> tracksById =
-                trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds).stream()
+                trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds).stream()
                         .collect(Collectors.toMap(
                                 MusicTrack::getId,
                                 Function.identity()
                         ));
-        return trackIds.stream()
+        List<MusicTrack> orderedTracks = trackIds.stream()
                 .map(tracksById::get)
                 .filter(Objects::nonNull)
-                .map(track -> musicLibraryService.toTrackSummaryDto(track, false))
                 .toList();
+        // 收藏标记必须按当前用户回查：写死 false 会让歌单里每首红心都显示未收藏，
+        // 用户点一次反而把已收藏的曲目取消掉。
+        return musicLibraryService.toTrackSummaryDtos(ownerUserId, orderedTracks);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -165,7 +167,7 @@ public class MusicPlaylistService {
         log.info("添加曲目到播放列表: playlistId={}, count={}", playlistId, request.trackIds().size());
         requireCustomPlaylist(ownerUserId, playlistId);
         List<UUID> trackIds = request.trackIds();
-        Set<UUID> existingTrackIds = trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds)
+        Set<UUID> existingTrackIds = trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds)
                 .stream()
                 .map(MusicTrack::getId)
                 .collect(Collectors.toSet());
@@ -241,7 +243,7 @@ public class MusicPlaylistService {
             return Map.of();
         }
         Map<UUID, MusicTrack> tracks = trackRepository
-                .findByOwnerUserIdAndIdIn(ownerUserId, new ArrayList<>(firstTrackIds.values()))
+                .findTracksVisibleToUserByIds(ownerUserId, new ArrayList<>(firstTrackIds.values()))
                 .stream()
                 .collect(Collectors.toMap(MusicTrack::getId, Function.identity()));
         Map<UUID, String> covers = new LinkedHashMap<>();
@@ -257,7 +259,11 @@ public class MusicPlaylistService {
     private String firstTrackCover(UUID ownerUserId, UUID playlistId) {
         return playlistItemRepository
                 .findTopByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(ownerUserId, playlistId)
-                .flatMap(item -> trackRepository.findByIdAndOwnerUserId(item.getTrackId(), ownerUserId))
+                // 歌单封面同样要认共享曲目：按所有者取不到就会退回默认封面。
+                .flatMap(item -> trackRepository
+                        .findTracksVisibleToUserByIds(ownerUserId, List.of(item.getTrackId()))
+                        .stream()
+                        .findFirst())
                 .map(track -> musicLibraryService.toTrackSummaryDto(track, false).coverUrl())
                 .orElse(null);
     }

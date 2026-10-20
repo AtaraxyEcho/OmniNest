@@ -143,6 +143,24 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 按空间收集子树内的已软删除节点，不限制所有者。
+     *
+     * <p>共享空间同一目录树里的节点 {@code owner_user_id} 是各自上传者。恢复父目录若仍按
+     * 单个所有者取子节点，别人上传的子文件会留在回收站，形成"父目录已恢复、子文件不可见"
+     * 的悬挂节点，而共享配额按整棵子树补记，账实不符。永久删除同理。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀
+     * @return 已软删除节点列表
+     */
+    @Query("select node from FileNode node where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
+    List<FileNode> findDeletedBySpaceTypeAndNormalizedPathStartingWith(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
      * 分页读取指定空间与路径下的全部节点。
      *
      * <p>由 derived 方法改为显式查询：派生属性的 {@code StartingWith} 生成的 LIKE 挂不上
@@ -518,6 +536,31 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
     int assignDeletedDescendantsToPurge(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix,
+            @Param("taskId") UUID taskId,
+            @Param("state") FilePurgeState state,
+            @Param("requestedAt") Instant requestedAt
+    );
+
+    /**
+     * 按空间把子树内的已软删除节点挂到粉碎任务上，不限制所有者。
+     *
+     * <p>共享空间里父目录由 A 粉碎时，B 上传的子文件也必须进物理清除清单；仍按
+     * 单个所有者过滤就会留下永久悬挂节点：列表与回收站都看不到，字节却一直占着桶。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 路径前缀
+     * @param taskId 任务 ID
+     * @param state 生命周期状态
+     * @param requestedAt 请求时间
+     * @return 更新数量
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update FileNode node set node.purgeTaskId = :taskId, node.purgeState = :state, "
+            + "node.purgeRequestedAt = :requestedAt where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = true")
+    int assignDeletedDescendantsToPurgeInSpace(
             @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix,
             @Param("taskId") UUID taskId,

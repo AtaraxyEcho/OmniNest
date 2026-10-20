@@ -85,16 +85,6 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
      */
     List<MusicTrack> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
 
-    @Query("""
-            select track from MusicTrack track
-            join FileNode file on track.fileNodeId = file.id
-            where track.ownerUserId = :ownerUserId and track.id in :ids and file.deleted = false
-            """)
-    List<MusicTrack> findByOwnerUserIdAndIdIn(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("ids") List<UUID> ids
-    );
-
     /**
      * 按歌名、歌手或专辑搜索用户曲目。
      *
@@ -284,4 +274,38 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
             @Param("userId") UUID userId,
             @Param("sharedType") SpaceType sharedType,
             Pageable pageable);
+
+    /**
+     * 按 ID 集合查询用户可见曲目（个人 + 共享空间），口径与
+     * {@link #findTracksVisibleToUser} 一致。
+     *
+     * <p>只按 owner_user_id 过滤会让别人上传到共享空间的曲目从收藏、最近播放、
+     * 播放历史和歌单里消失，而主曲库列得出它们——两处必须同一判据。</p>
+     *
+     * @param userId 当前用户 ID
+     * @param trackIds 曲目 ID 集合
+     * @return 可见曲目；空集合返回空列表
+     */
+    default List<MusicTrack> findTracksVisibleToUserByIds(UUID userId, Collection<UUID> trackIds) {
+        if (trackIds == null || trackIds.isEmpty()) {
+            return List.of();
+        }
+        return findVisibleTracksByIds(userId, SpaceType.SHARED, trackIds);
+    }
+
+    @Query("""
+            SELECT DISTINCT t FROM MusicTrack t
+            JOIN FileNode f ON t.fileNodeId = f.id
+            WHERE f.deleted = false
+            AND t.id IN :trackIds
+            AND (
+                t.ownerUserId = :userId
+                OR f.spaceType = :sharedType
+            )
+            """)
+    List<MusicTrack> findVisibleTracksByIds(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("trackIds") Collection<UUID> trackIds
+    );
 }

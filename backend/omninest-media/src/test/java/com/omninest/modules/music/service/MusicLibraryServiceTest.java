@@ -326,7 +326,7 @@ class MusicLibraryServiceTest {
         when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                 eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
-        when(trackRepository.findByOwnerUserIdAndIdIn(eq(OWNER_ID), eq(List.of(TRACK_ID))))
+        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(List.of(TRACK_ID))))
                 .thenReturn(List.of(track));
 
         var result = libraryService.playHistory(OWNER_ID, 0, 50);
@@ -347,7 +347,7 @@ class MusicLibraryServiceTest {
         when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                 eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
-        when(trackRepository.findByOwnerUserIdAndIdIn(eq(OWNER_ID), eq(List.of(TRACK_ID))))
+        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(List.of(TRACK_ID))))
                 .thenReturn(List.of());
 
         var result = libraryService.playHistory(OWNER_ID, 0, 50);
@@ -374,7 +374,7 @@ class MusicLibraryServiceTest {
 
         assertThat(result.getContent().getFirst().coverUrl())
                 .isEqualTo("https://p1.music.126.net/cover.jpg");
-        verify(trackRepository, never()).findByOwnerUserIdAndIdIn(eq(OWNER_ID), ArgumentMatchers.anyList());
+        verify(trackRepository, never()).findTracksVisibleToUserByIds(eq(OWNER_ID), ArgumentMatchers.anyList());
     }
 
     @Test
@@ -486,7 +486,7 @@ class MusicLibraryServiceTest {
                         ArgumentMatchers.any(Instant.class)
                 ))
                 .thenReturn(List.of(history));
-        when(trackRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of())).thenReturn(List.of());
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, List.of())).thenReturn(List.of());
 
         var recent = libraryService.recentItems(OWNER_ID);
 
