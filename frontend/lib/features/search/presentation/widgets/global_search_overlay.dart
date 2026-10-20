@@ -59,7 +59,6 @@ class _Hit {
     this.thumbnailUrl,
     this.progress,
     this.trailing,
-    this.kbds = const [],
   });
 
   final String title;
@@ -69,7 +68,6 @@ class _Hit {
   final String? thumbnailUrl;
   final double? progress;
   final String? trailing;
-  final List<String> kbds;
 }
 
 class _CommandPaletteDialog extends ConsumerStatefulWidget {
@@ -269,6 +267,44 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     );
   }
 
+  /// Tab / Shift+Tab 循环切换筛选页签，越界回绕。
+  void _cycleTab(int delta) {
+    final tabs = _PaletteTab.values;
+    final next = (_tab.index + delta) % tabs.length;
+    if (tabs[next] == _tab) {
+      return;
+    }
+    setState(() {
+      _tab = tabs[next];
+      _highlight = 0;
+    });
+  }
+
+  /// 数字键 1~7 直达对应页签；返回是否消费了这次按键。
+  bool _selectTabByDigit(LogicalKeyboardKey key) {
+    const digits = <LogicalKeyboardKey>[
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+      LogicalKeyboardKey.digit7,
+    ];
+    final index = digits.indexOf(key);
+    if (index < 0 || index >= _PaletteTab.values.length) {
+      return false;
+    }
+    if (_PaletteTab.values[index] == _tab) {
+      return true;
+    }
+    setState(() {
+      _tab = _PaletteTab.values[index];
+      _highlight = 0;
+    });
+    return true;
+  }
+
   List<_Hit> _commands(AppLocalizations l10n) {
     return [
       _Hit(
@@ -276,28 +312,24 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
         subtitle: l10n.searchGroupFile,
         type: 'command',
         route: '/files',
-        kbds: const ['G', 'F'],
       ),
       _Hit(
         title: l10n.portalDockMusic,
         subtitle: l10n.searchGroupMusic,
         type: 'command',
         route: '/music',
-        kbds: const ['G', 'M'],
       ),
       _Hit(
         title: l10n.portalDockMovies,
         subtitle: l10n.searchGroupVideo,
         type: 'command',
         route: '/video',
-        kbds: const ['G', 'V'],
       ),
       _Hit(
         title: l10n.searchGroupBook,
         subtitle: l10n.searchGroupBook,
         type: 'command',
         route: '/reader',
-        kbds: const ['G', 'B'],
       ),
     ];
   }
@@ -344,6 +376,14 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent) {
             return KeyEventResult.ignored;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.tab) {
+            // 页签切换在空结果时也要可用：换页签正是恢复手段。
+            _cycleTab(HardwareKeyboard.instance.isShiftPressed ? -1 : 1);
+            return KeyEventResult.handled;
+          }
+          if (_selectTabByDigit(event.logicalKey)) {
+            return KeyEventResult.handled;
           }
           if (filtered.isEmpty) {
             return KeyEventResult.ignored;
@@ -658,13 +698,6 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                     color: p.inkMuted,
                   ),
                 ),
-              ],
-              if (hit.kbds.isNotEmpty) ...[
-                const SizedBox(width: 10),
-                for (final k in hit.kbds) ...[
-                  _Kbd(label: k, p: p),
-                  const SizedBox(width: 4),
-                ],
               ],
             ],
           ),

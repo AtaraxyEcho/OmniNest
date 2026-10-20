@@ -91,4 +91,28 @@ public interface NotificationRepository extends JpaRepository<NotificationMessag
     @Modifying
     @Query("DELETE FROM NotificationMessage n WHERE n.recipientUserId = :userId")
     int deleteAllForRecipient(@Param("userId") UUID userId);
+
+    /**
+     * 查询已读且创建时间早于截止时刻的通知标识，按创建时间升序取一批。
+     *
+     * @param cutoff 截止时刻
+     * @param pageable 批次边界
+     * @return 待清理通知标识
+     */
+    @Query("""
+            select n.id from NotificationMessage n
+            where n.readAt is not null and n.createdAt < :cutoff
+            order by n.createdAt asc
+            """)
+    List<UUID> findIdsReadBefore(@Param("cutoff") Instant cutoff, Pageable pageable);
+
+    /**
+     * 批量删除指定标识的通知。
+     *
+     * @param ids 通知标识集合
+     * @return 删除数量
+     */
+    @Modifying
+    @Query("DELETE FROM NotificationMessage n WHERE n.id IN :ids")
+    int deleteByIds(@Param("ids") Collection<UUID> ids);
 }

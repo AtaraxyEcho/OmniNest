@@ -5,8 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
-import 'package:omninest/features/reader/application/reader_controller.dart';
-import 'package:omninest/features/reader/domain/reader_dashboard.dart';
+import 'package:omninest/features/reader/application/reader_bookshelf_controller.dart';
 import 'package:omninest/features/reader/domain/reader_item.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_bookshelf_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
@@ -14,13 +13,18 @@ import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.d
 
 const int _shelfCount = 200;
 
-class _FakeReaderCenterController extends ReaderCenterController {
+class _FakeBookshelfController extends ReaderBookshelfController {
+  _FakeBookshelfController({this.loadedCount = _shelfCount, int? totalElements})
+    : totalElements = totalElements ?? loadedCount;
+
+  final int loadedCount;
+  final int totalElements;
+
   @override
-  Future<ReaderCenterState> build() async {
-    return ReaderCenterState(
-      dashboard: ReaderDashboard.empty(),
+  Future<ReaderBookshelfState> build() async {
+    return ReaderBookshelfState(
       items: [
-        for (var i = 0; i < _shelfCount; i++)
+        for (var i = 0; i < loadedCount; i++)
           ReaderItem(
             id: 'item-$i',
             title: 'Book $i',
@@ -29,7 +33,9 @@ class _FakeReaderCenterController extends ReaderCenterController {
             updatedAt: null,
           ),
       ],
-      searchQuery: '',
+      page: 0,
+      totalElements: totalElements,
+      hasMore: false,
     );
   }
 }
@@ -45,8 +51,8 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
-          readerCenterControllerProvider.overrideWith(
-            _FakeReaderCenterController.new,
+          readerBookshelfControllerProvider.overrideWith(
+            _FakeBookshelfController.new,
           ),
         ],
         child: MaterialApp(
@@ -81,8 +87,8 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
-          readerCenterControllerProvider.overrideWith(
-            () => _EmptyReaderCenterController(),
+          readerBookshelfControllerProvider.overrideWith(
+            () => _FakeBookshelfController(loadedCount: 0),
           ),
         ],
         child: MaterialApp(
@@ -110,8 +116,8 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
-          readerCenterControllerProvider.overrideWith(
-            () => _EmptyReaderCenterController(),
+          readerBookshelfControllerProvider.overrideWith(
+            () => _FakeBookshelfController(loadedCount: 0),
           ),
         ],
         child: MaterialApp(
@@ -160,15 +166,38 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
-}
 
-class _EmptyReaderCenterController extends ReaderCenterController {
-  @override
-  Future<ReaderCenterState> build() async {
-    return ReaderCenterState(
-      dashboard: ReaderDashboard.empty(),
-      items: const [],
-      searchQuery: '',
+  testWidgets('书架计数取服务端总数，不随已加载窗口变化', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1024, 768);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+          readerBookshelfControllerProvider.overrideWith(
+            () => _FakeBookshelfController(loadedCount: 3, totalElements: 200),
+          ),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          theme: OmniNestTheme.dark(),
+          home: const ReaderBookshelfPage(),
+        ),
+      ),
     );
-  }
+    await tester.pumpAndSettle();
+
+    // 首页只落 3 条时，头部仍须显示书架真实数量。
+    expect(find.text('200'), findsOneWidget);
+    expect(
+      tester.widgetList<ReaderShelfRow>(find.byType(ReaderShelfRow)).length,
+      equals(3),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

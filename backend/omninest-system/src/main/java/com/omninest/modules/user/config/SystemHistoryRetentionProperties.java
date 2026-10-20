@@ -34,6 +34,11 @@ public class SystemHistoryRetentionProperties {
 
     private int configMinimumVersions = 20;
 
+    /**
+     * 已读站内通知保留时长。未读通知不参与清理。
+     */
+    private Duration notificationMaximumAge = Duration.ofDays(90);
+
     private int batchSize = 500;
 
     private int maximumBatches = 20;

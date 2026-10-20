@@ -5,7 +5,10 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SharedSpaceUsage;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
+import com.omninest.modules.file.repository.FileMetricsRepository;
+import com.omninest.modules.file.repository.SharedSpaceUsageProjection;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
+import com.omninest.modules.quota.port.SharedSpaceUsageReconcile;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,16 +16,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 共享空间配额服务，管理共享空间的容量限制和用量统计。
+ * 共享空间配额服务，管理共享空间的容量限制、用量统计和账本对账。
  *
  * @author OmniNest
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class SharedSpaceQuotaService {
+public class SharedSpaceQuotaService implements SharedSpaceUsageReconcile {
 
     private final SharedSpaceUsageRepository usageRepository;
+    private final FileMetricsRepository fileMetricsRepository;
     private final ConfigValueProvider configValueProvider;
 
     private static final String CONFIG_MAX_BYTES = "share.max-bytes";
@@ -100,6 +104,28 @@ public class SharedSpaceQuotaService {
         SharedSpaceUsage usage = getUsage();
         long maxBytes = configuredMaxBytes();
         return new SharedSpaceUsageDto(usage.getUsedBytes(), maxBytes, usage.getFileCount());
+    }
+
+    /**
+     * 按共享空间节点与历史版本的实际字节重算单行账本。
+     *
+     * <p>数值一致时条件更新不动版本行，避免每天无谓地推高乐观锁版本。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void reconcileUsage() {
+        SharedSpaceUsage usage = getUsage();
+        SharedSpaceUsageProjection actual = fileMetricsRepository.aggregateSharedSpaceUsage();
+        int updated = usageRepository.reconcileTo(
+                usage.getId(),
+                actual.getTotalBytes(),
+                actual.getTotalFiles(),
+                Instant.now()
+        );
+        if (updated > 0) {
+            log.info("共享空间用量对账完成: usedBytes={}, fileCount={}",
+                    actual.getTotalBytes(), actual.getTotalFiles());
+        }
     }
 
     /**

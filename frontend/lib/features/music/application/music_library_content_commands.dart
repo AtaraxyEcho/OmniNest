@@ -127,6 +127,8 @@ extension MusicLibraryContentCommands on MusicCenterController {
       } else {
         await _api.favorite(track.id);
       }
+      // 收藏分区读服务端完整列表，切换后必须作废重取，否则岛内停在旧集合。
+      invalidateFavoriteTracks();
       List<MusicTrack> patchFavorite(List<MusicTrack> items) {
         return items
             .map(

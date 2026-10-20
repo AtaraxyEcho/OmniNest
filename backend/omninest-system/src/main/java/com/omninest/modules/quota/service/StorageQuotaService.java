@@ -8,6 +8,7 @@ import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.user.UserAccountSummary;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.quota.QuotaStatus;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
 import com.omninest.modules.notification.port.NotificationPublisher;
@@ -40,6 +41,7 @@ public class StorageQuotaService {
     private final AdminAuditRecorder auditRecorder;
     private final NotificationPublisher notificationService;
     private final StorageQuotaReservationService reservationService;
+    private final AdminActorVerifier adminActorVerifier;
 
     /**
      * 为持久业务来源预留存储配额。
@@ -183,12 +185,16 @@ public class StorageQuotaService {
     /**
      * 修改指定用户的存储配额。
      *
+     * <p>操作者以库内当前角色绑定复核，不采信访问令牌里的 roles 声明：降权后旧令牌在有效期内
+     * 仍能通过接口上的 {@code @PreAuthorize}，配额这类管理端写操作必须当场拒绝。</p>
+     *
      * @param userId       目标用户 ID
      * @param newQuotaBytes 新配额字节数
-     * @param operatorId   操作者用户 ID
+     * @param operatorId 操作者用户 ID
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateQuota(UUID userId, long newQuotaBytes, UUID operatorId) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
         UserAccountSummary user = userAccountQuery.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
         if (user.superAdmin()) {
@@ -230,6 +236,8 @@ public class StorageQuotaService {
      * 批量修改多个用户的存储配额。
      * 跳过超级管理员和新配额不足的用户，返回实际修改数。
      *
+     * <p>与 {@link #updateQuota} 同样先复核操作者当前的管理员身份。</p>
+     *
      * @param userIds      目标用户 ID 列表
      * @param newQuotaBytes 新配额字节数
      * @param operatorId   操作者用户 ID
@@ -237,6 +245,7 @@ public class StorageQuotaService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int batchUpdateQuota(List<UUID> userIds, long newQuotaBytes, UUID operatorId) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
         int updated = 0;
         for (UUID userId : userIds) {
             UserAccountSummary user = userAccountQuery.findById(userId).orElse(null);

@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.audit.AdminAuditRecorder;
@@ -19,6 +21,7 @@ import com.omninest.common.user.UserAccountSummary;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.quota.QuotaStatus;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
 import java.util.ArrayList;
@@ -57,6 +60,8 @@ class StorageQuotaServiceTest {
     private NotificationService notificationService;
     @Mock
     private StorageQuotaReservationService reservationService;
+    @Mock
+    private AdminActorVerifier adminActorVerifier;
 
     private StorageQuotaService service;
 
@@ -72,7 +77,8 @@ class StorageQuotaServiceTest {
                 storageQuotaPolicy,
                 auditRecorder,
                 notificationService,
-                reservationService
+                reservationService,
+                adminActorVerifier
         );
     }
 
@@ -268,6 +274,62 @@ class StorageQuotaServiceTest {
         assertThatThrownBy(() -> service.updateQuota(SUPER_ADMIN_ID, 5000, UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    // ─── 管理端写操作的撤权复核 ───
+
+    @Test
+    @DisplayName("updateQuota: 写库前先以库内当前身份复核操作者")
+    void updateQuotaVerifiesActorBeforeWriting() {
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(userWith(1000, 500)));
+        UUID operatorId = UUID.randomUUID();
+
+        service.updateQuota(USER_ID, 2000, operatorId);
+
+        verify(adminActorVerifier).requireFreshAdminActor(operatorId);
+        verify(userStorageCommand).updateQuota(USER_ID, 2000);
+    }
+
+    @Test
+    @DisplayName("updateQuota: 操作者已失去管理权限时不写库也不审计")
+    void updateQuotaRejectsRevokedActor() {
+        UUID operatorId = UUID.randomUUID();
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "操作者已失去管理权限"))
+                .when(adminActorVerifier).requireFreshAdminActor(operatorId);
+
+        assertThatThrownBy(() -> service.updateQuota(USER_ID, 2000, operatorId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+
+        verify(userStorageCommand, never()).updateQuota(any(), anyLong());
+        verifyNoInteractions(auditRecorder);
+    }
+
+    @Test
+    @DisplayName("batchUpdateQuota: 操作者已失去管理权限时整批拒绝")
+    void batchUpdateQuotaRejectsRevokedActor() {
+        UUID operatorId = UUID.randomUUID();
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "操作者已失去管理权限"))
+                .when(adminActorVerifier).requireFreshAdminActor(operatorId);
+
+        assertThatThrownBy(() -> service.batchUpdateQuota(List.of(USER_ID), 5000, operatorId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+
+        verify(userStorageCommand, never()).updateQuota(any(), anyLong());
+        verifyNoInteractions(userAccountQuery, auditRecorder);
+    }
+
+    @Test
+    @DisplayName("读取配额不要求操作者管理员身份")
+    void readPathsDoNotVerifyAdminActor() {
+        UserAccountSummary user = userWith(1000, 500);
+        when(userAccountQuery.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        service.checkQuota(USER_ID, 100);
+        service.getQuotaStatus(USER_ID);
+
+        verifyNoInteractions(adminActorVerifier);
     }
 
     // ─── getDefaultQuotaBytes ───

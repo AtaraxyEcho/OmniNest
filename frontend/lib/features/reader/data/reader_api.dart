@@ -82,10 +82,12 @@ class ReaderApi {
   ///
   /// [contentKind] 为 `TEXT`/`COMIC`：书库分段必须在服务端过滤，否则分段只能命中
   /// 已加载的那一页，第 51 本之后的漫画永远看不到。
+  /// [bookshelfOnly] 为 true 时服务端先按书架过滤再切片，总数即已加架条目数。
   Future<ReaderItemPage> itemsPage({
     String? itemType,
     String? contentKind,
     String? query,
+    bool bookshelfOnly = false,
     int page = 0,
     int size = 50,
   }) async {
@@ -95,6 +97,7 @@ class ReaderApi {
         if (itemType != null) 'itemType': itemType,
         if (contentKind != null) 'contentKind': contentKind,
         if (query != null) 'query': query,
+        if (bookshelfOnly) 'bookshelfOnly': true,
         'page': page,
         'size': size,
       },

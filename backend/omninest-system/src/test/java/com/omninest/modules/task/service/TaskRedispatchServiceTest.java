@@ -177,9 +177,25 @@ class TaskRedispatchServiceTest {
                         + "\"datasetVersion\":\"v1\",\"dumpDate\":\"2026-01-01\"}");
 
         assertThat(payload)
+                .containsEntry("taskId", TASK_ID.toString())
                 .containsEntry("datasetId", "60000000-0000-0000-0000-000000000001")
                 .containsEntry("datasetVersion", "v1")
                 .containsEntry("dumpDate", "2026-01-01");
+    }
+
+    /** 库级分析没有 photoId，mode 丢失会让任务退化成单张分析并在消费端立即失败。 */
+    @Test
+    void rebuildsPhotoAiLibraryModeWithoutInventingPhotoId() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "AI_ANALYSIS", QueueNames.PHOTO_AI_ROUTING_KEY,
+                "{\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\","
+                        + "\"mode\":\"LIBRARY_REANALYSIS\",\"totalItems\":120}");
+
+        assertThat(payload)
+                .containsEntry("taskId", TASK_ID.toString())
+                .containsEntry("ownerUserId", "10000000-0000-0000-0000-000000000001")
+                .containsEntry("mode", "LIBRARY_REANALYSIS")
+                .containsEntry("photoId", null);
     }
 
     @Test

@@ -202,8 +202,11 @@ omninest:
   history-retention:
     enabled: true
     task-maximum-age: 30d
+    dispatch-maximum-age: 30d
+    purge-entry-maximum-age: 30d
     audit-maximum-age: 365d
     config-maximum-age: 365d
+    notification-maximum-age: 90d
     config-minimum-versions: 20
     batch-size: 500
     maximum-batches: 20

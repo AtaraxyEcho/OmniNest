@@ -126,10 +126,11 @@ public class ReaderItemService {
      * @return 条目 DTO 列表
      */
     public Page<ReaderItemDto> listItemsPage(
-            UUID ownerUserId, String itemType, String contentKind, String query, int page, int size) {
-        // 过滤链复用 listItems（类型/关键词为内存过滤）：分页解决网络传输与
+            UUID ownerUserId, String itemType, String contentKind, String query,
+            boolean bookshelfOnly, int page, int size) {
+        // 过滤链复用 listItems（类型/关键词/书架为内存过滤）：分页解决网络传输与
         // 前端驻留，全量查询下沉 Specification 留作后续演进。
-        List<ReaderItemDto> all = listItems(ownerUserId, itemType, contentKind, query);
+        List<ReaderItemDto> all = listItems(ownerUserId, itemType, contentKind, query, bookshelfOnly);
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(size, 1);
         int from = (int) Math.min((long) safePage * safeSize, all.size());
@@ -138,6 +139,21 @@ public class ReaderItemService {
     }
 
     public List<ReaderItemDto> listItems(UUID ownerUserId, String itemType, String contentKind, String query) {
+        return listItems(ownerUserId, itemType, contentKind, query, false);
+    }
+
+    /**
+     * 列出阅读条目，支持按类型、内容类型、关键词过滤，并可只保留已加入书架的条目。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param itemType 条目类型过滤（EPUB / TXT / CBZ），可为 null
+     * @param contentKind 内容类型过滤（TEXT / COMIC），可为 null
+     * @param query 标题或作者关键词，可为 null
+     * @param bookshelfOnly 为 true 时只返回已加入书架的条目
+     * @return 条目 DTO 列表
+     */
+    public List<ReaderItemDto> listItems(
+            UUID ownerUserId, String itemType, String contentKind, String query, boolean bookshelfOnly) {
         // 查询用户可见的所有条目（个人空间 + 共享空间）
         List<ReaderItem> items = itemRepository.findItemsVisibleToUser(ownerUserId, SpaceType.SHARED);
 
@@ -168,6 +184,14 @@ public class ReaderItemService {
         // 批量查询书架状态（1 次查询替代 N 次）
         List<UUID> itemIds = items.stream().map(ReaderItem::getId).toList();
         Set<UUID> bookshelfItemIds = bookshelfItemIds(ownerUserId, itemIds);
+        // 书架过滤必须发生在分页之前：留在分页之后会让一页里可能一个书架条目都没有，
+        // 前端只能不断续拉凑列表，总数也会算进未加架条目。
+        if (bookshelfOnly) {
+            items = items.stream()
+                    .filter(item -> bookshelfItemIds.contains(item.getId()))
+                    .toList();
+            itemIds = items.stream().map(ReaderItem::getId).toList();
+        }
 
         // 批量查询文件节点空间类型（1 次查询替代 N 次）
         List<UUID> fileNodeIds = items.stream()

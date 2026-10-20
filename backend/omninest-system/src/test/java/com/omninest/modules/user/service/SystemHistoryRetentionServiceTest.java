@@ -1,6 +1,7 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.modules.configcenter.service.ConfigHistoryRetentionService;
+import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.user.config.SystemHistoryRetentionProperties;
@@ -27,6 +28,7 @@ class SystemHistoryRetentionServiceTest {
     private final ConfigHistoryRetentionService configHistoryRetentionService =
             Mockito.mock(ConfigHistoryRetentionService.class);
     private final PurgeHistoryRetention purgeHistoryRetention = Mockito.mock(PurgeHistoryRetention.class);
+    private final NotificationMaintenance notificationMaintenance = Mockito.mock(NotificationMaintenance.class);
     private final SystemHistoryRetentionProperties properties = new SystemHistoryRetentionProperties();
     private final SystemHistoryRetentionService service = new SystemHistoryRetentionService(
             taskRecordService,
@@ -34,6 +36,7 @@ class SystemHistoryRetentionServiceTest {
             auditLogRepository,
             configHistoryRetentionService,
             purgeHistoryRetention,
+            notificationMaintenance,
             properties
     );
 
@@ -45,6 +48,7 @@ class SystemHistoryRetentionServiceTest {
         properties.setConfigMaximumAge(Duration.ofDays(365));
         properties.setDispatchMaximumAge(Duration.ofDays(30));
         properties.setPurgeEntryMaximumAge(Duration.ofDays(30));
+        properties.setNotificationMaximumAge(Duration.ofDays(90));
         properties.setConfigMinimumVersions(20);
         properties.setBatchSize(2);
         properties.setMaximumBatches(3);
@@ -104,14 +108,29 @@ class SystemHistoryRetentionServiceTest {
                 .deleteCompletedEntriesBefore(ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2));
     }
 
+    /**
+     * 已读站内通知按保留期分批回收：通知行带 jsonb 元数据且写入频繁。
+     */
+    @Test
+    void cleanupDeletesReadNotificationBatches() {
+        Mockito.when(notificationMaintenance.deleteReadNotificationsBefore(
+                ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2))).thenReturn(2, 1);
+
+        service.cleanup();
+
+        Mockito.verify(notificationMaintenance, Mockito.times(2))
+                .deleteReadNotificationsBefore(ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2));
+    }
+
     @Test
     void cleanupSkipsRetentionsWithInvalidAge() {
         properties.setDispatchMaximumAge(Duration.ofDays(-1));
         properties.setPurgeEntryMaximumAge(Duration.ZERO);
+        properties.setNotificationMaximumAge(null);
 
         service.cleanup();
 
-        Mockito.verifyNoInteractions(taskDispatchService, purgeHistoryRetention);
+        Mockito.verifyNoInteractions(taskDispatchService, purgeHistoryRetention, notificationMaintenance);
     }
 
     @Test
@@ -152,6 +171,6 @@ class SystemHistoryRetentionServiceTest {
         service.cleanup();
 
         Mockito.verifyNoInteractions(taskRecordService, taskDispatchService, auditLogRepository,
-                configHistoryRetentionService, purgeHistoryRetention);
+                configHistoryRetentionService, purgeHistoryRetention, notificationMaintenance);
     }
 }

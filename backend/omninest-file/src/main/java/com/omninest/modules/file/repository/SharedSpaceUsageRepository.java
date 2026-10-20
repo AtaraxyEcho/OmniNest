@@ -70,4 +70,30 @@ public interface SharedSpaceUsageRepository extends JpaRepository<SharedSpaceUsa
             @Param("deltaFiles") long deltaFiles,
             @Param("now") Instant now
     );
+
+    /**
+     * 将对账得到的实际用量写回单行账本，值未变化时不动版本。
+     *
+     * @param id 用量记录 ID
+     * @param usedBytes 对账后的占用字节数
+     * @param fileCount 对账后的文件数
+     * @param now 更新时间
+     * @return 更新行数，0 表示账本已与实际一致
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update SharedSpaceUsage usage
+            set usage.usedBytes = :usedBytes,
+                usage.fileCount = :fileCount,
+                usage.updatedAt = :now,
+                usage.version = usage.version + 1
+            where usage.id = :id
+              and (usage.usedBytes <> :usedBytes or usage.fileCount <> :fileCount)
+            """)
+    int reconcileTo(
+            @Param("id") UUID id,
+            @Param("usedBytes") long usedBytes,
+            @Param("fileCount") long fileCount,
+            @Param("now") Instant now
+    );
 }

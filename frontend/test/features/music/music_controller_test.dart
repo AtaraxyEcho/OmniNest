@@ -95,6 +95,33 @@ void main() {
     expect(state.isPlaying, isTrue);
   });
 
+  test(
+    'favorite section reads server list and refetches after toggling',
+    () async {
+      final api = _FakeMusicApi();
+      final container = ProviderContainer.test(
+        overrides: [
+          musicApiProvider.overrideWithValue(api),
+          userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(musicCenterControllerProvider.future);
+
+      expect(await container.read(musicFavoriteTracksProvider.future), isEmpty);
+
+      await container
+          .read(musicCenterControllerProvider.notifier)
+          .toggleFavorite(api.track);
+
+      // 收藏分区取的是服务端 /music/favorites，切换后必须作废重取才看得到新收藏。
+      final refetched = await container.read(
+        musicFavoriteTracksProvider.future,
+      );
+      expect(refetched.map((item) => item.id), ['track-1']);
+    },
+  );
+
   test('online temporary track does not request local playback plan', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
@@ -1371,10 +1398,21 @@ class _FakeMusicApi implements MusicApi {
   }
 
   @override
-  Future<void> favorite(String trackId) => throw UnimplementedError();
+  Future<void> favorite(String trackId) async => _markFavorite(trackId, true);
 
   @override
-  Future<List<MusicTrack>> favorites() => throw UnimplementedError();
+  Future<List<MusicTrack>> favorites() async => List<MusicTrack>.of(
+    libraryTracks.where((track) => track.favorite),
+    growable: false,
+  );
+
+  void _markFavorite(String trackId, bool favorite) {
+    final index = libraryTracks.indexWhere((track) => track.id == trackId);
+    if (index < 0) {
+      throw StateError('测试曲库里不存在该曲目: $trackId');
+    }
+    libraryTracks[index] = libraryTracks[index].copyWith(favorite: favorite);
+  }
 
   @override
   Future<List<MusicTrack>> recent() => throw UnimplementedError();
@@ -1434,7 +1472,8 @@ class _FakeMusicApi implements MusicApi {
   }
 
   @override
-  Future<void> removeFavorite(String trackId) => throw UnimplementedError();
+  Future<void> removeFavorite(String trackId) async =>
+      _markFavorite(trackId, false);
 
   @override
   Future<MusicScanJob> scanJobStatus(String jobId) =>

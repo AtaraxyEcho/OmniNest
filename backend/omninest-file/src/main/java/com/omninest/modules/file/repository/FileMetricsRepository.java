@@ -167,4 +167,48 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
     List<FileUserUsageProjection> sumFileSizeForUsers(
             @Param("ownerUserIds") Collection<UUID> ownerUserIds
     );
+
+    /**
+     * 汇总共享空间账本应有的字节数与文件数，口径与个人侧重算一致。
+     *
+     * <p>未删除的共享文件节点按自身字节计一个文件，历史版本按新版本对象字节加计，
+     * 与节点当前对象同引用的版本行不重复计；派生资产与只读本地影视库索引节点从不加计，
+     * 背景图原片与照片编辑版本两类不可重建派生写入例外。</p>
+     *
+     * <p>与 {@code sumFileSizeForUsers} 的唯一差别是回收站：共享账本在软删除时即扣减，
+     * 因此重算只看未删除节点，而个人配额在彻底删除前仍然占用。</p>
+     *
+     * @return 共享空间实际字节数与文件数投影
+     */
+    @Query(value = """
+            with quota_nodes as (
+                select n.id, n.size_bytes, n.current_object_id
+                from omni.file_nodes n
+                where n.node_type = 'FILE'
+                  and n.space_type = 'SHARED'
+                  and n.deleted = false
+                  and (n.source_type is null
+                       or n.source_type not in ('DERIVED', 'LOCAL_FILESYSTEM')
+                       or (n.source_type = 'DERIVED' and (
+                              n.normalized_path like '/.metadata/BACKDROP/%/ORIGINAL/%'
+                           or n.normalized_path like '/.metadata/PHOTO_ITEM/%/EDIT_VERSION/%')))
+            ),
+            version_usage as (
+                select distinct v.file_node_id, v.object_id
+                from omni.file_versions v
+                join quota_nodes q on q.id = v.file_node_id
+                where q.current_object_id is null or q.current_object_id <> v.object_id
+            ),
+            usage_bytes as (
+                select q.size_bytes as bytes from quota_nodes q
+                union all
+                select coalesce(f.size_bytes, 0)
+                from version_usage vu
+                left join omni.file_objects f on f.id = vu.object_id
+            )
+            select coalesce(sum(bytes), 0) as "totalBytes",
+                   (select count(*) from quota_nodes) as "totalFiles"
+            from usage_bytes
+            """, nativeQuery = true)
+    SharedSpaceUsageProjection aggregateSharedSpaceUsage();
 }

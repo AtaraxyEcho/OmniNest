@@ -627,15 +627,13 @@ void _showPlaylistMessage(BuildContext context, String message) {
 }
 
 List<MusicPlayableItem> _favoriteItems(
-  MusicCenterState center,
   MusicPlatformLibraryState platform,
   Set<MusicPlatform> sources,
+  List<MusicTrack> favoriteTracks,
 ) {
   return <MusicPlayableItem>[
     if (sources.contains(MusicPlatform.local))
-      ...center.tracks
-          .where((track) => track.favorite)
-          .map(MusicPlayableItem.local),
+      ...favoriteTracks.map(MusicPlayableItem.local),
     for (final source in sources)
       if (source != MusicPlatform.local)
         ...(platform.likedTracksByPlatform[source.apiValue]?.items ??

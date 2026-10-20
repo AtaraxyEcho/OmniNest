@@ -8,13 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle;
-import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/application/reader_bookshelf_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_page_fill.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.dart';
@@ -26,22 +25,16 @@ class ReaderBookshelfPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rc = context.readerColors;
-    final stateAsync = ref.watch(readerCenterControllerProvider);
-    final state = stateAsync.asData?.value;
-    final shelved = state?.bookshelfItems ?? const <ReaderItem>[];
-    scheduleReaderPageFill(
-      ref,
-      visibleCount: shelved.length,
-      hasMore: state?.itemsHasMore ?? false,
-      isLoadingMore: state?.itemsLoadingMore ?? false,
-    );
+    final stateAsync = ref.watch(readerBookshelfControllerProvider);
+    final shelf = stateAsync.asData?.value;
+    final shelved = shelf?.items ?? const <ReaderItem>[];
     return ReaderPageScaffold(
       target: ReaderPageTarget.bookshelf,
       // 书架自带滚动体：外层若是页级 SingleChildScrollView，列表的
       // builder 惰性会失效（需按内容固有高度全量布局）。
       childOwnScroll: true,
       onRefresh:
-          () => ref.read(readerCenterControllerProvider.notifier).refresh(),
+          () => ref.read(readerBookshelfControllerProvider.notifier).refresh(),
       header: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -62,7 +55,7 @@ class ReaderBookshelfPage extends ConsumerWidget {
               ),
               const Spacer(),
               Text(
-                '${shelved.length}',
+                '${shelf?.totalElements ?? 0}',
                 style: TextStyle(
                   color: rc.onSurfaceVariant,
                   fontSize: AppTypography.bodySmall,
@@ -76,19 +69,36 @@ class ReaderBookshelfPage extends ConsumerWidget {
       ),
       child: ReaderParseFeedback(
         child: InfiniteScrollTrigger(
-          enabled:
-              (stateAsync.asData?.value.itemsHasMore ?? false) &&
-              !(stateAsync.asData?.value.itemsLoadingMore ?? false),
+          enabled: (shelf?.hasMore ?? false) && !(shelf?.loadingMore ?? false),
           onLoadMore:
               () =>
                   ref
-                      .read(readerCenterControllerProvider.notifier)
-                      .loadMoreItems(),
+                      .read(readerBookshelfControllerProvider.notifier)
+                      .loadMore(),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
+              if (shelf?.errorMessage != null)
+                SliverToBoxAdapter(
+                  child: MaterialBanner(
+                    content: Text(shelf!.errorMessage!),
+                    actions: [
+                      TextButton(
+                        onPressed:
+                            () =>
+                                ref
+                                    .read(
+                                      readerBookshelfControllerProvider
+                                          .notifier,
+                                    )
+                                    .clearError(),
+                        child: Text(AppLocalizations.of(context).readerClose),
+                      ),
+                    ],
+                  ),
+                ),
               if (shelved.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,

@@ -141,6 +141,16 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     }
   }
 
+  /// 作废收藏列表：收藏分区读服务端完整列表，切换收藏后必须重取。
+  ///
+  /// 供同库扩展调用——扩展体内取受保护的 `ref` 会被分析器拒绝。
+  void invalidateFavoriteTracks() {
+    if (_controllerDisposed || !ref.mounted) {
+      return;
+    }
+    ref.invalidate(musicFavoriteTracksProvider);
+  }
+
   Future<void> _refreshTaskState() async {
     if (_controllerDisposed || !ref.mounted) {
       return;

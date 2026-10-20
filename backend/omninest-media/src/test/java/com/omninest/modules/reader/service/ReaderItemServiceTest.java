@@ -612,9 +612,9 @@ class ReaderItemServiceTest {
         when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
                 .thenReturn(List.of());
 
-        var first = itemService.listItemsPage(OWNER_ID, null, null, null, 0, 2);
-        var second = itemService.listItemsPage(OWNER_ID, null, null, null, 1, 2);
-        var overflow = itemService.listItemsPage(OWNER_ID, null, null, null, 9, 2);
+        var first = itemService.listItemsPage(OWNER_ID, null, null, null, false, 0, 2);
+        var second = itemService.listItemsPage(OWNER_ID, null, null, null, false, 1, 2);
+        var overflow = itemService.listItemsPage(OWNER_ID, null, null, null, false, 9, 2);
 
         assertThat(first.getContent()).extracting(ReaderItemDto::title)
                 .containsExactly("Book A", "Book B");
@@ -624,6 +624,34 @@ class ReaderItemServiceTest {
         assertThat(second.getTotalElements()).isEqualTo(3);
         assertThat(overflow.getContent()).isEmpty();
         assertThat(overflow.getTotalElements()).isEqualTo(3);
+    }
+
+    /**
+     * 书架分页必须先按书架过滤再切片：否则一页里可能一个书架条目都没有，
+     * 前端只能盲目续拉，总数也会算进未加架条目。
+     */
+    @Test
+    void listItemsPageWithBookshelfOnlySlicesShelfItemsAndCountsShelfTotal() {
+        ReaderItem a = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Book A", "TXT");
+        ReaderItem b = newItem(SHARED_ITEM_ID, OWNER_ID, SHARED_FILE_NODE_ID, "Book B", "TXT");
+        ReaderItem c = newItem(
+                UUID.fromString("30000000-0000-0000-0000-000000000003"),
+                OWNER_ID,
+                UUID.fromString("40000000-0000-0000-0000-000000000003"),
+                "Book C",
+                "TXT");
+        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
+                .thenReturn(List.of(a, b, c));
+        ReaderBookshelf shelfEntry = new ReaderBookshelf();
+        shelfEntry.setReaderItemId(c.getId());
+        when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
+                .thenReturn(List.of(shelfEntry));
+
+        var only = itemService.listItemsPage(OWNER_ID, null, null, null, true, 0, 2);
+
+        assertThat(only.getContent()).extracting(ReaderItemDto::title).containsExactly("Book C");
+        assertThat(only.getContent()).allSatisfy(dto -> assertThat(dto.addedToBookshelf()).isTrue());
+        assertThat(only.getTotalElements()).isEqualTo(1);
     }
 
     @Test

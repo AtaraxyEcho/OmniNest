@@ -51,6 +51,16 @@ final photoAlbumsProvider = FutureProvider<List<PhotoAlbum>>((ref) {
   return ref.watch(photoRepositoryProvider).listAlbums();
 });
 
+/// Frame 地点视图的分组来源：服务端按城市聚合地点与张数。
+///
+/// 不能由已加载照片在前端分组：窗口之外的地点根本不出现，张数也只反映已加载部分。
+final photoLocationGroupsProvider = FutureProvider<List<PhotoGroup>>((ref) {
+  return ref
+      .watch(photoRepositoryProvider)
+      .getGroups(GroupBy.location.value, size: 200)
+      .then((page) => page.items);
+});
+
 final photoDetailProvider = FutureProvider.autoDispose
     .family<PhotoItem, String>((ref, photoId) async {
       final photo = await ref.watch(photoRepositoryProvider).getPhoto(photoId);
@@ -379,6 +389,10 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     }
     if (view == FrameView.trash) {
       unawaited(loadTrashPage());
+    }
+    if (view == FrameView.locations) {
+      // 每次进入地点视图重取服务端分组：删除或移动照片后卡片计数不能停在旧快照。
+      ref.invalidate(photoLocationGroupsProvider);
     }
     _maybeReissueSupersededRefresh();
   }

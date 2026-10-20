@@ -113,18 +113,19 @@ public class ReaderLibraryController {
         return ApiResponse.success(readerItemService.listItems(currentUserContext.requireCurrentUserId(), itemType, contentKind, query));
     }
 
-    @Operation(summary = "分页获取阅读条目列表", description = "按类型与关键词过滤后分页返回阅读条目，供书架/书库滚动加载")
+    @Operation(summary = "分页获取阅读条目列表", description = "按类型、内容类型、关键词与书架状态过滤后分页返回阅读条目，供书架/书库滚动加载")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/reader/items/page")
     ApiResponse<PageResponse<ReaderItemDto>> listItemsPage(
             @RequestParam(required = false) String itemType,
             @RequestParam(required = false) String contentKind,
             @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "false") boolean bookshelfOnly,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
         var result = readerItemService.listItemsPage(
-                currentUserContext.requireCurrentUserId(), itemType, contentKind, query, page, size);
+                currentUserContext.requireCurrentUserId(), itemType, contentKind, query, bookshelfOnly, page, size);
         return ApiResponse.success(PageResponse.of(
                 result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }

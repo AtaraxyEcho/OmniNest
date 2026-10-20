@@ -1,6 +1,7 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.modules.configcenter.service.ConfigHistoryRetentionService;
+import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.user.config.SystemHistoryRetentionProperties;
@@ -21,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 在 Scheduler 角色中分批清理终态任务、Outbox 投递记录、文件物理删除条目、
- * 审计日志和配置历史。
+ * 审计日志、配置历史和已读站内通知。
  *
  * @author OmniNest
  */
@@ -37,6 +38,7 @@ public class SystemHistoryRetentionService {
     private final AuditLogRetentionRepository auditLogRepository;
     private final ConfigHistoryRetentionService configHistoryRetentionService;
     private final PurgeHistoryRetention purgeHistoryRetention;
+    private final NotificationMaintenance notificationMaintenance;
     private final SystemHistoryRetentionProperties properties;
 
     /**
@@ -57,10 +59,31 @@ public class SystemHistoryRetentionService {
         int deletedPurgeEntries = cleanupPurgeEntries(now, batchSize, maximumBatches);
         int deletedAuditLogs = cleanupAuditLogs(now, batchSize, maximumBatches);
         int deletedConfigHistories = cleanupConfigHistories(now, batchSize, maximumBatches);
+        int deletedNotifications = cleanupNotifications(now, batchSize, maximumBatches);
         log.info("系统历史保留清理完成: deletedTasks={}, deletedDispatches={}, deletedPurgeEntries={}, "
-                        + "deletedAuditLogs={}, deletedConfigHistories={}",
+                        + "deletedAuditLogs={}, deletedConfigHistories={}, deletedNotifications={}",
                 deletedTasks, deletedDispatches, deletedPurgeEntries,
-                deletedAuditLogs, deletedConfigHistories);
+                deletedAuditLogs, deletedConfigHistories, deletedNotifications);
+    }
+
+    /**
+     * 清理超期的已读站内通知。
+     *
+     * <p>通知表带 jsonb 元数据且按用户高频写入，是站内消息类表里增长最快的一张；
+     * 未读项保留到用户读过为止。</p>
+     */
+    private int cleanupNotifications(Instant now, int batchSize, int maximumBatches) {
+        Duration maximumAge = properties.getNotificationMaximumAge();
+        if (!isPositive(maximumAge)) {
+            log.warn("站内通知保留时间配置无效，跳过通知清理");
+            return 0;
+        }
+        Instant cutoff = now.minus(maximumAge);
+        return deleteBatches(
+                () -> notificationMaintenance.deleteReadNotificationsBefore(cutoff, batchSize),
+                batchSize,
+                maximumBatches
+        );
     }
 
     /**

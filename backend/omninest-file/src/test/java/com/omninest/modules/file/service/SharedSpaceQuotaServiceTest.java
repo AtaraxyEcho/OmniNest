@@ -16,6 +16,8 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SharedSpaceUsage;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
+import com.omninest.modules.file.repository.FileMetricsRepository;
+import com.omninest.modules.file.repository.SharedSpaceUsageProjection;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -34,13 +36,14 @@ import org.mockito.ArgumentCaptor;
 class SharedSpaceQuotaServiceTest {
 
     private final SharedSpaceUsageRepository usageRepository = mock(SharedSpaceUsageRepository.class);
+    private final FileMetricsRepository fileMetricsRepository = mock(FileMetricsRepository.class);
     private final ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
 
     private SharedSpaceQuotaService service;
 
     @BeforeEach
     void setUp() {
-        service = new SharedSpaceQuotaService(usageRepository, configValueProvider);
+        service = new SharedSpaceQuotaService(usageRepository, fileMetricsRepository, configValueProvider);
     }
 
     // ── checkQuota ─────────────────────────────────────────────────────
@@ -229,6 +232,41 @@ class SharedSpaceQuotaServiceTest {
         }
     }
 
+    // ── reconcileUsage ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("reconcileUsage()")
+    class ReconcileUsageTests {
+
+        @Test
+        @DisplayName("按节点与历史版本的实际字节写回账本")
+        void reconcileUsageWritesActualValues() {
+            SharedSpaceUsage usage = usage(9000L, 9);
+            when(usageRepository.findFirstBy()).thenReturn(Optional.of(usage));
+            when(fileMetricsRepository.aggregateSharedSpaceUsage()).thenReturn(projection(4200L, 4L));
+            when(usageRepository.reconcileTo(
+                    eq(usage.getId()), eq(4200L), eq(4L), any(Instant.class))).thenReturn(1);
+
+            service.reconcileUsage();
+
+            verify(usageRepository).reconcileTo(
+                    eq(usage.getId()), eq(4200L), eq(4L), any(Instant.class));
+        }
+
+        @Test
+        @DisplayName("用量记录缺失时先失败，不读取聚合")
+        void reconcileUsageWithoutRecordThrowsBeforeAggregating() {
+            when(usageRepository.findFirstBy()).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.reconcileUsage())
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.INTERNAL_ERROR);
+
+            verifyNoInteractions(fileMetricsRepository);
+        }
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────
 
     private SharedSpaceUsage usage(long usedBytes, long fileCount) {
@@ -238,6 +276,20 @@ class SharedSpaceQuotaServiceTest {
         usage.setFileCount(fileCount);
         usage.setVersion(0);
         return usage;
+    }
+
+    private SharedSpaceUsageProjection projection(long totalBytes, long totalFiles) {
+        return new SharedSpaceUsageProjection() {
+            @Override
+            public long getTotalBytes() {
+                return totalBytes;
+            }
+
+            @Override
+            public long getTotalFiles() {
+                return totalFiles;
+            }
+        };
     }
 
     private void stubConfig(String value) {

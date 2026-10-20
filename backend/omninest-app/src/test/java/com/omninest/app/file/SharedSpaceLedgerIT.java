@@ -311,7 +311,64 @@ class SharedSpaceLedgerIT {
         assertThat(usage).doesNotContainKey(sharedOwner);
     }
 
+    @Test
+    @DisplayName("共享账本对账与写入侧同口径：软删与只计换位版本都不重复计")
+    void sharedLedgerReconciliationMatchesWriteSide() {
+        clearSharedSpaceNodes();
+        UUID owner = UUID.randomUUID();
+
+        // 活动文件：节点 1000 + 一个不同引用的历史版本 700。
+        UUID historyObject = insertObject("/s/a-old.bin", 700L);
+        UUID firstNode = insertSharedNode(owner, "/s/a.bin", "FILE", 1000L,
+                insertObject("/s/a.bin", 1000L), null, false);
+        insertVersion(firstNode, historyObject, 1);
+
+        // 恢复历史版本只换位：与当前对象同引用的版本行不另计字节。
+        UUID restoredObject = insertObject("/s/b.bin", 300L);
+        UUID secondNode = insertSharedNode(owner, "/s/b.bin", "FILE", 300L, restoredObject, null, false);
+        insertVersion(secondNode, restoredObject, 1);
+
+        // 共享账本在软删除时就扣减，回收站节点不进对账基数。
+        insertSharedNode(owner, "/s/trash.bin", "FILE", 400L,
+                insertObject("/s/trash.bin", 400L), null, true);
+        // 目录不计字节也不计文件。
+        insertSharedNode(owner, "/s/folder", "FOLDER", 0L, null, null, false);
+        // 派生缩略图从不加计；背景图原片写入时已全额加计，必须留在基数内。
+        insertSharedNode(owner, "/.metadata/PHOTO_ITEM/" + firstNode + "/THUMBNAIL/thumb.jpg",
+                "FILE", 30_000L, insertObject("/s/thumb.jpg", 30_000L), "DERIVED", false);
+        insertSharedNode(owner, "/.metadata/BACKDROP/" + firstNode + "/ORIGINAL/wall.png",
+                "FILE", 2_500L, insertObject("/s/wall.png", 2_500L), "DERIVED", false);
+        insertSharedNode(owner, "/.metadata/LOCAL_MEDIA/" + firstNode + "/SOURCE.mkv",
+                "FILE", 7_000_000L, insertObject("/s/source.mkv", 7_000_000L), "LOCAL_FILESYSTEM", false);
+
+        var actual = fileMetricsRepository.aggregateSharedSpaceUsage();
+        assertThat(actual.getTotalBytes()).isEqualTo(1000L + 700L + 300L + 2_500L);
+        assertThat(actual.getTotalFiles()).isEqualTo(3L);
+
+        UUID usageId = freshUsage(9_999L, 99L, 0L);
+        sharedSpaceQuotaService.reconcileUsage();
+        assertThat(usedBytes(usageId)).isEqualTo(4_500L);
+        assertThat(fileCount(usageId)).isEqualTo(3L);
+        assertThat(version(usageId)).isEqualTo(1L);
+
+        // 已一致时条件更新不动行，避免每天无谓推高乐观锁版本。
+        sharedSpaceQuotaService.reconcileUsage();
+        assertThat(version(usageId)).isEqualTo(1L);
+    }
+
     // ── 种子与读取 ────────────────────────────────────────────────────────
+
+    /**
+     * 共享账本对账只在空间维度聚合，先清掉其他用例留下的共享节点，计数才只反映本用例的种子。
+     */
+    private void clearSharedSpaceNodes() {
+        jdbcTemplate.update("""
+                delete from omni.file_versions
+                where file_node_id in (
+                    select id from omni.file_nodes where space_type = 'SHARED')
+                """);
+        jdbcTemplate.update("delete from omni.file_nodes where space_type = 'SHARED'");
+    }
 
     private UUID freshUsage(long usedBytes, long fileCount, long version) {
         jdbcTemplate.update("delete from omni.shared_space_usage");
@@ -359,16 +416,29 @@ class SharedSpaceLedgerIT {
             long sizeBytes,
             boolean deleted
     ) {
+        return insertSharedNode(ownerUserId, normalizedPath, nodeType, sizeBytes, null, null, deleted);
+    }
+
+    private UUID insertSharedNode(
+            UUID ownerUserId,
+            String normalizedPath,
+            String nodeType,
+            long sizeBytes,
+            UUID currentObjectId,
+            String sourceType,
+            boolean deleted
+    ) {
         UUID nodeId = UUID.randomUUID();
         Instant now = Instant.now();
         jdbcTemplate.update("""
                 INSERT INTO omni.file_nodes
                     (id, owner_user_id, node_type, name, normalized_path, size_bytes,
-                     is_deleted, space_type, created_at, updated_at, version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'SHARED', ?, ?, 0)
+                     current_object_id, is_deleted, space_type, source_type, created_at, updated_at, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SHARED', ?, ?, ?, 0)
                 """, nodeId, ownerUserId, nodeType,
                 normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1),
-                normalizedPath, sizeBytes, deleted, Timestamp.from(now), Timestamp.from(now));
+                normalizedPath, sizeBytes, currentObjectId, deleted, sourceType,
+                Timestamp.from(now), Timestamp.from(now));
         return nodeId;
     }
 

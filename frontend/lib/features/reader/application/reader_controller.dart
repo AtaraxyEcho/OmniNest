@@ -112,6 +112,22 @@ final readerCenterControllerProvider =
       ReaderCenterController.new,
     );
 
+/// 书架成员变更计数：加入或移出书架时递增，书架分页据此重建。
+///
+/// 书架窗口是独立分页，不能靠书库列表的派生过滤维持；用递增令牌驱动重建，
+/// 避免阅读中心反向依赖书架控制器形成同特性内的循环引用。
+final readerBookshelfRevisionProvider =
+    NotifierProvider<ReaderBookshelfRevision, int>(ReaderBookshelfRevision.new);
+
+class ReaderBookshelfRevision extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() {
+    state = state + 1;
+  }
+}
+
 // ─── Bookshelf Toggle Result ────────────────────────────────────
 
 /// 书架切换操作结果
@@ -158,10 +174,6 @@ class ReaderCenterState {
 
   /// 继续阅读列表（来自仪表盘）
   List<ReaderItem> get continueItems => dashboard.continueReading;
-
-  /// 书架页条目：已加入书架的条目（个人 + 共享）
-  List<ReaderItem> get bookshelfItems =>
-      items.where((i) => i.addedToBookshelf).toList();
 
   /// 书库页条目：服务端已按分段与关键词过滤，这里只做客户端排序。
   List<ReaderItem> get visibleItems {
@@ -526,6 +538,7 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     try {
       await _api.toggleBookshelf(itemId);
       await refresh();
+      ref.read(readerBookshelfRevisionProvider.notifier).bump();
       final item =
           state.asData?.value.items
               .where((item) => item.id == itemId)

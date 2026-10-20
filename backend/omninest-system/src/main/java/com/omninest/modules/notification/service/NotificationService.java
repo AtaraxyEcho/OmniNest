@@ -249,11 +249,28 @@ public class NotificationService implements NotificationPublisher, NotificationR
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
-        public void adminPurgeForUser(UUID userId) {
+    public void adminPurgeForUser(UUID userId) {
         int count = notificationRepository.deleteAllForRecipient(userId);
         if (count > 0) {
             readThroughCache.invalidate("omninest:notification:unread:" + userId);
         }
+    }
+
+    /**
+     * 分批删除超期的已读站内通知，供系统历史保留清理调用。
+     *
+     * @param cutoff 截止时刻
+     * @param limit 单批最大删除条数
+     * @return 实际删除条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public int deleteReadNotificationsBefore(Instant cutoff, int limit) {
+        List<UUID> ids = notificationRepository.findIdsReadBefore(cutoff, PageRequest.of(0, limit));
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        return notificationRepository.deleteByIds(ids);
     }
 
     private NotificationDto toDto(NotificationMessage entity) {

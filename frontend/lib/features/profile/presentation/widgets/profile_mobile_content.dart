@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,10 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/version/app_version_api.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
@@ -79,6 +84,11 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
     for (final section in _profileAnchorSections)
       section: GlobalKey(debugLabel: 'profile-section-$section'),
   };
+
+  bool _checkingUpdate = false;
+
+  /// 最近一次检查结果，作为「检查更新」行的副标题留在列表里。
+  String? _updateResultMessage;
 
   @override
   void initState() {
@@ -249,6 +259,12 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
                 title: l10n.settingsAbout,
                 subtitle: l10n.settingsAboutHint,
                 onTap: () => _showAbout(context),
+              ),
+              MobileSettingsTile(
+                icon: Icons.system_update_outlined,
+                title: l10n.settingsCheckUpdate,
+                subtitle: _updateResultMessage ?? l10n.settingsAboutHint,
+                onTap: _checkingUpdate ? null : () => unawaited(_checkUpdate()),
               ),
               MobileSettingsTile(
                 icon: Icons.logout_rounded,
@@ -492,6 +508,64 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
               ),
             ),
           ),
+    );
+  }
+
+  /// 检查更新：与桌面端 about 面板同一套判据，移动端用弹层与反馈条承载。
+  Future<void> _checkUpdate() async {
+    if (_checkingUpdate) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    setState(() => _checkingUpdate = true);
+    AppVersionInfo? info;
+    String? failure;
+    try {
+      info = await ref.read(appVersionApiProvider).version();
+    } on Object catch (error) {
+      failure = describeUserFacingError(error).message;
+    }
+    if (!mounted) {
+      return;
+    }
+    final latestVersion = info?.latestVersion;
+    final downloadUrl = info?.downloadUrl;
+    final message =
+        failure != null
+            ? l10n.settingsCheckUpdateFailed(failure)
+            : latestVersion == null
+            ? l10n.settingsAlreadyLatest
+            : l10n.settingsNewVersionFound(latestVersion);
+    setState(() {
+      _checkingUpdate = false;
+      _updateResultMessage = message;
+    });
+    if (failure == null && latestVersion != null && downloadUrl != null) {
+      final open = await showMobileConfirmSheet(
+        context,
+        title: l10n.settingsCheckUpdate,
+        message: message,
+        confirmLabel: l10n.settingsOpenDownloadPage,
+      );
+      if (open && mounted) {
+        await _openDownloadPage(downloadUrl);
+      }
+      return;
+    }
+    showOmniFeedback(context, message);
+  }
+
+  Future<void> _openDownloadPage(String url) async {
+    // Web 经条件导入新开下载页；弹窗拦截时退回展示地址，与桌面端一致。
+    if (kIsWeb && openDownloadUrl(url)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      '${AppLocalizations.of(context).settingsOpenDownloadPage}: $url',
     );
   }
 

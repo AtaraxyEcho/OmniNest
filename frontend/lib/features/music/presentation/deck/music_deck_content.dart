@@ -114,7 +114,13 @@ class MusicDeckContent extends ConsumerWidget {
       MusicDeckSection.favorites => _TrackSection(
         title: AppLocalizations.of(context).musicDeckFavorites,
         subtitle: AppLocalizations.of(context).musicDeckFavoritesSubtitle,
-        items: _favoriteItems(center, platform, sources),
+        // 收藏取服务端完整列表；按分区订阅，其他分区不为它多打一次请求。
+        items: _favoriteItems(
+          platform,
+          sources,
+          ref.watch(musicFavoriteTracksProvider).asData?.value ??
+              const <MusicTrack>[],
+        ),
         center: center,
       ),
       MusicDeckSection.recent => _TrackSection(
@@ -917,9 +923,8 @@ class _CollectionDetail extends ConsumerWidget {
         if (selection case ArtistMusicDeckCollection(:final artist))
           _ArtistAlbumsShelf(
             artistId: artist.id,
-            onOpenAlbum: (album) => onOpenCollection(
-              AlbumMusicDeckCollection(album),
-            ),
+            onOpenAlbum:
+                (album) => onOpenCollection(AlbumMusicDeckCollection(album)),
           ),
         Expanded(
           child:

@@ -51,6 +51,7 @@ class _GatedReaderApi implements ReaderApi {
     String? itemType,
     String? contentKind,
     String? query,
+    bool bookshelfOnly = false,
     int page = 0,
     int size = 50,
   }) async {
