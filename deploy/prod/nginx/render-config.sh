@@ -16,8 +16,10 @@ case "$https_enabled" in
         ;;
 esac
 
+# 根部署的 "/" 是默认值（env 模板与 compose 都取它），必须与子路径前缀同等放行；
+# 只认 /*/ 会让默认配置在容器启动阶段直接失败。
 case "$web_base_href" in
-    /*/) : ;;
+    /|/*/) : ;;
     *)
         echo "OMNINEST_WEB_BASE_HREF 必须形如 / 或 /omninest/" >&2
         exit 1
