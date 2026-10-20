@@ -8,6 +8,7 @@ import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AcceptShareRequest;
+import com.omninest.modules.file.dto.AdminFileShareLinkDto;
 import com.omninest.modules.file.dto.ShareAccessSessionDto;
 import com.omninest.modules.file.dto.ShareAuthorizationRequest;
 import com.omninest.modules.file.dto.BatchDownloadRequest;
@@ -47,6 +48,7 @@ import com.omninest.modules.file.dto.SaveFileVersionRequest;
 import com.omninest.modules.file.dto.PermissionRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.dto.SharedFileDto;
+import com.omninest.modules.file.dto.UpdateShareLinkRequest;
 import com.omninest.modules.file.dto.UpdateExternalStorageRequest;
 import com.omninest.modules.file.service.ExternalStorageAccountService;
 import com.omninest.modules.file.service.FileFavoriteService;
@@ -510,6 +512,17 @@ public class FileController {
         return ApiResponse.success(fileShareService.createShare(ownerUserId, body));
     }
 
+    @Operation(summary = "修改分享链接设置", description = "改密码、有效期与访问次数上限；令牌与资源不变，已发出的地址继续可用")
+    @PatchMapping("/api/v1/files/shares/{shareId}")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    ApiResponse<FileShareLinkDto> updateShare(
+            @PathVariable UUID shareId,
+            @Valid @RequestBody UpdateShareLinkRequest body
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(fileShareService.updateShare(ownerUserId, shareId, body));
+    }
+
     @Operation(summary = "撤销分享链接", description = "撤销指定的分享链接")
     @DeleteMapping("/api/v1/files/shares/{shareId}")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
@@ -517,6 +530,21 @@ public class FileController {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         fileShareService.revokeShare(ownerUserId, shareId);
         return ApiResponse.success();
+    }
+
+    @Operation(summary = "全站分享链接列表", description = "管理员分页查看全部未撤销的分享链接，含所有者身份")
+    @GetMapping("/api/v1/admin/files/shares")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_USER_MANAGE + "')")
+    ApiResponse<PageResponse<AdminFileShareLinkDto>> listAllShareLinks(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        var items = fileShareService.listAllSharesPage(page, size);
+        return ApiResponse.success(PageResponse.of(
+                items.getContent(),
+                items.getNumber(),
+                items.getSize(),
+                items.getTotalElements()));
     }
 
     @Operation(summary = "访问分享链接", description = "通过分享令牌访问共享文件，可选密码验证")

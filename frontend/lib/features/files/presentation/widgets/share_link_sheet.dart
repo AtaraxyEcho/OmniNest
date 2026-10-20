@@ -121,10 +121,21 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
   /// 分享基址（服务器下发优先）；打开面板时解析一次。
   String? _shareBaseUrl;
 
+  /// 编辑态：勾选后才对已建分享下发"清除密码"，不勾选且密码框为空即保持原值。
+  bool _clearPasswordRequested = false;
+
   @override
   void initState() {
     super.initState();
     unawaited(_resolveShareBaseUrl());
+    final existing = widget.existingShare;
+    if (existing != null) {
+      // 编辑表单以分享当前设置起算，未改动的那一项保存时必须写回原值而不是清空。
+      _expiresAt = existing.expiresAt;
+      if (existing.maxAccessCount != null) {
+        _maxAccessController.text = '${existing.maxAccessCount}';
+      }
+    }
   }
 
   Future<void> _resolveShareBaseUrl() async {
@@ -190,6 +201,9 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
               const SizedBox(height: 16),
               if (existing != null) ...[
                 _buildShareInfo(existing),
+                // 已建分享必须能改设置：否则改一次有效期只能撤销重发，
+                // 已经发出去的地址会直接失效。
+                _buildEditSection(existing, shareState),
               ] else ...[
                 _buildCreateSection(shareState, hosted: hosted),
               ],
@@ -605,6 +619,148 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
         ],
       ],
     );
+  }
+
+  /// 已建分享的设置编辑区：只改有效期、访问次数上限与密码，令牌与地址不变。
+  Widget _buildEditSection(
+    FileShareLink share,
+    AsyncValue<FileShareLink?> shareState,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final busy = shareState.isLoading;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Container(height: 1, color: context.filesColors.outlineVariant),
+        const SizedBox(height: 14),
+        Text(
+          l10n.filesShareEditSettings,
+          style: TextStyle(
+            fontSize: AppTypography.bodyMedium,
+            fontWeight: FontWeight.w600,
+            color: context.filesColors.onSurface,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _maxAccessController,
+          keyboardType: TextInputType.number,
+          enabled: !busy,
+          decoration: InputDecoration(
+            labelText: l10n.filesMaxAccessCount,
+            hintText: l10n.filesNoLimit,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.filesExpiryTime),
+          subtitle: Text(
+            _expiresAt != null
+                ? _formatDateTime(_expiresAt!)
+                : l10n.filesNeverExpire,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_expiresAt != null)
+                IconButton(
+                  tooltip: l10n.coreClear,
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed:
+                      busy ? null : () => setState(() => _expiresAt = null),
+                ),
+              IconButton(
+                tooltip: l10n.coreChooseDate,
+                icon: const Icon(Icons.calendar_today, size: 18),
+                onPressed: busy ? null : _pickExpiryDate,
+              ),
+            ],
+          ),
+        ),
+        TextField(
+          controller: _passwordController,
+          enabled: !busy,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: l10n.profileChangePassword,
+            hintText: l10n.filesSharePasswordKeepHint,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          value: _clearPasswordRequested,
+          onChanged:
+              busy
+                  ? null
+                  : (value) =>
+                      setState(() => _clearPasswordRequested = value ?? false),
+          title: Text(l10n.filesSharePasswordClear),
+        ),
+        if (shareState.hasError) ...[
+          const SizedBox(height: 6),
+          Text(
+            '${shareState.error}',
+            style: TextStyle(
+              fontSize: AppTypography.bodySmall,
+              color: context.filesColors.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: busy ? null : () => unawaited(_saveShareSettings(share)),
+            icon: const Icon(Icons.check, size: 18),
+            label: Text(l10n.filesShareSaveSettings),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveShareSettings(FileShareLink share) async {
+    final l10n = AppLocalizations.of(context);
+    final maxText = _maxAccessController.text.trim();
+    final maxAccess = int.tryParse(maxText);
+    if (maxText.isNotEmpty && (maxAccess == null || maxAccess < 0)) {
+      showOmniFeedback(context, l10n.filesMaxAccessCount);
+      return;
+    }
+    final typedPassword = _passwordController.text.trim();
+    final updated = await ref
+        .read(shareLinkControllerProvider.notifier)
+        .updateShareLink(
+          shareId: share.id,
+          // 三种意图必须分开：勾清除才下发空串，填了新值才下发替换，
+          // 其余情况传 null 保持原密码（服务端把 null 当作"不改"）。
+          password:
+              _clearPasswordRequested
+                  ? ''
+                  : (typedPassword.isEmpty ? null : typedPassword),
+          // 有效期与次数上限按界面实况整条下发：起算值已在 initState 预填。
+          expiresAt:
+              _expiresAt == null ? '' : _expiresAt!.toUtc().toIso8601String(),
+          maxAccessCount: maxAccess ?? 0,
+        );
+    if (!mounted) {
+      return;
+    }
+    if (updated != null) {
+      setState(() {
+        _clearPasswordRequested = false;
+        _passwordController.clear();
+      });
+      showOmniFeedback(context, l10n.filesShareSettingsSaved);
+    }
   }
 
   Widget _buildStatusChip(

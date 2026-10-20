@@ -25,6 +25,19 @@ public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
             @Param("ownerUserId") UUID ownerUserId,
             Pageable pageable);
 
+    /**
+     * 分页查询全站未撤销的分享链接，供管理端治理使用。
+     *
+     * @param pageable 分页参数
+     * @return 分享链接分页
+     */
+    @Query("""
+            select s from ShareLink s
+            where s.disabledAt is null
+            order by s.createdAt desc
+            """)
+    Page<ShareLink> findAllActivePage(Pageable pageable);
+
     List<ShareLink> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
 
     Optional<ShareLink> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);

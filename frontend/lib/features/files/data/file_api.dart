@@ -529,6 +529,27 @@ class FileApi {
     return parseShareLinkResponse(response.data);
   }
 
+  /// 修改分享链接设置：令牌与资源不变，已发出的地址继续可用。
+  ///
+  /// 与创建不同，这里的空值有语义：[password] 传空串表示清除密码，[expiresAt]
+  /// 传空串表示改为长期有效，[maxAccessCount] 传 0 表示不限次数；传 null 表示保持原值。
+  Future<FileShareLink> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+  }) async {
+    final response = await apiClient.dio.patch<Map<String, dynamic>>(
+      '/files/shares/$shareId',
+      data: {
+        if (password != null) 'password': password,
+        if (expiresAt != null) 'expiresAt': expiresAt,
+        if (maxAccessCount != null) 'maxAccessCount': maxAccessCount,
+      },
+    );
+    return parseShareLinkResponse(response.data);
+  }
+
   Future<void> revokeShare(String shareId) async {
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/files/shares/$shareId',

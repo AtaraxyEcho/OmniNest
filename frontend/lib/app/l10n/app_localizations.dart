@@ -4399,6 +4399,36 @@ abstract class AppLocalizations {
   /// **'This link address can no longer be shown; revoke and create a new share'**
   String get filesShareLinkUnrecoverable;
 
+  /// No description provided for @filesShareEditSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Share settings'**
+  String get filesShareEditSettings;
+
+  /// No description provided for @filesShareSaveSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Save settings'**
+  String get filesShareSaveSettings;
+
+  /// No description provided for @filesShareSettingsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Share settings updated'**
+  String get filesShareSettingsSaved;
+
+  /// No description provided for @filesSharePasswordKeepHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank to keep the current password'**
+  String get filesSharePasswordKeepHint;
+
+  /// No description provided for @filesSharePasswordClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove password'**
+  String get filesSharePasswordClear;
+
   /// No description provided for @filesCopyLinkOnly.
   ///
   /// In en, this message translates to:

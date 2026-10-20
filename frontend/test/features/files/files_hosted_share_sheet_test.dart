@@ -76,7 +76,11 @@ void _stubCreate(
   });
 }
 
-Future<void> _openSheet(WidgetTester tester, FileRepository repository) async {
+Future<void> _openSheet(
+  WidgetTester tester,
+  FileRepository repository, {
+  FileShareLink? existingShare,
+}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(390, 844);
   addTearDown(tester.view.resetPhysicalSize);
@@ -101,7 +105,11 @@ Future<void> _openSheet(WidgetTester tester, FileRepository repository) async {
               builder:
                   (context) => TextButton(
                     onPressed:
-                        () => ShareLinkSheet.show(context, file: _seedFile),
+                        () => ShareLinkSheet.show(
+                          context,
+                          file: _seedFile,
+                          existingShare: existingShare,
+                        ),
                     child: const Text('打开分享面板'),
                   ),
             ),
@@ -222,5 +230,75 @@ void main() {
         maxAccessCount: any(named: 'maxAccessCount'),
       ),
     ).called(1);
+  });
+
+  testWidgets('已建分享就地改设置：只发 PATCH 且不换地址', (tester) async {
+    final repository = _MockFileRepository();
+    final existing = FileShareLink(
+      id: 'share-1',
+      resourceType: 'FILE',
+      resourceId: 'file-1',
+      resourceName: _seedFile.name,
+      shareCode: 'ab12cd',
+      status: 'ACTIVE',
+      accessCount: 3,
+      maxAccessCount: 5,
+      createdAt: DateTime(2026, 10, 5),
+    );
+    when(
+      () => repository.updateShareLink(
+        shareId: any(named: 'shareId'),
+        password: any(named: 'password'),
+        expiresAt: any(named: 'expiresAt'),
+        maxAccessCount: any(named: 'maxAccessCount'),
+      ),
+    ).thenAnswer(
+      (_) async => FileShareLink(
+        id: 'share-1',
+        resourceType: 'FILE',
+        resourceId: 'file-1',
+        resourceName: _seedFile.name,
+        shareCode: 'ab12cd',
+        status: 'ACTIVE',
+        accessCount: 3,
+        maxAccessCount: 8,
+        createdAt: DateTime(2026, 10, 5),
+      ),
+    );
+
+    await _openSheet(tester, repository, existingShare: existing);
+
+    expect(find.text('分享设置'), findsOneWidget);
+    // 表单按分享现值预填，改哪一项就只发那一项。
+    await tester.enterText(find.widgetWithText(TextField, '最大访问次数'), '8');
+    await tester.tap(find.text('保存设置'));
+    await tester.pumpAndSettle();
+
+    // 次数上限取界面值；有效期原本为空且未改动，下发空串即"长期有效"；
+    // 密码框留空必须是"不修改"，不能被当成清除密码。
+    verify(
+      () => repository.updateShareLink(
+        shareId: 'share-1',
+        password: null,
+        expiresAt: '',
+        maxAccessCount: 8,
+      ),
+    ).called(1);
+    verifyNever(
+      () => repository.createShareLink(
+        resourceId: any(named: 'resourceId'),
+        resourceType: any(named: 'resourceType'),
+        password: any(named: 'password'),
+        generatePassword: any(named: 'generatePassword'),
+        expiresAt: any(named: 'expiresAt'),
+        maxAccessCount: any(named: 'maxAccessCount'),
+      ),
+    );
+    // 地址仍然可复制：编辑设置不得让已发出的链接失效。
+    expect(find.text('https://share.test/#/s/ab12cd'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // 成功提示是自消失 toast，测试结束前要把它的定时器跑完。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 }

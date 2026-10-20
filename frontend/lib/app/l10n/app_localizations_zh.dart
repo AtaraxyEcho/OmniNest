@@ -2274,6 +2274,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesShareLinkUnrecoverable => '该分享的链接地址无法再显示，请撤销后重新创建';
 
   @override
+  String get filesShareEditSettings => '分享设置';
+
+  @override
+  String get filesShareSaveSettings => '保存设置';
+
+  @override
+  String get filesShareSettingsSaved => '分享设置已更新';
+
+  @override
+  String get filesSharePasswordKeepHint => '留空表示不修改密码';
+
+  @override
+  String get filesSharePasswordClear => '清除密码';
+
+  @override
   String get filesCopyLinkOnly => '仅复制链接';
 
   @override

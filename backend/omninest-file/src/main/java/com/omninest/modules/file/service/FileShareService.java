@@ -11,12 +11,14 @@ import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FileShareRecipient;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.ShareLink;
+import com.omninest.modules.file.dto.AdminFileShareLinkDto;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.FilePermissionDto;
 import com.omninest.modules.file.dto.FileShareLinkDto;
 import com.omninest.modules.file.dto.FileSharedItemDto;
 import com.omninest.modules.file.dto.PermissionRequest;
 import com.omninest.modules.file.dto.SharedFileDto;
+import com.omninest.modules.file.dto.UpdateShareLinkRequest;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
@@ -198,6 +200,55 @@ public class FileShareService {
     }
 
     /**
+     * 分页查询全站未撤销的分享链接，附所有者身份，供管理端治理。
+     *
+     * @param page 页码（从 0 开始）
+     * @param size 每页条数
+     * @return 全站分享分页
+     */
+    @Transactional(readOnly = true)
+    public Page<AdminFileShareLinkDto> listAllSharesPage(int page, int size) {
+        Pageable pageable = FilePageRequests.of(page, size);
+        Page<ShareLink> sharePage = shareLinkRepository.findAllActivePage(pageable);
+        if (sharePage.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, sharePage.getTotalElements());
+        }
+        List<UUID> resourceIds = sharePage.getContent()
+                .stream()
+                .map(ShareLink::getResourceId)
+                .distinct()
+                .toList();
+        Map<UUID, String> namesById = fileNodeRepository.findAllById(resourceIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        FileNode::getId, FileNode::getName, (l, r) -> l, LinkedHashMap::new));
+        List<UUID> ownerIds = sharePage.getContent()
+                .stream()
+                .map(ShareLink::getOwnerUserId)
+                .distinct()
+                .toList();
+        Map<UUID, String> ownerNames = userAccountQuery.findUsernames(ownerIds);
+        List<AdminFileShareLinkDto> items = sharePage.getContent()
+                .stream()
+                .map(share -> new AdminFileShareLinkDto(
+                        share.getId(),
+                        share.getOwnerUserId(),
+                        ownerNames.getOrDefault(share.getOwnerUserId(), "未知用户"),
+                        share.getResourceType(),
+                        share.getResourceId(),
+                        namesById.getOrDefault(share.getResourceId(), "已删除文件"),
+                        resolveShareStatus(share),
+                        share.getMaxAccessCount(),
+                        share.getAccessCount(),
+                        share.getExpiresAt(),
+                        share.getDisabledAt(),
+                        share.getCreatedAt()
+                ))
+                .toList();
+        return new PageImpl<>(items, pageable, sharePage.getTotalElements());
+    }
+
+    /**
      * 创建分享链接。
      *
      * @param ownerUserId 用户 ID
@@ -247,6 +298,57 @@ public class FileShareService {
         syncEventWriter.recordShareEvent(ownerUserId, saved.getId());
         recipients.forEach(recipientUserId -> syncEventWriter.recordShareEvent(recipientUserId, saved.getId()));
         return toShareDto(saved, rawToken, generatedPassword);
+    }
+
+    /**
+     * 修改分享链接的密码、有效期与访问次数上限。
+     *
+     * <p>令牌与资源不变：编辑设置不能让已经发出去的地址失效。三个字段传 null 表示保持原值；
+     * 密码传空白串表示清除密码，过期时间传空白串表示改为长期有效，次数上限传 0 表示不限次数。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param shareId     分享链接 ID
+     * @param request     更新请求
+     * @return 更新后的分享链接信息（不含明文令牌以外的凭据）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileShareLinkDto updateShare(UUID ownerUserId, UUID shareId, UpdateShareLinkRequest request) {
+        ShareLink share = shareLinkRepository.findByIdAndOwnerUserId(shareId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
+        if (share.getDisabledAt() != null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "分享链接已撤销");
+        }
+        Instant expiresAt = request.parsedExpiresAt();
+        if (expiresAt != null && expiresAt.isBefore(Instant.now())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "过期时间必须晚于当前时间");
+        }
+        Integer maxAccessCount = request.maxAccessCount();
+        if (maxAccessCount != null && maxAccessCount < 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "访问次数上限不能为负数");
+        }
+        if (maxAccessCount != null && maxAccessCount > 0 && share.getAccessCount() > maxAccessCount) {
+            throw new BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "访问次数上限不能低于已访问次数 " + share.getAccessCount()
+            );
+        }
+        if (request.expiresAt() != null) {
+            share.setExpiresAt(expiresAt);
+        }
+        if (maxAccessCount != null) {
+            share.setMaxAccessCount(maxAccessCount > 0 ? maxAccessCount : null);
+        }
+        if (request.password() != null) {
+            share.setPasswordHash(
+                    request.password().isBlank() ? null : passwordEncoder.encode(request.password()));
+        }
+        ShareLink saved = shareLinkRepository.save(share);
+        readThroughCache.invalidate("omninest:share:link:" + saved.getTokenHash());
+        syncEventWriter.recordShareEvent(ownerUserId, saved.getId());
+        log.info("更新分享链接设置: shareId={}, ownerUserId={}, 密码变更={}, expiresAt={}, maxAccessCount={}",
+                saved.getId(), ownerUserId, request.password() != null,
+                saved.getExpiresAt(), saved.getMaxAccessCount());
+        return toShareDto(saved, null, null);
     }
 
     /**

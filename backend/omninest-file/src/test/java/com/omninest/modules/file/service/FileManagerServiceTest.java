@@ -31,8 +31,10 @@ import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AcceptShareRequest;
+import com.omninest.modules.file.dto.AdminFileShareLinkDto;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.FileShareLinkDto;
+import com.omninest.modules.file.dto.UpdateShareLinkRequest;
 import com.omninest.modules.file.dto.FileSharePreviewDto;
 import com.omninest.modules.file.repository.FileAccessRecordRepository;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
@@ -1097,6 +1099,105 @@ class FileManagerServiceTest {
         FileShareLinkDto listed = fileShareService.listMySharesPage(OWNER_ID, 0, 20).getContent().get(0);
 
         assertThat(listed.shareCode()).isEmpty();
+    }
+
+    /** 修改分享设置不得换令牌：已经发出去的地址必须继续可用。 */
+    @Test
+    void updateShareKeepsTokenAndAppliesNewSettings() {
+        ShareLink stored = existingShare(0);
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID)).thenReturn(Optional.of(stored));
+        when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        String tokenHashBefore = stored.getTokenHash();
+        String tokenCipherBefore = stored.getTokenCipher();
+
+        FileShareLinkDto updated = fileShareService.updateShare(
+                OWNER_ID,
+                SHARE_ID,
+                new UpdateShareLinkRequest(null, "2099-01-01T00:00:00Z", 5));
+
+        assertThat(stored.getTokenHash()).isEqualTo(tokenHashBefore);
+        assertThat(stored.getTokenCipher()).isEqualTo(tokenCipherBefore);
+        assertThat(stored.getMaxAccessCount()).isEqualTo(5);
+        assertThat(stored.getExpiresAt()).isNotNull();
+        // 不传密码即保持原值，不能被当成"清除密码"。
+        assertThat(stored.getPasswordHash()).isNull();
+        assertThat(updated.shareCode()).isEqualTo("plain-token-1");
+        verify(readThroughCache).invalidate("omninest:share:link:" + tokenHashBefore);
+    }
+
+    /** 空白密码是"清除密码"，0 是"不限次数"，两者都必须能显式表达。 */
+    @Test
+    void updateShareBlankPasswordAndZeroLimitClearSettings() {
+        ShareLink stored = existingShare(3);
+        stored.setPasswordHash("hashed-old");
+        stored.setMaxAccessCount(20);
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID)).thenReturn(Optional.of(stored));
+        when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileShareService.updateShare(OWNER_ID, SHARE_ID, new UpdateShareLinkRequest("", "", 0));
+
+        assertThat(stored.getPasswordHash()).isNull();
+        assertThat(stored.getExpiresAt()).isNull();
+        assertThat(stored.getMaxAccessCount()).isNull();
+    }
+
+    /** 上限低于已访问次数会把分享直接判成耗尽，必须拒绝而不是静默生效。 */
+    @Test
+    void updateShareRejectsLimitBelowAccessCount() {
+        ShareLink stored = existingShare(10);
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID)).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> fileShareService.updateShare(
+                OWNER_ID, SHARE_ID, new UpdateShareLinkRequest(null, null, 5)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("已访问次数");
+
+        verify(shareLinkRepository, never()).save(any(ShareLink.class));
+    }
+
+    /** 已撤销的分享不能再改设置，否则撤销语义会变成"可恢复"。 */
+    @Test
+    void updateShareRejectsRevokedLink() {
+        ShareLink stored = existingShare(0);
+        stored.setDisabledAt(Instant.parse("2026-01-01T00:00:00Z"));
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID)).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> fileShareService.updateShare(
+                OWNER_ID, SHARE_ID, new UpdateShareLinkRequest(null, "2099-01-01T00:00:00Z", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("已撤销");
+    }
+
+    /** 全站列表要带所有者身份与已删资源占位名，管理员据此定位是谁发的链接。 */
+    @Test
+    void listAllSharesPageIncludesOwnerAndDeletedResourcePlaceholder() {
+        ShareLink stored = existingShare(2);
+        when(shareLinkRepository.findAllActivePage(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stored)));
+        when(userAccountQuery.findUsernames(List.of(OWNER_ID))).thenReturn(Map.of(OWNER_ID, "alice"));
+        when(fileNodeRepository.findAllById(List.of(FILE_ID))).thenReturn(List.of());
+
+        AdminFileShareLinkDto listed =
+                fileShareService.listAllSharesPage(0, 50).getContent().get(0);
+
+        assertThat(listed.ownerUserId()).isEqualTo(OWNER_ID);
+        assertThat(listed.ownerUsername()).isEqualTo("alice");
+        assertThat(listed.resourceName()).isEqualTo("已删除文件");
+        assertThat(listed.status()).isEqualTo("ACTIVE");
+    }
+
+    private ShareLink existingShare(int accessCount) {
+        ShareLink link = new ShareLink();
+        link.setId(SHARE_ID);
+        link.setOwnerUserId(OWNER_ID);
+        link.setResourceType("FILE");
+        link.setResourceId(FILE_ID);
+        link.setTokenHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        // credentialCipher 替身是 "cipher:" + 原文，因此密文去掉前缀即明文令牌。
+        link.setTokenCipher("cipher:plain-token-1");
+        link.setAccessCount(accessCount);
+        link.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
+        return link;
     }
 
     private FileAccessRecord accessRecord(FileNode node, String lastAccessedAt) {

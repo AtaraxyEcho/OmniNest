@@ -242,6 +242,21 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<FileShareLink> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+  }) {
+    return fileApi.updateShareLink(
+      shareId: shareId,
+      password: password,
+      expiresAt: expiresAt,
+      maxAccessCount: maxAccessCount,
+    );
+  }
+
+  @override
   Future<void> revokeShare(String shareId) {
     return fileApi.revokeShare(shareId);
   }

@@ -49,6 +49,34 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
     }
   }
 
+  /// 修改分享链接设置并写入状态。
+  ///
+  /// 失败处理与 [createShareLink] 一致：摘要落到 `AsyncError` 由分享面板内联展示，
+  /// 用户可改参数后重试。参数传 null 表示保持原值，空串与 0 的清除语义见 data 层。
+  Future<FileShareLink?> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+  }) async {
+    state = const AsyncLoading();
+    final repository = ref.read(fileRepositoryProvider);
+    try {
+      final link = await repository.updateShareLink(
+        shareId: shareId,
+        password: password,
+        expiresAt: expiresAt,
+        maxAccessCount: maxAccessCount,
+      );
+      state = AsyncData(link);
+      await _refreshShareLists();
+      return link;
+    } on Object catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      return null;
+    }
+  }
+
   /// 撤销分享链接。
   Future<void> revokeShare(String shareId) async {
     final repository = ref.read(fileRepositoryProvider);

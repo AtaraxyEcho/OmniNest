@@ -204,6 +204,14 @@ class _FakeFileRepository
   }) => throw UnimplementedError();
 
   @override
+  Future<FileShareLink> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+  }) => throw UnimplementedError();
+
+  @override
   Future<FileSharePreview> previewShare(String token, {String? password}) =>
       throw UnimplementedError();
 

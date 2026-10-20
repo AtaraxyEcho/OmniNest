@@ -118,6 +118,14 @@ abstract interface class FileRepository {
     int? maxAccessCount,
   });
 
+  /// 修改分享链接设置；空串与 0 的清除语义见实现侧注释，null 表示保持原值。
+  Future<FileShareLink> updateShareLink({
+    required String shareId,
+    String? password,
+    String? expiresAt,
+    int? maxAccessCount,
+  });
+
   Future<void> revokeShare(String shareId);
 
   Future<FileSharePreview> previewShare(String token, {String? password});

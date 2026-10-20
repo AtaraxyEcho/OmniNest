@@ -38,6 +38,17 @@ public record CreateShareLinkRequest(
      * @throws DateTimeParseException 两种格式均不匹配时（全局异常处理器映射为参数错误）
      */
     public Instant parsedExpiresAt() {
+        return parseExpiresAt(expiresAt);
+    }
+
+    /**
+     * 按创建与更新分享共用的双格式规则解析过期时间。
+     *
+     * @param expiresAt 原始过期时间串，空串或空白返回 null
+     * @return 解析后的即时，未提供时为 null
+     * @throws java.time.format.DateTimeParseException 两种格式均不匹配时
+     */
+    public static Instant parseExpiresAt(String expiresAt) {
         if (expiresAt == null || expiresAt.isBlank()) {
             return null;
         }

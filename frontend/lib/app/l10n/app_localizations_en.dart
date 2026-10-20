@@ -2350,6 +2350,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'This link address can no longer be shown; revoke and create a new share';
 
   @override
+  String get filesShareEditSettings => 'Share settings';
+
+  @override
+  String get filesShareSaveSettings => 'Save settings';
+
+  @override
+  String get filesShareSettingsSaved => 'Share settings updated';
+
+  @override
+  String get filesSharePasswordKeepHint =>
+      'Leave blank to keep the current password';
+
+  @override
+  String get filesSharePasswordClear => 'Remove password';
+
+  @override
   String get filesCopyLinkOnly => 'Copy link only';
 
   @override
