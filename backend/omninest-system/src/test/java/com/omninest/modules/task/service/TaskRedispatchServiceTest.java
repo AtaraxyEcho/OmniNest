@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.notification.service.NotificationEmailService;
 import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
@@ -251,6 +252,19 @@ class TaskRedispatchServiceTest {
                 .containsEntry("ownerUserId", OWNER_ID.toString())
                 .containsEntry("assetId", "80000000-0000-0000-0000-000000000001")
                 .containsEntry("originalFileName", "wall.png");
+    }
+
+    @Test
+    void rebuildsNotificationEmailPayload() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, NotificationEmailService.TASK_TYPE,
+                QueueNames.NOTIFICATION_EMAIL_ROUTING_KEY,
+                "{\"notificationId\":\"90000000-0000-0000-0000-000000000001\"}");
+
+        assertThat(payload)
+                .containsEntry("taskId", TASK_ID.toString())
+                .containsEntry("ownerUserId", OWNER_ID.toString())
+                .containsEntry("notificationId", "90000000-0000-0000-0000-000000000001");
     }
 
     @Test

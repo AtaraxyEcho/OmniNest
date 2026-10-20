@@ -113,6 +113,29 @@ class UserAccountQueryServiceTest {
         verify(authUserRepository).findUserIdsAfter(cursor, 20);
     }
 
+    /**
+     * 外部通道只该拿到"能投递的邮箱"：停用账户与空邮箱都由本模块判掉，
+     * 免得调用方为了账户状态反向依赖用户模块。
+     */
+    @Test
+    void findDeliverableEmailReturnsAddressOnlyForActiveAccount() {
+        AuthUser active = user(USER_ID, "alice");
+        active.setStatus("ACTIVE");
+        active.setEmail("alice@example.com");
+        when(authUserRepository.findById(USER_ID)).thenReturn(Optional.of(active));
+        assertThat(service.findDeliverableEmail(USER_ID)).contains("alice@example.com");
+
+        active.setStatus("DISABLED");
+        assertThat(service.findDeliverableEmail(USER_ID)).isEmpty();
+
+        active.setStatus("ACTIVE");
+        active.setEmail("  ");
+        assertThat(service.findDeliverableEmail(USER_ID)).isEmpty();
+
+        active.setEmail(null);
+        assertThat(service.findDeliverableEmail(USER_ID)).isEmpty();
+    }
+
     private AuthUser user(UUID id, String username) {
         AuthUser user = new AuthUser();
         user.setId(id);

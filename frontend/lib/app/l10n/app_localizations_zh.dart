@@ -309,6 +309,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationQuietHours => '免打扰时段';
 
   @override
+  String get profileNotificationEmail => '邮件通知';
+
+  @override
+  String get profileNotificationEmailHint => '通过邮件接收通知，需管理员启用邮件服务';
+
+  @override
   String get notificationQuietHoursHint => '时段内不弹提示、不播放提示音';
 
   @override

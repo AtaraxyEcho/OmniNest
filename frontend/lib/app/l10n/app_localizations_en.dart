@@ -320,6 +320,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationQuietHours => 'Do Not Disturb';
 
   @override
+  String get profileNotificationEmail => 'Email notifications';
+
+  @override
+  String get profileNotificationEmailHint =>
+      'Receive notifications by email; requires the administrator to enable the mail channel';
+
+  @override
   String get notificationQuietHoursHint =>
       'Suppress toasts and sounds during this period';
 

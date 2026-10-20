@@ -89,7 +89,15 @@ INSERT INTO omni.config_entries (
     ('weather.qweather.url', 'https://devapi.qweather.com', 'STRING', 'weather', 'HOT', '和风天气 API 地址', false),
     ('weather.qweather.key', '', 'STRING', 'weather', 'HOT', '和风天气 Ed25519 私钥', true),
     ('weather.location', '北京', 'STRING', 'weather', 'HOT', '天气默认位置', false),
-    ('auth.two-factor.required-roles', 'SUPER_ADMIN,ADMIN', 'STRING', 'auth', 'HOT', '强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）', false);
+    ('auth.two-factor.required-roles', 'SUPER_ADMIN,ADMIN', 'STRING', 'auth', 'HOT', '强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）', false),
+    ('notification.email.enabled', 'false', 'BOOLEAN', 'notification', 'HOT', '是否启用通知邮件投递', false),
+    ('notification.email.host', '', 'STRING', 'notification', 'HOT', 'SMTP 服务器主机（内网地址允许）', false),
+    ('notification.email.port', '587', 'NUMBER', 'notification', 'HOT', 'SMTP 服务器端口', false),
+    ('notification.email.username', '', 'STRING', 'notification', 'HOT', 'SMTP 登录账号', false),
+    ('notification.email.password', '', 'STRING', 'notification', 'HOT', 'SMTP 登录口令', true),
+    ('notification.email.from', '', 'STRING', 'notification', 'HOT', '发件人地址（留空时使用登录账号）', false),
+    ('notification.email.starttls', 'true', 'BOOLEAN', 'notification', 'HOT', '是否使用 STARTTLS 加密连接', false),
+    ('notification.email.timeout-millis', '10000', 'NUMBER', 'notification', 'HOT', 'SMTP 连接与读取时限（毫秒）', false);
 
 -- 内置角色。
 INSERT INTO omni.auth_roles (id, code, name, description, built_in, enabled) VALUES

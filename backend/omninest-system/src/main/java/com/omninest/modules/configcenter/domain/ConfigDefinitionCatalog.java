@@ -249,6 +249,24 @@ public final class ConfigDefinitionCatalog {
                 "config.appVersion.releaseNotesUrl", "当前版本发布说明地址", false, 512));
         add(values, string("app.version.download-url", "", "general", ConfigSurface.GENERAL,
                 "config.appVersion.downloadUrl", "安装包下载页地址", false, 512));
+
+        // 邮件通知通道：默认关闭，管理员填写 SMTP 参数后才产生投递任务。
+        add(values, bool("notification.email.enabled", false, "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.enabled", "是否启用通知邮件投递"));
+        add(values, string("notification.email.host", "", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.host", "SMTP 服务器主机（内网地址允许）", false, 255));
+        add(values, number("notification.email.port", "587", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.port", "SMTP 服务器端口", 1, 65_535));
+        add(values, string("notification.email.username", "", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.username", "SMTP 登录账号", false, 255));
+        add(values, sensitive("notification.email.password", "", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.password", "SMTP 登录口令", 512));
+        add(values, string("notification.email.from", "", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.from", "发件人地址（留空时使用登录账号）", false, 320));
+        add(values, bool("notification.email.starttls", true, "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.starttls", "是否使用 STARTTLS 加密连接"));
+        add(values, number("notification.email.timeout-millis", "10000", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.timeout", "SMTP 连接与读取时限（毫秒）", 1_000, 120_000));
         return Map.copyOf(values);
     }
 

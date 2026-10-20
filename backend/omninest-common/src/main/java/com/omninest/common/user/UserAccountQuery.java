@@ -38,6 +38,17 @@ public interface UserAccountQuery {
     Optional<String> findUsername(UUID userId);
 
     /**
+     * 查询可用于外部投递的邮箱：仅当账户处于启用状态且邮箱非空时返回。
+     *
+     * <p>账户状态归认证模块所有，外部通道不应为了判断"这个账户还能不能用"而反向依赖它，
+     * 因此判定放在这里，调用方只拿到可投递或不可投递两种结果。</p>
+     *
+     * @param userId 用户 ID
+     * @return 可投递邮箱，账户停用、删除或未填邮箱时返回空
+     */
+    Optional<String> findDeliverableEmail(UUID userId);
+
+    /**
      * 批量查询用户名。
      *
      * @param userIds 用户 ID 集合

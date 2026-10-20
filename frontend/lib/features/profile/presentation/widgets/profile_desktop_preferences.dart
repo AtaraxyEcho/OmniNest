@@ -215,6 +215,17 @@ class _ProfileNotificationSettingsCardState
           ),
           const _PreferenceDivider(),
           _PreferenceSwitchTile(
+            icon: Icons.mail_outline_rounded,
+            title: l10n.profileNotificationEmail,
+            subtitle: l10n.profileNotificationEmailHint,
+            value: widget.prefs.emailNotification,
+            onChanged:
+                (value) => widget.onChanged(
+                  widget.prefs.copyWith(emailNotification: value),
+                ),
+          ),
+          const _PreferenceDivider(),
+          _PreferenceSwitchTile(
             icon: Icons.nightlight_outlined,
             title: l10n.notificationQuietHours,
             subtitle: l10n.notificationQuietHoursHint,

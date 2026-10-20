@@ -171,6 +171,19 @@ void main() {
     expect(fake.saved.single.foregroundBanner, isFalse);
   });
 
+  testWidgets('邮件开关写回服务端偏好', (tester) async {
+    final fake = await pumpPage(tester, const NotificationPreferences());
+    final switchFinder = switchOfRow('邮件通知');
+    await tester.ensureVisible(switchFinder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+
+    expect(fake.saved, hasLength(1));
+    expect(fake.saved.single.emailNotification, isTrue);
+  });
+
   testWidgets('免打扰行展示起止时间并可选择', (tester) async {
     await pumpPage(
       tester,

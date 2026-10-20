@@ -27,6 +27,7 @@ import com.omninest.modules.reader.event.ReaderParseTaskEvent;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRedispatchService;
+import com.omninest.modules.notification.event.NotificationEmailRequestedEvent;
 import com.omninest.modules.video.event.LocalVideoLibraryApplyRequestedEvent;
 import com.omninest.modules.video.event.LocalVideoLibraryScanRequestedEvent;
 import com.omninest.modules.video.event.MediaLibraryScanRequestedEvent;
@@ -87,6 +88,8 @@ class TaskPayloadContractTest {
                     derivePayload(FileUploadedEvent.class)
             ),
             new Contract(QueueNames.MEDIA_SCAN_ROUTING_KEY, MediaLibraryScanRequestedEvent.class, null),
+            new Contract(QueueNames.NOTIFICATION_EMAIL_ROUTING_KEY,
+                    NotificationEmailRequestedEvent.class, null),
             // 解析事件的 ownerUserId 是文件归属者，记录载荷用 fileOwnerId 与书架归属者区分。
             new Contract(
                     QueueNames.READER_PARSE_ROUTING_KEY,

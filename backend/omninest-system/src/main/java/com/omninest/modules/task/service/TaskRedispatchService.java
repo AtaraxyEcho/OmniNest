@@ -165,6 +165,11 @@ public class TaskRedispatchService {
             case QueueNames.EXTERNAL_IMPORT_ROUTING_KEY -> Map.of(
                     "taskId", requiredUuid(payload, "importTaskId").toString()
             );
+            case QueueNames.NOTIFICATION_EMAIL_ROUTING_KEY -> Map.of(
+                    "taskId", taskId.toString(),
+                    "ownerUserId", requireOwner(payload, fallbackOwnerUserId).toString(),
+                    "notificationId", requiredUuid(payload, "notificationId").toString()
+            );
             case QueueNames.MUSIC_SCAN_ROUTING_KEY,
                     QueueNames.PHOTO_SCAN_ROUTING_KEY -> Map.of(
                     "jobId", requiredUuid(payload, "jobId").toString(),

@@ -179,6 +179,17 @@ class _NotificationSettingsPageState
                 ),
                 _SettingsDivider(),
                 _SettingsSwitchRow(
+                  icon: Icons.mail_outline_rounded,
+                  title: l10n.profileNotificationEmail,
+                  subtitle: l10n.profileNotificationEmailHint,
+                  value: prefs.emailNotification,
+                  onChanged:
+                      (v) => unawaited(
+                        _updatePrefs(prefs.copyWith(emailNotification: v)),
+                      ),
+                ),
+                _SettingsDivider(),
+                _SettingsSwitchRow(
                   icon: Icons.nightlight_outlined,
                   title: l10n.notificationQuietHours,
                   subtitle: l10n.notificationQuietHoursHint,

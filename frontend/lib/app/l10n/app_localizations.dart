@@ -674,6 +674,18 @@ abstract class AppLocalizations {
   /// **'Do Not Disturb'**
   String get notificationQuietHours;
 
+  /// No description provided for @profileNotificationEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email notifications'**
+  String get profileNotificationEmail;
+
+  /// No description provided for @profileNotificationEmailHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive notifications by email; requires the administrator to enable the mail channel'**
+  String get profileNotificationEmailHint;
+
   /// No description provided for @notificationQuietHoursHint.
   ///
   /// In en, this message translates to:

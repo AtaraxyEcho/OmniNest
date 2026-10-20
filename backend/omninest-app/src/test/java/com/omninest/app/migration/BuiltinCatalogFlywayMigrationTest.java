@@ -179,7 +179,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(67);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(75);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -250,7 +250,15 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('weather.qweather.credential'),
                         ('weather.qweather.url'),
                         ('weather.qweather.key'),
-                        ('weather.location')
+                        ('weather.location'),
+                        ('notification.email.enabled'),
+                        ('notification.email.host'),
+                        ('notification.email.port'),
+                        ('notification.email.username'),
+                        ('notification.email.password'),
+                        ('notification.email.from'),
+                        ('notification.email.starttls'),
+                        ('notification.email.timeout-millis')
                 ) expected(config_key)
                 FULL JOIN omni.config_entries actual USING (config_key)
                 WHERE expected.config_key IS NULL
@@ -265,10 +273,11 @@ class BuiltinCatalogFlywayMigrationTest {
                     'media.tmdb.key',
                     'media.tmdb.token',
                     'reader.gbooks.key',
-                    'weather.qweather.key'
+                    'weather.qweather.key',
+                    'notification.email.password'
                   )
                   AND config_value = ''
-                """)).isEqualTo(4);
+                """)).isEqualTo(5);
     }
 
     @Test

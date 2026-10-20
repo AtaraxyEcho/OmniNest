@@ -382,6 +382,18 @@ class _PmNotificationsSectionState
               ),
             ),
             _PmRow(
+              icon: Icons.mail_outline_rounded,
+              label: l10n.profileNotificationEmail,
+              subtitle: l10n.profileNotificationEmailHint,
+              trailing: _PmSwitch(
+                value: prefs.emailNotification,
+                onChanged:
+                    (value) => unawaited(
+                      _save(prefs.copyWith(emailNotification: value)),
+                    ),
+              ),
+            ),
+            _PmRow(
               icon: Icons.nightlight_outlined,
               label: l10n.notificationQuietHours,
               subtitle: l10n.notificationQuietHoursHint,

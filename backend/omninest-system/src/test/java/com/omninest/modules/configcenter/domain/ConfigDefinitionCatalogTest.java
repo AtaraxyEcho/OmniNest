@@ -10,14 +10,32 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(67);
+        assertThat(definitions).hasSize(75);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
                 .hasSize(32);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
-                .hasSize(35);
+                .hasSize(43);
+    }
+
+    @Test
+    void mailChannelKeepsItsCredentialSuperAdminOnlyAndSensitive() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.password"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.sensitive()).isTrue();
+                    assertThat(definition.superAdminOnly()).isTrue();
+                    assertThat(definition.defaultValue()).isEmpty();
+                });
+        assertThat(ConfigDefinitionCatalog.find("notification.email.enabled"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.valueType()).isEqualTo(ConfigValueType.BOOLEAN);
+                    assertThat(definition.superAdminOnly()).isTrue();
+                });
+        assertThat(ConfigDefinitionCatalog.find("notification.email.timeout-millis"))
+                .hasValueSatisfying(definition ->
+                        assertThat(definition.normalize("5000")).isEqualTo("5000"));
     }
 
     @Test

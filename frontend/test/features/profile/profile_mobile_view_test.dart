@@ -290,6 +290,7 @@ void main() {
     );
 
     expect(find.text('新通知前台提示'), findsOneWidget);
+    expect(find.text('邮件通知'), findsOneWidget);
     expect(find.text('免打扰时段'), findsOneWidget);
     expect(find.text('22:00'), findsOneWidget);
     expect(find.text('08:00'), findsOneWidget);

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
@@ -48,13 +49,15 @@ class NotificationServiceTest {
         return null;
     });
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final NotificationEmailService notificationEmailService = mock(NotificationEmailService.class);
     private final NotificationService service = new NotificationService(
             notificationRepository,
             notificationTypeRepository,
             userPreferenceQuery,
             readThroughCache,
             syncEventRecorder,
-            transactionManager
+            transactionManager,
+            notificationEmailService
     );
 
     @Test
@@ -138,6 +141,39 @@ class NotificationServiceTest {
         verify(syncEventRecorder).record(eventCaptor.capture());
         assertThat(eventCaptor.getValue().scope()).isEqualTo(SyncScope.NOTIFICATIONS);
         assertThat(eventCaptor.getValue().action()).isEqualTo(SyncAction.CREATED);
+    }
+
+    @Test
+    void create_handsSavedNotificationToEmailChannel() {
+        UUID userId = UUID.randomUUID();
+        UUID notificationId = UUID.fromString("90000000-0000-0000-0000-000000000004");
+        when(notificationTypeRepository.findByTypeCode("TASK_COMPLETED"))
+                .thenReturn(Optional.of(type("TASK_COMPLETED", true)));
+        when(userPreferenceQuery.findValues(userId, "notification")).thenReturn(Map.of("enabled", true));
+        when(notificationRepository.save(any(NotificationMessage.class)))
+                .thenAnswer(invocation -> {
+                    NotificationMessage msg = invocation.getArgument(0);
+                    msg.setId(notificationId);
+                    msg.setCreatedAt(Instant.now());
+                    return msg;
+                });
+
+        service.create(userId, "TASK_COMPLETED", "标题", "内容", null);
+
+        verify(notificationEmailService).enqueueDelivery(userId, notificationId);
+    }
+
+    @Test
+    void create_suppressedByPreferenceNeverReachesEmailChannel() {
+        UUID userId = UUID.randomUUID();
+        when(notificationTypeRepository.findByTypeCode("TASK_COMPLETED"))
+                .thenReturn(Optional.of(type("TASK_COMPLETED", true)));
+        when(userPreferenceQuery.findValues(userId, "notification"))
+                .thenReturn(Map.of("enabled", true, "types", Map.of("TASK_COMPLETED", false)));
+
+        assertThat(service.create(userId, "TASK_COMPLETED", "标题", "内容", null)).isNull();
+
+        verifyNoInteractions(notificationEmailService);
     }
 
     @Test

@@ -116,6 +116,8 @@
   "notificationForegroundToastToggle": "新通知前台提示",
   "notificationForegroundToastToggleSubtitle": "通知到达时弹出轻量提示条",
   "notificationQuietHours": "免打扰时段",
+  "profileNotificationEmail": "邮件通知",
+  "profileNotificationEmailHint": "通过邮件接收通知，需管理员启用邮件服务",
   "notificationQuietHoursHint": "时段内不弹提示、不播放提示音",
   "notificationQuietHoursStart": "开始",
   "notificationQuietHoursEnd": "结束",

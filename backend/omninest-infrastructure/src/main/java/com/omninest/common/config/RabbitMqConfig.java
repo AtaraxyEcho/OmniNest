@@ -211,6 +211,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue notificationEmailQueue() {
+        return durableQueue(QueueNames.NOTIFICATION_EMAIL_QUEUE);
+    }
+
+    @Bean
     Queue deadLetterQueue() {
         return new Queue(QueueNames.DEAD_LETTER_QUEUE, true);
     }
@@ -360,6 +365,13 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(backdropSecurityScanQueue)
                 .to(taskExchange)
                 .with(QueueNames.BACKDROP_SECURITY_SCAN_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding notificationEmailBinding(Queue notificationEmailQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(notificationEmailQueue)
+                .to(taskExchange)
+                .with(QueueNames.NOTIFICATION_EMAIL_ROUTING_KEY);
     }
 
     @Bean

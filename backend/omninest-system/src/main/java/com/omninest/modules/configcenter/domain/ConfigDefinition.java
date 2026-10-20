@@ -121,7 +121,8 @@ public record ConfigDefinition(
                 || key.startsWith("reader.openlib.")
                 || key.startsWith("photo.ai.")
                 || key.startsWith("weather.qweather.")
-                || key.startsWith("clamav.");
+                || key.startsWith("clamav.")
+                || key.startsWith("notification.email.");
     }
 
     private String normalizeString(String rawValue) {

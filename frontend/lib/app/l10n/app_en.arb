@@ -116,6 +116,8 @@
   "notificationForegroundToastToggle": "In-app new notification toasts",
   "notificationForegroundToastToggleSubtitle": "Show a lightweight toast when a notification arrives",
   "notificationQuietHours": "Do Not Disturb",
+  "profileNotificationEmail": "Email notifications",
+  "profileNotificationEmailHint": "Receive notifications by email; requires the administrator to enable the mail channel",
   "notificationQuietHoursHint": "Suppress toasts and sounds during this period",
   "notificationQuietHoursStart": "Start",
   "notificationQuietHoursEnd": "End",

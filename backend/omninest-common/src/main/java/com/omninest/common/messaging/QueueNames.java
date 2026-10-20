@@ -70,6 +70,8 @@ public final class QueueNames {
     public static final String FILE_SECURITY_SCAN_ROUTING_KEY = "file.security-scan";
     public static final String BACKDROP_SECURITY_SCAN_QUEUE = "omni.task.backdrop-security-scan";
     public static final String BACKDROP_SECURITY_SCAN_ROUTING_KEY = "backdrop.security-scan";
+    public static final String NOTIFICATION_EMAIL_QUEUE = "omni.task.notification-email";
+    public static final String NOTIFICATION_EMAIL_ROUTING_KEY = "notification.email";
 
     private static final List<String> DURABLE_QUEUES = List.of(
             FILE_INDEX_QUEUE,
@@ -99,6 +101,7 @@ public final class QueueNames {
             FILE_PURGE_QUEUE,
             FILE_SECURITY_SCAN_QUEUE,
             BACKDROP_SECURITY_SCAN_QUEUE,
+            NOTIFICATION_EMAIL_QUEUE,
             DEAD_LETTER_QUEUE
     );
 

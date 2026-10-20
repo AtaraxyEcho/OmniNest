@@ -6,6 +6,7 @@ import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.user.UserAccountSummary;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
+import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.util.AuthUserMapper;
@@ -68,6 +69,21 @@ public class UserAccountQueryService implements UserAccountQuery {
     public Optional<String> findUsername(UUID userId) {
         return authUserRepository.findById(userId)
                 .map(AuthUser::getUsername);
+    }
+
+    /**
+     * 查询可用于外部投递的邮箱。
+     *
+     * @param userId 用户 ID
+     * @return 账户启用且邮箱非空时返回邮箱
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> findDeliverableEmail(UUID userId) {
+        return authUserRepository.findById(userId)
+                .filter(user -> UserStatus.ACTIVE.getValue().equals(user.getStatus()))
+                .map(AuthUser::getEmail)
+                .filter(email -> email != null && !email.isBlank());
     }
 
     /**

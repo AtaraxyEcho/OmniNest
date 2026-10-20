@@ -49,6 +49,7 @@ public class NotificationService implements NotificationPublisher, NotificationR
     private final ReadThroughCache readThroughCache;
     private final UserSyncEventRecorder syncEventRecorder;
     private final PlatformTransactionManager transactionManager;
+    private final NotificationEmailService notificationEmailService;
 
     /**
      * 创建通知并持久化。
@@ -80,6 +81,7 @@ public class NotificationService implements NotificationPublisher, NotificationR
         entity.setMetadata(metadata != null ? metadata : Map.of());
         notificationRepository.save(entity);
         recordEvent(recipientUserId, entity.getId(), SyncAction.CREATED, Map.of("type", type));
+        notificationEmailService.enqueueDelivery(recipientUserId, entity.getId());
         log.info("已创建通知: userId={}, type={}", recipientUserId, type);
 
         // 清除未读数缓存
