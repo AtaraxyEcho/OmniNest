@@ -38,6 +38,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import static org.mockito.Mockito.never;
 
@@ -99,7 +100,8 @@ class TaskQueryServiceTest {
         @DisplayName("无状态过滤时返回全部任务")
         void list_noStatusFilter_returnsAllTasks() {
             // Arrange
-            Pageable pageable = PageRequest.of(0, 20);
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
             TaskRecord task1 = createTaskRecord("QUEUED");
             TaskRecord task2 = createTaskRecord("COMPLETED");
             Page<TaskRecord> page = new PageImpl<>(List.of(task1, task2), pageable, 2);
@@ -118,7 +120,8 @@ class TaskQueryServiceTest {
         @DisplayName("空字符串状态过滤时返回全部任务")
         void list_emptyStatusFilter_returnsAllTasks() {
             // Arrange
-            Pageable pageable = PageRequest.of(0, 20);
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
             Page<TaskRecord> page = new PageImpl<>(List.of(), pageable, 0);
             when(taskRecordRepository.findByOwnerUserId(OWNER_ID, pageable)).thenReturn(page);
 
@@ -131,10 +134,23 @@ class TaskQueryServiceTest {
         }
 
         @Test
+        @DisplayName("调用方指定排序时不被服务覆盖")
+        void list_withCallerSort_isNotOverridden() {
+            Pageable sorted = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "createdAt"));
+            Page<TaskRecord> page = new PageImpl<>(List.of(), sorted, 0);
+            when(taskRecordRepository.findByOwnerUserId(OWNER_ID, sorted)).thenReturn(page);
+
+            taskQueryService.listOwned(OWNER_ID, null, sorted);
+
+            verify(taskRecordRepository).findByOwnerUserId(OWNER_ID, sorted);
+        }
+
+        @Test
         @DisplayName("指定状态过滤时返回匹配任务")
         void list_withStatusFilter_returnsMatchingTasks() {
             // Arrange
-            Pageable pageable = PageRequest.of(0, 20);
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
             TaskRecord task = createTaskRecord("QUEUED");
             Page<TaskRecord> page = new PageImpl<>(List.of(task), pageable, 1);
             when(taskRecordRepository.findByOwnerUserIdAndStatus(OWNER_ID, "QUEUED", pageable)).thenReturn(page);
@@ -152,7 +168,8 @@ class TaskQueryServiceTest {
         @DisplayName("指定状态无匹配时返回空结果")
         void list_withStatusFilter_noMatch_returnsEmpty() {
             // Arrange
-            Pageable pageable = PageRequest.of(0, 20);
+            // 服务在无调用方排序时按创建时间倒序下发，桩必须按同一 Pageable 匹配。
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
             Page<TaskRecord> page = new PageImpl<>(List.of(), pageable, 0);
             when(taskRecordRepository.findByOwnerUserIdAndStatus(OWNER_ID, "FAILED", pageable)).thenReturn(page);
 

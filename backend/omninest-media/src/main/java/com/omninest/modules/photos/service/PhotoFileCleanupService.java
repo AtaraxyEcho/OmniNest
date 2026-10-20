@@ -203,7 +203,9 @@ public class PhotoFileCleanupService implements
         List<PhotoAlbum> albums = albumRepository
                 .findAllByIdInAndOwnerUserId(affectedAlbumIds, ownerUserId);
         for (PhotoAlbum album : albums) {
-            long count = albumItemRepository.countByAlbumId(album.getId());
+            // 与 PhotoAlbumService 同一口径：相册计数只算未进回收站且未删除的照片，
+            // 用裸 count 会把回收站里的照片重新算回去。
+            long count = albumItemRepository.countActivePhotosByAlbumId(album.getId());
             album.setPhotoCount((int) count);
         }
         if (!albums.isEmpty()) {

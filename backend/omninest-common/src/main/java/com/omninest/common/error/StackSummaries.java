@@ -51,10 +51,12 @@ public final class StackSummaries {
     /**
      * 掩码令牌、口令赋值与长密钥形态，保留异常结构便于诊断。
      *
+     * <p>供任何要把异常文本写入库或发给前端的组件复用，避免各处自造脱敏规则。</p>
+     *
      * @param raw 原始堆栈文本
      * @return 脱敏后的文本
      */
-    static String redact(String raw) {
+    public static String redact(String raw) {
         if (raw == null || raw.isEmpty()) {
             return "";
         }

@@ -6,6 +6,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.MediaSeriesFavorite;
 import com.omninest.modules.video.domain.MediaVideoCollection;
@@ -56,6 +57,7 @@ public class MovieEngagementService {
     private final MediaSyncEventService syncEventService;
     private final MediaLibraryAccessService mediaLibraryAccessService;
     private final MediaContentAccessService mediaContentAccessService;
+    private final FileQueryService fileQueryService;
     private final ReadThroughCache readThroughCache;
 
     @Transactional(readOnly = true)
@@ -219,6 +221,10 @@ public class MovieEngagementService {
     public MovieCollectionDto createCollection(UUID ownerUserId, MovieCollectionRequest request) {
         if (request.name() == null || request.name().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "合集名称不能为空");
+        }
+        if (request.coverFileId() != null) {
+            // 封面 ID 由客户端提交，必须归当前用户且是图片，否则合集卡片会引用他人文件。
+            fileQueryService.validateOwnedImage(ownerUserId, request.coverFileId());
         }
         MediaVideoCollection collection = new MediaVideoCollection();
         collection.setOwnerUserId(ownerUserId);

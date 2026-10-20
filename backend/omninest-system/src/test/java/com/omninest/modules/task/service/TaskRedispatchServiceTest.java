@@ -29,6 +29,7 @@ import org.mockito.Mockito;
 class TaskRedispatchServiceTest {
 
     private static final UUID TASK_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
+    private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000009");
 
     private final TaskDispatchService taskDispatchService = Mockito.mock(TaskDispatchService.class);
     private final TaskDispatchRepository taskDispatchRepository =
@@ -70,7 +71,7 @@ class TaskRedispatchServiceTest {
                 """;
 
         Map<String, Object> payload = redispatchService.rebuildPayload(
-                TASK_ID, "MEDIA_SCRAPE", QueueNames.MEDIA_SCRAPE_ROUTING_KEY, payloadJson);
+                TASK_ID, null, "MEDIA_SCRAPE", QueueNames.MEDIA_SCRAPE_ROUTING_KEY, payloadJson);
 
         assertThat(payload)
                 .containsEntry("taskId", TASK_ID.toString())
@@ -106,7 +107,7 @@ class TaskRedispatchServiceTest {
         TaskRecord record = record(QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY, "not-json");
 
         assertThatThrownBy(() -> redispatchService.rebuildPayload(
-                TASK_ID, "PHOTO_THUMBNAILS", QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY, record.getPayload()))
+                TASK_ID, null, "PHOTO_THUMBNAILS", QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY, record.getPayload()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("任务载荷不是合法 JSON");
     }
@@ -114,7 +115,7 @@ class TaskRedispatchServiceTest {
     @Test
     void rebuildRejectsPayloadMissingRequiredField() {
         assertThatThrownBy(() -> redispatchService.rebuildPayload(
-                TASK_ID, "MUSIC_SCRAPE", QueueNames.MUSIC_SCRAPE_ROUTING_KEY, "{}"))
+                TASK_ID, null, "MUSIC_SCRAPE", QueueNames.MUSIC_SCRAPE_ROUTING_KEY, "{}"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("任务缺少可重试载荷字段");
         Mockito.verifyNoInteractions(taskDispatchService);
@@ -157,7 +158,7 @@ class TaskRedispatchServiceTest {
                 .thenReturn(Optional.empty());
 
         Map<String, Object> payload = redispatchService.rebuildPayload(
-                TASK_ID, "PHOTO_THUMBNAILS", QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY,
+                TASK_ID, null, "PHOTO_THUMBNAILS", QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY,
                 "{\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\"}");
 
         assertThat(payload)
@@ -171,7 +172,7 @@ class TaskRedispatchServiceTest {
                 .thenReturn(Optional.empty());
 
         Map<String, Object> payload = redispatchService.rebuildPayload(
-                TASK_ID, "PHOTO_GEO_IMPORT", QueueNames.PHOTO_GEO_IMPORT_ROUTING_KEY,
+                TASK_ID, null, "PHOTO_GEO_IMPORT", QueueNames.PHOTO_GEO_IMPORT_ROUTING_KEY,
                 "{\"datasetId\":\"60000000-0000-0000-0000-000000000001\","
                         + "\"datasetVersion\":\"v1\",\"dumpDate\":\"2026-01-01\"}");
 
@@ -187,7 +188,7 @@ class TaskRedispatchServiceTest {
                 .thenReturn(Optional.empty());
 
         Map<String, Object> payload = redispatchService.rebuildPayload(
-                TASK_ID, "PHOTO_GEO_BACKFILL", QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY,
+                TASK_ID, null, "PHOTO_GEO_BACKFILL", QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY,
                 "{\"batchSize\":500}");
 
         assertThat(payload)
@@ -201,9 +202,110 @@ class TaskRedispatchServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> redispatchService.rebuildPayload(
-                TASK_ID, "PHOTO_GEO_BACKFILL", QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY, "{}"))
+                TASK_ID, null, "PHOTO_GEO_BACKFILL", QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY, "{}"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("batchSize");
+    }
+
+    @Test
+    void rebuildsFileSecurityScanPayloadWithOwnerFallbackAndBlankOptionalFields() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "FILE_SECURITY_SCAN", QueueNames.FILE_SECURITY_SCAN_ROUTING_KEY,
+                "{\"ingressItemId\":\"70000000-0000-0000-0000-000000000001\","
+                        + "\"asVersionOfFileId\":\"\",\"declaredSha256\":\"\"}");
+
+        assertThat(payload)
+                .containsEntry("taskId", TASK_ID.toString())
+                .containsEntry("ownerUserId", OWNER_ID.toString())
+                .containsEntry("ingressItemId", "70000000-0000-0000-0000-000000000001")
+                // 空串在事件里就是"不是版本上传/未声明摘要"，不能保留成字符串。
+                .containsEntry("asVersionOfFileId", null)
+                .containsEntry("declaredSha256", null);
+    }
+
+    @Test
+    void rebuildsBackdropSecurityScanPayloadFromOwnerFallback() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "BACKDROP_SECURITY_SCAN", QueueNames.BACKDROP_SECURITY_SCAN_ROUTING_KEY,
+                "{\"assetId\":\"80000000-0000-0000-0000-000000000001\","
+                        + "\"ingressItemId\":\"70000000-0000-0000-0000-000000000001\","
+                        + "\"originalFileName\":\"wall.png\"}");
+
+        assertThat(payload)
+                .containsEntry("ownerUserId", OWNER_ID.toString())
+                .containsEntry("assetId", "80000000-0000-0000-0000-000000000001")
+                .containsEntry("originalFileName", "wall.png");
+    }
+
+    @Test
+    void rebuildsFilePurgePayload() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "FILE_PURGE", QueueNames.FILE_PURGE_ROUTING_KEY,
+                "{\"taskId\":\"" + TASK_ID + "\","
+                        + "\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\","
+                        + "\"rootFileNodeId\":\"30000000-0000-0000-0000-000000000001\","
+                        + "\"cascade\":true}");
+
+        assertThat(payload)
+                .containsEntry("ownerUserId", "10000000-0000-0000-0000-000000000001")
+                .containsEntry("rootFileNodeId", "30000000-0000-0000-0000-000000000001")
+                .doesNotContainKey("cascade");
+    }
+
+    @Test
+    void rebuildsMediaScanPayloadWithBlankRootFolderAsNull() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "MEDIA_SCAN", QueueNames.MEDIA_SCAN_ROUTING_KEY,
+                "{\"rootFolderId\":\"\",\"incremental\":true}");
+
+        assertThat(payload)
+                .containsEntry("taskId", TASK_ID.toString())
+                .containsEntry("ownerUserId", OWNER_ID.toString())
+                .containsEntry("rootFolderId", null)
+                .containsEntry("incremental", true);
+    }
+
+    @Test
+    void rebuildsReaderParsePayloadPreferringFileOwner() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "READER_PARSE", QueueNames.READER_PARSE_ROUTING_KEY,
+                "{\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\","
+                        + "\"fileOwnerId\":\"90000000-0000-0000-0000-000000000001\","
+                        + "\"itemId\":\"20000000-0000-0000-0000-000000000001\","
+                        + "\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\","
+                        + "\"fileFormat\":\"TXT\",\"contentHash\":\"abc\"}");
+
+        assertThat(payload)
+                .containsEntry("ownerUserId", "90000000-0000-0000-0000-000000000001")
+                .containsEntry("itemId", "20000000-0000-0000-0000-000000000001")
+                .containsEntry("fileFormat", "TXT")
+                .containsEntry("isRetry", true);
+    }
+
+    @Test
+    void rebuildsPhotoMotionExtractPayloadAsFileUploadedEvent() {
+        Map<String, Object> payload = redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "PHOTO_MOTION", QueueNames.PHOTO_MOTION_ROUTING_KEY,
+                "{\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\","
+                        + "\"fileObjectId\":\"40000000-0000-0000-0000-000000000001\","
+                        + "\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\","
+                        + "\"bucket\":\"user-files\",\"objectKey\":\"2024/01/a.jpg\","
+                        + "\"fileName\":\"a.jpg\",\"mimeType\":\"image/jpeg\",\"sizeBytes\":1024}");
+
+        assertThat(payload)
+                .containsEntry("bucket", "user-files")
+                .containsEntry("objectKey", "2024/01/a.jpg");
+    }
+
+    @Test
+    void rejectsAutoImportRebuildBecauseRecordPayloadLacksStorageLocator() {
+        // 自动导入的记录载荷不含 bucket/objectKey，只有投递行能原样重放；
+        // 缺投递行时必须拒绝，不能投递一个消费端读不到对象的残缺事件。
+        assertThatThrownBy(() -> redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "MEDIA_AUTO_IMPORT", QueueNames.MEDIA_AUTO_IMPORT_ROUTING_KEY,
+                "{\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\"}"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不支持自动重新投递");
     }
 
     private TaskRecord record(String routingKey, String payload) {
@@ -212,6 +314,7 @@ class TaskRedispatchServiceTest {
         record.setTaskType("MEDIA_SCRAPE");
         record.setStatus("DLQ");
         record.setRoutingKey(routingKey);
+        record.setOwnerUserId(OWNER_ID);
         record.setPayload(payload);
         return record;
     }

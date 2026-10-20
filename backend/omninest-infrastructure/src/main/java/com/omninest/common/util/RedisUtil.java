@@ -188,8 +188,10 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
     /**
      * 执行或加入一次回源。
      *
-     * <p>抢到单飞位的调用执行 loader，完成后再释放单飞位并回填缓存；没抢到的调用直接等待在途
-     * 结果。在途异常按原运行时异常抛给等待方，保持调用方的错误映射不变；加载失败不写缓存。
+     * <p>抢到单飞位的调用执行 loader，先回填缓存再释放单飞位；若顺序反过来，
+     * 释放与写入之间的并发调用既查不到缓存也加不上单飞位，会重复回源。没抢到的调用
+     * 直接等待在途结果。在途异常按原运行时异常抛给等待方，保持调用方的错误映射不变；
+     * 加载失败不写缓存。
      */
     private <T> T loadOnce(String key, Duration ttl, Supplier<T> loader, Class<T> type) {
         CompletableFuture<T> future = new CompletableFuture<>();
@@ -201,19 +203,19 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
         T value;
         try {
             value = loader.get();
+            if (value != null) {
+                try {
+                    set(key, JsonSupport.toJson(value), ttl);
+                } catch (Exception ex) {
+                    log.warn("写入缓存失败: key={}", key, ex);
+                }
+            }
             future.complete(value);
         } catch (RuntimeException | Error exception) {
             future.completeExceptionally(exception);
             throw exception;
         } finally {
             loading.remove(key, future);
-        }
-        if (value != null) {
-            try {
-                set(key, JsonSupport.toJson(value), ttl);
-            } catch (Exception ex) {
-                log.warn("写入缓存失败: key={}", key, ex);
-            }
         }
         return value;
     }

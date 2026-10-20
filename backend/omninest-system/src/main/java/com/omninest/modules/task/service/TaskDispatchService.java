@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,28 @@ public class TaskDispatchService {
     private final TaskDispatchRepository repository;
     private final TaskOutboxProperties properties;
     private final TaskRecordService taskRecordService;
+
+    /**
+     * 分批删除超过保留期的已发布投递记录。
+     *
+     * <p>只清 PUBLISHED：PENDING 与 PUBLISHING 仍在重试链上。原始载荷是重试时的
+     * 首选投递来源，保留期不得短于任务记录保留期，否则只剩事件子载的任务类型
+     * 退回按路由键重建，个别类型会因此无法重投。</p>
+     *
+     * @param cutoff 发布时间截止点
+     * @param batchSize 单批数量
+     * @return 删除记录数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int deletePublishedBatchBefore(Instant cutoff, int batchSize) {
+        List<UUID> ids = repository.findPublishedIdsBefore(
+                cutoff, PageRequest.of(0, Math.max(1, Math.min(batchSize, 5000))));
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        repository.deleteAllByIdInBatch(ids);
+        return ids.size();
+    }
 
     /**
      * 在当前业务事务内创建待发布记录。

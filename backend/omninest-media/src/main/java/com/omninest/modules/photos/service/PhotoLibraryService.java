@@ -781,8 +781,8 @@ public class PhotoLibraryService {
     /**
      * 按标签分页查询照片列表。
      *
-     * <p>totalElements 取标签关联总数（与旧全量端点先查标签再过滤软删的口径一致），
-     * 个别软删照片导致页内条数略少于 size 由前端以已加载数对齐判断兜底。</p>
+     * <p>删除过滤已下沉到查询：先分页再在内存里剔除软删照片会让单页条数不足 size、
+     * totalElements 虚高，前端按总数翻页时会翻到空白页。</p>
      *
      * @param ownerUserId 用户标识
      * @param tag 标签名
@@ -792,14 +792,18 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public Page<PhotoItemDto> listByTagPage(UUID ownerUserId, String tag, int page, int size) {
-        Page<PhotoTag> tagPage = photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(
+        Page<PhotoTag> tagPage = photoTagRepository.findActiveByOwnerUserIdAndTag(
                 ownerUserId, tag, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
         if (tagPage.isEmpty()) {
             return new PageImpl<>(List.of(), tagPage.getPageable(), tagPage.getTotalElements());
         }
         List<UUID> photoIds = tagPage.getContent().stream().map(PhotoTag::getPhotoId).toList();
-        List<PhotoItem> items = photoItemRepository
+        // IN 查询不保证返回顺序，按标签行的排序（打标签时间倒序）重排，否则翻页顺序抖动。
+        Map<UUID, PhotoItem> itemsById = photoItemRepository
                 .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds).stream()
+                .collect(Collectors.toMap(PhotoItem::getId, item -> item, (left, right) -> left));
+        List<PhotoItem> items = photoIds.stream()
+                .map(itemsById::get)
                 .filter(Objects::nonNull)
                 .toList();
         List<PhotoItemDto> dtos = mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));

@@ -1,6 +1,7 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.runtime.WorkerRuntimeRegistry;
@@ -9,6 +10,7 @@ import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthLoginAudit;
@@ -25,12 +27,8 @@ import com.omninest.modules.user.repository.AuditLogAdminRepository;
 import com.omninest.modules.user.repository.AuthLoginAuditRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.TaskRecordAdminRepository;
-import com.sun.management.OperatingSystemMXBean;
 import jakarta.persistence.NoResultException;
-import java.io.File;
 import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryMXBean;
-import java.lang.management.MemoryUsage;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -88,12 +86,14 @@ public class AdminOperationsService {
     private final AuditLogAdminRepository auditLogAdminRepository;
     private final AdminAuditLogService auditLogService;
     private final TaskRedispatchService taskRedispatchService;
+    private final TaskRecordService taskRecordService;
     private final ObjectStorageBuckets objectStorageBuckets;
     private final HealthEndpoint healthEndpoint;
     private final ActiveSessionRepository activeSessionRepository;
     private final AuthLoginAuditRepository loginAuditRepository;
     private final SessionRevocationService sessionRevocationService;
     private final AdminActorGuard adminActorGuard;
+    private final SystemMetricsCollector systemMetricsCollector;
     private final WorkerRuntimeRegistry workerRuntimeRegistry;
 
     public AdminOperationsDto.ConfigManagementView configs() {
@@ -140,26 +140,18 @@ public class AdminOperationsService {
 
     @Transactional(rollbackFor = Exception.class)
     public AdminOperationsDto.TaskRecordItem retryTask(UUID actorUserId, UUID taskId) {
-        // 先查当前状态验证可重试
-        List<Object[]> rows = taskRecordRepository.findByIdRaw(taskId);
-        if (rows.isEmpty()) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "任务不存在");
-        }
-        Object[] row = rows.get(0);
-        String currentStatus = row[2] == null ? "" : row[2].toString();
-        String routingKey = row[4] == null ? null : row[4].toString();
-        if (!RETRYABLE_TASK_STATUS.contains(currentStatus)) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
+        TaskRecord record = taskRecordService.findTaskRecord(taskId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "任务不存在"));
+        if (!RETRYABLE_TASK_STATUS.contains(record.getStatus())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "只有失败、取消或死信任务可以重试");
         }
-        if (routingKey == null || routingKey.isBlank()) {
+        if (record.getRoutingKey() == null || record.getRoutingKey().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少路由键，无法重新投递");
         }
-        Map<String, Object> retryPayload = taskRedispatchService.rebuildPayload(
-                taskId,
-                toText(row[1]),
-                routingKey,
-                toText(row[9])
-        );
+        // 与用户侧重试走同一条链路：优先复用 Outbox 里的原始事件载荷，
+        // 任务记录载荷只是事件子集的类型（媒体导入、扫描、粉碎、安全扫描）按原样重放。
+        taskRedispatchService.redispatch(record);
         // 使用 EntityManager RETURNING 获取更新后的完整记录
         AdminOperationsDto.TaskRecordItem retried = metricsRepository.updateTaskStatusReturning(
                 taskId,
@@ -167,7 +159,6 @@ public class AdminOperationsService {
                 0
         );
         auditLogService.record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
-        taskRedispatchService.enqueueRedispatch(taskId, routingKey, retryPayload);
         return retried;
     }
 
@@ -620,36 +611,13 @@ public class AdminOperationsService {
     }
 
     private SystemSnapshot systemSnapshot() {
-        Runtime runtime = Runtime.getRuntime();
-        MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
-        MemoryUsage heap = memoryMXBean.getHeapMemoryUsage();
-        double cpuUsage = cpuUsage();
-        double memoryUsage = ratio(runtime.totalMemory() - runtime.freeMemory(), runtime.maxMemory());
-        double heapUsage = ratio(heap.getUsed(), heap.getMax());
-        File disk = new File(".");
-        double diskUsage = ratio(disk.getTotalSpace() - disk.getFreeSpace(), disk.getTotalSpace());
-        return new SystemSnapshot(cpuUsage, memoryUsage, diskUsage, heapUsage);
-    }
-
-    private double cpuUsage() {
-        var bean = ManagementFactory.getOperatingSystemMXBean();
-        if (bean instanceof OperatingSystemMXBean operatingSystemMXBean) {
-            return round(Math.max(0, operatingSystemMXBean.getCpuLoad()) * 100);
-        }
-        double load = bean.getSystemLoadAverage();
-        int processors = Math.max(1, bean.getAvailableProcessors());
-        return round(Math.max(0, load) / processors * 100);
-    }
-
-    private double ratio(long used, long total) {
-        if (total <= 0) {
-            return 0;
-        }
-        return round((double) used * 100 / total);
-    }
-
-    private double round(double value) {
-        return Math.round(value * 10.0) / 10.0;
+        SystemMetricsCollector.Snapshot metrics = systemMetricsCollector.collect();
+        return new SystemSnapshot(
+                metrics.cpuUsagePercent(),
+                metrics.runtimeMemoryUsagePercent(),
+                metrics.diskUsagePercent(),
+                metrics.heapUsagePercent()
+        );
     }
 
     private String formatPercent(double value) {

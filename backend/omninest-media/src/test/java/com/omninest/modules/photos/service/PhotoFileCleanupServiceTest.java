@@ -87,7 +87,7 @@ class PhotoFileCleanupServiceTest {
                 .thenReturn(List.of(ALBUM_ID));
         Mockito.when(albumRepository.findAllByIdInAndOwnerUserId(List.of(ALBUM_ID), OWNER_ID))
                 .thenReturn(List.of(album));
-        Mockito.when(albumItemRepository.countByAlbumId(ALBUM_ID)).thenReturn(2L);
+        Mockito.when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(2L);
         Mockito.when(itemRepository.findByCoverFileIdIn(Set.of(FILE_NODE_ID)))
                 .thenReturn(List.of(coverReference));
         Mockito.when(faceRepository.findByPhotoIdIn(List.of(PHOTO_ID)))

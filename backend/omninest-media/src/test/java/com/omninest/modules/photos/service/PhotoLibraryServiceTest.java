@@ -654,7 +654,7 @@ class PhotoLibraryServiceTest {
         tag2.setTag("旅行");
         tag2.setPhotoId(PHOTO_ID_2);
         Pageable pageable = PageRequest.of(0, 2);
-        when(photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(OWNER_ID, "旅行", pageable))
+        when(photoTagRepository.findActiveByOwnerUserIdAndTag(OWNER_ID, "旅行", pageable))
                 .thenReturn(new PageImpl<>(List.of(tag1, tag2), pageable, 5));
         PhotoItem photo1 = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "标签照片一");
         PhotoItem photo2 = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "标签照片二");
@@ -684,7 +684,7 @@ class PhotoLibraryServiceTest {
     @Test
     void listByTagPage_emptyTagReturnsEmptyPageWithoutItemLookup() {
         Pageable pageable = PageRequest.of(0, 2);
-        when(photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(OWNER_ID, "无标签", pageable))
+        when(photoTagRepository.findActiveByOwnerUserIdAndTag(OWNER_ID, "无标签", pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
         Page<PhotoItemDto> result = service.listByTagPage(OWNER_ID, "无标签", 0, 2);

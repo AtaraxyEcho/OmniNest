@@ -15,9 +15,16 @@ import org.springframework.data.repository.query.Param;
 public interface FileFavoriteRepository extends JpaRepository<FileFavorite, UUID> {
     List<FileFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
 
+    /**
+     * 分页查询收藏的文件节点 ID，只看未删除节点。
+     *
+     * <p>删除过滤必须留在查询里：先分页再在内存里剔除软删除节点，会让单页条数
+     * 少于 size、总数虚高，翻到后面出现整页空白。</p>
+     */
     @Query("""
             select f.fileNode.id from FileFavorite f
             where f.ownerUserId = :ownerUserId
+              and f.fileNode.deleted = false
             order by f.createdAt desc
             """)
     Page<UUID> findFavoriteNodeIds(@Param("ownerUserId") UUID ownerUserId, Pageable pageable);

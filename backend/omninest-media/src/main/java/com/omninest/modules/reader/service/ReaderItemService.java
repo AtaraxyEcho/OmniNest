@@ -167,11 +167,7 @@ public class ReaderItemService {
 
         // 批量查询书架状态（1 次查询替代 N 次）
         List<UUID> itemIds = items.stream().map(ReaderItem::getId).toList();
-        Set<UUID> bookshelfItemIds = bookshelfRepository
-                .findByOwnerUserIdAndReaderItemIdIn(ownerUserId, itemIds)
-                .stream()
-                .map(ReaderBookshelf::getReaderItemId)
-                .collect(Collectors.toSet());
+        Set<UUID> bookshelfItemIds = bookshelfItemIds(ownerUserId, itemIds);
 
         // 批量查询文件节点空间类型（1 次查询替代 N 次）
         List<UUID> fileNodeIds = items.stream()
@@ -788,6 +784,24 @@ public class ReaderItemService {
         }
         fileLifecycleGuard.requireOwnedWritable(ownerUserId, item.getFileNodeId());
         return item;
+    }
+
+    /**
+     * 批量查询用户已加入书架的条目 ID（1 次查询替代逐条判断）。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param itemIds 待判定条目 ID
+     * @return 已在书架上的条目 ID 集合
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> bookshelfItemIds(UUID ownerUserId, Collection<UUID> itemIds) {
+        if (itemIds.isEmpty()) {
+            return Set.of();
+        }
+        return bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(ownerUserId, itemIds)
+                .stream()
+                .map(ReaderBookshelf::getReaderItemId)
+                .collect(Collectors.toSet());
     }
 
     /**

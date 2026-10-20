@@ -166,6 +166,9 @@ public class ContentAssetService {
         if (ownerUserId == null || resourceId == null || fileNodeId == null) {
             return null;
         }
+        // 入参来自用户提交的元数据表单：必须先确认文件归当前用户且是图片，
+        // 否则资源上会挂一个别人（或不存在的）文件，后续按公开资产分发时取到错图。
+        fileQueryService.validateOwnedImage(ownerUserId, fileNodeId);
         ContentAsset asset = contentAssetRepository
                 .findPrimaryAsset(ownerUserId, resourceType, resourceId, assetType)
                 .orElseGet(ContentAsset::new);

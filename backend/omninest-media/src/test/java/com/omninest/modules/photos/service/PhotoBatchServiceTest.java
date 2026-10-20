@@ -44,6 +44,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +52,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,6 +113,19 @@ class PhotoBatchServiceTest {
             saved.setVersion(saved.getVersion() + 1);
             return saved;
         });
+        // 执行入口会先把 ID 收敛到"仍归当前用户且未删除"的照片（见 retainOwnedActive）。
+        // 桩按请求 ID 回显，用例原有的单张夹具语义不变。
+        Mockito.lenient()
+                .when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(eq(OWNER_ID), any()))
+                .thenAnswer(invocation -> {
+                    Collection<UUID> ids = invocation.getArgument(1);
+                    return ids.stream().map(id -> {
+                        PhotoItem owned = new PhotoItem();
+                        owned.setId(id);
+                        owned.setOwnerUserId(OWNER_ID);
+                        return owned;
+                    }).toList();
+                });
     }
 
     @Test

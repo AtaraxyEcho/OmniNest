@@ -6,8 +6,8 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,8 +22,10 @@ import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.dto.ConfigHistoryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.service.TaskRedispatchService;
 import com.omninest.modules.user.domain.AuditLog;
 import com.omninest.modules.user.domain.AuthPermission;
@@ -64,12 +66,14 @@ class AdminOperationsServiceTest {
     private final TaskDispatchRepository taskDispatchRepository = mock(TaskDispatchRepository.class);
     private final TaskRedispatchService taskRedispatchService =
             new TaskRedispatchService(taskDispatchService, taskDispatchRepository);
+    private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
     private final HealthEndpoint healthEndpoint = mock(HealthEndpoint.class);
     private final ActiveSessionRepository activeSessionRepository = mock(ActiveSessionRepository.class);
     private final AuthLoginAuditRepository loginAuditRepository = mock(AuthLoginAuditRepository.class);
     private final SessionRevocationService sessionRevocationService = mock(SessionRevocationService.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
+    private final SystemMetricsCollector systemMetricsCollector = new SystemMetricsCollector();
     private final WorkerRuntimeRegistry workerRuntimeRegistry = availableWorkerRuntimeRegistry();
     private final AdminOperationsService service = new AdminOperationsService(
             authUserRepository,
@@ -80,12 +84,14 @@ class AdminOperationsServiceTest {
             auditLogAdminRepository,
             auditLogService,
             taskRedispatchService,
+            taskRecordService,
             objectStorageBuckets,
             healthEndpoint,
             activeSessionRepository,
             loginAuditRepository,
             sessionRevocationService,
             adminActorGuard,
+            systemMetricsCollector,
             workerRuntimeRegistry
     );
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
@@ -153,6 +159,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void retryTaskOnlyAllowsFailedCancelledOrDlqTasks() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         UUID fileNodeId = UUID.fromString("11111111-1111-1111-1111-111111111111");
         UUID fileObjectId = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -169,11 +176,8 @@ class AdminOperationsServiceTest {
                   "occurredAt": "2026-06-01T10:00:00Z"
                 }
                 """.formatted(fileNodeId, fileObjectId, actorUserId);
-        List<Object[]> taskRow = Collections.singletonList(
-                new Object[]{taskId, "FILE_INDEX", "FAILED", 80, "file.index", "失败", 1,
-                        Instant.now(), Instant.now(), payload}
-        );
-        doReturn(taskRow).when(taskRecordRepository).findByIdRaw(taskId);
+        when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(
+                taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", payload)));
         when(metricsRepository.updateTaskStatusReturning(eq(taskId), eq("QUEUED"), eq(0))).thenReturn(
                 new AdminOperationsDto.TaskRecordItem(
                         taskId,
@@ -210,12 +214,10 @@ class AdminOperationsServiceTest {
 
     @Test
     void retryTaskRejectsMissingReplayPayload() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        List<Object[]> taskRow = Collections.singletonList(
-                new Object[]{taskId, "FILE_INDEX", "FAILED", 80, "file.index", "失败", 1,
-                        Instant.now(), Instant.now(), "{}"}
-        );
-        doReturn(taskRow).when(taskRecordRepository).findByIdRaw(taskId);
+        when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(
+                taskRecord(taskId, "FILE_INDEX", "FAILED", "file.index", "{}")));
 
         assertThatThrownBy(() -> service.retryTask(actorUserId, taskId))
                 .isInstanceOf(BusinessException.class)
@@ -224,6 +226,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void retryTaskRebuildsMusicScrapePayloadFromSystemTask() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         String payload = """
                 {
@@ -232,11 +235,8 @@ class AdminOperationsServiceTest {
                   "force": true
                 }
                 """.formatted(taskId, actorUserId);
-        List<Object[]> taskRow = Collections.singletonList(
-                new Object[]{taskId, "MUSIC_SCRAPE", "FAILED", 80, QueueNames.MUSIC_SCRAPE_ROUTING_KEY, "失败", 1,
-                        Instant.now(), Instant.now(), payload}
-        );
-        doReturn(taskRow).when(taskRecordRepository).findByIdRaw(taskId);
+        when(taskRecordService.findTaskRecord(taskId)).thenReturn(Optional.of(taskRecord(
+                taskId, "MUSIC_SCRAPE", "FAILED", QueueNames.MUSIC_SCRAPE_ROUTING_KEY, payload)));
         when(metricsRepository.updateTaskStatusReturning(eq(taskId), eq("QUEUED"), eq(0))).thenReturn(
                 new AdminOperationsDto.TaskRecordItem(
                         taskId,
@@ -271,6 +271,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void retryTaskUsesExternalImportBusinessTaskId() {
+        givenFreshAdminActor();
         UUID systemTaskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         UUID importTaskId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
         String payload = """
@@ -282,12 +283,8 @@ class AdminOperationsServiceTest {
                   "spaceType": "PRIVATE"
                 }
                 """.formatted(importTaskId);
-        List<Object[]> taskRow = Collections.singletonList(
-                new Object[]{systemTaskId, "EXTERNAL_IMPORT", "FAILED", 80,
-                        QueueNames.EXTERNAL_IMPORT_ROUTING_KEY, "失败", 1,
-                        Instant.now(), Instant.now(), payload}
-        );
-        doReturn(taskRow).when(taskRecordRepository).findByIdRaw(systemTaskId);
+        when(taskRecordService.findTaskRecord(systemTaskId)).thenReturn(Optional.of(taskRecord(
+                systemTaskId, "EXTERNAL_IMPORT", "FAILED", QueueNames.EXTERNAL_IMPORT_ROUTING_KEY, payload)));
         when(metricsRepository.updateTaskStatusReturning(eq(systemTaskId), eq("QUEUED"), eq(0))).thenReturn(
                 new AdminOperationsDto.TaskRecordItem(
                         systemTaskId,
@@ -592,4 +589,16 @@ class AdminOperationsServiceTest {
         permission.setModule(module);
         return permission;
     }
+
+    private TaskRecord taskRecord(UUID taskId, String taskType, String status, String routingKey, String payload) {
+        TaskRecord record = new TaskRecord();
+        record.setId(taskId);
+        record.setTaskType(taskType);
+        record.setStatus(status);
+        record.setRoutingKey(routingKey);
+        record.setOwnerUserId(actorUserId);
+        record.setPayload(payload);
+        return record;
+    }
+
 }

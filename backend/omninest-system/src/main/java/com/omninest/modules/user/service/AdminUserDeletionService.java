@@ -48,6 +48,7 @@ public class AdminUserDeletionService {
     private final AdminUserContentGuardRepository adminUserContentGuardRepository;
     private final AdminAuditLogService auditLogService;
     private final CurrentUserContext currentUserContext;
+    private final AdminActorGuard adminActorGuard;
 
     /**
      * 物理删除空账户用户。
@@ -65,10 +66,14 @@ public class AdminUserDeletionService {
         if (actorUserId.equals(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "不能删除当前登录账户");
         }
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(actorUserId);
         AuthUser user = authUserRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
         if (AuthUserMapper.roleCodes(user).contains(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员账户不能删除");
+        }
+        if (AuthUserMapper.roleCodes(user).contains(Roles.ADMIN) && !adminActorGuard.isSuperAdmin(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可删除管理员账户");
         }
         requireEmptyAccount(user);
         // 先撤销全部令牌并保留撤销记录：认证过滤器按撤销记录拒绝已签发

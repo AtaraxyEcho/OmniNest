@@ -27,6 +27,10 @@ public class AdminConsoleMetricsRepository {
      *
      * <p>RETURNING 只给出被更新行本身，归属显示名需再联用户表，
      * 因此写成 CTE 后在外层补齐 owner 两列。</p>
+     *
+     * <p>本语句服务管理员重试：重新投递等同用户侧重试，必须把重试阶梯复位
+     * （{@code retry_count} 归零、清空堆栈摘要与下次重试时刻）。若只递增计数，
+     * 已耗尽重试额度的任务再次遇到瞬时错误会直接进死信。</p>
      */
     public AdminOperationsDto.TaskRecordItem updateTaskStatusReturning(UUID taskId, String status, int progress) {
         var query = entityManager.createNativeQuery("""
@@ -35,7 +39,9 @@ public class AdminConsoleMetricsRepository {
                     set status = :status,
                         progress = :progress,
                         error_summary = null,
-                        retry_count = retry_count + 1,
+                        stack_summary = null,
+                        next_retry_at = null,
+                        retry_count = 0,
                         updated_at = now(),
                         version = version + 1
                     where id = :taskId

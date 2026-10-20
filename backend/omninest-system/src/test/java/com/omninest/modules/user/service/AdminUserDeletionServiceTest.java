@@ -49,6 +49,7 @@ class AdminUserDeletionServiceTest {
             Mockito.mock(AdminUserContentGuardRepository.class);
     private final AdminAuditLogService auditLogService = Mockito.mock(AdminAuditLogService.class);
     private final CurrentUserContext currentUserContext = Mockito.mock(CurrentUserContext.class);
+    private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
     private final AdminUserDeletionService service = new AdminUserDeletionService(
             authUserRepository,
             activeSessionRepository,
@@ -60,14 +61,30 @@ class AdminUserDeletionServiceTest {
             notificationService,
             adminUserContentGuardRepository,
             auditLogService,
-            currentUserContext
+            currentUserContext,
+            adminActorGuard
     );
 
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private final UUID targetUserId = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
+    /** 操作者默认是超级管理员：可处置管理员与成员账户。 */
     private void givenActor() {
+        givenActor(Roles.SUPER_ADMIN);
+    }
+
+    private void givenActor(String roleCode) {
         when(currentUserContext.requireCurrentUserId()).thenReturn(actorUserId);
+        AuthUser actor = new AuthUser();
+        actor.setId(actorUserId);
+        actor.setUsername("admin-it");
+        actor.setStatus("ACTIVE");
+        AuthRole role = new AuthRole();
+        role.setId(UUID.randomUUID());
+        role.setCode(roleCode);
+        role.setName(roleCode);
+        actor.getRoles().add(role);
+        when(authUserRepository.findWithRolesAndPermissionsById(actorUserId)).thenReturn(Optional.of(actor));
     }
 
     private AuthUser targetUser(String roleCode) {
@@ -117,6 +134,19 @@ class AdminUserDeletionServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.FORBIDDEN);
+        verifyNoInteractions(notificationService, activeSessionRepository, auditLogService);
+    }
+
+    /** 普通管理员不得删除同级管理员账户。 */
+    @Test
+    void deleteUserRejectsAdminTargetForPlainAdminActor() {
+        givenActor(Roles.ADMIN);
+        when(authUserRepository.findWithRolesById(targetUserId))
+                .thenReturn(Optional.of(targetUser(Roles.ADMIN)));
+
+        assertThatThrownBy(() -> service.deleteUser(targetUserId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅超级管理员可删除管理员账户");
         verifyNoInteractions(notificationService, activeSessionRepository, auditLogService);
     }
 

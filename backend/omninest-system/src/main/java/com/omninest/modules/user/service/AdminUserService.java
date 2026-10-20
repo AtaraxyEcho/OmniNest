@@ -65,6 +65,7 @@ public class AdminUserService {
     private final StorageQuotaService storageQuotaService;
     private final UserSessionRevocationService userSessionRevocationService;
     private final TwoFactorService twoFactorService;
+    private final AdminActorGuard adminActorGuard;
 
     /**
      * 分页查询用户，支持按用户名、展示名、邮箱模糊搜索、角色编码精确过滤
@@ -130,6 +131,8 @@ public class AdminUserService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto createUser(AdminCreateUserRequest request) {
+        UUID actorUserId = currentUserContext.requireCurrentUserId();
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(actorUserId);
         String username = normalizeUsername(request.username());
         if (authUserRepository.existsByUsername(username)) {
             throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
@@ -142,10 +145,10 @@ public class AdminUserService {
         user.setEmail(normalizeEmail(request.email()));
         user.setStatus(normalizeStatus(request.status()));
         user.setQuotaBytes(storageQuotaService.getDefaultQuotaBytes());
-        resolveRoles(request.roles()).forEach(user.getRoles()::add);
+        resolveRolesForActor(actor, request.roles()).forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         auditLogService.recordWithMetadata(
-                currentUserContext.requireCurrentUserId(),
+                actorUserId,
                 "ADMIN_USER_CREATE", "auth_users", saved.id(),
                 Map.of("username", saved.username()));
         return saved;
@@ -160,16 +163,18 @@ public class AdminUserService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto updateUserStatus(UUID userId, String rawStatus) {
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
         AuthUser user = authUserRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
         if (AuthUserMapper.roleCodes(user).contains(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员状态不能通过管理端修改");
         }
+        requireSuperAdminForAdminTarget(actor, user, "修改管理员账户状态");
         user.setStatus(normalizeStatus(rawStatus));
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户状态");
         auditLogService.recordWithMetadata(
-                currentUserContext.requireCurrentUserId(),
+                actor.getId(),
                 "ADMIN_USER_STATUS_UPDATE", "auth_users", userId,
                 Map.of("status", saved.status()));
         return saved;
@@ -182,16 +187,21 @@ public class AdminUserService {
      * 只能由管理员清零后重新开启。超级管理员同样可被重置，否则单实例部署会在换密钥后把自己锁在门外；
      * 重置不等于取得访问——登录仍需要该用户的密码。</p>
      *
+     * <p>普通管理员不得重置其他管理员的验证器：清掉 TOTP 并吊销全部会话，
+     * 已足够把一个同级账户挡在门外。</p>
+     *
      * @param userId 用户标识
      */
     @Transactional(rollbackFor = Exception.class)
     public void resetTwoFactor(UUID userId) {
-        AuthUser user = authUserRepository.findById(userId)
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
+        AuthUser user = authUserRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
+        requireSuperAdminForAdminTarget(actor, user, "重置管理员两步验证");
         twoFactorService.resetByAdmin(user.getId());
         userSessionRevocationService.revokeAll(List.of(user.getId()), "管理员重置两步验证");
         auditLogService.recordWithMetadata(
-                currentUserContext.requireCurrentUserId(),
+                actor.getId(),
                 "ADMIN_USER_2FA_RESET", "auth_users", user.getId(),
                 Map.of("username", user.getUsername()));
     }
@@ -232,17 +242,19 @@ public class AdminUserService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto updateUserRoles(UUID userId, Set<String> requestedRoles) {
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
         AuthUser user = authUserRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
         if (AuthUserMapper.roleCodes(user).contains(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员角色不能通过管理端修改");
         }
+        requireSuperAdminForAdminTarget(actor, user, "修改管理员角色");
         user.getRoles().clear();
-        resolveRoles(requestedRoles).forEach(user.getRoles()::add);
+        resolveRolesForActor(actor, requestedRoles).forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户角色");
         auditLogService.recordWithMetadata(
-                currentUserContext.requireCurrentUserId(),
+                actor.getId(),
                 "ADMIN_USER_ROLES_UPDATE", "auth_users", userId,
                 Map.of("roles", saved.roles()));
         return saved;
@@ -286,6 +298,51 @@ public class AdminUserService {
                 .map(this::normalizeRoleCode)
                 .map(this::loadRole)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * 按操作者身份解析待授予角色。
+     *
+     * <p>普通管理员既不能授予管理员角色，也不能授予自身不具备的权限：自定义角色的
+     * 权限集合可能宽于操作者本人，直接落库等同于让低权管理员给自己造一个高权账户。</p>
+     */
+    private Set<AuthRole> resolveRolesForActor(AuthUser actor, Set<String> requestedRoles) {
+        Set<AuthRole> roles = resolveRoles(requestedRoles);
+        if (adminActorGuard.isSuperAdmin(actor)) {
+            return roles;
+        }
+        if (roles.stream().anyMatch(role -> Roles.ADMIN.equals(role.getCode()))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可授予管理员角色");
+        }
+        Set<UUID> roleIds = roles.stream()
+                .map(AuthRole::getId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> grantedPermissions = authRoleRepository.findPermissionCodesByRoleIds(roleIds)
+                .values()
+                .stream()
+                .flatMap(Set::stream)
+                .collect(Collectors.toCollection(HashSet::new));
+        adminActorGuard.requireGrantWithinActorScope(actor, grantedPermissions);
+        return roles;
+    }
+
+    /**
+     * 拦截普通管理员处置同级账户。
+     *
+     * <p>本人操作不在此限：管理员自助停用或降权是退出管理的正常路径，不是横向越权。</p>
+     *
+     * @param actor 已复核的管理员
+     * @param target 目标账户
+     * @param action 动作描述，用于错误提示
+     */
+    private void requireSuperAdminForAdminTarget(AuthUser actor, AuthUser target, String action) {
+        if (actor.getId().equals(target.getId())
+                || !AuthUserMapper.roleCodes(target).contains(Roles.ADMIN)) {
+            return;
+        }
+        if (!adminActorGuard.isSuperAdmin(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可" + action);
+        }
     }
 
     private String normalizeRoleCode(String rawRoleCode) {

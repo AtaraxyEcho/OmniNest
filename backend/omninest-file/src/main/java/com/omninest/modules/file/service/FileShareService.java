@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.CredentialCipher;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
@@ -61,6 +62,7 @@ public class FileShareService {
     private final FileNodeSupport fileNodeSupport;
     private final FileSyncEventWriter syncEventWriter;
     private final ReadThroughCache readThroughCache;
+    private final CredentialCipher credentialCipher;
 
     /**
      * 分页查询收到的分享。
@@ -214,6 +216,8 @@ public class FileShareService {
         share.setResourceType(resourceType);
         share.setResourceId(node.getId());
         share.setTokenHash(sha256(rawToken));
+        // 密文令牌支持所有者日后重新复制链接地址；公开校验仍走哈希比对。
+        share.setTokenCipher(credentialCipher.encrypt(rawToken));
         share.setExpiresAt(request.parsedExpiresAt());
         share.setMaxAccessCount(request.maxAccessCount());
 
@@ -464,12 +468,15 @@ public class FileShareService {
             String generatedPassword,
             Map<UUID, String> namesById) {
         String resourceName = namesById.getOrDefault(share.getResourceId(), "已删除文件");
+        // 创建响应携带明文令牌；列表查询只能从密文还原，历史行无密文时返回空串，
+        // 不得回退到哈希片段——那不是可用地址，复制出去必然 404。
+        String shareCode = rawToken != null ? rawToken : revealToken(share);
         return new FileShareLinkDto(
                 share.getId(),
                 share.getResourceType(),
                 share.getResourceId(),
                 resourceName,
-                rawToken == null ? share.getTokenHash().substring(0, 12) : rawToken,
+                shareCode == null ? "" : shareCode,
                 resolveShareStatus(share),
                 share.getMaxAccessCount(),
                 share.getAccessCount(),
@@ -478,6 +485,26 @@ public class FileShareService {
                 share.getCreatedAt(),
                 generatedPassword
         );
+    }
+
+    /**
+     * 还原分享链接的明文令牌。
+     *
+     * <p>公开访问路径按哈希查库，不经过本方法；这里只服务所有者重新复制链接地址。
+     * 密钥轮换或历史数据缺密文时返回 null，由调用方按"无地址"处理。</p>
+     */
+    private String revealToken(ShareLink share) {
+        String cipher = share.getTokenCipher();
+        if (cipher == null || cipher.isBlank()) {
+            return null;
+        }
+        try {
+            return credentialCipher.decrypt(cipher);
+        } catch (RuntimeException error) {
+            log.debug("分享令牌解密失败，按无地址处理: shareId={}, errorType={}",
+                    share.getId(), error.getClass().getSimpleName());
+            return null;
+        }
     }
 
     private SharedFileDto toSharedFileDto(FileNode node, FilePermission permission, String ownerUsername) {

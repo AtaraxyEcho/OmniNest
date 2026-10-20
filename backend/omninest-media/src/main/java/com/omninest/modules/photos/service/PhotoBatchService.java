@@ -192,7 +192,7 @@ public class PhotoBatchService {
         task = batchTaskRepository.save(task);
 
         try {
-            List<UUID> photoIds = resolvePhotoIds(task);
+            List<UUID> photoIds = retainOwnedActive(ownerUserId, resolvePhotoIds(task));
             if ("DOWNLOAD".equals(task.getTaskType())) {
                 task = executeDownloadTask(ownerUserId, photoIds, task);
             } else {
@@ -230,6 +230,29 @@ public class PhotoBatchService {
                     .toList();
         }
         return List.of();
+    }
+
+    /**
+     * 只保留仍归当前用户且不在回收站的照片 ID。
+     *
+     * <p>参数里的 ID 是创建任务那一刻的选择，执行可能推迟到数分钟后（退避重试、
+     * 死信重投、管理台重试），期间照片可能已被删除或移入回收站。不在执行入口
+     * 重算，就会给已删照片写标签、投递索引事件或打包下载。</p>
+     */
+    private List<UUID> retainOwnedActive(UUID ownerUserId, List<UUID> photoIds) {
+        if (photoIds.isEmpty()) {
+            return photoIds;
+        }
+        Set<UUID> ownedIds = photoItemRepository.findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
+                .stream()
+                .map(PhotoItem::getId)
+                .collect(Collectors.toSet());
+        List<UUID> retained = photoIds.stream().filter(ownedIds::contains).toList();
+        if (retained.size() != photoIds.size()) {
+            log.info("批量任务跳过已删除或无权访问的照片: ownerUserId={}, 提交={}, 保留={}",
+                    ownerUserId, photoIds.size(), retained.size());
+        }
+        return retained;
     }
 
     private void executeMutationTask(UUID ownerUserId, List<UUID> photoIds, PhotoBatchTask task) {

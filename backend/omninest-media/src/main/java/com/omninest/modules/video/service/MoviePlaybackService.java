@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -167,6 +168,9 @@ public class MoviePlaybackService {
         history.setPositionSeconds(progress.getPositionSeconds());
         history.setDurationSeconds(progress.getDurationSeconds());
         history.setCompleted(progress.isCompleted());
+        // 观看历史按 played_at 倒序；实体只在 @PrePersist 填该字段，复看不刷新
+        // 就会让老片永远停在"最近观看"底部。
+        history.setPlayedAt(Instant.now());
         return history;
     }
 

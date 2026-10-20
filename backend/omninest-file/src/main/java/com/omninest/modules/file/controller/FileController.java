@@ -1,5 +1,6 @@
 package com.omninest.modules.file.controller;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.ClientIpResolver;
@@ -158,7 +159,8 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var files = fileManagerService.listRecentFiles(ownerUserId);
-        return ApiResponse.success(PageResponse.of(files, page, size, files.size()));
+        return ApiResponse.success(PageResponse.of(
+                PageClamps.slice(files, page, size), page, size, files.size()));
     }
 
     @Operation(summary = "列出收藏文件", description = "列出当前用户收藏的文件")
@@ -605,7 +607,8 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileUploadQueueService.listUploadQueue(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
+        return ApiResponse.success(PageResponse.of(
+                PageClamps.slice(items, page, size), page, size, items.size()));
     }
 
     @Operation(summary = "创建上传会话", description = "创建分片上传会话，支持大文件断点续传")
@@ -688,7 +691,8 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = externalStorageAccountService.listExternalAccounts(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
+        return ApiResponse.success(PageResponse.of(
+                PageClamps.slice(items, page, size), page, size, items.size()));
     }
 
     @Operation(summary = "创建外部存储", description = "关联一个新的外部存储账户")

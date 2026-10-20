@@ -1,8 +1,10 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.modules.configcenter.service.ConfigHistoryRetentionService;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.user.config.SystemHistoryRetentionProperties;
+import com.omninest.modules.user.port.PurgeHistoryRetention;
 import com.omninest.modules.user.repository.AuditLogRetentionRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -14,20 +16,24 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 /**
- * 系统任务与审计日志保留清理测试。
+ * 系统历史保留清理测试。
  *
  * @author OmniNest
  */
 class SystemHistoryRetentionServiceTest {
     private final TaskRecordService taskRecordService = Mockito.mock(TaskRecordService.class);
+    private final TaskDispatchService taskDispatchService = Mockito.mock(TaskDispatchService.class);
     private final AuditLogRetentionRepository auditLogRepository = Mockito.mock(AuditLogRetentionRepository.class);
     private final ConfigHistoryRetentionService configHistoryRetentionService =
             Mockito.mock(ConfigHistoryRetentionService.class);
+    private final PurgeHistoryRetention purgeHistoryRetention = Mockito.mock(PurgeHistoryRetention.class);
     private final SystemHistoryRetentionProperties properties = new SystemHistoryRetentionProperties();
     private final SystemHistoryRetentionService service = new SystemHistoryRetentionService(
             taskRecordService,
+            taskDispatchService,
             auditLogRepository,
             configHistoryRetentionService,
+            purgeHistoryRetention,
             properties
     );
 
@@ -37,6 +43,8 @@ class SystemHistoryRetentionServiceTest {
         properties.setTaskMaximumAge(Duration.ofDays(30));
         properties.setAuditMaximumAge(Duration.ofDays(365));
         properties.setConfigMaximumAge(Duration.ofDays(365));
+        properties.setDispatchMaximumAge(Duration.ofDays(30));
+        properties.setPurgeEntryMaximumAge(Duration.ofDays(30));
         properties.setConfigMinimumVersions(20);
         properties.setBatchSize(2);
         properties.setMaximumBatches(3);
@@ -77,6 +85,35 @@ class SystemHistoryRetentionServiceTest {
                 );
     }
 
+    /**
+     * Outbox 投递行与物理删除条目同样按批次回收：两张表都保存完整载荷或明细行，
+     * 不清理会无限增长。
+     */
+    @Test
+    void cleanupDeletesDispatchAndPurgeEntryBatches() {
+        Mockito.when(taskDispatchService.deletePublishedBatchBefore(
+                ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2))).thenReturn(2, 1);
+        Mockito.when(purgeHistoryRetention.deleteCompletedEntriesBefore(
+                ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2))).thenReturn(2, 1);
+
+        service.cleanup();
+
+        Mockito.verify(taskDispatchService, Mockito.times(2))
+                .deletePublishedBatchBefore(ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2));
+        Mockito.verify(purgeHistoryRetention, Mockito.times(2))
+                .deleteCompletedEntriesBefore(ArgumentMatchers.any(Instant.class), ArgumentMatchers.eq(2));
+    }
+
+    @Test
+    void cleanupSkipsRetentionsWithInvalidAge() {
+        properties.setDispatchMaximumAge(Duration.ofDays(-1));
+        properties.setPurgeEntryMaximumAge(Duration.ZERO);
+
+        service.cleanup();
+
+        Mockito.verifyNoInteractions(taskDispatchService, purgeHistoryRetention);
+    }
+
     @Test
     void cleanupStopsAtConfiguredMaximumBatches() {
         properties.setMaximumBatches(2);
@@ -114,6 +151,7 @@ class SystemHistoryRetentionServiceTest {
 
         service.cleanup();
 
-        Mockito.verifyNoInteractions(taskRecordService, auditLogRepository, configHistoryRetentionService);
+        Mockito.verifyNoInteractions(taskRecordService, taskDispatchService, auditLogRepository,
+                configHistoryRetentionService, purgeHistoryRetention);
     }
 }

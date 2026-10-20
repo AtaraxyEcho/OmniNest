@@ -41,6 +41,7 @@ class AdminConsoleServiceTest {
     private final StorageMetricsQuery storageMetricsQuery = mock(StorageMetricsQuery.class);
     private final AdminAnalyticsRepository analyticsRepository = mock(AdminAnalyticsRepository.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
+    private final SystemMetricsCollector systemMetricsCollector = new SystemMetricsCollector();
     private final AdminConsoleService service = new AdminConsoleService(
             authUserRepository,
             authRoleRepository,
@@ -50,7 +51,8 @@ class AdminConsoleServiceTest {
             auditLogRepository,
             storageMetricsQuery,
             analyticsRepository,
-            storageQuotaService
+            storageQuotaService,
+            systemMetricsCollector
     );
 
     @Test

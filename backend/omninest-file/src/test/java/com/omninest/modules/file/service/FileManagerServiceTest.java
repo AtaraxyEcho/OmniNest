@@ -14,6 +14,7 @@ import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.CredentialCipher;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.modules.file.port.MediaCoverDirectory;
 import com.omninest.modules.user.port.UserNameDirectory;
@@ -31,6 +32,7 @@ import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
+import com.omninest.modules.file.dto.FileShareLinkDto;
 import com.omninest.modules.file.dto.FileSharePreviewDto;
 import com.omninest.modules.file.repository.FileAccessRecordRepository;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
@@ -60,6 +62,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -94,6 +98,23 @@ class FileManagerServiceTest {
     private final FileContentChangePublisher fileContentChangePublisher = Mockito.mock(FileContentChangePublisher.class);
     private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
     private final PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
+    /** 可逆替身：只验证令牌密文读写链路，不代表生产算法。 */
+    private final CredentialCipher credentialCipher = new CredentialCipher() {
+        @Override
+        public String encrypt(String plaintext) {
+            return "cipher:" + plaintext;
+        }
+
+        @Override
+        public String decrypt(String payload) {
+            return payload.startsWith("cipher:") ? payload.substring("cipher:".length()) : payload;
+        }
+
+        @Override
+        public int currentKeyVersion() {
+            return 1;
+        }
+    };
     private final FileQueryService fileQueryService = Mockito.mock(FileQueryService.class);
     private final RateLimitService rateLimitService =
             Mockito.mock(RateLimitService.class);
@@ -125,7 +146,8 @@ class FileManagerServiceTest {
             fileContentChangePublisher, fileNodeSupport, syncEventWriter);
     private final FileShareService fileShareService = new FileShareService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
-            filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
+            filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
+            credentialCipher);
     private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder, rateLimitService,
             notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
@@ -863,7 +885,8 @@ class FileManagerServiceTest {
                 new BCryptPasswordEncoder();
         FileShareService realShareService = new FileShareService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
-                filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
+                filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
+                credentialCipher);
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
@@ -960,7 +983,8 @@ class FileManagerServiceTest {
                 new BCryptPasswordEncoder();
         FileShareService realShareService = new FileShareService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
-                filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
+                filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache,
+                credentialCipher);
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
@@ -1014,6 +1038,65 @@ class FileManagerServiceTest {
         assertThatThrownBy(() -> realAccessService.previewShare("rawtoken", "wrong"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
+    }
+
+    // ==================== 分享令牌回显测试 ====================
+
+    /**
+     * 「我的分享」列表回显的分享码必须能兑换公开访问：创建时落库的密文可解回明文，
+     * 且该明文的哈希就是访问路径比对的 token_hash。回退到哈希片段会让复制链接 404。
+     */
+    @Test
+    void listMySharesRevealsRedeemableToken() {
+        FileNode file = node("share-target.pdf", "application/pdf", 1024);
+        file.setCurrentObjectId(OBJECT_ID);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(file));
+        when(fileNodeRepository.findByIdAndOwnerUserId(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(file));
+        when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(invocation -> {
+            ShareLink link = invocation.getArgument(0);
+            if (link.getId() == null) {
+                link.setId(SHARE_ID);
+            }
+            return link;
+        });
+
+        String createdCode = fileShareService.createShare(
+                OWNER_ID,
+                new CreateShareLinkRequest(FILE_ID, "FILE", null, false, null, null, null)).shareCode();
+
+        ArgumentCaptor<ShareLink> savedLink = ArgumentCaptor.forClass(ShareLink.class);
+        verify(shareLinkRepository).save(savedLink.capture());
+        ShareLink stored = savedLink.getValue();
+        assertThat(stored.getTokenCipher()).isNotBlank();
+        // 替身是"前缀 + 原文"的可逆实现，所以只能断言不是裸令牌；真实密文由 CredentialCipher 保证。
+        assertThat(stored.getTokenCipher()).isNotEqualTo(createdCode);
+
+        when(shareLinkRepository.findActiveByOwnerPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stored)));
+        FileShareLinkDto listed = fileShareService.listMySharesPage(OWNER_ID, 0, 20).getContent().get(0);
+
+        assertThat(listed.shareCode()).isEqualTo(createdCode);
+        assertThat(FileShareService.sha256(listed.shareCode())).isEqualTo(stored.getTokenHash());
+    }
+
+    /** 历史行没有密文时不得伪造地址：回显空串，调用方据此判定"无地址"。 */
+    @Test
+    void listMySharesWithoutCipherYieldsEmptyCode() {
+        ShareLink legacy = new ShareLink();
+        legacy.setId(SHARE_ID);
+        legacy.setOwnerUserId(OWNER_ID);
+        legacy.setResourceType("FILE");
+        legacy.setResourceId(FILE_ID);
+        legacy.setTokenHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        legacy.setAccessCount(0);
+        when(shareLinkRepository.findActiveByOwnerPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(legacy)));
+
+        FileShareLinkDto listed = fileShareService.listMySharesPage(OWNER_ID, 0, 20).getContent().get(0);
+
+        assertThat(listed.shareCode()).isEmpty();
     }
 
     private FileAccessRecord accessRecord(FileNode node, String lastAccessedAt) {

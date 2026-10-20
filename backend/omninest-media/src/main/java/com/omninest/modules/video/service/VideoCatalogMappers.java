@@ -5,7 +5,9 @@ import com.omninest.modules.video.dto.MovieDtos.CastMemberDto;
 import com.omninest.modules.video.dto.MovieDtos.CrewMemberDto;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -37,20 +39,47 @@ public class VideoCatalogMappers {
     }
 
     /**
-     * 解析演员头像 URL：优先使用 MinIO（profileFileId），降级到 TMDB（profilePath）。
+     * 一次批量解析演职员头像地址。
+     *
+     * <p>逐条签名会让一部片的 10-20 名演职员变成 10-20 次文件查询与签名，
+     * 列表分页下就是几百次；批量接口一次取回，解析不到的条目降级到外部 URL。</p>
      */
-    public String resolveProfileUrl(UUID ownerUserId, Map<String, Object> memberMap) {
-        Object fileIdObj = memberMap.get("profileFileId");
-        if (fileIdObj instanceof String fileIdStr && !fileIdStr.isBlank()) {
-            try {
-                UUID fileId = UUID.fromString(fileIdStr);
-                String url = resolveFileUrl(ownerUserId, fileId);
-                if (url != null) return url;
-            } catch (IllegalArgumentException ignored) {
-                // profileFileId 格式异常，降级到 profilePath
-            }
+    private Map<UUID, String> resolveProfileUrls(UUID ownerUserId, List<Map<String, Object>> members) {
+        List<UUID> fileIds = members.stream()
+                .map(VideoCatalogMappers::profileFileId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (fileIds.isEmpty()) {
+            return Map.of();
         }
-        return (String) memberMap.get("profilePath");
+        try {
+            return fileQueryService.createDownloadUrls(ownerUserId, fileIds).entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().downloadUrl()));
+        } catch (RuntimeException ex) {
+            log.debug("批量解析演职员头像失败，降级到外部 URL: count={}, message={}",
+                    fileIds.size(), ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private static UUID profileFileId(Map<String, Object> member) {
+        Object fileIdObj = member.get("profileFileId");
+        if (!(fileIdObj instanceof String fileIdStr) || fileIdStr.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(fileIdStr);
+        } catch (IllegalArgumentException ex) {
+            // profileFileId 格式异常，退回 profilePath
+            return null;
+        }
+    }
+
+    private static String profileUrlOf(Map<String, Object> member, Map<UUID, String> resolvedUrls) {
+        UUID fileId = profileFileId(member);
+        String resolved = fileId == null ? null : resolvedUrls.get(fileId);
+        return resolved != null ? resolved : (String) member.get("profilePath");
     }
 
     @SuppressWarnings("unchecked")
@@ -58,11 +87,12 @@ public class VideoCatalogMappers {
         if (castMembers == null || castMembers.isEmpty()) {
             return List.of();
         }
+        Map<UUID, String> resolvedUrls = resolveProfileUrls(ownerUserId, castMembers);
         return castMembers.stream()
                 .map(m -> new CastMemberDto(
                         (String) m.get("name"),
                         (String) m.get("character"),
-                        resolveProfileUrl(ownerUserId, m),
+                        profileUrlOf(m, resolvedUrls),
                         m.get("order") instanceof Number n ? n.intValue() : null
                 ))
                 .toList();
@@ -73,12 +103,13 @@ public class VideoCatalogMappers {
         if (crewMembers == null || crewMembers.isEmpty()) {
             return List.of();
         }
+        Map<UUID, String> resolvedUrls = resolveProfileUrls(ownerUserId, crewMembers);
         return crewMembers.stream()
                 .map(m -> new CrewMemberDto(
                         (String) m.get("name"),
                         (String) m.get("job"),
                         (String) m.get("department"),
-                        resolveProfileUrl(ownerUserId, m)
+                        profileUrlOf(m, resolvedUrls)
                 ))
                 .toList();
     }

@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -253,11 +254,18 @@ public class ReaderStatsService {
                 .toList();
         Map<UUID, ReaderProgress> progressMap = inProgress.stream()
                 .collect(Collectors.toMap(ReaderProgress::getReaderItemId, p -> p, (first, second) -> first));
-        List<ReaderItemDto> inProgressItems = inProgress.stream()
+        List<ReaderItem> inProgressItemList = inProgress.stream()
                 .map(progress -> visibleItems.get(progress.getReaderItemId()))
                 .filter(Objects::nonNull)
                 .limit(12)
-                .map(item -> itemService.toDto(item, false, null, progressMap))
+                .toList();
+        // 书架标记必须查库回填：写死 false 会让统计页"在读"列表上的加书架按钮
+        // 全部显示成未加入，点一次就把已收藏的书重复加入书架。
+        Set<UUID> bookshelfItemIds = itemService.bookshelfItemIds(
+                ownerUserId, inProgressItemList.stream().map(ReaderItem::getId).toList());
+        List<ReaderItemDto> inProgressItems = inProgressItemList.stream()
+                .map(item -> itemService.toDto(
+                        item, bookshelfItemIds.contains(item.getId()), null, progressMap))
                 .toList();
 
         return new ReaderStatsOverviewDto(

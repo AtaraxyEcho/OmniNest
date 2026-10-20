@@ -23,9 +23,12 @@ public record CurrentUser(
     /**
      * 判断当前用户是否具有管理员角色。
      *
+     * <p>超级管理员不必然冗余绑定 ADMIN，只判 ADMIN 会把仅持 SUPER_ADMIN 的账户
+     * 当成普通用户；授权仍以权限编码为准，本方法只用于粗粒度分支。</p>
+     *
      * @return 具有管理员角色时返回 true
      */
     public boolean isAdmin() {
-        return roles != null && roles.contains("ADMIN");
+        return roles != null && (roles.contains(Roles.ADMIN) || roles.contains(Roles.SUPER_ADMIN));
     }
 }

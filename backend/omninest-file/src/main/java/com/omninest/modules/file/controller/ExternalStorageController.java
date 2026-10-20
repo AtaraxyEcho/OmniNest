@@ -137,7 +137,9 @@ public class ExternalStorageController {
     ApiResponse<PageResponse<ImportTaskDto>> listImportTasks() {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         List<ImportTaskDto> items = externalStorageService.listImportTasks(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, 0, 50, items.size()));
+        // 本端点不分页（任务数量级为几十），size 必须报实际返回条数，
+        // 写死 50 会让总数超过 50 时分页元数据自相矛盾。
+        return ApiResponse.success(PageResponse.of(items, 0, items.size(), items.size()));
     }
 
     @Operation(summary = "取消导入任务", description = "取消指定的导入任务")

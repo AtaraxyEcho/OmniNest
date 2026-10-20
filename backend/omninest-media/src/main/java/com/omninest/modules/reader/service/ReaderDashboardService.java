@@ -84,7 +84,7 @@ public class ReaderDashboardService {
         // 继续阅读：进度 > 0 且 < 100%，按最近阅读时间降序。
         // 排序键取进度记录的 updatedAt：上报进度只写 reader_progress，不会推进
         // reader_items.updated_at，按条目时间排序等于按导入时间排序。
-        List<ReaderItemDto> continueReading = allItems.stream()
+        List<ReaderItem> continueReadingItems = allItems.stream()
                 .filter(item -> {
                     ReaderProgress progress = progressMap.get(item.getId());
                     if (progress == null) {
@@ -102,6 +102,9 @@ public class ReaderDashboardService {
                         },
                         Comparator.nullsLast(Comparator.reverseOrder())
                 ))
+                .toList();
+        // 概览计数用截断前的全集：卡片只展示前 12 本，但"在读书籍"人数不能停在 12。
+        List<ReaderItemDto> continueReading = continueReadingItems.stream()
                 .limit(12)
                 .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
                 .toList();
@@ -112,7 +115,7 @@ public class ReaderDashboardService {
                 .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
                 .toList();
 
-        ReaderOverviewDto overview = new ReaderOverviewDto(totalItems, continueReading.size());
+        ReaderOverviewDto overview = new ReaderOverviewDto(totalItems, continueReadingItems.size());
         return new ReaderDashboardDto(overview, continueReading, recentItems);
     }
 

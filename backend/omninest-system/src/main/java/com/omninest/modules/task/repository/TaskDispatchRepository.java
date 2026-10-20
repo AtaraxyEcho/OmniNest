@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -24,6 +25,20 @@ public interface TaskDispatchRepository extends JpaRepository<TaskDispatch, UUID
      * @return 最近一次投递记录
      */
     Optional<TaskDispatch> findFirstByTaskIdOrderByCreatedAtDesc(UUID taskId);
+
+    /**
+     * 领取超过保留期的已发布记录 ID，供历史清理分批删除。
+     *
+     * @param cutoff 发布时间截止点
+     * @param pageable 批次大小
+     * @return 记录 ID 列表
+     */
+    @Query("""
+            select dispatch.id from TaskDispatch dispatch
+            where dispatch.status = 'PUBLISHED' and dispatch.publishedAt < :cutoff
+            order by dispatch.publishedAt asc
+            """)
+    List<UUID> findPublishedIdsBefore(@Param("cutoff") Instant cutoff, Pageable pageable);
 
     /**
      * 悲观锁领取可发布记录。

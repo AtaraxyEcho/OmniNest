@@ -1,5 +1,6 @@
 package com.omninest.common.util;
 
+import com.omninest.common.error.StackSummaries;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
@@ -45,7 +46,9 @@ public final class ThrowableDescriber {
             writer.println("\t... " + (frames.length - frameLimit) + " more");
         }
         writer.flush();
-        String summary = buffer.toString();
+        // 根因消息原样包含 SQL 约束名、MinIO 内网端点与本地绝对路径，
+        // 落库前必须与堆栈一起脱敏（任务详情会回显给前端）。
+        String summary = StackSummaries.redact(buffer.toString());
         if (summary.length() > MAX_LENGTH) {
             return summary.substring(0, MAX_LENGTH);
         }

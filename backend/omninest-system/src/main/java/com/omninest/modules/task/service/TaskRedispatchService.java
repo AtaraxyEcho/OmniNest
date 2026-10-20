@@ -60,6 +60,7 @@ public class TaskRedispatchService {
         }
         Map<String, Object> payload = rebuildPayload(
                 record.getId(),
+                record.getOwnerUserId(),
                 record.getTaskType(),
                 routingKey,
                 record.getPayload()
@@ -70,7 +71,13 @@ public class TaskRedispatchService {
     /**
      * 按路由键将任务载荷重建为消费方事件形状，并经 Outbox 立即投递。
      *
+     * <p>部分类型的任务记录载荷不足以还原事件：媒体自动导入只存文件标识与名称，
+     * 桶与对象键只在投递行里；文件恢复索引事件由领域事件直接投递，不落任务记录。
+     * 这两类只在存在投递行时可重投，落到重建路径时按"不支持"拒绝，
+     * 避免以残缺载荷打爆消费方。</p>
+     *
      * @param taskId 任务 ID
+     * @param fallbackOwnerUserId 任务记录上的归属用户，供载荷未冗余 ownerUserId 的类型回退
      * @param taskType 任务类型（仅用于错误提示）
      * @param routingKey 任务路由键
      * @param payloadJson 任务记录中的载荷 JSON
@@ -78,11 +85,12 @@ public class TaskRedispatchService {
      */
     public Map<String, Object> redispatch(
             UUID taskId,
+            UUID fallbackOwnerUserId,
             String taskType,
             String routingKey,
             String payloadJson
     ) {
-        Map<String, Object> payload = rebuildPayload(taskId, taskType, routingKey, payloadJson);
+        Map<String, Object> payload = rebuildPayload(taskId, fallbackOwnerUserId, taskType, routingKey, payloadJson);
         enqueueRedispatch(taskId, routingKey, payload);
         return payload;
     }
@@ -100,9 +108,17 @@ public class TaskRedispatchService {
 
     /**
      * 按路由键重建消费方事件载荷。
+     *
+     * @param taskId 任务 ID
+     * @param fallbackOwnerUserId 任务行上的归属用户，仅用于载荷未冗余 ownerUserId 的类型
+     * @param taskType 任务类型（仅用于错误提示）
+     * @param routingKey 任务路由键
+     * @param payloadJson 任务记录载荷 JSON
+     * @return 消费方事件形状的载荷
      */
     public Map<String, Object> rebuildPayload(
             UUID taskId,
+            UUID fallbackOwnerUserId,
             String taskType,
             String routingKey,
             String payloadJson
@@ -111,7 +127,39 @@ public class TaskRedispatchService {
         return switch (routingKey) {
             case QueueNames.FILE_INDEX_ROUTING_KEY,
                     QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
-                    QueueNames.THUMBNAIL_ROUTING_KEY -> fileUploadedPayload(payload);
+                    QueueNames.THUMBNAIL_ROUTING_KEY,
+                    QueueNames.PHOTO_MOTION_ROUTING_KEY -> fileUploadedPayload(payload);
+            case QueueNames.MEDIA_SCAN_ROUTING_KEY -> {
+                Map<String, Object> scan = new LinkedHashMap<>();
+                scan.put("taskId", taskId.toString());
+                scan.put("ownerUserId", requireOwner(payload, fallbackOwnerUserId).toString());
+                scan.put("rootFolderId", nullableUuid(payload.get("rootFolderId")));
+                scan.put("incremental", booleanValue(payload.get("incremental")));
+                yield scan;
+            }
+            case QueueNames.READER_PARSE_ROUTING_KEY -> readerParsePayload(taskId, payload);
+            case QueueNames.FILE_PURGE_ROUTING_KEY -> Map.of(
+                    "taskId", taskId.toString(),
+                    "ownerUserId", requireOwner(payload, fallbackOwnerUserId).toString(),
+                    "rootFileNodeId", requiredUuid(payload, "rootFileNodeId").toString()
+            );
+            case QueueNames.FILE_SECURITY_SCAN_ROUTING_KEY -> {
+                Map<String, Object> scan = new LinkedHashMap<>();
+                scan.put("taskId", taskId.toString());
+                scan.put("ownerUserId", requireOwner(payload, fallbackOwnerUserId).toString());
+                scan.put("ingressItemId", requiredUuid(payload, "ingressItemId").toString());
+                // 空串在消费端等价于"不是版本上传"，必须还原成 null 而不是抛格式错误。
+                scan.put("asVersionOfFileId", nullableUuid(payload.get("asVersionOfFileId")));
+                scan.put("declaredSha256", nullableText(payload.get("declaredSha256")));
+                yield scan;
+            }
+            case QueueNames.BACKDROP_SECURITY_SCAN_ROUTING_KEY -> Map.of(
+                    "taskId", taskId.toString(),
+                    "ownerUserId", requireOwner(payload, fallbackOwnerUserId).toString(),
+                    "assetId", requiredUuid(payload, "assetId").toString(),
+                    "ingressItemId", requiredUuid(payload, "ingressItemId").toString(),
+                    "originalFileName", optionalText(payload, "originalFileName", "")
+            );
             case QueueNames.EXTERNAL_IMPORT_ROUTING_KEY -> Map.of(
                     "taskId", requiredUuid(payload, "importTaskId").toString()
             );
@@ -223,6 +271,63 @@ public class TaskRedispatchService {
                 "contentHash", requiredText(payload, "contentHash"),
                 "isRetry", true
         );
+    }
+
+    /**
+     * 重建文本书籍解析事件。
+     *
+     * <p>事件里的 ownerUserId 是文件归属者而不是书架归属者，两者在共享文件场景下不同，
+     * 因此优先取 fileOwnerId，老任务无该键时退回 ownerUserId。</p>
+     */
+    private Map<String, Object> readerParsePayload(UUID taskId, Map<String, Object> payload) {
+        UUID fileOwnerId = nullableUuid(payload.getOrDefault("fileOwnerId", payload.get("ownerUserId")));
+        if (fileOwnerId == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少可重试载荷字段: fileOwnerId");
+        }
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("taskId", taskId.toString());
+        event.put("ownerUserId", fileOwnerId.toString());
+        event.put("itemId", requiredUuid(payload, "itemId").toString());
+        event.put("fileNodeId", requiredUuid(payload, "fileNodeId").toString());
+        event.put("fileFormat", requiredText(payload, "fileFormat"));
+        event.put("contentHash", optionalText(payload, "contentHash", ""));
+        event.put("isRetry", true);
+        return event;
+    }
+
+    /**
+     * 取载荷里的归属用户，缺失时回退到任务行上的归属用户。
+     */
+    private UUID requireOwner(Map<String, Object> payload, UUID fallbackOwnerUserId) {
+        UUID fromPayload = nullableUuid(payload.get("ownerUserId"));
+        if (fromPayload != null) {
+            return fromPayload;
+        }
+        if (fallbackOwnerUserId != null) {
+            return fallbackOwnerUserId;
+        }
+        throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少可重试载荷字段: ownerUserId");
+    }
+
+    /**
+     * 空串与缺失都按 null 处理：这些字段在事件里本就可为空。
+     */
+    private UUID nullableUuid(Object raw) {
+        if (raw == null || raw.toString().isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.toString().trim());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务载荷字段格式错误");
+        }
+    }
+
+    private String nullableText(Object raw) {
+        if (raw == null || raw.toString().isBlank()) {
+            return null;
+        }
+        return raw.toString().trim();
     }
 
     private Map<String, Object> parsePayload(String payloadJson) {

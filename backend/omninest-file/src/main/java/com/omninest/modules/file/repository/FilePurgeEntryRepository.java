@@ -1,6 +1,7 @@
 package com.omninest.modules.file.repository;
 
 import com.omninest.modules.file.domain.FilePurgeEntry;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -31,6 +32,25 @@ public interface FilePurgeEntryRepository extends JpaRepository<FilePurgeEntry, 
     List<FilePurgeEntry> findByTaskIdAndEntryType(UUID taskId, String entryType);
 
     long countByTaskIdAndStatusIn(UUID taskId, Collection<String> statuses);
+
+    /**
+     * 按状态与创建时间领取待清理的历史条目 ID，供保留期分批删除。
+     *
+     * @param statuses 视为已完成的状态
+     * @param cutoff 创建时间截止点
+     * @param pageable 批次大小
+     * @return 条目 ID 列表
+     */
+    @Query("""
+            select entry.id from FilePurgeEntry entry
+            where entry.status in :statuses and entry.createdAt < :cutoff
+            order by entry.createdAt asc
+            """)
+    List<UUID> findIdsByStatusInAndCreatedAtBefore(
+            @Param("statuses") Collection<String> statuses,
+            @Param("cutoff") Instant cutoff,
+            Pageable pageable
+    );
 
     /**
      * 将上一次执行失败的条目重置为待处理状态。

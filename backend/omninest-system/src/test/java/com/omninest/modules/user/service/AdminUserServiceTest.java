@@ -13,8 +13,10 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
 import com.omninest.modules.quota.service.StorageQuotaService;
+import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthTotpCredential;
 import com.omninest.modules.user.domain.AuthUser;
@@ -48,6 +50,7 @@ class AdminUserServiceTest {
     private final UserSessionRevocationService userSessionRevocationService =
             mock(UserSessionRevocationService.class);
     private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
+    private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
     private final AdminUserService service = new AdminUserService(
             authUserRepository,
             authRoleRepository,
@@ -58,7 +61,8 @@ class AdminUserServiceTest {
             currentUserContext,
             storageQuotaService,
             userSessionRevocationService,
-            twoFactorService
+            twoFactorService,
+            adminActorGuard
     );
 
     @Test
@@ -156,6 +160,7 @@ class AdminUserServiceTest {
 
     @Test
     void updateUserRolesAcceptsExistingCustomRoleAndRejectsUnknownOrSuperAdmin() {
+        givenSuperAdminActor();
         UUID userId = UUID.fromString("10000000-0000-0000-0000-000000000002");
         UUID customRoleId = UUID.fromString("53e2e138-59b7-4fa6-988f-58554f34b8d4");
         AuthUser user = new AuthUser();
@@ -198,7 +203,7 @@ class AdminUserServiceTest {
         when(authUserRepository.findWithRolesById(missingId)).thenReturn(Optional.empty());
         when(authUserRepository.findWithRolesById(superAdminId)).thenReturn(Optional.of(superAdmin));
         when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(currentUserContext.requireCurrentUserId()).thenReturn(okId);
+        givenActorAs(okId, Roles.SUPER_ADMIN);
 
         var result = service.batchUpdateUserStatus(
                 List.of(okId, missingId, superAdminId), "DISABLED");
@@ -227,8 +232,8 @@ class AdminUserServiceTest {
         AuthUser target = new AuthUser();
         target.setId(targetId);
         target.setUsername("alice");
-        when(authUserRepository.findById(targetId)).thenReturn(Optional.of(target));
-        when(currentUserContext.requireCurrentUserId()).thenReturn(adminId);
+        when(authUserRepository.findWithRolesById(targetId)).thenReturn(Optional.of(target));
+        givenActorAs(adminId, Roles.ADMIN);
 
         service.resetTwoFactor(targetId);
 
@@ -247,8 +252,8 @@ class AdminUserServiceTest {
         target.setId(superAdminId);
         target.setUsername("root");
         target.getRoles().add(superAdminRole);
-        when(authUserRepository.findById(superAdminId)).thenReturn(Optional.of(target));
-        when(currentUserContext.requireCurrentUserId()).thenReturn(superAdminId);
+        when(authUserRepository.findWithRolesById(superAdminId)).thenReturn(Optional.of(target));
+        givenActorAs(superAdminId, Roles.SUPER_ADMIN);
 
         service.resetTwoFactor(superAdminId);
 
@@ -258,13 +263,97 @@ class AdminUserServiceTest {
     @Test
     void resetTwoFactorRejectsMissingUserWithoutSideEffects() {
         UUID missingId = UUID.fromString("50000000-0000-0000-0000-000000000005");
-        when(authUserRepository.findById(missingId)).thenReturn(Optional.empty());
+        givenActorAs(UUID.fromString("20000000-0000-0000-0000-000000000009"), Roles.ADMIN);
+        when(authUserRepository.findWithRolesById(missingId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.resetTwoFactor(missingId))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.NOT_FOUND);
         verifyNoInteractions(twoFactorService, userSessionRevocationService, auditLogService);
+    }
+
+    /** 普通管理员不能停用同级管理员。 */
+    @Test
+    void updateUserStatusRejectsAdminTargetForPlainAdminActor() {
+        UUID actorId = UUID.fromString("20000000-0000-0000-0000-000000000007");
+        UUID peerId = UUID.fromString("10000000-0000-0000-0000-00000000000d");
+        givenActorAs(actorId, Roles.ADMIN);
+        AuthUser peer = new AuthUser();
+        peer.setId(peerId);
+        peer.setUsername("peer-admin");
+        peer.getRoles().add(role(UUID.randomUUID(), Roles.ADMIN));
+        when(authUserRepository.findWithRolesById(peerId)).thenReturn(Optional.of(peer));
+
+        assertThatThrownBy(() -> service.updateUserStatus(peerId, "DISABLED"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅超级管理员可修改管理员账户状态");
+        verifyNoInteractions(auditLogService);
+    }
+
+    /** 普通管理员不能把管理员角色授予别人。 */
+    @Test
+    void updateUserRolesRejectsAdminRoleForPlainAdminActor() {
+        UUID actorId = UUID.fromString("20000000-0000-0000-0000-000000000008");
+        UUID userId = UUID.fromString("10000000-0000-0000-0000-00000000000e");
+        givenActorAs(actorId, Roles.ADMIN);
+        AuthUser user = new AuthUser();
+        user.setId(userId);
+        user.setUsername("bob");
+        when(authUserRepository.findWithRolesById(userId)).thenReturn(Optional.of(user));
+        when(authRoleRepository.findByCode(Roles.ADMIN))
+                .thenReturn(Optional.of(role(UUID.randomUUID(), Roles.ADMIN)));
+
+        assertThatThrownBy(() -> service.updateUserRoles(userId, Set.of(Roles.ADMIN)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅超级管理员可授予管理员角色");
+    }
+
+    /** 自定义角色的权限集合超出操作者自身权限时拒绝，阻断自助造高权账户。 */
+    @Test
+    void updateUserRolesRejectsGrantBeyondActorPermissions() {
+        UUID actorId = UUID.fromString("20000000-0000-0000-0000-000000000011");
+        UUID userId = UUID.fromString("10000000-0000-0000-0000-000000000012");
+        UUID roleId = UUID.fromString("53e2e138-59b7-4fa6-988f-58554f34b8d5");
+        givenActorAs(actorId, Roles.ADMIN, permission(Permissions.FILE_READ, "file"));
+        AuthUser user = new AuthUser();
+        user.setId(userId);
+        user.setUsername("bob");
+        when(authUserRepository.findWithRolesById(userId)).thenReturn(Optional.of(user));
+        when(authRoleRepository.findByCode("ROLE_AUDITOR"))
+                .thenReturn(Optional.of(role(roleId, "ROLE_AUDITOR")));
+        when(authRoleRepository.findPermissionCodesByRoleIds(any()))
+                .thenReturn(Map.of(roleId, Set.of(Permissions.SYSTEM_USER_MANAGE)));
+
+        assertThatThrownBy(() -> service.updateUserRoles(userId, Set.of("ROLE_AUDITOR")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能授予操作者自身不具备的权限");
+    }
+
+    private void givenSuperAdminActor() {
+        givenActorAs(UUID.fromString("20000000-0000-0000-0000-0000000000f0"), Roles.SUPER_ADMIN);
+    }
+
+    /** 把操作者装成指定角色的活跃管理员：写操作入口都要按库内当前身份复核。 */
+    private void givenActorAs(UUID actorId, String roleCode, AuthPermission... permissions) {
+        when(currentUserContext.requireCurrentUserId()).thenReturn(actorId);
+        AuthUser actor = new AuthUser();
+        actor.setId(actorId);
+        actor.setUsername("admin-it");
+        actor.setStatus("ACTIVE");
+        AuthRole role = role(UUID.randomUUID(), roleCode);
+        role.getPermissions().addAll(List.of(permissions));
+        actor.getRoles().add(role);
+        when(authUserRepository.findWithRolesAndPermissionsById(actorId)).thenReturn(Optional.of(actor));
+    }
+
+    private AuthPermission permission(String code, String module) {
+        AuthPermission permission = new AuthPermission();
+        permission.setId(UUID.randomUUID());
+        permission.setCode(code);
+        permission.setName(code);
+        permission.setModule(module);
+        return permission;
     }
 
     private AuthRole role(UUID id, String code) {

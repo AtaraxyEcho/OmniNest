@@ -1,8 +1,10 @@
 package com.omninest.modules.user.service;
 
 import com.omninest.modules.configcenter.service.ConfigHistoryRetentionService;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.user.config.SystemHistoryRetentionProperties;
+import com.omninest.modules.user.port.PurgeHistoryRetention;
 import com.omninest.modules.user.repository.AuditLogRetentionRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,7 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 在 Scheduler 角色中分批清理终态任务、审计日志和配置历史。
+ * 在 Scheduler 角色中分批清理终态任务、Outbox 投递记录、文件物理删除条目、
+ * 审计日志和配置历史。
  *
  * @author OmniNest
  */
@@ -30,8 +33,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class SystemHistoryRetentionService {
 
     private final TaskRecordService taskRecordService;
+    private final TaskDispatchService taskDispatchService;
     private final AuditLogRetentionRepository auditLogRepository;
     private final ConfigHistoryRetentionService configHistoryRetentionService;
+    private final PurgeHistoryRetention purgeHistoryRetention;
     private final SystemHistoryRetentionProperties properties;
 
     /**
@@ -48,10 +53,50 @@ public class SystemHistoryRetentionService {
         Instant now = Instant.now();
 
         int deletedTasks = cleanupTasks(now, batchSize, maximumBatches);
+        int deletedDispatches = cleanupDispatches(now, batchSize, maximumBatches);
+        int deletedPurgeEntries = cleanupPurgeEntries(now, batchSize, maximumBatches);
         int deletedAuditLogs = cleanupAuditLogs(now, batchSize, maximumBatches);
         int deletedConfigHistories = cleanupConfigHistories(now, batchSize, maximumBatches);
-        log.info("系统历史保留清理完成: deletedTasks={}, deletedAuditLogs={}, deletedConfigHistories={}",
-                deletedTasks, deletedAuditLogs, deletedConfigHistories);
+        log.info("系统历史保留清理完成: deletedTasks={}, deletedDispatches={}, deletedPurgeEntries={}, "
+                        + "deletedAuditLogs={}, deletedConfigHistories={}",
+                deletedTasks, deletedDispatches, deletedPurgeEntries,
+                deletedAuditLogs, deletedConfigHistories);
+    }
+
+    /**
+     * 清理超期的已发布 Outbox 投递行。
+     *
+     * <p>每条投递都带完整 JSON 载荷，是三类表里体积增长最快的一张。</p>
+     */
+    private int cleanupDispatches(Instant now, int batchSize, int maximumBatches) {
+        Duration maximumAge = properties.getDispatchMaximumAge();
+        if (!isPositive(maximumAge)) {
+            log.warn("Outbox 投递记录保留时间配置无效，跳过投递清理");
+            return 0;
+        }
+        Instant cutoff = now.minus(maximumAge);
+        return deleteBatches(
+                () -> taskDispatchService.deletePublishedBatchBefore(cutoff, batchSize),
+                batchSize,
+                maximumBatches
+        );
+    }
+
+    /**
+     * 清理超期的文件物理删除条目（仅成功终态）。
+     */
+    private int cleanupPurgeEntries(Instant now, int batchSize, int maximumBatches) {
+        Duration maximumAge = properties.getPurgeEntryMaximumAge();
+        if (!isPositive(maximumAge)) {
+            log.warn("物理删除条目保留时间配置无效，跳过删除清单清理");
+            return 0;
+        }
+        Instant cutoff = now.minus(maximumAge);
+        return deleteBatches(
+                () -> purgeHistoryRetention.deleteCompletedEntriesBefore(cutoff, batchSize),
+                batchSize,
+                maximumBatches
+        );
     }
 
     private int cleanupTasks(Instant now, int batchSize, int maximumBatches) {

@@ -3,6 +3,7 @@ package com.omninest.modules.user.service;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.common.security.Roles;
+import com.omninest.modules.configcenter.domain.RefreshScope;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
@@ -18,9 +19,6 @@ import com.omninest.modules.user.repository.TaskRecordAdminRepository;
 import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.port.ExternalStorageAdministration;
-import com.sun.management.OperatingSystemMXBean;
-import java.io.File;
-import java.lang.management.ManagementFactory;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +45,7 @@ public class AdminConsoleService {
     private final StorageMetricsQuery storageMetricsQuery;
     private final AdminAnalyticsRepository analyticsRepository;
     private final StorageQuotaService storageQuotaService;
+    private final SystemMetricsCollector systemMetricsCollector;
 
     @Transactional(readOnly = true)
     public AdminConsoleSummaryDto summary() {
@@ -117,10 +116,15 @@ public class AdminConsoleService {
     }
 
     private AdminConsoleSummaryDto.ConfigStats configStats(List<ConfigEntryDto> configs) {
-        long hot = configs.stream().filter(config -> "HOT".equals(config.refreshScope())).count();
-        long nextTask = configs.stream().filter(config -> "NEXT_TASK".equals(config.refreshScope())).count();
+        // 统计口径直接取枚举，避免字面量与数据库 CHECK、枚举三处各写一份而漂移。
+        long hot = configs.stream()
+                .filter(config -> RefreshScope.HOT.getValue().equals(config.refreshScope()))
+                .count();
+        long nextTask = configs.stream()
+                .filter(config -> RefreshScope.NEXT_TASK.getValue().equals(config.refreshScope()))
+                .count();
         long restartRequired = configs.stream()
-                .filter(config -> "RESTART_REQUIRED".equals(config.refreshScope()))
+                .filter(config -> RefreshScope.RESTART_REQUIRED.getValue().equals(config.refreshScope()))
                 .count();
         return new AdminConsoleSummaryDto.ConfigStats(configs.size(), hot, nextTask, restartRequired);
     }
@@ -218,24 +222,16 @@ public class AdminConsoleService {
 
     /**
      * 采集当前系统负载快照（CPU、内存、磁盘、JVM 堆使用率）。
+     *
+     * <p>口径与运维页共用 {@link SystemMetricsCollector}，两个面板必须给出同一个数。</p>
      */
     private AdminAnalyticsDto.SystemLoadSnapshot systemLoadSnapshot() {
-        Runtime rt = Runtime.getRuntime();
-        long totalMemory = rt.totalMemory();
-        long freeMemory = rt.freeMemory();
-        long usedMemory = totalMemory - freeMemory;
-        double memoryUsage = (double) usedMemory / totalMemory * 100;
-        double jvmHeapUsage = memoryUsage;
-        // CPU 和磁盘使用通过 ManagementFactory 获取
-        OperatingSystemMXBean osBean =
-                (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-        double cpuUsage = osBean.getCpuLoad() * 100;
-        File root = new File("/");
-        long totalSpace = root.getTotalSpace();
-        long freeSpace = root.getFreeSpace();
-        double diskUsage = totalSpace > 0 ? (1.0 - (double) freeSpace / totalSpace) * 100 : 0;
+        SystemMetricsCollector.Snapshot metrics = systemMetricsCollector.collect();
         return new AdminAnalyticsDto.SystemLoadSnapshot(
-                Math.max(0, cpuUsage), Math.max(0, memoryUsage), Math.max(0, diskUsage), Math.max(0, jvmHeapUsage)
+                metrics.cpuUsagePercent(),
+                metrics.runtimeMemoryUsagePercent(),
+                metrics.diskUsagePercent(),
+                metrics.heapUsagePercent()
         );
     }
 }

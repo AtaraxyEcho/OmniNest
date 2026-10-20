@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,13 +69,28 @@ public class TaskQueryService {
      */
     @Transactional(readOnly = true)
     public Page<TaskDto> listOwned(UUID ownerUserId, String status, Pageable pageable) {
+        Pageable ordered = withDefaultOrder(pageable);
         Page<TaskRecord> page;
         if (status != null && !status.isBlank()) {
-            page = taskRecordRepository.findByOwnerUserIdAndStatus(ownerUserId, status, pageable);
+            page = taskRecordRepository.findByOwnerUserIdAndStatus(ownerUserId, status, ordered);
         } else {
-            page = taskRecordRepository.findByOwnerUserId(ownerUserId, pageable);
+            page = taskRecordRepository.findByOwnerUserId(ownerUserId, ordered);
         }
         return page.map(TaskDto::from);
+    }
+
+    /**
+     * 请求未指定排序时按创建时间倒序。
+     *
+     * <p>数据库不分页有序会让同一查询两次翻页的结果抖动，摘要里的"优先展示任务"
+     * 也会取到物理页顺序上的任意旧任务而不是最近任务。</p>
+     */
+    private Pageable withDefaultOrder(Pageable pageable) {
+        if (pageable.getSort().isSorted()) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
     /**
