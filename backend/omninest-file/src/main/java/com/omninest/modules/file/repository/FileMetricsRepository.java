@@ -186,7 +186,7 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
                 from omni.file_nodes n
                 where n.node_type = 'FILE'
                   and n.space_type = 'SHARED'
-                  and n.deleted = false
+                  and n.is_deleted = false
                   and (n.source_type is null
                        or n.source_type not in ('DERIVED', 'LOCAL_FILESYSTEM')
                        or (n.source_type = 'DERIVED' and (

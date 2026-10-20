@@ -430,6 +430,8 @@ class SharedSpaceLedgerIT {
     ) {
         UUID nodeId = UUID.randomUUID();
         Instant now = Instant.now();
+        // 显式写 NULL 会绕过列上的 DEFAULT 'LOCAL'，直接撞上 NOT NULL 约束。
+        String effectiveSourceType = sourceType == null ? "LOCAL" : sourceType;
         jdbcTemplate.update("""
                 INSERT INTO omni.file_nodes
                     (id, owner_user_id, node_type, name, normalized_path, size_bytes,
@@ -437,7 +439,7 @@ class SharedSpaceLedgerIT {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SHARED', ?, ?, ?, 0)
                 """, nodeId, ownerUserId, nodeType,
                 normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1),
-                normalizedPath, sizeBytes, currentObjectId, deleted, sourceType,
+                normalizedPath, sizeBytes, currentObjectId, deleted, effectiveSourceType,
                 Timestamp.from(now), Timestamp.from(now));
         return nodeId;
     }
