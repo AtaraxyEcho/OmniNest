@@ -29,11 +29,12 @@ import org.junit.jupiter.api.Test;
  */
 class OutboundExecutorRegistryTest {
 
-    /** 出网位置的识别标记：自建 HTTP 客户端、起子进程、驱动下载器/远端网关。都是代码形状，不匹配注释里的词。 */
+    /** 出网位置的识别标记：自建 HTTP 客户端、起子进程、驱动下载器/远端网关、直连 SMTP。都是代码形状，不匹配注释里的词。 */
     private static final Pattern OUTBOUND_MARKER = Pattern.compile(
             "^import java\\.net\\.http\\.HttpClient;|HttpClient\\.(newBuilder|newHttpClient)"
                     + "|new ProcessBuilder|VideoProcessExecutor|\\.exec\\("
-                    + "|RcloneGateway|RcloneRcClient",
+                    + "|RcloneGateway|RcloneRcClient"
+                    + "|^import org\\.springframework\\.mail\\.javamail\\.JavaMailSenderImpl;",
             Pattern.MULTILINE
     );
 
@@ -59,6 +60,9 @@ class OutboundExecutorRegistryTest {
                     "RC 端点来自配置；远端地址在文件模块过 ExternalStorageEndpointGuard"),
             Map.entry("omninest-infrastructure/src/main/java/com/omninest/common/ai/AiSidecarClient.java",
                     "端点来自 config-center 的 superAdminOnly 键，自持内网 sidecar 属认可形态"),
+            Map.entry("omninest-system/src/main/java/com/omninest/modules/notification/service/NotificationEmailSender.java",
+                    "SMTP 端点与凭据来自 config-center 的 notification.email.* （superAdminOnly，与 clamav.host 同档）；"
+                            + "内网自建中继属认可形态，证书链默认严格校验，放宽只在 trust-hosts 显式列出时发生"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/DerivedAssetStorageService.java",
                     "SafeUrlValidator.requireSafeHttpUrl 逐跳校验后取回派生资源"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/ExternalStorageService.java",

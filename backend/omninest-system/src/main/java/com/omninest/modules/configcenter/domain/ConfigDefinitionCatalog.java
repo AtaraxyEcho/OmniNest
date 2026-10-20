@@ -263,10 +263,21 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.mail.password", "SMTP 登录口令", 512));
         add(values, string("notification.email.from", "", "notification", ConfigSurface.INTEGRATION,
                 "config.integration.mail.from", "发件人地址（留空时使用登录账号）", false, 320));
-        add(values, bool("notification.email.starttls", true, "notification", ConfigSurface.INTEGRATION,
-                "config.integration.mail.starttls", "是否使用 STARTTLS 加密连接"));
+        add(values, enumString("notification.email.security", "STARTTLS", "notification",
+                ConfigSurface.INTEGRATION, "config.integration.mail.security", "SMTP 连接加密方式",
+                List.of("NONE", "STARTTLS", "SSL"), 16));
+        add(values, string("notification.email.trust-hosts", "", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.trustHosts", "跳过证书校验的主机清单（逗号分隔，仅内网自签证书场景）",
+                false, 512));
         add(values, number("notification.email.timeout-millis", "10000", "notification", ConfigSurface.INTEGRATION,
                 "config.integration.mail.timeout", "SMTP 连接与读取时限（毫秒）", 1_000, 120_000));
+        add(values, enumString("notification.email.format", "PLAIN", "notification",
+                ConfigSurface.INTEGRATION, "config.integration.mail.format", "邮件正文格式",
+                List.of("PLAIN", "RICH"), 16));
+        add(values, string("notification.email.web-base-url", "", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.webBaseUrl", "邮件内链接指向的站点地址（留空则不带链接）", false, 512));
+        add(values, number("notification.email.rate-per-hour", "30", "notification", ConfigSurface.INTEGRATION,
+                "config.integration.mail.ratePerHour", "每用户每小时邮件投递上限（0 表示不限制）", 0, 100_000));
         return Map.copyOf(values);
     }
 

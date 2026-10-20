@@ -540,6 +540,19 @@ public class TaskRecordService {
     }
 
     /**
+     * 统计窗口内该用户已登记的任务数，供通道级限速判定。
+     *
+     * @param taskType 任务类型
+     * @param ownerUserId 用户 ID
+     * @param since 窗口起点
+     * @return 任务数量
+     */
+    @Transactional(readOnly = true)
+    public long countRecentTasks(String taskType, UUID ownerUserId, Instant since) {
+        return taskRecordRepository.countByTaskTypeAndOwnerUserIdAndCreatedAtAfter(taskType, ownerUserId, since);
+    }
+
+    /**
      * 查询疑似投递断链的停滞任务：QUEUED 长时间未开始或 RETRY_WAIT 已过
      * 计划重投时间。调用方需结合投递记录存活状态裁决是否重新投递。
      *

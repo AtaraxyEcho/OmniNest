@@ -10,14 +10,14 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(75);
+        assertThat(definitions).hasSize(79);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
                 .hasSize(32);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
-                .hasSize(43);
+                .hasSize(47);
     }
 
     @Test
@@ -36,6 +36,38 @@ class ConfigDefinitionCatalogTest {
         assertThat(ConfigDefinitionCatalog.find("notification.email.timeout-millis"))
                 .hasValueSatisfying(definition ->
                         assertThat(definition.normalize("5000")).isEqualTo("5000"));
+    }
+
+    @Test
+    void mailEncryptionAndFormatOnlyAcceptTheDeclaredValues() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.security"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.defaultValue()).isEqualTo("STARTTLS");
+                    assertThat(definition.allowedValues())
+                            .containsExactly("NONE", "STARTTLS", "SSL");
+                    assertThat(definition.normalize("SSL")).isEqualTo("SSL");
+                    assertThatThrownBy(() -> definition.normalize("TRUST_ALL"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+        assertThat(ConfigDefinitionCatalog.find("notification.email.format"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.defaultValue()).isEqualTo("PLAIN");
+                    assertThatThrownBy(() -> definition.normalize("HTML_ONLY"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+    }
+
+    @Test
+    void mailSiteAddressIsRejectedBeforeItCanBecomeALinkTarget() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.web-base-url"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.normalize("https://nest.example.test"))
+                            .isEqualTo("https://nest.example.test");
+                    assertThatThrownBy(() -> definition.normalize("file:///etc/passwd"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("https://user:pw@nest.example.test"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
     }
 
     @Test

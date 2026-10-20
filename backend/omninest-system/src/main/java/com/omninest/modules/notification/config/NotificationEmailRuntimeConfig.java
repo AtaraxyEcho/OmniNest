@@ -3,6 +3,7 @@ package com.omninest.modules.notification.config;
 import com.omninest.common.config.BaseRuntimeConfigService;
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.config.RuntimeConfigCache;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 
 /**
@@ -22,8 +23,25 @@ public class NotificationEmailRuntimeConfig extends BaseRuntimeConfigService {
     private static final String USERNAME_KEY = "notification.email.username";
     private static final String PASSWORD_KEY = "notification.email.password";
     private static final String FROM_KEY = "notification.email.from";
-    private static final String STARTTLS_KEY = "notification.email.starttls";
+    private static final String SECURITY_KEY = "notification.email.security";
+    private static final String TRUST_HOSTS_KEY = "notification.email.trust-hosts";
     private static final String TIMEOUT_KEY = "notification.email.timeout-millis";
+    private static final String FORMAT_KEY = "notification.email.format";
+    private static final String WEB_BASE_URL_KEY = "notification.email.web-base-url";
+    private static final String RATE_PER_HOUR_KEY = "notification.email.rate-per-hour";
+
+    /** SMTP 加密方式：明文、STARTTLS 升级、隐式 TLS（465 一类端口）。 */
+    public enum TransportSecurity {
+        NONE,
+        STARTTLS,
+        SSL
+    }
+
+    /** 正文格式：纯文本，或纯文本加等价 HTML 的多部件邮件。 */
+    public enum MessageFormat {
+        PLAIN,
+        RICH
+    }
 
     /**
      * 创建邮件通道配置服务。
@@ -103,12 +121,21 @@ public class NotificationEmailRuntimeConfig extends BaseRuntimeConfigService {
     }
 
     /**
-     * 是否使用 STARTTLS。
+     * SMTP 加密方式；目录外的取值按缺省 STARTTLS 处理，不用明文兜底。
      *
-     * @return 需要加密连接时返回 true，默认 true
+     * @return 加密方式
      */
-    public boolean starttls() {
-        return booleanConfig(STARTTLS_KEY, true);
+    public TransportSecurity security() {
+        return parseEnum(SECURITY_KEY, TransportSecurity.STARTTLS, TransportSecurity.class);
+    }
+
+    /**
+     * 跳过证书校验的主机清单；空串表示严格校验证书链。
+     *
+     * @return 逗号分隔主机清单
+     */
+    public String trustHosts() {
+        return stringConfig(TRUST_HOSTS_KEY, "");
     }
 
     /**
@@ -118,5 +145,41 @@ public class NotificationEmailRuntimeConfig extends BaseRuntimeConfigService {
      */
     public int timeoutMillis() {
         return intConfig(TIMEOUT_KEY, 10_000);
+    }
+
+    /**
+     * 正文格式，默认纯文本；取值异常同样回落纯文本。
+     *
+     * @return 正文格式
+     */
+    public MessageFormat format() {
+        return parseEnum(FORMAT_KEY, MessageFormat.PLAIN, MessageFormat.class);
+    }
+
+    /**
+     * 邮件内链接指向的站点地址。
+     *
+     * @return 站点地址，未配置时为空串
+     */
+    public String webBaseUrl() {
+        return stringConfig(WEB_BASE_URL_KEY, "");
+    }
+
+    /**
+     * 每用户每小时邮件投递上限。
+     *
+     * @return 上限，0 表示不限制
+     */
+    public int ratePerHour() {
+        return intConfig(RATE_PER_HOUR_KEY, 30);
+    }
+
+    private <T extends Enum<T>> T parseEnum(String key, T fallback, Class<T> type) {
+        String raw = stringConfig(key, fallback.name());
+        try {
+            return Enum.valueOf(type, raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return fallback;
+        }
     }
 }

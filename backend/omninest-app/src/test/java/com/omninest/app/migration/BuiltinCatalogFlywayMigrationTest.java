@@ -179,7 +179,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(75);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(79);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -257,7 +257,11 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('notification.email.username'),
                         ('notification.email.password'),
                         ('notification.email.from'),
-                        ('notification.email.starttls'),
+                        ('notification.email.security'),
+                        ('notification.email.trust-hosts'),
+                        ('notification.email.format'),
+                        ('notification.email.web-base-url'),
+                        ('notification.email.rate-per-hour'),
                         ('notification.email.timeout-millis')
                 ) expected(config_key)
                 FULL JOIN omni.config_entries actual USING (config_key)

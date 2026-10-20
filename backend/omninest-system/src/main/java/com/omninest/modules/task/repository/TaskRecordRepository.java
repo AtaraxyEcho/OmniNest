@@ -241,4 +241,14 @@ public interface TaskRecordRepository extends JpaRepository<TaskRecord, UUID> {
             @Param("retryDueCutoff") Instant retryDueCutoff,
             Pageable pageable
     );
+
+    /**
+     * 统计窗口内该用户已登记的任务数，供通道级限速判定。
+     *
+     * @param taskType 任务类型
+     * @param ownerUserId 用户 ID
+     * @param createdAtAfter 窗口起点
+     * @return 任务数量
+     */
+    long countByTaskTypeAndOwnerUserIdAndCreatedAtAfter(String taskType, UUID ownerUserId, Instant createdAtAfter);
 }

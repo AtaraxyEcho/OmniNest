@@ -14,9 +14,12 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.preferences.UserPreferenceQuery;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig;
+import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig.MessageFormat;
 import com.omninest.modules.notification.domain.NotificationMessage;
+import com.omninest.modules.notification.domain.NotificationType;
 import com.omninest.modules.notification.event.NotificationEmailRequestedEvent;
 import com.omninest.modules.notification.repository.NotificationRepository;
+import com.omninest.modules.notification.repository.NotificationTypeRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
@@ -27,7 +30,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * 通知邮件通道的准入判定、任务登记与投递行为。
+ * 通知邮件通道的准入判定、限速与投递行为。
+ *
+ * <p>渲染器用真实实现：正文的转义与降级同样是本通道要保证的行为，桩掉它就等于没测。</p>
  *
  * @author OmniNest
  */
@@ -38,6 +43,7 @@ class NotificationEmailServiceTest {
     private static final UUID NOTIFICATION_ID = UUID.fromString("60000000-0000-0000-0000-000000000003");
 
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
+    private final NotificationTypeRepository notificationTypeRepository = mock(NotificationTypeRepository.class);
     private final NotificationEmailRuntimeConfig runtimeConfig = mock(NotificationEmailRuntimeConfig.class);
     private final NotificationEmailSender emailSender = mock(NotificationEmailSender.class);
     private final UserPreferenceQuery userPreferenceQuery = mock(UserPreferenceQuery.class);
@@ -47,8 +53,10 @@ class NotificationEmailServiceTest {
 
     private final NotificationEmailService service = new NotificationEmailService(
             notificationRepository,
+            notificationTypeRepository,
             runtimeConfig,
             emailSender,
+            new NotificationEmailRenderer(),
             userPreferenceQuery,
             userAccountQuery,
             taskRecordService,
@@ -72,9 +80,7 @@ class NotificationEmailServiceTest {
 
     @Test
     void enqueueDeliveryWritesTaskRowAndOutboxInOneShot() {
-        when(runtimeConfig.configured()).thenReturn(true);
-        when(userPreferenceQuery.findValues(USER_ID, "notification"))
-                .thenReturn(Map.of("emailNotification", Boolean.TRUE));
+        givenOptedInUser();
 
         var taskId = service.enqueueDelivery(USER_ID, NOTIFICATION_ID);
 
@@ -111,20 +117,103 @@ class NotificationEmailServiceTest {
     }
 
     @Test
-    void deliverSendsRenderedMessageAndCompletesTask() {
+    void hourlyCapBlocksRegistrationAtAndAboveTheLimit() {
+        givenOptedInUser();
+        when(runtimeConfig.ratePerHour()).thenReturn(2);
+
+        for (long recent : new long[] {2L, 3L}) {
+            when(taskRecordService.countRecentTasks(
+                    eq(NotificationEmailService.TASK_TYPE), eq(USER_ID), any(Instant.class)))
+                    .thenReturn(recent);
+
+            assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID))
+                    .as("已登记 %d 条、上限 2 时不应再登记", recent)
+                    .isEmpty();
+        }
+
+        verify(taskRecordService, never())
+                .createQueuedTask(any(), any(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        verifyNoInteractions(taskDispatchService);
+    }
+
+    @Test
+    void hourlyCapStillRegistersBelowTheLimit() {
+        givenOptedInUser();
+        when(runtimeConfig.ratePerHour()).thenReturn(2);
+        when(taskRecordService.countRecentTasks(
+                eq(NotificationEmailService.TASK_TYPE), eq(USER_ID), any(Instant.class)))
+                .thenReturn(1L);
+
+        assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID)).isPresent();
+    }
+
+    @Test
+    void zeroCapMeansUnlimitedAndSkipsTheCountQuery() {
+        givenOptedInUser();
+        when(runtimeConfig.ratePerHour()).thenReturn(0);
+
+        assertThat(service.enqueueDelivery(USER_ID, NOTIFICATION_ID)).isPresent();
+
+        verify(taskRecordService, never()).countRecentTasks(anyString(), any(), any());
+    }
+
+    @Test
+    void deliverSendsPlainTextByDefaultAndCompletesTask() {
         givenClaimed();
         when(notificationRepository.findByIdAndRecipientUserId(NOTIFICATION_ID, USER_ID))
                 .thenReturn(Optional.of(notification("任务已完成", "备份任务在 3 秒内完成")));
         when(userAccountQuery.findDeliverableEmail(USER_ID)).thenReturn(Optional.of("alex@omninest.local"));
+        when(notificationTypeRepository.findByTypeCode("TASK_COMPLETED"))
+                .thenReturn(Optional.of(type("TASK_COMPLETED", "任务完成")));
+        when(runtimeConfig.format()).thenReturn(MessageFormat.PLAIN);
+        when(runtimeConfig.webBaseUrl()).thenReturn("");
 
         service.deliver(event());
 
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(emailSender).send(eq("alex@omninest.local"), eq("任务已完成"), body.capture());
-        assertThat(body.getValue())
+        ArgumentCaptor<String> plain = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(eq("alex@omninest.local"), eq("任务已完成"), plain.capture(), eq(null));
+        assertThat(plain.getValue())
                 .contains("备份任务在 3 秒内完成")
-                .contains("通知类型：TASK_COMPLETED");
+                .contains("通知类型：任务完成");
         verify(taskRecordService).markCompleted(eq(TASK_ID), any(Map.class));
+    }
+
+    @Test
+    void richFormatSendsHtmlWithEscapedUserData() {
+        givenClaimed();
+        when(notificationRepository.findByIdAndRecipientUserId(NOTIFICATION_ID, USER_ID)).thenReturn(Optional.of(
+                notification("下载完成", "已导入 <b>movie.nfo</b> 与 </td></tr> 片段")));
+        when(userAccountQuery.findDeliverableEmail(USER_ID)).thenReturn(Optional.of("alex@omninest.local"));
+        when(notificationTypeRepository.findByTypeCode("TASK_COMPLETED"))
+                .thenReturn(Optional.of(type("TASK_COMPLETED", "任务完成")));
+        when(runtimeConfig.format()).thenReturn(MessageFormat.RICH);
+        when(runtimeConfig.webBaseUrl()).thenReturn("https://nest.example.test");
+
+        service.deliver(event());
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(eq("alex@omninest.local"), eq("下载完成"), anyString(), html.capture());
+        assertThat(html.getValue())
+                .contains("&lt;b&gt;movie.nfo&lt;/b&gt;")
+                .contains("&lt;/td&gt;&lt;/tr&gt;")
+                .doesNotContain("<img")
+                .contains("href=\"https://nest.example.test/#/notifications\"");
+    }
+
+    @Test
+    void missingTitleFallsBackToTypeLabelAsSubject() {
+        givenClaimed();
+        when(notificationRepository.findByIdAndRecipientUserId(NOTIFICATION_ID, USER_ID))
+                .thenReturn(Optional.of(notification("  ", "没有标题的正文")));
+        when(userAccountQuery.findDeliverableEmail(USER_ID)).thenReturn(Optional.of("alex@omninest.local"));
+        when(notificationTypeRepository.findByTypeCode("TASK_COMPLETED"))
+                .thenReturn(Optional.of(type("TASK_COMPLETED", "任务完成")));
+        when(runtimeConfig.format()).thenReturn(MessageFormat.PLAIN);
+        when(runtimeConfig.webBaseUrl()).thenReturn("");
+
+        service.deliver(event());
+
+        verify(emailSender).send(anyString(), eq("任务完成"), anyString(), eq(null));
     }
 
     @Test
@@ -163,10 +252,23 @@ class NotificationEmailServiceTest {
     }
 
     @Test
-    void sendTestMailUsesSenderDirectly() {
+    void sendTestMailUsesTheSameRenderingPipeline() {
+        when(notificationTypeRepository.findByTypeCode("SYSTEM_MESSAGE"))
+                .thenReturn(Optional.of(type("SYSTEM_MESSAGE", "系统消息")));
+        when(runtimeConfig.format()).thenReturn(MessageFormat.PLAIN);
+        when(runtimeConfig.webBaseUrl()).thenReturn("");
+
         service.sendTestMail("ops@omninest.local");
 
-        verify(emailSender).send(eq("ops@omninest.local"), anyString(), anyString());
+        ArgumentCaptor<String> plain = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(eq("ops@omninest.local"), eq("OmniNest 邮件通道测试"), plain.capture(), eq(null));
+        assertThat(plain.getValue()).contains("通知类型：系统消息");
+    }
+
+    private void givenOptedInUser() {
+        when(runtimeConfig.configured()).thenReturn(true);
+        when(userPreferenceQuery.findValues(USER_ID, "notification"))
+                .thenReturn(Map.of("emailNotification", Boolean.TRUE));
     }
 
     private void givenClaimed() {
@@ -188,5 +290,12 @@ class NotificationEmailServiceTest {
                 null,
                 Instant.parse("2026-10-20T02:00:00Z")
         );
+    }
+
+    private NotificationType type(String code, String label) {
+        NotificationType notificationType = new NotificationType();
+        notificationType.setTypeCode(code);
+        notificationType.setLabel(label);
+        return notificationType;
     }
 }

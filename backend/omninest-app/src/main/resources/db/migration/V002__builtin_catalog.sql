@@ -96,8 +96,12 @@ INSERT INTO omni.config_entries (
     ('notification.email.username', '', 'STRING', 'notification', 'HOT', 'SMTP 登录账号', false),
     ('notification.email.password', '', 'STRING', 'notification', 'HOT', 'SMTP 登录口令', true),
     ('notification.email.from', '', 'STRING', 'notification', 'HOT', '发件人地址（留空时使用登录账号）', false),
-    ('notification.email.starttls', 'true', 'BOOLEAN', 'notification', 'HOT', '是否使用 STARTTLS 加密连接', false),
-    ('notification.email.timeout-millis', '10000', 'NUMBER', 'notification', 'HOT', 'SMTP 连接与读取时限（毫秒）', false);
+    ('notification.email.security', 'STARTTLS', 'STRING', 'notification', 'HOT', 'SMTP 连接加密方式', false),
+    ('notification.email.trust-hosts', '', 'STRING', 'notification', 'HOT', '跳过证书校验的主机清单（逗号分隔，仅内网自签证书场景）', false),
+    ('notification.email.timeout-millis', '10000', 'NUMBER', 'notification', 'HOT', 'SMTP 连接与读取时限（毫秒）', false),
+    ('notification.email.format', 'PLAIN', 'STRING', 'notification', 'HOT', '邮件正文格式', false),
+    ('notification.email.web-base-url', '', 'STRING', 'notification', 'HOT', '邮件内链接指向的站点地址（留空则不带链接）', false),
+    ('notification.email.rate-per-hour', '30', 'NUMBER', 'notification', 'HOT', '每用户每小时邮件投递上限（0 表示不限制）', false);
 
 -- 内置角色。
 INSERT INTO omni.auth_roles (id, code, name, description, built_in, enabled) VALUES
