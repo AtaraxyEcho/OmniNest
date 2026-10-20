@@ -119,6 +119,108 @@ void main() {
       expect(restored.sound, prefs.sound);
       expect(restored.showPreview, prefs.showPreview);
     });
+
+    test('foregroundBanner 默认开启并随 json 往返', () {
+      expect(NotificationPreferences.fromJson({}).foregroundBanner, true);
+      expect(
+        NotificationPreferences.fromJson({
+          'foregroundBanner': false,
+        }).foregroundBanner,
+        false,
+      );
+
+      const prefs = NotificationPreferences(foregroundBanner: false);
+      expect(
+        NotificationPreferences.fromJson(prefs.toJson()).foregroundBanner,
+        false,
+      );
+    });
+
+    test('presentsBannerFor 汇总总开关、横幅开关与类型开关', () {
+      final at = DateTime(2026, 10, 20, 9, 0);
+
+      expect(
+        const NotificationPreferences().presentsBannerFor(
+          'TASK_FAILED',
+          at: at,
+        ),
+        true,
+      );
+      expect(
+        const NotificationPreferences(
+          foregroundBanner: false,
+        ).presentsBannerFor('TASK_FAILED', at: at),
+        false,
+      );
+      expect(
+        const NotificationPreferences(
+          enabled: false,
+        ).presentsBannerFor('TASK_FAILED', at: at),
+        false,
+      );
+      expect(
+        const NotificationPreferences(
+          types: {'TASK_FAILED': false},
+        ).presentsBannerFor('TASK_FAILED', at: at),
+        false,
+      );
+      expect(
+        const NotificationPreferences(
+          types: {'TASK_FAILED': false},
+        ).presentsBannerFor('TASK_COMPLETED', at: at),
+        true,
+      );
+    });
+
+    test('isQuietAt 跨零点回绕且忽略非法时段', () {
+      const quiet = NotificationPreferences(
+        quietHours: QuietHours(enabled: true, start: '22:00', end: '08:00'),
+      );
+
+      expect(quiet.isQuietAt(DateTime(2026, 10, 20, 23, 30)), true);
+      expect(quiet.isQuietAt(DateTime(2026, 10, 20, 8, 0)), false);
+      expect(quiet.isQuietAt(DateTime(2026, 10, 20, 7, 59)), true);
+      expect(quiet.isQuietAt(DateTime(2026, 10, 20, 12, 0)), false);
+
+      const sameBoundaries = NotificationPreferences(
+        quietHours: QuietHours(enabled: true, start: '08:00', end: '08:00'),
+      );
+      expect(
+        sameBoundaries.isQuietAt(DateTime(2026, 10, 20, 8, 30)),
+        false,
+      );
+
+      const malformed = NotificationPreferences(
+        quietHours: QuietHours(enabled: true, start: '8am', end: '08:00'),
+      );
+      expect(malformed.isQuietAt(DateTime(2026, 10, 20, 3, 0)), false);
+
+      const disabled = NotificationPreferences(
+        quietHours: QuietHours(enabled: false, start: '22:00', end: '08:00'),
+      );
+      expect(disabled.isQuietAt(DateTime(2026, 10, 20, 23, 30)), false);
+    });
+
+    test('免打扰时段内横幅与提示音一起静默', () {
+      const quiet = NotificationPreferences(
+        quietHours: QuietHours(enabled: true, start: '22:00', end: '08:00'),
+      );
+
+      expect(
+        quiet.presentsBannerFor(
+          'TASK_FAILED',
+          at: DateTime(2026, 10, 20, 23, 0),
+        ),
+        false,
+      );
+      expect(
+        quiet.presentsBannerFor(
+          'TASK_FAILED',
+          at: DateTime(2026, 10, 20, 10, 0),
+        ),
+        true,
+      );
+    });
   });
 
   group('QuietHours', () {

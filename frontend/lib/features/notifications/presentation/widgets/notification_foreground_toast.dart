@@ -10,6 +10,7 @@ import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/notifications/application/notification_foreground_presenter.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
+import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_type_l10n.dart';
 
 /// 根部挂载的前台通知提示：实时通知到达时经全局反馈门面展示顶部居中
@@ -20,7 +21,8 @@ import 'package:omninest/features/notifications/presentation/utils/notification_
 /// SnackBar 的 Hero tag 由内容字符串派生，路由切换的 Hero 遍历会命中
 /// 多个同名 Hero 触发断言；门面自管的 Overlay 体系不参与 Hero。同文案
 /// 通知由门面按键合并并重置计时，不同通知按门面堆叠上限共存。通知页
-/// 打开期间抑制（同屏冗余）。开关为设备级本地偏好，默认开启。
+/// 打开期间抑制（同屏冗余）。是否弹出、是否带正文、是否出声一律取服务端
+/// 通知偏好，本地快照仅作首帧缓存。
 class NotificationForegroundToast extends ConsumerWidget {
   const NotificationForegroundToast({required this.child, super.key});
 
@@ -36,20 +38,29 @@ class NotificationForegroundToast extends ConsumerWidget {
       if (!context.mounted) {
         return;
       }
-      _present(context, ref, notification);
+      unawaited(_present(context, ref, notification));
     });
     return child;
   }
 
-  void _present(
+  Future<void> _present(
     BuildContext context,
     WidgetRef ref,
     NotificationDto notification,
-  ) {
-    final enabled =
-        ref.read(notificationForegroundToastEnabledProvider).asData?.value ??
-        true;
-    if (!enabled) {
+  ) async {
+    // 横幅真值取服务端通知偏好：必须等偏好读出再判定，读不到才按默认放行。
+    // 本地快照只是首帧缓存，不能用设备级 SharedPreferences 另立一套开关。
+    NotificationPreferences? prefs;
+    try {
+      prefs = await ref.read(notificationPreferencesProvider.future);
+    } on Object {
+      prefs = null;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    if (prefs != null &&
+        !prefs.presentsBannerFor(notification.type, at: DateTime.now())) {
       return;
     }
     // Toast 挂在 MaterialApp.builder，位于 GoRouter 之上，GoRouter.of 会抛
@@ -60,18 +71,19 @@ class NotificationForegroundToast extends ConsumerWidget {
       return;
     }
     final l10n = AppLocalizations.of(context);
+    // 关闭预览只报「有新通知」，不带正文；查看入口保留。
     final title =
-        notification.title ??
-        notification.message ??
-        synthesizedNotificationText(notification, l10n) ??
-        '';
+        (prefs?.showPreview ?? true)
+            ? notification.title ??
+                notification.message ??
+                synthesizedNotificationText(notification, l10n) ??
+                ''
+            : l10n.notificationContentHidden;
     if (title.isEmpty) {
       return;
     }
     // 提示音跟随通知偏好（默认开启）；用系统提示声，Web 平台为静音空实现。
-    final soundEnabled =
-        ref.read(notificationPreferencesProvider).asData?.value.sound ?? true;
-    if (soundEnabled) {
+    if (prefs?.sound ?? true) {
       unawaited(SystemSound.play(SystemSoundType.alert));
     }
     showOmniFeedback(

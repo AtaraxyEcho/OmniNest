@@ -9,15 +9,26 @@ import 'package:omninest/app/router.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/features/notifications/application/notification_foreground_presenter.dart';
+import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
+import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toastification/toastification.dart';
 
-NotificationDto _notification(String title) {
+/// 偏好假体：横幅判定只读 state，这里不需要真实网络与本地缓存。
+class _FakePreferencesNotifier extends NotificationPreferencesController {
+  _FakePreferencesNotifier(this._prefs);
+
+  final NotificationPreferences _prefs;
+
+  @override
+  Future<NotificationPreferences> build() async => _prefs;
+}
+
+NotificationDto _notification(String title, {String type = 'SYSTEM'}) {
   return NotificationDto(
     id: title,
-    type: 'SYSTEM',
+    type: type,
     title: title,
     read: false,
     createdAt: DateTime.utc(2026, 9, 20),
@@ -58,6 +69,7 @@ Future<ProviderContainer> _pumpHost(
   required StreamController<NotificationDto> events,
   String initialLocation = '/',
   Widget Function(BuildContext, GoRouterState)? homeBuilder,
+  NotificationPreferences prefs = const NotificationPreferences(),
 }) async {
   final router = _buildRouter(
     initialLocation: initialLocation,
@@ -70,6 +82,9 @@ Future<ProviderContainer> _pumpHost(
         (ref) => events.stream,
       ),
       appRouterProvider.overrideWithValue(router),
+      notificationPreferencesProvider.overrideWith(
+        () => _FakePreferencesNotifier(prefs),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -101,13 +116,25 @@ Future<void> _flush(WidgetTester tester) async {
 Future<void> _presentEvent(
   WidgetTester tester,
   StreamController<NotificationDto> events,
-  String title,
-) async {
-  events.add(_notification(title));
+  String title, {
+  String type = 'SYSTEM',
+}) async {
+  events.add(_notification(title, type: type));
   await tester.pump();
   await tester.pump();
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 350));
+}
+
+/// 包住当前墙钟的 ±30 分钟免打扰窗口：用例不依赖固定时刻也能命中时段。
+({String start, String end}) _quietWindowAround(DateTime now) {
+  String format(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:'
+      '${value.minute.toString().padLeft(2, '0')}';
+  return (
+    start: format(now.subtract(const Duration(minutes: 30))),
+    end: format(now.add(const Duration(minutes: 30))),
+  );
 }
 
 void main() {
@@ -118,7 +145,6 @@ void main() {
   });
 
   testWidgets('通知到达弹出前台提示并可点击跳转', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
     final events = StreamController<NotificationDto>.broadcast();
     addTearDown(events.close);
     await _pumpHost(tester, events: events);
@@ -136,23 +162,76 @@ void main() {
     expect(find.text('新任务完成'), findsNothing);
   });
 
-  testWidgets('开关关闭时不弹前台提示', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'notification_foreground_toast_enabled': false,
-    });
+  testWidgets('服务端横幅开关关闭时不弹前台提示', (tester) async {
     final events = StreamController<NotificationDto>.broadcast();
     addTearDown(events.close);
-    final container = await _pumpHost(tester, events: events);
-    // 预热开关 provider，确保读取到关闭值而非回落默认。
-    await container.read(notificationForegroundToastEnabledProvider.future);
+    await _pumpHost(
+      tester,
+      events: events,
+      prefs: const NotificationPreferences(foregroundBanner: false),
+    );
 
     await _presentEvent(tester, events, '不应出现');
 
     expect(find.text('不应出现'), findsNothing);
   });
 
+  testWidgets('类型开关只屏蔽对应类型，其余类型照常弹', (tester) async {
+    final events = StreamController<NotificationDto>.broadcast();
+    addTearDown(events.close);
+    await _pumpHost(
+      tester,
+      events: events,
+      prefs: const NotificationPreferences(types: {'SYSTEM': false}),
+    );
+
+    await _presentEvent(tester, events, '已关类型', type: 'SYSTEM');
+    expect(find.text('已关类型'), findsNothing);
+
+    await _presentEvent(tester, events, '未关类型', type: 'TASK_COMPLETED');
+
+    expect(find.text('未关类型'), findsOneWidget);
+    await _flush(tester);
+  });
+
+  testWidgets('免打扰时段内横幅静默', (tester) async {
+    final window = _quietWindowAround(DateTime.now());
+    final events = StreamController<NotificationDto>.broadcast();
+    addTearDown(events.close);
+    await _pumpHost(
+      tester,
+      events: events,
+      prefs: NotificationPreferences(
+        quietHours: QuietHours(
+          enabled: true,
+          start: window.start,
+          end: window.end,
+        ),
+      ),
+    );
+
+    await _presentEvent(tester, events, '免打扰内');
+
+    expect(find.text('免打扰内'), findsNothing);
+  });
+
+  testWidgets('关闭预览时横幅只报收到新通知', (tester) async {
+    final events = StreamController<NotificationDto>.broadcast();
+    addTearDown(events.close);
+    await _pumpHost(
+      tester,
+      events: events,
+      prefs: const NotificationPreferences(showPreview: false),
+    );
+
+    await _presentEvent(tester, events, '机密任务完成');
+
+    expect(find.text('机密任务完成'), findsNothing);
+    expect(find.text('收到新通知'), findsOneWidget);
+    await _flush(tester);
+  });
+
   testWidgets('通知页打开期间抑制前台提示', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
     final events = StreamController<NotificationDto>.broadcast();
     addTearDown(events.close);
     await _pumpHost(tester, events: events, initialLocation: '/notifications');
@@ -163,7 +242,6 @@ void main() {
   });
 
   testWidgets('同文案通知合并为一条，不同文案按门面堆叠共存', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
     final events = StreamController<NotificationDto>.broadcast();
     addTearDown(events.close);
     await _pumpHost(tester, events: events);
@@ -179,7 +257,6 @@ void main() {
   });
 
   testWidgets('多根 Scaffold 并存时路由切换不触发 SnackBar Hero 冲突', (tester) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
     final events = StreamController<NotificationDto>.broadcast();
     addTearDown(events.close);
     // 模拟桌面端分支壳层：IndexedStack 内多个根 Scaffold 同时挂载，

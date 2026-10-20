@@ -202,6 +202,46 @@ class _ProfileNotificationSettingsCardState
                 (value) =>
                     widget.onChanged(widget.prefs.copyWith(showPreview: value)),
           ),
+          const _PreferenceDivider(),
+          _PreferenceSwitchTile(
+            icon: Icons.campaign_outlined,
+            title: l10n.notificationForegroundToastToggle,
+            subtitle: l10n.notificationForegroundToastToggleSubtitle,
+            value: widget.prefs.foregroundBanner,
+            onChanged:
+                (value) => widget.onChanged(
+                  widget.prefs.copyWith(foregroundBanner: value),
+                ),
+          ),
+          const _PreferenceDivider(),
+          _PreferenceSwitchTile(
+            icon: Icons.nightlight_outlined,
+            title: l10n.notificationQuietHours,
+            subtitle: l10n.notificationQuietHoursHint,
+            value: widget.prefs.quietHours.enabled,
+            onChanged:
+                (value) => widget.onChanged(
+                  widget.prefs.copyWith(
+                    quietHours: widget.prefs.quietHours.copyWith(
+                      enabled: value,
+                    ),
+                  ),
+                ),
+          ),
+          NotificationQuietHoursFields(
+            start: widget.prefs.quietHours.start,
+            end: widget.prefs.quietHours.end,
+            enabled: widget.prefs.quietHours.enabled,
+            onChanged:
+                (start, end) => widget.onChanged(
+                  widget.prefs.copyWith(
+                    quietHours: widget.prefs.quietHours.copyWith(
+                      start: start,
+                      end: end,
+                    ),
+                  ),
+                ),
+          ),
         ],
       ),
     );

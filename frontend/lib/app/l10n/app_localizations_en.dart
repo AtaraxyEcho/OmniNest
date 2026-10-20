@@ -317,6 +317,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show a lightweight toast when a notification arrives';
 
   @override
+  String get notificationQuietHours => 'Do Not Disturb';
+
+  @override
+  String get notificationQuietHoursHint =>
+      'Suppress toasts and sounds during this period';
+
+  @override
+  String get notificationQuietHoursStart => 'Start';
+
+  @override
+  String get notificationQuietHoursEnd => 'End';
+
+  @override
+  String get notificationContentHidden => 'New notification';
+
+  @override
   String get notificationFilterAllLabel => 'All';
 
   @override

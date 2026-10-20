@@ -668,6 +668,36 @@ abstract class AppLocalizations {
   /// **'Show a lightweight toast when a notification arrives'**
   String get notificationForegroundToastToggleSubtitle;
 
+  /// No description provided for @notificationQuietHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Do Not Disturb'**
+  String get notificationQuietHours;
+
+  /// No description provided for @notificationQuietHoursHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Suppress toasts and sounds during this period'**
+  String get notificationQuietHoursHint;
+
+  /// No description provided for @notificationQuietHoursStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get notificationQuietHoursStart;
+
+  /// No description provided for @notificationQuietHoursEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get notificationQuietHoursEnd;
+
+  /// No description provided for @notificationContentHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'New notification'**
+  String get notificationContentHidden;
+
   /// No description provided for @notificationFilterAllLabel.
   ///
   /// In en, this message translates to:

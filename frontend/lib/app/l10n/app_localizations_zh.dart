@@ -303,7 +303,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationForegroundToastToggle => '新通知前台提示';
 
   @override
-  String get notificationForegroundToastToggleSubtitle => '通知到达时在页面底部弹出轻量提示';
+  String get notificationForegroundToastToggleSubtitle => '通知到达时弹出轻量提示条';
+
+  @override
+  String get notificationQuietHours => '免打扰时段';
+
+  @override
+  String get notificationQuietHoursHint => '时段内不弹提示、不播放提示音';
+
+  @override
+  String get notificationQuietHoursStart => '开始';
+
+  @override
+  String get notificationQuietHoursEnd => '结束';
+
+  @override
+  String get notificationContentHidden => '收到新通知';
 
   @override
   String get notificationFilterAllLabel => '全部';

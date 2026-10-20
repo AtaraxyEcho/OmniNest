@@ -22,10 +22,10 @@ import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/core/window/desktop_close_behavior_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
-import 'package:omninest/features/notifications/application/notification_foreground_presenter.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/application/notification_type_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 import 'package:omninest/app/environment_providers.dart';
@@ -483,8 +483,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _ForegroundToastToggleCard(),
-            const SizedBox(height: 16),
             ProfileNotificationSettingsCard(
               typesAsync: types,
               prefs: value,
@@ -507,69 +505,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   void _showMessage(String message) {
     if (!mounted) return;
     showOmniFeedback(context, message);
-  }
-}
-
-/// 前台新通知提示开关（设备级本地偏好，默认开启）。
-class _ForegroundToastToggleCard extends ConsumerWidget {
-  const _ForegroundToastToggleCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final enabled = ref.watch(notificationForegroundToastEnabledProvider);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.notificationForegroundToastToggle,
-                  style: TextStyle(
-                    fontSize: AppTypography.bodyMedium,
-                    fontWeight: FontWeight.w500,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.notificationForegroundToastToggleSubtitle,
-                  style: TextStyle(
-                    fontSize: AppTypography.labelSmall,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          WorkstationSwitch(
-            value: enabled.asData?.value ?? true,
-            onChanged: (value) {
-              unawaited(
-                ref
-                    .read(notificationForegroundPreferenceStoreProvider)
-                    .saveEnabled(value)
-                    .then((_) {
-                      if (context.mounted) {
-                        ref.invalidate(
-                          notificationForegroundToastEnabledProvider,
-                        );
-                      }
-                    }),
-              );
-            },
-          ),
-        ],
-      ),
-    );
   }
 }
 

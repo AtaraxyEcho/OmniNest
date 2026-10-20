@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -15,6 +16,10 @@ import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
+import 'package:omninest/features/notifications/application/notification_type_controller.dart';
+import 'package:omninest/features/notifications/domain/notification_preferences.dart';
+import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 import 'package:omninest/features/profile/presentation/pages/profile_page.dart';
@@ -37,6 +42,12 @@ class _AuthedSessionNotifier extends AuthSessionNotifier {
   }
 }
 
+class _StubNotificationPreferences extends NotificationPreferencesController {
+  @override
+  Future<NotificationPreferences> build() async =>
+      const NotificationPreferences();
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -48,6 +59,7 @@ void main() {
     Brightness brightness = Brightness.dark,
     Future<List<UserSession>> Function()? sessionsBuilder,
     Size surface = const Size(390, 844),
+    List<Override> overrides = const [],
   }) async {
     tester.view.physicalSize = surface;
     tester.view.devicePixelRatio = 1.0;
@@ -92,6 +104,7 @@ void main() {
               wsBaseUrl: 'ws://localhost',
             ),
           ),
+          ...overrides,
         ],
         child: MaterialApp.router(
           theme:
@@ -257,6 +270,29 @@ void main() {
 
     expect(find.text('设备与会话'), findsNothing, reason: '第一次返回只关子视图');
     expect(find.text('退出登录'), findsOneWidget, reason: '仍停在账户页');
+    expect(tester.takeException(), isNull);
+  });
+
+  // 通知分组三端同一真值：移动行也必须把横幅开关与免打扰起止摆出来，
+  // 否则用户在桌面改过的偏好只在桌面可见，手机上无从核对。
+  testWidgets('通知分组：横幅开关与免打扰起止行在场', (tester) async {
+    await pumpProfile(
+      tester,
+      initialSection: 'notifications',
+      overrides: [
+        notificationPreferencesProvider.overrideWith(
+          _StubNotificationPreferences.new,
+        ),
+        notificationTypesProvider.overrideWith(
+          (_) async => const <NotificationTypeConfig>[],
+        ),
+      ],
+    );
+
+    expect(find.text('新通知前台提示'), findsOneWidget);
+    expect(find.text('免打扰时段'), findsOneWidget);
+    expect(find.text('22:00'), findsOneWidget);
+    expect(find.text('08:00'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

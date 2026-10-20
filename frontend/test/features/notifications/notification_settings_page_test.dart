@@ -151,4 +151,55 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
   });
+
+  /// 行内开关要按标题定位：分区里开关数量随类型条数变化，裸索引会错位。
+  Finder switchOfRow(String title) {
+    final row = find.ancestor(of: find.text(title), matching: find.byType(Row));
+    return find.descendant(of: row, matching: find.byType(WorkstationSwitch));
+  }
+
+  testWidgets('横幅开关写回服务端偏好', (tester) async {
+    final fake = await pumpPage(tester, const NotificationPreferences());
+    final switchFinder = switchOfRow('新通知前台提示');
+    await tester.ensureVisible(switchFinder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+
+    expect(fake.saved, hasLength(1));
+    expect(fake.saved.single.foregroundBanner, isFalse);
+  });
+
+  testWidgets('免打扰行展示起止时间并可选择', (tester) async {
+    await pumpPage(
+      tester,
+      const NotificationPreferences(
+        quietHours: QuietHours(enabled: true, start: '22:30', end: '07:15'),
+      ),
+    );
+
+    expect(find.text('22:30'), findsOneWidget);
+    expect(find.text('07:15'), findsOneWidget);
+
+    await tester.tap(find.text('22:30'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TimePickerDialog), findsOneWidget);
+  });
+
+  testWidgets('免打扰关闭时不可选时间', (tester) async {
+    final fake = await pumpPage(tester, const NotificationPreferences());
+
+    await tester.tap(find.text('22:00'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TimePickerDialog), findsNothing);
+
+    final switchFinder = switchOfRow('免打扰时段');
+    await tester.ensureVisible(switchFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+
+    expect(fake.saved.single.quietHours.enabled, isTrue);
+  });
 }

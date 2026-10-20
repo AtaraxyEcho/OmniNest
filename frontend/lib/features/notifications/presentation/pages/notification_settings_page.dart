@@ -14,6 +14,7 @@ import 'package:omninest/features/notifications/application/notification_type_co
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/notifications/presentation/utils/notification_type_l10n.dart';
+import 'package:omninest/features/notifications/presentation/widgets/notification_quiet_hours_fields.dart';
 
 /// 通知偏好设置页：56px 工位顶栏 + 分区卡开关行。
 ///
@@ -163,6 +164,48 @@ class _NotificationSettingsPageState
                   onChanged:
                       (v) => unawaited(
                         _updatePrefs(prefs.copyWith(showPreview: v)),
+                      ),
+                ),
+                _SettingsDivider(),
+                _SettingsSwitchRow(
+                  icon: Icons.campaign_outlined,
+                  title: l10n.notificationForegroundToastToggle,
+                  subtitle: l10n.notificationForegroundToastToggleSubtitle,
+                  value: prefs.foregroundBanner,
+                  onChanged:
+                      (v) => unawaited(
+                        _updatePrefs(prefs.copyWith(foregroundBanner: v)),
+                      ),
+                ),
+                _SettingsDivider(),
+                _SettingsSwitchRow(
+                  icon: Icons.nightlight_outlined,
+                  title: l10n.notificationQuietHours,
+                  subtitle: l10n.notificationQuietHoursHint,
+                  value: prefs.quietHours.enabled,
+                  onChanged:
+                      (v) => unawaited(
+                        _updatePrefs(
+                          prefs.copyWith(
+                            quietHours: prefs.quietHours.copyWith(enabled: v),
+                          ),
+                        ),
+                      ),
+                ),
+                NotificationQuietHoursFields(
+                  start: prefs.quietHours.start,
+                  end: prefs.quietHours.end,
+                  enabled: prefs.quietHours.enabled,
+                  onChanged:
+                      (start, end) => unawaited(
+                        _updatePrefs(
+                          prefs.copyWith(
+                            quietHours: prefs.quietHours.copyWith(
+                              start: start,
+                              end: end,
+                            ),
+                          ),
+                        ),
                       ),
                 ),
               ],

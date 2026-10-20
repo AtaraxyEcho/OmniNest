@@ -369,6 +369,51 @@ class _PmNotificationsSectionState
                         unawaited(_save(prefs.copyWith(showPreview: value))),
               ),
             ),
+            _PmRow(
+              icon: Icons.campaign_outlined,
+              label: l10n.notificationForegroundToastToggle,
+              subtitle: l10n.notificationForegroundToastToggleSubtitle,
+              trailing: _PmSwitch(
+                value: prefs.foregroundBanner,
+                onChanged:
+                    (value) => unawaited(
+                      _save(prefs.copyWith(foregroundBanner: value)),
+                    ),
+              ),
+            ),
+            _PmRow(
+              icon: Icons.nightlight_outlined,
+              label: l10n.notificationQuietHours,
+              subtitle: l10n.notificationQuietHoursHint,
+              trailing: _PmSwitch(
+                value: prefs.quietHours.enabled,
+                onChanged:
+                    (value) => unawaited(
+                      _save(
+                        prefs.copyWith(
+                          quietHours: prefs.quietHours.copyWith(enabled: value),
+                        ),
+                      ),
+                    ),
+              ),
+            ),
+            NotificationQuietHoursFields(
+              start: prefs.quietHours.start,
+              end: prefs.quietHours.end,
+              enabled: prefs.quietHours.enabled,
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              onChanged:
+                  (start, end) => unawaited(
+                    _save(
+                      prefs.copyWith(
+                        quietHours: prefs.quietHours.copyWith(
+                          start: start,
+                          end: end,
+                        ),
+                      ),
+                    ),
+                  ),
+            ),
             _PmGroupLabel(l10n.profileRowNotifications),
             types.when(
               loading:
@@ -453,7 +498,8 @@ class _PmServerSection extends ConsumerWidget {
         const SizedBox(height: 12),
         _PmPrimaryButton(
           label: l10n.profileSwitchServer,
-          onPressed: () => unawaited(_confirmAndChangeServer(context, ref, l10n)),
+          onPressed:
+              () => unawaited(_confirmAndChangeServer(context, ref, l10n)),
         ),
       ],
     );
