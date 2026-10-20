@@ -940,6 +940,7 @@
     }
   },
   "filesCopyLinkWithPassword": "Copy link (with password)",
+  "filesShareLinkUnrecoverable": "This link address can no longer be shown; revoke and create a new share",
   "filesCopyLinkOnly": "Copy link only",
   "filesCopyLink": "Copy Link",
   "filesCannotLoadImage": "Cannot load image",

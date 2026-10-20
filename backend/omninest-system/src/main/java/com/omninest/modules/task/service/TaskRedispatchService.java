@@ -19,10 +19,9 @@ import tools.jackson.core.type.TypeReference;
  * 任务重新投递服务：从任务记录重建消费方事件载荷并经 Outbox 重发。
  *
  * <p>供管理员重试、死信重试与停滞任务清扫三类入口共用，保证"存储载荷 →
- * 消费事件"的重建规则只有一份。优先复用最近一次 Outbox 投递的原始消息
- * （部分任务类型的记录载荷是事件子集，只有投递行携带完整事件）；无投递
- * 记录时按路由键从记录载荷重建。未收录的路由键拒绝重投，避免以错误形状
- * 的载荷打爆消费方。</p>
+ * 消费事件"的重建规则只有一份。优先复用最近一次 Outbox 投递的原始消息，
+ * 无投递记录（历史数据或已过保留期）时按路由键从记录载荷重建；重建要求的字段
+ * 与生产侧记录载荷同形。未收录的路由键拒绝重投，避免以错误形状的载荷打爆消费方。</p>
  *
  * @author OmniNest
  */
@@ -71,10 +70,8 @@ public class TaskRedispatchService {
     /**
      * 按路由键将任务载荷重建为消费方事件形状，并经 Outbox 立即投递。
      *
-     * <p>部分类型的任务记录载荷不足以还原事件：媒体自动导入只存文件标识与名称，
-     * 桶与对象键只在投递行里；文件恢复索引事件由领域事件直接投递，不落任务记录。
-     * 这两类只在存在投递行时可重投，落到重建路径时按"不支持"拒绝，
-     * 避免以残缺载荷打爆消费方。</p>
+     * <p>文件恢复索引事件由领域事件直接投递、不落任务记录，因此只在存在投递行时可重投；
+     * 落到重建路径时按"不支持"拒绝，避免以错误形状投递。</p>
      *
      * @param taskId 任务 ID
      * @param fallbackOwnerUserId 任务记录上的归属用户，供载荷未冗余 ownerUserId 的类型回退
@@ -129,6 +126,11 @@ public class TaskRedispatchService {
                     QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
                     QueueNames.THUMBNAIL_ROUTING_KEY,
                     QueueNames.PHOTO_MOTION_ROUTING_KEY -> fileUploadedPayload(payload);
+            case QueueNames.MEDIA_AUTO_IMPORT_ROUTING_KEY -> Map.of(
+                    "taskId", taskId.toString(),
+                    // 事件是嵌套形状：文件字段整体落在 file 之下（MediaAutoImportRequestedEvent）。
+                    "file", fileUploadedPayload(payload)
+            );
             case QueueNames.MEDIA_SCAN_ROUTING_KEY -> {
                 Map<String, Object> scan = new LinkedHashMap<>();
                 scan.put("taskId", taskId.toString());

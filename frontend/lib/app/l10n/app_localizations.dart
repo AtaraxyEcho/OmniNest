@@ -4393,6 +4393,12 @@ abstract class AppLocalizations {
   /// **'Copy link (with password)'**
   String get filesCopyLinkWithPassword;
 
+  /// No description provided for @filesShareLinkUnrecoverable.
+  ///
+  /// In en, this message translates to:
+  /// **'This link address can no longer be shown; revoke and create a new share'**
+  String get filesShareLinkUnrecoverable;
+
   /// No description provided for @filesCopyLinkOnly.
   ///
   /// In en, this message translates to:

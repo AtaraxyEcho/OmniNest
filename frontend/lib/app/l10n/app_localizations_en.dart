@@ -27,7 +27,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mobileNavReader => 'Reading';
 
   @override
-  String get mobileOfflineBanner => 'You are offline. Some actions are unavailable.';
+  String get mobileOfflineBanner =>
+      'You are offline. Some actions are unavailable.';
 
   @override
   String get fullscreenEnterShortcut => 'Full screen (F11)';
@@ -78,7 +79,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchGroupCommand => 'Commands';
 
   @override
-  String get searchPaletteHint => 'Search media, music, books, files, or type a command…';
+  String get searchPaletteHint =>
+      'Search media, music, books, files, or type a command…';
 
   @override
   String get searchFooterNavigate => 'Navigate';
@@ -149,13 +151,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsEmailNotification => 'Email notifications';
 
   @override
-  String get settingsEmailNotificationHint => 'Receive important notifications via email';
+  String get settingsEmailNotificationHint =>
+      'Receive important notifications via email';
 
   @override
   String get settingsSyncOffline => 'Sync and offline';
 
   @override
-  String get settingsSyncOfflineHint => 'Manage online sync status and offline content';
+  String get settingsSyncOfflineHint =>
+      'Manage online sync status and offline content';
 
   @override
   String get settingsSecurity => 'Security and devices';
@@ -173,13 +177,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupTitle => 'Initial Setup';
 
   @override
-  String get setupSubtitle => 'Create the super administrator account for this OmniNest instance.';
+  String get setupSubtitle =>
+      'Create the super administrator account for this OmniNest instance.';
 
   @override
   String get setupUnavailableTitle => 'Setup is not ready';
 
   @override
-  String get setupUnavailableMessage => 'Configure OMNINEST_SETUP_TOKEN with at least 32 characters on the server, then restart the backend.';
+  String get setupUnavailableMessage =>
+      'Configure OMNINEST_SETUP_TOKEN with at least 32 characters on the server, then restart the backend.';
 
   @override
   String get setupToken => 'Setup token';
@@ -209,13 +215,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupConfirmPassword => 'Confirm password';
 
   @override
-  String get setupPasswordLength => 'The super administrator password must be between 8 and 24 characters';
+  String get setupPasswordLength =>
+      'The super administrator password must be between 8 and 24 characters';
 
   @override
   String get setupTwoFactorSection => 'Two-Factor Verification';
 
   @override
-  String get setupTwoFactorHint => 'This deployment requires two-factor verification for the super administrator: scan the QR code with an authenticator app and enter the 6-digit code to finish setup.';
+  String get setupTwoFactorHint =>
+      'This deployment requires two-factor verification for the super administrator: scan the QR code with an authenticator app and enter the 6-digit code to finish setup.';
 
   @override
   String get setupTwoFactorGenerate => 'Generate QR code';
@@ -224,7 +232,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupTwoFactorRegenerate => 'Regenerate secret';
 
   @override
-  String get setupTwoFactorGenerateFirst => 'Generate the two-factor QR code and enter the verification code first';
+  String get setupTwoFactorGenerateFirst =>
+      'Generate the two-factor QR code and enter the verification code first';
 
   @override
   String get setupTwoFactorGoLogin => 'Backup codes saved, continue to sign in';
@@ -245,7 +254,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get setupCreateFailed => 'Failed to create super administrator';
 
   @override
-  String get setupSecureNotice => 'The setup token is only used for initialization and is not stored on this device.';
+  String get setupSecureNotice =>
+      'The setup token is only used for initialization and is not stored on this device.';
 
   @override
   String get setupLanguageSelector => 'Language';
@@ -292,16 +302,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coreSignOutConfirmTitle => 'Sign out?';
 
   @override
-  String get coreSignOutConfirmMessage => 'You will need to sign in again to continue.';
+  String get coreSignOutConfirmMessage =>
+      'You will need to sign in again to continue.';
 
   @override
   String get notificationForegroundToastView => 'View';
 
   @override
-  String get notificationForegroundToastToggle => 'In-app new notification toasts';
+  String get notificationForegroundToastToggle =>
+      'In-app new notification toasts';
 
   @override
-  String get notificationForegroundToastToggleSubtitle => 'Show a lightweight toast when a notification arrives';
+  String get notificationForegroundToastToggleSubtitle =>
+      'Show a lightweight toast when a notification arrives';
 
   @override
   String get notificationFilterAllLabel => 'All';
@@ -322,13 +335,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationClearConfirmTitle => 'Clear all notifications?';
 
   @override
-  String get notificationClearConfirmMessage => 'This permanently deletes every notification for the current account.';
+  String get notificationClearConfirmMessage =>
+      'This permanently deletes every notification for the current account.';
 
   @override
-  String get notificationDeleteFailed => 'Failed to delete notification. Try again.';
+  String get notificationDeleteFailed =>
+      'Failed to delete notification. Try again.';
 
   @override
-  String get notificationClearFailed => 'Failed to clear notifications. Try again.';
+  String get notificationClearFailed =>
+      'Failed to clear notifications. Try again.';
 
   @override
   String get notificationTypeCompleted => 'Done';
@@ -343,7 +359,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypeTaskCompleted => 'Task Completed';
 
   @override
-  String get notificationTypeTaskCompletedDesc => 'Async task completed successfully';
+  String get notificationTypeTaskCompletedDesc =>
+      'Async task completed successfully';
 
   @override
   String get notificationTypeTaskFailed => 'Task Failed';
@@ -355,7 +372,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypeShareAccess => 'Share Access';
 
   @override
-  String get notificationTypeShareAccessDesc => 'Someone accessed your share link';
+  String get notificationTypeShareAccessDesc =>
+      'Someone accessed your share link';
 
   @override
   String get notificationTypeSystemMessage => 'System Message';
@@ -367,7 +385,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypeMetadataScrape => 'Metadata Scrape';
 
   @override
-  String get notificationTypeMetadataScrapeDesc => 'Media metadata scraping completed';
+  String get notificationTypeMetadataScrapeDesc =>
+      'Media metadata scraping completed';
 
   @override
   String get notificationTypeShareVisited => 'Share Visited';
@@ -379,7 +398,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypeStorageWarning => 'Storage Warning';
 
   @override
-  String get notificationTypeStorageWarningDesc => 'Storage usage is running high';
+  String get notificationTypeStorageWarningDesc =>
+      'Storage usage is running high';
 
   @override
   String get notificationTypeNewDeviceLogin => 'New Device Login';
@@ -391,19 +411,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypePasswordChanged => 'Password Changed';
 
   @override
-  String get notificationTypePasswordChangedDesc => 'Account password was changed';
+  String get notificationTypePasswordChangedDesc =>
+      'Account password was changed';
 
   @override
   String get notificationTypeSecurityThreat => 'Security Threat';
 
   @override
-  String get notificationTypeSecurityThreatDesc => 'Suspicious file upload activity detected';
+  String get notificationTypeSecurityThreatDesc =>
+      'Suspicious file upload activity detected';
 
   @override
   String get notificationTypeSecurityScanFailed => 'Security Scan Failed';
 
   @override
-  String get notificationTypeSecurityScanFailedDesc => 'A file failed the security scan and was quarantined';
+  String get notificationTypeSecurityScanFailedDesc =>
+      'A file failed the security scan and was quarantined';
 
   @override
   String get notificationTypesHeader => 'Notification Types';
@@ -433,7 +456,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileBackTooltip => 'Back to Portal';
 
   @override
-  String get profileAvatarFormatError => 'Only JPG, PNG, WebP formats are supported';
+  String get profileAvatarFormatError =>
+      'Only JPG, PNG, WebP formats are supported';
 
   @override
   String get profileAvatarSizeError => 'Avatar size cannot exceed 5MB';
@@ -577,7 +601,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileRowAbout => 'About OmniNest';
 
   @override
-  String get profileFooterTag => 'OmniNest · self-hosted media for one household';
+  String get profileFooterTag =>
+      'OmniNest · self-hosted media for one household';
 
   @override
   String get profileRoleAdmin => 'Admin';
@@ -640,10 +665,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileWeatherCity => 'Weather City';
 
   @override
-  String get profileWeatherCityHint => 'Set the weather display city, leave empty to use GPS or system default';
+  String get profileWeatherCityHint =>
+      'Set the weather display city, leave empty to use GPS or system default';
 
   @override
-  String get profileWeatherCityPlaceholder => 'Enter city name, e.g. Beijing, Shanghai';
+  String get profileWeatherCityPlaceholder =>
+      'Enter city name, e.g. Beijing, Shanghai';
 
   @override
   String get profileWeatherCitySave => 'Save';
@@ -663,13 +690,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileNotificationMasterSwitch => 'Master Switch';
 
   @override
-  String get profileNotificationMasterSwitchHint => 'Disable to stop all notifications';
+  String get profileNotificationMasterSwitchHint =>
+      'Disable to stop all notifications';
 
   @override
-  String get profileNotificationTypesLoadFailed => 'Failed to load notification types';
+  String get profileNotificationTypesLoadFailed =>
+      'Failed to load notification types';
 
   @override
-  String get profileNotificationSaveFailed => 'Failed to save notification preferences. Try again.';
+  String get profileNotificationSaveFailed =>
+      'Failed to save notification preferences. Try again.';
 
   @override
   String get profileNotificationSound => 'Sound';
@@ -681,7 +711,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileNotificationPreview => 'Notification Preview';
 
   @override
-  String get profileNotificationPreviewHint => 'Show message content in notifications';
+  String get profileNotificationPreviewHint =>
+      'Show message content in notifications';
 
   @override
   String profileNotificationTypes(Object count) {
@@ -697,7 +728,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileSessionManagement => 'Session Management';
 
   @override
-  String get profileSessionManagementSubtitle => 'View and manage current login sessions';
+  String get profileSessionManagementSubtitle =>
+      'View and manage current login sessions';
 
   @override
   String get profileActiveSessions => 'Active Sessions';
@@ -724,7 +756,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileRevokeSessionConfirm => 'Revoke Session?';
 
   @override
-  String get profileRevokeSessionMessage => 'The device will be forcibly signed out and will need to sign in again.';
+  String get profileRevokeSessionMessage =>
+      'The device will be forcibly signed out and will need to sign in again.';
 
   @override
   String get profileSessionRevoked => 'Session revoked';
@@ -748,10 +781,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changePasswordEnterNew => 'Please enter new password';
 
   @override
-  String get changePasswordMinLength => 'Password must be at least 8 characters';
+  String get changePasswordMinLength =>
+      'Password must be at least 8 characters';
 
   @override
-  String get changePasswordMaxLength => 'Password must be at most 24 characters';
+  String get changePasswordMaxLength =>
+      'Password must be at most 24 characters';
 
   @override
   String get changePasswordConfirmNew => 'Confirm New Password';
@@ -760,7 +795,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginTwoFactorTitle => 'Two-Factor Verification';
 
   @override
-  String get loginTwoFactorSubtitle => 'Enter the 6-digit code from your authenticator app to sign in';
+  String get loginTwoFactorSubtitle =>
+      'Enter the 6-digit code from your authenticator app to sign in';
 
   @override
   String get loginTwoFactorCodeLabel => 'Verification code';
@@ -769,7 +805,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginTwoFactorCodeHint => 'Enter the 6-digit code';
 
   @override
-  String get loginTwoFactorUseBackupHint => 'You can also enter a one-time backup code (XXXX-XXXX)';
+  String get loginTwoFactorUseBackupHint =>
+      'You can also enter a one-time backup code (XXXX-XXXX)';
 
   @override
   String get loginTwoFactorVerifyAndSignIn => 'Verify and sign in';
@@ -781,7 +818,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get twoFactorEnrollTitle => 'Set Up Two-Factor Verification';
 
   @override
-  String get twoFactorEnrollSubtitle => 'Your role requires two-factor verification. Complete setup to continue';
+  String get twoFactorEnrollSubtitle =>
+      'Your role requires two-factor verification. Complete setup to continue';
 
   @override
   String get twoFactorEnrollPasswordLabel => 'Login password';
@@ -793,7 +831,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get twoFactorEnrollContinue => 'Next: scan QR code';
 
   @override
-  String get twoFactorEnrollScanHint => 'Scan the QR code with your authenticator app, or copy the secret to add it manually';
+  String get twoFactorEnrollScanHint =>
+      'Scan the QR code with your authenticator app, or copy the secret to add it manually';
 
   @override
   String get twoFactorEnrollSecretLabel => 'Copy secret';
@@ -805,7 +844,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get twoFactorEnrollBackupTitle => 'Backup codes';
 
   @override
-  String get twoFactorEnrollBackupHint => 'These one-time backup codes are shown only once. Save them to recover access if you lose your authenticator.';
+  String get twoFactorEnrollBackupHint =>
+      'These one-time backup codes are shown only once. Save them to recover access if you lose your authenticator.';
 
   @override
   String get twoFactorEnrollBackupSavedCheck => 'I have saved the backup codes';
@@ -820,13 +860,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get twoFactorCopyCodes => 'Copy all backup codes';
 
   @override
-  String get twoFactorDisableHint => 'After disabling, sign-in will no longer require a verification code.';
+  String get twoFactorDisableHint =>
+      'After disabling, sign-in will no longer require a verification code.';
 
   @override
   String get profileTwoFactorTitle => 'Two-Factor Verification';
 
   @override
-  String get profileTwoFactorSubtitle => 'Protect sign-in with one-time verification codes';
+  String get profileTwoFactorSubtitle =>
+      'Protect sign-in with one-time verification codes';
 
   @override
   String get profileTwoFactorEnabled => 'Enabled';
@@ -835,7 +877,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileTwoFactorDisabled => 'Not enabled';
 
   @override
-  String get profileTwoFactorRequiredBadge => 'Required for your role but not enabled yet';
+  String get profileTwoFactorRequiredBadge =>
+      'Required for your role but not enabled yet';
 
   @override
   String get profileTwoFactorEnableAction => 'Enable';
@@ -879,7 +922,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginDescription => 'Sign in with your OmniNest account.';
 
   @override
-  String get loginSubtitle => 'Consolidate family media, reading, files, and automation tasks into one stable personal space.';
+  String get loginSubtitle =>
+      'Consolidate family media, reading, files, and automation tasks into one stable personal space.';
 
   @override
   String get loginFeatureMedia => 'Media Center';
@@ -924,10 +968,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginFailed => 'Login failed, please try again later';
 
   @override
-  String get loginConnectionError => 'Cannot connect to backend, please confirm the service is running';
+  String get loginConnectionError =>
+      'Cannot connect to backend, please confirm the service is running';
 
   @override
-  String get loginRequestFailed => 'Login request failed, please check your account or network';
+  String get loginRequestFailed =>
+      'Login request failed, please check your account or network';
 
   @override
   String get coreRetry => 'Retry';
@@ -936,7 +982,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coreStartupFailed => 'Startup failed';
 
   @override
-  String get coreStartupFailedHint => 'A runtime dependency could not be initialized. Retry, then check the local media components and application logs if the problem continues.';
+  String get coreStartupFailedHint =>
+      'A runtime dependency could not be initialized. Retry, then check the local media components and application logs if the problem continues.';
 
   @override
   String get coreCancel => 'Cancel';
@@ -1080,37 +1127,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesImportTasks => 'Import Tasks';
 
   @override
-  String get filesAllFilesDesc => 'Browse root or specified directory to manage folders, files and paths.';
+  String get filesAllFilesDesc =>
+      'Browse root or specified directory to manage folders, files and paths.';
 
   @override
-  String get filesRecentDesc => 'View recently opened or downloaded files sorted by access time.';
+  String get filesRecentDesc =>
+      'View recently opened or downloaded files sorted by access time.';
 
   @override
-  String get filesFavoritesDesc => 'View starred files in one place, ideal for frequently used materials.';
+  String get filesFavoritesDesc =>
+      'View starred files in one place, ideal for frequently used materials.';
 
   @override
-  String get filesRecycleBinDesc => 'View soft-deleted files, supports restore or permanent delete.';
+  String get filesRecycleBinDesc =>
+      'View soft-deleted files, supports restore or permanent delete.';
 
   @override
-  String get filesSharedWithMeDesc => 'View files shared to your account by other users.';
+  String get filesSharedWithMeDesc =>
+      'View files shared to your account by other users.';
 
   @override
   String get filesMySharesDesc => 'View share links created by you.';
 
   @override
-  String get filesShareManagementDesc => 'Manage active, expired or revoked share links.';
+  String get filesShareManagementDesc =>
+      'Manage active, expired or revoked share links.';
 
   @override
-  String get filesStorageStatsDesc => 'View capacity, quota, file type distribution and space usage.';
+  String get filesStorageStatsDesc =>
+      'View capacity, quota, file type distribution and space usage.';
 
   @override
-  String get filesUploadQueueDesc => 'View multipart upload sessions, resume progress and upload status.';
+  String get filesUploadQueueDesc =>
+      'View multipart upload sessions, resume progress and upload status.';
 
   @override
   String get filesUploadQueueEmptyTitle => 'Nothing is uploading';
 
   @override
-  String get filesUploadQueueEmptyMessage => 'Start an upload from any folder; progress and failure reasons stay here.';
+  String get filesUploadQueueEmptyMessage =>
+      'Start an upload from any folder; progress and failure reasons stay here.';
 
   @override
   String get filesUploadQueueSummaryActive => 'Active';
@@ -1125,13 +1181,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesSharesEmptyTitle => 'No share links yet';
 
   @override
-  String get filesSharesEmptyMessage => 'Long-press a file and choose Share; links and their access state show up here.';
+  String get filesSharesEmptyMessage =>
+      'Long-press a file and choose Share; links and their access state show up here.';
 
   @override
   String get filesStorageEmptyTitle => 'Storage stats unavailable';
 
   @override
-  String get filesStorageEmptyMessage => 'Stats are aggregated by the server; retry once the network is back.';
+  String get filesStorageEmptyMessage =>
+      'Stats are aggregated by the server; retry once the network is back.';
 
   @override
   String get filesStorageRetry => 'Reload';
@@ -1160,10 +1218,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get filesExternalStorageDesc => 'Manage OneDrive, WebDAV and other third-party storage mounts.';
+  String get filesExternalStorageDesc =>
+      'Manage OneDrive, WebDAV and other third-party storage mounts.';
 
   @override
-  String get filesImportTasksDesc => 'View external storage file import progress, supports cancelling queued tasks.';
+  String get filesImportTasksDesc =>
+      'View external storage file import progress, supports cancelling queued tasks.';
 
   @override
   String filesHostedItemCount(int count) {
@@ -1174,28 +1234,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesSharedWithMeEmptyTitle => 'Nobody has shared files with you';
 
   @override
-  String get filesSharedWithMeEmptyMessage => 'Files others share with your account are listed here and open straight into preview.';
+  String get filesSharedWithMeEmptyMessage =>
+      'Files others share with your account are listed here and open straight into preview.';
 
   @override
   String get filesExternalEmptyTitle => 'No storage mounted';
 
   @override
-  String get filesExternalEmptyMessage => 'Add a OneDrive, WebDAV or other source to browse and import files here.';
+  String get filesExternalEmptyMessage =>
+      'Add a OneDrive, WebDAV or other source to browse and import files here.';
 
   @override
   String get filesExternalCredentialsMissing => 'Credentials missing';
 
   @override
-  String get filesExternalBrowseFailedTitle => 'Cannot read the mount directory';
+  String get filesExternalBrowseFailedTitle =>
+      'Cannot read the mount directory';
 
   @override
-  String get filesExternalBrowseEmptyMessage => 'This directory has nothing to browse.';
+  String get filesExternalBrowseEmptyMessage =>
+      'This directory has nothing to browse.';
 
   @override
   String get filesImportEmptyTitle => 'No import tasks';
 
   @override
-  String get filesImportEmptyMessage => 'Import a file from external storage and its progress is listed here.';
+  String get filesImportEmptyMessage =>
+      'Import a file from external storage and its progress is listed here.';
 
   @override
   String get filesHomeWorkspaceTools => 'Workspace tools';
@@ -1264,7 +1329,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesMoveToPersonalSuccess => 'Moved back to personal space';
 
   @override
-  String get filesMoveSpaceFailed => 'Space migration failed. Please try again later.';
+  String get filesMoveSpaceFailed =>
+      'Space migration failed. Please try again later.';
 
   @override
   String get filesCount => 'files';
@@ -1455,7 +1521,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesImportCancelConfirm => 'Cancel import task?';
 
   @override
-  String get filesImportCancelMessage => 'The running import pipeline will be aborted.';
+  String get filesImportCancelMessage =>
+      'The running import pipeline will be aborted.';
 
   @override
   String get filesShareLink => 'Share Link';
@@ -1578,7 +1645,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesInspectorTabActivity => 'Activity';
 
   @override
-  String get filesInspectorEmptyHint => 'Select an item to inspect its technical details';
+  String get filesInspectorEmptyHint =>
+      'Select an item to inspect its technical details';
 
   @override
   String get filesInspectorPath => 'Path';
@@ -1847,7 +1915,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String filesUploadBatchSummary(Object completed, Object conflicts, Object failed, Object paused) {
+  String filesUploadBatchSummary(
+    Object completed,
+    Object conflicts,
+    Object failed,
+    Object paused,
+  ) {
     return '$completed uploaded, $conflicts conflicted, $failed failed, $paused paused';
   }
 
@@ -1961,7 +2034,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get filesImportSizeGuardHint => 'Very large files may be rejected; put 4K originals in the local media library instead.';
+  String get filesImportSizeGuardHint =>
+      'Very large files may be rejected; put 4K originals in the local media library instead.';
 
   @override
   String get filesTestConnection => 'Test connection';
@@ -1970,7 +2044,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesAuthorizeAccount => 'Authorize';
 
   @override
-  String get filesAuthorizeHint => 'Open this link in a browser to finish authorization, then refresh the connection:';
+  String get filesAuthorizeHint =>
+      'Open this link in a browser to finish authorization, then refresh the connection:';
 
   @override
   String get filesImport => 'Import';
@@ -2015,7 +2090,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesShareMgmt => 'Share Management';
 
   @override
-  String get filesShareMgmtDesc => 'Manage share links created by you. Revocable.';
+  String get filesShareMgmtDesc =>
+      'Manage share links created by you. Revocable.';
 
   @override
   String get filesNoShareLinks => 'No share links';
@@ -2085,7 +2161,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesUploadDone => 'Upload complete';
 
   @override
-  String get filesUploadScanPending => 'Upload complete. Security scan in progress; the file will appear once it passes.';
+  String get filesUploadScanPending =>
+      'Upload complete. Security scan in progress; the file will appear once it passes.';
 
   @override
   String filesUploadedParts(Object current, Object total) {
@@ -2096,7 +2173,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesCleanupConflict => 'Clean up same-name file in recycle bin?';
 
   @override
-  String get filesCleanupMessage => 'Same-name file exists in recycle bin. Will auto re-upload after cleanup.';
+  String get filesCleanupMessage =>
+      'Same-name file exists in recycle bin. Will auto re-upload after cleanup.';
 
   @override
   String get filesCleanupAndRetry => 'Clean up and retry';
@@ -2105,7 +2183,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesDeleteUploadTask => 'Delete Upload Task?';
 
   @override
-  String get filesDeleteUploadTaskMessage => 'The upload task will be removed from the queue. Unfinished server sessions will be cancelled.';
+  String get filesDeleteUploadTaskMessage =>
+      'The upload task will be removed from the queue. Unfinished server sessions will be cancelled.';
 
   @override
   String get filesDeleteTask => 'Delete Task';
@@ -2132,7 +2211,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get externalRenameFile => 'Rename';
 
   @override
-  String get externalDeleteConfirm => 'Delete this remote file? This cannot be undone.';
+  String get externalDeleteConfirm =>
+      'Delete this remote file? This cannot be undone.';
 
   @override
   String externalSpaceUsedOf(Object used, Object total) {
@@ -2152,13 +2232,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesConnectionCredentials => 'Connection Credentials';
 
   @override
-  String get filesExistingSecretPreserved => 'Passwords, secrets, and tokens are never returned. Leave them blank to keep the saved values.';
+  String get filesExistingSecretPreserved =>
+      'Passwords, secrets, and tokens are never returned. Leave them blank to keep the saved values.';
 
   @override
-  String get filesKeepExistingSecretHint => 'Leave blank to keep the saved value';
+  String get filesKeepExistingSecretHint =>
+      'Leave blank to keep the saved value';
 
   @override
-  String get filesOAuthAppMissing => 'This type requires the administrator to configure an OAuth app under Admin - External Storage first. It is not configured yet, so creating is unavailable.';
+  String get filesOAuthAppMissing =>
+      'This type requires the administrator to configure an OAuth app under Admin - External Storage first. It is not configured yet, so creating is unavailable.';
 
   @override
   String get filesS3Provider => 'S3 Provider';
@@ -2248,7 +2331,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesCopiedClipboard => 'Copied to clipboard';
 
   @override
-  String get clipboardCopyFailed => 'Copy failed, please select and copy manually';
+  String get clipboardCopyFailed =>
+      'Copy failed, please select and copy manually';
 
   @override
   String get filesPasswordLabel => 'Password';
@@ -2260,6 +2344,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesCopyLinkWithPassword => 'Copy link (with password)';
+
+  @override
+  String get filesShareLinkUnrecoverable =>
+      'This link address can no longer be shown; revoke and create a new share';
 
   @override
   String get filesCopyLinkOnly => 'Copy link only';
@@ -2295,7 +2383,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesCannotGetFileUrl => 'Cannot get file URL';
 
   @override
-  String get filesPdfDownloadHint => 'PDF preview is not available yet. Download the file to view it.';
+  String get filesPdfDownloadHint =>
+      'PDF preview is not available yet. Download the file to view it.';
 
   @override
   String get filesAccessKeyId => 'Access Key ID';
@@ -2473,10 +2562,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalEnterSystem => 'Enter System';
 
   @override
-  String get portalVisualCompactTitle => 'Desktop Portal switched to one column';
+  String get portalVisualCompactTitle =>
+      'Desktop Portal switched to one column';
 
   @override
-  String get portalVisualCompactBody => 'The current window is narrow, so content covers and status information are stacked.';
+  String get portalVisualCompactBody =>
+      'The current window is narrow, so content covers and status information are stacked.';
 
   @override
   String get portalVisualEyebrowRecentContent => 'Recent Content';
@@ -2497,25 +2588,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalFileManager => 'File Manager';
 
   @override
-  String get portalFileManagerSubtitle => 'Network storage, folders, recycle bin and object preview.';
+  String get portalFileManagerSubtitle =>
+      'Network storage, folders, recycle bin and object preview.';
 
   @override
   String get portalMovieCenter => 'Media Library';
 
   @override
-  String get portalMovieCenterSubtitle => 'Manage movies, TV series, and anime with metadata sync and direct playback.';
+  String get portalMovieCenterSubtitle =>
+      'Manage movies, TV series, and anime with metadata sync and direct playback.';
 
   @override
   String get portalReaderCenter => 'Reader Center';
 
   @override
-  String get portalReaderCenterSubtitle => 'Books, comics, and reading progress continuation.';
+  String get portalReaderCenterSubtitle =>
+      'Books, comics, and reading progress continuation.';
 
   @override
   String get portalMusic => 'Music';
 
   @override
-  String get portalMusicSubtitle => 'Lossless music, play queue and playlist management.';
+  String get portalMusicSubtitle =>
+      'Lossless music, play queue and playlist management.';
 
   @override
   String get portalPhotos => 'Photos';
@@ -2527,13 +2622,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalAdmin => 'Manage';
 
   @override
-  String get portalAdminSubtitle => 'User permissions, system config, tasks and status.';
+  String get portalAdminSubtitle =>
+      'User permissions, system config, tasks and status.';
 
   @override
-  String get portalDescriptionAdmin => 'Switch between media, reading, files and system admin from one entry; each subsystem has its own workspace.';
+  String get portalDescriptionAdmin =>
+      'Switch between media, reading, files and system admin from one entry; each subsystem has its own workspace.';
 
   @override
-  String get portalDescriptionMember => 'Switch between media, reading and file management from one entry; each subsystem has its own workspace.';
+  String get portalDescriptionMember =>
+      'Switch between media, reading and file management from one entry; each subsystem has its own workspace.';
 
   @override
   String get portalNoFiles => 'No files';
@@ -3027,7 +3125,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalWeatherTipFog => 'Foggy, drive safely';
 
   @override
-  String get portalWeatherTipNice => 'Nice weather, great for outdoor activities';
+  String get portalWeatherTipNice =>
+      'Nice weather, great for outdoor activities';
 
   @override
   String get portalWeatherHumidity => 'Humidity';
@@ -3162,7 +3261,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropTitle => 'Backdrops';
 
   @override
-  String get portalLocalBackdropSubtitle => 'Your backdrop library is synced to your account and shared across Web, desktop, and mobile. The bundled wallpaper also works offline.';
+  String get portalLocalBackdropSubtitle =>
+      'Your backdrop library is synced to your account and shared across Web, desktop, and mobile. The bundled wallpaper also works offline.';
 
   @override
   String get portalLocalBackdropLoadFailed => 'Failed to load backdrops';
@@ -3185,13 +3285,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get portalLocalBackdropDeleteFailed => 'Delete failed. Please try again later.';
+  String get portalLocalBackdropDeleteFailed =>
+      'Delete failed. Please try again later.';
 
   @override
-  String get portalLocalBackdropQuotaExceeded => 'Backdrop count or storage quota exceeded';
+  String get portalLocalBackdropQuotaExceeded =>
+      'Backdrop count or storage quota exceeded';
 
   @override
-  String get portalLocalBackdropUnsupportedFormat => 'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported';
+  String get portalLocalBackdropUnsupportedFormat =>
+      'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported';
 
   @override
   String get portalLocalBackdropWebUnsupportedBadge => 'No web playback';
@@ -3205,13 +3308,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropFileTooLarge => 'Backdrop file is too large';
 
   @override
-  String get portalLocalBackdropScanUnavailable => 'Security scanning is unavailable, upload blocked';
+  String get portalLocalBackdropScanUnavailable =>
+      'Security scanning is unavailable, upload blocked';
 
   @override
-  String get portalLocalBackdropMalwareDetected => 'Malware detected, upload rejected';
+  String get portalLocalBackdropMalwareDetected =>
+      'Malware detected, upload rejected';
 
   @override
-  String get portalLocalBackdropRateLimited => 'Uploading too frequently, please try again later';
+  String get portalLocalBackdropRateLimited =>
+      'Uploading too frequently, please try again later';
 
   @override
   String get portalLocalBackdropClearAll => 'Clear all';
@@ -3220,7 +3326,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropClearAllTitle => 'Remove all backdrops?';
 
   @override
-  String get portalLocalBackdropClearAllMessage => 'Your backdrop assets will be removed from the server library on all devices. The bundled wallpaper stays available offline.';
+  String get portalLocalBackdropClearAllMessage =>
+      'Your backdrop assets will be removed from the server library on all devices. The bundled wallpaper stays available offline.';
 
   @override
   String get portalLocalBackdropClearAllConfirm => 'Remove';
@@ -3231,16 +3338,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get portalLocalBackdropEmpty => 'No backdrops yet. Add videos, GIFs, or images and they will sync to all your devices.';
+  String get portalLocalBackdropEmpty =>
+      'No backdrops yet. Add videos, GIFs, or images and they will sync to all your devices.';
 
   @override
   String get portalLocalBackdropFilterEmpty => 'No backdrops in this category';
 
   @override
-  String get portalLocalBackdropEmptyScan => 'No usable backdrop files found. MP4, WEBM, MOV, M4V, GIF, JPG, PNG, and WEBP are supported.';
+  String get portalLocalBackdropEmptyScan =>
+      'No usable backdrop files found. MP4, WEBM, MOV, M4V, GIF, JPG, PNG, and WEBP are supported.';
 
   @override
-  String get portalLocalBackdropScanFailed => 'Scan failed. Check folder permissions.';
+  String get portalLocalBackdropScanFailed =>
+      'Scan failed. Check folder permissions.';
 
   @override
   String get portalLocalBackdropMissing => 'File missing';
@@ -3249,7 +3359,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropProcessing => 'Processing';
 
   @override
-  String get portalLocalBackdropProcessingVideo => 'Processing (videos take 1-2 minutes)';
+  String get portalLocalBackdropProcessingVideo =>
+      'Processing (videos take 1-2 minutes)';
 
   @override
   String get portalLocalBackdropFailed => 'Unavailable';
@@ -3258,7 +3369,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropRemoveConfirmTitle => 'Remove this backdrop?';
 
   @override
-  String get portalLocalBackdropRemoveConfirmMessage => 'It will be deleted from the server library and disappear on all devices.';
+  String get portalLocalBackdropRemoveConfirmMessage =>
+      'It will be deleted from the server library and disappear on all devices.';
 
   @override
   String portalLocalBackdropClearPartial(int removed, int failed) {
@@ -3272,19 +3384,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropEnable => 'Enable backdrop';
 
   @override
-  String get portalLocalBackdropEnableHint => 'Used by Portal and Music. The bundled wallpaper also works offline.';
+  String get portalLocalBackdropEnableHint =>
+      'Used by Portal and Music. The bundled wallpaper also works offline.';
 
   @override
-  String get portalLocalBackdropSeparateDevices => 'Separate desktop and mobile';
+  String get portalLocalBackdropSeparateDevices =>
+      'Separate desktop and mobile';
 
   @override
-  String get portalLocalBackdropSeparateDevicesHint => 'Off uses one shared selection. On keeps a separate backdrop for each device class.';
+  String get portalLocalBackdropSeparateDevicesHint =>
+      'Off uses one shared selection. On keeps a separate backdrop for each device class.';
 
   @override
-  String get portalLocalBackdropCurrentDesktop => 'Currently configuring the desktop backdrop';
+  String get portalLocalBackdropCurrentDesktop =>
+      'Currently configuring the desktop backdrop';
 
   @override
-  String get portalLocalBackdropCurrentMobile => 'Currently configuring the mobile backdrop';
+  String get portalLocalBackdropCurrentMobile =>
+      'Currently configuring the mobile backdrop';
 
   @override
   String get portalLocalBackdropFit => 'Display mode';
@@ -3353,7 +3470,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropRetryPlayback => 'Retry playback';
 
   @override
-  String get portalLocalBackdropLocalOnly => 'Backdrop paths are stored only in SQLite on this device. Use short loops with common codecs; playback pauses when the page is hidden or the app enters the background. Web uses the default theme backdrop.';
+  String get portalLocalBackdropLocalOnly =>
+      'Backdrop paths are stored only in SQLite on this device. Use short loops with common codecs; playback pauses when the page is hidden or the app enters the background. Web uses the default theme backdrop.';
 
   @override
   String get adminOpenMenu => 'Open admin menu';
@@ -3429,7 +3547,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminSystemMonitoring => 'System Monitoring';
 
   @override
-  String get adminMonitoringSubtitle => 'View service status, resource usage, component health, alerts and admin operation records.';
+  String get adminMonitoringSubtitle =>
+      'View service status, resource usage, component health, alerts and admin operation records.';
 
   @override
   String get adminRunning => 'Running';
@@ -3472,10 +3591,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminComponentHealth => 'Component Health';
 
   @override
-  String get adminComponentHealthSubtitle => 'Current snapshot of database, Redis, RabbitMQ, MinIO and index components.';
+  String get adminComponentHealthSubtitle =>
+      'Current snapshot of database, Redis, RabbitMQ, MinIO and index components.';
 
   @override
-  String get adminMiddlewareTopologyTitle => 'Middleware & Infrastructure Topology';
+  String get adminMiddlewareTopologyTitle =>
+      'Middleware & Infrastructure Topology';
 
   @override
   String adminChartTipCompleted(Object count) {
@@ -3499,7 +3620,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRecentAlerts => 'Recent System Alerts';
 
   @override
-  String get adminRecentAlertsSubtitle => 'Generated by snapshot rules, can be connected to real alert table later.';
+  String get adminRecentAlertsSubtitle =>
+      'Generated by snapshot rules, can be connected to real alert table later.';
 
   @override
   String get adminNoAlerts => 'No system alerts.';
@@ -3508,7 +3630,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRecentOperations => 'Recent Operations';
 
   @override
-  String get adminRecentOperationsSubtitle => 'From audit logs, useful for troubleshooting config and admin actions.';
+  String get adminRecentOperationsSubtitle =>
+      'From audit logs, useful for troubleshooting config and admin actions.';
 
   @override
   String get adminNoOperations => 'No admin operation records.';
@@ -3517,7 +3640,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTrendCharts => 'Real-time Trend Charts';
 
   @override
-  String get adminTrendChartsSubtitle => 'Currently showing 55-minute sampling trends, can be replaced with real time-series storage later.';
+  String get adminTrendChartsSubtitle =>
+      'Currently showing 55-minute sampling trends, can be replaced with real time-series storage later.';
 
   @override
   String get adminNoTrendData => 'No trend data.';
@@ -3526,7 +3650,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLogCenter => 'Log Center';
 
   @override
-  String get adminLogCenterSubtitle => 'Unified view of operation audit and login logs.';
+  String get adminLogCenterSubtitle =>
+      'Unified view of operation audit and login logs.';
 
   @override
   String adminAuditCount(Object count) {
@@ -3543,7 +3668,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRecentAudit => 'Recent Audit';
 
   @override
-  String get adminRecentAuditSubtitle => 'From audit_logs, sorted by creation time descending.';
+  String get adminRecentAuditSubtitle =>
+      'From audit_logs, sorted by creation time descending.';
 
   @override
   String get adminServiceInspect => 'Inspect';
@@ -3569,7 +3695,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminUserProtected => 'PROTECTED';
 
   @override
-  String get adminUserProtectedTooltip => 'Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.';
+  String get adminUserProtectedTooltip =>
+      'Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.';
 
   @override
   String get adminUserDisableConfirmTitle => 'Disable account';
@@ -3604,7 +3731,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminEditRolesHint => 'Assign one or more system roles. Changing roles immediately updates the user\'s permissions and visible menus.';
+  String get adminEditRolesHint =>
+      'Assign one or more system roles. Changing roles immediately updates the user\'s permissions and visible menus.';
 
   @override
   String get adminCreateRole => 'New custom role';
@@ -3613,7 +3741,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRoleCode => 'Role code';
 
   @override
-  String get adminRoleCodeRule => 'Must start with ROLE_ and contain only uppercase letters, digits and underscores (7-66 chars in total).';
+  String get adminRoleCodeRule =>
+      'Must start with ROLE_ and contain only uppercase letters, digits and underscores (7-66 chars in total).';
 
   @override
   String get adminRoleDisplayName => 'Display name';
@@ -3645,7 +3774,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminRoleSuperAdminLocked => 'SUPER_ADMIN holds every permission and is read-only by design.';
+  String get adminRoleSuperAdminLocked =>
+      'SUPER_ADMIN holds every permission and is read-only by design.';
 
   @override
   String adminRolePermissionSummary(Object count, Object modules) {
@@ -3662,7 +3792,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminPermissionMatrixTitle => 'Business module permission matrix';
 
   @override
-  String get adminPermissionMatrixSubtitle => 'Derived from the permission catalog grouped by module; open a role to edit its bindings.';
+  String get adminPermissionMatrixSubtitle =>
+      'Derived from the permission catalog grouped by module; open a role to edit its bindings.';
 
   @override
   String adminPermissionSelectedCount(Object selected, Object total) {
@@ -3727,7 +3858,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminThroughputTrend => 'Task Throughput Trend';
 
   @override
-  String get adminThroughputTrendSubtitle => 'Completed and failed task throughput for this week (Mon-Sun).';
+  String get adminThroughputTrendSubtitle =>
+      'Completed and failed task throughput for this week (Mon-Sun).';
 
   @override
   String get adminLoadStateNormal => 'Normal';
@@ -3756,7 +3888,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLoginLog => 'Login Log';
 
   @override
-  String get adminLoginLogSubtitle => 'From auth_login_audit, records all login attempts.';
+  String get adminLoginLogSubtitle =>
+      'From auth_login_audit, records all login attempts.';
 
   @override
   String get adminLoginSuccess => 'Success';
@@ -3788,7 +3921,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCleanupConfirmTitle => 'Confirm cleanup';
 
   @override
-  String get adminCleanupConfirmMessage => 'Records outside the retention period will be deleted permanently.';
+  String get adminCleanupConfirmMessage =>
+      'Records outside the retention period will be deleted permanently.';
 
   @override
   String adminCleanupCompleted(Object count) {
@@ -3799,7 +3933,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminBackgroundTasks => 'Background Tasks';
 
   @override
-  String get adminBackgroundTasksSubtitle => 'Track indexing, transcoding, sync, backup and cleanup tasks.';
+  String get adminBackgroundTasksSubtitle =>
+      'Track indexing, transcoding, sync, backup and cleanup tasks.';
 
   @override
   String get adminTotalTasks => 'Total Tasks';
@@ -3856,7 +3991,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTaskExecutionStatus => 'Status';
 
   @override
-  String get adminTaskListSubtitle => 'Failed, cancelled and DLQ status support re-queue.';
+  String get adminTaskListSubtitle =>
+      'Failed, cancelled and DLQ status support re-queue.';
 
   @override
   String get adminNoBackgroundTasks => 'No background tasks.';
@@ -3874,7 +4010,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRoleManagement => 'Role Management';
 
   @override
-  String get adminRoleManagementSubtitle => 'Maintain roles, permission sets and resource access boundaries.';
+  String get adminRoleManagementSubtitle =>
+      'Maintain roles, permission sets and resource access boundaries.';
 
   @override
   String adminPermissionCount(Object count) {
@@ -3903,7 +4040,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRolePermissionsTitle => 'Role Permissions';
 
   @override
-  String get adminRolePermissionsSubtitle => 'Built-in roles cannot be deleted, SUPER_ADMIN permissions maintained by system.';
+  String get adminRolePermissionsSubtitle =>
+      'Built-in roles cannot be deleted, SUPER_ADMIN permissions maintained by system.';
 
   @override
   String get adminNoRoles => 'No role data.';
@@ -3925,13 +4063,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminSecurityWarning => 'Security Warning';
 
   @override
-  String get adminSecurityWarningMessage => 'Only grant permissions that are actually needed. Over-privileged roles may lead to unauthorized data access or system misuse.';
+  String get adminSecurityWarningMessage =>
+      'Only grant permissions that are actually needed. Over-privileged roles may lead to unauthorized data access or system misuse.';
 
   @override
   String get adminConfigCenter => 'Config Center';
 
   @override
-  String get adminConfigCenterSubtitle => 'Manage business policies and external service integrations.';
+  String get adminConfigCenterSubtitle =>
+      'Manage business policies and external service integrations.';
 
   @override
   String get adminConfigRefresh => 'Refresh settings';
@@ -4002,7 +4142,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigManage => 'Manage';
 
   @override
-  String get adminConfigSecretConfigured => 'Sensitive credential configured; its value is never shown';
+  String get adminConfigSecretConfigured =>
+      'Sensitive credential configured; its value is never shown';
 
   @override
   String get adminConfigNeedsSetup => 'Not configured';
@@ -4016,13 +4157,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigClearCredential => 'Clear credential';
 
   @override
-  String get adminConfigClearCredentialConfirm => 'The related integration will stop working after this credential is cleared. Continue?';
+  String get adminConfigClearCredentialConfirm =>
+      'The related integration will stop working after this credential is cleared. Continue?';
 
   @override
-  String get adminConfigCredentialClearedReason => 'Integration credential cleared by administrator';
+  String get adminConfigCredentialClearedReason =>
+      'Integration credential cleared by administrator';
 
   @override
-  String get adminConfigMediaAutoImport => 'Automatically import discovered media';
+  String get adminConfigMediaAutoImport =>
+      'Automatically import discovered media';
 
   @override
   String get adminConfigDefaultQuota => 'Default quota for new users';
@@ -4100,7 +4244,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigReaderGoogleBooksLimit => 'Google Books result limit';
 
   @override
-  String get adminConfigReaderGoogleBooksTimeout => 'Google Books request timeout';
+  String get adminConfigReaderGoogleBooksTimeout =>
+      'Google Books request timeout';
 
   @override
   String get adminConfigReaderGoogleBooksApiKey => 'Google Books API Key';
@@ -4175,10 +4320,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigUnlimited => 'Unlimited';
 
   @override
-  String get adminConfigUnlimitedDescription => 'No capacity check is applied when unlimited is selected.';
+  String get adminConfigUnlimitedDescription =>
+      'No capacity check is applied when unlimited is selected.';
 
   @override
-  String get adminConfigQuotaUnlimitedDescription => 'Enter a value directly, or move the slider to the far right or enable unlimited to remove the cap.';
+  String get adminConfigQuotaUnlimitedDescription =>
+      'Enter a value directly, or move the slider to the far right or enable unlimited to remove the cap.';
 
   @override
   String get adminConfigQuotaSliderUnlimited => 'Far right: unlimited';
@@ -4187,16 +4334,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigQuotaSliderMinimum => '1 GB';
 
   @override
-  String get adminConfigQuotaInvalid => 'Enter a quota greater than 0 GB, or enable unlimited.';
+  String get adminConfigQuotaInvalid =>
+      'Enter a quota greater than 0 GB, or enable unlimited.';
 
   @override
-  String get adminConfigQuotaWholeGb => 'The default user quota must be a whole number of GB.';
+  String get adminConfigQuotaWholeGb =>
+      'The default user quota must be a whole number of GB.';
 
   @override
-  String get adminConfigEndpointDescription => 'Base address used by server requests; adjust it for your deployment.';
+  String get adminConfigEndpointDescription =>
+      'Base address used by server requests; adjust it for your deployment.';
 
   @override
-  String get adminConfigWeatherLocationDescription => 'City, coordinates, or a provider-specific location identifier used for weather queries.';
+  String get adminConfigWeatherLocationDescription =>
+      'City, coordinates, or a provider-specific location identifier used for weather queries.';
 
   @override
   String get adminConfigUnknownItem => 'Unknown setting';
@@ -4211,73 +4362,86 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigLogRetentionPaths => 'Log retention scan paths';
 
   @override
-  String get adminConfigLogRetentionEnabledDescription => 'Automatically cleans archived logs and temporary files based on retention days.';
+  String get adminConfigLogRetentionEnabledDescription =>
+      'Automatically cleans archived logs and temporary files based on retention days.';
 
   @override
-  String get adminConfigLogRetentionDaysDescription => 'Maximum number of days archived logs and temporary files are kept.';
+  String get adminConfigLogRetentionDaysDescription =>
+      'Maximum number of days archived logs and temporary files are kept.';
 
   @override
-  String get adminConfigLogRetentionPathsDescription => 'Comma-separated paths relative to the runtime directory included in retention cleanup.';
+  String get adminConfigLogRetentionPathsDescription =>
+      'Comma-separated paths relative to the runtime directory included in retention cleanup.';
 
   @override
   String get adminConfigPhotoGeoOffline => 'Offline reverse geocoding';
 
   @override
-  String get adminConfigPhotoGeoOfflineDescription => 'Resolve photo coordinates into place names using the local GeoNames dataset.';
+  String get adminConfigPhotoGeoOfflineDescription =>
+      'Resolve photo coordinates into place names using the local GeoNames dataset.';
 
   @override
   String get adminConfigPhotoGeoNominatim => 'Online geocoding fallback';
 
   @override
-  String get adminConfigPhotoGeoNominatimDescription => 'Fall back to the Nominatim online service when offline matching misses.';
+  String get adminConfigPhotoGeoNominatimDescription =>
+      'Fall back to the Nominatim online service when offline matching misses.';
 
   @override
   String get adminConfigPhotoGeoMaxDistance => 'Nearest-city max distance';
 
   @override
-  String get adminConfigPhotoGeoMaxDistanceDescription => 'Maximum trusted distance in km to the nearest city (0 disables the limit).';
+  String get adminConfigPhotoGeoMaxDistanceDescription =>
+      'Maximum trusted distance in km to the nearest city (0 disables the limit).';
 
   @override
   String get adminConfigPhotoGeoImportBatchSize => 'GeoNames import batch size';
 
   @override
-  String get adminConfigPhotoGeoImportBatchSizeDescription => 'Number of rows written per batch while importing GeoNames data.';
+  String get adminConfigPhotoGeoImportBatchSizeDescription =>
+      'Number of rows written per batch while importing GeoNames data.';
 
   @override
   String get adminConfigPhotoGeoImportAuto => 'Auto GeoNames import';
 
   @override
-  String get adminConfigPhotoGeoImportAutoDescription => 'Trigger the GeoNames import automatically at startup when no dataset is published and files are present.';
+  String get adminConfigPhotoGeoImportAutoDescription =>
+      'Trigger the GeoNames import automatically at startup when no dataset is published and files are present.';
 
   @override
   String get adminConfigQuarantineRetentionDays => 'Quarantine retention days';
 
   @override
-  String get adminConfigQuarantineRetentionDaysDescription => 'Days quarantined objects are kept before automatic cleanup.';
+  String get adminConfigQuarantineRetentionDaysDescription =>
+      'Days quarantined objects are kept before automatic cleanup.';
 
   @override
   String get adminConfigClamavTimeout => 'Scan timeout';
 
   @override
-  String get adminConfigClamavTimeoutDescription => 'Per-file virus scan time limit in milliseconds; exceeding it is reported as incomplete.';
+  String get adminConfigClamavTimeoutDescription =>
+      'Per-file virus scan time limit in milliseconds; exceeding it is reported as incomplete.';
 
   @override
   String get adminConfigTwoFactorRequiredRoles => 'Mandatory 2FA roles';
 
   @override
-  String get adminConfigTwoFactorRequiredRolesDescription => 'Comma-separated role codes required to enable two-factor authentication; empty means optional for everyone.';
+  String get adminConfigTwoFactorRequiredRolesDescription =>
+      'Comma-separated role codes required to enable two-factor authentication; empty means optional for everyone.';
 
   @override
   String get adminConfigBackdropMaxImageBytes => 'Backdrop image size limit';
 
   @override
-  String get adminConfigBackdropMaxImageBytesDescription => 'Maximum size of a single backdrop image, entered in MB and stored as bytes.';
+  String get adminConfigBackdropMaxImageBytesDescription =>
+      'Maximum size of a single backdrop image, entered in MB and stored as bytes.';
 
   @override
   String get adminConfigBackdropMaxVideoBytes => 'Backdrop video size limit';
 
   @override
-  String get adminConfigBackdropMaxVideoBytesDescription => 'Maximum size of a single backdrop video, entered in MB and stored as bytes.';
+  String get adminConfigBackdropMaxVideoBytesDescription =>
+      'Maximum size of a single backdrop video, entered in MB and stored as bytes.';
 
   @override
   String get adminConfigMbInvalid => 'Enter a size limit of at least 1 MB.';
@@ -4286,97 +4450,124 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigBackdropMaxAssets => 'Backdrop asset count limit';
 
   @override
-  String get adminConfigBackdropMaxAssetsDescription => 'Maximum number of backdrop assets kept per user.';
+  String get adminConfigBackdropMaxAssetsDescription =>
+      'Maximum number of backdrop assets kept per user.';
 
   @override
   String get adminConfigBackdropUploadRate => 'Backdrop upload rate limit';
 
   @override
-  String get adminConfigBackdropUploadRateDescription => 'Backdrop uploads allowed per user each hour.';
+  String get adminConfigBackdropUploadRateDescription =>
+      'Backdrop uploads allowed per user each hour.';
 
   @override
   String get adminConfigAppVersionLatest => 'Latest client version';
 
   @override
-  String get adminConfigAppVersionLatestDescription => 'Latest client version number; empty means every client is up to date.';
+  String get adminConfigAppVersionLatestDescription =>
+      'Latest client version number; empty means every client is up to date.';
 
   @override
   String get adminConfigAppVersionReleaseNotes => 'Release notes URL';
 
   @override
-  String get adminConfigAppVersionReleaseNotesDescription => 'Link to the release notes of the current version.';
+  String get adminConfigAppVersionReleaseNotesDescription =>
+      'Link to the release notes of the current version.';
 
   @override
   String get adminConfigAppVersionDownloadUrl => 'Installer download URL';
 
   @override
-  String get adminConfigAppVersionDownloadUrlDescription => 'Link to the client installer download page.';
+  String get adminConfigAppVersionDownloadUrlDescription =>
+      'Link to the client installer download page.';
 
   @override
-  String get adminConfigMediaAutoImportDescription => 'Allows discovered titles to enter the media import flow according to Media rules.';
+  String get adminConfigMediaAutoImportDescription =>
+      'Allows discovered titles to enter the media import flow according to Media rules.';
 
   @override
-  String get adminConfigDefaultQuotaDescription => 'Storage assigned to newly created users, in GB.';
+  String get adminConfigDefaultQuotaDescription =>
+      'Storage assigned to newly created users, in GB.';
 
   @override
-  String get adminConfigQuotaWarningDescription => 'Shows a capacity warning when usage reaches this percentage.';
+  String get adminConfigQuotaWarningDescription =>
+      'Shows a capacity warning when usage reaches this percentage.';
 
   @override
-  String get adminConfigSharedSpaceDescription => 'Controls whether users can access the shared space.';
+  String get adminConfigSharedSpaceDescription =>
+      'Controls whether users can access the shared space.';
 
   @override
-  String get adminConfigSharedSpaceLimitDescription => 'Limits the total capacity available to the shared space.';
+  String get adminConfigSharedSpaceLimitDescription =>
+      'Limits the total capacity available to the shared space.';
 
   @override
-  String get adminConfigLocalMediaDescription => 'Can only disable local media authorized at deployment; it cannot expand mount access.';
+  String get adminConfigLocalMediaDescription =>
+      'Can only disable local media authorized at deployment; it cannot expand mount access.';
 
   @override
-  String get adminConfigWeatherDescription => 'Controls whether clients can request weather data.';
+  String get adminConfigWeatherDescription =>
+      'Controls whether clients can request weather data.';
 
   @override
-  String get adminConfigProviderToggleDescription => 'Controls whether this integration may be used.';
+  String get adminConfigProviderToggleDescription =>
+      'Controls whether this integration may be used.';
 
   @override
-  String get adminConfigCredentialDescription => 'Used for server-side authentication and never shown again after saving.';
+  String get adminConfigCredentialDescription =>
+      'Used for server-side authentication and never shown again after saving.';
 
   @override
-  String get adminConfigProviderIdentifierDescription => 'Project or credential identifier supplied by the external service console.';
+  String get adminConfigProviderIdentifierDescription =>
+      'Project or credential identifier supplied by the external service console.';
 
   @override
-  String get adminConfigTmdbLanguageDescription => 'Preferred language for titles, descriptions, and image metadata returned by TMDB.';
+  String get adminConfigTmdbLanguageDescription =>
+      'Preferred language for titles, descriptions, and image metadata returned by TMDB.';
 
   @override
-  String get adminConfigTmdbAdultDescription => 'Search results may include adult content when enabled.';
+  String get adminConfigTmdbAdultDescription =>
+      'Search results may include adult content when enabled.';
 
   @override
-  String get adminConfigInternalNumericDescription => 'Internal request or result bound used by this provider.';
+  String get adminConfigInternalNumericDescription =>
+      'Internal request or result bound used by this provider.';
 
   @override
-  String get adminConfigTmdbStrategyDescription => 'Controls the normalized and fallback queries used for TMDB matching.';
+  String get adminConfigTmdbStrategyDescription =>
+      'Controls the normalized and fallback queries used for TMDB matching.';
 
   @override
-  String get adminConfigMediaTranscodeDescription => 'Allows the media pipeline to generate playback derivatives.';
+  String get adminConfigMediaTranscodeDescription =>
+      'Allows the media pipeline to generate playback derivatives.';
 
   @override
-  String get adminConfigReaderAutoImportDescription => 'Allows recognized reader files to enter the import flow automatically.';
+  String get adminConfigReaderAutoImportDescription =>
+      'Allows recognized reader files to enter the import flow automatically.';
 
   @override
-  String get adminConfigMusicAutoImportDescription => 'Allows recognized music files to enter the import flow automatically.';
+  String get adminConfigMusicAutoImportDescription =>
+      'Allows recognized music files to enter the import flow automatically.';
 
   @override
-  String get adminConfigPhotoGeoRateDescription => 'Maximum geocoding requests permitted per second.';
+  String get adminConfigPhotoGeoRateDescription =>
+      'Maximum geocoding requests permitted per second.';
 
   @override
-  String get adminConfigUploadRateDescription => 'Controls whether upload traffic is subject to the server rate policy.';
+  String get adminConfigUploadRateDescription =>
+      'Controls whether upload traffic is subject to the server rate policy.';
 
   @override
-  String get adminConfigSecurityRateLimitDescription => 'Default request limit applied by security controls.';
+  String get adminConfigSecurityRateLimitDescription =>
+      'Default request limit applied by security controls.';
 
   @override
-  String get adminConfigMusicBrainzUserAgentDescription => 'Identification string sent with MusicBrainz requests.';
+  String get adminConfigMusicBrainzUserAgentDescription =>
+      'Identification string sent with MusicBrainz requests.';
 
   @override
-  String get adminConfigHostSuffixesDescription => 'Comma-separated host suffixes accepted for provider media requests.';
+  String get adminConfigHostSuffixesDescription =>
+      'Comma-separated host suffixes accepted for provider media requests.';
 
   @override
   String get adminConfigItems => 'Config Items';
@@ -4400,7 +4591,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigItemList => 'Config Items';
 
   @override
-  String get adminConfigItemListSubtitle => 'Settings take effect by hot update, on the next task, or after restart.';
+  String get adminConfigItemListSubtitle =>
+      'Settings take effect by hot update, on the next task, or after restart.';
 
   @override
   String get adminNoConfigItems => 'No config items.';
@@ -4427,7 +4619,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigValue => 'Config Value';
 
   @override
-  String get adminSensitiveValuePlaceholder => 'Enter a new sensitive value; the current value is never displayed';
+  String get adminSensitiveValuePlaceholder =>
+      'Enter a new sensitive value; the current value is never displayed';
 
   @override
   String get adminChangeReason => 'Change Reason';
@@ -4454,7 +4647,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDlq => 'Dead Letter Queue';
 
   @override
-  String get adminDlqSubtitle => 'Failed tasks exhausted retries — re-queue manually';
+  String get adminDlqSubtitle =>
+      'Failed tasks exhausted retries — re-queue manually';
 
   @override
   String get adminDlqMetricHint => 'Retries exhausted; manual action needed';
@@ -4572,10 +4766,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLibrarySourceAdd => 'Add library source';
 
   @override
-  String get adminLibrarySourcesEmpty => 'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.';
+  String get adminLibrarySourcesEmpty =>
+      'No library sources yet. Enable a media library under Trusted mounts above; movie/TV/anime sources are created automatically.';
 
   @override
-  String get adminLibrarySourcesSubtitle => 'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.';
+  String get adminLibrarySourcesSubtitle =>
+      'Sources created when a mount media library is enabled. Advanced custom sources can still be added manually.';
 
   @override
   String get adminMountLibraryScanAll => 'Scan all';
@@ -4594,10 +4790,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLibraryAdvancedAdd => 'Advanced: add library source';
 
   @override
-  String get adminMountLibraryScanAllHint => 'Run discovery for movie, TV, and anime library sources together';
+  String get adminMountLibraryScanAllHint =>
+      'Run discovery for movie, TV, and anime library sources together';
 
   @override
-  String get adminMountLibraryProvisionSuccess => 'Media library enabled. Put files under Movie / TV / Anime, then choose Scan all to import.';
+  String get adminMountLibraryProvisionSuccess =>
+      'Media library enabled. Put files under Movie / TV / Anime, then choose Scan all to import.';
 
   @override
   String adminLibrarySourceCountLabel(int count) {
@@ -4616,7 +4814,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminLibraryReviewSubtitle => 'Pick a source to review the scan results and apply them.';
+  String get adminLibraryReviewSubtitle =>
+      'Pick a source to review the scan results and apply them.';
 
   @override
   String get adminStorageStatusHealthy => 'Healthy';
@@ -4637,7 +4836,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageEmptyList => 'No storage locations match the filter';
 
   @override
-  String get adminStorageDetailHint => 'Select a storage location to view details';
+  String get adminStorageDetailHint =>
+      'Select a storage location to view details';
 
   @override
   String get adminStorageStatusDisabled => 'Disabled';
@@ -4686,7 +4886,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageParentDir => 'Up one level';
 
   @override
-  String get adminStorageManagementSubtitle => 'Manage MinIO buckets and local media locations; use local locations for 4K playback.';
+  String get adminStorageManagementSubtitle =>
+      'Manage MinIO buckets and local media locations; use local locations for 4K playback.';
 
   @override
   String get adminBucketConfig => 'Bucket Config';
@@ -4713,16 +4914,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminExternalStorageIntegration => 'External Storage';
 
   @override
-  String get adminExternalStorageSubtitle => 'Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.';
+  String get adminExternalStorageSubtitle =>
+      'Govern every user connection and configure instance-level OAuth apps; users create and import from Files - External Storage.';
 
   @override
   String get adminOAuthAppsTitle => 'OAuth apps';
 
   @override
-  String get adminOAuthAppsSubtitle => 'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.';
+  String get adminOAuthAppsSubtitle =>
+      'Instance-level integration: register app credentials for connectors like OneDrive / Google; user OAuth authorization depends on it.';
 
   @override
-  String get adminOAuthRedirectHint => 'Must exactly match the redirect URI registered in the provider console; usually this site\'s callback URL.';
+  String get adminOAuthRedirectHint =>
+      'Must exactly match the redirect URI registered in the provider console; usually this site\'s callback URL.';
 
   @override
   String get adminNoOAuthApps => 'No OAuth apps configured yet.';
@@ -4779,7 +4983,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConnectionList => 'Connection List';
 
   @override
-  String get adminConnectionListSubtitle => 'Supervision only: enable or disable any user connection. Create and manage under Files - External Storage.';
+  String get adminConnectionListSubtitle =>
+      'Supervision only: enable or disable any user connection. Create and manage under Files - External Storage.';
 
   @override
   String get adminExternalStorageOwner => 'Owner';
@@ -4854,31 +5059,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageColumnType => 'Type';
 
   @override
-  String get adminStorageMountsSection => 'Underlying storage locations (read-only)';
+  String get adminStorageMountsSection =>
+      'Underlying storage locations (read-only)';
 
   @override
   String get adminTrustedMountsTitle => 'Trusted mounts';
 
   @override
-  String get adminTrustedMountsSubtitle => 'Mount keys registered in deployment config and their availability on this node. Enabling a mount provisions Movie / TV / Anime library sources under the agreed folders.';
+  String get adminTrustedMountsSubtitle =>
+      'Mount keys registered in deployment config and their availability on this node. Enabling a mount provisions Movie / TV / Anime library sources under the agreed folders.';
 
   @override
-  String get adminTrustedMountsEmpty => 'No mounts registered in deployment config';
+  String get adminTrustedMountsEmpty =>
+      'No mounts registered in deployment config';
 
   @override
   String get adminMountLibraryEnable => 'Enable media library';
 
   @override
-  String get adminMountLibraryEnableHint => 'Creates three libraries at the mount root: Movie, TV, and Anime. Drop files into those folders to be scanned and classified.';
+  String get adminMountLibraryEnableHint =>
+      'Creates three libraries at the mount root: Movie, TV, and Anime. Drop files into those folders to be scanned and classified.';
 
   @override
-  String get adminMountLibraryEnableHintOff => 'Not enabled yet. Enabling creates libraries for Movie, TV, and Anime folders automatically.';
+  String get adminMountLibraryEnableHintOff =>
+      'Not enabled yet. Enabling creates libraries for Movie, TV, and Anime folders automatically.';
 
   @override
   String get adminMountLibraryAutoImport => 'Auto-import after scan';
 
   @override
-  String get adminMountLibraryAutoImportHint => 'On: matched files join the library after scan. Off: review and import from Library Sources first.';
+  String get adminMountLibraryAutoImportHint =>
+      'On: matched files join the library after scan. Off: review and import from Library Sources first.';
 
   @override
   String get adminMountLibraryStatusOff => 'Disabled';
@@ -4907,7 +5118,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminMountLibraryProvisionFailed => 'Failed to configure mount media library';
+  String get adminMountLibraryProvisionFailed =>
+      'Failed to configure mount media library';
 
   @override
   String adminLibraryOrphanLocation(Object count) {
@@ -4942,7 +5154,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminLibraryManageReviewSection => 'Discovery & review';
 
   @override
-  String adminLibraryLastScanSummary(Object found, Object created, Object missing) {
+  String adminLibraryLastScanSummary(
+    Object found,
+    Object created,
+    Object missing,
+  ) {
     return 'Found $found · Created $created · Missing $missing';
   }
 
@@ -5023,7 +5239,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminSessionRevokeReason => 'Revoke reason';
 
   @override
-  String get adminSessionManagementSubtitle => 'View all user active sessions, supports forced logout.';
+  String get adminSessionManagementSubtitle =>
+      'View all user active sessions, supports forced logout.';
 
   @override
   String get adminActiveSessions => 'active';
@@ -5107,13 +5324,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminUserManagement => 'User Management';
 
   @override
-  String get adminUserManagementSubtitle => 'Manage accounts, status, quota and role assignment.';
+  String get adminUserManagementSubtitle =>
+      'Manage accounts, status, quota and role assignment.';
 
   @override
   String get adminAccountList => 'Account List';
 
   @override
-  String get adminAccountListSubtitle => 'Filter accounts by username, nickname, email and role.';
+  String get adminAccountListSubtitle =>
+      'Filter accounts by username, nickname, email and role.';
 
   @override
   String get adminCreateUser => 'Create User';
@@ -5215,7 +5434,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get adminBatchQuotaHint => 'Will set the same storage quota for all selected users. Super admins and users with insufficient space will be skipped.';
+  String get adminBatchQuotaHint =>
+      'Will set the same storage quota for all selected users. Super admins and users with insufficient space will be skipped.';
 
   @override
   String get adminQuotaGib => 'Quota (GiB)';
@@ -5303,7 +5523,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConsole => 'Admin Console';
 
   @override
-  String get adminConsoleSubtitle => 'Key metrics of users, permissions, runtime status and storage capacity.';
+  String get adminConsoleSubtitle =>
+      'Key metrics of users, permissions, runtime status and storage capacity.';
 
   @override
   String get adminAccountOverview => 'Account Overview';
@@ -5349,13 +5570,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTaskThroughput7d => 'Task Throughput (7D)';
 
   @override
-  String get adminOverviewThroughputTrend => 'Task Throughput Trend (Last 7 Days)';
+  String get adminOverviewThroughputTrend =>
+      'Task Throughput Trend (Last 7 Days)';
 
   @override
   String get adminGrowthPanelTitle => 'Activity & Storage Growth';
 
   @override
-  String get adminGrowthPanelSubtitle => 'Daily user growth and storage growth from analytics.';
+  String get adminGrowthPanelSubtitle =>
+      'Daily user growth and storage growth from analytics.';
 
   @override
   String get adminUserGrowthLabel => 'User Growth';
@@ -5364,7 +5587,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageGrowthLabel => 'Storage Growth';
 
   @override
-  String adminFilesFoldersObjects(Object files, Object folders, Object objects) {
+  String adminFilesFoldersObjects(
+    Object files,
+    Object folders,
+    Object objects,
+  ) {
     return '$files files · $folders folders · $objects objects';
   }
 
@@ -5387,13 +5614,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminActivityChart => 'Activity Chart';
 
   @override
-  String get adminActivityChartSubtitle => 'Admin-side trend view generated from current system statistics.';
+  String get adminActivityChartSubtitle =>
+      'Admin-side trend view generated from current system statistics.';
 
   @override
   String get adminHealthStatus => 'Health Status';
 
   @override
-  String get adminHealthStatusSubtitle => 'Health status from admin aggregation endpoint.';
+  String get adminHealthStatusSubtitle =>
+      'Health status from admin aggregation endpoint.';
 
   @override
   String get adminUserLabel => 'Users';
@@ -5471,58 +5700,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminOverviewTitle => 'Admin Console';
 
   @override
-  String get adminOverviewSubtitle => 'Key metrics of users, permissions, runtime status and storage capacity.';
+  String get adminOverviewSubtitle =>
+      'Key metrics of users, permissions, runtime status and storage capacity.';
 
   @override
   String get adminMonitoringTitle => 'System Monitor';
 
   @override
-  String get adminMonitoringSubtitle2 => 'View health checks, service metrics, node status and alerts.';
+  String get adminMonitoringSubtitle2 =>
+      'View health checks, service metrics, node status and alerts.';
 
   @override
   String get adminLogsTitle => 'Log Center';
 
   @override
-  String get adminLogsSubtitle => 'Unified view of application logs, error logs and login audit.';
+  String get adminLogsSubtitle =>
+      'Unified view of application logs, error logs and login audit.';
 
   @override
   String get adminTasksTitle => 'Background Tasks';
 
   @override
-  String get adminTasksSubtitle => 'Track indexing, transcoding, sync, backup and cleanup tasks.';
+  String get adminTasksSubtitle =>
+      'Track indexing, transcoding, sync, backup and cleanup tasks.';
 
   @override
-  String get adminSectionForbidden => 'You do not have permission to open this admin section.';
+  String get adminSectionForbidden =>
+      'You do not have permission to open this admin section.';
 
   @override
   String get adminSessionsTitle => 'Session Management';
 
   @override
-  String get adminSessionsSubtitle => 'View and manage user active sessions, supports forced logout.';
+  String get adminSessionsSubtitle =>
+      'View and manage user active sessions, supports forced logout.';
 
   @override
   String get adminUsersTitle => 'User Management';
 
   @override
-  String get adminUsersSubtitle => 'Manage accounts, status, quota and role assignment.';
+  String get adminUsersSubtitle =>
+      'Manage accounts, status, quota and role assignment.';
 
   @override
   String get adminRolesTitle => 'Role Management';
 
   @override
-  String get adminRolesSubtitle => 'Maintain roles, permission sets and resource access boundaries.';
+  String get adminRolesSubtitle =>
+      'Maintain roles, permission sets and resource access boundaries.';
 
   @override
   String get adminConfigTitle => 'Config Center';
 
   @override
-  String get adminConfigSubtitle => 'Manage system config items, feature flags and hot update release status.';
+  String get adminConfigSubtitle =>
+      'Manage system config items, feature flags and hot update release status.';
 
   @override
   String get adminStorageTitle => 'Storage Management';
 
   @override
-  String get adminStorageSubtitle => 'Manage MinIO buckets, capacity, and index maintenance.';
+  String get adminStorageSubtitle =>
+      'Manage MinIO buckets, capacity, and index maintenance.';
 
   @override
   String get adminExternalStorageTitle => 'External Storage';
@@ -5580,10 +5819,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminUserOperationFailed => 'User operation failed';
 
   @override
-  String get adminConsoleResponseFormat => 'Admin console response format is incorrect';
+  String get adminConsoleResponseFormat =>
+      'Admin console response format is incorrect';
 
   @override
-  String get adminNoConsoleResult => 'Server did not return admin console result';
+  String get adminNoConsoleResult =>
+      'Server did not return admin console result';
 
   @override
   String get adminConsoleLoadFailed => 'Admin console load failed';
@@ -5613,10 +5854,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolsReaderAdminDetail => 'Import queue and metadata management';
 
   @override
-  String get readerShelfEmpty => 'Your shelf is empty. Add books from the library.';
+  String get readerShelfEmpty =>
+      'Your shelf is empty. Add books from the library.';
 
   @override
-  String get readerShelfEmptyHint => 'Browse the library and add books to your shelf.';
+  String get readerShelfEmptyHint =>
+      'Browse the library and add books to your shelf.';
 
   @override
   String get readerStatsActivity => 'Reading Activity';
@@ -5712,7 +5955,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNavFavorites => 'Favorites';
 
   @override
-  String get readerManageHint => 'Management tools visible to super admins only';
+  String get readerManageHint =>
+      'Management tools visible to super admins only';
 
   @override
   String get readerSearchHint => 'Search book titles, authors…';
@@ -5775,7 +6019,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerFollowBookTypesetting => 'Follow the book\'s typography';
 
   @override
-  String get readerFollowBookTypesettingHint => 'Takes this book\'s first-line indent, paragraph spacing and alignment. Font size, typeface and line spacing always follow your settings.';
+  String get readerFollowBookTypesettingHint =>
+      'Takes this book\'s first-line indent, paragraph spacing and alignment. Font size, typeface and line spacing always follow your settings.';
 
   @override
   String get readerPreviousPage => 'Previous page';
@@ -5842,7 +6087,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readerImagesNotLoadedHint => 'This chapter exceeded the per-chapter image budget; the text is unaffected';
+  String get readerImagesNotLoadedHint =>
+      'This chapter exceeded the per-chapter image budget; the text is unaffected';
 
   @override
   String readerReadingProgress(int percent) {
@@ -5864,10 +6110,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerComicModeScroll => 'Scroll mode';
 
   @override
-  String get readerComicFullWidth => 'Use all available width in continuous mode';
+  String get readerComicFullWidth =>
+      'Use all available width in continuous mode';
 
   @override
-  String get readerComicFullWidthHint => 'Turn off to limit page width on desktop and avoid excessive upscaling';
+  String get readerComicFullWidthHint =>
+      'Turn off to limit page width on desktop and avoid excessive upscaling';
 
   @override
   String readerComicContentWidth(int width) {
@@ -5980,22 +6228,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerChapterList => 'Chapter List';
 
   @override
-  String get readerOperationFailed => 'Operation failed, please try again later';
+  String get readerOperationFailed =>
+      'Operation failed, please try again later';
 
   @override
   String get readerOperationSubmitted => 'Operation submitted';
 
   @override
-  String get readerChapterLoadFailed => 'The chapter could not be loaded. Please try again.';
+  String get readerChapterLoadFailed =>
+      'The chapter could not be loaded. Please try again.';
 
   @override
-  String get readerChapterNeedsNetwork => 'This chapter is not cached for offline reading. Connect to the network and try again.';
+  String get readerChapterNeedsNetwork =>
+      'This chapter is not cached for offline reading. Connect to the network and try again.';
 
   @override
-  String get readerChapterNeedsReparse => 'The chapter text no longer matches this book. Reparse it in the book details and try again.';
+  String get readerChapterNeedsReparse =>
+      'The chapter text no longer matches this book. Reparse it in the book details and try again.';
 
   @override
-  String get readerChapterUnsupportedEncoding => 'This chapter uses a text encoding that can\'t be decoded here. Convert the book to UTF-8 and import it again.';
+  String get readerChapterUnsupportedEncoding =>
+      'This chapter uses a text encoding that can\'t be decoded here. Convert the book to UTF-8 and import it again.';
 
   @override
   String get readerRemoveFavorite => 'Remove from favorites';
@@ -6028,7 +6281,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNoDescription => 'No description';
 
   @override
-  String get readerNoChapters => 'No chapters yet, wait for parsing or re-parse the book';
+  String get readerNoChapters =>
+      'No chapters yet, wait for parsing or re-parse the book';
 
   @override
   String get readerDescription => 'Description';
@@ -6093,7 +6347,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerCollectionEmpty => 'No books in this collection';
 
   @override
-  String get readerCollectionEmptyHint => 'Long press a book on the bookshelf to add it to a collection.';
+  String get readerCollectionEmptyHint =>
+      'Long press a book on the bookshelf to add it to a collection.';
 
   @override
   String get readerConfirmDeleteCollection => 'Delete collection';
@@ -6170,7 +6425,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerUploadCover => 'Upload New Cover';
 
   @override
-  String get readerNoImageFiles => 'No image files available in the file system';
+  String get readerNoImageFiles =>
+      'No image files available in the file system';
 
   @override
   String get readerSelectCoverImage => 'Select Cover Image';
@@ -6280,7 +6536,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerImportTypeTitle => 'Choose EPUB import type';
 
   @override
-  String get readerImportTypeDesc => 'Fixed-layout or image-based EPUB files can be imported as comics. Text EPUB files should usually be imported as books.';
+  String get readerImportTypeDesc =>
+      'Fixed-layout or image-based EPUB files can be imported as comics. Text EPUB files should usually be imported as books.';
 
   @override
   String get readerImportNovel => 'Book';
@@ -6312,25 +6569,29 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readerPendingImportDesc => 'These files have been uploaded but not yet imported to the Reader Center. EPUB files can be imported as books or comics.';
+  String get readerPendingImportDesc =>
+      'These files have been uploaded but not yet imported to the Reader Center. EPUB files can be imported as books or comics.';
 
   @override
   String get readerNoPendingImport => 'No files pending import';
 
   @override
-  String get readerNoPendingImportHint => 'After uploading EPUB, CBZ and other reading files, they will appear here. Already imported files won\'t be shown again.';
+  String get readerNoPendingImportHint =>
+      'After uploading EPUB, CBZ and other reading files, they will appear here. Already imported files won\'t be shown again.';
 
   @override
   String get readerReparse => 'Re-parse';
 
   @override
-  String get readerReparseDesc => 'Re-parse cover, metadata and chapters for imported content. Useful when parsing was incomplete or new parsing capabilities have been added.';
+  String get readerReparseDesc =>
+      'Re-parse cover, metadata and chapters for imported content. Useful when parsing was incomplete or new parsing capabilities have been added.';
 
   @override
   String get readerNoImportedContent => 'No imported content';
 
   @override
-  String get readerNoImportedContentHint => 'After importing books, you can re-parse them here.';
+  String get readerNoImportedContentHint =>
+      'After importing books, you can re-parse them here.';
 
   @override
   String get readerNoFileNode => 'This entry has no file node, cannot re-parse';
@@ -6373,10 +6634,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerComicPagePreview => 'Page Preview';
 
   @override
-  String get readerComicCatalogPending => 'Catalog parsing is still in progress. Refresh later to view the result.';
+  String get readerComicCatalogPending =>
+      'Catalog parsing is still in progress. Refresh later to view the result.';
 
   @override
-  String get readerComicPagesPending => 'Pages are still being parsed. Refresh later to view previews.';
+  String get readerComicPagesPending =>
+      'Pages are still being parsed. Refresh later to view previews.';
 
   @override
   String get readerComicImportPending => 'Waiting to parse';
@@ -6397,16 +6660,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerComicEmptyTitle => 'No comics yet';
 
   @override
-  String get readerComicEmptyHint => 'Import a CBZ, ZIP, or image-based EPUB to start reading.';
+  String get readerComicEmptyHint =>
+      'Import a CBZ, ZIP, or image-based EPUB to start reading.';
 
   @override
   String get readerComicParsingMessage => 'The comic is being parsed…';
 
   @override
-  String get readerComicPartialFailedMessage => 'Some sources failed to parse. Retry or remove the failed sources.';
+  String get readerComicPartialFailedMessage =>
+      'Some sources failed to parse. Retry or remove the failed sources.';
 
   @override
-  String get readerComicFailedMessage => 'Parsing failed. Retry the failed source.';
+  String get readerComicFailedMessage =>
+      'Parsing failed. Retry the failed source.';
 
   @override
   String get readerComicSources => 'Sources';
@@ -6471,7 +6737,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerAddBook => 'Add Book';
 
   @override
-  String get readerImportQueued => 'File uploaded. Import is running in the background...';
+  String get readerImportQueued =>
+      'File uploaded. Import is running in the background...';
 
   @override
   String get readerImportQueuedShort => 'Waiting to upload';
@@ -6489,13 +6756,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerMetadataManagement => 'Metadata Management';
 
   @override
-  String get readerMetadataDesc => 'Manually edit metadata for books/comics, including title, author, description, cover, etc. Visible to super admins only.';
+  String get readerMetadataDesc =>
+      'Manually edit metadata for books/comics, including title, author, description, cover, etc. Visible to super admins only.';
 
   @override
   String get readerNoBookEntries => 'No book entries';
 
   @override
-  String get readerNoBookEntriesHint => 'Import books to manage their metadata here.';
+  String get readerNoBookEntriesHint =>
+      'Import books to manage their metadata here.';
 
   @override
   String get readerStatusPending => 'Pending';
@@ -6516,13 +6785,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerScrapeQueue => 'Scrape Queue';
 
   @override
-  String get readerScrapeQueueDesc => 'Entries missing metadata (description, rating, genre, etc.) can be manually scraped. Visible to super admins only.';
+  String get readerScrapeQueueDesc =>
+      'Entries missing metadata (description, rating, genre, etc.) can be manually scraped. Visible to super admins only.';
 
   @override
   String get readerAllMetadataComplete => 'All entries have complete metadata';
 
   @override
-  String get readerScrapeHint => 'Newly imported books will be automatically scraped. You can also manually retry from the detail page.';
+  String get readerScrapeHint =>
+      'Newly imported books will be automatically scraped. You can also manually retry from the detail page.';
 
   @override
   String readerScrapeSubmitted(Object id) {
@@ -6530,7 +6801,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readerScrapeSubmitFailed => 'Scrape task submission failed, please try again later';
+  String get readerScrapeSubmitFailed =>
+      'Scrape task submission failed, please try again later';
 
   @override
   String get readerSubmitting => 'Submitting…';
@@ -6556,7 +6828,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerDeleteBook => 'Delete Book';
 
   @override
-  String get readerDeleteBookHint => 'Permanently delete the book and its source file';
+  String get readerDeleteBookHint =>
+      'Permanently delete the book and its source file';
 
   @override
   String get readerDeleteSource => 'Delete source';
@@ -6611,19 +6884,22 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readerSectionNotAvailableHint => 'This entry has been reserved and will be connected to an independent content page later.';
+  String get readerSectionNotAvailableHint =>
+      'This entry has been reserved and will be connected to an independent content page later.';
 
   @override
   String get readerNoBookmarks => 'No bookmarks yet';
 
   @override
-  String get readerNoBookmarksHint => 'Add bookmarks while reading to quickly jump back here later.';
+  String get readerNoBookmarksHint =>
+      'Add bookmarks while reading to quickly jump back here later.';
 
   @override
   String get readerEmptyHint => 'No content here yet';
 
   @override
-  String get readerEmptyHintDesc => 'Supports EPUB, TXT, CBZ, ZIP, and PDF. Imported books appear on the bookshelf automatically.';
+  String get readerEmptyHintDesc =>
+      'Supports EPUB, TXT, CBZ, ZIP, and PDF. Imported books appear on the bookshelf automatically.';
 
   @override
   String get readerImportBooks => 'Import books';
@@ -6810,19 +7086,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoMovieLibrary => 'Media Library';
 
   @override
-  String get videoMovieLibrarySubtitle => 'Browse movies, TV series, and anime with filters and categories.';
+  String get videoMovieLibrarySubtitle =>
+      'Browse movies, TV series, and anime with filters and categories.';
 
   @override
   String get videoAnimeLibrary => 'Anime Library';
 
   @override
-  String get videoAnimeLibrarySubtitle => 'Japanese anime organized by series, click to view details, season/episode list and direct playback.';
+  String get videoAnimeLibrarySubtitle =>
+      'Japanese anime organized by series, click to view details, season/episode list and direct playback.';
 
   @override
-  String get videoRecentSubtitle => 'Content added in the last 30 days is shown here.';
+  String get videoRecentSubtitle =>
+      'Content added in the last 30 days is shown here.';
 
   @override
-  String get videoFavoritesSubtitle => 'Movies and TV shows starred by the current user are shown here.';
+  String get videoFavoritesSubtitle =>
+      'Movies and TV shows starred by the current user are shown here.';
 
   @override
   String videoSeasonProgress(Object season, Object current, Object total) {
@@ -6851,7 +7131,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoAudio => 'Audio';
 
   @override
-  String get videoItemPermanentlyDeleted => 'Media item and source file permanently deleted';
+  String get videoItemPermanentlyDeleted =>
+      'Media item and source file permanently deleted';
 
   @override
   String get videoMetadataStatusComplete => 'Complete info';
@@ -7010,7 +7291,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSectionMovieAdmin => 'Movie management';
 
   @override
-  String get videoMovieAdminSubtitle => 'Manage metadata, scraping and transcoding for your library.';
+  String get videoMovieAdminSubtitle =>
+      'Manage metadata, scraping and transcoding for your library.';
 
   @override
   String get videoMovieAdminEmpty => 'No movies match the current filters.';
@@ -7106,13 +7388,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoViewMore => 'View More';
 
   @override
-  String get videoContinueSubtitle => 'Shows unfinished movies and TV shows, click card to resume playback.';
+  String get videoContinueSubtitle =>
+      'Shows unfinished movies and TV shows, click card to resume playback.';
 
   @override
   String get videoNoContinueRecord => 'No continue watching records.';
 
   @override
-  String get videoCollectionsSubtitle => 'Supports user-defined or auto-generated collections, such as movie universes, director filmographies and family collections.';
+  String get videoCollectionsSubtitle =>
+      'Supports user-defined or auto-generated collections, such as movie universes, director filmographies and family collections.';
 
   @override
   String videoCollectionItemCount(Object count) {
@@ -7170,16 +7454,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoRequestTimeout => 'Request timed out, please try again later';
 
   @override
-  String get videoConnectionError => 'Cannot connect to backend, please confirm the service is running';
+  String get videoConnectionError =>
+      'Cannot connect to backend, please confirm the service is running';
 
   @override
   String get videoOperationCancelled => 'Operation cancelled';
 
   @override
-  String get videoServerError => 'Server response error, please try again later';
+  String get videoServerError =>
+      'Server response error, please try again later';
 
   @override
-  String get videoCertificateError => 'Certificate verification failed, please check service configuration';
+  String get videoCertificateError =>
+      'Certificate verification failed, please check service configuration';
 
   @override
   String get videoRequestFailed => 'Request failed, please try again later';
@@ -7312,7 +7599,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSeriesLibrary => 'Series Library';
 
   @override
-  String get videoSeriesLibrarySubtitle => 'TV series organized by series, click to view details, season/episode list and direct playback.';
+  String get videoSeriesLibrarySubtitle =>
+      'TV series organized by series, click to view details, season/episode list and direct playback.';
 
   @override
   String get videoNoSeries => 'No series yet.';
@@ -7357,7 +7645,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoMetadataSaved => 'Metadata saved';
 
   @override
-  String get videoEditMetadataDesc => 'Edit title, overview, poster and backdrop for display. Saving will lock to manual metadata.';
+  String get videoEditMetadataDesc =>
+      'Edit title, overview, poster and backdrop for display. Saving will lock to manual metadata.';
 
   @override
   String get videoCoverAssets => 'Cover Assets';
@@ -7369,7 +7658,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoBackdropFileId => 'Backdrop File ID';
 
   @override
-  String get videoCoverIdHint => 'Use file node ID to bind poster and backdrop; saving will immediately update Media Library display resources.';
+  String get videoCoverIdHint =>
+      'Use file node ID to bind poster and backdrop; saving will immediately update Media Library display resources.';
 
   @override
   String get videoBrandVersion => 'Media Library v1.0';
@@ -7411,7 +7701,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoOriginalAspectRatio => 'Original Aspect Ratio';
 
   @override
-  String get videoCompatibleAudioNotice => 'Using compatible audio stream. Tap the audio button at the bottom to switch audio source.';
+  String get videoCompatibleAudioNotice =>
+      'Using compatible audio stream. Tap the audio button at the bottom to switch audio source.';
 
   @override
   String get videoGotIt => 'Got it';
@@ -7420,7 +7711,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSubtitleTrack => 'Subtitle Track';
 
   @override
-  String get videoNoSubtitlesAvailable => 'No subtitles available for this video';
+  String get videoNoSubtitlesAvailable =>
+      'No subtitles available for this video';
 
   @override
   String get videoDisableSubtitles => 'Disable Subtitles';
@@ -7432,7 +7724,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoCompatibleAudioAac => 'Compatible Audio (AAC Cache)';
 
   @override
-  String get videoCompatibleAudioDesc => 'Pre-processed AAC audio stream, compatible with all web browsers';
+  String get videoCompatibleAudioDesc =>
+      'Pre-processed AAC audio stream, compatible with all web browsers';
 
   @override
   String videoOriginalAudioLabel(Object codec) {
@@ -7440,7 +7733,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoOriginalAudioDesc => 'Real-time transcoded original audio, may require more processing time';
+  String get videoOriginalAudioDesc =>
+      'Real-time transcoded original audio, may require more processing time';
 
   @override
   String get videoPlaybackSpeed => 'Playback Speed';
@@ -7509,7 +7803,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosTaskFailed => 'Task failed';
 
   @override
-  String get photosTaskStatusRefreshFailed => 'Unable to refresh task status. Retrying automatically';
+  String get photosTaskStatusRefreshFailed =>
+      'Unable to refresh task status. Retrying automatically';
 
   @override
   String photosProcessedItems(Object count) {
@@ -7620,13 +7915,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosEditTypeFilter => 'Filter';
 
   @override
-  String get photosImportCompletedNotVisible => 'Import finished, but the photos are not visible in this list yet. Refresh later.';
+  String get photosImportCompletedNotVisible =>
+      'Import finished, but the photos are not visible in this list yet. Refresh later.';
 
   @override
-  String get photosImportStillProcessing => 'Photo import is still processing. Refresh the page later.';
+  String get photosImportStillProcessing =>
+      'Photo import is still processing. Refresh the page later.';
 
   @override
-  String get photosImportBackendFailed => 'Photo import failed in the background. Check the task center for details.';
+  String get photosImportBackendFailed =>
+      'Photo import failed in the background. Check the task center for details.';
 
   @override
   String get photosSharedPoweredBy => 'Powered by OmniNest';
@@ -7723,7 +8021,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosNoFavorites => 'No favorite photos yet';
 
   @override
-  String get photosNoFavoritesHint => 'Tap the favorite button in photo details to add favorites.';
+  String get photosNoFavoritesHint =>
+      'Tap the favorite button in photo details to add favorites.';
 
   @override
   String get photosRecentPhotos => 'Recent Photos';
@@ -7732,7 +8031,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosNoPhotos => 'No photos yet';
 
   @override
-  String get photosNoPhotosHint => 'Photos will appear here automatically after uploading.';
+  String get photosNoPhotosHint =>
+      'Photos will appear here automatically after uploading.';
 
   @override
   String get photosAlbums => 'Albums';
@@ -7787,7 +8087,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get photosArchiveDownloadFailed => 'ZIP download failed. Choose the same path to resume.';
+  String get photosArchiveDownloadFailed =>
+      'ZIP download failed. Choose the same path to resume.';
 
   @override
   String get photosDownloadPhoto => 'Download original';
@@ -7801,10 +8102,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get photosExportShared => 'System share opened — save to Photos or another app';
+  String get photosExportShared =>
+      'System share opened — save to Photos or another app';
 
   @override
-  String get photosDownloadSourceUnavailable => 'Original file is unavailable for download';
+  String get photosDownloadSourceUnavailable =>
+      'Original file is unavailable for download';
 
   @override
   String photosSlideshowBadge(int current, int total) {
@@ -7855,7 +8158,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosNoTimelineData => 'No timeline data';
 
   @override
-  String get photosNoTimelineHint => 'Photos need capture time info to display timeline';
+  String get photosNoTimelineHint =>
+      'Photos need capture time info to display timeline';
 
   @override
   String photosYear(Object year) {
@@ -7863,7 +8167,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get photosOperationFailed => 'Operation failed, please try again later';
+  String get photosOperationFailed =>
+      'Operation failed, please try again later';
 
   @override
   String get photosImageLoadFailed => 'Image load failed';
@@ -8025,7 +8330,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosAddTagFailed => 'Failed to add tag';
 
   @override
-  String get photosNoAlbumsCreateFirst => 'No albums yet, please create one first';
+  String get photosNoAlbumsCreateFirst =>
+      'No albums yet, please create one first';
 
   @override
   String get photosAddedToAlbum => 'Added to album';
@@ -8076,7 +8382,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosEditorCloseWarningTitle => 'Close Image Editor?';
 
   @override
-  String get photosEditorCloseWarningMessage => 'Are you sure you want to close the Image Editor? Your changes will not be saved.';
+  String get photosEditorCloseWarningMessage =>
+      'Are you sure you want to close the Image Editor? Your changes will not be saved.';
 
   @override
   String get photosEditorCloseWarningConfirm => 'OK';
@@ -8313,10 +8620,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get photosSharedAlbumPasswordRequired => 'This album requires password access';
+  String get photosSharedAlbumPasswordRequired =>
+      'This album requires password access';
 
   @override
-  String get photosSharedAlbumPasswordHint => 'Enter share password to view album content';
+  String get photosSharedAlbumPasswordHint =>
+      'Enter share password to view album content';
 
   @override
   String get photosEnterPassword => 'Enter password';
@@ -8328,7 +8637,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosAlbumEmpty => 'No photos in this album';
 
   @override
-  String get photosAlbumEmptyHint => 'Pick photos from your library to add to this album.';
+  String get photosAlbumEmptyHint =>
+      'Pick photos from your library to add to this album.';
 
   @override
   String get photosAddPhotos => 'Add photos';
@@ -8350,13 +8660,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosSharePhoto => 'Share Photo';
 
   @override
-  String get photosSharedItemPasswordRequired => 'This share requires password access';
+  String get photosSharedItemPasswordRequired =>
+      'This share requires password access';
 
   @override
   String get photosLiveBadge => 'LIVE';
 
   @override
-  String get photosLiveBadgeTooltip => 'Tap to play the motion photo, long-press the photo for a quick preview';
+  String get photosLiveBadgeTooltip =>
+      'Tap to play the motion photo, long-press the photo for a quick preview';
 
   @override
   String get photosMotionPlayFailed => 'Failed to play motion video';
@@ -8392,7 +8704,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareToQr => 'QR code';
 
   @override
-  String get photosShareWeChatCopiedFallback => 'Link copied. Paste it into WeChat to send.';
+  String get photosShareWeChatCopiedFallback =>
+      'Link copied. Paste it into WeChat to send.';
 
   @override
   String get photosShareOptionLocation => 'Include location';
@@ -8461,7 +8774,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareRevokeAllConfirmTitle => 'Clear share links';
 
   @override
-  String get photosShareRevokeAllConfirmBody => 'This revokes every active share link for this item; links already sent stop working immediately.';
+  String get photosShareRevokeAllConfirmBody =>
+      'This revokes every active share link for this item; links already sent stop working immediately.';
 
   @override
   String photosShareRevokeAllDone(Object count) {
@@ -8620,19 +8934,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicLibraryAlbumsEmptyTitle => 'No albums yet';
 
   @override
-  String get musicLibraryAlbumsEmptyMessage => 'Albums will appear here after importing local music or connecting an online platform.';
+  String get musicLibraryAlbumsEmptyMessage =>
+      'Albums will appear here after importing local music or connecting an online platform.';
 
   @override
   String get musicLibraryArtistsEmptyTitle => 'No artists yet';
 
   @override
-  String get musicLibraryArtistsEmptyMessage => 'Artists will appear here after importing local music or connecting an online platform.';
+  String get musicLibraryArtistsEmptyMessage =>
+      'Artists will appear here after importing local music or connecting an online platform.';
 
   @override
-  String get musicDailyRecommendationEmpty => 'Today\'s recommendations are unavailable. Try again later.';
+  String get musicDailyRecommendationEmpty =>
+      'Today\'s recommendations are unavailable. Try again later.';
 
   @override
-  String get musicDailyRecommendationLoadFailed => 'Could not load daily recommendations. Try again.';
+  String get musicDailyRecommendationLoadFailed =>
+      'Could not load daily recommendations. Try again.';
 
   @override
   String get musicDeckAccounts => 'Platform accounts';
@@ -8644,7 +8962,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicDeckManage => 'Manage';
 
   @override
-  String get musicLocalManagementSubtitle => 'Manage local metadata, covers, lyrics, and storage scans.';
+  String get musicLocalManagementSubtitle =>
+      'Manage local metadata, covers, lyrics, and storage scans.';
 
   @override
   String get musicStartScan => 'Scan storage';
@@ -8682,13 +9001,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicDeleteLocalTrackSuccess => 'Local track permanently deleted';
 
   @override
-  String get musicDeleteLocalTrackFailed => 'Delete failed. Please try again later.';
+  String get musicDeleteLocalTrackFailed =>
+      'Delete failed. Please try again later.';
 
   @override
   String get musicRemoveFromPlaylistSuccess => 'Removed from playlist';
 
   @override
-  String get musicRemoveFromPlaylistFailed => 'Failed to remove, please retry later';
+  String get musicRemoveFromPlaylistFailed =>
+      'Failed to remove, please retry later';
 
   @override
   String get musicDeletePlaylistTitle => 'Delete this playlist?';
@@ -8705,7 +9026,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicPlaylistCoverChange => 'Change cover';
 
   @override
-  String get musicPlaylistCoverHint => 'Uses the first song cover when no image is selected';
+  String get musicPlaylistCoverHint =>
+      'Uses the first song cover when no image is selected';
 
   @override
   String musicPlaylistSaveFailed(Object error) {
@@ -8721,7 +9043,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicDeckConnectedSources => 'Connected sources';
 
   @override
-  String get musicDeckSearchPrompt => 'Enter at least two characters to filter by song, artist, or album';
+  String get musicDeckSearchPrompt =>
+      'Enter at least two characters to filter by song, artist, or album';
 
   @override
   String get musicDeckNoSearchResults => 'No matching songs';
@@ -8758,22 +9081,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicDeckYourCollections => 'Your playlists';
 
   @override
-  String get musicDeckRecentEmpty => 'Recently played content will appear here after you play a song.';
+  String get musicDeckRecentEmpty =>
+      'Recently played content will appear here after you play a song.';
 
   @override
-  String get musicDeckPartialSourceFailure => 'Some online sources are temporarily unavailable. Local music and other sources remain usable.';
+  String get musicDeckPartialSourceFailure =>
+      'Some online sources are temporarily unavailable. Local music and other sources remain usable.';
 
   @override
-  String get musicDeckLibrarySubtitle => 'Browse local music and known songs from your connected accounts.';
+  String get musicDeckLibrarySubtitle =>
+      'Browse local music and known songs from your connected accounts.';
 
   @override
-  String get musicDeckPlaylistsSubtitle => 'Local and connected-platform playlists share one organized space.';
+  String get musicDeckPlaylistsSubtitle =>
+      'Local and connected-platform playlists share one organized space.';
 
   @override
-  String get musicDeckFavoritesSubtitle => 'Local favorites and liked songs from connected platforms.';
+  String get musicDeckFavoritesSubtitle =>
+      'Local favorites and liked songs from connected platforms.';
 
   @override
-  String get musicDeckRecentSubtitle => 'Continue with recently accessed local content.';
+  String get musicDeckRecentSubtitle =>
+      'Continue with recently accessed local content.';
 
   @override
   String get musicDeckLocalPlaylist => 'Local playlist';
@@ -8812,7 +9141,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicGotIt => 'Got it';
 
   @override
-  String get musicPlaybackError => 'Audio playback failed, the codec may not be supported';
+  String get musicPlaybackError =>
+      'Audio playback failed, the codec may not be supported';
 
   @override
   String get musicCancel => 'Cancel';
@@ -8926,10 +9256,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicScrapeLibraryConfirmTitle => 'Rescrape entire library?';
 
   @override
-  String get musicScrapeLibraryConfirmMessage => 'Every local track will be re-matched online, including already scraped ones. Continue?';
+  String get musicScrapeLibraryConfirmMessage =>
+      'Every local track will be re-matched online, including already scraped ones. Continue?';
 
   @override
-  String get musicQualityHint => 'Playback falls back automatically to tiers your connected platforms support';
+  String get musicQualityHint =>
+      'Playback falls back automatically to tiers your connected platforms support';
 
   @override
   String get musicQualityUnsupported => 'Not supported by connected platforms';
@@ -8971,7 +9303,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicPlatformNeteaseName => 'Netease Cloud Music';
 
   @override
-  String get musicPlatformNeteaseQrHint => 'Scan the QR code with the Netease Cloud Music app to log in';
+  String get musicPlatformNeteaseQrHint =>
+      'Scan the QR code with the Netease Cloud Music app to log in';
 
   @override
   String get musicPlatformQrGenerating => 'Generating QR code...';
@@ -9003,7 +9336,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicPlatformLogoutConfirmTitle => 'Disconnect this account?';
 
   @override
-  String get musicPlatformLogoutConfirmMessage => 'The connection and its cached playlists will be removed, and tracks of this platform will be dropped from the play queue.';
+  String get musicPlatformLogoutConfirmMessage =>
+      'The connection and its cached playlists will be removed, and tracks of this platform will be dropped from the play queue.';
 
   @override
   String get musicPlatformLogoutSuccess => 'Disconnected';
@@ -9023,7 +9357,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicHistoryTitle => 'Play History';
 
   @override
-  String get musicHistoryTrackUnavailable => 'Track is no longer available in your library';
+  String get musicHistoryTrackUnavailable =>
+      'Track is no longer available in your library';
 
   @override
   String get musicHistoryEmpty => 'No plays in the last 7 days';
@@ -9064,10 +9399,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get musicScanConfirmMessage => 'Audio files in your music directories will be scanned into the library; existing files are skipped or updated.';
+  String get musicScanConfirmMessage =>
+      'Audio files in your music directories will be scanned into the library; existing files are skipped or updated.';
 
   @override
-  String get musicScanPollTimeout => 'The job is still running in the background; progress display has stopped. Refresh later to check.';
+  String get musicScanPollTimeout =>
+      'The job is still running in the background; progress display has stopped. Refresh later to check.';
 
   @override
   String musicSelectionCount(Object count) {
@@ -9121,13 +9458,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicPlaybackSpeed => 'Playback Speed';
 
   @override
-  String get musicSpeedApplyHint => 'Changes apply to the current track immediately';
+  String get musicSpeedApplyHint =>
+      'Changes apply to the current track immediately';
 
   @override
   String get musicNavGenres => 'Genres';
 
   @override
-  String get musicGenresEmpty => 'No genre info on local tracks yet; add it in metadata editing';
+  String get musicGenresEmpty =>
+      'No genre info on local tracks yet; add it in metadata editing';
 
   @override
   String get musicGenresPickHint => 'Pick a genre to browse its tracks';
@@ -9142,7 +9481,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileTaskSystemNotifications => 'System Notifications';
 
   @override
-  String get profileTaskSystemNotificationsHint => 'Send a system notification when tasks complete or fail';
+  String get profileTaskSystemNotificationsHint =>
+      'Send a system notification when tasks complete or fail';
 
   @override
   String get settingsCheckUpdate => 'Check for Updates';
@@ -9374,7 +9714,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicOpenPlaylist => 'Open Playlist';
 
   @override
-  String get musicPlaylistEmptyHint => 'Add songs from the song list to see them here.';
+  String get musicPlaylistEmptyHint =>
+      'Add songs from the song list to see them here.';
 
   @override
   String get musicAlbumNoTracks => 'No tracks in this album.';
@@ -9433,7 +9774,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicNoAlbums => 'No albums yet';
 
   @override
-  String get musicAlbumsHint => 'Albums are automatically aggregated after music scanning.';
+  String get musicAlbumsHint =>
+      'Albums are automatically aggregated after music scanning.';
 
   @override
   String get musicAlbumsSubtitle => 'Browse your local music library by album.';
@@ -9453,7 +9795,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get musicScanSubtitle => 'Scan audio files in the file library, parse tags, albums, artists and covers.';
+  String get musicScanSubtitle =>
+      'Scan audio files in the file library, parse tags, albums, artists and covers.';
 
   @override
   String get musicNoScanTask => 'No new scan tasks.';
@@ -9467,18 +9810,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicScanIdleHint => 'No scan has run yet.';
 
   @override
-  String get musicScanStartConfirmMessage => 'Scans the local music directories again and updates the library.';
+  String get musicScanStartConfirmMessage =>
+      'Scans the local music directories again and updates the library.';
 
   @override
-  String musicScanStatus(Object id, Object status, Object progress, Object files) {
+  String musicScanStatus(
+    Object id,
+    Object status,
+    Object progress,
+    Object files,
+  ) {
     return 'Task $id · $status · $progress% · $files files scanned';
   }
 
   @override
-  String get musicMetadataSubtitle => 'Review song titles, artists, albums and quality tags.';
+  String get musicMetadataSubtitle =>
+      'Review song titles, artists, albums and quality tags.';
 
   @override
-  String get musicNoMetadataHint => 'After music scanning, you can complete MusicBrainz metadata here.';
+  String get musicNoMetadataHint =>
+      'After music scanning, you can complete MusicBrainz metadata here.';
 
   @override
   String get musicCandidate => 'Candidate';
@@ -9493,13 +9844,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicNoCandidates => 'No candidates found';
 
   @override
-  String get musicNoCandidatesHint => 'Try improving the local title, artist or album, then retry.';
+  String get musicNoCandidatesHint =>
+      'Try improving the local title, artist or album, then retry.';
 
   @override
   String get photoRegenerateThumbnails => 'Regenerate Thumbnails';
 
   @override
-  String get photoRegenerateQueued => 'Thumbnail rebuild queued. Track progress in the task center.';
+  String get photoRegenerateQueued =>
+      'Thumbnail rebuild queued. Track progress in the task center.';
 
   @override
   String get photosActionFailed => 'Action failed. Try again later.';
@@ -9543,7 +9896,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importFailed => 'Import failed';
 
   @override
-  String get importRefreshFailed => 'Import completed, but the list could not be refreshed.';
+  String get importRefreshFailed =>
+      'Import completed, but the list could not be refreshed.';
 
   @override
   String importProcessing(Object count) {
@@ -9608,7 +9962,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerRestoreProgress => 'Restore Reading Progress';
 
   @override
-  String get readerRestoreProgressConfirm => 'Restore to this version\'s reading progress? Current progress will be overwritten.';
+  String get readerRestoreProgressConfirm =>
+      'Restore to this version\'s reading progress? Current progress will be overwritten.';
 
   @override
   String get readerConfirmRestore => 'Restore';
@@ -9628,7 +9983,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNoVersionHistory => 'No version history';
 
   @override
-  String get readerVersionHistoryHint => 'Versions are automatically recorded when reading progress changes';
+  String get readerVersionHistoryHint =>
+      'Versions are automatically recorded when reading progress changes';
 
   @override
   String get readerRestoreThisVersion => 'Restore this version';
@@ -9649,10 +10005,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSubtitleImportFailed => 'Unable to read the subtitle file';
 
   @override
-  String get videoSubtitleFileTooLarge => 'Subtitle files must be 2 MB or smaller';
+  String get videoSubtitleFileTooLarge =>
+      'Subtitle files must be 2 MB or smaller';
 
   @override
-  String get videoSubtitleNoCues => 'No supported timed captions were found in this file';
+  String get videoSubtitleNoCues =>
+      'No supported timed captions were found in this file';
 
   @override
   String videoAudioTrackNumber(int index) {
@@ -9740,7 +10098,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoHeroCenterTitle => 'Media Library';
 
   @override
-  String get videoHeroCenterSubtitle => 'Select a title to view its details and start playback.';
+  String get videoHeroCenterSubtitle =>
+      'Select a title to view its details and start playback.';
 
   @override
   String get filePurgeDeleteTitle => 'Permanently delete?';
@@ -9765,7 +10124,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoLocalLibrarySources => 'Local direct media libraries';
 
   @override
-  String get videoLocalLibrarySourcesSubtitle => 'Reference read-only deployment mounts directly; original movies are not copied to MinIO.';
+  String get videoLocalLibrarySourcesSubtitle =>
+      'Reference read-only deployment mounts directly; original movies are not copied to MinIO.';
 
   @override
   String get videoLibrarySourcesTitle => 'Media sources';
@@ -9788,25 +10148,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoEditLibrarySource => 'Edit source';
 
   @override
-  String get videoStorageLocationUnavailable => 'Storage locations could not be loaded';
+  String get videoStorageLocationUnavailable =>
+      'Storage locations could not be loaded';
 
   @override
   String get videoNoStorageLocation => 'No local storage location is available';
 
   @override
-  String get videoNoStorageLocationHint => 'Ask a system administrator to configure and enable a read-only local mount in Storage Management.';
+  String get videoNoStorageLocationHint =>
+      'Ask a system administrator to configure and enable a read-only local mount in Storage Management.';
 
   @override
   String get videoLoadSourcesFailed => 'Library sources could not be loaded';
 
   @override
-  String get videoNoLibrarySources => 'No local media library source has been configured.';
+  String get videoNoLibrarySources =>
+      'No local media library source has been configured.';
 
   @override
   String get videoLibraryType => 'Library type';
 
   @override
-  String get videoLibraryTypeHint => 'The type selects the scanner and hierarchy; existing sources cannot change it directly.';
+  String get videoLibraryTypeHint =>
+      'The type selects the scanner and hierarchy; existing sources cannot change it directly.';
 
   @override
   String get videoLibraryTypeMovie => 'Movie';
@@ -9860,7 +10224,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoScanThisSource => 'Discover updates';
 
   @override
-  String get videoReviewLibrarySource => 'Review discoveries and add selected media';
+  String get videoReviewLibrarySource =>
+      'Review discoveries and add selected media';
 
   @override
   String get videoBrowseRelativeDirectory => 'Browse safe directories';
@@ -9881,7 +10246,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoNoTrustedMount => 'No trusted mount available';
 
   @override
-  String get videoNoTrustedMountHint => 'Register a mount in deployment config first and make sure it is available. The mount root is registered as a storage location automatically on creation.';
+  String get videoNoTrustedMountHint =>
+      'Register a mount in deployment config first and make sure it is available. The mount root is registered as a storage location automatically on creation.';
 
   @override
   String get videoBrowseMountDirectory => 'Browse mount directories';
@@ -9890,7 +10256,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoDiscoveryTitle => 'Discovery and import';
 
   @override
-  String get videoReviewSelectionHint => 'Select a series, season, or episode. Only confirmed selections are added to the library.';
+  String get videoReviewSelectionHint =>
+      'Select a series, season, or episode. Only confirmed selections are added to the library.';
 
   @override
   String get videoLocalDiscoveryTask => 'Local media discovery';
@@ -9902,16 +10269,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoAwaitingReview => 'Awaiting review';
 
   @override
-  String get videoDiscoveryEmpty => 'No discovery result yet. Discovering creates candidates without immediately adding them.';
+  String get videoDiscoveryEmpty =>
+      'No discovery result yet. Discovering creates candidates without immediately adding them.';
 
   @override
-  String get videoDiscoveryRunning => 'Discovering media files. Leaving this screen does not stop the background task.';
+  String get videoDiscoveryRunning =>
+      'Discovering media files. Leaving this screen does not stop the background task.';
 
   @override
-  String get videoDiscoveryFailed => 'Discovery failed. Check source health and try again.';
+  String get videoDiscoveryFailed =>
+      'Discovery failed. Check source health and try again.';
 
   @override
-  String get videoDiscoveryCancelled => 'The discovery or import task was cancelled.';
+  String get videoDiscoveryCancelled =>
+      'The discovery or import task was cancelled.';
 
   @override
   String videoDiscoveryCandidates(int count) {
@@ -9990,7 +10361,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoUnavailableEmpty => 'No local media is currently missing or unreadable.';
+  String get videoUnavailableEmpty =>
+      'No local media is currently missing or unreadable.';
 
   @override
   String videoUnavailableCount(int count) {
@@ -9998,7 +10370,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoUnavailableLoadFailed => 'Unavailable items could not be loaded';
+  String get videoUnavailableLoadFailed =>
+      'Unavailable items could not be loaded';
 
   @override
   String get videoMissingPending => 'Awaiting missing confirmation';
@@ -10028,19 +10401,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoNoAvailableStorageLocation => 'No storage location available';
 
   @override
-  String get videoNoAvailableStorageLocationHint => 'Add a local storage location and ensure it is enabled before creating a library source.';
+  String get videoNoAvailableStorageLocationHint =>
+      'Add a local storage location and ensure it is enabled before creating a library source.';
 
   @override
   String get videoRelativeDirectory => 'Relative directory';
 
   @override
-  String get videoRelativeDirectoryHint => 'Enter a path within the storage location, for example Movies/4K';
+  String get videoRelativeDirectoryHint =>
+      'Enter a path within the storage location, for example Movies/4K';
 
   @override
   String get videoSourceEnabled => 'Enable this source';
 
   @override
-  String get videoSourceRequiredFields => 'Enter a source name and relative directory';
+  String get videoSourceRequiredFields =>
+      'Enter a source name and relative directory';
 
   @override
   String get videoNeverScanned => 'Never scanned';
@@ -10055,10 +10431,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminReadOnlyMediaMounts => 'Read-only media mounts';
 
   @override
-  String get adminLocalStorageLocationsSubtitle => 'Locations registered automatically for diagnostics and cleanup. Enable or disable media libraries under Trusted mounts above.';
+  String get adminLocalStorageLocationsSubtitle =>
+      'Locations registered automatically for diagnostics and cleanup. Enable or disable media libraries under Trusted mounts above.';
 
   @override
-  String get adminNoLocalStorageLocations => 'No read-only local storage location has been configured.';
+  String get adminNoLocalStorageLocations =>
+      'No read-only local storage location has been configured.';
 
   @override
   String get adminDeleteLocalStorageLocation => 'Delete storage location';
@@ -10067,25 +10445,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminMountKey => 'Mount key';
 
   @override
-  String get adminMountKeyHint => 'Must match a key under file.local-media.mounts in application.yml';
+  String get adminMountKeyHint =>
+      'Must match a key under file.local-media.mounts in application.yml';
 
   @override
   String get adminAutoCreateLibrarySource => 'Create video library source';
 
   @override
-  String get adminAutoCreateLibrarySourceHint => 'Automatically create a matching video library source after the mount location is created';
+  String get adminAutoCreateLibrarySourceHint =>
+      'Automatically create a matching video library source after the mount location is created';
 
   @override
   String get adminRelativeRoot => 'Relative root';
 
   @override
-  String get adminRelativeRootHint => 'Enter a directory inside the mount; use . for the mount root';
+  String get adminRelativeRootHint =>
+      'Enter a directory inside the mount; use . for the mount root';
 
   @override
-  String get adminLocalStorageSecurityHint => 'Absolute paths are supplied by deployment configuration; this screen can only select a relative directory in an approved mount.';
+  String get adminLocalStorageSecurityHint =>
+      'Absolute paths are supplied by deployment configuration; this screen can only select a relative directory in an approved mount.';
 
   @override
-  String get adminLocalStorageRequiredFields => 'Enter a name, mount key, and relative root';
+  String get adminLocalStorageRequiredFields =>
+      'Enter a name, mount key, and relative root';
 
   @override
   String get adminCancel => 'Cancel';
@@ -10094,7 +10477,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosTaskNotFound => 'This task is no longer available.';
 
   @override
-  String get photosTaskMonitorTimedOut => 'Status monitoring timed out. The background task may still be running.';
+  String get photosTaskMonitorTimedOut =>
+      'Status monitoring timed out. The background task may still be running.';
 
   @override
   String get photosRetryStatus => 'Retry status';
@@ -10103,7 +10487,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicQrLoginTitle => 'Netease Cloud Music login';
 
   @override
-  String get musicQrLoginInstruction => 'Open the Netease Cloud Music app and scan this QR code.';
+  String get musicQrLoginInstruction =>
+      'Open the Netease Cloud Music app and scan this QR code.';
 
   @override
   String get musicQrWaiting => 'Waiting for scan…';
@@ -10115,10 +10500,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicQrConfirmedSyncing => 'Confirmed — syncing your library…';
 
   @override
-  String get musicQrExpired => 'The QR code expired. Start login again to get a new code.';
+  String get musicQrExpired =>
+      'The QR code expired. Start login again to get a new code.';
 
   @override
-  String get musicQrStatusFailed => 'Unable to refresh login status. Check the connection and retry.';
+  String get musicQrStatusFailed =>
+      'Unable to refresh login status. Check the connection and retry.';
 
   @override
   String get musicQrRetry => 'Retry';
@@ -10144,19 +10531,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoLibraryVisibilityPrivate => 'Private';
 
   @override
-  String get videoLibraryVisibilityPrivateHint => 'Only the creator sees this library in media views. Administrators can still manage it here.';
+  String get videoLibraryVisibilityPrivateHint =>
+      'Only the creator sees this library in media views. Administrators can still manage it here.';
 
   @override
   String get videoLibraryVisibilitySelected => 'Selected users';
 
   @override
-  String get videoLibraryVisibilitySelectedHint => 'Only the users selected below can browse and play this library.';
+  String get videoLibraryVisibilitySelectedHint =>
+      'Only the users selected below can browse and play this library.';
 
   @override
   String get videoLibraryVisibilityMembers => 'All members';
 
   @override
-  String get videoLibraryVisibilityMembersHint => 'Members and administrators with media read access are included. Guests are not included automatically.';
+  String get videoLibraryVisibilityMembersHint =>
+      'Members and administrators with media read access are included. Guests are not included automatically.';
 
   @override
   String get videoLibraryAccessSearch => 'Search username or display name';
@@ -10194,7 +10584,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoLibrarySourceTypeLabel => 'Media type';
 
   @override
-  String get adminTrustedMountUnavailable => 'No configured mount is available. Check application.yml or the environment variables, then restart the backend.';
+  String get adminTrustedMountUnavailable =>
+      'No configured mount is available. Check application.yml or the environment variables, then restart the backend.';
 
   @override
   String get adminChooseRelativeFolder => 'Choose relative folder';
@@ -10238,7 +10629,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosGroupsSubtitle => 'Browse your photo timeline';
 
   @override
-  String get photosGroupsEmptyHint => 'Months and photo counts appear here once you have photos.';
+  String get photosGroupsEmptyHint =>
+      'Months and photo counts appear here once you have photos.';
 
   @override
   String get photosViewGroups => 'Groups';
@@ -10272,7 +10664,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosDeleteForeverConfirmTitle => 'Delete Forever?';
 
   @override
-  String get photosDeleteForeverConfirmBody => 'This photo will be permanently deleted. This cannot be undone.';
+  String get photosDeleteForeverConfirmBody =>
+      'This photo will be permanently deleted. This cannot be undone.';
 
   @override
   String get photosMoveToTrashTitle => 'Move to Trash?';
@@ -10283,7 +10676,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get photosMoveToTrashBodyOne => 'This photo will be moved to the Trash. You can restore it within 30 days.';
+  String get photosMoveToTrashBodyOne =>
+      'This photo will be moved to the Trash. You can restore it within 30 days.';
 
   @override
   String get photosMoveToTrashAction => 'Move to Trash';
@@ -10360,7 +10754,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosFrameLocationsEmpty => 'No locations yet';
 
   @override
-  String get photosFrameLocationsEmptyHint => 'Photos with location details will appear here';
+  String get photosFrameLocationsEmptyHint =>
+      'Photos with location details will appear here';
 
   @override
   String get photosFrameTagsEmpty => 'No tags yet';
@@ -10372,7 +10767,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosFrameTrashEmpty => 'Trash is empty';
 
   @override
-  String get photosFrameTrashEmptyHint => 'Deleted photos stay here for 30 days';
+  String get photosFrameTrashEmptyHint =>
+      'Deleted photos stay here for 30 days';
 
   @override
   String photosFrameStatsPhotos(Object count) {
@@ -10415,7 +10811,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosRelCooccurTitle => 'Related entities';
 
   @override
-  String get photosRelHint => 'Tap an entity to inspect relations; View all filters the library by that entity.';
+  String get photosRelHint =>
+      'Tap an entity to inspect relations; View all filters the library by that entity.';
 
   @override
   String videoRedesignItemsCount(int count) {
@@ -10491,10 +10888,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoRedesignNoFavorites => 'No favorites yet';
 
   @override
-  String get videoRedesignNoFavoritesHint => 'Tap the favorite button while playing';
+  String get videoRedesignNoFavoritesHint =>
+      'Tap the favorite button while playing';
 
   @override
-  String get videoRedesignNoHistoryHint => 'Your watch records will appear here';
+  String get videoRedesignNoHistoryHint =>
+      'Your watch records will appear here';
 
   @override
   String get videoRedesignSubtitlesEn => 'Subtitles';
@@ -10575,7 +10974,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoDetailPlayNextEpisode => 'Play next episode';
 
   @override
-  String get videoDetailNoPlayableEpisode => 'No playable episodes in this series';
+  String get videoDetailNoPlayableEpisode =>
+      'No playable episodes in this series';
 
   @override
   String get videoEpisodeFileMissing => 'File missing';
@@ -10590,10 +10990,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoEpisodeCheckLibrarySource => 'Check library source';
 
   @override
-  String get videoProgressSyncDeferred => 'Progress was not synced and kept on this device';
+  String get videoProgressSyncDeferred =>
+      'Progress was not synced and kept on this device';
 
   @override
-  String get readerTtsUnavailable => 'Read aloud is unavailable. Check system TTS or try again later';
+  String get readerTtsUnavailable =>
+      'Read aloud is unavailable. Check system TTS or try again later';
 
   @override
   String get videoEmptyImportMedia => 'Import media';
@@ -10604,13 +11006,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get videoSearchNoHitsLoadMore => 'Not found in loaded results. Load more or clear filters';
+  String get videoSearchNoHitsLoadMore =>
+      'Not found in loaded results. Load more or clear filters';
 
   @override
   String get readerGoToLibrary => 'Go to library';
 
   @override
-  String get readerSearchTruncated => 'Showing first 100 matches only. Narrow your search';
+  String get readerSearchTruncated =>
+      'Showing first 100 matches only. Narrow your search';
 
   @override
   String get readerShortcutsTouchTitle => 'Touch gestures';
@@ -10671,7 +11075,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoMetaFieldOverview => 'Overview';
 
   @override
-  String get readerComicManifestLoadFailed => 'Failed to load the comic manifest, please retry later';
+  String get readerComicManifestLoadFailed =>
+      'Failed to load the comic manifest, please retry later';
 
   @override
   String readerComicParseFailedWithReason(Object reason) {
@@ -10679,7 +11084,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readerComicParseFailed => 'Comic parsing failed, retry sources on the detail page';
+  String get readerComicParseFailed =>
+      'Comic parsing failed, retry sources on the detail page';
 
   @override
   String readerComicPartialFailedWithReason(Object reason) {
@@ -10687,10 +11093,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readerComicPartialFailed => 'Some comic sources failed to parse, handle failed sources on the detail page';
+  String get readerComicPartialFailed =>
+      'Some comic sources failed to parse, handle failed sources on the detail page';
 
   @override
-  String get readerComicEmptyManifest => 'Comic content is empty or the manifest has not been generated';
+  String get readerComicEmptyManifest =>
+      'Comic content is empty or the manifest has not been generated';
 
   @override
   String get readerComicEmpty => 'Comic content is empty';
@@ -10726,7 +11134,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorOperationFailed => 'Operation failed';
 
   @override
-  String get errorNetworkTimeout => 'Request timed out. Check your network and try again';
+  String get errorNetworkTimeout =>
+      'Request timed out. Check your network and try again';
 
   @override
   String get errorNetworkError => 'Network error. Please try again later';
@@ -10756,7 +11165,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorUploadUrlMissing => 'Invalid upload URL';
 
   @override
-  String get errorSecurityScanFailed => 'Security scan did not finish. The file is kept; check the library later or import again.';
+  String get errorSecurityScanFailed =>
+      'Security scan did not finish. The file is kept; check the library later or import again.';
 
   @override
   String get errorOtherCategory => 'Other';
@@ -10778,16 +11188,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get errorServiceUnavailable => 'Service temporarily unavailable. Please try again later; files remain safely isolated';
+  String get errorServiceUnavailable =>
+      'Service temporarily unavailable. Please try again later; files remain safely isolated';
 
   @override
-  String get errorCannotConnect => 'Cannot reach the backend. Check that the service is running or your network';
+  String get errorCannotConnect =>
+      'Cannot reach the backend. Check that the service is running or your network';
 
   @override
   String get errorRequestCancelled => 'Request cancelled';
 
   @override
-  String get errorBadCertificate => 'Backend certificate validation failed. Check service configuration';
+  String get errorBadCertificate =>
+      'Backend certificate validation failed. Check service configuration';
 
   @override
   String errorServerCode(Object code) {
@@ -10795,13 +11208,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get errorRequestFailedRetry => 'Request failed. Please try again later';
+  String get errorRequestFailedRetry =>
+      'Request failed. Please try again later';
 
   @override
-  String get errorWebPdfTooLarge => 'Web reader supports PDF files up to 128 MiB';
+  String get errorWebPdfTooLarge =>
+      'Web reader supports PDF files up to 128 MiB';
 
   @override
-  String get errorWebBookTooLarge => 'Web reader supports EPUB or TXT files up to 32 MiB';
+  String get errorWebBookTooLarge =>
+      'Web reader supports EPUB or TXT files up to 32 MiB';
 
   @override
   String get errorFileNotFound => 'File not found';
@@ -10843,7 +11259,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopCloseDialogTitle => 'Close OmniNest';
 
   @override
-  String get desktopCloseDialogBody => 'When minimized to the tray, OmniNest keeps running in the background and the window can be restored from the tray at any time.';
+  String get desktopCloseDialogBody =>
+      'When minimized to the tray, OmniNest keeps running in the background and the window can be restored from the tray at any time.';
 
   @override
   String get desktopCloseDialogMinimize => 'Minimize to tray';
@@ -10852,7 +11269,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopCloseDialogExit => 'Exit app';
 
   @override
-  String get desktopCloseDialogRemember => 'Remember my choice and don\'t ask again';
+  String get desktopCloseDialogRemember =>
+      'Remember my choice and don\'t ask again';
 
   @override
   String get desktopCloseBehaviorTitle => 'Window close behavior';
@@ -10873,13 +11291,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverSetupTitle => 'Connect to your OmniNest';
 
   @override
-  String get serverSetupSubtitle => 'Enter your self-hosted server address; first-time setup starts here';
+  String get serverSetupSubtitle =>
+      'Enter your self-hosted server address; first-time setup starts here';
 
   @override
   String get serverSetupAddressLabel => 'Server address';
 
   @override
-  String get serverSetupAddressHint => 'e.g. 192.168.1.10:8080 or https://nest.example.com';
+  String get serverSetupAddressHint =>
+      'e.g. 192.168.1.10:8080 or https://nest.example.com';
 
   @override
   String get serverSetupAdvanced => 'Advanced options';
@@ -10908,25 +11328,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get serverSetupHttpWarning => 'This is a plaintext HTTP connection; HTTPS is recommended for public networks';
+  String get serverSetupHttpWarning =>
+      'This is a plaintext HTTP connection; HTTPS is recommended for public networks';
 
   @override
-  String get serverSetupErrorInvalid => 'The address could not be parsed, please check and retry';
+  String get serverSetupErrorInvalid =>
+      'The address could not be parsed, please check and retry';
 
   @override
-  String get serverSetupErrorHttpsOnly => 'This build only allows HTTPS server addresses';
+  String get serverSetupErrorHttpsOnly =>
+      'This build only allows HTTPS server addresses';
 
   @override
-  String get serverSetupErrorUnreachable => 'Could not reach the server, check the address and network';
+  String get serverSetupErrorUnreachable =>
+      'Could not reach the server, check the address and network';
 
   @override
-  String get serverSetupErrorTimeout => 'Connection timed out, make sure the server is reachable';
+  String get serverSetupErrorTimeout =>
+      'Connection timed out, make sure the server is reachable';
 
   @override
-  String get serverSetupErrorNotOmniNest => 'The target is not an OmniNest server';
+  String get serverSetupErrorNotOmniNest =>
+      'The target is not an OmniNest server';
 
   @override
-  String get serverSetupErrorRejected => 'The server returned an unexpected status, check the address';
+  String get serverSetupErrorRejected =>
+      'The server returned an unexpected status, check the address';
 
   @override
   String get profileSectionServer => 'Server & connection';
@@ -10950,7 +11377,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverPanelChangeTitle => 'Change server?';
 
   @override
-  String get serverPanelChangeBody => 'You will be signed out and local session data cleared, then re-enter the server address.';
+  String get serverPanelChangeBody =>
+      'You will be signed out and local session data cleared, then re-enter the server address.';
 
   @override
   String get serverPanelChangeConfirm => 'Sign out & change';
@@ -10962,19 +11390,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminAuditActionConfigUpdate => 'Config updated';
 
   @override
-  String get adminAuditActionExternalStorageCreate => 'External storage created';
+  String get adminAuditActionExternalStorageCreate =>
+      'External storage created';
 
   @override
-  String get adminAuditActionExternalStorageStatusUpdate => 'External storage status updated';
+  String get adminAuditActionExternalStorageStatusUpdate =>
+      'External storage status updated';
 
   @override
-  String get adminAuditActionExternalStorageDelete => 'External storage deleted';
+  String get adminAuditActionExternalStorageDelete =>
+      'External storage deleted';
 
   @override
   String get adminAuditActionQuotaUpdate => 'Quota updated';
 
   @override
-  String get adminAuditActionRolePermissionsUpdate => 'Role permissions updated';
+  String get adminAuditActionRolePermissionsUpdate =>
+      'Role permissions updated';
 
   @override
   String get adminAuditActionTaskRetry => 'Task retried';
@@ -11049,13 +11481,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminCleanupPreviewCount => 'Estimated rows';
 
   @override
-  String get adminCleanupPhysicalWarning => 'Records beyond the retention window are physically deleted and cannot be recovered.';
+  String get adminCleanupPhysicalWarning =>
+      'Records beyond the retention window are physically deleted and cannot be recovered.';
 
   @override
-  String get adminCleanupExportHint => 'Export the current page as CSV before cleanup to keep a copy.';
+  String get adminCleanupExportHint =>
+      'Export the current page as CSV before cleanup to keep a copy.';
 
   @override
-  String get adminCleanupSessionsHint => 'Only expired and revoked sessions are removed; active sessions are unaffected.';
+  String get adminCleanupSessionsHint =>
+      'Only expired and revoked sessions are removed; active sessions are unaffected.';
 
   @override
   String get adminCleanupTargetSessions => 'Expired & revoked sessions';
@@ -11079,7 +11514,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTaskCancelConfirmTitle => 'Cancel this task';
 
   @override
-  String get adminTaskCancelConfirmMessage => 'The task will stop before execution and cannot be resumed.';
+  String get adminTaskCancelConfirmMessage =>
+      'The task will stop before execution and cannot be resumed.';
 
   @override
   String get adminTaskDiscard => 'Discard';
@@ -11088,7 +11524,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminTaskDiscardTitle => 'Discard DLQ task';
 
   @override
-  String get adminTaskDiscardMessage => 'A discarded task reaches a terminal state and can never be retried.';
+  String get adminTaskDiscardMessage =>
+      'A discarded task reaches a terminal state and can never be retried.';
 
   @override
   String get adminTaskStatusDiscarded => 'Discarded';
@@ -11136,7 +11573,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationFilterAllTooltip => 'View all notifications';
 
   @override
-  String get notificationFilterUnreadTooltip => 'View unread notifications only';
+  String get notificationFilterUnreadTooltip =>
+      'View unread notifications only';
 
   @override
   String notificationTotalSummary(Object count) {
@@ -11186,7 +11624,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationSubtitleAllRead => 'All caught up';
 
   @override
-  String get notificationDeleteConfirmMessage => 'Delete this notification? This cannot be undone.';
+  String get notificationDeleteConfirmMessage =>
+      'Delete this notification? This cannot be undone.';
 
   @override
   String get profileHeaderAccount => 'Account Profile';
@@ -11207,19 +11646,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileHeaderAbout => 'About';
 
   @override
-  String get profileSectionAccountSubtitle => 'Manage your basic profile, avatar and account status.';
+  String get profileSectionAccountSubtitle =>
+      'Manage your basic profile, avatar and account status.';
 
   @override
-  String get profileSectionAppearanceSubtitle => 'Adjust theme, language, font scale and local backdrop.';
+  String get profileSectionAppearanceSubtitle =>
+      'Adjust theme, language, font scale and local backdrop.';
 
   @override
-  String get profileSectionNotificationsSubtitle => 'Configure notification types and foreground toasts.';
+  String get profileSectionNotificationsSubtitle =>
+      'Configure notification types and foreground toasts.';
 
   @override
-  String get profileSectionSecuritySubtitle => 'Manage password, two-factor authentication and active sessions.';
+  String get profileSectionSecuritySubtitle =>
+      'Manage password, two-factor authentication and active sessions.';
 
   @override
-  String get profileSectionServerSubtitle => 'View and switch the connected server.';
+  String get profileSectionServerSubtitle =>
+      'View and switch the connected server.';
 
   @override
   String get profileSectionAboutSubtitle => 'View system version and updates.';
@@ -11297,16 +11741,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileBreadcrumbTitle => 'Profile & Settings';
 
   @override
-  String get videoAutoImportStatusUnknown => 'Import result could not be confirmed yet; check the notification and task center later';
+  String get videoAutoImportStatusUnknown =>
+      'Import result could not be confirmed yet; check the notification and task center later';
 
   @override
-  String get readerAnnotationSaveFailed => 'Failed to save the annotation, please retry';
+  String get readerAnnotationSaveFailed =>
+      'Failed to save the annotation, please retry';
 
   @override
-  String get musicFavoriteToggleFailed => 'Failed to toggle favorite, please retry';
+  String get musicFavoriteToggleFailed =>
+      'Failed to toggle favorite, please retry';
 
   @override
-  String get readerImportCandidatesLoadFailed => 'Failed to load import candidates';
+  String get readerImportCandidatesLoadFailed =>
+      'Failed to load import candidates';
 
   @override
   String syncReplayPendingWarning(Object count) {
@@ -11328,7 +11776,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get profileDisplayNameInvalid => 'Display name must be 1-120 characters';
+  String get profileDisplayNameInvalid =>
+      'Display name must be 1-120 characters';
 
   @override
   String get profileEmailInvalid => 'Invalid email format';
@@ -11342,16 +11791,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationTypeMediaImportCompleted => 'Media import completed';
 
   @override
-  String get notificationTypeMediaImportCompletedDesc => 'An uploaded file was imported into the library automatically';
+  String get notificationTypeMediaImportCompletedDesc =>
+      'An uploaded file was imported into the library automatically';
 
   @override
   String get notificationTypeMediaImportFailed => 'Media import failed';
 
   @override
-  String get notificationTypeMediaImportFailedDesc => 'An uploaded file could not be imported automatically';
+  String get notificationTypeMediaImportFailedDesc =>
+      'An uploaded file could not be imported automatically';
 
   @override
-  String get notificationMediaImportCompleted => 'Media was imported into the library automatically';
+  String get notificationMediaImportCompleted =>
+      'Media was imported into the library automatically';
 
   @override
   String notificationMediaImportCompletedWithName(Object fileName) {
@@ -11359,7 +11811,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get notificationMediaImportFailed => 'Automatic media import failed; check the file and re-upload or import manually';
+  String get notificationMediaImportFailed =>
+      'Automatic media import failed; check the file and re-upload or import manually';
 
   @override
   String notificationMediaImportFailedWithName(Object fileName) {
@@ -11394,7 +11847,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolsTitle => 'Workspace tools';
 
   @override
-  String get toolsSubtitle => 'Pages that have no first-level entry inside their module';
+  String get toolsSubtitle =>
+      'Pages that have no first-level entry inside their module';
 
   @override
   String get toolsIntroEyebrow => 'Supplementary list';
@@ -11403,7 +11857,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolsIntroTitle => 'The less-used entries, in one place.';
 
   @override
-  String get toolsIntroBody => 'Manage files, films, music and this server without leaving the interface you already know.';
+  String get toolsIntroBody =>
+      'Manage files, films, music and this server without leaving the interface you already know.';
 
   @override
   String get toolsGroupFiles => 'Files';
@@ -11687,7 +12142,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get weatherDayTomorrow => 'Tomorrow';
 
   @override
-  String get weatherSheetEnvironmentNote => 'Your visual environment is following local light and weather.';
+  String get weatherSheetEnvironmentNote =>
+      'Your visual environment is following local light and weather.';
 
   @override
   String get bookDetailInLibrary => 'IN YOUR LIBRARY';
@@ -11696,10 +12152,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookDetailHeader => 'Book details';
 
   @override
-  String get readerDetailActionMetadataDesc => 'Title, author, cover and summary';
+  String get readerDetailActionMetadataDesc =>
+      'Title, author, cover and summary';
 
   @override
-  String get readerDetailActionReparseDesc => 'Rebuild cover, metadata and chapters';
+  String get readerDetailActionReparseDesc =>
+      'Rebuild cover, metadata and chapters';
 
   @override
   String bookDetailMeta(String type, int year) {
@@ -11777,25 +12235,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryEmptyPhotosTitle => 'No photos yet';
 
   @override
-  String get libraryEmptyPhotosMessage => 'Import or upload to see your moments here.';
+  String get libraryEmptyPhotosMessage =>
+      'Import or upload to see your moments here.';
 
   @override
   String get libraryEmptyFavoritesTitle => 'No favorites yet';
 
   @override
-  String get libraryEmptyFavoritesMessage => 'Long-press a photo to favorite it.';
+  String get libraryEmptyFavoritesMessage =>
+      'Long-press a photo to favorite it.';
 
   @override
   String get libraryEmptyMoviesTitle => 'Nothing to watch';
 
   @override
-  String get libraryEmptyMoviesMessage => 'Register a library source and scan to build your cinema.';
+  String get libraryEmptyMoviesMessage =>
+      'Register a library source and scan to build your cinema.';
 
   @override
   String get libraryEmptyMusicTitle => 'No music yet';
 
   @override
-  String get libraryEmptyMusicMessage => 'Import tracks and they will land right here.';
+  String get libraryEmptyMusicMessage =>
+      'Import tracks and they will land right here.';
 
   @override
   String get searchEmptyTitle => 'No matches yet';
@@ -11826,7 +12288,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryEmptyBooksTitle => 'No books yet';
 
   @override
-  String get libraryEmptyBooksMessage => 'Import EPUB or comics to fill your shelves.';
+  String get libraryEmptyBooksMessage =>
+      'Import EPUB or comics to fill your shelves.';
 
   @override
   String get readerRecentTitle => 'Recently read';
@@ -11849,7 +12312,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicNowPlayingMoreActions => 'More actions';
 
   @override
-  String get musicSourceSyncError => 'Platform sync failed; the local library keeps playing.';
+  String get musicSourceSyncError =>
+      'Platform sync failed; the local library keeps playing.';
 
   @override
   String get musicImmersiveEyebrow => 'Music · Immersive';
@@ -11870,7 +12334,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get spatialStartTitle => 'Start listening';
 
   @override
-  String get spatialStartSubtitle => 'Pick up where you left off, or begin something new';
+  String get spatialStartSubtitle =>
+      'Pick up where you left off, or begin something new';
 
   @override
   String searchResultCount(int count) {

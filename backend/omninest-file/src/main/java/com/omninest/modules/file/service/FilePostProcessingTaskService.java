@@ -56,13 +56,7 @@ public class FilePostProcessingTaskService {
         }
 
         UUID taskId = UUID.randomUUID();
-        Map<String, Object> payload = Map.of(
-                "fileNodeId", event.fileNodeId().toString(),
-                "fileObjectId", event.fileObjectId().toString(),
-                "fileName", event.fileName(),
-                "mimeType", event.mimeType() == null ? "" : event.mimeType(),
-                "sizeBytes", event.sizeBytes()
-        );
+        Map<String, Object> payload = postProcessPayload(event);
         taskRecordService.createQueuedTask(
                 taskId,
                 event.ownerUserId(),
@@ -220,13 +214,24 @@ public class FilePostProcessingTaskService {
         );
     }
 
+    /**
+     * 后处理类任务记录载荷：与 {@link FileUploadedEvent} 同形。
+     *
+     * <p>必须存完整事件字段：管理员重试与死信重投在投递行已过保留期时只能从任务记录
+     * 重建消息，缺 bucket/objectKey/occurredAt 会让重建直接报"缺少可重试载荷字段"，
+     * 表现为"重试按钮对该任务永久失效"。</p>
+     */
     private Map<String, Object> postProcessPayload(FileUploadedEvent event) {
         return Map.of(
                 "fileNodeId", event.fileNodeId().toString(),
                 "fileObjectId", event.fileObjectId().toString(),
+                "ownerUserId", event.ownerUserId().toString(),
+                "bucket", event.bucket() == null ? "" : event.bucket(),
+                "objectKey", event.objectKey() == null ? "" : event.objectKey(),
                 "fileName", event.fileName(),
                 "mimeType", event.mimeType() == null ? "" : event.mimeType(),
-                "sizeBytes", event.sizeBytes()
+                "sizeBytes", event.sizeBytes(),
+                "occurredAt", event.occurredAt() == null ? "" : event.occurredAt().toString()
         );
     }
 

@@ -298,12 +298,31 @@ class TaskRedispatchServiceTest {
     }
 
     @Test
-    void rejectsAutoImportRebuildBecauseRecordPayloadLacksStorageLocator() {
-        // 自动导入的记录载荷不含 bucket/objectKey，只有投递行能原样重放；
-        // 缺投递行时必须拒绝，不能投递一个消费端读不到对象的残缺事件。
-        assertThatThrownBy(() -> redispatchService.rebuildPayload(
+    @SuppressWarnings("unchecked")
+    void rebuildsAutoImportAsNestedFileEvent() {
+        // 投递行已过保留期时只能从记录载荷重建；自动导入的事件形状是 {taskId, file:{...}}。
+        Map<String, Object> payload = redispatchService.rebuildPayload(
                 TASK_ID, OWNER_ID, "MEDIA_AUTO_IMPORT", QueueNames.MEDIA_AUTO_IMPORT_ROUTING_KEY,
-                "{\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\"}"))
+                "{\"fileNodeId\":\"30000000-0000-0000-0000-000000000001\","
+                        + "\"fileObjectId\":\"40000000-0000-0000-0000-000000000001\","
+                        + "\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\","
+                        + "\"bucket\":\"user-files\",\"objectKey\":\"2024/01/a.jpg\","
+                        + "\"fileName\":\"a.jpg\",\"mimeType\":\"image/jpeg\",\"sizeBytes\":1024,"
+                        + "\"occurredAt\":\"2026-06-01T10:00:00Z\"}");
+
+        assertThat(payload).containsEntry("taskId", TASK_ID.toString());
+        Map<String, Object> file = (Map<String, Object>) payload.get("file");
+        assertThat(file)
+                .containsEntry("bucket", "user-files")
+                .containsEntry("objectKey", "2024/01/a.jpg")
+                .containsEntry("ownerUserId", "10000000-0000-0000-0000-000000000001");
+    }
+
+    /** 恢复索引事件不落任务记录，重建分支必须拒绝而不是投一个错误形状。 */
+    @Test
+    void rejectsRestoreIndexRebuildBecauseNoTaskRecordExists() {
+        assertThatThrownBy(() -> redispatchService.rebuildPayload(
+                TASK_ID, OWNER_ID, "FILE_RESTORE_INDEX", QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY, "{}"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不支持自动重新投递");
     }

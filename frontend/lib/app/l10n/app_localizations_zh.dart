@@ -2271,6 +2271,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesCopyLinkWithPassword => '复制链接（含密码）';
 
   @override
+  String get filesShareLinkUnrecoverable => '该分享的链接地址无法再显示，请撤销后重新创建';
+
+  @override
   String get filesCopyLinkOnly => '仅复制链接';
 
   @override

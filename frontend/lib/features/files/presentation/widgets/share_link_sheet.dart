@@ -447,7 +447,12 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     final hosted = !widget.embedded && MobileShellScope.isHosted(context);
     // 基址解析完成前先占位（复制按钮同时禁用）。
     final baseUrl = _shareBaseUrl;
-    final shareUrl = baseUrl == null ? null : '$baseUrl/#/s/${share.shareCode}';
+    // 早期分享没落令牌密文，地址已不可回显：此时不给复制入口，
+    // 否则复制出去的是打不开的链接（分享码为空拼出的 /s/ 地址必然 404）。
+    final shareUrl =
+        baseUrl == null || share.shareCode.isEmpty
+            ? null
+            : '$baseUrl/#/s/${share.shareCode}';
     final hasPassword = share.generatedPassword != null;
 
     return Column(
@@ -474,7 +479,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      shareUrl ?? '…',
+                      shareUrl ??
+                          (share.shareCode.isEmpty
+                              ? l10n.filesShareLinkUnrecoverable
+                              : '…'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
