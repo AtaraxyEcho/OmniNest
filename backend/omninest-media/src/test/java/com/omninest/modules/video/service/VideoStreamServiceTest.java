@@ -41,7 +41,7 @@ class VideoStreamServiceTest {
         item.setOwnerUserId(OWNER_ID);
         item.setAudioCodec("ac3");
 
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(mediaContentAccessService.findReadableVideo(OWNER_ID, VIDEO_ITEM_ID))
                 .thenReturn(Optional.of(item));
 
         boolean result = service.needsTranscode(OWNER_ID, VIDEO_ITEM_ID);
@@ -57,7 +57,7 @@ class VideoStreamServiceTest {
         item.setOwnerUserId(OWNER_ID);
         item.setAudioCodec("aac");
 
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(mediaContentAccessService.findReadableVideo(OWNER_ID, VIDEO_ITEM_ID))
                 .thenReturn(Optional.of(item));
 
         boolean result = service.needsTranscode(OWNER_ID, VIDEO_ITEM_ID);
@@ -68,7 +68,7 @@ class VideoStreamServiceTest {
     @Test
     void needsTranscode_returnsFalseWhenItemNotFound() {
         // 视频条目不存在时返回 false
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(mediaContentAccessService.findReadableVideo(OWNER_ID, VIDEO_ITEM_ID))
                 .thenReturn(Optional.empty());
 
         boolean result = service.needsTranscode(OWNER_ID, VIDEO_ITEM_ID);

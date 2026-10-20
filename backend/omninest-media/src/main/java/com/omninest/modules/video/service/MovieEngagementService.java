@@ -6,6 +6,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.MediaSeriesFavorite;
@@ -89,9 +90,12 @@ public class MovieEngagementService {
             return List.of();
         }
         List<UUID> videoItemIds = favorites.stream().map(MediaVideoFavorite::getVideoItemId).toList();
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
         Map<UUID, MediaVideoItem> itemIndex = videoItemRepository.findReadableByIds(
                         ownerUserId,
-                        mediaLibraryAccessService.findReadableLibraryIds(ownerUserId),
+                        scope.sharedSpaceReadable(),
+                        SpaceType.SHARED,
+                        scope.librarySourceIds(),
                         videoItemIds
                 )
                 .stream()
@@ -162,9 +166,12 @@ public class MovieEngagementService {
             return List.of();
         }
         List<UUID> videoItemIds = histories.stream().map(MediaWatchHistory::getVideoItemId).distinct().toList();
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
         List<MediaVideoItem> items = videoItemRepository.findReadableByIds(
                 ownerUserId,
-                mediaLibraryAccessService.findReadableLibraryIds(ownerUserId),
+                scope.sharedSpaceReadable(),
+                SpaceType.SHARED,
+                scope.librarySourceIds(),
                 videoItemIds
         );
         Map<UUID, MovieVideoItemDto> itemIndex = videoItemDtoConverter.toVideoDtos(ownerUserId, items).stream()
@@ -269,9 +276,12 @@ public class MovieEngagementService {
             return List.of();
         }
         List<UUID> videoItemIds = collectionItems.stream().map(MediaVideoCollectionItem::getVideoItemId).toList();
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
         Map<UUID, MediaVideoItem> itemIndex = videoItemRepository.findReadableByIds(
                         ownerUserId,
-                        mediaLibraryAccessService.findReadableLibraryIds(ownerUserId),
+                        scope.sharedSpaceReadable(),
+                        SpaceType.SHARED,
+                        scope.librarySourceIds(),
                         videoItemIds
                 )
                 .stream()

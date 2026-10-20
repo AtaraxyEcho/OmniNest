@@ -16,49 +16,7 @@ import org.springframework.data.repository.query.Param;
 public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, UUID> {
     long countByLibrarySourceId(UUID librarySourceId);
 
-    @Query("""
-            select count(i) from MediaVideoItem i
-            join FileNode file on i.fileNodeId = file.id
-            where i.ownerUserId = :ownerUserId and i.mediaType = :mediaType
-              and i.sourceVideoItemId is null and file.deleted = false
-            """)
-    long countByOwnerUserIdAndMediaType(@Param("ownerUserId") UUID ownerUserId, @Param("mediaType") String mediaType);
-
-    @Query("""
-            select count(i) from MediaVideoItem i
-            join FileNode file on i.fileNodeId = file.id
-            where i.ownerUserId = :ownerUserId and i.metadataStatus = :metadataStatus
-              and i.sourceVideoItemId is null and file.deleted = false
-            """)
-    long countByOwnerUserIdAndMetadataStatus(@Param("ownerUserId") UUID ownerUserId, @Param("metadataStatus") String metadataStatus);
-
     // 库列表查询：排除派生版本（sourceVideoItemId IS NULL = 仅原始条目）
-
-    @Query("""
-            select i from MediaVideoItem i
-            join FileNode file on i.fileNodeId = file.id
-            where i.ownerUserId = :ownerUserId and i.sourceVideoItemId is null and file.deleted = false
-            order by i.updatedAt desc
-            """)
-    List<MediaVideoItem> findTop12ByOwnerUserIdOrderByUpdatedAtDesc(@Param("ownerUserId") UUID ownerUserId);
-
-    @Query("""
-            select i from MediaVideoItem i
-            join FileNode file on i.fileNodeId = file.id
-            where i.ownerUserId = :ownerUserId and i.mediaType = :mediaType
-              and i.sourceVideoItemId is null and file.deleted = false
-            order by i.updatedAt desc
-            """)
-    List<MediaVideoItem> findByOwnerUserIdAndMediaTypeOrderByUpdatedAtDesc(@Param("ownerUserId") UUID ownerUserId, @Param("mediaType") String mediaType);
-
-    @Query("""
-            select i from MediaVideoItem i
-            join FileNode file on i.fileNodeId = file.id
-            where i.ownerUserId = :ownerUserId and i.updatedAt > :updatedAt
-              and i.sourceVideoItemId is null and file.deleted = false
-            order by i.updatedAt desc
-            """)
-    List<MediaVideoItem> findByOwnerUserIdAndUpdatedAtAfterOrderByUpdatedAtDesc(@Param("ownerUserId") UUID ownerUserId, @Param("updatedAt") Instant updatedAt);
 
     @Query("""
             select i from MediaVideoItem i
@@ -66,12 +24,16 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             where i.mediaType = :mediaType
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             order by i.updatedAt desc
             """)
     List<MediaVideoItem> findReadableOriginalsByMediaType(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("mediaType") String mediaType
     );
@@ -83,11 +45,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
               and i.sourceVideoItemId is null
               and file.deleted = false
               and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     Page<MediaVideoItem> findReadableOriginalsByMediaType(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("mediaType") String mediaType,
             @Param("metadataStatus") String metadataStatus,
@@ -121,11 +87,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
               and (:metadataStatus is null or i.metadataStatus = :metadataStatus)
               and (:titlePattern is null
                    or lower(coalesce(movie.title, episode.title, file.name)) like :titlePattern escape '\\')
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     Page<MediaVideoItem> searchReadableOriginalsByMediaType(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("mediaType") String mediaType,
             @Param("metadataStatus") String metadataStatus,
@@ -138,12 +108,16 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             join FileNode file on i.fileNodeId = file.id
             where i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             order by i.updatedAt desc
             """)
     List<MediaVideoItem> findReadableOriginals(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds
     );
 
@@ -152,11 +126,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             join FileNode file on i.fileNodeId = file.id
             where i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     Page<MediaVideoItem> findReadableOriginals(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             Pageable pageable
     );
@@ -167,11 +145,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             where i.mediaType = :mediaType
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     long countReadableOriginalsByMediaType(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("mediaType") String mediaType
     );
@@ -182,11 +164,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             where i.metadataStatus = :metadataStatus
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     long countReadableOriginalsByMetadataStatus(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("metadataStatus") String metadataStatus
     );
@@ -197,11 +183,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             where i.seriesId is not null
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     long countReadableOriginalSeries(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds
     );
 
@@ -211,12 +201,16 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             where i.updatedAt > :updatedAt
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             order by i.updatedAt desc
             """)
     List<MediaVideoItem> findReadableOriginalsUpdatedAfter(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("updatedAt") Instant updatedAt
     );
@@ -236,25 +230,19 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             where i.seriesId = :seriesId
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             order by i.seasonNumber asc, i.episodeNumber asc
             """)
     List<MediaVideoItem> findReadableBySeriesId(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("seriesId") UUID seriesId
     );
-
-    @Query("""
-            select i from MediaVideoItem i
-            join FileNode file on i.fileNodeId = file.id
-            where i.ownerUserId = :ownerUserId and i.seriesId = :seriesId
-              and i.seasonNumber = :seasonNumber and i.sourceVideoItemId is null
-              and file.deleted = false
-            order by i.episodeNumber asc
-            """)
-    List<MediaVideoItem> findByOwnerUserIdAndSeriesIdAndSeasonNumberOrderByEpisodeNumberAsc(@Param("ownerUserId") UUID ownerUserId, @Param("seriesId") UUID seriesId, @Param("seasonNumber") Integer seasonNumber);
 
     @Query("""
             select i from MediaVideoItem i
@@ -263,12 +251,16 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
               and i.seasonNumber = :seasonNumber
               and i.sourceVideoItemId is null
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             order by i.episodeNumber asc
             """)
     List<MediaVideoItem> findReadableBySeriesIdAndSeasonNumber(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("seriesId") UUID seriesId,
             @Param("seasonNumber") Integer seasonNumber
@@ -297,10 +289,6 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
      * @return 视频业务行
      */
     Optional<MediaVideoItem> findByFileNodeId(UUID fileNodeId);
-
-    List<MediaVideoItem> findByOwnerUserIdAndMovieId(UUID ownerUserId, UUID movieId);
-
-    List<MediaVideoItem> findByOwnerUserIdAndEpisodeId(UUID ownerUserId, UUID episodeId);
 
     // 版本列表查询：仅原始条目（排除派生版本如 AUDIO_ONLY、H265）
     @Query("""
@@ -338,11 +326,15 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
             join FileNode file on i.fileNodeId = file.id
             where i.id in :ids
               and file.deleted = false
-              and ((i.librarySourceId is null and i.ownerUserId = :requesterUserId)
+              and ((i.librarySourceId is null
+                     and (i.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or i.librarySourceId in :librarySourceIds)
             """)
     List<MediaVideoItem> findReadableByIds(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("ids") Collection<UUID> ids
     );
@@ -357,8 +349,6 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
     Optional<MediaVideoItem> findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(UUID ownerUserId, UUID sourceVideoItemId, String versionLabel);
 
     long countByOwnerUserIdAndMovieId(UUID ownerUserId, UUID movieId);
-
-    long countByOwnerUserIdAndEpisodeId(UUID ownerUserId, UUID episodeId);
 
     long countByOwnerUserIdAndMovieIdAndIdNotIn(
             UUID ownerUserId,
@@ -409,49 +399,6 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
      */
     @Query("SELECT DISTINCT i.seriesId FROM MediaVideoItem i WHERE i.ownerUserId = :ownerUserId AND i.seriesId IN :seriesIds")
     List<UUID> findSeriesIdsWithItems(@Param("ownerUserId") UUID ownerUserId, @Param("seriesIds") Collection<UUID> seriesIds);
-
-    @Query("select count(i) from MediaVideoItem i where i.ownerUserId = :ownerUserId and i.seriesId = :seriesId and i.sourceVideoItemId is null")
-    long countByOwnerUserIdAndSeriesId(@Param("ownerUserId") UUID ownerUserId, @Param("seriesId") UUID seriesId);
-
-    /**
-     * 查询某部电影的所有可用版本（个人 + 共享）。
-     */
-    @Query("""
-            SELECT vi FROM MediaVideoItem vi
-            JOIN FileNode f ON vi.fileNodeId = f.id
-            WHERE vi.movieId = :movieId
-            AND f.deleted = false
-            AND (
-                vi.ownerUserId = :userId
-                OR f.spaceType = :sharedType
-            )
-            ORDER BY vi.resolutionHeight DESC
-            """)
-    List<MediaVideoItem> findVideoVersionsForMovie(@Param("movieId") UUID movieId, @Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
-
-    @Query("""
-            select item.id as videoItemId,
-                   item.fileNodeId as fileNodeId,
-                   item.librarySourceId as librarySourceId,
-                   coalesce(movie.title, episode.title, file.name) as title,
-                   ref.availabilityStatus as availabilityStatus,
-                   ref.missingSince as missingSince,
-                   ref.missingConfirmations as missingConfirmations
-              from MediaVideoItem item
-              join FileNode file on item.fileNodeId = file.id
-              join FileContentRef ref on item.fileNodeId = ref.fileNodeId
-              left join MediaMovie movie on item.movieId = movie.id
-              left join MediaTvEpisode episode on item.episodeId = episode.id
-             where item.ownerUserId = :ownerUserId
-               and item.librarySourceId is not null
-               and file.deleted = false
-               and ref.availabilityStatus <> 'AVAILABLE'
-             order by ref.missingSince desc, item.updatedAt desc
-            """)
-    Page<UnavailableMediaProjection> findUnavailableLocalMedia(
-            @Param("ownerUserId") UUID ownerUserId,
-            Pageable pageable
-    );
 
     @Query("""
             select item.id as videoItemId,

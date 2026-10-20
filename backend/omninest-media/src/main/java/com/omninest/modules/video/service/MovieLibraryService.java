@@ -21,6 +21,7 @@ import com.omninest.modules.video.domain.MediaTvEpisode;
 import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaVideoItem;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
@@ -117,15 +118,16 @@ public class MovieLibraryService {
      * 从数据库加载视频仪表盘数据。
      */
     private MovieDashboardDto loadDashboard(UUID ownerUserId) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         MovieStatsDto stats = new MovieStatsDto(
                 videoItemRepository.countReadableOriginalsByMediaType(
-                        ownerUserId, readableLibraryIds, MediaType.MOVIE.getValue()),
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, MediaType.MOVIE.getValue()),
                 videoItemRepository.countReadableOriginalsByMediaType(
-                        ownerUserId, readableLibraryIds, MediaType.EPISODE.getValue()),
-                videoItemRepository.countReadableOriginalSeries(ownerUserId, readableLibraryIds),
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, MediaType.EPISODE.getValue()),
+                videoItemRepository.countReadableOriginalSeries(ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds),
                 videoItemRepository.countReadableOriginalsByMetadataStatus(
-                        ownerUserId, readableLibraryIds, MetadataStatus.FAILED.getValue()),
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, MetadataStatus.FAILED.getValue()),
                 videoFavoriteRepository.countByOwnerUserId(ownerUserId)
                         + seriesFavoriteRepository.countByOwnerUserId(ownerUserId),
                 watchHistoryRepository.countByOwnerUserId(ownerUserId),
@@ -138,7 +140,7 @@ public class MovieLibraryService {
                 Sort.by(Sort.Direction.DESC, "updatedAt").and(Sort.by(Sort.Direction.DESC, "id"))
         );
         List<MediaVideoItem> recentItems = deduplicateBySeries(
-                videoItemRepository.findReadableOriginals(ownerUserId, readableLibraryIds, recentPage).getContent()
+                videoItemRepository.findReadableOriginals(ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, recentPage).getContent()
         ).stream().limit(12).toList();
         List<MovieVideoItemDto> recentlyAdded = videoItemDtoConverter.toVideoDtos(ownerUserId, recentItems);
         List<MediaPlaybackProgress> progresses = progressService.latest(ownerUserId, MediaPlaybackType.VIDEO);
@@ -148,11 +150,12 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> movies(UUID ownerUserId) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         return videoItemDtoConverter.toVideoDtos(
                 ownerUserId,
                 videoItemRepository.findReadableOriginalsByMediaType(
-                        ownerUserId,
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds,
                         MediaType.MOVIE.getValue()
                 )
@@ -210,17 +213,18 @@ public class MovieLibraryService {
         String normalizedStatus = normalizeLibraryMetadataStatus(metadataStatus);
         String titlePattern = buildLibraryTitlePattern(keyword);
         PageRequest pageable = createLibraryPageRequest(page, size, sort);
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         Page<MediaVideoItem> result = titlePattern == null
                 ? videoItemRepository.findReadableOriginalsByMediaType(
-                ownerUserId,
+                ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 normalizedMediaType,
                 normalizedStatus,
                 pageable
         )
                 : videoItemRepository.searchReadableOriginalsByMediaType(
-                ownerUserId,
+                ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 normalizedMediaType,
                 normalizedStatus,
@@ -266,10 +270,11 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> episodes(UUID ownerUserId) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         List<MediaVideoItem> items = deduplicateBySeries(
                 videoItemRepository.findReadableOriginalsByMediaType(
-                        ownerUserId,
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds,
                         MediaType.EPISODE.getValue()
                 ));
@@ -314,9 +319,10 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public List<MovieSeriesDto> seriesByType(UUID ownerUserId, String seriesType) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         List<MediaTvSeries> items = tvSeriesRepository
-                .findActiveReadableBySeriesType(ownerUserId, readableLibraryIds, seriesType);
+                .findActiveReadableBySeriesType(ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, seriesType);
         return toSeriesDtos(ownerUserId, items);
     }
 
@@ -332,9 +338,10 @@ public class MovieLibraryService {
     @Transactional(readOnly = true)
     public Page<MovieSeriesDto> seriesByTypePage(
             UUID ownerUserId, String seriesType, int page, int size, String keyword) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         Page<MediaTvSeries> items = tvSeriesRepository.findPageByActiveReadableAndSeriesType(
-                ownerUserId,
+                ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 seriesType,
                 buildLibraryTitlePattern(keyword),
@@ -382,9 +389,10 @@ public class MovieLibraryService {
             return List.of();
         }
         List<UUID> seriesIds = favorites.stream().map(MediaSeriesFavorite::getSeriesId).toList();
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         Map<UUID, MediaTvSeries> seriesIndex = tvSeriesRepository
-                .findActiveReadableByIdIn(seriesIds, ownerUserId, readableLibraryIds)
+                .findActiveReadableByIdIn(seriesIds, ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds)
                 .stream()
                 .collect(Collectors.toMap(
                         MediaTvSeries::getId,
@@ -468,9 +476,10 @@ public class MovieLibraryService {
     public List<MovieVideoItemDto> recent(UUID ownerUserId, int days) {
         int safeDays = days <= 0 ? 30 : Math.min(days, 365);
         Instant since = Instant.now().minus(safeDays, ChronoUnit.DAYS);
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         List<MediaVideoItem> items = deduplicateBySeries(videoItemRepository.findReadableOriginalsUpdatedAfter(
-                ownerUserId,
+                ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 since
         ));
@@ -510,9 +519,10 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> episodes(UUID ownerUserId, UUID seriesId) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         List<MediaVideoItem> items = videoItemRepository.findReadableBySeriesId(
-                ownerUserId,
+                ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 seriesId
         );
@@ -691,9 +701,10 @@ public class MovieLibraryService {
                         LinkedHashMap::new
         ));
         List<UUID> videoItemIds = progressItemIds.values().stream().distinct().toList();
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         List<MediaVideoItem> items = videoItemRepository.findReadableByIds(
-                ownerUserId,
+                ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 videoItemIds
         );
@@ -883,10 +894,11 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public MovieSeriesDetailDto seriesDetail(UUID ownerUserId, UUID seriesId) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         MediaTvSeries series = tvSeriesRepository.findActiveReadableById(
                         seriesId,
-                        ownerUserId,
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds
                 )
                 .orElseThrow(() -> new BusinessException(
@@ -915,10 +927,11 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public MovieSeasonDetailDto seasonDetail(UUID ownerUserId, UUID seriesId, int seasonNumber) {
-        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
+        Set<UUID> readableLibraryIds = scope.librarySourceIds();
         MediaTvSeries series = tvSeriesRepository.findActiveReadableById(
                         seriesId,
-                        ownerUserId,
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds
                 )
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "剧集不存在"));
@@ -935,7 +948,7 @@ public class MovieLibraryService {
         MovieSeasonDto seasonDto = toSeasonDto(catalogOwnerUserId, season);
         List<MediaVideoItem> episodes = videoItemRepository
                 .findReadableBySeriesIdAndSeasonNumber(
-                        ownerUserId,
+                        ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds,
                         seriesId,
                         seasonNumber

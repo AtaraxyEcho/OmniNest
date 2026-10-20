@@ -5,6 +5,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.domain.StorageLocation;
+import com.omninest.modules.file.service.SharedSpaceService;
 import com.omninest.modules.file.service.StorageLocationService;
 import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.UserDirectoryDtos.UserAuthorizationProfile;
@@ -41,6 +42,7 @@ public class MediaLibraryAccessService {
     private final MediaLibraryAccessRepository accessRepository;
     private final UserDirectoryQueryService userDirectoryQueryService;
     private final StorageLocationService storageLocationService;
+    private final SharedSpaceService sharedSpaceService;
 
     /** 校验媒体库管理权限。 */
     @Transactional(readOnly = true)
@@ -101,6 +103,39 @@ public class MediaLibraryAccessService {
             }
         }
         return Set.copyOf(result);
+    }
+
+    /**
+     * 一次算出请求者的影视列表可见性范围。
+     *
+     * <p>条目按来源二分：本地媒体库来源认库可见性（{@link #findReadableLibraryIds}），
+     * 网盘文件来源认网盘空间（本人文件或共享空间可浏览）。共享空间的角色矩阵每请求
+     * 只解析一次，列表查询把它当布尔量传入，避免逐条查询重复判定。</p>
+     *
+     * @param requesterUserId 请求用户 ID
+     * @return 可见性范围
+     */
+    @Transactional(readOnly = true)
+    public MediaVisibilityScope visibilityScope(UUID requesterUserId) {
+        return new MediaVisibilityScope(
+                requesterUserId,
+                findReadableLibraryIds(requesterUserId),
+                sharedSpaceService.canBrowse(requesterUserId)
+        );
+    }
+
+    /**
+     * 影视列表可见性范围。
+     *
+     * @param requesterUserId 请求用户 ID
+     * @param librarySourceIds 请求者可读的本地媒体库 ID
+     * @param sharedSpaceReadable 请求者是否可浏览共享空间
+     */
+    public record MediaVisibilityScope(
+            UUID requesterUserId,
+            Set<UUID> librarySourceIds,
+            boolean sharedSpaceReadable
+    ) {
     }
 
     /** 查询媒体库当前访问设置。 */

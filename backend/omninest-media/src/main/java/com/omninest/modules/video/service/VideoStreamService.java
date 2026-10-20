@@ -80,7 +80,7 @@ public class VideoStreamService {
      * 判断指定视频条目的音频编码是否需要 Web 端转码。
      */
     public boolean needsTranscode(UUID ownerUserId, UUID videoItemId) {
-        MediaVideoItem item = videoItemRepository.findByIdAndOwnerUserId(videoItemId, ownerUserId)
+        MediaVideoItem item = mediaContentAccessService.findReadableVideo(ownerUserId, videoItemId)
                 .orElse(null);
         if (item == null) {
             return false;
@@ -142,8 +142,7 @@ public class VideoStreamService {
     public void streamAudioTranscoded(
             UUID ownerUserId, UUID videoItemId, long startSeconds, OutputStream output
     ) {
-        MediaVideoItem item = videoItemRepository.findByIdAndOwnerUserId(videoItemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "视频条目不存在"));
+        MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
 
         String internalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, item.getFileNodeId());
         log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, startSeconds={}",
@@ -211,8 +210,7 @@ public class VideoStreamService {
             UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
             long startSeconds, OutputStream output
     ) {
-        MediaVideoItem sourceItem = videoItemRepository.findByIdAndOwnerUserId(sourceVideoItemId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "视频条目不存在"));
+        MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId);
 
         String videoInternalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, sourceItem.getFileNodeId());
         String audioInternalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, audioFileNodeId);

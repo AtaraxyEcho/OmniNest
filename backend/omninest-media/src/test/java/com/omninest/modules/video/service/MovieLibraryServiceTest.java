@@ -3,6 +3,7 @@ package com.omninest.modules.video.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -18,6 +19,7 @@ import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileContentAvailabilityQueryService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
@@ -62,11 +64,15 @@ import org.springframework.data.domain.Pageable;
  * @author OmniNest
  */
 class MovieLibraryServiceTest {
+
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID MOVIE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID LOGICAL_MOVIE_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
     private static final UUID FILE_NODE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID SERIES_ID = UUID.fromString("60000000-0000-0000-0000-000000000001");
+
+    private static final MediaLibraryAccessService.MediaVisibilityScope SCOPE =
+            new MediaLibraryAccessService.MediaVisibilityScope(OWNER_ID, Set.of(), false);
 
     private final MediaVideoItemRepository videoItemRepository = mock(MediaVideoItemRepository.class);
     private final MediaTvSeriesRepository tvSeriesRepository = mock(MediaTvSeriesRepository.class);
@@ -147,25 +153,27 @@ class MovieLibraryServiceTest {
         progress.setDurationSeconds(7200);
         progress.setUpdatedAt(Instant.parse("2026-05-21T10:00:00Z"));
 
-        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
-        when(videoItemRepository.countReadableOriginalsByMediaType(OWNER_ID, Set.of(), "MOVIE"))
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
+        when(videoItemRepository.countReadableOriginalsByMediaType(OWNER_ID, false, SpaceType.SHARED, Set.of(), "MOVIE"))
                 .thenReturn(1L);
-        when(videoItemRepository.countReadableOriginalsByMediaType(OWNER_ID, Set.of(), "EPISODE"))
+        when(videoItemRepository.countReadableOriginalsByMediaType(OWNER_ID, false, SpaceType.SHARED, Set.of(), "EPISODE"))
                 .thenReturn(0L);
-        when(videoItemRepository.countReadableOriginalSeries(OWNER_ID, Set.of())).thenReturn(0L);
-        when(videoItemRepository.countReadableOriginalsByMetadataStatus(OWNER_ID, Set.of(), "FAILED"))
+        when(videoItemRepository.countReadableOriginalSeries(OWNER_ID, false, SpaceType.SHARED, Set.of())).thenReturn(0L);
+        when(videoItemRepository.countReadableOriginalsByMetadataStatus(OWNER_ID, false, SpaceType.SHARED, Set.of(), "FAILED"))
                 .thenReturn(0L);
         when(videoFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(2L);
         when(watchHistoryRepository.countByOwnerUserId(OWNER_ID)).thenReturn(3L);
         when(videoCollectionRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
         when(seriesFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
         when(progressService.countIncomplete(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(1L);
-        when(videoItemRepository.findReadableOriginals(eq(OWNER_ID), eq(Set.of()), any(Pageable.class)))
+        when(videoItemRepository.findReadableOriginals(
+                eq(OWNER_ID), eq(false), eq(SpaceType.SHARED), eq(Set.of()), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(movie)));
         when(progressService.latest(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(List.of(progress));
         // converter 需要通过 movieRepository.findAllById 加载 movie
         when(movieRepository.findAllById(any())).thenReturn(List.of(logicalMovie));
-        when(videoItemRepository.findReadableByIds(OWNER_ID, Set.of(), List.of(MOVIE_ID)))
+        when(videoItemRepository.findReadableByIds(
+                OWNER_ID, false, SpaceType.SHARED, Set.of(), List.of(MOVIE_ID)))
                 .thenReturn(List.of(movie));
 
         var dashboard = movieLibraryService.dashboard(OWNER_ID);
@@ -208,9 +216,11 @@ class MovieLibraryServiceTest {
 
         when(progressService.latest(OWNER_ID, MediaPlaybackType.VIDEO))
                 .thenReturn(List.of(older, newer));
-        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
         when(videoItemRepository.findReadableByIds(
                 org.mockito.ArgumentMatchers.eq(OWNER_ID),
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any()
         )).thenReturn(List.of(episode9, episode10));
@@ -235,9 +245,11 @@ class MovieLibraryServiceTest {
         MediaMovie logicalMovie = logicalMovie("Inception");
         logicalMovie.setReleaseDate(LocalDate.of(2010, 7, 16));
         logicalMovie.setRating(8.8);
-        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
         when(videoItemRepository.findReadableOriginalsByMediaType(
                 eq(OWNER_ID),
+                eq(false),
+                eq(SpaceType.SHARED),
                 eq(Set.of()),
                 eq("MOVIE"),
                 isNull(),
@@ -269,15 +281,17 @@ class MovieLibraryServiceTest {
 
     @Test
     void seriesByTypePageNormalizesKeywordAndTreatsBlankAsNoFilter() {
-        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
         when(tvSeriesRepository.findPageByActiveReadableAndSeriesType(
-                any(), any(), any(), any(), any(Pageable.class)))
+                any(), anyBoolean(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
         // 大小写归一、去首尾空白，LIKE 通配符按字面量转义：直接透传原始关键词会搜错。
         movieLibraryService.seriesByTypePage(OWNER_ID, "TV", 0, 50, "  Drift%  ");
         verify(tvSeriesRepository).findPageByActiveReadableAndSeriesType(
                 eq(OWNER_ID),
+                eq(false),
+                eq(SpaceType.SHARED),
                 eq(Set.of()),
                 eq("TV"),
                 eq("%drift\\%%"),
@@ -288,6 +302,8 @@ class MovieLibraryServiceTest {
         movieLibraryService.seriesByTypePage(OWNER_ID, "TV", 0, 50, "   ");
         verify(tvSeriesRepository).findPageByActiveReadableAndSeriesType(
                 eq(OWNER_ID),
+                eq(false),
+                eq(SpaceType.SHARED),
                 eq(Set.of()),
                 eq("TV"),
                 isNull(),
@@ -297,7 +313,7 @@ class MovieLibraryServiceTest {
 
     @Test
     void seriesByTypePageRejectsOverlongKeyword() {
-        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
 
         // 前后通配的 LIKE 不走索引，代价随行数与关键词长度相乘；超长输入必须拒绝而不是照查。
         String overlong = "a".repeat(201);
@@ -386,12 +402,13 @@ class MovieLibraryServiceTest {
         oldest.setSeriesId(MOVIE_ID);
         when(seriesFavoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
                 .thenReturn(List.of(newest, oldest));
-        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
         MediaTvSeries series = new MediaTvSeries();
         series.setId(SERIES_ID);
         series.setOwnerUserId(OWNER_ID);
         series.setTitle("Diablo");
-        when(tvSeriesRepository.findActiveReadableByIdIn(any(), eq(OWNER_ID), eq(Set.of())))
+        when(tvSeriesRepository.findActiveReadableByIdIn(
+                any(), eq(OWNER_ID), anyBoolean(), eq(SpaceType.SHARED), eq(Set.of())))
                 .thenReturn(List.of(series));
         when(contentAssetService.primarySeriesAssets(OWNER_ID, List.of(SERIES_ID)))
                 .thenReturn(Map.of());

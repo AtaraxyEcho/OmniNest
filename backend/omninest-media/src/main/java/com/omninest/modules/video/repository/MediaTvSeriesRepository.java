@@ -1,5 +1,6 @@
 package com.omninest.modules.video.repository;
 
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import java.util.Collection;
 import java.util.List;
@@ -14,48 +15,34 @@ import org.springframework.data.repository.query.Param;
 public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UUID> {
     long countByOwnerUserId(UUID ownerUserId);
 
-    /**
-     * 统计至少包含一个活动文件的系列数量。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @return 活动系列数量
-     */
-    @Query("""
-            select count(distinct series.id) from MediaTvSeries series
-            join MediaVideoItem item on item.seriesId = series.id
-            join FileNode file on item.fileNodeId = file.id
-            where series.ownerUserId = :ownerUserId and file.deleted = false
-            """)
-    long countActiveByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
-
     List<MediaTvSeries> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
 
     /**
-     * 查询至少包含一个活动剧集文件的系列。
+     * 查询当前用户可访问且至少包含一个活动剧集文件的系列。
      *
-     * @param ownerUserId 所有者用户 ID
+     * <p>条目按来源二分：本地媒体库来源认库可见性，网盘文件来源认本人文件或共享空间可浏览。</p>
+     *
+     * @param requesterUserId 请求用户 ID
+     * @param sharedSpaceReadable 请求者是否可浏览共享空间
+     * @param sharedSpaceType 共享空间类型常量，与 {@code sharedSpaceReadable} 同用
+     * @param librarySourceIds 请求者可读的媒体库来源 ID
      * @return 活动系列
      */
     @Query("""
             select distinct series from MediaTvSeries series
             join MediaVideoItem item on item.seriesId = series.id
             join FileNode file on item.fileNodeId = file.id
-            where series.ownerUserId = :ownerUserId and file.deleted = false
-            order by series.updatedAt desc
-            """)
-    List<MediaTvSeries> findActiveByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
-
-    @Query("""
-            select distinct series from MediaTvSeries series
-            join MediaVideoItem item on item.seriesId = series.id
-            join FileNode file on item.fileNodeId = file.id
             where file.deleted = false
-              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+              and ((series.librarySourceId is null
+                     and (series.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or series.librarySourceId in :librarySourceIds)
             order by series.updatedAt desc
             """)
     List<MediaTvSeries> findActiveReadable(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds
     );
 
@@ -71,9 +58,12 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
     List<MediaTvSeries> findByOwnerUserIdAndSeriesTypeOrderByUpdatedAtDesc(UUID ownerUserId, String seriesType);
 
     /**
-     * 按类型查询至少包含一个活动剧集文件的系列。
+     * 按类型查询当前用户可访问且至少包含一个活动剧集文件的系列。
      *
-     * @param ownerUserId 所有者用户 ID
+     * @param requesterUserId 请求用户 ID
+     * @param sharedSpaceReadable 请求者是否可浏览共享空间
+     * @param sharedSpaceType 共享空间类型常量，与 {@code sharedSpaceReadable} 同用
+     * @param librarySourceIds 请求者可读的媒体库来源 ID
      * @param seriesType 系列类型
      * @return 活动系列
      */
@@ -81,28 +71,18 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             select distinct series from MediaTvSeries series
             join MediaVideoItem item on item.seriesId = series.id
             join FileNode file on item.fileNodeId = file.id
-            where series.ownerUserId = :ownerUserId
-              and series.seriesType = :seriesType
-              and file.deleted = false
-            order by series.updatedAt desc
-            """)
-    List<MediaTvSeries> findActiveByOwnerUserIdAndSeriesType(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("seriesType") String seriesType
-    );
-
-    @Query("""
-            select distinct series from MediaTvSeries series
-            join MediaVideoItem item on item.seriesId = series.id
-            join FileNode file on item.fileNodeId = file.id
             where series.seriesType = :seriesType
               and file.deleted = false
-              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+              and ((series.librarySourceId is null
+                     and (series.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or series.librarySourceId in :librarySourceIds)
             order by series.updatedAt desc
             """)
     List<MediaTvSeries> findActiveReadableBySeriesType(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("seriesType") String seriesType
     );
@@ -121,7 +101,9 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             where series.seriesType = :seriesType
               and file.deleted = false
               and (:titlePattern is null or lower(series.title) like :titlePattern escape '\\')
-              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+              and ((series.librarySourceId is null
+                     and (series.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or series.librarySourceId in :librarySourceIds)
             order by series.updatedAt desc
             """,
@@ -132,11 +114,15 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             where series.seriesType = :seriesType
               and file.deleted = false
               and (:titlePattern is null or lower(series.title) like :titlePattern escape '\\')
-              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+              and ((series.librarySourceId is null
+                     and (series.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or series.librarySourceId in :librarySourceIds)
             """)
     Page<MediaTvSeries> findPageByActiveReadableAndSeriesType(
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds,
             @Param("seriesType") String seriesType,
             @Param("titlePattern") String titlePattern,
@@ -147,32 +133,28 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
      * 查询当前用户可访问且至少包含一个活动剧集文件的系列详情。
      *
      * @param id 系列 ID
-     * @param ownerUserId 所有者用户 ID
+     * @param requesterUserId 请求用户 ID
+     * @param sharedSpaceReadable 请求者是否可浏览共享空间
+     * @param sharedSpaceType 共享空间类型常量，与 {@code sharedSpaceReadable} 同用
+     * @param librarySourceIds 请求者可读的媒体库来源 ID
      * @return 活动系列
      */
     @Query("""
             select distinct series from MediaTvSeries series
             join MediaVideoItem item on item.seriesId = series.id
             join FileNode file on item.fileNodeId = file.id
-            where series.id = :id and series.ownerUserId = :ownerUserId and file.deleted = false
-            """)
-    Optional<MediaTvSeries> findActiveByIdAndOwnerUserId(
-            @Param("id") UUID id,
-            @Param("ownerUserId") UUID ownerUserId
-    );
-
-    @Query("""
-            select distinct series from MediaTvSeries series
-            join MediaVideoItem item on item.seriesId = series.id
-            join FileNode file on item.fileNodeId = file.id
             where series.id = :id
               and file.deleted = false
-              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+              and ((series.librarySourceId is null
+                     and (series.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or series.librarySourceId in :librarySourceIds)
             """)
     Optional<MediaTvSeries> findActiveReadableById(
             @Param("id") UUID id,
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds
     );
 
@@ -181,6 +163,8 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
      *
      * @param ids 系列 ID 集合
      * @param requesterUserId 请求者用户 ID
+     * @param sharedSpaceReadable 请求者是否可浏览共享空间
+     * @param sharedSpaceType 共享空间类型常量，与 {@code sharedSpaceReadable} 同用
      * @param librarySourceIds 可访问的库来源 ID 集合
      * @return 活动系列列表
      */
@@ -190,12 +174,16 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             join FileNode file on item.fileNodeId = file.id
             where series.id in :ids
               and file.deleted = false
-              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+              and ((series.librarySourceId is null
+                     and (series.ownerUserId = :requesterUserId
+                          or (:sharedSpaceReadable = true and file.spaceType = :sharedSpaceType)))
                    or series.librarySourceId in :librarySourceIds)
             """)
     List<MediaTvSeries> findActiveReadableByIdIn(
             @Param("ids") Collection<UUID> ids,
             @Param("requesterUserId") UUID requesterUserId,
+            @Param("sharedSpaceReadable") boolean sharedSpaceReadable,
+            @Param("sharedSpaceType") SpaceType sharedSpaceType,
             @Param("librarySourceIds") Collection<UUID> librarySourceIds
     );
 

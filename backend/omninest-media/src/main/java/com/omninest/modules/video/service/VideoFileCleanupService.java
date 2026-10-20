@@ -216,9 +216,12 @@ public class VideoFileCleanupService implements
         List<UUID> videoItemIds = videos.stream().map(MediaVideoItem::getId).toList();
         List<String> videoKeys = videoItemIds.stream().map(UUID::toString).toList();
         playbackCleanupService.deleteOwned(ownerUserId, MediaPlaybackType.VIDEO, videoKeys);
-        watchHistoryRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
-        videoFavoriteRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
-        collectionItemRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
+        // 观看历史、收藏与合集条目按"观看者"归属：共享空间或公共影视库的条目会被其他成员
+        // 引用，只删条目所有者那一份会在别人列表里留下指向已删条目的死引用。
+        // 仪表盘计数按用户缓存 3 分钟，其余成员的统计在缓存到期后自洽。
+        watchHistoryRepository.deleteByVideoItemIdIn(videoItemIds);
+        videoFavoriteRepository.deleteByVideoItemIdIn(videoItemIds);
+        collectionItemRepository.deleteByVideoItemIdIn(videoItemIds);
         subtitleTrackRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
         nfoExportRepository.deleteByOwnerUserIdAndVideoItemIdIn(ownerUserId, videoItemIds);
         cleanupContentAssets(ownerUserId, videoItemIds);

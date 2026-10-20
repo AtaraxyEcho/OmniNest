@@ -59,11 +59,7 @@ public class SharedSpaceService {
      * 检查共享空间是否启用。
      */
     private void ensureSharedSpaceEnabled() {
-        boolean enabled = configValueProvider.findByKey("share.enabled")
-                .or(() -> configValueProvider.findByKey("shared_space.enabled"))
-                .map(value -> "true".equalsIgnoreCase(value))
-                .orElse(true);
-        if (!enabled) {
+        if (!isSharedSpaceEnabled()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间已禁用");
         }
     }
@@ -338,6 +334,39 @@ public class SharedSpaceService {
         if (!allowed) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权限执行此操作");
         }
+    }
+
+    /**
+     * 判断用户能否浏览共享空间，供跨模块的列表可见性使用。
+     *
+     * <p>{@link #validatePermission} 用异常表达"不允许"，而列表查询只需要一个布尔量：
+     * 把共享空间开关与角色矩阵一并折算成可见性，避免调用方靠捕获异常控制流程。
+     * 判定顺序与 {@code listSharedSpaceFiles} 一致（先开关、再 CAN_BROWSE）。</p>
+     *
+     * @param userId 用户 ID
+     * @return 共享空间启用且角色授予 CAN_BROWSE 时返回 true
+     */
+    @Transactional(readOnly = true)
+    public boolean canBrowse(UUID userId) {
+        if (!isSharedSpaceEnabled()) {
+            return false;
+        }
+        UserAccountSummary user = userAccountQuery.findById(userId).orElse(null);
+        if (user == null || user.roleIds().isEmpty()) {
+            return false;
+        }
+        return permissionRepository.findByRoleIdIn(user.roleIds()).stream()
+                .anyMatch(permission -> permission.isAllowed(Action.CAN_BROWSE));
+    }
+
+    /**
+     * 共享空间开关当前是否开启。
+     */
+    private boolean isSharedSpaceEnabled() {
+        return configValueProvider.findByKey("share.enabled")
+                .or(() -> configValueProvider.findByKey("shared_space.enabled"))
+                .map(value -> "true".equalsIgnoreCase(value))
+                .orElse(true);
     }
 
     /**

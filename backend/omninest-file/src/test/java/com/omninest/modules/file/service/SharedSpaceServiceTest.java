@@ -516,6 +516,45 @@ class SharedSpaceServiceTest {
 
     // ── Helpers ────────────────────────────────────────────────────────
 
+    @Nested
+    @DisplayName("canBrowse()：跨模块可见性布尔量")
+    class CanBrowseTests {
+
+        @Test
+        @DisplayName("空间开启且角色授予 CAN_BROWSE 时为 true")
+        void canBrowseTrueForPermittedMember() {
+            stubPermission(USER_A, true, false, false, false, false, false, false, false);
+
+            assertThat(service.canBrowse(USER_A)).isTrue();
+        }
+
+        @Test
+        @DisplayName("角色未授予 CAN_BROWSE 时返回 false，不像 validatePermission 那样抛异常")
+        void canBrowseFalseWithoutBrowsePermission() {
+            stubPermission(USER_A, false, true, true, false, false, false, false, false);
+
+            assertThat(service.canBrowse(USER_A)).isFalse();
+        }
+
+        @Test
+        @DisplayName("共享空间关闭时一律不可见，即使角色有权限")
+        void canBrowseFalseWhenSpaceDisabled() {
+            stubPermission(USER_A, true, true, true, true, true, true, true, true);
+            when(configValueProvider.findByKey("shared_space.enabled"))
+                    .thenReturn(Optional.of("false"));
+
+            assertThat(service.canBrowse(USER_A)).isFalse();
+        }
+
+        @Test
+        @DisplayName("用户不存在时返回 false，不判未授权")
+        void canBrowseFalseForUnknownUser() {
+            when(userAccountQuery.findById(USER_A)).thenReturn(Optional.empty());
+
+            assertThat(service.canBrowse(USER_A)).isFalse();
+        }
+    }
+
     /**
      * 为用户设置共享空间权限。
      * 每次调用都会覆盖该用户的权限配置。

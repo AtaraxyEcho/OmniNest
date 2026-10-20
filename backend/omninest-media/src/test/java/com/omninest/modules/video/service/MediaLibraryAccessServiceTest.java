@@ -13,6 +13,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.domain.StorageLocation;
+import com.omninest.modules.file.service.SharedSpaceService;
 import com.omninest.modules.file.service.StorageLocationService;
 import com.omninest.modules.user.dto.UserDirectoryDtos.UserAuthorizationProfile;
 import com.omninest.modules.user.service.UserDirectoryQueryService;
@@ -36,11 +37,13 @@ class MediaLibraryAccessServiceTest {
     private final MediaLibraryAccessRepository accessRepository = mock(MediaLibraryAccessRepository.class);
     private final UserDirectoryQueryService userDirectoryQueryService = mock(UserDirectoryQueryService.class);
     private final StorageLocationService storageLocationService = mock(StorageLocationService.class);
+    private final SharedSpaceService sharedSpaceService = mock(SharedSpaceService.class);
     private final MediaLibraryAccessService service = new MediaLibraryAccessService(
             sourceRepository,
             accessRepository,
             userDirectoryQueryService,
-            storageLocationService
+            storageLocationService,
+            sharedSpaceService
     );
 
     @Test

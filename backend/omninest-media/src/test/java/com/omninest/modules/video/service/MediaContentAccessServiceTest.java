@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.service.FileContentAccessService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.video.domain.ContentAsset;
 import com.omninest.modules.video.domain.MediaMovie;
@@ -39,6 +40,7 @@ class MediaContentAccessServiceTest {
     private final MediaMovieRepository movieRepository = mock(MediaMovieRepository.class);
     private final MediaLibraryAccessService libraryAccessService = mock(MediaLibraryAccessService.class);
     private final FileContentAccessService fileContentAccessService = mock(FileContentAccessService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final MediaPlaybackTokenService tokenService = mock(MediaPlaybackTokenService.class);
     private final ContentAssetRepository contentAssetRepository = mock(ContentAssetRepository.class);
     private final MediaContentAccessService service = new MediaContentAccessService(
@@ -47,6 +49,7 @@ class MediaContentAccessServiceTest {
             movieRepository,
             libraryAccessService,
             fileContentAccessService,
+            fileLifecycleGuard,
             tokenService,
             contentAssetRepository
     );
@@ -111,16 +114,31 @@ class MediaContentAccessServiceTest {
     }
 
     @Test
-    void personalMediaStillRejectsAUserWhoIsNotTheOwner() {
+    void fileSourcedMediaDelegatesAccessToTheFileSpaceGuard() {
+        MediaVideoItem item = item();
+        item.setLibrarySourceId(null);
+        when(videoItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(fileLifecycleGuard.requireReadable(USER_ID, FILE_ID))
+                .thenThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件"));
+
+        assertThatThrownBy(() -> service.requireReadableVideo(USER_ID, ITEM_ID))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+
+        verify(libraryAccessService).requireReadPermission(USER_ID);
+        verify(libraryAccessService, never()).requireRead(any(), any());
+    }
+
+    @Test
+    void sharedSpaceMemberReadsAnotherMembersFileSourcedItem() {
+        // 条目属于上传者 OWNER_ID，请求者是共享空间成员：网盘侧判定放行即视为可读。
         MediaVideoItem item = item();
         item.setLibrarySourceId(null);
         when(videoItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
 
-        assertThatThrownBy(() -> service.requireReadableVideo(USER_ID, ITEM_ID))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.MEDIA_NOT_FOUND));
+        assertThat(service.requireReadableVideo(USER_ID, ITEM_ID)).isSameAs(item);
 
-        verify(libraryAccessService).requireReadPermission(USER_ID);
+        verify(fileLifecycleGuard).requireReadable(USER_ID, FILE_ID);
         verify(libraryAccessService, never()).requireRead(any(), any());
     }
 

@@ -1,6 +1,5 @@
 package com.omninest.modules.video.repository;
 
-import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.video.domain.MediaMovie;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -34,16 +33,4 @@ public interface MediaMovieRepository extends JpaRepository<MediaMovie, UUID> {
 
     List<MediaMovie> findByBackdropFileIdIn(Collection<UUID> fileIds);
 
-    /**
-     * 查询用户可见的所有电影（个人 + 共享合并）。
-     */
-    @Query("""
-            SELECT DISTINCT m FROM MediaMovie m
-            JOIN MediaVideoItem vi ON vi.movieId = m.id
-            LEFT JOIN FileNode f ON vi.fileNodeId = f.id
-            WHERE vi.ownerUserId = :userId
-               OR (f.spaceType = :sharedType AND f.deleted = false)
-            ORDER BY m.title ASC
-            """)
-    List<MediaMovie> findMoviesVisibleToUser(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
 }

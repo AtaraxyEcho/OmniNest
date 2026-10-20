@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import com.omninest.OmniNestApplication;
 import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -117,7 +118,7 @@ class MediaLibraryKeywordQueryIT {
         markSoleFileNodeDeleted(owner, retiredSeriesId);
 
         Page<MediaTvSeries> page = tvSeriesRepository.findPageByActiveReadableAndSeriesType(
-                owner, Set.of(), "TV", null, PageRequest.of(0, 10));
+                owner, false, SpaceType.SHARED, Set.of(), "TV", null, PageRequest.of(0, 10));
 
         assertThat(seriesTitles(page)).containsExactlyInAnyOrder("Northern Drift", "Amber Hall");
         assertThat(page.getTotalElements()).isEqualTo(2);
@@ -135,7 +136,7 @@ class MediaLibraryKeywordQueryIT {
         insertSeries(owner, "Amber Hall", "TV");
 
         Page<MediaTvSeries> page = tvSeriesRepository.findPageByActiveReadableAndSeriesType(
-                owner, Set.of(), "TV", "%northern%", PageRequest.of(0, 10));
+                owner, false, SpaceType.SHARED, Set.of(), "TV", "%northern%", PageRequest.of(0, 10));
 
         // 大小写不敏感：原文大写开头的 Northern 也要被小写模式命中。
         assertThat(seriesTitles(page)).containsExactlyInAnyOrder("Northern Drift", "northern hours");
@@ -151,7 +152,7 @@ class MediaLibraryKeywordQueryIT {
         insertSeries(owner, "Plain Drift", "TV");
 
         Page<MediaTvSeries> page = tvSeriesRepository.findPageByActiveReadableAndSeriesType(
-                owner, Set.of(), "TV", "%\\%%", PageRequest.of(0, 10));
+                owner, false, SpaceType.SHARED, Set.of(), "TV", "%\\%%", PageRequest.of(0, 10));
 
         assertThat(seriesTitles(page)).containsExactly("100% Drift");
         assertThat(page.getTotalElements()).isEqualTo(1);
@@ -165,12 +166,52 @@ class MediaLibraryKeywordQueryIT {
         insertItemWithNode(owner, "plain drift.mkv");
 
         Page<MediaVideoItem> page = videoItemRepository.searchReadableOriginalsByMediaType(
-                owner, Set.of(), "MOVIE", null, "%\\%%", PageRequest.of(0, 10));
+                owner, false, SpaceType.SHARED, Set.of(), "MOVIE", null, "%\\%%", PageRequest.of(0, 10));
 
         // 条目没有元数据标题，coalesce 落到文件名；只有含字面量 % 的那个节点该命中。
         assertThat(page.getContent()).singleElement()
                 .satisfies(item -> assertThat(item.getFileNodeId()).isEqualTo(wildcardNode));
         assertThat(page.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("网盘来源条目：共享空间成员按浏览权限看到他人上传的影片，权限关闭时不可见")
+    void fileSourcedItemFollowsSharedBrowseFlag() {
+        UUID uploader = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        UUID sharedNode = insertItemWithNode(uploader, "Shared Drift.mkv", SpaceType.SHARED);
+
+        // 成员本身不拥有该条目，只有共享布尔量打开才该出现在她的列表里。
+        assertThat(videoItemRepository.findReadableOriginalsByMediaType(
+                member, true, SpaceType.SHARED, Set.of(), "MOVIE"))
+                .singleElement()
+                .satisfies(item -> assertThat(item.getFileNodeId()).isEqualTo(sharedNode));
+        assertThat(videoItemRepository.findReadableOriginalsByMediaType(
+                member, false, SpaceType.SHARED, Set.of(), "MOVIE")).isEmpty();
+        // 上传者不需要共享标志即可见，个人来源判定未被放宽。
+        assertThat(videoItemRepository.findReadableOriginalsByMediaType(
+                uploader, false, SpaceType.SHARED, Set.of(), "MOVIE")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("网盘来源系列：条目在共享空间时，成员只能带着浏览权限看到系列")
+    void fileSourcedSeriesFollowsSharedBrowseFlag() {
+        UUID uploader = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        UUID seriesId = insertSeries(uploader, "Shared Drift", "TV", SpaceType.SHARED);
+
+        List<MediaTvSeries> asMember = tvSeriesRepository.findActiveReadable(
+                member, true, SpaceType.SHARED, Set.of());
+        assertThat(seriesTitlesOf(asMember)).containsExactly("Shared Drift");
+
+        List<MediaTvSeries> withoutFlag = tvSeriesRepository.findActiveReadable(
+                member, false, SpaceType.SHARED, Set.of());
+        assertThat(withoutFlag).isEmpty();
+
+        assertThat(tvSeriesRepository.findActiveReadableById(
+                seriesId, member, true, SpaceType.SHARED, Set.of())).isPresent();
+        assertThat(tvSeriesRepository.findActiveReadableById(
+                seriesId, member, false, SpaceType.SHARED, Set.of())).isEmpty();
     }
 
     @Test
@@ -223,10 +264,18 @@ class MediaLibraryKeywordQueryIT {
     }
 
     private List<String> seriesTitles(Page<MediaTvSeries> page) {
-        return page.getContent().stream().map(MediaTvSeries::getTitle).toList();
+        return seriesTitlesOf(page.getContent());
+    }
+
+    private List<String> seriesTitlesOf(List<MediaTvSeries> series) {
+        return series.stream().map(MediaTvSeries::getTitle).toList();
     }
 
     private UUID insertSeries(UUID owner, String title, String seriesType) {
+        return insertSeries(owner, title, seriesType, SpaceType.PERSONAL);
+    }
+
+    private UUID insertSeries(UUID owner, String title, String seriesType, SpaceType spaceType) {
         UUID seriesId = UUID.randomUUID();
         jdbcTemplate.update(
                 "insert into omni.media_tv_series (id, owner_user_id, title, series_type) "
@@ -236,12 +285,16 @@ class MediaLibraryKeywordQueryIT {
                 title,
                 seriesType
         );
-        insertEpisodeItem(owner, seriesId, "s01e01.mkv");
+        insertEpisodeItem(owner, seriesId, "s01e01.mkv", spaceType);
         return seriesId;
     }
 
     private void insertEpisodeItem(UUID owner, UUID seriesId, String fileName) {
-        UUID nodeId = insertFileNode(owner, fileName, "/tv/" + seriesId + "/" + fileName);
+        insertEpisodeItem(owner, seriesId, fileName, SpaceType.PERSONAL);
+    }
+
+    private void insertEpisodeItem(UUID owner, UUID seriesId, String fileName, SpaceType spaceType) {
+        UUID nodeId = insertFileNode(owner, fileName, "/tv/" + seriesId + "/" + fileName, spaceType);
         jdbcTemplate.update(
                 "insert into omni.media_video_items (id, owner_user_id, file_node_id, media_type, series_id) "
                         + "values (?, ?, ?, 'EPISODE', ?)",
@@ -253,7 +306,11 @@ class MediaLibraryKeywordQueryIT {
     }
 
     private UUID insertItemWithNode(UUID owner, String fileName) {
-        UUID nodeId = insertFileNode(owner, fileName, "/movies/" + fileName);
+        return insertItemWithNode(owner, fileName, SpaceType.PERSONAL);
+    }
+
+    private UUID insertItemWithNode(UUID owner, String fileName, SpaceType spaceType) {
+        UUID nodeId = insertFileNode(owner, fileName, "/movies/" + fileName, spaceType);
         jdbcTemplate.update(
                 "insert into omni.media_video_items (id, owner_user_id, file_node_id, media_type) "
                         + "values (?, ?, ?, 'MOVIE')",
@@ -289,14 +346,19 @@ class MediaLibraryKeywordQueryIT {
     }
 
     private UUID insertFileNode(UUID owner, String name, String normalizedPath) {
+        return insertFileNode(owner, name, normalizedPath, SpaceType.PERSONAL);
+    }
+
+    private UUID insertFileNode(UUID owner, String name, String normalizedPath, SpaceType spaceType) {
         UUID nodeId = UUID.randomUUID();
         jdbcTemplate.update(
-                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path) "
-                        + "values (?, ?, 'FILE', ?, ?)",
+                "insert into omni.file_nodes (id, owner_user_id, node_type, name, normalized_path, space_type) "
+                        + "values (?, ?, 'FILE', ?, ?, ?)",
                 nodeId,
                 owner,
                 name,
-                normalizedPath
+                normalizedPath,
+                spaceType.name()
         );
         return nodeId;
     }

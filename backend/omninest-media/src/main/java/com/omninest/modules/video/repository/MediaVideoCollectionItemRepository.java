@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -21,6 +22,13 @@ public interface MediaVideoCollectionItemRepository extends JpaRepository<MediaV
     );
 
     void deleteByOwnerUserIdAndVideoItemIdIn(UUID ownerUserId, Collection<UUID> videoItemIds);
+
+    /**
+     * 按 videoItemId 删除所有用户的合集条目（共享空间文件清理用）。
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM MediaVideoCollectionItem ci WHERE ci.videoItemId IN :videoItemIds")
+    void deleteByVideoItemIdIn(@Param("videoItemIds") Collection<UUID> videoItemIds);
 
     List<MediaVideoCollectionItem> findByOwnerUserIdAndVideoItemIdIn(UUID ownerUserId, Collection<UUID> videoItemIds);
 

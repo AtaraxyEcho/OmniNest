@@ -3,9 +3,11 @@ package com.omninest.modules.video.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.MediaContentPurpose;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileContentAccessService;
+import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.video.domain.ContentAsset;
 import com.omninest.modules.video.domain.MediaMovie;
@@ -16,6 +18,7 @@ import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,7 @@ public class MediaContentAccessService {
     private final MediaMovieRepository movieRepository;
     private final MediaLibraryAccessService libraryAccessService;
     private final FileContentAccessService fileContentAccessService;
+    private final FileLifecycleGuard fileLifecycleGuard;
     private final MediaPlaybackTokenService tokenService;
     private final ContentAssetRepository contentAssetRepository;
 
@@ -43,14 +47,14 @@ public class MediaContentAccessService {
     public MediaVideoItem requireReadableVideo(UUID requesterUserId, UUID videoItemId) {
         MediaVideoItem item = videoItemRepository.findById(videoItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在"));
-        if (item.getLibrarySourceId() == null) {
-            libraryAccessService.requireReadPermission(requesterUserId);
-            if (!item.getOwnerUserId().equals(requesterUserId)) {
-                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
-            }
+        if (item.getLibrarySourceId() != null) {
+            libraryAccessService.requireRead(requesterUserId, item.getLibrarySourceId());
             return item;
         }
-        libraryAccessService.requireRead(requesterUserId, item.getLibrarySourceId());
+        libraryAccessService.requireReadPermission(requesterUserId);
+        // 文件来源认网盘空间：File 模块的生命周期守卫已把"本人文件"与
+        // "共享空间 + CAN_BROWSE"合成一处，影视侧不再复制 owner 比对。
+        fileLifecycleGuard.requireReadable(requesterUserId, item.getFileNodeId());
         return item;
     }
 
@@ -59,15 +63,45 @@ public class MediaContentAccessService {
     public MediaTvSeries requireReadableSeries(UUID requesterUserId, UUID seriesId) {
         MediaTvSeries series = tvSeriesRepository.findById(seriesId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "剧集不存在"));
-        if (series.getLibrarySourceId() == null) {
-            libraryAccessService.requireReadPermission(requesterUserId);
-            if (!series.getOwnerUserId().equals(requesterUserId)) {
-                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "剧集不存在");
-            }
+        if (series.getLibrarySourceId() != null) {
+            libraryAccessService.requireRead(requesterUserId, series.getLibrarySourceId());
             return series;
         }
-        libraryAccessService.requireRead(requesterUserId, series.getLibrarySourceId());
-        return series;
+        libraryAccessService.requireReadPermission(requesterUserId);
+        if (series.getOwnerUserId().equals(requesterUserId)) {
+            return series;
+        }
+        // 共享空间成员只能看到确有可读文件的系列，判据与列表查询共用同一套二分条件。
+        MediaLibraryAccessService.MediaVisibilityScope scope =
+                libraryAccessService.visibilityScope(requesterUserId);
+        return tvSeriesRepository
+                .findActiveReadableById(
+                        seriesId,
+                        scope.requesterUserId(),
+                        scope.sharedSpaceReadable(),
+                        SpaceType.SHARED,
+                        scope.librarySourceIds()
+                )
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "剧集不存在"));
+    }
+
+    /**
+     * 只读探测请求者能否读取该视频条目。
+     *
+     * <p>访问判定本身以异常表达拒绝，这里的调用方（如 Web 端"是否需要转码"探测）只需要
+     * 一个存在性结论；只收敛业务异常，数据库或存储故障照常上抛。</p>
+     *
+     * @param requesterUserId 请求用户 ID
+     * @param videoItemId 视频条目标识
+     * @return 可读时返回条目，否则返回空
+     */
+    @Transactional(readOnly = true)
+    public Optional<MediaVideoItem> findReadableVideo(UUID requesterUserId, UUID videoItemId) {
+        try {
+            return Optional.of(requireReadableVideo(requesterUserId, videoItemId));
+        } catch (BusinessException exception) {
+            return Optional.empty();
+        }
     }
 
     /** 使用短期媒体令牌打开本地影片 Range 资源。 */
