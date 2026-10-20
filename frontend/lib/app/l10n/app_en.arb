@@ -3810,6 +3810,7 @@
   "photosRollback": "Rollback",
   "photosConfirm": "Confirm",
   "photosPhotoCount": "{count} photos",
+  "photosOpenPhotoPreview": "Open full-size preview",
   "@photosPhotoCount": {
     "placeholders": {
       "count": {}

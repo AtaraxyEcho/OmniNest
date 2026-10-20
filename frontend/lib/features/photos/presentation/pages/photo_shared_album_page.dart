@@ -8,6 +8,9 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -161,6 +164,9 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
     );
   }
 
+  /// 全屏预览覆盖层的当前下标；null 表示未打开。
+  int? _lightboxIndex;
+
   Widget _buildBody() {
     if (_loading) return const AppLoading();
 
@@ -185,10 +191,25 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
 
     if (_album == null) return const SizedBox.shrink();
 
-    return _SharedAlbumContent(
-      album: _album!,
-      isLoadingMore: _loadingMore,
-      onLoadMore: _loadMore,
+    final album = _album!;
+    final index = _lightboxIndex;
+    return Stack(
+      children: [
+        _SharedAlbumContent(
+          album: album,
+          isLoadingMore: _loadingMore,
+          onLoadMore: _loadMore,
+          onOpenPhoto:
+              (photoIndex) => setState(() => _lightboxIndex = photoIndex),
+        ),
+        if (index != null && index < album.photos.length)
+          _SharedPhotoLightbox(
+            photos: album.photos,
+            index: index,
+            onIndexChanged: (next) => setState(() => _lightboxIndex = next),
+            onClose: () => setState(() => _lightboxIndex = null),
+          ),
+      ],
     );
   }
 }
@@ -309,11 +330,15 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
 class _SharedAlbumContent extends StatelessWidget {
   const _SharedAlbumContent({
     required this.album,
+    required this.onOpenPhoto,
     this.isLoadingMore = false,
     this.onLoadMore,
   });
 
   final PhotoSharedAlbum album;
+
+  /// 点开某张：由宿主渲染页内全屏覆盖层（公开页不额外挂路由）。
+  final ValueChanged<int> onOpenPhoto;
 
   /// 滚动加载：访客页续页由宿主 State 持有会话与门闩。
   final bool isLoadingMore;
@@ -431,54 +456,29 @@ class _SharedAlbumContent extends StatelessWidget {
                           itemCount: album.photos.length,
                           itemBuilder: (context, index) {
                             final photo = album.photos[index];
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child:
-                                  photo.hasCover
-                                      ? CachedNetworkImage(
-                                        imageUrl: photo.coverUrl!,
-                                        // 网格瓦片按实际列宽解码：公开相册页
-                                        // 在宽屏下同时可见数十张，全分辨率解码
-                                        // 会造成明显滚动与首帧卡顿。
-                                        memCacheWidth: thumbnailDecodeWidth(
-                                          (constraints.maxWidth -
-                                                  48 -
-                                                  8 * (columns - 1)) /
-                                              columns,
-                                          MediaQuery.devicePixelRatioOf(
-                                            context,
-                                          ),
-                                        ),
-                                        fit: BoxFit.cover,
-                                        placeholder:
-                                            (context, url) => Container(
-                                              color:
-                                                  context
-                                                      .photosColors
-                                                      .surfaceContainerHigh,
-                                            ),
-                                        errorWidget:
-                                            (context, url, error) => Icon(
-                                              Icons.broken_image_outlined,
-                                              color:
-                                                  context
-                                                      .photosColors
-                                                      .onSurfaceVariant,
-                                            ),
-                                      )
-                                      : Container(
-                                        color:
-                                            context
-                                                .photosColors
-                                                .surfaceContainerHigh,
-                                        child: Icon(
-                                          Icons.photo_outlined,
-                                          color:
-                                              context
-                                                  .photosColors
-                                                  .onSurfaceVariant,
-                                        ),
-                                      ),
+                            // 公开相册原本只能看缩略图：点开后页内覆盖层给大图与下载。
+                            return InkWell(
+                              onTap: () => onOpenPhoto(index),
+                              child: Semantics(
+                                label:
+                                    AppLocalizations.of(
+                                      context,
+                                    ).photosOpenPhotoPreview,
+                                button: true,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: _SharedAlbumTile(
+                                    photo: photo,
+                                    decodeWidth: thumbnailDecodeWidth(
+                                      (constraints.maxWidth -
+                                              48 -
+                                              8 * (columns - 1)) /
+                                          columns,
+                                      MediaQuery.devicePixelRatioOf(context),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -498,6 +498,168 @@ class _SharedAlbumContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 共享相册网格瓦片：按列宽解码缩略图，无封面时给占位图标。
+class _SharedAlbumTile extends StatelessWidget {
+  const _SharedAlbumTile({required this.photo, required this.decodeWidth});
+
+  final PhotoItem photo;
+
+  /// 已按列宽与设备像素比算好的解码宽度，由网格侧统一计算。
+  final int decodeWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverUrl = photo.coverUrl;
+    if (!photo.hasCover || coverUrl == null || coverUrl.isEmpty) {
+      return Container(
+        color: context.photosColors.surfaceContainerHigh,
+        child: Icon(
+          Icons.photo_outlined,
+          color: context.photosColors.onSurfaceVariant,
+        ),
+      );
+    }
+    // 网格瓦片按实际列宽解码：公开相册页在宽屏下同时可见数十张，
+    // 全分辨率解码会造成明显滚动与首帧卡顿。
+    return CachedNetworkImage(
+      imageUrl: coverUrl,
+      memCacheWidth: decodeWidth,
+      fit: BoxFit.cover,
+      placeholder:
+          (context, url) =>
+              Container(color: context.photosColors.surfaceContainerHigh),
+      errorWidget:
+          (context, url, error) => Icon(
+            Icons.broken_image_outlined,
+            color: context.photosColors.onSurfaceVariant,
+          ),
+    );
+  }
+}
+
+/// 公开相册的页内全屏预览覆盖层：大图、左右翻页与下载，不改分享令牌语义。
+class _SharedPhotoLightbox extends StatelessWidget {
+  const _SharedPhotoLightbox({
+    required this.photos,
+    required this.index,
+    required this.onIndexChanged,
+    required this.onClose,
+  });
+
+  final List<PhotoItem> photos;
+  final int index;
+  final ValueChanged<int> onIndexChanged;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final photo = photos[index];
+    // 关闭原图质量时服务端不签发 sourceUrl：预览退回封面，下载入口隐藏。
+    final displayUrl = photo.sourceUrl ?? photo.coverUrl;
+    final sourceUrl = photo.sourceUrl;
+    return Positioned.fill(
+      child: ColoredBox(
+        color: const Color(0xF2000000),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        '${index + 1} / ${photos.length}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip:
+                        sourceUrl == null
+                            ? l10n.photosDownloadSourceUnavailable
+                            : l10n.photosDownloadPhoto,
+                    icon: const Icon(Icons.download_rounded),
+                    color: Colors.white,
+                    onPressed:
+                        sourceUrl == null
+                            ? null
+                            : () => _download(context, sourceUrl, photo),
+                  ),
+                  IconButton(
+                    tooltip: l10n.corePrevious,
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    color: Colors.white,
+                    onPressed:
+                        index > 0 ? () => onIndexChanged(index - 1) : null,
+                  ),
+                  IconButton(
+                    tooltip: l10n.coreNext,
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    color: Colors.white,
+                    onPressed:
+                        index < photos.length - 1
+                            ? () => onIndexChanged(index + 1)
+                            : null,
+                  ),
+                  IconButton(
+                    tooltip: l10n.coreClose,
+                    icon: const Icon(Icons.close_rounded),
+                    color: Colors.white,
+                    onPressed: onClose,
+                  ),
+                ],
+              ),
+              Expanded(
+                child:
+                    displayUrl == null || displayUrl.isEmpty
+                        ? Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            size: 48,
+                            color: Colors.white54,
+                          ),
+                        )
+                        : InteractiveViewer(
+                          child: Center(
+                            child: CachedNetworkImage(
+                              imageUrl: displayUrl,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 与文件夹分享同一口径：能开新标签就开，否则退回复制链接。
+  Future<void> _download(
+    BuildContext context,
+    String url,
+    PhotoItem photo,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    if (openDownloadUrl(url)) {
+      return;
+    }
+    final copied = await copyTextToClipboard(url);
+    if (!context.mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
     );
   }
 }

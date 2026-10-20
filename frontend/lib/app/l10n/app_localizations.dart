@@ -15773,6 +15773,12 @@ abstract class AppLocalizations {
   /// **'{count} photos'**
   String photosPhotoCount(Object count);
 
+  /// No description provided for @photosOpenPhotoPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Open full-size preview'**
+  String get photosOpenPhotoPreview;
+
   /// No description provided for @photosSharedAlbumAccessError.
   ///
   /// In en, this message translates to:

@@ -8384,6 +8384,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get photosOpenPhotoPreview => '查看大图';
+
+  @override
   String photosSharedAlbumAccessError(Object error) {
     return '无法访问共享相册：$error';
   }

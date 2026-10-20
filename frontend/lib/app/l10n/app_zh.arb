@@ -3684,6 +3684,7 @@
   "photosRollback": "回滚",
   "photosConfirm": "确定",
   "photosPhotoCount": "{count} 张照片",
+  "photosOpenPhotoPreview": "查看大图",
   "@photosPhotoCount": {
     "placeholders": {
       "count": {}

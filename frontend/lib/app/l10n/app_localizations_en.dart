@@ -8631,6 +8631,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get photosOpenPhotoPreview => 'Open full-size preview';
+
+  @override
   String photosSharedAlbumAccessError(Object error) {
     return 'Cannot access shared album: $error';
   }
