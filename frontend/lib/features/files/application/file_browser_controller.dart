@@ -75,7 +75,15 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     _beginNavigation();
-    state = AsyncData(live.copyWith(section: section, searchQuery: ''));
+    // 分区切换等于换上下文：搜索词与分类筛选一起归零，否则会带着上个分区的
+    // 分类条件进入新分区，列表莫名只剩一类文件。
+    state = AsyncData(
+      live.copyWith(
+        section: section,
+        searchQuery: '',
+        fileCategory: FileBrowserFileCategory.all,
+      ),
+    );
   }
 
   /// 导航世代计数，见 `_beginNavigation`。
@@ -1011,14 +1019,21 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> setFileCategory(FileBrowserFileCategory category) async {
     _clearSelection();
     _clearInspection();
+    final current = state.asData?.value;
+    if (current != null &&
+        (current.section != FileManagerSection.allFiles ||
+            current.spaceType == 'SHARED')) {
+      // 最近/收藏/回收站与共享空间的分类条件没有服务端参数，列表又已在内存里：
+      // 只改过滤条件，既不发请求，也不把用户踢回全部文件。
+      state = AsyncData(current.copyWith(fileCategory: category));
+      return;
+    }
     final navigation = _beginNavigation();
     await _runAction(FileOperation.filterFileType, () async {
-      final current = state.asData?.value;
-      final categoryForRequest = category;
       final filesPage = await _listFilePageForSpace(
         spaceType: current?.spaceType ?? 'PERSONAL',
         parentId: current?.parentId,
-        category: categoryForRequest,
+        category: category,
         size: current?.filePageSize ?? 10,
       );
       if (_isStaleNavigation(navigation)) {
@@ -1027,7 +1042,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       state = AsyncData(
         _liveOr(current).copyWith(
           files: filesPage.items,
-          section: FileManagerSection.allFiles,
           fileCategory: category,
           filePage: filesPage.page,
           filePageSize: filesPage.size,

@@ -124,10 +124,16 @@ class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
                         .selectSection,
                 counts: {
                   MovieSection.movies: visibleState.dashboard.stats.movieCount,
-                  // 剧集/动漫各读独立系列列表：分区加载互不覆盖，
-                  // 且与各自分区网格数据同源，避免计数被清零或漂移。
-                  MovieSection.tvShows: visibleState.tvSeries.length,
-                  MovieSection.anime: visibleState.animeSeries.length,
+                  // 剧集/动漫徽标读各自分页的服务端总数：列表只加载首屏 50 部，
+                  // 用已加载长度会在超过首屏后永远停在 50。
+                  MovieSection.tvShows: _pagingCount(
+                    visibleState.tvSeriesPaging,
+                    visibleState.tvSeries.length,
+                  ),
+                  MovieSection.anime: _pagingCount(
+                    visibleState.animeSeriesPaging,
+                    visibleState.animeSeries.length,
+                  ),
                   // 收藏/历史/合集/继续观看读服务端权威统计，
                   // 分区列表仍懒加载，徽标不受访问与否影响。
                   MovieSection.collections:
@@ -295,10 +301,7 @@ class _MovieContent extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
               child: HostedCollectionsSection(collections: state.collections),
             )
-            : CollectionsSection(
-              totalCount: state.movies.length,
-              collections: state.collections,
-            ),
+            : CollectionsSection(collections: state.collections),
       MovieSection.recent => _RecentSection(state: state),
       MovieSection.continueWatching => _ContinueSection(state: state),
       MovieSection.favorites => _FavoritesSection(state: state),
@@ -1139,3 +1142,7 @@ class _FavoritesSection extends ConsumerWidget {
     );
   }
 }
+
+/// 分区徽标计数：优先取服务端总数，分区还没加载过（total 为 -1）时退回已加载长度。
+int _pagingCount(ListPaging paging, int loadedCount) =>
+    paging.total >= 0 ? paging.total : loadedCount;

@@ -453,11 +453,36 @@ class _PmServerSection extends ConsumerWidget {
         const SizedBox(height: 12),
         _PmPrimaryButton(
           label: l10n.profileSwitchServer,
-          onPressed: () => unawaited(context.push('/server-setup?switch=1')),
+          onPressed: () => unawaited(_confirmAndChangeServer(context, ref, l10n)),
         ),
       ],
     );
   }
+}
+
+/// 更换服务器：与桌面端同一流程 —— 确认后先清会话与已保存的服务端地址再进设置页。
+/// 只跳转不清理会把旧凭据留在本机，新地址登录失败时也无从判断是旧配置还是新配置。
+Future<void> _confirmAndChangeServer(
+  BuildContext context,
+  WidgetRef ref,
+  AppLocalizations l10n,
+) async {
+  final confirmed = await showMobileConfirmSheet(
+    context,
+    title: l10n.serverPanelChangeTitle,
+    message: l10n.serverPanelChangeBody,
+    confirmLabel: l10n.serverPanelChangeConfirm,
+    destructive: true,
+  );
+  if (!confirmed || !context.mounted) {
+    return;
+  }
+  await ref.read(authSessionProvider.notifier).clearSession();
+  await ref.read(serverConfigProvider.notifier).clear();
+  if (!context.mounted) {
+    return;
+  }
+  context.go('/server-setup?switch=1');
 }
 
 /// 关于：版本信息。

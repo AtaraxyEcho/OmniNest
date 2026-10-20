@@ -559,7 +559,7 @@
   "filesSharePublic": "公开无密",
   "filesSharePermanent": "永久有效",
   "filesShareExpiredShort": "已失效",
-  "filesOpEdit": "修改",
+  "filesOpViewShare": "查看分享",
   "filesOpRevoke": "撤销",
   "filesMetricUploading": "进行中任务",
   "filesMetricQueued": "队列中",
@@ -2905,6 +2905,8 @@
       "field": {}
     }
   },
+  "readerInvalidRating": "评分须为 0-10 的数字",
+  "readerInvalidReleaseDate": "出版日期格式应为 YYYY-MM-DD",
   "readerHistory": "历史",
   "readerImports": "导入",
   "readerGroupPersonal": "个人",
@@ -3848,6 +3850,8 @@
   },
   "musicDeleteLocalTrackSuccess": "本地歌曲已永久删除",
   "musicDeleteLocalTrackFailed": "删除失败，请稍后重试",
+  "musicRemoveFromPlaylistSuccess": "已从歌单移除",
+  "musicRemoveFromPlaylistFailed": "移除失败，请稍后重试",
   "musicDeletePlaylistTitle": "删除这个歌单？",
   "musicDeletePlaylistMessage": "确定要删除「{name}」吗？歌单内的歌曲不会被删除。",
   "@musicDeletePlaylistMessage": {
@@ -4003,6 +4007,7 @@
     }
   },
   "musicHistoryTitle": "播放历史",
+  "musicHistoryTrackUnavailable": "曲目已不在曲库中，无法播放",
   "musicHistoryEmpty": "最近 7 天没有播放记录",
   "musicHistoryLoadMore": "加载更多",
   "musicHistoryToday": "今天",

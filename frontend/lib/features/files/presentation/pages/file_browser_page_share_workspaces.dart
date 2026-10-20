@@ -249,6 +249,42 @@ class _ShareWorkspace extends ConsumerStatefulWidget {
 class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
   _ShareFilter _filter = _ShareFilter.all;
 
+  /// 分享基址：与分享面板同一来源，进入列表时解析一次，
+  /// 复制必须在用户手势内同步完成，不能在点击后再 await。
+  String? _shareBaseUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resolveShareBaseUrl());
+  }
+
+  Future<void> _resolveShareBaseUrl() async {
+    try {
+      final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
+      if (mounted) {
+        setState(() => _shareBaseUrl = baseUrl);
+      }
+    } on Object {
+      // 环境未配置基址时不显示复制入口，避免复制出半截地址。
+    }
+  }
+
+  Future<void> _copyShareLink(String shareUrl) async {
+    final l10n = AppLocalizations.of(context);
+    final copied = await copyTextToClipboard(shareUrl);
+    if (!mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesCopiedClipboard : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+      duration: const Duration(seconds: 1),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -429,12 +465,27 @@ class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Flexible(child: _SubMono(share.shareCode)),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.content_copy_rounded,
-                            size: 12,
-                            color: context.filesColors.onSurfaceVariant,
-                          ),
+                          // 历史分享未存令牌密文时 shareCode 为空，无地址可复制。
+                          if (_shareBaseUrl != null &&
+                              share.shareCode.isNotEmpty) ...[
+                            const SizedBox(width: 4),
+                            Tooltip(
+                              message: l10n.filesCopyLink,
+                              child: InkWell(
+                                onTap:
+                                    () => unawaited(
+                                      _copyShareLink(
+                                        '$_shareBaseUrl/#/s/${share.shareCode}',
+                                      ),
+                                    ),
+                                child: Icon(
+                                  Icons.content_copy_rounded,
+                                  size: 12,
+                                  color: context.filesColors.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       _SubMono(
@@ -467,7 +518,9 @@ class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _SubAction(
-                              label: l10n.filesOpEdit,
+                              // 文件分享没有更新端点，弹窗是只读的分享详情；
+                              // 叫"修改"会让用户以为能改有效期与权限。
+                              label: l10n.filesOpViewShare,
                               onTap:
                                   enabled
                                       ? () => ShareLinkSheet.show(

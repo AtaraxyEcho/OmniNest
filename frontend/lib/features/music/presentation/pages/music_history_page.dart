@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_sample_kit.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -321,6 +322,24 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
     return label;
   }
 
+  Future<void> _playTrackById(String trackId) async {
+    final l10n = AppLocalizations.of(context);
+    MusicTrack? track;
+    try {
+      track = await ref.read(musicApiProvider).trackDetail(trackId);
+    } on Exception {
+      track = null;
+    }
+    if (!mounted) {
+      return;
+    }
+    if (track == null) {
+      showOmniFeedback(context, l10n.musicHistoryTrackUnavailable);
+      return;
+    }
+    ref.read(musicCenterControllerProvider.notifier).playTrack(track);
+  }
+
   void _playEntry(
     BuildContext context,
     WidgetRef ref,
@@ -331,9 +350,15 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
       final trackId = key.substring('local:'.length);
       final center = ref.read(musicCenterControllerProvider).asData?.value;
       final track = center?.tracks.where((t) => t.id == trackId).firstOrNull;
-      if (track != null && context.mounted) {
-        ref.read(musicCenterControllerProvider.notifier).playTrack(track);
+      if (track != null) {
+        if (context.mounted) {
+          ref.read(musicCenterControllerProvider.notifier).playTrack(track);
+        }
+        return;
       }
+      // 历史条目可以指向还没加载到本页的曲目：按 ID 回取详情再播，
+      // 只在已加载列表里找会让第二页之后的记录点了没反应。
+      unawaited(_playTrackById(trackId));
       return;
     }
     // 在线曲目缺少平台凭据快照，从可播放对象构造兜底卡片。

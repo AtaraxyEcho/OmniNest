@@ -312,11 +312,13 @@ class _CategoryFilterBar extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(fileBrowserControllerProvider.notifier);
     final counts = <FileBrowserFileCategory, int>{
+      // 计数取未过滤的分区原始列表：选中某个分类后其余胶囊不该全部归零，
+      // "全部"也不该退化成当前分类的条数。
       for (final category in FileBrowserFileCategory.values)
         category:
             category == FileBrowserFileCategory.all
-                ? state.files.length
-                : state.files
+                ? state.sectionNodes.length
+                : state.sectionNodes
                     .where((node) => _categoryOfNode(node) == category)
                     .length,
     };

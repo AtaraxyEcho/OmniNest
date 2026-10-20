@@ -186,6 +186,14 @@ abstract final class OmniIcons {
   static const OmniIconsData close = OmniIconsData(
     paths: ['M5 5l14 14M19 5 5 19'],
   );
+  static const OmniIconsData trash = OmniIconsData(
+    paths: [
+      'M4 7h16',
+      'M9 7V4.5h6V7',
+      'M6.5 7 7.6 20h8.8L17.5 7',
+      'M10 11v6M14 11v6',
+    ],
+  );
   static const OmniIconsData queue = OmniIconsData(
     paths: ['M4 6h10M4 12h10M4 18h7', 'm17 14 4 3-4 3z'],
   );

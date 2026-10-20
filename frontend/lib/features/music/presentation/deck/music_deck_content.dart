@@ -86,6 +86,7 @@ class MusicDeckContent extends ConsumerWidget {
         center: center,
         platform: platform,
         onBack: onCloseCollection,
+        onOpenCollection: onOpenCollection,
       );
     }
     return switch (section) {
@@ -173,6 +174,7 @@ class _HomeContent extends ConsumerWidget {
         center: center,
         covers: covers,
         recent: recent,
+        sources: sources,
         dailyVisible: dailySectionVisible,
         onSectionChanged: onSectionChanged,
       );
@@ -709,12 +711,16 @@ class _CollectionDetail extends ConsumerWidget {
     required this.center,
     required this.platform,
     required this.onBack,
+    required this.onOpenCollection,
   });
 
   final MusicDeckCollectionSelection selection;
   final MusicCenterState center;
   final MusicPlatformLibraryState platform;
   final VoidCallback onBack;
+
+  /// 从歌手详情点专辑时要切换外层集合视图，光改中心状态界面仍停在原地。
+  final ValueChanged<MusicDeckCollectionSelection> onOpenCollection;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -909,7 +915,12 @@ class _CollectionDetail extends ConsumerWidget {
         ),
         const SizedBox(height: 18),
         if (selection case ArtistMusicDeckCollection(:final artist))
-          _ArtistAlbumsShelf(artistId: artist.id),
+          _ArtistAlbumsShelf(
+            artistId: artist.id,
+            onOpenAlbum: (album) => onOpenCollection(
+              AlbumMusicDeckCollection(album),
+            ),
+          ),
         Expanded(
           child:
               loading && items.isEmpty
@@ -953,7 +964,10 @@ class _CollectionDetail extends ConsumerWidget {
                             )
                             : null,
                     onToggleFavorite: _favoriteHandler(context, ref),
-                    onDelete: _deleteTrackHandler(context, ref),
+                    onDelete:
+                        selection is LocalMusicDeckCollection
+                            ? _removeFromPlaylistHandler(context, ref)
+                            : _deleteTrackHandler(context, ref),
                     onEnqueue: _enqueueTrackHandler(context, ref),
                     onAddToPlaylist: _addToPlaylistHandler(context, ref),
                   ),
@@ -1030,6 +1044,7 @@ Widget _hostedHomeBody(
   required MusicCenterState center,
   required List<MusicDeckCoverItem> covers,
   required List<MusicPlayableItem> recent,
+  required Set<MusicPlatform> sources,
   required bool dailyVisible,
   required ValueChanged<MusicDeckSection> onSectionChanged,
 }) {
@@ -1042,7 +1057,8 @@ Widget _hostedHomeBody(
           ? Duration.zero
           : Duration(seconds: track.durationSeconds ?? 0);
   final controller = ref.read(musicCenterControllerProvider.notifier);
-  final recentPlayables = _recentItems(center, const <MusicPlatform>{});
+  // 每日推荐按已启用平台取最近播放：传空集合会让这一栏在任何时候都不出现。
+  final recentPlayables = _recentItems(center, sources);
   final dailyFirst = recentPlayables.firstOrNull;
   return SingleChildScrollView(
     padding: const EdgeInsets.only(bottom: 96),

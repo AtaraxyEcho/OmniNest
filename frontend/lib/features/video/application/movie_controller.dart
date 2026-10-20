@@ -1192,7 +1192,3 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     }
   }
 }
-
-/// 分页页对象到滚动加载状态的映射。
-ListPaging _pagingOf<T>(MediaPage<T> page) =>
-    ListPaging(page: page.page, hasMore: page.page + 1 < page.totalPages);

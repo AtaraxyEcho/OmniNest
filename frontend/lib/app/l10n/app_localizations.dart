@@ -2996,11 +2996,11 @@ abstract class AppLocalizations {
   /// **'Inactive'**
   String get filesShareExpiredShort;
 
-  /// No description provided for @filesOpEdit.
+  /// No description provided for @filesOpViewShare.
   ///
   /// In en, this message translates to:
-  /// **'Edit'**
-  String get filesOpEdit;
+  /// **'View share'**
+  String get filesOpViewShare;
 
   /// No description provided for @filesOpRevoke.
   ///
@@ -12473,6 +12473,18 @@ abstract class AppLocalizations {
   /// **'{field} cannot be empty'**
   String readerFieldRequired(Object field);
 
+  /// No description provided for @readerInvalidRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating must be a number from 0 to 10'**
+  String get readerInvalidRating;
+
+  /// No description provided for @readerInvalidReleaseDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Release date must use YYYY-MM-DD'**
+  String get readerInvalidReleaseDate;
+
   /// No description provided for @readerHistory.
   ///
   /// In en, this message translates to:
@@ -16427,6 +16439,18 @@ abstract class AppLocalizations {
   /// **'Delete failed. Please try again later.'**
   String get musicDeleteLocalTrackFailed;
 
+  /// No description provided for @musicRemoveFromPlaylistSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from playlist'**
+  String get musicRemoveFromPlaylistSuccess;
+
+  /// No description provided for @musicRemoveFromPlaylistFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to remove, please retry later'**
+  String get musicRemoveFromPlaylistFailed;
+
   /// No description provided for @musicDeletePlaylistTitle.
   ///
   /// In en, this message translates to:
@@ -17038,6 +17062,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Play History'**
   String get musicHistoryTitle;
+
+  /// No description provided for @musicHistoryTrackUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Track is no longer available in your library'**
+  String get musicHistoryTrackUnavailable;
 
   /// No description provided for @musicHistoryEmpty.
   ///

@@ -128,11 +128,6 @@ class _AppBackdropSettingsContentState
     extends State<_AppBackdropSettingsContent> {
   String _filter = _allBackdropFilter;
 
-  static const Duration _processingPollInterval = Duration(seconds: 3);
-  static const Duration _processingPollTimeout = Duration(minutes: 10);
-  Timer? _processingPollTimer;
-  DateTime? _pollDeadline;
-
   @override
   void initState() {
     super.initState();
@@ -143,45 +138,12 @@ class _AppBackdropSettingsContentState
       // 打开面板无条件轻量同步:素材可能在面板之外(上传后处理、其他设备)
       // 已流转状态,不能只依赖签名 URL 临期判断。
       unawaited(widget.notifier.syncFromServer());
-      _syncProcessingPoll(widget.state);
     });
-  }
-
-  @override
-  void didUpdateWidget(covariant _AppBackdropSettingsContent oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _syncProcessingPoll(widget.state);
   }
 
   @override
   void dispose() {
-    _processingPollTimer?.cancel();
-    _processingPollTimer = null;
     super.dispose();
-  }
-
-  /// 存在"处理中"素材时按固定间隔轮询服务端;素材全部到达终态、超过
-  /// 超时上限或面板关闭即停止。失败由 syncFromServer 静默保留上次态。
-  void _syncProcessingPoll(AppBackdropState state) {
-    final hasProcessing = state.backdrops.any(
-      (backdrop) => backdrop.status == AppBackdropAssetStatus.processing,
-    );
-    if (!hasProcessing) {
-      _processingPollTimer?.cancel();
-      _processingPollTimer = null;
-      _pollDeadline = null;
-      return;
-    }
-    final deadline =
-        _pollDeadline ??= DateTime.now().add(_processingPollTimeout);
-    if (DateTime.now().isAfter(deadline)) {
-      _processingPollTimer?.cancel();
-      _processingPollTimer = null;
-      return;
-    }
-    _processingPollTimer ??= Timer.periodic(_processingPollInterval, (_) {
-      unawaited(widget.notifier.syncFromServer());
-    });
   }
 
   @override

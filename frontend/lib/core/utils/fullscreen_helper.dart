@@ -1,5 +1,5 @@
 import 'fullscreen_helper_stub.dart'
-    if (dart.library.html) 'fullscreen_helper_web.dart'
+    if (dart.library.js_interop) 'fullscreen_helper_web.dart'
     as platform;
 
 bool get isFullscreen => platform.FullscreenHelperWeb.isFullscreenEnabled;

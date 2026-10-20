@@ -15,6 +15,7 @@ import 'package:omninest/features/files/presentation/widgets/file_node_actions.d
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
 import 'package:omninest/features/files/presentation/widgets/files_toolbar_control.dart';
 import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
+import 'package:omninest/features/files/domain/file_manager_models.dart';
 
 /// 文件属性详情栏（模板形态）：标题行 + 缩略图预览块 + 元数据键值 +
 /// 底部固定双操作钮（打开/预览 + 创建分享外链）。

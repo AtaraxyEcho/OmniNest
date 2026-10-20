@@ -6,8 +6,8 @@ import 'package:web/web.dart' as web;
 import 'package:omninest/core/log/dev_log.dart';
 
 /// Web 平台的背景视频视图。
-/// 基于原生 HTML video 元素(平台视图):强制 muted + autoplay + loop + playsinline
-/// 以满足浏览器自动播放策略;BoxFit 映射为 CSS object-fit。
+/// 基于原生 HTML video 元素(平台视图):autoplay + loop + playsinline，静音跟随上层开关，
+/// 但被浏览器自动播放策略拒绝时退回静音继续播放;BoxFit 映射为 CSS object-fit。
 /// 播放失败时切换到备用地址(内置壁纸),仍失败则收敛为空视图避免白屏。
 class AppBackdropVideoView extends StatefulWidget {
   const AppBackdropVideoView({
@@ -47,6 +47,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
   bool _sourceStaleNotified = false;
   Timer? _retryTimer;
   int _attempts = 0;
+  bool _autoplayPolicyMuted = false;
 
   static const int _maxAttempts = 2;
 
@@ -57,7 +58,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     el.style.height = '100%';
     el.style.display = 'block';
     el.style.objectFit = _objectFit(widget.fit);
-    el.muted = true;
+    el.muted = widget.muted || _autoplayPolicyMuted;
     el.autoplay = true;
     el.loop = true;
     el.playsInline = true;
@@ -73,6 +74,12 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.fit != widget.fit) {
       _element?.style.objectFit = _objectFit(widget.fit);
+    }
+    if (oldWidget.muted != widget.muted) {
+      // 壁纸设置里的"视频静音"开关此前在 Web 端是死参：改动必须回写元素，
+      // 并清掉自动播放策略造成的静音回退。
+      _autoplayPolicyMuted = false;
+      _element?.muted = widget.muted;
     }
     final oldIdentity = _sourceIdentityOf(oldWidget.source);
     final newIdentity = _sourceIdentityOf(widget.source);
@@ -130,7 +137,15 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
   }
 
   void _play(web.HTMLVideoElement el) {
-    el.play().toDart.then((_) {}, onError: (Object _) {});
+    el.play().toDart.then((_) {}, onError: (Object _) {
+      if (widget.muted || _autoplayPolicyMuted) {
+        return;
+      }
+      // 自动播放策略拒绝带声播放：退回静音继续放，而不是让壁纸停在原地。
+      _autoplayPolicyMuted = true;
+      el.muted = true;
+      el.play().toDart.then((_) {}, onError: (Object _) {});
+    });
   }
 
   void _handleReady(web.Event event) {

@@ -336,9 +336,11 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
               children: [
                 MobileModuleHeader(
                   title: l10n.modulePhotosTitle,
+                  // 副标题读服务端总数：只列首屏 50 张时用已加载长度计数，
+                  // 超过首屏就永远停在 50。
                   subtitle: l10n.photosModuleSubtitle(
-                    data.photos.length,
-                    data.albums.length,
+                    data.photoTotalElements,
+                    data.dashboard.totalAlbums,
                   ),
                   // 头部返回钮 = 直接离开模块回媒体库；逐级回退（多选→
                   // 图库→清搜索）只留给系统返回，见 PopScope 分支。

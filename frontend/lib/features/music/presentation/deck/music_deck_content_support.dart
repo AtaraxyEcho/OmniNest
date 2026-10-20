@@ -776,6 +776,32 @@ ValueChanged<MusicPlayableItem> _addToPlaylistHandler(
   };
 }
 
+/// 歌单详情里的"删除"是从歌单移除，不是销毁网盘源文件：
+/// 只提供永久粉碎会让用户误删整首曲目。
+ValueChanged<MusicPlayableItem> _removeFromPlaylistHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) async {
+    if (item.ref is! LocalMusicRef) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .removeTrackFromSelectedPlaylist(item.track);
+      if (context.mounted) {
+        _showPlaylistMessage(context, l10n.musicRemoveFromPlaylistSuccess);
+      }
+    } on Exception {
+      if (context.mounted) {
+        _showPlaylistMessage(context, l10n.musicRemoveFromPlaylistFailed);
+      }
+    }
+  };
+}
+
 ValueChanged<MusicPlayableItem> _deleteTrackHandler(
   BuildContext context,
   WidgetRef ref,

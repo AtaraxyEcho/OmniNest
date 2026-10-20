@@ -1509,7 +1509,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesShareExpiredShort => '已失效';
 
   @override
-  String get filesOpEdit => '修改';
+  String get filesOpViewShare => '查看分享';
 
   @override
   String get filesOpRevoke => '撤销';
@@ -6638,6 +6638,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get readerInvalidRating => '评分须为 0-10 的数字';
+
+  @override
+  String get readerInvalidReleaseDate => '出版日期格式应为 YYYY-MM-DD';
+
+  @override
   String get readerHistory => '历史';
 
   @override
@@ -8737,6 +8743,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicDeleteLocalTrackFailed => '删除失败，请稍后重试';
 
   @override
+  String get musicRemoveFromPlaylistSuccess => '已从歌单移除';
+
+  @override
+  String get musicRemoveFromPlaylistFailed => '移除失败，请稍后重试';
+
+  @override
   String get musicDeletePlaylistTitle => '删除这个歌单？';
 
   @override
@@ -9063,6 +9075,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicHistoryTitle => '播放历史';
+
+  @override
+  String get musicHistoryTrackUnavailable => '曲目已不在曲库中，无法播放';
 
   @override
   String get musicHistoryEmpty => '最近 7 天没有播放记录';

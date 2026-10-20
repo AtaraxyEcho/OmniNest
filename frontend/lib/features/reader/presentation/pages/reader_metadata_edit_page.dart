@@ -294,6 +294,7 @@ class _ReaderMetadataEditPageState
                   second: _buildTextField(
                     controller: _releaseDateCtrl,
                     label: l10n.readerLabelReleaseDate,
+                    validator: _validateReleaseDate,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -304,6 +305,7 @@ class _ReaderMetadataEditPageState
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    validator: _validateRating,
                   ),
                   second: _buildSerialStatusDropdown(),
                 ),
@@ -423,12 +425,41 @@ class _ReaderMetadataEditPageState
     );
   }
 
+  /// 评分允许留空（不评分），一旦填写就必须是 0~10 的数字。
+  /// 不校验时 `double.tryParse` 对 "abc" 返回 null，保存会把原有评分静默清空。
+  String? _validateRating(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return null;
+    }
+    final parsed = double.tryParse(text);
+    if (parsed == null || parsed < 0 || parsed > 10) {
+      return AppLocalizations.of(context).readerInvalidRating;
+    }
+    return null;
+  }
+
+  /// 出版日期按后端解析口径要求 YYYY-MM-DD，非法串在提交前拦下。
+  String? _validateReleaseDate(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return null;
+    }
+    if (!_releaseDatePattern.hasMatch(text)) {
+      return AppLocalizations.of(context).readerInvalidReleaseDate;
+    }
+    return null;
+  }
+
+  static final RegExp _releaseDatePattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
     bool required = false,
     int maxLines = 1,
     TextInputType? keyboardType,
+    String? Function(String? value)? validator,
   }) {
     return TextFormField(
       controller: controller,
@@ -474,13 +505,12 @@ class _ReaderMetadataEditPageState
           vertical: AppControlTokens.fieldVerticalPadding,
         ),
       ),
-      validator:
-          required
-              ? (v) =>
-                  (v == null || v.trim().isEmpty)
-                      ? AppLocalizations.of(context).readerFieldRequired(label)
-                      : null
-              : null,
+      validator: (value) {
+        if (required && (value == null || value.trim().isEmpty)) {
+          return AppLocalizations.of(context).readerFieldRequired(label);
+        }
+        return validator?.call(value);
+      },
     );
   }
 

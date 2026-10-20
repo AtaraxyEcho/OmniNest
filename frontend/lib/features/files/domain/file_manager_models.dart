@@ -561,3 +561,65 @@ class FilesSubPageMeta {
     );
   }
 }
+
+/// 分类近似枚举（与 FileBrowserFileCategory 一一对应，供筛选计数与展示层复用）。
+///
+/// 放在 domain：分类判定只依赖节点名与 MIME，浏览器视图与应用层状态都要用它，
+/// 留在 presentation 会让 application 反向依赖展示层。
+enum FileCategoryLabel {
+  all,
+  image,
+  video,
+  audio,
+  document,
+  novel,
+  comic,
+  archive,
+  other,
+}
+
+/// 客户端近似分类：按 MIME 与扩展名归入九个分类（供筛选计数与分区内过滤复用）。
+FileCategoryLabel fileCategoryOfNode(FileNode node) {
+  if (node.isFolder) {
+    return FileCategoryLabel.other;
+  }
+  final mime = (node.mimeType ?? '').toLowerCase();
+  final name = node.name.toLowerCase();
+  if (mime.startsWith('image/')) {
+    return FileCategoryLabel.image;
+  }
+  if (mime.startsWith('video/')) {
+    return FileCategoryLabel.video;
+  }
+  if (mime.startsWith('audio/')) {
+    return FileCategoryLabel.audio;
+  }
+  if (name.endsWith('.cbz') || name.endsWith('.cbr')) {
+    return FileCategoryLabel.comic;
+  }
+  if (name.endsWith('.epub') || name.endsWith('.txt')) {
+    return FileCategoryLabel.novel;
+  }
+  if (name.endsWith('.zip') ||
+      name.endsWith('.rar') ||
+      name.endsWith('.7z') ||
+      name.endsWith('.tar') ||
+      name.endsWith('.gz')) {
+    return FileCategoryLabel.archive;
+  }
+  if (mime.contains('pdf') ||
+      mime.startsWith('text/') ||
+      mime.contains('word') ||
+      mime.contains('sheet') ||
+      name.endsWith('.doc') ||
+      name.endsWith('.docx') ||
+      name.endsWith('.xls') ||
+      name.endsWith('.xlsx') ||
+      name.endsWith('.ppt') ||
+      name.endsWith('.pptx') ||
+      name.endsWith('.pdf')) {
+    return FileCategoryLabel.document;
+  }
+  return FileCategoryLabel.other;
+}
+

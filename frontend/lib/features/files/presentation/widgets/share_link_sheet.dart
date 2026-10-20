@@ -587,7 +587,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
               _buildCapsuleButton(
                 l10n.filesCopyLinkWithPassword,
                 Icons.copy,
-                () => _copyToClipboard(shareUrl),
+                // 按钮承诺"含密码"，只复制链接会把提取码丢在剪贴板外。
+                () => _copyToClipboard(
+                  '$shareUrl\n${l10n.filesSharePasswordLabel(share.generatedPassword!)}',
+                ),
               ),
             ],
           ),

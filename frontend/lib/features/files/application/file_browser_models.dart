@@ -325,12 +325,7 @@ class FileBrowserState {
   }
 
   List<FileNode> get visibleNodes {
-    final source = switch (section) {
-      FileManagerSection.recent => recentFiles,
-      FileManagerSection.favorites => favoriteFiles,
-      FileManagerSection.recycleBin => recycleBin,
-      _ => files,
-    };
+    final source = categoryFilteredNodes;
     final query = searchQuery.trim().toLowerCase();
     final filtered =
         query.isEmpty
@@ -345,6 +340,43 @@ class FileBrowserState {
                 .toList();
     final sorted = [...filtered]..sort(_compareNodes);
     return sorted;
+  }
+
+  /// 当前分区的原始列表（未按搜索与分类过滤），供分类胶囊计数复用。
+  List<FileNode> get sectionNodes {
+    return switch (section) {
+      FileManagerSection.recent => recentFiles,
+      FileManagerSection.favorites => favoriteFiles,
+      FileManagerSection.recycleBin => recycleBin,
+      _ => files,
+    };
+  }
+
+  /// 分类过滤后的分区列表。
+  ///
+  /// 全部文件分区的分类条件由服务端执行；其余分区（最近/收藏/回收站/共享空间）
+  /// 整表已在内存里，就地过滤即可 —— 点分类胶囊不该把用户踢回全部文件。
+  List<FileNode> get categoryFilteredNodes {
+    if (section == FileManagerSection.allFiles ||
+        fileCategory == FileBrowserFileCategory.all) {
+      return sectionNodes;
+    }
+    return sectionNodes.where(_matchesCategory).toList();
+  }
+
+  bool _matchesCategory(FileNode node) {
+    final label = fileCategoryOfNode(node);
+    return switch (fileCategory) {
+      FileBrowserFileCategory.all => true,
+      FileBrowserFileCategory.image => label == FileCategoryLabel.image,
+      FileBrowserFileCategory.video => label == FileCategoryLabel.video,
+      FileBrowserFileCategory.audio => label == FileCategoryLabel.audio,
+      FileBrowserFileCategory.document => label == FileCategoryLabel.document,
+      FileBrowserFileCategory.novel => label == FileCategoryLabel.novel,
+      FileBrowserFileCategory.comic => label == FileCategoryLabel.comic,
+      FileBrowserFileCategory.archive => label == FileCategoryLabel.archive,
+      FileBrowserFileCategory.other => label == FileCategoryLabel.other,
+    };
   }
 
   FileBrowserStats get stats {

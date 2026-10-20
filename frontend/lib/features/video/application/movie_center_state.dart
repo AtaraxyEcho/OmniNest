@@ -443,17 +443,23 @@ class ListPaging {
     this.page = -1,
     this.hasMore = false,
     this.isLoadingMore = false,
+    this.total = -1,
   });
 
   final int page;
   final bool hasMore;
   final bool isLoadingMore;
 
-  ListPaging copyWith({int? page, bool? hasMore, bool? isLoadingMore}) {
+  /// 服务端总条数，-1 表示尚未取到。侧栏徽标读它而不是已加载长度，
+  /// 否则超过首屏后计数会永远停在页大小上。
+  final int total;
+
+  ListPaging copyWith({int? page, bool? hasMore, bool? isLoadingMore, int? total}) {
     return ListPaging(
       page: page ?? this.page,
       hasMore: hasMore ?? this.hasMore,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      total: total ?? this.total,
     );
   }
 }

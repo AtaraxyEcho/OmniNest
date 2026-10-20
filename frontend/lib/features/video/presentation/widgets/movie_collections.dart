@@ -21,13 +21,8 @@ import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/workstation_dialog.dart';
 
 class CollectionsSection extends ConsumerWidget {
-  const CollectionsSection({
-    required this.totalCount,
-    required this.collections,
-    super.key,
-  });
+  const CollectionsSection({required this.collections, super.key});
 
-  final int totalCount;
   final List<MovieCollection> collections;
 
   @override

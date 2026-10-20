@@ -4,7 +4,7 @@ import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/core/security/offline_data_lifecycle_base.dart';
 import 'package:omninest/core/security/offline_data_lifecycle_stub.dart'
     if (dart.library.io) 'package:omninest/core/security/offline_data_lifecycle_io.dart'
-    if (dart.library.html) 'package:omninest/core/security/offline_data_lifecycle_web.dart'
+    if (dart.library.js_interop) 'package:omninest/core/security/offline_data_lifecycle_web.dart'
     as platform_lifecycle;
 
 export 'package:omninest/core/security/offline_data_lifecycle_base.dart';

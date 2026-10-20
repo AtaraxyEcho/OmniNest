@@ -559,7 +559,7 @@
   "filesSharePublic": "Public",
   "filesSharePermanent": "Permanent",
   "filesShareExpiredShort": "Inactive",
-  "filesOpEdit": "Edit",
+  "filesOpViewShare": "View share",
   "filesOpRevoke": "Revoke",
   "filesMetricUploading": "Uploading",
   "filesMetricQueued": "Queued",
@@ -3031,6 +3031,8 @@
       "field": {}
     }
   },
+  "readerInvalidRating": "Rating must be a number from 0 to 10",
+  "readerInvalidReleaseDate": "Release date must use YYYY-MM-DD",
   "readerHistory": "History",
   "readerImports": "Imports",
   "readerGroupPersonal": "Personal",
@@ -3974,6 +3976,8 @@
   },
   "musicDeleteLocalTrackSuccess": "Local track permanently deleted",
   "musicDeleteLocalTrackFailed": "Delete failed. Please try again later.",
+  "musicRemoveFromPlaylistSuccess": "Removed from playlist",
+  "musicRemoveFromPlaylistFailed": "Failed to remove, please retry later",
   "musicDeletePlaylistTitle": "Delete this playlist?",
   "musicDeletePlaylistMessage": "Delete \"{name}\"? Songs in the playlist will not be deleted.",
   "@musicDeletePlaylistMessage": {
@@ -4129,6 +4133,7 @@
     }
   },
   "musicHistoryTitle": "Play History",
+  "musicHistoryTrackUnavailable": "Track is no longer available in your library",
   "musicHistoryEmpty": "No plays in the last 7 days",
   "musicHistoryLoadMore": "Load More",
   "musicHistoryToday": "Today",

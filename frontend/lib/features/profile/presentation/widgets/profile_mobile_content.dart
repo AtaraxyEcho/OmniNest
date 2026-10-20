@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -253,14 +254,32 @@ class _ProfileMobileContentState extends ConsumerState<ProfileMobileContent> {
                 icon: Icons.logout_rounded,
                 title: l10n.coreSignOut,
                 destructive: true,
-                onTap:
-                    () => ref.read(authSessionProvider.notifier).clearSession(),
+                onTap: () => unawaited(_confirmSignOut(context, ref, l10n)),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  /// 退出登录属破坏性操作：与桌面端与移动其它入口一致，先二次确认再清会话。
+  Future<void> _confirmSignOut(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) async {
+    final confirmed = await showMobileConfirmSheet(
+      context,
+      title: l10n.coreSignOutConfirmTitle,
+      message: l10n.coreSignOutConfirmMessage,
+      confirmLabel: l10n.coreSignOut,
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await ref.read(authSessionProvider.notifier).clearSession();
   }
 
   String _roleLabel(AppLocalizations l10n) {

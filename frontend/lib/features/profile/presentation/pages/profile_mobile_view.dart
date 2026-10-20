@@ -158,7 +158,7 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
         ),
         const SizedBox(height: 28),
         _PmSignOutButton(
-          onTap: () => ref.read(authSessionProvider.notifier).clearSession(),
+          onTap: () => unawaited(_confirmSignOut(context, ref, l10n)),
         ),
         const SizedBox(height: 18),
         Center(
@@ -172,6 +172,25 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
         ),
       ],
     );
+  }
+
+  /// 退出登录是破坏性操作：与桌面端一样需要二次确认，误触不该直接踢出账号。
+  Future<void> _confirmSignOut(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) async {
+    final confirmed = await showMobileConfirmSheet(
+      context,
+      title: l10n.coreSignOutConfirmTitle,
+      message: l10n.coreSignOutConfirmMessage,
+      confirmLabel: l10n.coreSignOut,
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await ref.read(authSessionProvider.notifier).clearSession();
   }
 
   Widget _buildSectionBody(

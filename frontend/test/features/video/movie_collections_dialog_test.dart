@@ -125,7 +125,6 @@ Widget _host(_CollectionApiAdapter adapter) {
       locale: const Locale('zh'),
       home: const Scaffold(
         body: CollectionsSection(
-          totalCount: 1,
           collections: [
             MovieCollection(
               id: 'coll-1',

@@ -113,6 +113,7 @@ class _FrameViewContent extends ConsumerWidget {
         FrameView.trash => FrameTrashView(
           key: const ValueKey('frame-trash'),
           photos: state.trashPhotos,
+          totalCount: state.trashTotalElements,
           isLoading: state.isLoadingTrash,
           errorMessage: state.trashPageError,
           onRestore: onRestoreFromTrash,

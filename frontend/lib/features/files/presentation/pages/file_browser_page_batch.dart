@@ -379,10 +379,23 @@ class _MobileStickyBatchBar extends ConsumerWidget {
               ),
               _SelectionIconButton(
                 tooltip: l10n.filesBatchPurge,
-                icon: OmniIcons.close,
+                // 与右侧"取消选择"共用 × 会让用户在多选态一键粉碎文件，
+                // 永久删除必须换图标并走与桌面同级的输入确认。
+                icon: OmniIcons.trash,
                 onTap:
                     enabled
-                        ? () => unawaited(controller.batchPurgeFiles())
+                        ? () => unawaited(
+                          _confirmTypedAndRun(
+                            context,
+                            title: l10n.filesBatchPurgeTitle,
+                            message: l10n.filesBatchPurgeMessage(
+                              state.selectionCount,
+                            ),
+                            confirmPhrase: state.selectionCount.toString(),
+                            confirmLabel: l10n.filesPurge,
+                            action: controller.batchPurgeFiles,
+                          ),
+                        )
                         : null,
               ),
             ] else ...[

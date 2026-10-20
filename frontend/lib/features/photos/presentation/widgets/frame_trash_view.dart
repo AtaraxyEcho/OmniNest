@@ -18,6 +18,8 @@ import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 class FrameTrashView extends StatefulWidget {
   const FrameTrashView({
     required this.photos,
+    /// 回收站总条数（服务端），未传时退回已加载长度。
+    this.totalCount,
     required this.isLoading,
     required this.onRestore,
     required this.onDeleteForever,
@@ -30,6 +32,7 @@ class FrameTrashView extends StatefulWidget {
   });
 
   final List<PhotoItem> photos;
+  final int? totalCount;
   final bool isLoading;
   final String? errorMessage;
   final ValueChanged<PhotoItem> onRestore;
@@ -51,7 +54,9 @@ class _FrameTrashViewState extends State<FrameTrashView> {
     final confirmed = await showFrameConfirmDialog(
       context,
       title: l10n.photosEmptyTrashConfirmTitle,
-      body: l10n.photosEmptyTrashConfirmBody(widget.photos.length),
+      body: l10n.photosEmptyTrashConfirmBody(
+        widget.totalCount ?? widget.photos.length,
+      ),
       confirmLabel: l10n.photosDeleteForever,
       destructive: true,
     );
@@ -180,7 +185,7 @@ class _FrameTrashViewState extends State<FrameTrashView> {
               ),
               const SizedBox(height: 4),
               Text(
-                l10n.photosTrashSubtitle(widget.photos.length),
+                l10n.photosTrashSubtitle(widget.totalCount ?? widget.photos.length),
                 style: TextStyle(
                   color: colors.muted,
                   fontSize: AppTypography.bodySmall,

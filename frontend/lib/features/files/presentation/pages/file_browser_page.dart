@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/module_entry_refresh_listener.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/realtime_providers.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/app/theme/app_typography.dart';

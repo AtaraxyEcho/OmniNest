@@ -83,8 +83,50 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   static const Duration _urlRefreshLead = Duration(minutes: 2);
   Future<void>? _settingsMutation;
 
+  static const Duration _processingPollInterval = Duration(seconds: 3);
+  static const Duration _processingPollTimeout = Duration(minutes: 10);
+  Timer? _processingPollTimer;
+  DateTime? _processingPollDeadline;
+
+  /// 轮询由 application 持有：上传受理后的安全扫描（视频还叠加缩略图/转码）
+  /// 要在服务端跑完才转 READY，桌面面板与移动抽屉都只展示状态、各自不再起定时器。
+  @override
+  set state(AsyncValue<AppBackdropState> value) {
+    super.state = value;
+    _syncProcessingPoll();
+  }
+
+  /// 存在处理中素材就按固定间隔回读，全部到终态、超过上限或控制器释放即停。
+  void _syncProcessingPoll() {
+    final hasProcessing =
+        state.asData?.value.backdrops.any(
+              (backdrop) => backdrop.status == AppBackdropAssetStatus.processing,
+            ) ??
+        false;
+    if (!hasProcessing) {
+      _stopProcessingPoll();
+      return;
+    }
+    final deadline = _processingPollDeadline ??=
+        DateTime.now().add(_processingPollTimeout);
+    if (DateTime.now().isAfter(deadline)) {
+      _stopProcessingPoll();
+      return;
+    }
+    _processingPollTimer ??= Timer.periodic(_processingPollInterval, (_) {
+      unawaited(syncFromServer());
+    });
+  }
+
+  void _stopProcessingPoll() {
+    _processingPollTimer?.cancel();
+    _processingPollTimer = null;
+    _processingPollDeadline = null;
+  }
+
   @override
   Future<AppBackdropState> build() async {
+    ref.onDispose(_stopProcessingPoll);
     final repository = ref.watch(appBackdropRepositoryProvider);
     ref.watch(appBackdropSelectionTargetProvider);
     final session = await ref.watch(authSessionProvider.future);

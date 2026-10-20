@@ -141,9 +141,10 @@ class _MusicBatchActionBar extends ConsumerWidget {
 
 /// 艺人详情页的专辑横向封面架，进入详情时按需加载。
 class _ArtistAlbumsShelf extends ConsumerStatefulWidget {
-  const _ArtistAlbumsShelf({required this.artistId});
+  const _ArtistAlbumsShelf({required this.artistId, required this.onOpenAlbum});
 
   final String artistId;
+  final ValueChanged<MusicAlbum> onOpenAlbum;
 
   @override
   ConsumerState<_ArtistAlbumsShelf> createState() => _ArtistAlbumsShelfState();
@@ -178,10 +179,7 @@ class _ArtistAlbumsShelfState extends ConsumerState<_ArtistAlbumsShelf> {
           subtitle: l10n.musicDeckTrackCount(album.trackCount),
           imageUrl: album.listCoverUrl,
           icon: Icons.album_rounded,
-          onTap:
-              () => ref
-                  .read(musicCenterControllerProvider.notifier)
-                  .openAlbum(album),
+          onTap: () => widget.onOpenAlbum(album),
         ),
     ];
     return Padding(

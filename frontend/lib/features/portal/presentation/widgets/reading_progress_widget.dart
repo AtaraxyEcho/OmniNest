@@ -16,6 +16,9 @@ class ReadingProgressWidget extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final current = item;
+    // 后端契约里 progressPercent 是 0~1 的比值（reader_progress.progress_percent 有
+    // CHECK 约束兜住），这里只做展示换算，不能再除一次 100。
+    final progressRatio = (current?.progressPercent ?? 0).clamp(0.0, 1.0);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -77,7 +80,7 @@ class ReadingProgressWidget extends StatelessWidget {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(999),
                             child: LinearProgressIndicator(
-                              value: (current.progressPercent ?? 0) / 100,
+                              value: progressRatio.toDouble(),
                               minHeight: 3,
                               backgroundColor:
                                   colorScheme.surfaceContainerHighest,
@@ -85,7 +88,7 @@ class ReadingProgressWidget extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${(current.progressPercent ?? 0).round()}%',
+                            '${(progressRatio * 100).round()}%',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
