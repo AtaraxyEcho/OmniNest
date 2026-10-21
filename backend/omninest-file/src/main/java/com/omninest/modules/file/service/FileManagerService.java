@@ -8,6 +8,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.file.domain.FileAccessRecord;
 import com.omninest.modules.file.domain.FileNode;
@@ -22,11 +23,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +51,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class FileManagerService {
+
+    /**
+     * {@code file_nodes.name} 列宽；副本追加序号时按它截短词干。
+     */
+    private static final int MAX_NAME_LENGTH = 255;
+
     private final FileNodeRepository fileNodeRepository;
     private final FileAccessRecordRepository accessRecordRepository;
     private final FileObjectRepository fileObjectRepository;
@@ -53,6 +65,7 @@ public class FileManagerService {
     private final StorageQuotaService storageQuotaService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final UserSyncEventRecorder syncEventRecorder;
+    private final FileIndexSyncService fileIndexSyncService;
 
     /**
      * 查询用户最近访问的文件。
@@ -94,7 +107,7 @@ public class FileManagerService {
 
     /**
      * 复制文件或文件夹到目标位置。
-     * 文件夹复制为浅复制（仅复制节点结构，不递归复制子文件）。
+     * 文件夹按整棵子树递归复制，节点、层级与配额口径与源子树一致。
      *
      * @param userId         用户 ID
      * @param sourceId       源文件/文件夹 ID
@@ -112,40 +125,150 @@ public class FileManagerService {
         if (targetParent != null && source.getSpaceType() != targetParent.getSpaceType()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "不能在不同空间之间复制文件");
         }
-        if (fileNodeSupport.sameNameExists(userId, source.getSpaceType(), resolvedParentId, source.getName())) {
-            throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件");
+        String copyName = resolveAvailableName(userId, source.getSpaceType(), resolvedParentId, source.getName());
+        boolean isFolder = NodeType.FOLDER.getValue().equals(source.getNodeType());
+        if (isFolder && targetParent != null && isInsideSubtree(source, targetParent)) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能把文件夹复制到自身内部");
         }
 
+        // 文件夹必须整棵子树一起复制，否则副本是一个空壳，用户按「复制文件夹」预期丢失全部内容；
+        // 后代路径前缀已带尾斜杠，不会把同名前缀的兄弟目录卷进来。
+        List<FileNode> subtree = new ArrayList<>();
+        subtree.add(source);
+        if (isFolder) {
+            String prefix = LikePatterns.escapeSpecials(source.getNormalizedPath() + "/");
+            subtree.addAll(fileNodeRepository
+                    .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                            userId, source.getSpaceType(), prefix)
+                    .stream()
+                    // 父节点必须先于子节点建副本，才能按父子映射推导新路径
+                    .sorted(Comparator.comparingInt(node -> node.getNormalizedPath().length()))
+                    .toList());
+        }
+
+        long fileCount = subtree.stream()
+                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
+                .count();
+        long totalBytes = subtree.stream()
+                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
+                .mapToLong(FileNode::getSizeBytes)
+                .sum();
+        chargeQuotaForCopy(userId, source.getSpaceType(), totalBytes, fileCount);
+
+        Map<UUID, FileNode> parentById = new HashMap<>();
+        parentById.put(source.getId(), null);
+        List<UUID> copiedIds = new ArrayList<>(subtree.size());
+        FileNode copiedRoot = null;
+        for (FileNode node : subtree) {
+            FileNode newParent = node == source ? targetParent : parentById.get(node.getParentId());
+            if (node != source && newParent == null) {
+                // 祖先被回收站或跨空间过滤掉时整条分支一并跳过，避免生成挂空父级的孤儿节点
+                continue;
+            }
+            FileNode copy = copyNodeShape(node, userId, newParent, source.getSpaceType(),
+                    node == source ? copyName : node.getName());
+            FileNode saved = fileNodeRepository.save(copy);
+            if (node == source) {
+                copiedRoot = saved;
+            }
+            parentById.put(node.getId(), saved);
+            copiedIds.add(saved.getId());
+        }
+        fileIndexSyncService.scheduleAfterCommit(userId, copiedIds);
+        recordFileEvent(userId, copiedRoot.getId(), SyncAction.CREATED);
+        log.info("文件复制完成: sourceId={}, copyId={}, ownerUserId={}, 复制节点数={}",
+                sourceId, copiedRoot.getId(), userId, copiedIds.size());
+        return fileNodeSupport.toNodeDto(copiedRoot);
+    }
+
+    /**
+     * 复制节点的形态字段到新的目标父级下，内容对象沿用同一 {@code currentObjectId}。
+     *
+     * @param source 被复制的源节点
+     * @param userId 复制执行者
+     * @param targetParent 目标父节点，null 表示根目录
+     * @param spaceType 目标空间类型
+     * @param name 副本名称；顶层副本可能带 {@code (n)} 序号，子节点沿用自身名称
+     */
+    private FileNode copyNodeShape(FileNode source, UUID userId, FileNode targetParent, SpaceType spaceType,
+            String name) {
         FileNode copy = new FileNode();
         copy.setOwnerUserId(userId);
-        copy.setParentId(resolvedParentId);
+        copy.setParentId(targetParent != null ? targetParent.getId() : null);
         copy.setNodeType(source.getNodeType());
-        copy.setName(source.getName());
-        copy.setNormalizedPath(fileNodeSupport.resolveChildPath(targetParent, source.getName()));
+        copy.setName(name);
+        copy.setNormalizedPath(fileNodeSupport.resolveChildPath(targetParent, name));
         copy.setMimeType(source.getMimeType());
         copy.setSizeBytes(source.getSizeBytes());
         copy.setCurrentObjectId(source.getCurrentObjectId());
-        copy.setSpaceType(source.getSpaceType());
-        if (source.getSpaceType() == SpaceType.SHARED) {
+        copy.setSpaceType(spaceType);
+        if (spaceType == SpaceType.SHARED) {
             copy.setUploadedBy(userId);
         }
+        return copy;
+    }
 
-        FileNode saved = fileNodeRepository.save(copy);
-        // 副本按新节点计入配额：账本口径是节点数而非物理对象数，同一对象被两个节点引用
-        // 时对账也计两次。不加计会让「复制后彻底删除副本」反向扣减，把已用空间刷空。
-        chargeQuotaForCopy(userId, saved.getSpaceType(), saved.getSizeBytes());
-        recordFileEvent(userId, saved.getId(), SyncAction.CREATED);
-        log.info("文件复制完成: sourceId={}, copyId={}, ownerUserId={}", sourceId, saved.getId(), userId);
-        return fileNodeSupport.toNodeDto(saved);
+    /**
+     * 为目标目录选一个未被占用的副本名称：首个保持原名，后续追加 {@code (n)} 序号。
+     *
+     * <p>复制是"再要一份"的动作，目标目录已有同名项是常态而不是错误，所以不返回冲突；
+     * 改名与移动仍然拒绝同名，因为那是用户在指定一个确定的名字。</p>
+     *
+     * @param userId 副本所有者
+     * @param spaceType 目标空间类型
+     * @param parentId 目标父目录 ID，null 表示根目录
+     * @param preferredName 期望名称，通常为源节点名称
+     * @return 目标目录内唯一的名称
+     */
+    private String resolveAvailableName(UUID userId, SpaceType spaceType, UUID parentId, String preferredName) {
+        if (!fileNodeSupport.sameNameExists(userId, spaceType, parentId, preferredName)) {
+            return preferredName;
+        }
+        int suffix = 1;
+        String candidate = appendCopySuffix(preferredName, suffix);
+        while (fileNodeSupport.sameNameExists(userId, spaceType, parentId, candidate)) {
+            candidate = appendCopySuffix(preferredName, ++suffix);
+        }
+        return candidate;
+    }
+
+    /**
+     * 把序号插在扩展名之前，并按 {@code file_nodes.name} 列宽截短词干。
+     */
+    private String appendCopySuffix(String name, int suffix) {
+        String suffixText = " (" + suffix + ")";
+        int dot = name.lastIndexOf('.');
+        String stem = dot <= 0 ? name : name.substring(0, dot);
+        String extension = dot <= 0 ? "" : name.substring(dot);
+        int stemLimit = Math.max(1, MAX_NAME_LENGTH - suffixText.length() - extension.length());
+        if (stem.length() > stemLimit) {
+            stem = stem.substring(0, stemLimit);
+        }
+        return stem + suffixText + extension;
+    }
+
+    /**
+     * 判断目标父目录是否位于源文件夹子树内（含指向自身）。
+     */
+    private boolean isInsideSubtree(FileNode source, FileNode targetParent) {
+        String sourcePath = source.getNormalizedPath();
+        String targetPath = targetParent.getNormalizedPath();
+        if (sourcePath == null || targetPath == null) {
+            return false;
+        }
+        return targetPath.equals(sourcePath) || targetPath.startsWith(sourcePath + "/");
     }
 
     /**
      * 复制产生的新节点按所属空间结算配额，个人空间按用户、共享空间按全空间单行账本。
+     *
+     * <p>副本按新节点计入配额：账本口径是节点数而非物理对象数，同一对象被两个节点引用
+     * 时对账也计两次。不加计会让「复制后彻底删除副本」反向扣减，把已用空间刷空。</p>
      */
-    private void chargeQuotaForCopy(UUID userId, SpaceType spaceType, long bytes) {
+    private void chargeQuotaForCopy(UUID userId, SpaceType spaceType, long bytes, long fileCount) {
         if (spaceType == SpaceType.SHARED) {
             sharedSpaceQuotaService.checkQuota(bytes);
-            sharedSpaceQuotaService.increaseUsage(bytes, 1);
+            sharedSpaceQuotaService.increaseUsage(bytes, fileCount);
             return;
         }
         storageQuotaService.checkQuota(userId, bytes);
@@ -174,30 +297,83 @@ public class FileManagerService {
      * @param out     输出流
      */
     public void packAsZip(UUID userId, List<String> fileIds, OutputStream out) {
+        packZipEntries(planZipEntries(userId, fileIds), out);
+    }
+
+    /**
+     * 打包条目的数据来源：已校验归属、已定名并指向一个对象存储条目。
+     *
+     * @param entryName ZIP 内条目名，同名条目已追加序号
+     * @param bucketName 对象桶名
+     * @param objectKey 对象键
+     */
+    public record ZipPackEntry(String entryName, String bucketName, String objectKey) {
+    }
+
+    /**
+     * 在写出任何响应字节之前完成 ID 解析、归属校验、对象定位与同名去重。
+     *
+     * <p>ZIP 是流式响应：响应头一旦发出就无法回滚成 JSON 错误体，客户端只会收到 HTTP 200
+     * 的半截损坏压缩包。非法 ID、越权节点与缺失对象必须在这里抛出，让上层返回常规错误响应。</p>
+     *
+     * @param userId 请求用户 ID
+     * @param fileIds 待打包文件 ID 列表
+     * @return 打包条目，文件夹与回收站节点不产出条目
+     */
+    @Transactional(readOnly = true)
+    public List<ZipPackEntry> planZipEntries(UUID userId, List<String> fileIds) {
+        List<UUID> nodeIds = fileIds.stream().map(this::parseFileId).toList();
+        Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(nodeIds).stream()
+                .collect(Collectors.toMap(FileNode::getId, node -> node));
+        List<UUID> objectIds = nodesById.values().stream()
+                .filter(node -> !node.isDeleted())
+                .filter(node -> NodeType.FILE.getValue().equals(node.getNodeType()))
+                .map(FileNode::getCurrentObjectId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, FileObject> objectsById = fileObjectRepository.findAllById(objectIds).stream()
+                .collect(Collectors.toMap(FileObject::getId, object -> object));
+
         Set<String> usedEntryNames = new HashSet<>();
+        List<ZipPackEntry> entries = new ArrayList<>(nodeIds.size());
+        for (UUID nodeId : nodeIds) {
+            FileNode node = nodesById.get(nodeId);
+            if (node == null || !Objects.equals(node.getOwnerUserId(), userId)) {
+                throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在: " + nodeId);
+            }
+            // 回收站节点与文件夹不产出条目，但请求本身合法，沿用既有跳过口径
+            if (node.isDeleted() || !NodeType.FILE.getValue().equals(node.getNodeType())) {
+                continue;
+            }
+            if (node.getCurrentObjectId() == null) {
+                continue;
+            }
+            FileObject obj = objectsById.get(node.getCurrentObjectId());
+            if (obj == null) {
+                // 对象行缺失沿用既有跳过口径：这不是请求方的错，不该让整批打包失败
+                continue;
+            }
+            entries.add(new ZipPackEntry(
+                    uniqueEntryName(node.getName(), usedEntryNames),
+                    obj.getBucketName(),
+                    obj.getObjectKey()
+            ));
+        }
+        return entries;
+    }
+
+    /**
+     * 按已规划好的条目写出 ZIP 流。
+     *
+     * @param entries 打包条目
+     * @param out 输出流
+     */
+    public void packZipEntries(List<ZipPackEntry> entries, OutputStream out) {
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
-            for (String fileId : fileIds) {
-                FileNode node = fileNodeRepository.findByIdAndOwnerUserId(UUID.fromString(fileId), userId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在: " + fileId));
-                // 回收站节点不得混入打包结果
-                if (node.isDeleted()) {
-                    continue;
-                }
-                // 跳过文件夹
-                if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-                    continue;
-                }
-                // 无对象数据则跳过
-                if (node.getCurrentObjectId() == null) {
-                    continue;
-                }
-                FileObject obj = fileObjectRepository.findById(node.getCurrentObjectId()).orElse(null);
-                if (obj == null) {
-                    continue;
-                }
-                zip.putNextEntry(new ZipEntry(uniqueEntryName(node.getName(), usedEntryNames)));
+            for (ZipPackEntry entry : entries) {
+                zip.putNextEntry(new ZipEntry(entry.entryName()));
                 try (InputStream in = objectStorageClient.getObject(
-                        new ObjectStorageKey(obj.getBucketName(), obj.getObjectKey()))) {
+                        new ObjectStorageKey(entry.bucketName(), entry.objectKey()))) {
                     byte[] buffer = new byte[8192];
                     int len;
                     while ((len = in.read(buffer)) > 0) {
@@ -209,6 +385,14 @@ public class FileManagerService {
         } catch (IOException e) {
             log.error("ZIP 打包失败", e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件打包失败");
+        }
+    }
+
+    private UUID parseFileId(String fileId) {
+        try {
+            return UUID.fromString(fileId);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "文件 ID 不合法: " + fileId);
         }
     }
 

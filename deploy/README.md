@@ -31,6 +31,29 @@ docker compose up -d
 开发编排默认只构建图像分析侧车和网易云 API，后端仍由 Maven 或 IDE 运行；图像分析侧车
 继续使用 `ai-sidecar/` 作为源码构建上下文。
 
+### 基线重写后重建开发库
+
+项目未发布期间，`backend/omninest-app/src/main/resources/db/migration/V001__init_schema.sql` 与
+`V002__builtin_catalog.sql` 是唯一基线：结构变更直接改这两份文件，不新增递增迁移。
+只要文件内容与已建库时不一致，后端启动就会被 Flyway 拒绝（`validate-on-migrate` 默认为真，
+报 `Migration checksum mismatch for migration version 001`，并列出库内与本地两个校验和）。
+
+不要用 `flyway repair` 绕过：repair 只改写历史表里的校验和，不会补上基线新增的列与内置目录行，
+结果是启动成功、第一次读写该字段时再报缺列，比启动失败更难定位。开发库直接重建：
+
+```bash
+# 先停后端进程。历史表 flyway_schema_history 与业务表同处 omni 模式，整模式级联删除一并清掉。
+docker exec omninest-postgres psql -U omninest -d omninest -c 'DROP SCHEMA omni CASCADE;'
+```
+
+随后起后端，Flyway 会按当前基线重建 `omni` 模式、内置目录与默认配置。Redis、RabbitMQ 与
+Lucene 索引本就是可重建数据，不随库清理。生产环境在未发布阶段同样按基线重建；一旦进入
+已发布且环境执行过迁移的阶段，基线不可改写，必须改用递增迁移（见根目录 `AGENTS.md`）。
+
+重建只清数据库，MinIO 卷里的对象字节仍在：新库没有任何 `file_objects` 行，桶内**全部**对象
+都会被原件桶孤儿审计判成无主字节。重设基线之后不得开启
+`omninest.storage.user-file-orphan-scan.delete-enabled`，否则等价于清空用户文件。
+
 ### ClamAV 可选开关
 
 ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
@@ -462,5 +485,13 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
   保持 false 时登录密码、JWT 与刷新 Cookie 全部明文传输。
 - **MinIO 发布面**：托管桶保持私有，下载只签发短期签名 URL；经 Nginx 发布时不开放
   桶的匿名读，客户端仅通过 `OMNINEST_MINIO_PUBLIC_ENDPOINT` 访问。
+- **对象存储孤儿审计**：派生桶与原件桶各有一个扫描器（`DerivedAssetOrphanScanner`、
+  `UserFileOrphanScanner`），只在 Scheduler 角色跑，判据都是"对象键没有 `file_objects` 行"，
+  原件桶额外排除在途入库记录持有的目标键。年龄宽限不同：派生桶 24h（可重建），原件桶 30d
+  （不可重建，须大于过期会话 7d 与隔离保留期 7d 之和再加余量）。两个桶的
+  `delete-enabled` 都默认 false，先出报表再决定开删。
+- **原件桶审计的已知缺口**：分片上传的字节只落在隔离桶，原件桶不会出现未完成分片；
+  隔离桶侧的存储兜底需要对象存储端口暴露"列举未完成分片上传"，当前未暴露，
+  依赖 `FileCleanupService` 按会话行取消与 `FileQuarantineReaperScheduler` 按保留期删除。
 - **备份脚本**：见上文「备份与恢复」章节，宿主 crontab 每日执行。
 

@@ -1853,7 +1853,8 @@ CREATE TABLE "omni"."photo_items" (
   "gps_location" jsonb DEFAULT '{}'::jsonb,
   "deleted_at" timestamptz(6),
   "motion_state" varchar(16),
-  "motion_video_file_node_id" uuid
+  "motion_video_file_node_id" uuid,
+  "active_file_id" uuid
 )
 ;
 
@@ -3936,6 +3937,7 @@ COMMENT ON COLUMN "omni"."photo_items"."white_balance" IS '白平衡模式';
 COMMENT ON COLUMN "omni"."photo_items"."metering_mode" IS '测光模式';
 COMMENT ON COLUMN "omni"."photo_items"."lens_model" IS '镜头型号';
 COMMENT ON COLUMN "omni"."photo_items"."gps_location" IS '照片地理位置 JSON，保存 GPS 反向地理编码结果';
+COMMENT ON COLUMN "omni"."photo_items"."active_file_id" IS '当前活动全分辨率文件节点，编辑产物或空（空表示原图 file_node_id）';
 
 COMMENT ON TABLE "omni"."photo_scan_jobs" IS '照片库扫描任务表，记录扫描进度和执行结果';
 COMMENT ON COLUMN "omni"."photo_scan_jobs"."id" IS '照片扫描任务唯一标识，主键';

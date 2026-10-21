@@ -19,16 +19,38 @@ void main() {
     expect(identical(photo, photo.copyWith(favorite: false)), isTrue);
   });
 
-  test('照片详情源图使用稳定缓存键', () {
-    final photo = PhotoItem.fromJson(<String, dynamic>{
+  test('源图缓存键取对象路径，换编辑产物必须换键', () {
+    PhotoItem build(String url) => PhotoItem.fromJson(<String, dynamic>{
       'id': 'photo-source',
       'fileNodeId': 'file-source',
       'title': 'source.jpg',
-      'sourceUrl': 'https://example.test/files/source.jpg?signature=temporary',
+      'sourceUrl': url,
     });
 
-    expect(photo.sourceUrl, contains('/files/source.jpg'));
-    expect(photo.sourceCacheKey, 'photo-source:photo-source');
+    final signed = build(
+      'https://example.test/files/source.jpg?signature=temporary',
+    );
+    expect(signed.sourceUrl, contains('/files/source.jpg'));
+    expect(
+      signed.sourceCacheKey,
+      'photo-source:photo-source:/files/source.jpg',
+    );
+
+    // 同一文件重新签发预签名地址不得换键，否则详情页每次重下整本原图。
+    expect(
+      build(
+        'https://example.test/files/source.jpg?signature=refreshed',
+      ).sourceCacheKey,
+      signed.sourceCacheKey,
+    );
+    // 编辑或回滚版本后地址指向另一个文件，键必须随之改变，
+    // 否则缓存继续命中未编辑原图，表现为「编辑保存成功但大图没变」。
+    expect(
+      build(
+        'https://example.test/files/edited.jpg?signature=temporary',
+      ).sourceCacheKey,
+      isNot(signed.sourceCacheKey),
+    );
   });
 
   test('照片详情只暴露稳定图像分析分类并兼容旧结构', () {

@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -9,7 +9,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
-import 'package:omninest/features/reader/application/reader_cache_providers.dart';
+import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
@@ -21,7 +21,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-/// PDF 阅读页：字节取自本地缓存，由 pdfrx 渲染。
+/// PDF 阅读页：原生端按页映射解密后的会话文件，Web 端用缓存字节渲染。
 ///
 /// 进度契约：charOffset=当前页（1 起），chapterId 固定 `pdf`，
 /// progressPercent = 当前页 / 总页数。
@@ -41,6 +41,11 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     with WidgetsBindingObserver {
   String? _error;
   bool _loading = true;
+
+  /// 原生端解密后的会话文件路径，按页映射读取，不把整本 PDF 读进 Dart 堆。
+  String? _sessionFilePath;
+
+  /// Web 端没有文件路径，只能持有整本字节。
   Uint8List? _bytes;
   int _currentPage = 1;
   int _totalPages = 0;
@@ -89,6 +94,8 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
         ),
       );
     }
+    // 句柄由 pdfBookHandleProvider 持有并释放（ref.onDispose 删除明文会话文件），
+    // 本页只在 build 中保持订阅，避免 autoDispose 在查看器仍映射文件时删掉它。
     super.dispose();
   }
 
@@ -160,20 +167,22 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
       _error = null;
     });
     try {
-      final api = ref.read(readerApiProvider);
       final restore = await _resolveRestoreTarget();
-      // 字节走本地缓存：重复开书不再逐次重新下载整本 PDF。
-      final cache = ref.read(localBookCacheProvider);
-      final bytes = await cache.ensureCachedBytes(
-        widget.itemId,
-        webDownloader:
-            () => api.downloadFileBytes(widget.itemId, itemType: 'PDF'),
-        nativeDownloader: (path) => api.downloadFileToPath(widget.itemId, path),
+      // 走缓存句柄而不是整本字节：原生端解密到会话文件后按页映射，
+      // 把 100MB 级扫描版 PDF 全量读进 Dart 堆会叠加 PDFium 的 native 拷贝，移动端极易 OOM。
+      final handle = await ref.read(
+        pdfBookHandleProvider(widget.itemId).future,
       );
       if (!mounted) {
         return;
       }
-      if (bytes.isEmpty) {
+      final filePath = kIsWeb ? null : await handle.openFilePath();
+      final memoryBytes = filePath != null ? null : handle.memoryBytes;
+      if (!mounted) {
+        return;
+      }
+      final hasContent = filePath != null || (memoryBytes?.isNotEmpty ?? false);
+      if (!hasContent) {
         setState(() {
           _error = AppLocalizations.of(context).readerPdfLoadFailed;
           _loading = false;
@@ -181,7 +190,8 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
         return;
       }
       setState(() {
-        _bytes = bytes;
+        _sessionFilePath = filePath;
+        _bytes = memoryBytes;
         _currentPage = restore.page;
         _pendingPercentFallback = restore.percentFallback;
         _loading = false;
@@ -380,10 +390,13 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 保持句柄订阅：autoDispose provider 在无人监听时会释放句柄并删除明文会话文件，
+    // 而查看器可能仍在按页映射该文件。
+    ref.watch(pdfBookHandleProvider(widget.itemId));
     if (_loading) {
       return Scaffold(body: Center(child: AppLoading()));
     }
-    if (_error != null || _bytes == null) {
+    if (_error != null || (_sessionFilePath == null && _bytes == null)) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.readerPdfTitle)),
         body: AppErrorView(
@@ -409,25 +422,44 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
             onPressed: () => unawaited(_handleExit()),
           ),
         ),
-        body: PdfViewer.data(
-          _bytes!,
-          sourceName: 'reader-${widget.itemId}',
-          controller: _viewerController,
-          initialPageNumber: _currentPage,
-          params: PdfViewerParams(
-            onViewerReady: (document, controller) {
-              unawaited(_handleViewerReady(document, controller));
-            },
-            onPageChanged: (pageNumber) {
-              if (pageNumber == null) {
-                return;
-              }
-              setState(() => _currentPage = pageNumber);
-              unawaited(_syncProgress());
-            },
-          ),
-        ),
+        body: _buildViewerBody(),
       ),
+    );
+  }
+
+  /// 渲染主体：原生端按页映射会话文件，Web 端回退到内存字节。
+  Widget _buildViewerBody() {
+    final params = PdfViewerParams(
+      onViewerReady: (document, controller) {
+        unawaited(_handleViewerReady(document, controller));
+      },
+      onPageChanged: (pageNumber) {
+        if (pageNumber == null) {
+          return;
+        }
+        setState(() => _currentPage = pageNumber);
+        unawaited(_syncProgress());
+      },
+    );
+    final filePath = _sessionFilePath;
+    if (filePath != null) {
+      return PdfViewer.file(
+        filePath,
+        controller: _viewerController,
+        initialPageNumber: _currentPage,
+        params: params,
+      );
+    }
+    final bytes = _bytes;
+    if (bytes == null) {
+      return const AppErrorView(message: 'PDF 数据未就绪');
+    }
+    return PdfViewer.data(
+      bytes,
+      sourceName: 'reader-${widget.itemId}',
+      controller: _viewerController,
+      initialPageNumber: _currentPage,
+      params: params,
     );
   }
 }

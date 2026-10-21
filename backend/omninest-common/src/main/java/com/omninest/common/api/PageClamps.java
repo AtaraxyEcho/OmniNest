@@ -59,4 +59,22 @@ public final class PageClamps {
         int start = (int) from;
         return items.subList(start, (int) Math.min(from + safeSize(size), items.size()));
     }
+
+    /**
+     * 按夹取后的分页参数切出内存列表并组装响应。
+     *
+     * <p>响应体的 page、size 与 totalPages 必须与切片实际使用的参数同源，否则请求带上越界或
+     * 负数分页参数时，客户端读到的页码与收到的条目对不上，翻页会跳页或提前判定结束。</p>
+     *
+     * @param items 全量列表
+     * @param page 请求页码，从零开始
+     * @param size 请求每页数量
+     * @return 当前页响应
+     */
+    public static <T> PageResponse<T> pagedResponse(List<T> items, int page, int size) {
+        int safePage = safePage(page);
+        int safeSize = safeSize(size);
+        long totalElements = items == null ? 0L : items.size();
+        return PageResponse.of(slice(items, safePage, safeSize), safePage, safeSize, totalElements);
+    }
 }

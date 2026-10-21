@@ -53,9 +53,12 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
      * 浏览器 CSP。script-src 禁止 unsafe-inline（启动脚本已外置到 web/js）。
      * style-src 保留 unsafe-inline：Flutter Web 引擎/CanvasKit 运行时会注入内联 style，
      * 去掉会导致文本编辑与渲染层样式失效；待 Flutter 提供 nonce/hash 方案后再收紧。
+     * worker-src 必须放行 blob：pdfrx 的 pdfium 客户端从 blob URL 创建 Worker，
+     * 未显式声明时会回落到 script-src 并被拦截，表现为 PDF 预览区一片空白且不报错。
      */
     private String contentSecurityPolicy = "default-src 'self'; "
             + "script-src 'self' 'wasm-unsafe-eval'; "
+            + "worker-src 'self' blob:; "
             + "style-src 'self' 'unsafe-inline'; "
             + "font-src 'self' data:; "
             + "img-src 'self' data: blob: http: https:; "

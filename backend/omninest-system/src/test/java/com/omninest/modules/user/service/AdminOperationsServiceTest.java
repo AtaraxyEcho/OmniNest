@@ -407,6 +407,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void cancelTaskCancelsQueuedTaskAndRecordsReason() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(rawTaskRow(taskId, "QUEUED")).when(taskRecordRepository).findByIdRaw(taskId);
         when(metricsRepository.updateTaskTerminalReturning(taskId, "CANCELLED", "QUEUED", "cancelled by admin"))
@@ -425,6 +426,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void cancelTaskRejectsRunningTask() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(rawTaskRow(taskId, "RUNNING")).when(taskRecordRepository).findByIdRaw(taskId);
 
@@ -436,6 +438,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void cancelTaskRejectsMissingTask() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(List.of()).when(taskRecordRepository).findByIdRaw(taskId);
 
@@ -447,6 +450,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void cancelTaskReportsConcurrentStateChange() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(rawTaskRow(taskId, "QUEUED")).when(taskRecordRepository).findByIdRaw(taskId);
         when(metricsRepository.updateTaskTerminalReturning(taskId, "CANCELLED", "QUEUED", "cancelled by admin"))
@@ -460,6 +464,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void discardDlqTaskMarksDiscardedTerminalWithoutOverwritingError() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(rawTaskRow(taskId, "DLQ")).when(taskRecordRepository).findByIdRaw(taskId);
         when(metricsRepository.updateTaskTerminalReturning(taskId, "DISCARDED", "DLQ", null))
@@ -476,6 +481,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void discardDlqTaskRejectsNonDlqTask() {
+        givenFreshAdminActor();
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         doReturn(rawTaskRow(taskId, "FAILED")).when(taskRecordRepository).findByIdRaw(taskId);
 

@@ -37,7 +37,6 @@ import com.omninest.modules.file.event.FileNodesRestoredEvent;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
-import com.omninest.modules.search.service.FileSearchIndexService;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.io.ByteArrayInputStream;
@@ -67,8 +66,8 @@ class FileQueryServiceTest {
     private final FileObjectRepository fileObjectRepository = Mockito.mock(FileObjectRepository.class);
     private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
     private final ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
-    private final FileSearchIndexService fileSearchIndexService =
-            Mockito.mock(FileSearchIndexService.class);
+    private final FileIndexSyncService fileIndexSyncService =
+            Mockito.mock(FileIndexSyncService.class);
     private final FilePermissionService filePermissionService =
             Mockito.mock(FilePermissionService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
@@ -92,7 +91,7 @@ class FileQueryServiceTest {
             filePermissionService,
             fileLifecycleGuard,
             eventPublisher,
-            fileSearchIndexService,
+            fileIndexSyncService,
             syncEventRecorder,
             userIds -> Map.of(),
             new MediaProbeService(),
@@ -998,7 +997,7 @@ class FileQueryServiceTest {
                 filePermissionService,
                 fileLifecycleGuard,
                 eventPublisher,
-                fileSearchIndexService,
+                fileIndexSyncService,
                 syncEventRecorder,
                 userIds -> Map.of(),
                 probeService,
@@ -1055,7 +1054,7 @@ class FileQueryServiceTest {
                 filePermissionService,
                 fileLifecycleGuard,
                 eventPublisher,
-                fileSearchIndexService,
+                fileIndexSyncService,
                 syncEventRecorder,
                 userIds -> Map.of(),
                 probeService,

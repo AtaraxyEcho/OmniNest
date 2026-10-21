@@ -2,6 +2,7 @@ package com.omninest.app.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -39,6 +40,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mail.MailException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -52,12 +54,14 @@ import org.testcontainers.utility.MountableFile;
  * 通知邮件通道在真实 SMTP 服务上的投递验证。
  *
  * <p>SMTP 参数走配置中心（口令密文落库、读取时解回明文），发送要真建一条 TCP 连接把消息
- * 交出去，这两点用 Mock 永远证明不了。这里起两个 Mailpit：一个开放投递，另一个强制登录，
- * 因此既能确认消息确实落到收件端、多部件正文与转义形态符合预期，也能证明凭据真的被发出并
- * 被服务端接受或拒绝。</p>
+ * 交出去，这两点用 Mock 永远证明不了。这里起三个 Mailpit：一个开放投递，另一个强制登录，
+ * 第三个带运行期自签证书，因此既能确认消息确实落到收件端、多部件正文与转义形态符合预期，
+ * 也能证明凭据真的被发出，以及证书校验与"必须加密"这两道闸门在服务端不配合时确实会失败。</p>
  *
- * <p>TLS 握手不在这里验证：那要把测试证书与私钥提交进仓库，与凭据管理规范冲突。加密方式
- * 如何落到 JavaMail 参数上由 {@code NotificationEmailSenderTest} 断言。</p>
+ * <p>证书不落仓库，由 {@link NotificationEmailTestCertificates} 在测试启动时现生成，退出即删。
+ * 隐式 TLS（465 一类端口）不在这里验证：Mailpit 的 {@code --smtp} 只接受 {@code ip:port} 绑定，
+ * 没有免 STARTTLS 的 TLS 监听口，因此 {@code security=SSL} 只能断言"不会静默退回明文"，
+ * 真正握手成功需要一台隐式 TLS 服务。</p>
  *
  * @author OmniNest
  */
@@ -113,6 +117,10 @@ class NotificationEmailDeliveryIT {
             // 镜像的 ENTRYPOINT 已是 /mailpit，这里只给参数，重复写可执行文件会让容器起不来。
             .withCommand("-s", "[::]:1025", "--smtp-auth-file", "/tmp/htpasswd",
                     "--smtp-auth-allow-insecure");
+
+    /** 提供 STARTTLS 的收件端：自签证书，用来区分"链校验失败"与"根本连不上"。 */
+    @Container
+    private static final GenericContainer<?> MAILPIT_TLS = startTlsMailpit();
 
     @Autowired
     private ConfigCenterService configCenterService;
@@ -225,18 +233,91 @@ class NotificationEmailDeliveryIT {
         assertThat(get(MAILPIT_AUTH, "/api/v1/messages")).doesNotContain(rejected);
     }
 
-    private void configureOpenRelay() {
-        configCenterService.seedSystemConfigValue("notification.email.enabled", "true");
-        configCenterService.seedSystemConfigValue("notification.email.host", MAILPIT.getHost());
+    @Test
+    @DisplayName("要求加密时不静默降明文：明文服务端在 STARTTLS 与 SSL 下都投递失败")
+    void tlsModesRefusePlaintextServer() throws Exception {
+        configureOpenRelay();
+        configCenterService.seedSystemConfigValue("notification.email.security", "STARTTLS");
+        String refused = "starttls-refused-" + UUID.randomUUID();
+        Throwable startTlsFailure = catchThrowable(() ->
+                emailSender.send(RECIPIENT, "STARTTLS 降密验证 " + refused, "正文 " + refused, null));
+        assertThat(startTlsFailure).isInstanceOf(MailException.class);
+        assertThat(causeChain(startTlsFailure)).containsIgnoringCase("tls");
+
+        configCenterService.seedSystemConfigValue("notification.email.security", "SSL");
+        String sslRefused = "ssl-refused-" + UUID.randomUUID();
+        assertThatThrownBy(() ->
+                emailSender.send(RECIPIENT, "隐式 TLS 降密验证 " + sslRefused, "正文 " + sslRefused, null))
+                .isInstanceOf(MailException.class);
+
+        String listed = get(MAILPIT, "/api/v1/messages");
+        assertThat(listed).doesNotContain(refused).doesNotContain(sslRefused);
+    }
+
+    @Test
+    @DisplayName("自签证书默认拒绝：写进信任清单后才投递，失败时一封都不落信")
+    void selfSignedCertRequiresTrustList() throws Exception {
+        configureTlsRelay("");
+        String rejected = "tls-untrusted-" + UUID.randomUUID();
+        Throwable failure = catchThrowable(() ->
+                emailSender.send(RECIPIENT, "证书校验验证 " + rejected, "正文 " + rejected, null));
+        assertThat(failure).isInstanceOf(MailException.class);
+        assertThat(causeChain(failure))
+                .as("失败原因应是 TLS 校验，而不是端口不通之类的环境问题：%s", causeChain(failure))
+                .containsAnyOf("SSLHandshakeException", "certificate");
+        assertThat(get(MAILPIT_TLS, "/api/v1/messages")).doesNotContain(rejected);
+
         configCenterService.seedSystemConfigValue(
-                "notification.email.port", String.valueOf(MAILPIT.getMappedPort(1025)));
-        configCenterService.seedSystemConfigValue("notification.email.security", "NONE");
-        configCenterService.seedSystemConfigValue("notification.email.trust-hosts", "");
+                "notification.email.trust-hosts", MAILPIT_TLS.getHost());
+        String accepted = "tls-trusted-" + UUID.randomUUID();
+        emailSender.send(RECIPIENT, "证书信任投递 " + accepted, "正文 " + accepted, null);
+        assertThat(fetchStoredMessage(MAILPIT_TLS, accepted))
+                .contains("证书信任投递 " + accepted);
+    }
+
+    private void configureOpenRelay() {
+        configureRelay(MAILPIT, "NONE", "");
+    }
+
+    private void configureTlsRelay(String trustHosts) {
+        configureRelay(MAILPIT_TLS, "STARTTLS", trustHosts);
+    }
+
+    /**
+     * 把 SMTP 参数指向指定收件端。
+     */
+    private void configureRelay(GenericContainer<?> mailpit, String security, String trustHosts) {
+        configCenterService.seedSystemConfigValue("notification.email.enabled", "true");
+        configCenterService.seedSystemConfigValue("notification.email.host", mailpit.getHost());
+        configCenterService.seedSystemConfigValue(
+                "notification.email.port", String.valueOf(mailpit.getMappedPort(1025)));
+        configCenterService.seedSystemConfigValue("notification.email.security", security);
+        configCenterService.seedSystemConfigValue("notification.email.trust-hosts", trustHosts);
         configCenterService.seedSystemConfigValue("notification.email.from", "notify@omninest.test");
         configCenterService.seedSystemConfigValue("notification.email.username", "");
         configCenterService.seedSystemConfigValue("notification.email.password", "");
         configCenterService.seedSystemConfigValue("notification.email.format", "PLAIN");
         configCenterService.seedSystemConfigValue("notification.email.web-base-url", "");
+    }
+
+    /**
+     * 拼接异常链上的类名与消息，用于按"失败原因"而不是"是否失败"下断言。
+     *
+     * <p>只看类型会把端口不通、容器没起来这类环境问题也当成校验生效，因此必须把链上的
+     * TLS 相关字样锁住。</p>
+     */
+    private static String causeChain(Throwable error) {
+        StringBuilder text = new StringBuilder();
+        Throwable current = error;
+        while (current != null) {
+            text.append(current.getClass().getName()).append(": ")
+                    .append(current.getMessage()).append('\n');
+            if (current.getCause() == current) {
+                break;
+            }
+            current = current.getCause();
+        }
+        return text.toString();
     }
 
     /**
@@ -273,6 +354,20 @@ class NotificationEmailDeliveryIT {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         assertThat(response.statusCode()).isEqualTo(200);
         return response.body();
+    }
+
+    private static GenericContainer<?> startTlsMailpit() {
+        GenericContainer<?> mailpit = new GenericContainer<>(MAILPIT_IMAGE)
+                .withExposedPorts(1025, 8025);
+        NotificationEmailTestCertificates.CertificatePair certificate =
+                NotificationEmailTestCertificates.generateLocalhostPair(mailpit.getHost());
+        return mailpit
+                .withCopyFileToContainer(
+                        MountableFile.forHostPath(certificate.certificate()), "/tmp/fullchain.pem")
+                .withCopyFileToContainer(
+                        MountableFile.forHostPath(certificate.privateKey()), "/tmp/privkey.pem")
+                .withCommand("-s", "[::]:1025", "--smtp-tls-cert", "/tmp/fullchain.pem",
+                        "--smtp-tls-key", "/tmp/privkey.pem");
     }
 
     private static Path writeAuthFile() {

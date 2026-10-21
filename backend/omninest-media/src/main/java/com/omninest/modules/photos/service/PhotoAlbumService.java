@@ -1,5 +1,6 @@
 package com.omninest.modules.photos.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
@@ -77,7 +78,7 @@ public class PhotoAlbumService {
     @Transactional(readOnly = true)
     public Page<PhotoAlbumDto> listAlbumsPage(UUID ownerUserId, int page, int size) {
         Page<PhotoAlbum> result = albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(
-                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                ownerUserId, PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
         return result.map(this::toDto);
     }
 

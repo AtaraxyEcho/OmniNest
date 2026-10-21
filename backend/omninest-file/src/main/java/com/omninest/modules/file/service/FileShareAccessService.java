@@ -28,6 +28,7 @@ import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,7 @@ public class FileShareAccessService {
     private final FileNodeSupport fileNodeSupport;
     private final StorageQuotaService storageQuotaService;
     private final UserSyncEventRecorder syncEventRecorder;
+    private final FileIndexSyncService fileIndexSyncService;
 
     /**
      * 通过分享 token 与密码访问文件并消费一次访问次数。
@@ -462,6 +464,7 @@ public class FileShareAccessService {
         newNode.setSpaceType(SpaceType.PERSONAL);
         FileNode saved = fileNodeRepository.save(newNode);
         chargePersonalQuota(userId, newNode.getSizeBytes());
+        fileIndexSyncService.scheduleAfterCommit(userId, List.of(saved.getId()));
         recordFileEvent(userId, saved.getId(), SyncAction.CREATED);
     }
 
@@ -500,6 +503,9 @@ public class FileShareAccessService {
             throw new BusinessException(ErrorCode.CONFLICT, "目标目录已存在同名文件夹，请先改名或清理后再保存");
         }
         FileNode newFolder = new FileNode();
+        // 预生成主键：子节点要靠父节点 ID 建立映射，而 ID 原本在 flush 才赋值，
+        // 逐条 save 就是把它逼出来的 N+1 写。预分配后整棵子树可以一次 saveAll。
+        newFolder.setId(UUID.randomUUID());
         newFolder.setOwnerUserId(userId);
         newFolder.setParentId(targetParent != null ? targetParent.getId() : null);
         newFolder.setNodeType(NodeType.FOLDER.getValue());
@@ -509,22 +515,22 @@ public class FileShareAccessService {
         newFolder.setSourceType(SourceType.SHARE.getValue());
         newFolder.setShared(false);
         newFolder.setSpaceType(SpaceType.PERSONAL);
-        FileNode savedFolder = fileNodeRepository.save(newFolder);
 
         List<FileNode> descendants = fileNodeRepository
                 .findDescendantsByPrefixOrdered(
                         sourceFolder.getOwnerUserId(),
                         LikePatterns.escapeSpecials(sourceFolder.getNormalizedPath() + "/"));
 
+        List<FileNode> pending = new ArrayList<>();
+        pending.add(newFolder);
         Map<String, FileNode> pathToNewNode = new LinkedHashMap<>();
-        pathToNewNode.put(sourceFolder.getNormalizedPath(), savedFolder);
+        pathToNewNode.put(sourceFolder.getNormalizedPath(), newFolder);
 
         long totalBytes = 0L;
-        long totalFiles = 0L;
         for (FileNode child : descendants) {
             String relativePath = child.getNormalizedPath().substring(sourceFolder.getNormalizedPath().length());
             String[] segments = relativePath.split("/");
-            FileNode parentNode = savedFolder;
+            FileNode parentNode = newFolder;
             StringBuilder currentPath = new StringBuilder(sourceFolder.getNormalizedPath());
 
             for (int i = 0; i < segments.length - 1; i++) {
@@ -536,6 +542,7 @@ public class FileShareAccessService {
             }
 
             FileNode newChild = new FileNode();
+            newChild.setId(UUID.randomUUID());
             newChild.setOwnerUserId(userId);
             newChild.setParentId(parentNode != null ? parentNode.getId() : null);
             newChild.setNodeType(child.getNodeType());
@@ -547,15 +554,17 @@ public class FileShareAccessService {
             newChild.setSourceType(SourceType.SHARE.getValue());
             newChild.setShared(false);
             newChild.setSpaceType(SpaceType.PERSONAL);
-            FileNode savedChild = fileNodeRepository.save(newChild);
-            pathToNewNode.put(child.getNormalizedPath(), savedChild);
+            pathToNewNode.put(child.getNormalizedPath(), newChild);
+            pending.add(newChild);
             if (NodeType.FILE.getValue().equals(child.getNodeType())) {
                 totalBytes += child.getSizeBytes();
-                totalFiles += 1;
             }
         }
+        List<FileNode> savedNodes = fileNodeRepository.saveAll(pending);
         chargePersonalQuota(userId, totalBytes);
-        recordFileEvent(userId, savedFolder.getId(), SyncAction.CREATED);
+        fileIndexSyncService.scheduleAfterCommit(
+                userId, savedNodes.stream().map(FileNode::getId).toList());
+        recordFileEvent(userId, newFolder.getId(), SyncAction.CREATED);
     }
 
     /**

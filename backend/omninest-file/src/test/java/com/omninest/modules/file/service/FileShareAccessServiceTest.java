@@ -71,7 +71,7 @@ class FileShareAccessServiceTest {
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
             rateLimitService, notificationService,
             fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport, storageQuotaService,
-            syncEventRecorder
+            syncEventRecorder, Mockito.mock(FileIndexSyncService.class)
     );
 
     @BeforeEach

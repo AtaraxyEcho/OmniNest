@@ -3,9 +3,12 @@ package com.omninest.modules.configcenter.domain;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 受控运行时配置定义。
@@ -56,6 +59,17 @@ public record ConfigDefinition(
      * 避免直到清理任务执行才被发现配置根本无效。
      */
     private static final Set<String> RELATIVE_PATH_LIST_KEYS = Set.of("log-retention.scan-paths");
+
+    /**
+     * 跳过证书校验的主机清单：这条配置的语义是"对哪些地址不验证书"，写宽一点就等于
+     * 把整条信道降级成可中间人，因此只接受具体主机名或 IPv4，通配符与空项一律拒绝。
+     */
+    private static final Set<String> TRUST_HOST_LIST_KEYS = Set.of("notification.email.trust-hosts");
+
+    private static final Pattern TRUST_HOST = Pattern.compile(
+            "[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?");
+
+    private static final int MAX_TRUST_HOSTS = 20;
 
     public ConfigDefinition {
         allowedValues = List.copyOf(allowedValues);
@@ -133,10 +147,38 @@ public record ConfigDefinition(
         if (RELATIVE_PATH_LIST_KEYS.contains(key)) {
             return normalizeRelativePathList(rawValue);
         }
+        if (TRUST_HOST_LIST_KEYS.contains(key)) {
+            return normalizeTrustHostList(rawValue);
+        }
         if (!URL_KEYS.contains(key)) {
             return rawValue;
         }
         return normalizeUrl(rawValue);
+    }
+
+    /**
+     * 校验跳过证书校验的主机清单：只接受具体主机名或 IPv4，拒绝通配符、空项与多余字符。
+     *
+     * <p>{@code *} 这类写法会让 JavaMail 对所有地址免校验，等于把整条 SMTP 信道（含登录口令）
+     * 降级成可中间人；清单必须逐台写明，写错时宁可拒绝保存，也不要静默放宽。</p>
+     */
+    private String normalizeTrustHostList(String rawValue) {
+        String value = rawValue.trim();
+        if (value.isEmpty()) {
+            return "";
+        }
+        List<String> hosts = new ArrayList<>();
+        for (String segment : value.split(",")) {
+            String host = segment.trim().toLowerCase(Locale.ROOT);
+            if (!TRUST_HOST.matcher(host).matches()) {
+                throw new IllegalArgumentException("证书信任清单只接受具体主机名或 IPv4 地址，不能使用通配符或空项");
+            }
+            if (hosts.size() >= MAX_TRUST_HOSTS) {
+                throw new IllegalArgumentException("证书信任清单最多 " + MAX_TRUST_HOSTS + " 个主机");
+            }
+            hosts.add(host);
+        }
+        return String.join(",", hosts);
     }
 
     /**

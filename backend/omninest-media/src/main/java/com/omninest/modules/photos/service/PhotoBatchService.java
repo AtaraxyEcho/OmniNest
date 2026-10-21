@@ -402,7 +402,8 @@ public class PhotoBatchService {
             if (photo == null) {
                 continue;
             }
-            FileDescriptor fileNode = fileMetadataQueryService.findById(photo.getFileNodeId())
+            UUID activeFileId = photo.activeOrSourceFileId();
+            FileDescriptor fileNode = fileMetadataQueryService.findById(activeFileId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件节点不存在"));
             if (fileNode.currentObjectId() == null) {
                 continue;
@@ -420,7 +421,9 @@ public class PhotoBatchService {
             if (totalBytes > downloadProperties.getMaxSourceBytes()) {
                 throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "批量下载文件总大小超过限制");
             }
-            String extension = safeExtension(photo.getFormat());
+            // 条目后缀必须跟随实际取出的文件：编辑产物是 JPEG，继续沿用 photo.format（原图扩展名）
+            // 会让解压出来的文件类型与内容不符。
+            String extension = safeExtension(extensionOf(fileNode.name(), photo.getFormat()));
             String proposedName = String.format(
                     "%03d_%s.%s",
                     sources.size() + 1,
@@ -429,13 +432,26 @@ public class PhotoBatchService {
             );
             String entryName = uniqueEntryName(proposedName, entryNames);
             sources.add(new PhotoArchiveSource(
-                    photo.getFileNodeId(),
+                    activeFileId,
                     entryName,
                     fileObject.sizeBytes(),
                     fileObject.sha256()
             ));
         }
         return new PhotoArchivePlan(List.copyOf(sources), totalBytes);
+    }
+
+    /**
+     * 取文件节点名的扩展名，缺失时回退到照片记录的格式字段。
+     */
+    private String extensionOf(String fileName, String fallbackFormat) {
+        if (fileName != null) {
+            int dot = fileName.lastIndexOf('.');
+            if (dot > 0 && dot < fileName.length() - 1) {
+                return fileName.substring(dot + 1);
+            }
+        }
+        return fallbackFormat;
     }
 
     private PhotoBatchTask writeArchive(

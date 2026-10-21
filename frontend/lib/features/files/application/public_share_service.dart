@@ -34,6 +34,11 @@ class PublicShareService {
   }) {
     return _repository.accept(token, password: password, authToken: authToken);
   }
+
+  /// 匿名获取单文件的短期下载地址。
+  Future<ShareAccessResult> access(String token, {String? password}) {
+    return _repository.access(token, password: password);
+  }
 }
 
 /// 公开分享应用服务依赖注入入口。

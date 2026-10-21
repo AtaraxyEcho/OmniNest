@@ -3,8 +3,10 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +19,7 @@ import com.omninest.common.user.UserAccountQuery;
 import com.omninest.common.user.UserAccountSummary;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.SharedSpacePermission;
+import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileNodePermissionRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
 
 /**
  * 共享空间服务测试。
@@ -209,17 +213,72 @@ class SharedSpaceServiceTest {
             when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                     USER_A, SpaceType.PERSONAL, "/archive/movies/"))
                     .thenReturn(List.of(child));
-            when(fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, FOLDER_ID))
+            when(fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(USER_A, FOLDER_ID))
                     .thenReturn(List.of(child));
-            // 子树重写读的是目标空间：后代已被 batchMoveChildrenToShared 翻成 SHARED。
-            when(fileNodeRepository.findBySpaceTypeAndNormalizedPathStartingWithOrderById(
-                    eq(SpaceType.SHARED), eq("/archive/movies/"), any()))
-                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(child)));
 
             service.moveToSharedSpace(FOLDER_ID, USER_A);
 
             assertThat(folder.getNormalizedPath()).isEqualTo("/movies");
             assertThat(child.getNormalizedPath()).isEqualTo("/movies/movie.mkv");
+            // 跨空间移动不得再按路径前缀盲扫目标空间：那会把其他用户/成员的同名子树一起改掉。
+            verify(fileNodeRepository, never()).findSubtreeBySpaceTypeAfterId(
+                    any(), anyString(), any(), any());
+        }
+
+        @Test
+        @DisplayName("已在共享空间的节点再次移入：拒绝且不重复扣个人配额")
+        void moveToSharedSpace_alreadyShared_rejectsWithoutDoubleCharging() {
+            stubPermission(USER_A, true, false, false, false, false, true, false, false);
+            FileNode already = sharedFile(FOLDER_ID, USER_A, "movie.mkv", 2048L);
+            when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FOLDER_ID, USER_A))
+                    .thenReturn(Optional.of(already));
+
+            assertThatThrownBy(() -> service.moveToSharedSpace(FOLDER_ID, USER_A))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(exception -> ((BusinessException) exception).errorCode())
+                    .isEqualTo(ErrorCode.CONFLICT);
+
+            // 重复移入曾把个人已用空间反复扣到 0 并让共享配额虚增
+            verify(storageQuotaService, never()).decrementUsage(any(), Mockito.anyLong());
+            verify(sharedSpaceQuotaService, never()).increaseUsage(Mockito.anyLong(), Mockito.anyLong());
+        }
+
+        @Test
+        @DisplayName("共享文件夹改名：子树路径按主键游标全量重写")
+        void renameSharedFile_rewritesWholeSubtreeByCursor() {
+            // 上传者改名需要 CAN_DELETE_OWN
+            stubPermission(USER_A, true, false, false, true, false, false, false, false);
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "movies");
+            folder.setNormalizedPath("/movies");
+            FileNode first = sharedFile(CHILD_FILE_ID, USER_A, "a.mkv", 10L);
+            first.setParentId(FOLDER_ID);
+            first.setNormalizedPath("/movies/a.mkv");
+            FileNode second = sharedFile(UUID.randomUUID(), USER_A, "b.mkv", 10L);
+            second.setParentId(FOLDER_ID);
+            second.setNormalizedPath("/movies/b.mkv");
+
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    eq(SpaceType.SHARED), any(), eq("cinema"))).thenReturn(false);
+            // 改写掉的记录不再匹配旧前缀：按 OFFSET 递增翻页会整批跳过未改写的后代，
+            // 因此每一批都必须从上一批最大 ID 继续。
+            when(fileNodeRepository.findSubtreeBySpaceTypeAfterId(
+                    eq(SpaceType.SHARED), eq("/movies/"), any(UUID.class), any(Pageable.class)))
+                    .thenReturn(List.of(first))
+                    .thenReturn(List.of(second))
+                    .thenReturn(List.of());
+
+            service.renameSharedFile(FOLDER_ID, new RenameFileNodeRequest("cinema"), USER_A);
+
+            assertThat(folder.getNormalizedPath()).isEqualTo("/cinema");
+            assertThat(first.getNormalizedPath()).isEqualTo("/cinema/a.mkv");
+            assertThat(second.getNormalizedPath()).isEqualTo("/cinema/b.mkv");
+            ArgumentCaptor<UUID> cursors = ArgumentCaptor.forClass(UUID.class);
+            verify(fileNodeRepository, Mockito.times(3)).findSubtreeBySpaceTypeAfterId(
+                    eq(SpaceType.SHARED), eq("/movies/"), cursors.capture(), any(Pageable.class));
+            assertThat(cursors.getAllValues()).containsExactly(
+                    new UUID(0L, 0L), first.getId(), second.getId());
         }
 
         @Test

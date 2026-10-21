@@ -253,7 +253,8 @@ public class MovieTaskService {
         if (NodeType.FILE.getValue().equals(root.nodeType())) {
             return List.of(root);
         }
-        String prefix = root.normalizedPath() == null ? "" : root.normalizedPath();
+        // 前缀必须带尾斜杠：否则扫描 /Movies 会把兄弟目录 /Movies_2026 里的文件一并登记进影视库
+        String prefix = root.normalizedPath() == null ? "/" : root.normalizedPath() + "/";
         return fileMetadataQueryService.listOwnedActiveByPathPrefix(
                 ownerUserId, root.spaceType(), prefix);
     }

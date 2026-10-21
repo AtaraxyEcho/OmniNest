@@ -135,22 +135,33 @@ class RealtimeCoordinator {
 
   void _onLifecycleStateChanged(AppLifecycleState state) {
     if (!_suspendInBackground) return;
-    final resumed = state == AppLifecycleState.resumed;
-    if (resumed == _foreground) return;
-    _foreground = resumed;
-    if (!resumed) {
-      _headTimer?.cancel();
-      _degradedTimer?.cancel();
-      _catchUpDebounce?.cancel();
-      _stompClient.pause();
+    if (state == AppLifecycleState.resumed) {
+      if (_foreground) return;
+      _foreground = true;
+      unawaited(_resumeFromBackground());
       return;
     }
-    unawaited(_resumeFromBackground());
+    // 只认真正进入后台的状态。inactive 是下拉通知栏、系统权限弹窗、分享面板和
+    // 切窗预览，几百毫秒后就会回到 resumed；在这里挂起等于每次失焦都断链、
+    // 回焦就轮换一次刷新令牌。
+    if (state != AppLifecycleState.paused &&
+        state != AppLifecycleState.hidden) {
+      return;
+    }
+    if (!_foreground) return;
+    _foreground = false;
+    _headTimer?.cancel();
+    _degradedTimer?.cancel();
+    _catchUpDebounce?.cancel();
+    _stompClient.pause();
   }
 
   Future<void> _resumeFromBackground() async {
-    if (!await _refreshSession() || _disposed) return;
+    // 回到前台先无条件重启高水位轮询：预刷新遇到瞬时网络抖动只会返回 false，
+    // 把它当成「别再连接」会让 headTimer 永不启动、STOMP 停在 pause 且再无入口恢复。
     _startHeadTimer();
+    await _refreshSession();
+    if (_disposed || !_foreground) return;
     _stompClient.connect();
     await synchronize();
   }

@@ -1,6 +1,7 @@
 package com.omninest.modules.file.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 
@@ -15,7 +16,10 @@ import java.util.UUID;
 @Schema(description = "保存文件新版本请求")
 public record SaveFileVersionRequest(
         @Schema(description = "新文件对象 ID") @NotNull UUID objectId,
-        @Schema(description = "新对象大小（字节）") long sizeBytes,
+        @Schema(description = "新对象大小（字节）")
+        @NotNull(message = "新对象大小不能为空")
+        @Min(value = 0, message = "新对象大小不能为负数")
+        Long sizeBytes,
         @Schema(description = "版本备注") String remark
 ) {
 }

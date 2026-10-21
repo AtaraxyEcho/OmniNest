@@ -410,7 +410,9 @@ public class FileShareService {
         }
         List<FileNode> descendants = fileNodeRepository
                 .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        ownerUserId, folder.getSpaceType(), LikePatterns.escapeSpecials(folder.getNormalizedPath()));
+                        ownerUserId,
+                        folder.getSpaceType(),
+                        LikePatterns.escapeSpecials(folder.getNormalizedPath() + "/"));
         Instant now = Instant.now();
         for (FileNode node : descendants) {
             node.setShared(shared);

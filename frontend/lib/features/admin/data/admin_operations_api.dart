@@ -307,17 +307,17 @@ class AdminOperationsApi {
     return 0;
   }
 
-  /// 全量重建搜索索引，返回清除的文档数
-  Future<int> rebuildSearchIndex() async {
+  /// 全量重建搜索索引，返回异步任务 ID（重建在服务端后台执行）
+  Future<String> rebuildSearchIndex() async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/search/rebuild',
     );
     final envelope = parseEnvelope(response.data);
     final data = envelope['data'];
-    if (data is Map<String, dynamic> && data['clearedDocuments'] is int) {
-      return data['clearedDocuments'] as int;
+    if (data is Map<String, dynamic> && data['taskId'] is String) {
+      return data['taskId'] as String;
     }
-    return 0;
+    return '';
   }
 
   Future<AdminExternalStorageView> externalStorage() async {

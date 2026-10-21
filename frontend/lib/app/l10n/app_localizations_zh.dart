@@ -2343,7 +2343,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesCannotGetFileUrl => '无法获取文件地址';
 
   @override
-  String get filesPdfDownloadHint => '暂不支持 PDF 在线预览，请下载后查看';
+  String get filesPdfDownloadHint => '无法在线打开这份 PDF，请下载后查看';
 
   @override
   String get filesAccessKeyId => '访问密钥 ID';

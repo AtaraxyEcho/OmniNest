@@ -68,8 +68,7 @@ void main() {
     expect(refreshCount, 0);
   });
 
-  test('403 刷新会话并携带新令牌重试一次成功', () async {
-    var accessToken = 'stale-claims-token';
+  test('403 按权限拒绝原样返回，不轮换刷新令牌也不重放请求', () async {
     var refreshCount = 0;
     final adapter = _ReplayAdapter();
     final client = ApiClient(
@@ -77,38 +76,9 @@ void main() {
         apiBaseUrl: 'http://localhost:8080/api/v1',
         wsBaseUrl: 'ws://localhost:8080/ws',
       ),
-      readAccessToken: () => accessToken,
+      readAccessToken: () => 'stale-claims-token',
       refreshSession: () async {
         refreshCount++;
-        accessToken = 'fresh-claims-token';
-        return true;
-      },
-      httpClientAdapter: adapter,
-    );
-
-    final response = await client.dio.get<Map<String, dynamic>>('/claims');
-
-    expect(refreshCount, 1);
-    expect(response.data?['code'], 200);
-    expect(adapter.claimAuthorizationHeaders, [
-      'Bearer stale-claims-token',
-      'Bearer fresh-claims-token',
-    ]);
-  });
-
-  test('403 真实权限拒绝重试后原样上抛且不清除会话', () async {
-    var accessToken = 'stale-claims-token';
-    var refreshCount = 0;
-    final adapter = _ReplayAdapter();
-    final client = ApiClient(
-      const AppEnvironment(
-        apiBaseUrl: 'http://localhost:8080/api/v1',
-        wsBaseUrl: 'ws://localhost:8080/ws',
-      ),
-      readAccessToken: () => accessToken,
-      refreshSession: () async {
-        refreshCount++;
-        accessToken = 'fresh-claims-token';
         return true;
       },
       httpClientAdapter: adapter,
@@ -117,8 +87,33 @@ void main() {
     final response = await client.dio.get<Map<String, dynamic>>('/forbidden');
 
     expect(response.statusCode, 403);
-    expect(refreshCount, 1);
-    expect(adapter.forbiddenRequestCount, 2);
+    expect(refreshCount, 0);
+    expect(adapter.forbiddenRequestCount, 1);
+  });
+
+  test('声明过期的 403 同样交回业务层，不由拦截器盲刷会话', () async {
+    // 权限变更时服务端已吊销旧会话（表现为 401），管理端改动自己也显式刷新；
+    // 让每个 403 都换一枚新令牌只会多付一次刷新与一次重放。
+    var refreshCount = 0;
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => 'stale-claims-token',
+      refreshSession: () async {
+        refreshCount++;
+        return true;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    final response = await client.dio.get<Map<String, dynamic>>('/claims');
+
+    expect(response.statusCode, 403);
+    expect(refreshCount, 0);
+    expect(adapter.claimAuthorizationHeaders, ['Bearer stale-claims-token']);
   });
 
   test('刷新失败时原样上抛 401 且不触发登出（分级由会话通知器负责）', () async {

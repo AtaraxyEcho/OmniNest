@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.omninest.common.ai.ImageAnalysisGateway;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
-import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.ai.ImageAnalysisGateway.FaceDetection;
 import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.enums.ErrorCode;
@@ -115,11 +114,6 @@ class PhotoAiServiceTest {
                     stagedFile.set(path);
                     return List.of();
                 });
-        Mockito.when(imageAnalysisGateway.analyzeContent(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(emptyAnalysis());
 
         service.processPhoto(ownerUserId, photoId);
 
@@ -196,11 +190,6 @@ class PhotoAiServiceTest {
                         ArgumentMatchers.anyString(),
                         ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(new FaceDetection(1, 2, 3, 4, embedding512())));
-        Mockito.when(imageAnalysisGateway.analyzeContent(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(emptyAnalysis());
 
         service.processPhoto(ownerUserId, photoId);
 
@@ -254,7 +243,7 @@ class PhotoAiServiceTest {
     }
 
     @Test
-    void shouldApplyStructuredContentLabelsWithoutCrossNamespaceInference() {
+    void shouldSkipContentUploadAndDeriveLabelsFromFacesOnly() {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
         UUID coverNodeId = UUID.randomUUID();
@@ -281,34 +270,26 @@ class PhotoAiServiceTest {
                         ArgumentMatchers.anyString(),
                         ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(new FaceDetection(1, 2, 3, 4, embedding512())));
-        ContentAnalysis analysis = new ContentAnalysis(
-                2,
-                "content-analysis-v2",
-                List.of(
-                        new ContentObservation("SUBJECT", "cat", 0.91F, "coco", List.of()),
-                        new ContentObservation("SCENE", "mountain", 0.72F, "places365", List.of())
-                )
-        );
-        Mockito.when(imageAnalysisGateway.analyzeContent(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(analysis);
-
         service.processPhoto(ownerUserId, photoId);
 
+        // 侧车的场景/主体分类模型已下线，接口恒返回空观察项：
+        // 再为每张照片二次上传整图只会翻倍网络与侧车 I/O，并白占推理槽位。
+        Mockito.verify(imageAnalysisGateway, Mockito.never()).analyzeContent(
+                ArgumentMatchers.any(Path.class),
+                ArgumentMatchers.anyString(),
+                ArgumentMatchers.anyInt());
+        // 命名空间之间不得互相推导由 PhotoLabelPolicyTest 覆盖，这里只确认标签来自人脸。
         Mockito.verify(contentAnalysisService).apply(
                 ArgumentMatchers.eq(ownerUserId),
                 ArgumentMatchers.eq(photoId),
                 ArgumentMatchers.anyList(),
-                ArgumentMatchers.eq(analysis),
-                ArgumentMatchers.argThat(labels -> labels.stream().anyMatch(label ->
+                ArgumentMatchers.argThat(analysis ->
+                        analysis.observations().isEmpty()
+                                && "content-analysis-disabled".equals(analysis.pipelineVersion())),
+                ArgumentMatchers.argThat(labels -> labels.stream().allMatch(label ->
                         label.namespace().equals(PhotoLabelPolicy.SUBJECT)
-                                && label.code().equals("cat"))
-                        && labels.stream().anyMatch(label ->
-                        label.namespace().equals(PhotoLabelPolicy.SCENE)
-                                && label.code().equals("mountain"))
-                        && labels.stream().noneMatch(label -> label.code().equals("animal")))
+                                && label.code().equals("person"))
+                        && labels.size() == 1)
         );
     }
 
@@ -389,10 +370,6 @@ class PhotoAiServiceTest {
         float[] embedding = new float[512];
         embedding[0] = 0.5F;
         return embedding;
-    }
-
-    private ContentAnalysis emptyAnalysis() {
-        return new ContentAnalysis(2, "content-analysis-v2", List.of());
     }
 
     @Test

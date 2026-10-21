@@ -5,6 +5,7 @@ import com.omninest.modules.user.domain.SessionRevocationEntity;
 import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.assertj.core.api.Assertions;
@@ -43,12 +44,40 @@ class SessionRevocationServiceTest {
     void cachedRevocationSkipsDatabaseLookup() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        Mockito.when(cache.contains(userId, sessionId)).thenReturn(true);
+        Mockito.when(cache.checkRevoked(userId, sessionId)).thenReturn(Optional.of(true));
 
         boolean result = service.isRevoked(userId, sessionId);
 
         Assertions.assertThat(result).isTrue();
         Mockito.verifyNoInteractions(repository);
+    }
+
+    @Test
+    void cacheConfirmedCleanSessionSkipsDatabaseLookup() {
+        // 正常流量下绝大多数会话都未撤销：缓存确认未撤销时必须直接放行，
+        // 否则每个请求都要额外查一次数据库，黑名单缓存退化成第二次往返。
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        Mockito.when(cache.checkRevoked(userId, sessionId)).thenReturn(Optional.of(false));
+
+        boolean result = service.isRevoked(userId, sessionId);
+
+        Assertions.assertThat(result).isFalse();
+        Mockito.verifyNoInteractions(repository);
+    }
+
+    @Test
+    void databaseConfirmedCleanSessionWritesShortLivedNotRevokedMarker() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        Mockito.when(cache.checkRevoked(userId, sessionId)).thenReturn(Optional.empty());
+        Mockito.when(repository.existsByUserIdAndSessionId(userId, sessionId)).thenReturn(false);
+
+        boolean result = service.isRevoked(userId, sessionId);
+
+        Assertions.assertThat(result).isFalse();
+        Mockito.verify(cache).markNotRevoked(
+                Mockito.eq(userId), Mockito.eq(sessionId), Mockito.any(Duration.class));
     }
 
     @Test

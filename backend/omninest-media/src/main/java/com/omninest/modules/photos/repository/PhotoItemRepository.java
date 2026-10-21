@@ -1217,4 +1217,65 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
              ORDER BY p.createdAt DESC
             """)
     List<UUID> findIdsMissingCover(@Param("ownerUserId") UUID ownerUserId);
+
+    /**
+     * 批量读取照片当前活动的全分辨率文件节点，只返回已产生编辑产物的照片。
+     *
+     * <p>列表接口据此把大图地址指向编辑产物；未编辑的照片不在结果中，由调用方回退到
+     * {@code fileNodeId} 原图。用单列投影是为了不把整行实体拉进列表装配路径。</p>
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param photoIds 当前页照片 ID
+     * @return 已编辑照片的活动文件投影
+     */
+    @Query("""
+            SELECT p.id AS photoId,
+                   p.activeFileId AS activeFileId
+              FROM PhotoItem p
+             WHERE p.ownerUserId = :ownerUserId
+               AND p.id IN :photoIds
+               AND p.activeFileId IS NOT NULL
+            """)
+    List<PhotoActiveFileProjection> findActiveFileIds(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("photoIds") Collection<UUID> photoIds);
+
+    /**
+     * 按主键游标读取需要重建搜索索引的照片，跨全部用户。
+     *
+     * <p>仅服务于管理员发起的全站索引重建：索引字段口径变更后旧文档不会再被新查询命中，
+     * 只能整卷重投。排除回收站照片与文件已删除的照片，与 {@code findActiveByOwnerUserIdAndIdIn}
+     * 同一判据；游标按 ID 推进，与文件索引重建侧保持同一翻页方式。</p>
+     *
+     * @param afterId 上一页最大照片 ID，首页传最小 UUID
+     * @param limit 单批数量
+     * @return 按 ID 升序的照片投影批次
+     */
+    @Query("""
+            SELECT p.id AS id,
+                   p.ownerUserId AS ownerUserId
+              FROM PhotoItem p
+              JOIN FileNode file ON p.fileNodeId = file.id
+             WHERE file.deleted = false
+               AND p.deletedAt IS NULL
+               AND p.id > :afterId
+             ORDER BY p.id ASC
+            """)
+    List<PhotoIndexTargetProjection> findIndexablePhotosAfterId(
+            @Param("afterId") UUID afterId,
+            Pageable limit);
+
+    /**
+     * 统计需要重建搜索索引的照片总数，用于换算任务进度。
+     *
+     * @return 待重投照片数
+     */
+    @Query("""
+            SELECT COUNT(p)
+              FROM PhotoItem p
+              JOIN FileNode file ON p.fileNodeId = file.id
+             WHERE file.deleted = false
+               AND p.deletedAt IS NULL
+            """)
+    long countIndexablePhotos();
 }

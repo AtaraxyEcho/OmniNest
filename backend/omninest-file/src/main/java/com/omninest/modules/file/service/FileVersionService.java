@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -115,9 +116,16 @@ public class FileVersionService {
     public List<FileVersionDto> listVersions(UUID ownerUserId, UUID fileNodeId) {
         FileNode node = fileNodeSupport.findActiveNode(ownerUserId, fileNodeId);
         List<FileVersion> versions = fileVersionRepository.findByFileNodeIdOrderByVersionNoDesc(fileNodeId);
+        // 版本对象一次性批量读取：逐条 findById 会在版本历史较长的文件上退化成 N+1
+        List<UUID> objectIds = new ArrayList<>(versions.stream().map(FileVersion::getObjectId).toList());
+        if (node.getCurrentObjectId() != null) {
+            objectIds.add(node.getCurrentObjectId());
+        }
+        Map<UUID, FileObject> objectsById = fileObjectRepository.findAllById(objectIds).stream()
+                .collect(Collectors.toMap(FileObject::getId, object -> object));
         List<FileVersionDto> items = new ArrayList<>();
         for (FileVersion version : versions) {
-            FileObject object = fileObjectRepository.findById(version.getObjectId()).orElse(null);
+            FileObject object = objectsById.get(version.getObjectId());
             items.add(new FileVersionDto(
                     version.getId(),
                     version.getVersionNo(),
@@ -132,7 +140,7 @@ public class FileVersionService {
         }
         if (node.getCurrentObjectId() != null
                 && versions.stream().noneMatch(v -> v.getObjectId().equals(node.getCurrentObjectId()))) {
-            FileObject current = fileObjectRepository.findById(node.getCurrentObjectId()).orElse(null);
+            FileObject current = objectsById.get(node.getCurrentObjectId());
             if (current != null) {
                 items.add(0, new FileVersionDto(
                         null,

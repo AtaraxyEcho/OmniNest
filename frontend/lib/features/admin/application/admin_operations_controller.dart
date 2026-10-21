@@ -488,13 +488,13 @@ class AdminOperationsActions {
     return count;
   }
 
-  /// 全量重建搜索索引
-  Future<int> rebuildSearchIndex() async {
-    final count = await _api.rebuildSearchIndex();
+  /// 全量重建搜索索引，返回后台任务 ID
+  Future<String> rebuildSearchIndex() async {
+    final taskId = await _api.rebuildSearchIndex();
     ref.invalidate(adminTasksProvider);
     ref.invalidate(adminTaskPageProvider);
     ref.invalidate(adminConsoleSummaryProvider);
-    return count;
+    return taskId;
   }
 
   Future<AdminStorageLocation> createStorageLocation({

@@ -45,6 +45,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class SharedSpaceService {
 
+    /** 子树路径重写的单批条目数。 */
+    private static final int SUBTREE_REWRITE_BATCH_SIZE = 500;
+
     private final FileNodeRepository fileNodeRepository;
     private final SharedSpacePermissionRepository permissionRepository;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
@@ -163,11 +166,14 @@ public class SharedSpaceService {
     }
 
     /**
-     * 分页重写子树规范化路径。
+     * 按主键游标分页重写子树规范化路径。
      *
-     * <p>驱动两类写入：共享空间改名，以及跨空间移动到根目录。只给 LIKE 用转义形式，
-     * 路径改写仍按原始 oldPath 长度定位，不能让反斜杠进 substring。分页收集后代，
-     * 避免大目录一次加载到内存。</p>
+     * <p>驱动共享空间改名时的后代路径级联更新。只给 LIKE 用转义形式，路径改写仍按原始
+     * oldPath 长度定位，不能让反斜杠进 substring。</p>
+     *
+     * <p>翻页必须按 ID 游标而不是 OFFSET：改写掉的 normalizedPath 就是过滤条件列，
+     * 第一批记录改写后已不再匹配 oldPath 前缀，剩余记录整体前移，OFFSET 会让一半节点漏改，
+     * 表现为改名后子树路径与实际层级不一致。</p>
      *
      * @param oldPath 移动前的节点路径
      * @param newPath 移动后的节点路径
@@ -178,23 +184,21 @@ public class SharedSpaceService {
             return;
         }
         String prefix = LikePatterns.escapeSpecials(oldPath + "/");
-        int pageNumber = 0;
-        final int batchSize = 500;
-        Page<FileNode> page;
-        do {
-            page = fileNodeRepository.findBySpaceTypeAndNormalizedPathStartingWithOrderById(
-                    spaceType,
-                    prefix,
-                    PageRequest.of(pageNumber, batchSize, Sort.by("id"))
-            );
-            for (FileNode descendant : page.getContent()) {
+        UUID afterId = new UUID(0L, 0L);
+        while (true) {
+            List<FileNode> batch = fileNodeRepository.findSubtreeBySpaceTypeAfterId(
+                    spaceType, prefix, afterId, PageRequest.of(0, SUBTREE_REWRITE_BATCH_SIZE));
+            if (batch.isEmpty()) {
+                return;
+            }
+            for (FileNode descendant : batch) {
                 descendant.setNormalizedPath(
                         newPath + descendant.getNormalizedPath().substring(oldPath.length())
                 );
+                afterId = descendant.getId();
             }
-            fileNodeRepository.saveAll(page.getContent());
-            pageNumber++;
-        } while (page.hasNext());
+            fileNodeRepository.saveAll(batch);
+        }
     }
 
     /**
@@ -207,6 +211,10 @@ public class SharedSpaceService {
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, operatorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
         validatePermission(operatorId, Action.CAN_MOVE_TO);
+        // 已经在共享空间里的节点再次移入会重复扣减个人配额并让共享配额虚增
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            throw new BusinessException(ErrorCode.CONFLICT, "文件已在共享空间中");
+        }
         // 移入共享空间根目录，检查共享空间根目录下的同名冲突
         checkSharedSpaceNameConflict(node.getName(), null);
         revokeShareLinks(fileNodeId);
@@ -218,13 +226,11 @@ public class SharedSpaceService {
         node.setUploadedBy(operatorId);
         // 移入共享空间根目录：规范化路径必须跟着父级重算，否则节点会以旧父级前缀
         // 落进目标空间的另一棵子树，被那棵子树的批量软删/永久删除按前缀认领。
-        String previousPath = node.getNormalizedPath();
         node.setParentId(null);
         node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-            batchMoveChildrenToShared(node.getId(), operatorId);
-            rewriteSubtreePaths(previousPath, node.getNormalizedPath(), SpaceType.SHARED);
+            batchMoveChildrenToShared(node.getId(), node.getNormalizedPath(), operatorId);
         }
         storageQuotaService.decrementUsage(operatorId, stats.totalBytes());
         sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount());
@@ -254,7 +260,6 @@ public class SharedSpaceService {
                 targetUserId, SpaceType.PERSONAL, node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "个人空间根目录已存在同名节点");
         }
-        String previousPath = node.getNormalizedPath();
         node.setSpaceType(SpaceType.PERSONAL);
         node.setOwnerUserId(targetUserId);
         // 个人空间文件不需要 uploaded_by
@@ -264,8 +269,7 @@ public class SharedSpaceService {
         node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-            batchMoveChildrenToPersonal(node.getId(), targetUserId);
-            rewriteSubtreePaths(previousPath, node.getNormalizedPath(), SpaceType.PERSONAL);
+            batchMoveChildrenToPersonal(node.getId(), node.getNormalizedPath(), targetUserId);
         }
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
         storageQuotaService.incrementUsage(targetUserId, stats.totalBytes());
@@ -452,42 +456,65 @@ public class SharedSpaceService {
     }
 
     /**
-     * 批量移动子文件到共享空间。
+     * 批量移动子文件到共享空间，并按目标层级逐个重写规范化路径。
      * 保留文件夹层级：子文件的 parentId 指向其在共享空间中的父文件夹（同一个 node，只是 spaceType 变了）。
+     *
+     * <p>路径必须由父节点向下精确推导，不能按旧路径前缀盲扫：跨空间移动后旧前缀已经不属于
+     * 本节点，按前缀批量改写会命中其他用户或其他成员的同名子树。</p>
+     *
+     * @param folderId 父文件夹 ID
+     * @param parentPath 父文件夹在目标空间中的规范化路径
+     * @param previousOwner 移动操作者，即子节点原所有者
      */
-    private void batchMoveChildrenToShared(UUID folderId, UUID previousOwner) {
+    private void batchMoveChildrenToShared(UUID folderId, String parentPath, UUID previousOwner) {
         List<FileNode> children = fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(previousOwner, folderId);
         for (FileNode child : children) {
             child.setSpaceType(SpaceType.SHARED);
             child.setUploadedBy(previousOwner);
+            child.setNormalizedPath(childPath(parentPath, child.getName()));
             // parentId 保持不变，指向已移动的父文件夹
         }
         fileNodeRepository.saveAll(children);
         for (FileNode child : children) {
             if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                batchMoveChildrenToShared(child.getId(), previousOwner);
+                batchMoveChildrenToShared(child.getId(), child.getNormalizedPath(), previousOwner);
             }
         }
     }
 
     /**
-     * 批量移动子文件到个人空间。
+     * 批量移动子文件到个人空间，并按目标层级逐个重写规范化路径。
      * 保留文件夹层级：子文件的 parentId 指向其在个人空间中的父文件夹。
+     *
+     * <p>路径必须由父节点向下精确推导：子孙此刻仍是 SHARED 空间，而目标前缀属于接收者的
+     * 个人空间，按前缀批量改写会把其他用户个人空间里的同名路径一起改掉。</p>
+     *
+     * @param folderId 父文件夹 ID
+     * @param parentPath 父文件夹在目标空间中的规范化路径
+     * @param targetUserId 接收者用户 ID
      */
-    private void batchMoveChildrenToPersonal(UUID folderId, UUID targetUserId) {
+    private void batchMoveChildrenToPersonal(UUID folderId, String parentPath, UUID targetUserId) {
         List<FileNode> children = fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, folderId);
         for (FileNode child : children) {
             child.setSpaceType(SpaceType.PERSONAL);
             child.setOwnerUserId(targetUserId);
             child.setUploadedBy(null);
+            child.setNormalizedPath(childPath(parentPath, child.getName()));
             // parentId 保持不变，指向已移动的父文件夹
         }
         fileNodeRepository.saveAll(children);
         for (FileNode child : children) {
             if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                batchMoveChildrenToPersonal(child.getId(), targetUserId);
+                batchMoveChildrenToPersonal(child.getId(), child.getNormalizedPath(), targetUserId);
             }
         }
+    }
+
+    private String childPath(String parentPath, String name) {
+        if (parentPath == null || parentPath.isEmpty() || "/".equals(parentPath)) {
+            return "/" + name;
+        }
+        return parentPath + "/" + name;
     }
 
     /**

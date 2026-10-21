@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -153,7 +154,7 @@ class FileManagerServiceTest {
     private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
             fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder, rateLimitService,
             notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
-                storageQuotaService, syncEventRecorder);
+                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
     private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
     private final ExternalStorageAccountService externalStorageAccountService = new ExternalStorageAccountService(
             externalAccountRepository, externalStorageService, mock(ExternalStorageCredentialService.class),
@@ -166,7 +167,8 @@ class FileManagerServiceTest {
             fileNodeSupport,
             storageQuotaService,
             sharedSpaceQuotaService,
-            syncEventRecorder
+            syncEventRecorder,
+            mock(FileIndexSyncService.class)
     );
 
     @Test
@@ -264,7 +266,7 @@ class FileManagerServiceTest {
                 FILE_ID, "FILE", null, false, "2026-09-26T00:00:00Z", null, null);
         assertThat(iso.parsedExpiresAt()).isEqualTo(Instant.parse("2026-09-26T00:00:00Z"));
 
-        // FastJson 全局线格式 yyyy-MM-dd HH:mm:ss（按 UTC）
+        // Web 全局线格式 yyyy-MM-dd HH:mm:ss（按 UTC）
         CreateShareLinkRequest legacy = new CreateShareLinkRequest(
                 FILE_ID, "FILE", null, false, "2026-09-26 00:00:00", null, null);
         assertThat(legacy.parsedExpiresAt()).isEqualTo(Instant.parse("2026-09-26T00:00:00Z"));
@@ -560,16 +562,91 @@ class FileManagerServiceTest {
     }
 
     @Test
-    void copyNode_rejectsSameNameInTargetParent() {
+    void copyNode_appendsSequenceWhenTargetAlreadyHasSameName() {
         FileNode source = node("report.pdf", "application/pdf", 2048);
+        source.setCurrentObjectId(OBJECT_ID);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(source));
+        // 原名与 (1) 都被占用，副本必须落到 (2)，而不是把冲突抛给用户
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "report.pdf")).thenReturn(true);
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "report (1).pdf")).thenReturn(true);
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "report (2).pdf")).thenReturn(false);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
+
+        var result = fileManagerService.copyNode(OWNER_ID, FILE_ID, null);
+
+        assertThat(result.name()).isEqualTo("report (2).pdf");
+        assertThat(result.normalizedPath()).isEqualTo("/report (2).pdf");
+        // 序号插在扩展名之前，副本仍按原扩展名识别
+        verify(fileNodeRepository).save(argThat(copy -> "report (2).pdf".equals(copy.getName())
+                && OBJECT_ID.equals(copy.getCurrentObjectId())));
+    }
+
+    @Test
+    void copyNode_keepsFolderChildNamesWhenRootIsRenamed() {
+        UUID folderId = UUID.fromString("90000000-0000-0000-0000-000000000005");
+        FileNode folder = node("Album", null, 0, "FOLDER");
+        folder.setId(folderId);
+        folder.setNormalizedPath("/Album");
+        FileNode child = node("inner.txt", "text/plain", 16);
+        child.setId(UUID.fromString("90000000-0000-0000-0000-000000000006"));
+        child.setParentId(folderId);
+        child.setNormalizedPath("/Album/inner.txt");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
+                .thenReturn(Optional.of(folder));
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "/Album/")).thenReturn(List.of(child));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Album")).thenReturn(true);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
+
+        var result = fileManagerService.copyNode(OWNER_ID, folderId, null);
+
+        // 只有顶层副本改名；子节点落在新建的父目录下，不可能与兄弟冲突
+        assertThat(result.name()).isEqualTo("Album (1)");
+        assertThat(result.normalizedPath()).isEqualTo("/Album (1)");
+        verify(fileNodeRepository).save(argThat(copy -> "/Album (1)/inner.txt".equals(copy.getNormalizedPath())
+                && "inner.txt".equals(copy.getName())));
+    }
+
+    @Test
+    void copyNode_truncatesStemSoSuffixedNameFitsColumnWidth() {
+        String longName = "x".repeat(250) + ".pdf";
+        FileNode source = node(longName, "application/pdf", 2048);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
-                OWNER_ID, SpaceType.PERSONAL, "report.pdf")).thenReturn(true);
+                OWNER_ID, SpaceType.PERSONAL, longName)).thenReturn(true);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
 
-        assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, FILE_ID, null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("同名");
+        var result = fileManagerService.copyNode(OWNER_ID, FILE_ID, null);
+
+        assertThat(result.name()).hasSize(255);
+        assertThat(result.name()).endsWith(" (1).pdf");
     }
 
     @Test
@@ -726,6 +803,20 @@ class FileManagerServiceTest {
 
     // ==================== 批量打包下载测试 ====================
 
+    /**
+     * 打包路径改为一次批量读节点与对象后，桩必须覆盖 findAllById 而不是逐条 findById。
+     */
+    private static <T> List<T> keepKnown(Iterable<?> ids, Map<UUID, T> byId) {
+        List<T> found = new ArrayList<>();
+        for (Object rawId : ids) {
+            T value = byId.get((UUID) rawId);
+            if (value != null) {
+                found.add(value);
+            }
+        }
+        return found;
+    }
+
     @Test
     void packAsZip_containsAllRequestedFiles() throws IOException {
         UUID file1Id = UUID.fromString("70000000-0000-0000-0000-000000000001");
@@ -745,26 +836,23 @@ class FileManagerServiceTest {
         file3.setId(file3Id);
         file3.setCurrentObjectId(obj3Id);
 
-        when(fileNodeRepository.findByIdAndOwnerUserId(file1Id, OWNER_ID))
-                .thenReturn(Optional.of(file1));
-        when(fileNodeRepository.findByIdAndOwnerUserId(file2Id, OWNER_ID))
-                .thenReturn(Optional.of(file2));
-        when(fileNodeRepository.findByIdAndOwnerUserId(file3Id, OWNER_ID))
-                .thenReturn(Optional.of(file3));
-
         FileObject obj1 = new FileObject();
+        obj1.setId(obj1Id);
         obj1.setBucketName("files");
         obj1.setObjectKey("obj1");
         FileObject obj2 = new FileObject();
+        obj2.setId(obj2Id);
         obj2.setBucketName("files");
         obj2.setObjectKey("obj2");
         FileObject obj3 = new FileObject();
+        obj3.setId(obj3Id);
         obj3.setBucketName("files");
         obj3.setObjectKey("obj3");
 
-        when(fileObjectRepository.findById(obj1Id)).thenReturn(Optional.of(obj1));
-        when(fileObjectRepository.findById(obj2Id)).thenReturn(Optional.of(obj2));
-        when(fileObjectRepository.findById(obj3Id)).thenReturn(Optional.of(obj3));
+        Map<UUID, FileNode> nodesById = Map.of(file1Id, file1, file2Id, file2, file3Id, file3);
+        Map<UUID, FileObject> objectsById = Map.of(obj1Id, obj1, obj2Id, obj2, obj3Id, obj3);
+        when(fileNodeRepository.findAllById(any())).thenAnswer(inv -> keepKnown(inv.getArgument(0), nodesById));
+        when(fileObjectRepository.findAllById(any())).thenAnswer(inv -> keepKnown(inv.getArgument(0), objectsById));
 
         when(objectStorageClient.getObject(new ObjectStorageKey("files", "obj1")))
                 .thenReturn(new ByteArrayInputStream("content1".getBytes()));
@@ -801,15 +889,14 @@ class FileManagerServiceTest {
         file.setId(fileId);
         file.setCurrentObjectId(objId);
 
-        when(fileNodeRepository.findByIdAndOwnerUserId(folderId, OWNER_ID))
-                .thenReturn(Optional.of(folder));
-        when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID))
-                .thenReturn(Optional.of(file));
-
+        Map<UUID, FileNode> packNodes = Map.of(folderId, folder, fileId, file);
         FileObject obj = new FileObject();
+        obj.setId(objId);
         obj.setBucketName("files");
         obj.setObjectKey("obj11");
-        when(fileObjectRepository.findById(objId)).thenReturn(Optional.of(obj));
+        Map<UUID, FileObject> packObjects = Map.of(objId, obj);
+        when(fileNodeRepository.findAllById(any())).thenAnswer(inv -> keepKnown(inv.getArgument(0), packNodes));
+        when(fileObjectRepository.findAllById(any())).thenAnswer(inv -> keepKnown(inv.getArgument(0), packObjects));
         when(objectStorageClient.getObject(new ObjectStorageKey("files", "obj11")))
                 .thenReturn(new ByteArrayInputStream("report-content".getBytes()));
 
@@ -850,17 +937,19 @@ class FileManagerServiceTest {
         trashed.setCurrentObjectId(obj3);
         trashed.setDeleted(true);
 
-        when(fileNodeRepository.findByIdAndOwnerUserId(firstId, OWNER_ID)).thenReturn(Optional.of(reportA));
-        when(fileNodeRepository.findByIdAndOwnerUserId(secondId, OWNER_ID)).thenReturn(Optional.of(reportB));
-        when(fileNodeRepository.findByIdAndOwnerUserId(trashedId, OWNER_ID)).thenReturn(Optional.of(trashed));
+        Map<UUID, FileNode> dedupeNodes = Map.of(firstId, reportA, secondId, reportB, trashedId, trashed);
+        Map<UUID, FileObject> dedupeObjects = new HashMap<>();
         for (UUID objectId : List.of(obj1, obj2, obj3)) {
             FileObject object = new FileObject();
+            object.setId(objectId);
             object.setBucketName("files");
             object.setObjectKey("obj-" + objectId);
-            when(fileObjectRepository.findById(objectId)).thenReturn(Optional.of(object));
+            dedupeObjects.put(objectId, object);
             when(objectStorageClient.getObject(new ObjectStorageKey("files", "obj-" + objectId)))
                     .thenReturn(new ByteArrayInputStream("payload".getBytes()));
         }
+        when(fileNodeRepository.findAllById(any())).thenAnswer(inv -> keepKnown(inv.getArgument(0), dedupeNodes));
+        when(fileObjectRepository.findAllById(any())).thenAnswer(inv -> keepKnown(inv.getArgument(0), dedupeObjects));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         fileManagerService.packAsZip(
@@ -892,7 +981,7 @@ class FileManagerServiceTest {
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
-                storageQuotaService, syncEventRecorder);
+                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
 
         // 模拟：文件存在
         FileNode file = node("report.xlsx", "application/vnd.ms-excel", 4096);
@@ -990,7 +1079,7 @@ class FileManagerServiceTest {
         FileShareAccessService realAccessService = new FileShareAccessService(
                 fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder, rateLimitService,
                 notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport,
-                storageQuotaService, syncEventRecorder);
+                storageQuotaService, syncEventRecorder, mock(FileIndexSyncService.class));
 
         FileNode file = node("photo.jpg", "image/jpeg", 2048);
         file.setCurrentObjectId(OBJECT_ID);

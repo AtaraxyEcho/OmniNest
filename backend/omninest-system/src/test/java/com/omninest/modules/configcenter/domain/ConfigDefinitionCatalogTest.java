@@ -3,6 +3,7 @@ package com.omninest.modules.configcenter.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 
 class ConfigDefinitionCatalogTest {
@@ -53,6 +54,30 @@ class ConfigDefinitionCatalogTest {
                 .hasValueSatisfying(definition -> {
                     assertThat(definition.defaultValue()).isEqualTo("PLAIN");
                     assertThatThrownBy(() -> definition.normalize("HTML_ONLY"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                });
+    }
+
+    @Test
+    void mailTrustListRejectsWildcardsAndKeepsConcreteHosts() {
+        assertThat(ConfigDefinitionCatalog.find("notification.email.trust-hosts"))
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.normalize("")).isEmpty();
+                    assertThat(definition.normalize("  Mail.Internal , 10.0.0.5 "))
+                            .isEqualTo("mail.internal,10.0.0.5");
+                    // 通配符与空项会把整条信道降级成不校验证书，必须在保存时就拒绝。
+                    assertThatThrownBy(() -> definition.normalize("*"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("mail.internal,*"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("mail.internal,,10.0.0.5"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThatThrownBy(() -> definition.normalize("mail internal"))
+                            .isInstanceOf(IllegalArgumentException.class);
+                    assertThat(definition.normalize(String.join(",", Collections.nCopies(20, "mx.internal"))))
+                            .isEqualTo(String.join(",", Collections.nCopies(20, "mx.internal")));
+                    assertThatThrownBy(() ->
+                            definition.normalize(String.join(",", Collections.nCopies(21, "mx.internal"))))
                             .isInstanceOf(IllegalArgumentException.class);
                 });
     }

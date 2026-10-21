@@ -1,5 +1,6 @@
 package com.omninest.modules.file.event;
 
+import com.omninest.modules.file.domain.FileNode;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -28,4 +29,26 @@ public record FileUploadedEvent(
         long sizeBytes,
         Instant occurredAt
 ) {
+    /**
+     * 由存量文件节点还原事件，供索引重投与全站重建使用。
+     *
+     * <p>桶与对象键留空：下游的文件索引与文本提取消费都按 {@code fileNodeId} 经 File 模块
+     * 回读内容定位，不消费这两个字段，留空可避免为每个节点额外查询一次对象记录。</p>
+     *
+     * @param node 当前活动文件节点
+     * @return 可直接投递后处理任务的事件
+     */
+    public static FileUploadedEvent fromNode(FileNode node) {
+        return new FileUploadedEvent(
+                node.getId(),
+                node.getCurrentObjectId(),
+                node.getOwnerUserId(),
+                "",
+                "",
+                node.getName(),
+                node.getMimeType(),
+                node.getSizeBytes(),
+                Instant.now()
+        );
+    }
 }

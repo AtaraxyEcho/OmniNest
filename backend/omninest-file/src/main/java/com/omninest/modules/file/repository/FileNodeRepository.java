@@ -183,21 +183,26 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
-     * 分页读取共享空间指定路径前缀下的节点。
+     * 按 ID 游标读取指定空间与路径前缀下的节点。
      *
-     * <p>该查询驱动共享空间改名时的子树路径重写，口径与排序保留同上。</p>
+     * <p>该查询驱动共享空间改名时的子树路径重写。被改写的 normalizedPath 正是过滤条件列，
+     * 用 OFFSET 翻页会让改写后的记录退出结果集、后续页整体前移，从而跳过未改写的一半节点，
+     * 因此必须按主键游标推进。</p>
      *
      * @param spaceType 空间类型
      * @param prefix 已转义的路径前缀
-     * @param pageable 分页参数
-     * @return 文件节点分页
+     * @param afterId 上一页最大节点 ID，首页传最小 UUID
+     * @param limit 单批数量
+     * @return 按 ID 升序的节点批次
      */
     @Query("select node from FileNode node where node.spaceType = :spaceType "
-            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' order by node.id asc")
-    Page<FileNode> findBySpaceTypeAndNormalizedPathStartingWithOrderById(
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' "
+            + "and node.id > :afterId order by node.id asc")
+    List<FileNode> findSubtreeBySpaceTypeAfterId(
             @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix,
-            Pageable pageable
+            @Param("afterId") UUID afterId,
+            Pageable limit
     );
 
     /**
@@ -718,6 +723,46 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("spaceType") SpaceType spaceType,
             @Param("parentId") UUID parentId,
             Pageable pageable);
+
+    /**
+     * 按 ID 游标读取需要重建全文索引的文件节点。
+     *
+     * <p>排除回收站节点与派生资产：派生缩略图、海报与元数据侧车文件不是用户内容，
+     * 重建时把它们卷进来会让搜索结果混入内部资产。</p>
+     *
+     * @param nodeType 节点类型字面量（FILE）
+     * @param afterId 上一页最大节点 ID，首页传最小 UUID
+     * @param limit 单批数量
+     * @return 按 ID 升序的文件节点批次
+     */
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.nodeType = :nodeType
+              AND n.deleted = false
+              AND n.currentObjectId IS NOT NULL
+              AND (n.sourceType IS NULL OR n.sourceType <> 'DERIVED')
+              AND n.id > :afterId
+            ORDER BY n.id ASC
+            """)
+    List<FileNode> findIndexableFilesAfterId(
+            @Param("nodeType") String nodeType,
+            @Param("afterId") UUID afterId,
+            Pageable limit);
+
+    /**
+     * 统计需要重建全文索引的文件节点总数，用于换算任务进度。
+     *
+     * @param nodeType 节点类型字面量（FILE）
+     * @return 待重建文件数
+     */
+    @Query("""
+            SELECT COUNT(n) FROM FileNode n
+            WHERE n.nodeType = :nodeType
+              AND n.deleted = false
+              AND n.currentObjectId IS NOT NULL
+              AND (n.sourceType IS NULL OR n.sourceType <> 'DERIVED')
+            """)
+    long countIndexableFiles(@Param("nodeType") String nodeType);
 
     /**
      * 按 ID + 空间类型查找

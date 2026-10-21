@@ -4540,7 +4540,7 @@ abstract class AppLocalizations {
   /// No description provided for @filesPdfDownloadHint.
   ///
   /// In en, this message translates to:
-  /// **'PDF preview is not available yet. Download the file to view it.'**
+  /// **'This PDF could not be opened online. Download it to view.'**
   String get filesPdfDownloadHint;
 
   /// No description provided for @filesAccessKeyId.

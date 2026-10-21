@@ -31,6 +31,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 管理端用户维护服务。
@@ -66,6 +67,8 @@ public class AdminUserService {
     private final UserSessionRevocationService userSessionRevocationService;
     private final TwoFactorService twoFactorService;
     private final AdminActorGuard adminActorGuard;
+    private final CurrentUserService currentUserService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 分页查询用户，支持按用户名、展示名、邮箱模糊搜索、角色编码精确过滤
@@ -163,16 +166,27 @@ public class AdminUserService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto updateUserStatus(UUID userId, String rawStatus) {
+        return executeUpdateUserStatus(userId, rawStatus);
+    }
+
+    /**
+     * 单行状态变更的实际实现：状态落库、会话撤销与审计必须在同一个事务里。
+     *
+     * <p>批量入口经 {@code TransactionTemplate} 调用本方法；直接自调用公开方法会被
+     * Spring AOP 代理绕过，注解事务不生效，那时「状态已改但会话未吊销」会各自提交。</p>
+     */
+    private AuthUserDto executeUpdateUserStatus(UUID userId, String rawStatus) {
         AuthUser actor = adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
         AuthUser user = authUserRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
         if (AuthUserMapper.roleCodes(user).contains(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员状态不能通过管理端修改");
         }
-        requireSuperAdminForAdminTarget(actor, user, "修改管理员账户状态");
+        adminActorGuard.requireSuperAdminForAdminTarget(actor, user, "修改管理员账户状态");
         user.setStatus(normalizeStatus(rawStatus));
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户状态");
+        currentUserService.evictProfileCache(userId);
         auditLogService.recordWithMetadata(
                 actor.getId(),
                 "ADMIN_USER_STATUS_UPDATE", "auth_users", userId,
@@ -197,9 +211,10 @@ public class AdminUserService {
         AuthUser actor = adminActorGuard.requireFreshAdminActor(currentUserContext.requireCurrentUserId());
         AuthUser user = authUserRepository.findWithRolesById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "用户不存在"));
-        requireSuperAdminForAdminTarget(actor, user, "重置管理员两步验证");
+        adminActorGuard.requireSuperAdminForAdminTarget(actor, user, "重置管理员两步验证");
         twoFactorService.resetByAdmin(user.getId());
         userSessionRevocationService.revokeAll(List.of(user.getId()), "管理员重置两步验证");
+        currentUserService.evictProfileCache(user.getId());
         auditLogService.recordWithMetadata(
                 actor.getId(),
                 "ADMIN_USER_2FA_RESET", "auth_users", user.getId(),
@@ -213,6 +228,9 @@ public class AdminUserService {
      * 不刻意包整体事务——逐项独立提交保证某行中途失败时已成功项不回滚，
      * 失败项（不存在、超级管理员或更新异常）计入 failedIds 供前端逐项反馈。</p>
      *
+     * <p>单行必须通过 {@code TransactionTemplate} 进入事务：同类自调用不走 AOP 代理，
+     * 注解事务会失效，那时某行的会话撤销失败只留下已提交的状态变更。</p>
+     *
      * @param userIds 用户标识列表
      * @param rawStatus 目标状态
      * @return 成功数量与失败用户 ID 列表
@@ -224,7 +242,7 @@ public class AdminUserService {
         List<UUID> failedIds = new ArrayList<>();
         for (UUID userId : userIds) {
             try {
-                updateUserStatus(userId, rawStatus);
+                transactionTemplate.executeWithoutResult(status -> executeUpdateUserStatus(userId, rawStatus));
                 successCount++;
             } catch (RuntimeException ex) {
                 failedIds.add(userId);
@@ -248,11 +266,12 @@ public class AdminUserService {
         if (AuthUserMapper.roleCodes(user).contains(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员角色不能通过管理端修改");
         }
-        requireSuperAdminForAdminTarget(actor, user, "修改管理员角色");
+        adminActorGuard.requireSuperAdminForAdminTarget(actor, user, "修改管理员角色");
         user.getRoles().clear();
         resolveRolesForActor(actor, requestedRoles).forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户角色");
+        currentUserService.evictProfileCache(userId);
         auditLogService.recordWithMetadata(
                 actor.getId(),
                 "ADMIN_USER_ROLES_UPDATE", "auth_users", userId,
@@ -324,25 +343,6 @@ public class AdminUserService {
                 .collect(Collectors.toCollection(HashSet::new));
         adminActorGuard.requireGrantWithinActorScope(actor, grantedPermissions);
         return roles;
-    }
-
-    /**
-     * 拦截普通管理员处置同级账户。
-     *
-     * <p>本人操作不在此限：管理员自助停用或降权是退出管理的正常路径，不是横向越权。</p>
-     *
-     * @param actor 已复核的管理员
-     * @param target 目标账户
-     * @param action 动作描述，用于错误提示
-     */
-    private void requireSuperAdminForAdminTarget(AuthUser actor, AuthUser target, String action) {
-        if (actor.getId().equals(target.getId())
-                || !AuthUserMapper.roleCodes(target).contains(Roles.ADMIN)) {
-            return;
-        }
-        if (!adminActorGuard.isSuperAdmin(actor)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可" + action);
-        }
     }
 
     private String normalizeRoleCode(String rawRoleCode) {

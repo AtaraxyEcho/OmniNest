@@ -18,7 +18,11 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 文件恢复后的派生任务发布服务。
+ * 文件恢复后的派生资产修复任务发布服务。
+ *
+ * <p>只负责源对象校验与缩略图补齐。搜索索引不在这里派发：恢复写入侧已经调用
+ * {@code FileIndexSyncService.scheduleAfterCommit} 重投 {@code FILE_INDEX + TEXT_EXTRACTION}，
+ * 那是唯一能保住已抽取正文的一条路，索引恢复不允许有第二条更弱的入口。</p>
  *
  * @author OmniNest
  */
@@ -29,7 +33,7 @@ public class FileRestoreTaskPublisher {
     private final DomainEventPublisher domainEventPublisher;
 
     /**
-     * 在文件恢复事务提交后发布独立的索引恢复事件。
+     * 在文件恢复事务提交后按文件投递派生资产修复消息。
      *
      * @param event 文件节点恢复事件
     */

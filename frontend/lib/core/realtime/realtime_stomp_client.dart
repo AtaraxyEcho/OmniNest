@@ -43,6 +43,10 @@ class RealtimeStompClient implements RealtimeTransport {
     Duration(seconds: 30),
   ];
 
+  /// 握手超时：连接发出 CONNECT 后迟迟收不到 CONNECTED 时必须自行拆链重连，
+  /// 否则状态永远停在 connecting，后续 connect() 被短路条件挡回。
+  static const _handshakeTimeout = Duration(seconds: 15);
+
   final String url;
 
   /// 每次建立连接时实时解析访问令牌；令牌在会话内轮换后重连仍可用。
@@ -57,6 +61,7 @@ class RealtimeStompClient implements RealtimeTransport {
 
   StompClient? _client;
   Timer? _reconnectTimer;
+  Timer? _connectTimeoutTimer;
   int _reconnectAttempt = 0;
   bool _desired = false;
   bool _disposed = false;
@@ -97,6 +102,8 @@ class RealtimeStompClient implements RealtimeTransport {
     _desired = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _connectTimeoutTimer?.cancel();
+    _connectTimeoutTimer = null;
     final client = _client;
     _client = null;
     client?.deactivate();
@@ -114,6 +121,10 @@ class RealtimeStompClient implements RealtimeTransport {
         onDisconnect: _onDisconnect,
         onStompError: _onStompError,
         onWebSocketError: _onWebSocketError,
+        // 反向代理空闲超时、服务端重启或网络切换都会「正常关闭」底层 WebSocket，
+        // 走的是 onDone 而不是 onError。不接这个回调时 _client 保持非空、状态停在
+        // connected，后续 connect() 被短路，本次会话的推送与通知流永久失效。
+        onWebSocketDone: _onWebSocketDone,
         stompConnectHeaders: {'Authorization': 'Bearer $accessToken'},
         reconnectDelay: const Duration(days: 365),
         heartbeatIncoming: const Duration(seconds: 10),
@@ -121,10 +132,22 @@ class RealtimeStompClient implements RealtimeTransport {
       ),
     );
     _client = client;
+    _connectTimeoutTimer?.cancel();
+    _connectTimeoutTimer = Timer(_handshakeTimeout, () {
+      if (_disposed || _client == null) return;
+      if (_state != RealtimeTransportState.connecting) return;
+      _handleConnectionLoss('STOMP 握手超时');
+    });
     client.activate();
   }
 
+  void _onWebSocketDone() {
+    _handleConnectionLoss('WebSocket 连接已关闭');
+  }
+
   void _onConnect(StompFrame frame) {
+    _connectTimeoutTimer?.cancel();
+    _connectTimeoutTimer = null;
     if (_disposed || !_desired) {
       pause();
       return;
@@ -187,6 +210,8 @@ class RealtimeStompClient implements RealtimeTransport {
 
   void _handleConnectionLoss(String message) {
     if (_disposed) return;
+    _connectTimeoutTimer?.cancel();
+    _connectTimeoutTimer = null;
     final client = _client;
     _client = null;
     client?.deactivate();

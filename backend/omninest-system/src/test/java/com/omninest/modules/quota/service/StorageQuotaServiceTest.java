@@ -24,6 +24,7 @@ import com.omninest.modules.quota.QuotaStatus;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
+import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,8 @@ class StorageQuotaServiceTest {
     private StorageQuotaReservationService reservationService;
     @Mock
     private AdminActorVerifier adminActorVerifier;
+    @Mock
+    private UserProfileCacheEvictor userProfileCacheEvictor;
 
     private StorageQuotaService service;
 
@@ -78,7 +81,8 @@ class StorageQuotaServiceTest {
                 auditRecorder,
                 notificationService,
                 reservationService,
-                adminActorVerifier
+                adminActorVerifier,
+                userProfileCacheEvictor
         );
     }
 

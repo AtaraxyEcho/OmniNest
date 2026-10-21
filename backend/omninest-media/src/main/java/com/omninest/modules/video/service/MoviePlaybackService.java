@@ -139,8 +139,15 @@ public class MoviePlaybackService {
         );
     }
 
+    /**
+     * 保存播放进度与观看历史。
+     *
+     * <p>心跳每 20 秒一次，且暂停与退出各一次，因此这里不重算播放计划：{@code buildPlaybackPlan}
+     * 每次都要签发播放 Token、回查文件节点与对象、签下载 URL、查转码缓存与全部字幕轨道，
+     * 而客户端心跳根本不读取响应体。</p>
+     */
     @Transactional(rollbackFor = Exception.class)
-    public PlaybackPlanDto updateProgress(UUID ownerUserId, UUID videoItemId, PlaybackProgressRequest request) {
+    public void updateProgress(UUID ownerUserId, UUID videoItemId, PlaybackProgressRequest request) {
         MediaVideoItem item = findVideo(ownerUserId, videoItemId);
         long duration = request.durationSeconds() > 0 ? request.durationSeconds() : safeDuration(item);
         long position = Math.max(0, request.positionSeconds());
@@ -155,8 +162,6 @@ public class MoviePlaybackService {
                 request.deviceId()
         );
         historyRepository.save(upsertHistory(ownerUserId, videoItemId, progress));
-        // 复用已加载的 item，避免重复查询
-        return buildPlaybackPlan(ownerUserId, item, progress);
     }
 
     private MediaWatchHistory upsertHistory(UUID ownerUserId, UUID videoItemId, MediaPlaybackProgress progress) {

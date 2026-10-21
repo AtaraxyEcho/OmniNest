@@ -166,6 +166,48 @@ class ShareApi implements PublicShareRepository {
     }
   }
 
+  /// 匿名获取单文件的短期下载地址。
+  ///
+  /// 后端 `GET /s/{token}` 凭分享会话即可签发预签名地址，不需要系统账号；
+  /// 文件夹分享返回空地址（子项各自带 downloadUrl）。
+  @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    try {
+      final sessionToken = await _ensureSession(token, password);
+      if (sessionToken == null) {
+        return ShareAccessResult.failure(AppErrorCodes.needPassword);
+      }
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/s/$token',
+        options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
+      );
+      final body = response.data;
+      if (body == null || body['code'] != 200) {
+        return ShareAccessResult.failure(
+          body?['message']?.toString() ?? AppErrorCodes.operationFailed,
+        );
+      }
+      final data = body['data'] as Map<String, dynamic>?;
+      final url = data?['downloadUrl']?.toString();
+      if (url == null || url.isEmpty) {
+        return ShareAccessResult.failure(AppErrorCodes.emptyResponse);
+      }
+      return ShareAccessResult.success(url);
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      if (body is Map<String, dynamic>) {
+        return ShareAccessResult.failure(
+          _isPasswordPrompt(body)
+              ? AppErrorCodes.needPassword
+              : _messageOf(body),
+        );
+      }
+      return ShareAccessResult.failure(_networkErrorCode(e));
+    } on Object catch (e) {
+      return ShareAccessResult.failure('${AppErrorCodes.unknown}: $e');
+    }
+  }
+
   Future<String?> _ensureSession(String token, String? password) async {
     final existing = _sessionTokens[token];
     if (existing != null && (password == null || password.isEmpty)) {

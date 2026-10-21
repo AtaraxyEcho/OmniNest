@@ -53,6 +53,7 @@ public class AdminRoleService {
     private final AdminAuditLogService auditLogService;
     private final UserSessionRevocationService userSessionRevocationService;
     private final AdminActorGuard adminActorGuard;
+    private final CurrentUserService currentUserService;
 
     @Transactional(readOnly = true)
     public AdminOperationsDto.RoleManagementView roles() {
@@ -113,6 +114,8 @@ public class AdminRoleService {
                 .map(AuthUser::getId)
                 .toList();
         userSessionRevocationService.revokeAll(affectedUserIds, "管理员更新角色权限");
+        // 资料缓存含角色与权限快照，不主动驱逐会让受影响用户在 TTL 内向 /api/v1/me 报旧权限
+        affectedUserIds.forEach(currentUserService::evictProfileCache);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("oldValue", previousCodes);
         payload.put("newValue", toRoleDetail(role).permissions());

@@ -5,6 +5,7 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.domain.PhotoTag;
 import com.omninest.modules.photos.event.PhotoIndexEvent;
+import com.omninest.modules.photos.repository.PhotoIndexTargetProjection;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
@@ -12,6 +13,8 @@ import com.omninest.modules.task.service.TaskDispatchService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 /**
@@ -23,9 +26,15 @@ import org.springframework.stereotype.Service;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PhotoIndexTaskService {
+    /**
+     * 全站重建时的单批扫描数量。
+     */
+    private static final int REBUILD_BATCH_SIZE = 500;
+
     private final PhotoItemRepository photoItemRepository;
     private final PhotoTagRepository photoTagRepository;
     private final PhotoSearchIndexService photoSearchIndexService;
@@ -82,5 +91,40 @@ public class PhotoIndexTaskService {
                 QueueNames.PHOTO_INDEX_ROUTING_KEY,
                 new PhotoIndexEvent(photoId, ownerUserId)
         );
+    }
+
+    /**
+     * 清空照片索引并按存量照片重新派发索引任务。
+     *
+     * <p>仅由 Worker 侧消费调用。照片索引与文件索引是两个独立根目录，
+     * 且索引字段口径变更后旧文档不会再被新查询命中，所以全站重建必须先整卷丢弃再逐张重投；
+     * 重投复用 {@code PHOTO_INDEX} 任务类型，因此既有的去重、重试与死信语义一并生效。
+     * 回收站照片与文件已删除的照片不在扫描范围，其残留文档由整卷丢弃直接清除。</p>
+     *
+     * @return 重新派发的照片数
+     */
+    public int rebuildAll() {
+        int cleared = photoSearchIndexService.clearAll();
+        long total = photoItemRepository.countIndexablePhotos();
+        log.info("开始重建照片索引: 已丢弃文档数={}, 待派发照片数={}", cleared, total);
+        int dispatched = 0;
+        UUID afterId = new UUID(0L, 0L);
+        while (true) {
+            List<PhotoIndexTargetProjection> batch = photoItemRepository.findIndexablePhotosAfterId(
+                    afterId, PageRequest.of(0, REBUILD_BATCH_SIZE));
+            if (batch.isEmpty()) {
+                break;
+            }
+            for (PhotoIndexTargetProjection photo : batch) {
+                scheduleIndexAfterCommit(photo.getOwnerUserId(), photo.getId());
+                dispatched++;
+            }
+            afterId = batch.getLast().getId();
+            if (batch.size() < REBUILD_BATCH_SIZE) {
+                break;
+            }
+        }
+        log.info("照片索引重建派发完成: 待派发照片数={}, 已派发={}", total, dispatched);
+        return dispatched;
     }
 }

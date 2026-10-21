@@ -10,6 +10,9 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -18,6 +21,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_type_utils.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 /// 全屏文件预览页面。
 class FilePreviewPage extends ConsumerStatefulWidget {
@@ -551,53 +555,107 @@ class _TextPreview extends ConsumerWidget {
 
 // ---- PDF 预览 ----
 
-class _PdfPreview extends StatelessWidget {
+class _PdfPreview extends ConsumerWidget {
   const _PdfPreview({required this.file});
 
   final FileNode file;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Card(
-          margin: const EdgeInsets.all(24),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.picture_as_pdf_outlined,
-                  size: 64,
-                  color: context.filesColors.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  file.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.titleMedium,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  AppLocalizations.of(context).filesPdfDownloadHint,
-                  style: TextStyle(
-                    fontSize: AppTypography.bodyMedium,
-                    color: context.filesColors.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final urlAsync = ref.watch(fileDownloadUrlProvider(file.id));
+    return urlAsync.when(
+      loading: () => const AppLoading(),
+      error:
+          (error, stackTrace) => _MediaPreviewFailure(
+            message: describeUserFacingError(error).message,
+            onRetry: () => ref.invalidate(fileDownloadUrlProvider(file.id)),
           ),
+      data: (url) {
+        if (url == null || url.isEmpty) {
+          return _MediaPreviewFailure(
+            message: l10n.filesPdfDownloadHint,
+            onRetry: () => ref.invalidate(fileDownloadUrlProvider(file.id)),
+          );
+        }
+        return Column(
+          children: [
+            Expanded(
+              child: PdfViewer.uri(
+                Uri.parse(url),
+                params: PdfViewerParams(
+                  // 签名地址与页面不同源，Web 上可能因跨源或分段读取被拦下；
+                  // pdfrx 默认错误横幅是英文原文，这里换成与「拿不到地址」同一张卡片，
+                  // 下载入口仍在下方，用户不必退出预览去列表里找。
+                  errorBannerBuilder:
+                      (context, error, stackTrace, documentRef) =>
+                          _MediaPreviewFailure(
+                            message: l10n.filesPdfDownloadHint,
+                            onRetry:
+                                () => ref.invalidate(
+                                  fileDownloadUrlProvider(file.id),
+                                ),
+                          ),
+                ),
+              ),
+            ),
+            _PdfActionBar(url: url),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// PDF 预览底部的下载入口。
+///
+/// 内联渲染与下载走同一条签名地址：浏览器端若被 CORS 或分段读取拦下，
+/// 用户仍然拿得到文件，不必关掉预览回列表里再找下载菜单。
+class _PdfActionBar extends StatelessWidget {
+  const _PdfActionBar({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: OutlinedButton.icon(
+          onPressed: () => _onDownload(context),
+          icon: const Icon(Icons.download_rounded),
+          label: Text(l10n.filesDownload),
         ),
       ),
+    );
+  }
+
+  void _onDownload(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (openDownloadUrl(url)) {
+      showOmniFeedback(
+        context,
+        l10n.filesDownloadOpened,
+        severity: OmniFeedbackSeverity.success,
+      );
+      return;
+    }
+    unawaited(_copyLink(context));
+  }
+
+  Future<void> _copyLink(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final copied = await copyTextToClipboard(url);
+    if (!context.mounted) {
+      return;
+    }
+    showOmniFeedback(
+      context,
+      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+      severity:
+          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
     );
   }
 }

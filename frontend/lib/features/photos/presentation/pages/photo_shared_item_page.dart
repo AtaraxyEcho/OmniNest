@@ -8,6 +8,7 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
@@ -264,7 +265,7 @@ class _SharedItemContent extends StatelessWidget {
         Container(
           height: 64 + MediaQuery.paddingOf(context).top,
           padding: EdgeInsets.only(
-            left: 24,
+            left: 8,
             right: 24,
             top: MediaQuery.paddingOf(context).top,
           ),
@@ -282,6 +283,14 @@ class _SharedItemContent extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // 本页挂在应用壳层之外：桌面端没有浏览器后退键时，这是唯一退出入口。
+              IconButton(
+                tooltip: AppLocalizations.of(context).coreBackToPortal,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed:
+                    () => exitDetailRoute(context, fallbackRoute: '/portal'),
+              ),
+              SizedBox(width: 4),
               Icon(
                 Icons.photo_rounded,
                 color: context.photosColors.primaryContainer,

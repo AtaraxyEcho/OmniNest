@@ -15,6 +15,30 @@ abstract interface class PublicShareRepository {
     String? password,
     String? authToken,
   });
+
+  /// 凭短期分享会话匿名取单文件的下载地址，不需要系统账号。
+  Future<ShareAccessResult> access(String token, {String? password});
+}
+
+/// 匿名获取分享文件下载地址的结果。
+sealed class ShareAccessResult {
+  const ShareAccessResult();
+
+  factory ShareAccessResult.success(String downloadUrl) = ShareAccessSuccess;
+
+  factory ShareAccessResult.failure(String message) = ShareAccessFailure;
+}
+
+class ShareAccessSuccess extends ShareAccessResult {
+  const ShareAccessSuccess(this.downloadUrl);
+
+  final String downloadUrl;
+}
+
+class ShareAccessFailure extends ShareAccessResult {
+  const ShareAccessFailure(this.message);
+
+  final String message;
 }
 
 /// 分享文件夹的子项。

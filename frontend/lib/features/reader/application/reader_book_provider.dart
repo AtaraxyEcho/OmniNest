@@ -41,6 +41,25 @@ final cachedBookHandleProvider = FutureProvider.autoDispose
       return handle;
     });
 
+/// PDF 阅读页持有的源文件句柄。
+///
+/// 与通用句柄的差别只在 Web 侧的体积档位：PDF 上限 128MiB 且失败要报专用错误码。
+/// 由本页保持订阅，autoDispose 才会在页面仍映射会话文件时把它删掉。
+final pdfBookHandleProvider = FutureProvider.autoDispose
+    .family<CachedBookHandle, String>((ref, itemId) async {
+      final api = ref.watch(readerApiProvider);
+      final cache = ref.watch(localBookCacheProvider);
+      final handle = await cache.ensureCachedHandle(
+        itemId,
+        webDownloader: () => api.downloadFileBytes(itemId, itemType: 'PDF'),
+        nativeDownloader: (path) => api.downloadFileToPath(itemId, path),
+      );
+      ref.onDispose(() {
+        unawaited(handle.close());
+      });
+      return handle;
+    });
+
 /// 阅读条目解析进度：按内容类型轮询文本或漫画清单中的后台任务。
 ///
 /// 使用 Stream 以固定间隔多次发出进度，书架卡片不依赖全局导入监控器

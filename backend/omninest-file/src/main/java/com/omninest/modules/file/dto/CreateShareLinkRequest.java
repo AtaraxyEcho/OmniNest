@@ -29,9 +29,9 @@ public record CreateShareLinkRequest(
     /**
      * 解析过期时间为 Instant。
      *
-     * <p>项目 JSON 层（FastJson 全局）以 {@code yyyy-MM-dd HH:mm:ss} 为线格式，
+     * <p>项目 Web 线格式（Jackson 3 全局）以 {@code yyyy-MM-dd HH:mm:ss} 为日期形态，
      * 但客户端（如前端分享面板）与 Swagger 契约按 ISO-8601 即时区（Instant 的
-     * 自然表达）发送；此前仅 FastJson 格式可解析，ISO-8601 抛 500（D-011）。
+     * 自然表达）发送；此前仅默认形态可解析，ISO-8601 抛 500（D-011）。
      * 现统一兼容双格式：含 'T'/'Z'/'+' 视为 ISO-8601 即时，否则按
      * {@code yyyy-MM-dd HH:mm:ss} 的 UTC；空串/空白返回 null。
      *

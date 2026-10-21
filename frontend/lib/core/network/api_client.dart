@@ -66,7 +66,6 @@ class ApiClient {
             handler.next(response);
             return;
           }
-          final isForbidden = response.statusCode == 403;
 
           try {
             final originalToken =
@@ -95,18 +94,6 @@ class ApiClient {
               if (sessionToken == null || sessionToken.isEmpty) {
                 _refreshRejected = true;
               }
-              if (isForbidden) {
-                // 刷新不可用时的 403 多为真实权限拒绝，不清除会话，
-                // 原样上抛由业务层呈现无权限反馈。
-                handler.reject(
-                  DioException.badResponse(
-                    statusCode: response.statusCode ?? 403,
-                    requestOptions: response.requestOptions,
-                    response: response,
-                  ),
-                );
-                return;
-              }
               // 会话清理由会话通知器按刷新结果分级处理：服务端明确拒绝
               // 才清除；瞬时网络故障保留会话，这里不再无条件登出。
               handler.reject(
@@ -133,18 +120,7 @@ class ApiClient {
               );
             }
           } catch (_) {
-            // _refreshOnce() 或后续逻辑抛出异常时拒绝请求；
-            // 403 路径不清会话，避免权限误判升级为登出。
-            if (isForbidden) {
-              handler.reject(
-                DioException.badResponse(
-                  statusCode: response.statusCode ?? 403,
-                  requestOptions: response.requestOptions,
-                  response: response,
-                ),
-              );
-              return;
-            }
+            // _refreshOnce() 或后续逻辑抛出异常时拒绝请求，由会话通知器判定是否清会话。
             handler.reject(
               DioException.badResponse(
                 statusCode: response.statusCode ?? 401,
@@ -235,11 +211,12 @@ class ApiClient {
     if (_refreshRejected) {
       return false;
     }
-    // 401 表示令牌过期；403 可能是本地 JWT 缺少最新授权 claim（角色权限
-    // 变更后服务端不重发令牌），两者都值得刷新会话后重试一次。
+    // 只有 401 才代表访问令牌本身需要轮换。403 是 RBAC 权限拒绝：换一枚新令牌换不来
+    // 权限，而授权变更时服务端已吊销旧会话（刷新接口会返回 401 走正常重登），管理端
+    // 改动自己也显式触发刷新。让每个无权限请求都多付一次 /auth/refresh 加一次原请求
+    // 重放，只会把报错延迟翻倍并挤占刷新接口的限流额度。
     final statusCode = response.statusCode;
-    final isAuthChallenge = statusCode == 401 || statusCode == 403;
-    if (!isAuthChallenge ||
+    if (statusCode != 401 ||
         response.requestOptions.extra[skipAuthorizationKey] == true) {
       return false;
     }
@@ -249,7 +226,7 @@ class ApiClient {
         path.contains('/auth/refresh')) {
       return false;
     }
-    // 401/403 也承载业务级密码校验（分享访问密码、2FA 复核）。这类拒绝
+    // 401 也承载业务级密码校验（分享访问密码、2FA 复核）。这类拒绝
     // 与令牌无关，刷新只会轮换令牌并用同一错误密码重放请求。
     final data = response.data;
     if (data is Map) {

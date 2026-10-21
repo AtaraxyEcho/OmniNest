@@ -41,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import jakarta.annotation.PreDestroy;
@@ -177,76 +178,66 @@ public class WeatherService {
             return withLocationName(cachedWeather, effectiveDisplayName);
         }
 
-        // singleflight：同一位置的并发请求复用同一个 Future，防止缓存击穿
-        CompletableFuture<WeatherDto> existing = inflightRequests.get(requestKey);
-        if (existing != null && !existing.isDone()) {
-            try {
-                return existing.get(6, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.debug("等待 in-flight 天气请求超时，自行发起请求", e);
-            }
-        }
+        // singleflight：同一位置的并发请求复用同一个 Future，防止缓存击穿。
+        // 必须用 computeIfAbsent 创建：先 supplyAsync 再 putIfAbsent 的写法会让每个并发线程
+        // 都真的发出一轮外部请求，落败线程的 cancel 只能取消已经开跑的任务。
+        final AtomicBoolean owned = new AtomicBoolean(false);
+        CompletableFuture<WeatherDto> future = inflightRequests.computeIfAbsent(requestKey, key -> {
+            owned.set(true);
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    // 预生成 JWT，并行请求外部 API
+                    String jwt = generateJwt(config);
+                    CompletableFuture<JsonNode> weatherNowFuture = CompletableFuture.supplyAsync(
+                            () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt, apiLang),
+                            weatherExecutor
+                    );
+                    CompletableFuture<JsonNode> airNowFuture = CompletableFuture.supplyAsync(
+                            () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt, apiLang), weatherExecutor);
+                    CompletableFuture<JsonNode> weather7dFuture = CompletableFuture.supplyAsync(
+                            () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt, apiLang),
+                            weatherExecutor
+                    );
+                    CompletableFuture<JsonNode> weather24hFuture = CompletableFuture.supplyAsync(
+                            () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt, apiLang),
+                            weatherExecutor
+                    );
 
-        CompletableFuture<WeatherDto> future = CompletableFuture.supplyAsync(() -> {
-            try {
-                // 预生成 JWT，并行请求外部 API
-                String jwt = generateJwt(config);
-                CompletableFuture<JsonNode> weatherNowFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt, apiLang),
-                        weatherExecutor
-                );
-                CompletableFuture<JsonNode> airNowFuture = CompletableFuture.supplyAsync(
-                        () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt, apiLang), weatherExecutor);
-                CompletableFuture<JsonNode> weather7dFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt, apiLang),
-                        weatherExecutor
-                );
-                CompletableFuture<JsonNode> weather24hFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt, apiLang),
-                        weatherExecutor
-                );
+                    JsonNode weatherNow = getOrNull(weatherNowFuture);
+                    JsonNode airNow = getOrNull(airNowFuture);
+                    JsonNode weather7d = getOrNull(weather7dFuture);
+                    JsonNode weather24h = getOrNull(weather24hFuture);
 
-                JsonNode weatherNow = getOrNull(weatherNowFuture);
-                JsonNode airNow = getOrNull(airNowFuture);
-                JsonNode weather7d = getOrNull(weather7dFuture);
-                JsonNode weather24h = getOrNull(weather24hFuture);
+                    if (weatherNow == null) {
+                        return WeatherDto.empty();
+                    }
 
-                if (weatherNow == null) {
+                    WeatherDto result = aggregateWeather(
+                            weatherNow, airNow, weather7d, weather24h,
+                            finalResolved.locationName() != null && !finalResolved.locationName().isBlank()
+                                    ? finalResolved.locationName()
+                                    : effectiveDisplayName);
+                    weatherCacheStore.saveWeather(requestKey, result);
+                    return result;
+                } catch (Exception e) {
+                    log.error("获取天气数据失败", e);
                     return WeatherDto.empty();
                 }
+            }, weatherExecutor);
+        });
 
-                WeatherDto result = aggregateWeather(
-                        weatherNow, airNow, weather7d, weather24h,
-                        finalResolved.locationName() != null && !finalResolved.locationName().isBlank()
-                                ? finalResolved.locationName()
-                                : effectiveDisplayName);
-                weatherCacheStore.saveWeather(requestKey, result);
-                return result;
-            } catch (Exception e) {
-                log.error("获取天气数据失败", e);
-                return WeatherDto.empty();
-            }
-        }, weatherExecutor);
-
-        // putIfAbsent：防止两个线程同时创建 Future，只保留第一个
-        CompletableFuture<WeatherDto> winner = inflightRequests.putIfAbsent(requestKey, future);
-        if (winner != null) {
-            // 其他线程已先创建，取消自己的 Future 避免浪费外部 API 调用
-            future.cancel(false);
-            try {
-                return winner.get(6, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.debug("等待已有 in-flight 请求超时", e);
-                return WeatherDto.empty();
-            }
+        if (owned.get()) {
+            // 登记线程负责摘除条目：按值删除，避免超时线程误摘后来者的任务
+            future.whenComplete((value, throwable) -> inflightRequests.remove(requestKey, future));
         }
         try {
             return future.get(6, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.error("天气请求执行超时", e);
+            log.warn("天气请求未在超时内完成: location={}", requestKey, e);
+            if (owned.get()) {
+                future.cancel(true);
+            }
             return WeatherDto.empty();
-        } finally {
-            inflightRequests.remove(requestKey);
         }
     }
 

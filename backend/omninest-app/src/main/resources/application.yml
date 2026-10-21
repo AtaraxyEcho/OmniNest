@@ -173,7 +173,7 @@ omninest:
     refresh-session-max-lifetime: 90d
     allow-credentials: true
     # script-src 无 unsafe-inline；style-src 保留给 Flutter Web 引擎运行时内联样式。
-    content-security-policy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+    content-security-policy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
     permissions-policy: "camera=(), microphone=(), geolocation=(), payment=()"
   worker:
     runtime:
@@ -223,6 +223,19 @@ omninest:
       cursor-ttl: 30d
       lock-ttl: 30m
       cleanup-cron: 0 15 4 * * *
+    user-file-orphan-scan:
+      enabled: true
+      # 原件不可重建：默认只出报表。开启删除前必须先人工核对一轮候选清单，
+      # 且严禁在清空 schema 而保留存储桶之后立刻打开（此时桶内全部对象都会被判成孤儿）。
+      delete-enabled: false
+      prefix: ""
+      minimum-age: 30d
+      page-size: 500
+      maximum-pages-per-run: 20
+      maximum-deletes-per-run: 100
+      cursor-ttl: 30d
+      lock-ttl: 30m
+      cleanup-cron: 0 5 5 * * *
   rate-limit:
     enabled: true
     default-limit: 120

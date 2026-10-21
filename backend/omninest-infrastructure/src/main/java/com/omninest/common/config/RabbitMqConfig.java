@@ -86,6 +86,16 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue fileIndexSyncQueue() {
+        return durableQueue(QueueNames.FILE_INDEX_SYNC_QUEUE);
+    }
+
+    @Bean
+    Queue searchIndexRebuildQueue() {
+        return durableQueue(QueueNames.SEARCH_INDEX_REBUILD_QUEUE);
+    }
+
+    @Bean
     Queue mediaAutoImportQueue() {
         return durableQueue(QueueNames.MEDIA_AUTO_IMPORT_QUEUE);
     }
@@ -230,6 +240,20 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(fileRestoreIndexQueue)
                 .to(taskExchange)
                 .with(QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding fileIndexSyncBinding(Queue fileIndexSyncQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(fileIndexSyncQueue)
+                .to(taskExchange)
+                .with(QueueNames.FILE_INDEX_SYNC_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding searchIndexRebuildBinding(Queue searchIndexRebuildQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(searchIndexRebuildQueue)
+                .to(taskExchange)
+                .with(QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY);
     }
 
     @Bean

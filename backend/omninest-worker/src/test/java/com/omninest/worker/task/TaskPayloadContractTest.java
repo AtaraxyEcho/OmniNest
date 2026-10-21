@@ -12,6 +12,7 @@ import com.omninest.modules.file.event.FilePurgeRequestedEvent;
 import com.omninest.modules.file.event.FileSecurityScanRequestedEvent;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.event.MediaAutoImportRequestedEvent;
+import com.omninest.modules.file.event.SearchIndexRebuildEvent;
 import com.omninest.modules.music.event.MusicScanEvent;
 import com.omninest.modules.music.event.MusicScrapeEvent;
 import com.omninest.modules.photos.event.PhotoAiEvent;
@@ -69,10 +70,12 @@ class TaskPayloadContractTest {
     );
 
     /**
-     * 不落任务记录的路由键：恢复索引事件由领域事件直投，死信路由键属于 {@code omni.dlx} 交换机。
+     * 不落任务记录的路由键：恢复索引与索引同步事件由请求侧 Outbox 直投（与 PHOTO_INDEX 同口径，
+     * 载荷就是节点 ID，无需进度与重试台账），死信路由键属于 {@code omni.dlx} 交换机。
      */
     private static final Set<String> ROUTING_KEYS_WITHOUT_TASK_RECORD = Set.of(
             QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY,
+            QueueNames.FILE_INDEX_SYNC_ROUTING_KEY,
             QueueNames.DEAD_LETTER_ROUTING_KEY
     );
 
@@ -123,6 +126,7 @@ class TaskPayloadContractTest {
             new Contract(QueueNames.PHOTO_SCAN_ROUTING_KEY, PhotoScanEvent.class, null),
             new Contract(QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY, PhotoThumbnailRegenerationEvent.class, null),
             new Contract(QueueNames.PHOTO_INDEX_ROUTING_KEY, PhotoIndexEvent.class, null),
+            new Contract(QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY, SearchIndexRebuildEvent.class, null),
             new Contract(QueueNames.PHOTO_BATCH_ROUTING_KEY, PhotoBatchEvent.class, null),
             new Contract(QueueNames.PHOTO_AI_ROUTING_KEY, PhotoAiEvent.class, null),
             new Contract(QueueNames.PHOTO_MOTION_RESCAN_ROUTING_KEY, PhotoMotionRescanEvent.class, null),

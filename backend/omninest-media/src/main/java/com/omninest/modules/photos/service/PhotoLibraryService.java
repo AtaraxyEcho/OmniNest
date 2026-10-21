@@ -24,6 +24,7 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoTrashResultDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoYearGroup;
+import com.omninest.modules.photos.repository.PhotoActiveFileProjection;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoGroupPreviewProjection;
@@ -438,10 +439,12 @@ public class PhotoLibraryService {
      *
      * <p>导入时的逆地理编码可能因限流或网络失败而缺失，此方法用于按需回填。</p>
      *
+     * <p>刻意不加方法级事务：在线回退会等分布式限流并同步请求外部服务（超时 10 秒），
+     * 包在事务里就是让这段外呼一直占着数据库连接。读取、外呼与单行写回各自成事务即可。</p>
+     *
      * @param ownerUserId 当前用户 ID
      * @param photoId 照片 ID
      */
-    @Transactional(rollbackFor = Exception.class)
     public void backfillPhotoGeocode(UUID ownerUserId, UUID photoId) {
         PhotoItem item = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
@@ -793,7 +796,9 @@ public class PhotoLibraryService {
     @Transactional(readOnly = true)
     public Page<PhotoItemDto> listByTagPage(UUID ownerUserId, String tag, int page, int size) {
         Page<PhotoTag> tagPage = photoTagRepository.findActiveByOwnerUserIdAndTag(
-                ownerUserId, tag, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                ownerUserId,
+                tag,
+                PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
         if (tagPage.isEmpty()) {
             return new PageImpl<>(List.of(), tagPage.getPageable(), tagPage.getTotalElements());
         }
@@ -884,7 +889,7 @@ public class PhotoLibraryService {
                 favorite,
                 tags,
                 includeContentAnalysis
-                        ? resolveSourceUrl(photo.getOwnerUserId(), photo.getFileNodeId())
+                        ? resolveSourceUrl(photo.getOwnerUserId(), photo.activeOrSourceFileId())
                         : null,
                 includeContentAnalysis
                         ? contentAnalysisService.current(photo.getOwnerUserId(), photo.getId())
@@ -949,10 +954,21 @@ public class PhotoLibraryService {
                         .toList());
         // 原图地址同样批量签发：逐行 createDownloadUrl 每张照片都要两次单行查询加一次
         // 签名运算，一屏 200 张就是数百次往返，而列表接口与详情共用同一份投影。
+        // 已编辑的照片要把地址指向编辑产物，否则详情页与幻灯片的「大图」仍是未编辑原图。
+        Map<UUID, UUID> activeFileByPhoto = photoIds.isEmpty()
+                ? Map.of()
+                : photoItemRepository.findActiveFileIds(ownerUserId, photoIds).stream()
+                        .collect(Collectors.toMap(
+                                PhotoActiveFileProjection::getPhotoId,
+                                PhotoActiveFileProjection::getActiveFileId
+                        ));
         Map<UUID, String> sourceUrls = resolveDownloadUrls(
                 ownerUserId,
                 projections.stream()
-                        .map(PhotoListItemProjection::getFileNodeId)
+                        .map(item -> {
+                            UUID activeFileId = activeFileByPhoto.get(item.getId());
+                            return activeFileId != null ? activeFileId : item.getFileNodeId();
+                        })
                         .filter(Objects::nonNull)
                         .toList());
         return projections.stream().map(item -> new PhotoListItemDto(
@@ -970,7 +986,7 @@ public class PhotoLibraryService {
                 item.getFormat(),
                 item.getFileSize(),
                 urlOrNull(coverUrls, item.getCoverFileId()),
-                urlOrNull(sourceUrls, item.getFileNodeId()),
+                urlOrNull(sourceUrls, activeFileByPhoto.getOrDefault(item.getId(), item.getFileNodeId())),
                 item.getMetadataStatus(),
                 favoriteIds.contains(item.getId()),
                 item.getCreatedAt(),

@@ -79,4 +79,31 @@ class PhotoSearchIndexServiceTest {
         assertThat(java.nio.file.Files.exists(indexDir)).isTrue();
     }
 
+    @Test
+    @DisplayName("共享目录下的多租户隔离：ownerUserId 精确项是唯一屏障")
+    void searchIsPerOwnerWithinTheSharedDirectory() throws Exception {
+        UUID firstOwner = UUID.randomUUID();
+        UUID secondOwner = UUID.randomUUID();
+        UUID thirdOwner = UUID.randomUUID();
+        UUID firstPhoto = UUID.randomUUID();
+        UUID secondPhoto = UUID.randomUUID();
+        PhotoSearchIndexService service = new PhotoSearchIndexService(indexDir.toString());
+        try {
+            // 两人写入同一个目录：照片索引不像文件索引按用户分目录，
+            // ownerUserId 一旦被分词，过滤条件就可能被同名片段命中，因此必须逐租户精确匹配。
+            service.indexPhoto(firstPhoto, firstOwner, "sunset ridge", "黄昏的海边", List.of("travel"));
+            service.indexPhoto(secondPhoto, secondOwner, "sunset ridge", "黄昏的海边", List.of("travel"));
+
+            assertThat(service.search(firstOwner, "sunset", 10)).containsExactly(firstPhoto);
+            assertThat(service.search(secondOwner, "sunset", 10)).containsExactly(secondPhoto);
+            assertThat(service.search(thirdOwner, "sunset", 10)).isEmpty();
+
+            service.deletePhoto(firstPhoto);
+            assertThat(service.search(secondOwner, "sunset", 10)).containsExactly(secondPhoto);
+            assertThat(service.search(firstOwner, "sunset", 10)).isEmpty();
+        } finally {
+            service.close();
+        }
+    }
+
 }

@@ -5,7 +5,6 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.event.FileUploadedEvent;
-import com.omninest.modules.file.event.FileRestoredEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.search.service.FileSearchIndexService;
 import java.time.Instant;
@@ -73,31 +72,6 @@ class FileIndexTaskServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         Mockito.verifyNoInteractions(fileSearchIndexService);
-    }
-
-    @Test
-    void processRestoredOnlyRebuildsFileIndex() {
-        FileUploadedEvent uploadedEvent = event();
-        FileRestoredEvent restoredEvent = new FileRestoredEvent(
-                uploadedEvent.fileNodeId(),
-                uploadedEvent.ownerUserId(),
-                uploadedEvent.fileName(),
-                Instant.now()
-        );
-        FileDescriptor descriptor = descriptor(SpaceType.PERSONAL);
-        Mockito.when(fileLifecycleGuard.requireOwnedWritable(
-                        restoredEvent.ownerUserId(), restoredEvent.fileNodeId()))
-                .thenReturn(descriptor);
-
-        service.processRestored(restoredEvent);
-
-        Mockito.verify(fileSearchIndexService).indexFile(
-                restoredEvent.fileNodeId(),
-                restoredEvent.ownerUserId(),
-                restoredEvent.fileName(),
-                null,
-                SpaceType.PERSONAL.getValue()
-        );
     }
 
     private FileDescriptor descriptor(SpaceType spaceType) {

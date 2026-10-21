@@ -964,7 +964,7 @@
   "filesCannotGetAudioUrl": "Cannot get audio URL",
   "filesCannotLoadFile": "Cannot load file",
   "filesCannotGetFileUrl": "Cannot get file URL",
-  "filesPdfDownloadHint": "PDF preview is not available yet. Download the file to view it.",
+  "filesPdfDownloadHint": "This PDF could not be opened online. Download it to view.",
   "filesAccessKeyId": "Access Key ID",
   "filesSecretAccessKey": "Secret Access Key",
   "filesOauthTokenJson": "OAuth Token JSON",

@@ -123,6 +123,24 @@ public class PhotoItem {
     @Column(name = "motion_video_file_node_id")
     private UUID motionVideoFileNodeId;
 
+    /**
+     * 当前活动的全分辨率文件节点：编辑产物，{@code null} 表示未编辑、按 {@code fileNodeId} 原图。
+     *
+     * <p>{@code coverFileId} 承担的是网格缩略图槽位（缩略图任务产出上限 1024px），
+     * 不能当作大图来源，否则详情查看、二次编辑与打包下载都会退到缩略图分辨率。</p>
+     */
+    @Column(name = "active_file_id")
+    private UUID activeFileId;
+
+    /**
+     * 全分辨率展示与导出使用的文件节点：编辑产物优先，未编辑时为原图。
+     *
+     * @return 当前活动文件节点 ID
+     */
+    public UUID activeOrSourceFileId() {
+        return activeFileId != null ? activeFileId : fileNodeId;
+    }
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

@@ -401,65 +401,78 @@ public class FileSearchIndexService implements Closeable {
      * @return 搜索结果列表
      */
     public List<SearchResultDto> search(UUID ownerUserId, String queryStr, int maxResults, String spaceType) {
-        try {
-            return withUserIndexState(ownerUserId, state -> {
-                List<SearchResultDto> results = new ArrayList<>();
-                try (DirectoryReader reader = openReaderOrNull(state)) {
-                    if (reader == null) {
-                        return results;
-                    }
-                    IndexSearcher searcher = new IndexSearcher(reader);
-                    QueryParser parser = new QueryParser(FIELD_TITLE, analyzer);
-                    parser.setDefaultOperator(QueryParser.Operator.OR);
-                    String escaped = QueryParser.escape(queryStr);
-                    // 标题与正文任一命中即可；空间过滤必须独立成 FILTER 子句。
-                    // 把 spaceType 拼进查询串会因默认 OR 退化成加分项，且 QueryParser
-                    // 经分词器得到的词项与写入时不分词的大写 StringField 术语对不上。
-                    Query keyword = parser.parse(FIELD_TITLE + ":\"" + escaped + "\" "
-                            + FIELD_CONTENT + ":\"" + escaped + "\"");
-                    BooleanQuery.Builder query = new BooleanQuery.Builder()
-                            .add(keyword, BooleanClause.Occur.MUST);
-                    if (spaceType != null) {
-                        query.add(new TermQuery(new Term(FIELD_SPACE_TYPE, spaceType)),
-                                BooleanClause.Occur.FILTER);
-                    }
-                    Query built = query.build();
-                    // 超长文件分块后同一 fileId 会命中多条文档，放宽候选后再按文件去重。
-                    int candidateLimit = Math.max(maxResults * 8, maxResults);
-                    TopDocs topDocs = searcher.search(built, candidateLimit);
-                    Map<UUID, Float> bestScores = new LinkedHashMap<>();
-                    Map<UUID, String> titles = new LinkedHashMap<>();
-                    for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-                        Document doc = searcher.storedFields().document(scoreDoc.doc);
-                        UUID fileId = UUID.fromString(doc.get(FIELD_FILE_ID));
-                        String title = doc.get(FIELD_TITLE);
-                        Float existing = bestScores.get(fileId);
-                        if (existing == null || scoreDoc.score > existing) {
-                            bestScores.put(fileId, scoreDoc.score);
-                            titles.put(fileId, title);
-                        }
-                    }
-                    int added = 0;
-                    for (Map.Entry<UUID, Float> entry : bestScores.entrySet()) {
-                        if (added >= maxResults) {
-                            break;
-                        }
-                        results.add(new SearchResultDto(
-                                entry.getKey(),
-                                titles.get(entry.getKey()),
-                                null,
-                                entry.getValue()
-                        ));
-                        added++;
-                    }
-                }
-                return results;
-            });
-        } catch (Exception e) {
-            log.error("Lucene 搜索失败: ownerUserId={}, queryLength={}, errorType={}",
-                    ownerUserId, queryStr.length(), e.getClass().getSimpleName());
+        Path userDir = getUserIndexPath(ownerUserId);
+        if (!Files.exists(userDir)) {
             return new ArrayList<>();
         }
+        // 搜索一律只读打开索引目录：API 与 Worker 共挂同一 Lucene 卷时，读取路径若构造
+        // IndexWriter 就会与 Worker 抢 write.lock，抢锁失败被吞掉后表现为搜索静默返回空结果。
+        // Worker 每次写入都 commit，因此 open(directory) 读到的就是最新已提交段。
+        try (Directory directory = new NIOFSDirectory(userDir)) {
+            if (!DirectoryReader.indexExists(directory)) {
+                return new ArrayList<>();
+            }
+            try (DirectoryReader reader = DirectoryReader.open(directory)) {
+                return collectHits(new IndexSearcher(reader), queryStr, maxResults, spaceType);
+            }
+        } catch (Exception e) {
+            log.error("Lucene 搜索失败: ownerUserId={}, queryLength={}, errorType={}",
+                    ownerUserId, queryStr.length(), e.getClass().getSimpleName(), e);
+            return new ArrayList<>();
+        }
+    }
+
+    private List<SearchResultDto> collectHits(
+            IndexSearcher searcher,
+            String queryStr,
+            int maxResults,
+            String spaceType
+    ) throws Exception {
+        List<SearchResultDto> results = new ArrayList<>();
+        QueryParser parser = new QueryParser(FIELD_TITLE, analyzer);
+        parser.setDefaultOperator(QueryParser.Operator.OR);
+        String escaped = QueryParser.escape(queryStr);
+        // 标题与正文任一命中即可；空间过滤必须独立成 FILTER 子句。
+        // 把 spaceType 拼进查询串会因默认 OR 退化成加分项，且 QueryParser
+        // 经分词器得到的词项与写入时不分词的大写 StringField 术语对不上。
+        Query keyword = parser.parse(FIELD_TITLE + ":\"" + escaped + "\" "
+                + FIELD_CONTENT + ":\"" + escaped + "\"");
+        BooleanQuery.Builder query = new BooleanQuery.Builder()
+                .add(keyword, BooleanClause.Occur.MUST);
+        if (spaceType != null) {
+            query.add(new TermQuery(new Term(FIELD_SPACE_TYPE, spaceType)),
+                    BooleanClause.Occur.FILTER);
+        }
+        Query built = query.build();
+        // 超长文件分块后同一 fileId 会命中多条文档，放宽候选后再按文件去重。
+        int candidateLimit = Math.max(maxResults * 8, maxResults);
+        TopDocs topDocs = searcher.search(built, candidateLimit);
+        Map<UUID, Float> bestScores = new LinkedHashMap<>();
+        Map<UUID, String> titles = new LinkedHashMap<>();
+        for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
+            Document doc = searcher.storedFields().document(scoreDoc.doc);
+            UUID fileId = UUID.fromString(doc.get(FIELD_FILE_ID));
+            String title = doc.get(FIELD_TITLE);
+            Float existing = bestScores.get(fileId);
+            if (existing == null || scoreDoc.score > existing) {
+                bestScores.put(fileId, scoreDoc.score);
+                titles.put(fileId, title);
+            }
+        }
+        int added = 0;
+        for (Map.Entry<UUID, Float> entry : bestScores.entrySet()) {
+            if (added >= maxResults) {
+                break;
+            }
+            results.add(new SearchResultDto(
+                    entry.getKey(),
+                    titles.get(entry.getKey()),
+                    null,
+                    entry.getValue()
+            ));
+            added++;
+        }
+        return results;
     }
 
     /**

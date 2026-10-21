@@ -10,6 +10,8 @@ import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
@@ -352,7 +354,7 @@ class _SharedAlbumContent extends StatelessWidget {
         Container(
           height: 64 + MediaQuery.paddingOf(context).top,
           padding: EdgeInsets.only(
-            left: 24,
+            left: 8,
             right: 24,
             top: MediaQuery.paddingOf(context).top,
           ),
@@ -370,6 +372,14 @@ class _SharedAlbumContent extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // 本页挂在应用壳层之外：桌面端没有浏览器后退键时，这是唯一退出入口。
+              IconButton(
+                tooltip: AppLocalizations.of(context).coreBackToPortal,
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed:
+                    () => exitDetailRoute(context, fallbackRoute: '/portal'),
+              ),
+              SizedBox(width: 4),
               Icon(
                 Icons.photo_album_rounded,
                 color: context.photosColors.primaryContainer,
@@ -627,9 +637,20 @@ class _SharedPhotoLightbox extends StatelessWidget {
                         )
                         : InteractiveViewer(
                           child: Center(
+                            // 分享页大图同样按屏宽量化解码档位：手机浏览器直接解码
+                            // 高像素原图会卡住主线程并把位图堆满内存。
                             child: CachedNetworkImage(
                               imageUrl: displayUrl,
                               fit: BoxFit.contain,
+                              memCacheWidth: quantizedDecodeWidth(
+                                logicalWidth: MediaQuery.sizeOf(context).width,
+                                devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                                  context,
+                                ),
+                                step: 256,
+                                min: 512,
+                                max: 4096,
+                              ),
                             ),
                           ),
                         ),

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.OmniNestApplication;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.modules.photos.repository.PhotoIndexTargetProjection;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
 import java.sql.Timestamp;
@@ -30,6 +31,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -142,6 +144,32 @@ class PhotoTimelineMonthConsistencyIT {
             assertThat(row.getMonth()).isEqualTo(4);
             assertThat(row.getPhotoCount()).isEqualTo(1L);
         });
+    }
+
+    @Test
+    @DisplayName("重建候选查询只取活动照片并能解析出所有者投影")
+    void indexRebuildScanProjectsOwnerAndExcludesDeletedPhotos() {
+        UUID owner = UUID.randomUUID();
+        UUID activePhoto = insertPhoto(owner, instant("2026-06-01"), instant("2026-06-01"));
+        UUID trashedPhoto = insertPhoto(owner, instant("2026-06-02"), instant("2026-06-02"));
+        jdbcTemplate.update("UPDATE omni.photo_items SET deleted_at = now() WHERE id = ?", trashedPhoto);
+        UUID deletedFileNodeId = UUID.randomUUID();
+        UUID fileDeletedPhoto = insertPhotoWithNode(
+                owner, deletedFileNodeId, instant("2026-06-03"), instant("2026-06-03"));
+        jdbcTemplate.update("UPDATE omni.file_nodes SET is_deleted = true WHERE id = ?", deletedFileNodeId);
+
+        List<PhotoIndexTargetProjection> page = photoItemRepository.findIndexablePhotosAfterId(
+                new UUID(0L, 0L), PageRequest.of(0, 500));
+        List<UUID> ownedCandidates = page.stream()
+                .filter(row -> owner.equals(row.getOwnerUserId()))
+                .map(PhotoIndexTargetProjection::getId)
+                .toList();
+
+        // 投影别名写错只会在这里露出来：上下文冒烟只解析 HQL、不执行 SQL，
+        // 服务侧单测又是桩掉的仓储，两者都证不到「真查得到、且判据对」。
+        assertThat(ownedCandidates).containsExactly(activePhoto);
+        assertThat(page).extracting(PhotoIndexTargetProjection::getId)
+                .doesNotContain(trashedPhoto, fileDeletedPhoto);
     }
 
     private UUID insertPhoto(UUID ownerUserId, Instant dateTaken, Instant createdAt) {

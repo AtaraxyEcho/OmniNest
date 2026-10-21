@@ -198,6 +198,10 @@ public class TaskRedispatchService {
                     "photoId", requiredUuid(payload, "photoId").toString(),
                     "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
             );
+            case QueueNames.SEARCH_INDEX_REBUILD_ROUTING_KEY -> Map.of(
+                    "taskId", taskId.toString(),
+                    "actorUserId", requiredUuid(payload, "actorUserId").toString()
+            );
             case QueueNames.PHOTO_AI_ROUTING_KEY -> {
                 Map<String, Object> analysis = new LinkedHashMap<>();
                 analysis.put("taskId", taskId.toString());

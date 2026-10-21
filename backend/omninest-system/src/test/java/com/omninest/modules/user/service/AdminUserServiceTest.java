@@ -36,6 +36,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class AdminUserServiceTest {
     private final AuthUserRepository authUserRepository = mock(AuthUserRepository.class);
@@ -51,6 +53,9 @@ class AdminUserServiceTest {
             mock(UserSessionRevocationService.class);
     private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
+    private final CurrentUserService currentUserService = mock(CurrentUserService.class);
+    private final TransactionTemplate transactionTemplate =
+            new TransactionTemplate(mock(PlatformTransactionManager.class));
     private final AdminUserService service = new AdminUserService(
             authUserRepository,
             authRoleRepository,
@@ -62,7 +67,9 @@ class AdminUserServiceTest {
             storageQuotaService,
             userSessionRevocationService,
             twoFactorService,
-            adminActorGuard
+            adminActorGuard,
+            currentUserService,
+            transactionTemplate
     );
 
     @Test

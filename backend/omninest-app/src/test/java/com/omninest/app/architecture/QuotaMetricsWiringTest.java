@@ -13,6 +13,7 @@ import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.service.FileStorageMetricsService;
 import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.quota.port.AdminActorVerifier;
+import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.quota.service.RuntimeStorageQuotaPolicy;
 import com.omninest.modules.quota.service.StorageQuotaReservationService;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -37,6 +38,7 @@ class QuotaMetricsWiringTest {
             .withBean(ReadThroughCache.class, () -> mock(ReadThroughCache.class))
             .withBean(StorageQuotaReservationService.class, () -> mock(StorageQuotaReservationService.class))
             .withBean(AdminActorVerifier.class, () -> mock(AdminActorVerifier.class))
+            .withBean(UserProfileCacheEvictor.class, () -> mock(UserProfileCacheEvictor.class))
             .withUserConfiguration(
                     RuntimeStorageQuotaPolicy.class,
                     StorageQuotaService.class,

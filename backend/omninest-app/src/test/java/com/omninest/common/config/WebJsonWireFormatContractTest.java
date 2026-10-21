@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,6 +60,23 @@ class WebJsonWireFormatContractTest {
                 "{\"name\":123,\"count\":1,\"seenAt\":\"2026-10-02 11:30:00\",\"condition\":\"SUNNY\"}",
                 SamplePayload.class);
         assertThat(coerced.name()).isEqualTo("123");
+    }
+
+    @Test
+    void optionalFlagMayBeOmittedFromShareRequest() {
+        // 文档标称选填的开关必须能整体缺席；此前它是原始类型组件，
+        // 缺席即绑定失败，客户端只拿到「请求体格式不正确或枚举值不受支持」。
+        CreateShareLinkRequest omitted = objectMapper.readValue("""
+                {"resourceId":"550e8400-e29b-41d4-a716-446655440000","resourceType":"FOLDER"}
+                """, CreateShareLinkRequest.class);
+        assertThat(omitted.generatePassword()).isFalse();
+        assertThat(omitted.parsedExpiresAt()).isNull();
+
+        CreateShareLinkRequest explicit = objectMapper.readValue("""
+                {"resourceId":"550e8400-e29b-41d4-a716-446655440000","resourceType":"FOLDER",
+                 "generatePassword":true}
+                """, CreateShareLinkRequest.class);
+        assertThat(explicit.generatePassword()).isTrue();
     }
 
     @Test

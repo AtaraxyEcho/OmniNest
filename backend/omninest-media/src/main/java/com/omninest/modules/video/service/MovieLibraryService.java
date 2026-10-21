@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.media.domain.AssetType;
@@ -345,7 +346,7 @@ public class MovieLibraryService {
                 readableLibraryIds,
                 seriesType,
                 buildLibraryTitlePattern(keyword),
-                PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
         return new PageImpl<>(
                 toSeriesDtos(ownerUserId, items.getContent()),
                 items.getPageable(),
@@ -376,7 +377,7 @@ public class MovieLibraryService {
     @Transactional(readOnly = true)
     public Page<MovieSeriesDto> favoriteSeriesPage(UUID ownerUserId, int page, int size) {
         Page<MediaSeriesFavorite> favorites = seriesFavoriteRepository.findPageByOwnerUserIdOrderByCreatedAtDesc(
-                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                ownerUserId, PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
         return new PageImpl<>(
                 toFavoriteSeriesDtos(ownerUserId, favorites.getContent()),
                 favorites.getPageable(),

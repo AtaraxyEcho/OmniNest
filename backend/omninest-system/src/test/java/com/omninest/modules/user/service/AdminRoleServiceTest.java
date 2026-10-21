@@ -47,13 +47,15 @@ class AdminRoleServiceTest {
     private final UserSessionRevocationService userSessionRevocationService =
             mock(UserSessionRevocationService.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
+    private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final AdminRoleService service = new AdminRoleService(
             authRoleRepository,
             authUserRepository,
             authPermissionRepository,
             auditLogService,
             userSessionRevocationService,
-            adminActorGuard
+            adminActorGuard,
+            currentUserService
     );
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
 

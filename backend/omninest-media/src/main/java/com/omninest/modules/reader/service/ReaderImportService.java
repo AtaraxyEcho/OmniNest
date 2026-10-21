@@ -45,6 +45,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 阅读导入服务，负责创建阅读条目、加入书架和触发漫画异步解析。
@@ -79,6 +80,7 @@ public class ReaderImportService {
     private final ReaderPdfMetadataService pdfMetadataService;
     private final ReaderCoverExtractionService coverExtractionService;
     private final MediaSyncEventService syncEventService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * EPUB 自动归类时每文本条目平均正文字符阈值，低于该值判定为漫画。
@@ -95,7 +97,6 @@ public class ReaderImportService {
      * @param contentKindOverride 内容形态覆盖值，EPUB 可指定 TEXT 或 COMIC
      * @return 导入或复用的阅读条目
      */
-    @Transactional(rollbackFor = Exception.class)
     public ReaderItem importFile(
             UUID ownerUserId,
             UUID fileNodeId,
@@ -107,13 +108,72 @@ public class ReaderImportService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的阅读文件类型");
         }
 
-        Optional<ReaderItem> existingByFile = itemRepository
-                .findAccessibleByFileNodeId(ownerUserId, fileNodeId, SpaceType.SHARED)
+        // 整本 SHA-256 与版式探测都要从对象存储完整取流，EPUB/CBZ 还要整包落盘解压；
+        // 这些只读 I/O 放进事务里就是让数百 MB 的传输全程占住一个数据库连接。
+        // 因此先判定是否真要新建条目，只有新建时才在事务外算好，事务内只做校验、加锁与落库。
+        ContentProbe probe = null;
+        if (findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType()) == null
+                && findAttachedComicItem(ownerUserId, fileNodeId, fileNode.spaceType()) == null) {
+            probe = new ContentProbe(
+                    computeSha256Stream(fileNode),
+                    resolveContentKind(fileNode, fileType, contentKindOverride)
+            );
+        }
+        ContentProbe effectiveProbe = probe;
+        return transactionTemplate.execute(status -> importInTransaction(
+                ownerUserId, fileNodeId, fileNode, fileType, forceImport, contentKindOverride, effectiveProbe));
+    }
+
+    /**
+     * 事务外预计算的正文指纹：整本哈希与内容形态。
+     */
+    private record ContentProbe(String contentHash, String contentKind) {
+    }
+
+    /**
+     * 查询该文件在目标空间范围内已有的阅读条目。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param fileNodeId 文件节点 ID
+     * @param spaceType 文件所在空间
+     * @return 已存在的条目，无则 {@code null}
+     */
+    private ReaderItem findExistingItem(UUID ownerUserId, UUID fileNodeId, SpaceType spaceType) {
+        return itemRepository.findAccessibleByFileNodeId(ownerUserId, fileNodeId, SpaceType.SHARED)
                 .stream()
-                .filter(candidate -> isSameSpaceScope(ownerUserId, candidate, fileNode.spaceType()))
-                .findFirst();
-        if (existingByFile.isPresent()) {
-            ReaderItem existing = existingByFile.get();
+                .filter(candidate -> isSameSpaceScope(ownerUserId, candidate, spaceType))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * 查询该文件是否已作为其他作品的漫画分卷并入。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param fileNodeId 文件节点 ID
+     * @param spaceType 文件所在空间
+     * @return 承载该分卷的作品条目，无则 {@code null}
+     */
+    private ReaderItem findAttachedComicItem(UUID ownerUserId, UUID fileNodeId, SpaceType spaceType) {
+        for (ReaderItemSource attached : sourceRepository.findByFileNodeIdIn(List.of(fileNodeId))) {
+            ReaderItem parent = itemRepository.findById(attached.getReaderItemId()).orElse(null);
+            if (parent != null && isSameSpaceScope(ownerUserId, parent, spaceType)) {
+                return parent;
+            }
+        }
+        return null;
+    }
+
+    private ReaderItem importInTransaction(
+            UUID ownerUserId,
+            UUID fileNodeId,
+            FileDescriptor fileNode,
+            String fileType,
+            boolean forceImport,
+            String contentKindOverride,
+            ContentProbe probe) {
+        ReaderItem existing = findExistingItem(ownerUserId, fileNodeId, fileNode.spaceType());
+        if (existing != null) {
             // 条目归属固定为文件所有者；成员复用共享条目时只加入自己的书架，
             // 不得触发内容覆盖或 PDF 派生元数据重写。
             if (existing.getOwnerUserId().equals(ownerUserId)) {
@@ -134,19 +194,20 @@ public class ReaderImportService {
         }
 
         // 该文件已作为别人的多卷漫画分卷并入共享作品时，再次点击导入应回到同一作品而不是新建条目。
-        for (ReaderItemSource attached : sourceRepository.findByFileNodeIdIn(List.of(fileNodeId))) {
-            ReaderItem parent = itemRepository.findById(attached.getReaderItemId()).orElse(null);
-            if (parent != null && isSameSpaceScope(ownerUserId, parent, fileNode.spaceType())) {
-                ensureOnBookshelf(ownerUserId, parent.getId());
-                syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
-                log.info("文件已作为漫画分卷并入作品，加入书架: userId={}, fileNodeId={}, itemId={}",
-                        ownerUserId, fileNodeId, parent.getId());
-                return parent;
-            }
+        ReaderItem attachedParent = findAttachedComicItem(ownerUserId, fileNodeId, fileNode.spaceType());
+        if (attachedParent != null) {
+            ensureOnBookshelf(ownerUserId, attachedParent.getId());
+            syncEventService.invalidate(ownerUserId, SyncScope.READER, "READER_LIBRARY", Map.of());
+            log.info("文件已作为漫画分卷并入作品，加入书架: userId={}, fileNodeId={}, itemId={}",
+                    ownerUserId, fileNodeId, attachedParent.getId());
+            return attachedParent;
         }
 
-        String contentHash = computeSha256Stream(fileNode);
-        String contentKind = resolveContentKind(fileNode, fileType, contentKindOverride);
+        // 事务外已算好时直接复用；判定与实际落库之间被并发导入抢先的极少数情况下退回事务内计算。
+        String contentHash = probe != null ? probe.contentHash() : computeSha256Stream(fileNode);
+        String contentKind = probe != null
+                ? probe.contentKind()
+                : resolveContentKind(fileNode, fileType, contentKindOverride);
         itemRepository.lockContentHash(ownerUserId, contentHash);
 
         if (!forceImport) {
@@ -299,7 +360,6 @@ public class ReaderImportService {
      * @param fileNodeId 文件节点 ID
      * @return 导入或复用的阅读条目
      */
-    @Transactional(rollbackFor = Exception.class)
     public ReaderItem importFile(UUID ownerUserId, UUID fileNodeId) {
         return importFile(ownerUserId, fileNodeId, false);
     }
@@ -312,7 +372,6 @@ public class ReaderImportService {
      * @param forceImport 是否强制导入
      * @return 导入或复用的阅读条目
      */
-    @Transactional(rollbackFor = Exception.class)
     public ReaderItem importFile(UUID ownerUserId, UUID fileNodeId, boolean forceImport) {
         return importFile(ownerUserId, fileNodeId, forceImport, null);
     }

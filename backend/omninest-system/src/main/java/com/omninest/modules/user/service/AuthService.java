@@ -19,6 +19,7 @@ import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorBootstrapEnableRespo
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.util.AuthUserMapper;
+import com.omninest.modules.user.security.ClientPlatform;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.user.repository.AuthRoleRepository;
@@ -395,12 +396,15 @@ public class AuthService {
             boolean enforcePlatformMutex
     ) {
         UUID sessionId = UUID.randomUUID();
+        // 平台标识参与互斥判定与 Redis 会话键拼接，必须在落库和登记前先归一化到固定档位，
+        // 否则改写大小写即可绕开同平台互斥，并把任意长字符串写进键空间。
+        String platform = ClientPlatform.normalize(clientPlatform);
         if (enforcePlatformMutex) {
-            enforceSamePlatformMutex(profile.getId(), clientPlatform, sessionId);
+            enforceSamePlatformMutex(profile.getId(), platform, sessionId);
         }
         activeSessionRegistry.register(
                 profile.getId(),
-                clientPlatform,
+                platform,
                 sessionId,
                 authenticationTokenPolicy.refreshTokenTtl()
         );
@@ -409,7 +413,7 @@ public class AuthService {
         AuthActiveSession session = new AuthActiveSession();
         session.setId(sessionId);
         session.setUserId(profile.getId());
-        session.setClientPlatform(LoginAuditService.clamped(clientPlatform, LoginAuditService.CLIENT_PLATFORM_MAX));
+        session.setClientPlatform(LoginAuditService.clamped(platform, LoginAuditService.CLIENT_PLATFORM_MAX));
         session.setDeviceId(LoginAuditService.clamped(deviceId, LoginAuditService.DEVICE_ID_MAX));
         session.setDeviceName(LoginAuditService.clamped(deviceName, LoginAuditService.DEVICE_NAME_MAX));
         session.setIpAddress(LoginAuditService.clamped(ipAddress, LoginAuditService.IP_ADDRESS_MAX));
@@ -471,7 +475,7 @@ public class AuthService {
         // 第 30 天先于会话失效，导致同平台互斥查不到旧会话。
         activeSessionRegistry.register(
                 userId,
-                session.getClientPlatform(),
+                ClientPlatform.normalize(session.getClientPlatform()),
                 sessionId,
                 authenticationTokenPolicy.refreshTokenTtl()
         );

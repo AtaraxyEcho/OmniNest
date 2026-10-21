@@ -99,6 +99,24 @@ public class FilePostProcessingTaskService {
     }
 
     /**
+     * 为索引重建派发元数据索引与文本提取任务，不重做缩略图等派生资产。
+     *
+     * <p>沿用上传后处理的任务类型与 active-task 去重，因此管理员重试、恢复与死信语义
+     * 一并生效；派生资产已在首次上传时生成，重建全文索引不应重新覆盖它们。</p>
+     *
+     * @param event 由存量文件节点还原的文件事件
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void enqueueReindex(FileUploadedEvent event) {
+        if (!hasActiveTask(event, "FILE_INDEX")) {
+            enqueueIndex(event);
+        }
+        if (isTextExtractable(event.mimeType()) && !hasActiveTask(event, "TEXT_EXTRACTION")) {
+            enqueueTextExtraction(event);
+        }
+    }
+
+    /**
      * 为导入完成的图片补投缩略图任务；已有进行中的同任务时跳过。
      *
      * <p>照片导入不再同步生成封面，由本任务在 Worker/内嵌 Worker 中

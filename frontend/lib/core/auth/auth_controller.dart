@@ -371,19 +371,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       await _saveSession(session);
       return SessionRefreshResult.ok(_toState(session));
     } on AppException catch (error) {
-      // authClient 没有会话拦截器：validateStatus < 500 时服务端 4xx 以
-      // AppException 抛出。服务端明确拒绝按 invalid 处理，本地解析/存储
-      // 故障（EMPTY_RESPONSE/INVALID_RESPONSE）仍按瞬时失败保留会话。
-      final serverRejected =
-          int.tryParse(error.code) != null ||
-          error.details['errorName'] != null;
-      if (serverRejected) {
-        if (kDebugMode) {
-          devLog('会话刷新被服务端拒绝: ${error.code}');
-        }
-        return const SessionRefreshResult.invalid();
-      }
-      return const SessionRefreshResult.transient();
+      return _gradeApiRefreshFailure(error);
     } on DioException catch (error) {
       return _gradeRefreshFailure(error);
     } catch (error) {
@@ -394,11 +382,36 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     }
   }
 
-  /// 按响应分级刷新失败：4xx 为服务端明确拒绝（凭据确定失效）；
-  /// 连接层故障与 5xx 视为瞬时，不清除本地会话与 Cookie。
+  /// 按服务端业务码分级刷新失败。
+  ///
+  /// 只有 401/403 表示凭据确实不可用。刷新接口另有每分钟限流（429）与超时（408），
+  /// 把这些一并当作凭据失效会直接清会话并清空离线数据库与加密缓存——用户只是网络抖动
+  /// 或多组件并发刷新撞到限流，却被踢出登录并丢掉本地内容。
+  SessionRefreshResult _gradeApiRefreshFailure(AppException error) {
+    final errorCode = int.tryParse(error.code);
+    final errorName = error.details['errorName']?.toString();
+    final credentialRejected =
+        errorCode == 401 ||
+        errorCode == 403 ||
+        errorName == 'UNAUTHORIZED' ||
+        errorName == 'FORBIDDEN';
+    if (credentialRejected) {
+      if (kDebugMode) {
+        devLog('会话刷新被服务端拒绝: ${error.code}');
+      }
+      return const SessionRefreshResult.invalid();
+    }
+    if (kDebugMode) {
+      devLog('会话刷新失败但不影响凭据: ${error.code}（保留本地会话）');
+    }
+    return const SessionRefreshResult.transient();
+  }
+
+  /// 按响应分级刷新失败：仅 401/403 为服务端明确拒绝（凭据确定失效）；
+  /// 连接层故障、408/429 与 5xx 视为瞬时，不清除本地会话与 Cookie。
   SessionRefreshResult _gradeRefreshFailure(DioException error) {
     final statusCode = error.response?.statusCode;
-    if (statusCode != null && statusCode >= 400 && statusCode < 500) {
+    if (statusCode == 401 || statusCode == 403) {
       if (kDebugMode) {
         devLog('会话刷新被服务端拒绝: HTTP $statusCode');
       }

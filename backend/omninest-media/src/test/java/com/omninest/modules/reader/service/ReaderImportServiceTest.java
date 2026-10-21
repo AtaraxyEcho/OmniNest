@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,13 +37,16 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 阅读导入服务单元测试：验证内容哈希去重、空间隔离、跨用户分卷合并与权限校验。
@@ -88,9 +92,22 @@ class ReaderImportServiceTest {
     private ReaderCoverExtractionService coverExtractionService;
     @Mock
     private MediaSyncEventService syncEventService;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private ReaderImportService importService;
+
+    /**
+     * 导入把大文件哈希与版式探测挪到事务外后，落库段经 TransactionTemplate 执行，
+     * 桩必须真的回调业务体，否则每个用例都拿不到条目。
+     */
+    @BeforeEach
+    @SuppressWarnings("unchecked")
+    void runTransactionCallback() {
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
+                ((TransactionCallback<Object>) invocation.getArgument(0)).doInTransaction(null));
+    }
 
     @Test
     void importCreatesItemAndAddsToBookshelf() {

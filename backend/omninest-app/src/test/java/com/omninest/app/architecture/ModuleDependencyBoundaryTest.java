@@ -269,7 +269,7 @@ class ModuleDependencyBoundaryTest {
     void photoIndexWritesMustStayInSingleWriterServices() throws IOException {
         Path root = findBackendRoot();
         Pattern writerCall = Pattern.compile(
-                "photoSearchIndexService\\.(indexPhoto|deletePhoto|deletePhotos)\\s*\\(");
+                "photoSearchIndexService\\.(indexPhoto|deletePhoto|deletePhotos|clearAll)\\s*\\(");
         Set<String> violations = new TreeSet<>();
         for (String module : MODULES) {
             Path sourceRoot = root.resolve(module).resolve("src/main/java");
@@ -295,6 +295,56 @@ class ModuleDependencyBoundaryTest {
         assertTrue(
                 violations.isEmpty(),
                 () -> "照片索引写入只能由单写进程执行，请求侧请改为投递 PHOTO_INDEX 消息：\n"
+                        + String.join("\n", violations)
+        );
+    }
+
+    /**
+     * 允许直接持有文件索引 {@code IndexWriter} 的单写侧服务。
+     *
+     * <p>与照片索引同口径：API 与 Worker 共挂同一 Lucene 卷时，请求进程打开第二个
+     * {@code IndexWriter} 会抢不到 {@code write.lock}，重命名与删除的索引更新被吞掉后
+     * 表现为搜索静默漏结果。请求侧只能投递 {@code FILE_INDEX_SYNC} 消息。</p>
+     */
+    private static final Set<String> FILE_INDEX_WRITER_SOURCES = Set.of(
+            "omninest-file/src/main/java/com/omninest/modules/file/service/FilePurgeStateService.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/FileIndexSyncService.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/SearchIndexRebuildService.java",
+            "omninest-worker/src/main/java/com/omninest/worker/index/FileIndexTaskService.java",
+            "omninest-worker/src/main/java/com/omninest/worker/tika/TextExtractionConsumer.java"
+    );
+
+    @Test
+    void fileIndexWritesMustStayInSingleWriterServices() throws IOException {
+        Path root = findBackendRoot();
+        Pattern writerCall = Pattern.compile(
+                "fileSearchIndexService\\.(indexFile|indexFiles|indexFileChunks|deleteFile"
+                        + "|deleteFiles|clearAllIndexes|clearIndex)\\s*\\(");
+        Set<String> violations = new TreeSet<>();
+        for (String module : MODULES) {
+            Path sourceRoot = root.resolve(module).resolve("src/main/java");
+            if (!Files.isDirectory(sourceRoot)) {
+                continue;
+            }
+            try (Stream<Path> paths = Files.walk(sourceRoot)) {
+                for (Path path : paths.filter(this::isJavaSource).toList()) {
+                    String relative = normalize(root.relativize(path));
+                    if (FILE_INDEX_WRITER_SOURCES.contains(relative)
+                            || relative.endsWith("FileSearchIndexService.java")) {
+                        continue;
+                    }
+                    try (Stream<String> lines = Files.lines(path)) {
+                        if (lines.anyMatch(line -> writerCall.matcher(line).find())) {
+                            violations.add(relative);
+                        }
+                    }
+                }
+            }
+        }
+
+        assertTrue(
+                violations.isEmpty(),
+                () -> "文件索引写入只能由单写进程执行，请求侧请改为投递 FILE_INDEX_SYNC 消息：\n"
                         + String.join("\n", violations)
         );
     }

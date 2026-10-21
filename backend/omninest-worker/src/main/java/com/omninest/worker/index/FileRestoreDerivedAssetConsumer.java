@@ -15,7 +15,15 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
 /**
- * 文件恢复索引消费者，只恢复搜索索引，不重复执行上传后的媒体导入流程。
+ * 文件恢复后的派生资产消费者：校验源对象是否仍在，并补齐缺失的图片缩略图。
+ *
+ * <p>搜索索引不在这里重建。恢复写入侧已经通过 {@code FileIndexSyncService} 派发
+ * {@code FILE_INDEX + TEXT_EXTRACTION} 重投，那是唯一能保住正文的一条路；本消费者此前附带
+ * 的 {@code indexFile(content=null)} 对已抽过正文的文件会被"已有正文就跳过"那道闸吞掉，
+ * 属于第二条更弱的索引路径，已撤下。</p>
+ *
+ * <p>队列与路由键沿用 {@code omni.task.file-restore-index}：改名会在已部署的 broker 上留下
+ * 需要手工清理的旧队列，而这条链路的职责已由类名与 Javadoc 说明，不值得换来运维残留。</p>
  *
  * @author OmniNest
  */
@@ -23,12 +31,11 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ConditionalOnWorkerRuntime
-public class FileRestoreIndexConsumer {
-    private final FileIndexTaskService taskService;
+public class FileRestoreDerivedAssetConsumer {
     private final FileRestoreDerivedAssetService derivedAssetService;
 
     /**
-     * 处理文件恢复索引消息。
+     * 处理文件恢复索引消息中的派生资产修复部分。
      *
      * @param event 文件恢复事件
      * @param message AMQP 消息
@@ -40,19 +47,18 @@ public class FileRestoreIndexConsumer {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         try {
             derivedAssetService.validateAndRepair(event);
-            taskService.processRestored(event);
             channel.basicAck(deliveryTag, false);
         } catch (BusinessException exception) {
             if (ErrorCode.FILE_NOT_FOUND.equals(exception.errorCode())
                     || ErrorCode.FILE_LIFECYCLE_CONFLICT.equals(exception.errorCode())) {
-                log.info("恢复文件已再次删除或正在永久删除，跳过索引: fileNodeId={}", event.fileNodeId());
+                log.info("恢复文件已再次删除或正在永久删除，跳过派生资产修复: fileNodeId={}", event.fileNodeId());
                 channel.basicAck(deliveryTag, false);
                 return;
             }
-            log.error("恢复文件索引业务处理失败: fileNodeId={}", event.fileNodeId(), exception);
+            log.error("恢复文件派生资产修复业务处理失败: fileNodeId={}", event.fileNodeId(), exception);
             channel.basicNack(deliveryTag, false, false);
         } catch (Throwable exception) {
-            log.error("恢复文件索引处理失败: fileNodeId={}", event.fileNodeId(), exception);
+            log.error("恢复文件派生资产修复失败: fileNodeId={}", event.fileNodeId(), exception);
             channel.basicNack(deliveryTag, false, false);
         }
     }

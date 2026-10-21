@@ -1,6 +1,7 @@
 package com.omninest.modules.search.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.omninest.modules.search.dto.SearchResultDto;
 import java.io.IOException;
@@ -10,6 +11,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.store.LockObtainFailedException;
+import org.apache.lucene.store.NIOFSDirectory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -221,6 +227,37 @@ class FileSearchIndexServiceTest {
         // 内部 catch 异常并记录日志，不向外抛出
         service.deleteFile(unknownFile, USER_A);
         // 无异常即通过
+    }
+
+    @Test
+    @DisplayName("另一写者持有 write.lock 时搜索仍返回命中")
+    void search_returnsHitsWhileAnotherWriterHoldsWriteLock() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        FileSearchIndexService writerSide = new FileSearchIndexService(tempDir.toString(), 64);
+        writerSide.indexFile(fileId, USER_A, "山间晨雾", "内容", "PERSONAL");
+        writerSide.close();
+
+        Path userDir = tempDir.resolve(USER_A.toString());
+        try (StandardAnalyzer analyzer = new StandardAnalyzer();
+             NIOFSDirectory otherProcessDir = new NIOFSDirectory(userDir);
+             IndexWriter otherProcessWriter = new IndexWriter(otherProcessDir, new IndexWriterConfig(analyzer))) {
+
+            // 先证明这把锁真的被占住：否则下面的断言只是「无锁也能读」，钉不住单写进程的约束。
+            assertThatThrownBy(() -> new IndexWriter(
+                    new NIOFSDirectory(userDir), new IndexWriterConfig(new StandardAnalyzer())))
+                    .isInstanceOf(LockObtainFailedException.class);
+
+            // 冷缓存的请求侧只能读：修复前这里会去 getOrCreateUserIndex 开第二个 IndexWriter，
+            // 抢锁失败被内部吞掉，表现为搜索静默返回空结果。
+            FileSearchIndexService requestSide = new FileSearchIndexService(tempDir.toString(), 64);
+            try {
+                assertThat(requestSide.search(USER_A, "山间晨雾", 10))
+                        .extracting(SearchResultDto::fileId)
+                        .containsExactly(fileId);
+            } finally {
+                requestSide.close();
+            }
+        }
     }
 
     @Test

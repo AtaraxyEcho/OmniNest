@@ -28,7 +28,6 @@ import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesRestoredEvent;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
-import com.omninest.modules.search.service.FileSearchIndexService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -68,7 +67,7 @@ public class FileQueryService {
     private final FilePermissionService filePermissionService;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final ApplicationEventPublisher eventPublisher;
-    private final FileSearchIndexService fileSearchIndexService;
+    private final FileIndexSyncService fileIndexSyncService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final UserNameDirectory userNameDirectory;
     private final MediaProbeService mediaProbeService;
@@ -217,9 +216,8 @@ public class FileQueryService {
         updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
         // 更新 Lucene 搜索索引中的文件名，空间类型必须跟随节点本身，
-        // 否则共享文件重命名后会在索引里被写成个人空间。
-        fileSearchIndexService.indexFile(
-                saved.getId(), ownerUserId, saved.getName(), null, saved.getSpaceType().getValue());
+        // 否则共享文件重命名后会在索引里被写成个人空间。索引写入由 Worker 单进程执行。
+        fileIndexSyncService.scheduleAfterCommit(ownerUserId, List.of(saved.getId()));
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return toDto(saved);
     }
@@ -260,7 +258,7 @@ public class FileQueryService {
         Instant deletedAt = Instant.now();
         markDeleted(node, ownerUserId, deletedAt);
         fileNodeRepository.save(node);
-        fileSearchIndexService.deleteFile(node.getId(), ownerUserId);
+        fileIndexSyncService.scheduleAfterCommit(ownerUserId, List.of(node.getId()));
         eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, List.of(node.getId()), deletedAt));
 
         while (true) {
@@ -275,7 +273,7 @@ public class FileQueryService {
                 break;
             }
             fileNodeRepository.softDeleteIds(ownerUserId, descendantIds, deletedAt);
-            fileSearchIndexService.deleteFiles(descendantIds, ownerUserId);
+            fileIndexSyncService.scheduleAfterCommit(ownerUserId, descendantIds);
             eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(
                     ownerUserId,
                     List.copyOf(descendantIds),
@@ -351,9 +349,10 @@ public class FileQueryService {
                 .computeIfAbsent(descendant.getOwnerUserId(), key -> new ArrayList<>())
                 .add(descendant.getId()));
         Instant restoredAt = Instant.now();
-        restoredIdsByOwner.forEach((ownerId, ids) -> eventPublisher.publishEvent(
-                new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt)
-        ));
+        restoredIdsByOwner.forEach((ownerId, ids) -> {
+            eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt));
+            fileIndexSyncService.scheduleAfterCommit(ownerId, ids);
+        });
         recordFileEvent(nodeOwnerUserId, saved.getId(), SyncAction.RESTORED);
 
         return toDto(saved);
@@ -396,7 +395,7 @@ public class FileQueryService {
         }
         if (!allToSave.isEmpty()) {
             fileNodeRepository.saveAll(allToSave);
-            fileSearchIndexService.deleteFiles(allDeletedIds, ownerUserId);
+            fileIndexSyncService.scheduleAfterCommit(ownerUserId, allDeletedIds);
             eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, allDeletedIds, deletedAt));
             recordLibraryInvalidation(ownerUserId, SyncAction.DELETED, allDeletedIds.size());
         }
@@ -506,6 +505,7 @@ public class FileQueryService {
                     sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount()));
             restoredIdsByOwner.forEach((ownerId, ids) -> {
                 eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerId, List.copyOf(ids), restoredAt));
+                fileIndexSyncService.scheduleAfterCommit(ownerId, ids);
                 recordLibraryInvalidation(ownerId, SyncAction.RESTORED, ids.size());
             });
         }

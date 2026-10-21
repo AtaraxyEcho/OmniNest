@@ -7,6 +7,7 @@ import com.omninest.modules.user.repository.SessionRevocationJpaRepository;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 编排会话撤销记录、正命中缓存和安全降级判定。
+ * 编排会话撤销记录、撤销黑名单缓存、未撤销短期判定和安全降级判定。
  *
  * @author OmniNest
  */
@@ -26,6 +27,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SessionRevocationService implements SessionRevocationChecker {
 
     private static final Duration DEFAULT_REVOCATION_TTL = Duration.ofDays(30);
+    /**
+     * 「经数据库确认未撤销」的判定保留时长。
+     *
+     * <p>取值只影响一种退化场景：撤销时 Redis 写黑名单与清除判定同时部分失败，此时旧判定
+     * 最多再存活一个周期。数据库始终是权威，TTL 到期即回源复核。</p>
+     */
+    private static final Duration NOT_REVOKED_TTL = Duration.ofMinutes(1);
 
     private final SessionRevocationJpaRepository repository;
     private final SessionRevocationCache cache;
@@ -77,13 +85,18 @@ public class SessionRevocationService implements SessionRevocationChecker {
      */
     @Override
     public boolean isRevoked(UUID userId, UUID sessionId) {
-        if (cache.contains(userId, sessionId)) {
-            return true;
+        Optional<Boolean> cached = cache.checkRevoked(userId, sessionId);
+        if (cached.isPresent()) {
+            return cached.get();
         }
         try {
             boolean revoked = repository.existsByUserIdAndSessionId(userId, sessionId);
             if (revoked) {
                 publishRevocations(userId, List.of(sessionId), DEFAULT_REVOCATION_TTL);
+            } else {
+                // 未命中黑名单不等于「确认未撤销」：不写这条短期判定的话，占绝大多数的正常
+                // 请求每次都要回源数据库，缓存退化成额外的第二次往返。
+                cache.markNotRevoked(userId, sessionId, NOT_REVOKED_TTL);
             }
             return revoked;
         } catch (RuntimeException exception) {

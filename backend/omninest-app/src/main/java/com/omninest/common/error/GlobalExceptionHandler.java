@@ -102,7 +102,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorCode.PARAM_ERROR, "缺少必填参数: " + exception.getParameterName()));
     }
 
-    // FastJson 按全局日期格式解析失败时抛出 DateTimeParseException，属请求体格式问题而非系统故障。
+    // 全局日期格式解析失败时抛出 DateTimeParseException，属请求体格式问题而非系统故障。
     @ExceptionHandler(DateTimeParseException.class)
     ResponseEntity<ApiResponse<Void>> handleDateTimeParse(DateTimeParseException exception) {
         log.warn("日期时间格式解析失败: {}", exception.getMessage());

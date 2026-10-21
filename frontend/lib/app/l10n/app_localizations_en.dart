@@ -2423,7 +2423,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesPdfDownloadHint =>
-      'PDF preview is not available yet. Download the file to view it.';
+      'This PDF could not be opened online. Download it to view.';
 
   @override
   String get filesAccessKeyId => 'Access Key ID';

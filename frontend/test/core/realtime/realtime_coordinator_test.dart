@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/native.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/core/realtime/realtime_api.dart';
 import 'package:omninest/core/realtime/realtime_coordinator.dart';
@@ -97,6 +98,41 @@ void main() {
       expect(coordinator.phase, RealtimePhase.degraded);
     },
   );
+
+  test('后台挂起只认 paused/hidden，回前台即使预刷新失败也必须重连', () async {
+    final binding = TestWidgetsFlutterBinding.instance;
+    var refreshOk = true;
+    coordinator = RealtimeCoordinator(
+      api: remote,
+      store: store,
+      stompClient: transport,
+      connectivity: connectivity.stream,
+      refreshSession: () async => refreshOk,
+      suspendInBackground: true,
+      headInterval: const Duration(days: 1),
+    );
+    await coordinator.start();
+    expect(transport.connectCalls, 1);
+
+    // 下拉通知栏、系统权限弹窗与切窗预览都是 inactive，
+    // 在这里掐链等于每次失焦断一次、回焦又轮换一次刷新令牌。
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    expect(transport.pauseCalls, 0);
+    expect(transport.connectCalls, 1);
+
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    expect(transport.pauseCalls, 1);
+
+    // 刚解锁时网络未就绪，预刷新返回 false；恢复流程不得因此跳过重连，
+    // 否则 head 定时器与 STOMP 永久停摆，且没有任何入口能自愈。
+    refreshOk = false;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    expect(transport.pauseCalls, 1);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await waitFor(() async => transport.connectCalls >= 2);
+
+    expect(transport.pauseCalls, 1);
+  });
 }
 
 Future<void> waitFor(Future<bool> Function() predicate) async {
@@ -159,6 +195,7 @@ class FakeRealtimeTransport implements RealtimeTransport {
   final StreamController<RealtimeTransportState> _states =
       StreamController<RealtimeTransportState>.broadcast();
   int connectCalls = 0;
+  int pauseCalls = 0;
   RealtimeTransportState _state = RealtimeTransportState.disconnected;
 
   @override
@@ -185,6 +222,7 @@ class FakeRealtimeTransport implements RealtimeTransport {
 
   @override
   void pause() {
+    pauseCalls++;
     _state = RealtimeTransportState.disconnected;
   }
 

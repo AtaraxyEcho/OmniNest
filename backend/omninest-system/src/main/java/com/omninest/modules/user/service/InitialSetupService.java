@@ -71,10 +71,10 @@ public class InitialSetupService {
             return new InitialSetupStatusDto(false, false, false, false);
         }
         return new InitialSetupStatusDto(
-                setupRequired,
-                setupRequired && hasValidConfiguredToken(),
+                true,
+                hasValidConfiguredToken(),
                 persistentStateEnabled,
-                setupRequired && properties.isTwoFactorRequired()
+                properties.isTwoFactorRequired()
         );
     }
 
@@ -118,12 +118,16 @@ public class InitialSetupService {
             throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
         }
         passwordPolicy.validate(username, request.password());
+        // 管理员在向导里主动提交了 TOTP 秘钥时也必须绑定：配置未强制不等于可以丢弃，
+        // 否则扫码完成后凭据被静默忽略，账户看起来开了两步验证实际没有。
+        boolean twoFactorSubmitted = request.totpSecret() != null && !request.totpSecret().isBlank();
+        boolean bindTwoFactor = properties.isTwoFactorRequired() || twoFactorSubmitted;
         List<String> backupCodes = null;
-        if (properties.isTwoFactorRequired()) {
-            if (request.totpSecret() == null || request.totpSecret().isBlank()
-                    || request.totpCode() == null || request.totpCode().isBlank()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "安装向导要求完成两步验证注册");
-            }
+        if (properties.isTwoFactorRequired() && !twoFactorSubmitted) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "安装向导要求完成两步验证注册");
+        }
+        if (bindTwoFactor && (request.totpCode() == null || request.totpCode().isBlank())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "两步验证码不能为空");
         }
 
         AuthUser user = new AuthUser();
@@ -134,7 +138,7 @@ public class InitialSetupService {
         user.setStatus(UserStatus.ACTIVE.getValue());
         user.getRoles().add(superAdminRole);
         AuthUser savedUser = authUserRepository.saveAndFlush(user);
-        if (properties.isTwoFactorRequired()) {
+        if (bindTwoFactor) {
             backupCodes = twoFactorService.provisionForNewUser(
                     savedUser.getId(),
                     request.totpSecret(),

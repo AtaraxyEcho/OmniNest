@@ -219,7 +219,7 @@ class AuthServiceTest {
         }
 
         @Test
-        @DisplayName("未认证头部超长时按会话列宽截断，不把登录变成 500")
+        @DisplayName("平台头未识别时归入 native 档，其余超长头部按列宽截断")
         void loginClampsOversizedSessionHeaders() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
             when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
@@ -236,10 +236,39 @@ class AuthServiceTest {
             ArgumentCaptor<AuthActiveSession> captor = ArgumentCaptor.forClass(AuthActiveSession.class);
             verify(activeSessionRepository).save(captor.capture());
             AuthActiveSession session = captor.getValue();
-            assertThat(session.getClientPlatform()).hasSize(32);
+            // 平台标识参与同平台互斥与 Redis 会话键拼接，改写大小写或塞随机串不得
+            // 制造新档位：未识别值统一落到 native，与缺省请求头同档。
+            assertThat(session.getClientPlatform()).isEqualTo("native");
+            verify(activeSessionRegistry).register(
+                    eq(user.getId()),
+                    eq("native"),
+                    any(UUID.class),
+                    any(Duration.class)
+            );
             assertThat(session.getDeviceId()).hasSize(128);
             assertThat(session.getDeviceName()).hasSize(255);
             assertThat(session.getIpAddress()).hasSize(45);
+        }
+
+        @Test
+        @DisplayName("平台标识大小写不敏感归一，Redis 键与入库值同源")
+        void loginNormalizesKnownPlatformCase() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("correct"));
+            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+
+            service.login(
+                    new LoginRequest("admin", "correct"), " Web ", null, null, "127.0.0.1", "test");
+
+            ArgumentCaptor<AuthActiveSession> captor = ArgumentCaptor.forClass(AuthActiveSession.class);
+            verify(activeSessionRepository).save(captor.capture());
+            assertThat(captor.getValue().getClientPlatform()).isEqualTo("web");
+            verify(activeSessionRegistry).register(
+                    eq(user.getId()),
+                    eq("web"),
+                    any(UUID.class),
+                    any(Duration.class)
+            );
         }
 
         @Test

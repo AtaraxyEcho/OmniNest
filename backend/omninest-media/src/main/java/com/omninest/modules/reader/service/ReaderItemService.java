@@ -1,6 +1,7 @@
 package com.omninest.modules.reader.service;
 import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
@@ -131,8 +132,8 @@ public class ReaderItemService {
         // 过滤链复用 listItems（类型/关键词/书架为内存过滤）：分页解决网络传输与
         // 前端驻留，全量查询下沉 Specification 留作后续演进。
         List<ReaderItemDto> all = listItems(ownerUserId, itemType, contentKind, query, bookshelfOnly);
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(size, 1);
+        int safePage = PageClamps.safePage(page);
+        int safeSize = PageClamps.safeSize(size);
         int from = (int) Math.min((long) safePage * safeSize, all.size());
         int to = (int) Math.min((long) from + safeSize, all.size());
         return new PageImpl<>(all.subList(from, to), PageRequest.of(safePage, safeSize), all.size());

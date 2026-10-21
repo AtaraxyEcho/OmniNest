@@ -64,6 +64,7 @@ void main() {
 class _FakePublicShareRepository implements PublicShareRepository {
   int previewCalls = 0;
   int acceptCalls = 0;
+  int accessCalls = 0;
   int childrenCalls = 0;
   String? lastPassword;
   String? lastAuthToken;
@@ -97,6 +98,13 @@ class _FakePublicShareRepository implements PublicShareRepository {
       resourceType: 'FILE',
       hasPassword: false,
     );
+  }
+
+  @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    accessCalls += 1;
+    lastPassword = password;
+    return const ShareAccessSuccess('https://signed/shared-file.txt');
   }
 
   @override

@@ -68,7 +68,7 @@ server {
     # add_header 在 location 级不继承 server 级，两处必须写全。
     location = ${OMNINEST_WEB_BASE_PATH}index.html {
         add_header Cache-Control "no-cache";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'";
         add_header X-Content-Type-Options "nosniff";
         add_header X-Frame-Options "SAMEORIGIN";
         add_header Referrer-Policy "strict-origin-when-cross-origin";

@@ -111,6 +111,58 @@ void main() {
     expect(find.text('videos'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  /// 没有系统账号的外部访客必须能直接拿到文件：只有「保存到我的文件」时，
+  /// 点下去会被送去登录页，分享链接对访客等于无效。
+  testWidgets('单文件分享为访客保留免登录直接下载入口', (tester) async {
+    final repository = _OkShareRepository();
+    await tester.pumpWidget(_host(PublicShareService(repository)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('下载'), findsOneWidget);
+
+    await tester.tap(
+      find.widgetWithIcon(OutlinedButton, Icons.download_rounded),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.accessCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  /// 输错提取码后界面原样不动，访客无从判断是「要密码」还是「密码错了」。
+  testWidgets('提取码被拒时在输入框下方显示服务端提示', (tester) async {
+    await tester.pumpWidget(
+      _host(PublicShareService(_WrongPasswordShareRepository())),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'bad-code');
+    await tester.tap(find.text('访问'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('提取码不正确'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  /// 服务端只放行一页 50 条，第 51 条之后访客原本既看不到也下载不了。
+  testWidgets('文件夹分享子项触底后续页', (tester) async {
+    final repository = _PagedShareRepository();
+    await tester.pumpWidget(_host(PublicShareService(repository)));
+    await tester.pumpAndSettle();
+
+    expect(repository.requestedPages.first, 0);
+    // 长列表按虚拟化只构建可见行，断言取可见项与请求页码，不数不可见的尾项。
+    expect(find.text('child-0'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -3000));
+    await tester.pumpAndSettle();
+    expect(repository.requestedPages, contains(1));
+
+    await tester.scrollUntilVisible(find.text('tail-31'), 200);
+    expect(find.text('tail-31'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _host(PublicShareService service) {
@@ -143,6 +195,8 @@ Widget _host(PublicShareService service) {
 }
 
 class _OkShareRepository implements PublicShareRepository {
+  int accessCalls = 0;
+
   @override
   Future<SharePreviewResult> preview(String token, {String? password}) async {
     return SharePreviewResult.success(
@@ -162,6 +216,12 @@ class _OkShareRepository implements PublicShareRepository {
     int size = 50,
   }) async {
     return const ShareChildrenSuccess(items: [], total: 0);
+  }
+
+  @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    accessCalls += 1;
+    return const ShareAccessSuccess('https://signed/report.pdf');
   }
 
   @override
@@ -228,6 +288,11 @@ class _FolderShareRepository implements PublicShareRepository {
   }
 
   @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    return const ShareAccessFailure('SHARE_NEED_PASSWORD');
+  }
+
+  @override
   Future<ShareAcceptResult> accept(
     String token, {
     String? password,
@@ -251,6 +316,11 @@ class _PasswordShareRepository implements PublicShareRepository {
     int size = 50,
   }) async {
     return const ShareChildrenFailure('SHARE_NEED_PASSWORD');
+  }
+
+  @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    return const ShareAccessFailure('SHARE_NEED_PASSWORD');
   }
 
   @override
@@ -280,11 +350,113 @@ class _FailingShareRepository implements PublicShareRepository {
   }
 
   @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    return const ShareAccessFailure('SHARE_EXPIRED');
+  }
+
+  @override
   Future<ShareAcceptResult> accept(
     String token, {
     String? password,
     String? authToken,
   }) async {
     return const ShareAcceptError('SHARE_EXPIRED');
+  }
+}
+
+/// 已提交提取码仍被服务端拒绝。
+class _WrongPasswordShareRepository implements PublicShareRepository {
+  @override
+  Future<SharePreviewResult> preview(String token, {String? password}) async {
+    return const SharePreviewNeedPassword('提取码不正确');
+  }
+
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    return const ShareChildrenFailure('提取码不正确');
+  }
+
+  @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    return const ShareAccessFailure('提取码不正确');
+  }
+
+  @override
+  Future<ShareAcceptResult> accept(
+    String token, {
+    String? password,
+    String? authToken,
+  }) async {
+    return const ShareAcceptError('提取码不正确');
+  }
+}
+
+/// 子项超过一页：首页 30 条，续页再给 2 条。
+class _PagedShareRepository implements PublicShareRepository {
+  final List<int> requestedPages = <int>[];
+
+  @override
+  Future<SharePreviewResult> preview(String token, {String? password}) async {
+    return const SharePreviewSuccess(
+      fileName: 'bundle',
+      sizeBytes: 0,
+      resourceType: 'FOLDER',
+      hasPassword: false,
+    );
+  }
+
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    requestedPages.add(page);
+    final items =
+        page == 0
+            ? List.generate(
+              30,
+              (index) => ShareChild(
+                id: 'id-$index',
+                name: 'child-$index',
+                nodeType: 'FILE',
+                sizeBytes: 8,
+              ),
+            )
+            : const [
+              ShareChild(
+                id: 'id-30',
+                name: 'child-30',
+                nodeType: 'FILE',
+                sizeBytes: 8,
+              ),
+              ShareChild(
+                id: 'id-31',
+                name: 'tail-31',
+                nodeType: 'FILE',
+                sizeBytes: 8,
+              ),
+            ];
+    return ShareChildrenSuccess(items: items, total: 32);
+  }
+
+  @override
+  Future<ShareAccessResult> access(String token, {String? password}) async {
+    return const ShareAccessFailure('SHARE_NEED_PASSWORD');
+  }
+
+  @override
+  Future<ShareAcceptResult> accept(
+    String token, {
+    String? password,
+    String? authToken,
+  }) async {
+    return ShareAcceptResult.success();
   }
 }

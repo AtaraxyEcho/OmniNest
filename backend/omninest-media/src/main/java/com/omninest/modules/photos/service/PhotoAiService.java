@@ -54,6 +54,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PhotoAiService {
     private static final int MAX_CLUSTER_FACES = 10_000;
+    /** 内容分析契约版本，与侧车结构化接口保持一致。 */
+    private static final int CONTENT_ANALYSIS_SCHEMA_VERSION = 2;
+    /** 本地构造的内容分析流水线标识：分类模型已下线，观察项恒为空。 */
+    private static final String CONTENT_ANALYSIS_PIPELINE_VERSION = "content-analysis-disabled";
 
     private final ImageAnalysisGateway imageAnalysisGateway;
     private final AiSidecarProperties aiSidecarProperties;
@@ -82,7 +86,13 @@ public class PhotoAiService {
             String endpoint = configService.aiEndpoint();
             int timeout = configService.aiTimeoutSeconds();
             List<FaceDetection> faces = imageAnalysisGateway.detectFaces(imageFile, endpoint, timeout);
-            ContentAnalysis analysis = imageAnalysisGateway.analyzeContent(imageFile, endpoint, timeout);
+            // 侧车已移除场景与主体分类模型，/analyze-content 恒返回空观察项，但仍会收完整图片、
+            // 占用推理信号量并全量解码校验。这里不再整图二次上传，标签只由人脸结果推导。
+            ContentAnalysis analysis = new ContentAnalysis(
+                    CONTENT_ANALYSIS_SCHEMA_VERSION,
+                    CONTENT_ANALYSIS_PIPELINE_VERSION,
+                    List.of()
+            );
             requireValidAnalysis(faces, analysis);
 
             List<PhotoFace> faceEntities = faces.stream()

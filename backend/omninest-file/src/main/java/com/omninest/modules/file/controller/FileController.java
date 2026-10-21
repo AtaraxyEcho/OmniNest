@@ -161,8 +161,7 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var files = fileManagerService.listRecentFiles(ownerUserId);
-        return ApiResponse.success(PageResponse.of(
-                PageClamps.slice(files, page, size), page, size, files.size()));
+        return ApiResponse.success(PageClamps.pagedResponse(files, page, size));
     }
 
     @Operation(summary = "列出收藏文件", description = "列出当前用户收藏的文件")
@@ -408,10 +407,12 @@ public class FileController {
             @Valid @RequestBody BatchDownloadRequest body,
             HttpServletResponse response
     ) throws IOException {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        // 先完成校验再写响应头：ZIP 是流式响应，半途报错只能留下解压失败的半截文件
+        var entries = fileManagerService.planZipEntries(ownerUserId, body.fileIds());
         response.setContentType("application/zip");
         response.setHeader("Content-Disposition", "attachment; filename=\"omninest-batch.zip\"");
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.packAsZip(ownerUserId, body.fileIds(), response.getOutputStream());
+        fileManagerService.packZipEntries(entries, response.getOutputStream());
     }
 
     /**
@@ -599,6 +600,7 @@ public class FileController {
 
     @Operation(summary = "接受分享", description = "接受共享文件，将其保存到自己的文件空间")
     @PostMapping("/api/v1/s/{token}/accept")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> acceptShare(
             @PathVariable String token,
             @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
@@ -635,8 +637,7 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileUploadQueueService.listUploadQueue(ownerUserId);
-        return ApiResponse.success(PageResponse.of(
-                PageClamps.slice(items, page, size), page, size, items.size()));
+        return ApiResponse.success(PageClamps.pagedResponse(items, page, size));
     }
 
     @Operation(summary = "创建上传会话", description = "创建分片上传会话，支持大文件断点续传")
@@ -719,8 +720,7 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = externalStorageAccountService.listExternalAccounts(ownerUserId);
-        return ApiResponse.success(PageResponse.of(
-                PageClamps.slice(items, page, size), page, size, items.size()));
+        return ApiResponse.success(PageClamps.pagedResponse(items, page, size));
     }
 
     @Operation(summary = "创建外部存储", description = "关联一个新的外部存储账户")
@@ -808,7 +808,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> setGlobalPermission(
             @PathVariable UUID fileId,
-            @RequestBody PermissionRequest request
+            @RequestBody @Valid PermissionRequest request
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         fileShareService.setGlobalPermission(ownerUserId, fileId, request);
@@ -821,7 +821,7 @@ public class FileController {
     ApiResponse<Void> setUserPermission(
             @PathVariable UUID fileId,
             @PathVariable UUID granteeUserId,
-            @RequestBody PermissionRequest request
+            @RequestBody @Valid PermissionRequest request
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         fileShareService.setUserPermission(ownerUserId, fileId, granteeUserId, request);

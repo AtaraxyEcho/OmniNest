@@ -13,10 +13,13 @@ import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+
+part 'file_share_preview_page_widgets.dart';
 
 /// 文件分享预览页面（公开，无需登录即可查看）。
 class FileSharePreviewPage extends ConsumerStatefulWidget {
@@ -38,6 +41,9 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   late final PublicShareService _service;
   String? _password;
   bool _needPassword = false;
+
+  /// 提取码被服务端拒绝时的提示；首次要求输入时保持为空。
+  String? _passwordError;
   SharePreviewSuccess? _preview;
   String? _error;
   bool _loading = true;
@@ -45,7 +51,10 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   List<_ShareFolderCrumb> _trail = const [];
   List<ShareChild> _children = const [];
   int _childTotal = 0;
+  int _childPage = 0;
+  bool _childHasMore = false;
   bool _childrenLoading = false;
+  bool _childrenLoadingMore = false;
   String? _childrenError;
 
   @override
@@ -62,9 +71,12 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _passwordError = null;
       _trail = const [];
       _children = const [];
       _childTotal = 0;
+      _childPage = 0;
+      _childHasMore = false;
     });
 
     final result = await _service.preview(widget.token, password: _password);
@@ -76,12 +88,16 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
         case SharePreviewSuccess(:final hasPassword):
           _preview = result;
           _needPassword = false;
+          _passwordError = null;
           // 如果需要密码但没提供，显示密码输入
           if (hasPassword && _password == null) {
             _needPassword = true;
           }
-        case SharePreviewNeedPassword():
+        case SharePreviewNeedPassword(:final message):
           _needPassword = true;
+          // 已经提交过提取码仍被拒，才把服务端文案当错误显示；
+          // 首次要求输入不是错误，否则一进页面就满屏红。
+          _passwordError = (_password?.isNotEmpty ?? false) ? message : null;
         case SharePreviewError(:final message):
           _error = message;
       }
@@ -97,11 +113,15 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     setState(() {
       _childrenLoading = true;
       _childrenError = null;
+      _children = const [];
+      _childPage = 0;
+      _childHasMore = false;
     });
 
     final result = await _service.listChildren(
       widget.token,
       parentId: parentId,
+      page: _childPage,
     );
 
     if (!mounted) return;
@@ -111,10 +131,44 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
         case ShareChildrenSuccess(:final items, :final total):
           _children = items;
           _childTotal = total;
+          _childHasMore = items.length < total;
         case ShareChildrenFailure(:final message):
           _children = const [];
           _childTotal = 0;
+          _childHasMore = false;
           _childrenError = message;
+      }
+    });
+  }
+
+  /// 触底续页：按已有条目数量取下一页并去重追加，失败静默等下次触底重试。
+  Future<void> _loadMoreChildren(String? parentId) async {
+    if (_childrenLoading || _childrenLoadingMore || !_childHasMore) {
+      return;
+    }
+    setState(() => _childrenLoadingMore = true);
+    final nextPage = _childPage + 1;
+    final result = await _service.listChildren(
+      widget.token,
+      parentId: parentId,
+      page: nextPage,
+    );
+    if (!mounted) return;
+    setState(() {
+      _childrenLoadingMore = false;
+      switch (result) {
+        case ShareChildrenSuccess(:final items, :final total):
+          final seen = _children.map((child) => child.id).toSet();
+          _children = [
+            ..._children,
+            ...items.where((child) => !seen.contains(child.id)),
+          ];
+          _childTotal = total;
+          _childPage = nextPage;
+          _childHasMore = _children.length < total;
+        case ShareChildrenFailure(:final message):
+          _childrenError = message;
+          _childHasMore = false;
       }
     });
   }
@@ -137,12 +191,35 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   }
 
   Future<void> _openChild(ShareChild child) async {
-    final l10n = AppLocalizations.of(context);
     final url = child.downloadUrl;
     if (url == null || url.isEmpty) {
       return;
     }
-    // 与文件页同一口径：Web 直接开新标签，桌面与移动退回复制链接。
+    await _openDownloadUrl(url);
+  }
+
+  /// 单文件分享免登录直接下载：后端 `GET /s/{token}` 凭分享会话即可签发地址。
+  Future<void> _downloadCurrentFile() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _saving = true);
+    final result = await _service.access(widget.token, password: _password);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    switch (result) {
+      case ShareAccessSuccess(:final downloadUrl):
+        await _openDownloadUrl(downloadUrl);
+      case ShareAccessFailure(:final message):
+        showOmniFeedback(
+          context,
+          l10n.messageForErrorCode(message, fallback: l10n.filesDownloadFailed),
+          severity: OmniFeedbackSeverity.error,
+        );
+    }
+  }
+
+  /// 与文件页同一口径：Web 直接开新标签，桌面与移动退回复制链接。
+  Future<void> _openDownloadUrl(String url) async {
+    final l10n = AppLocalizations.of(context);
     if (openDownloadUrl(url)) {
       if (!mounted) return;
       showOmniFeedback(
@@ -273,6 +350,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     if (_needPassword) {
       return _PasswordPrompt(
         initialPassword: _password,
+        errorText: _passwordError,
         onSubmit: _onPasswordSubmit,
       );
     }
@@ -287,6 +365,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       preview: _preview!,
       saving: _saving,
       onAccept: _acceptShare,
+      onDownload: _downloadCurrentFile,
     );
   }
 
@@ -368,11 +447,15 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
         ),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      itemCount: _children.length,
-      itemBuilder:
-          (context, index) => _buildChildRow(context, _children[index]),
+    return InfiniteScrollTrigger(
+      enabled: _childHasMore && !_childrenLoadingMore,
+      onLoadMore: () => unawaited(_loadMoreChildren(_currentFolderId)),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        itemCount: _children.length,
+        itemBuilder:
+            (context, index) => _buildChildRow(context, _children[index]),
+      ),
     );
   }
 
@@ -458,255 +541,4 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       ),
     );
   }
-}
-
-/// 密码输入提示。
-class _PasswordPrompt extends StatefulWidget {
-  const _PasswordPrompt({required this.onSubmit, this.initialPassword});
-
-  final ValueChanged<String> onSubmit;
-  final String? initialPassword;
-
-  @override
-  State<_PasswordPrompt> createState() => _PasswordPromptState();
-}
-
-class _PasswordPromptState extends State<_PasswordPrompt> {
-  late final TextEditingController _controller;
-  bool _obscure = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialPassword);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        constraints: BoxConstraints(maxWidth: 396),
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: context.filesColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.zero,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              color: context.filesColors.primary,
-              size: 48,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              AppLocalizations.of(context).filesPasswordAccess,
-              style: TextStyle(
-                color: context.filesColors.onSurface,
-                fontSize: AppTypography.titleMedium,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              AppLocalizations.of(context).filesEnterSharePassword,
-              style: TextStyle(
-                color: context.filesColors.onSurfaceVariant,
-                fontSize: AppTypography.bodyMedium,
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _controller,
-              obscureText: _obscure,
-              autofocus: widget.initialPassword == null,
-              style: TextStyle(color: context.filesColors.onSurface),
-              decoration: InputDecoration(
-                hintText: AppLocalizations.of(context).filesEnterPassword,
-                hintStyle: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                ),
-                prefixIcon: const Icon(Icons.key_rounded, size: 18),
-                suffixIcon: IconButton(
-                  tooltip:
-                      _obscure
-                          ? AppLocalizations.of(context).coreShowPassword
-                          : AppLocalizations.of(context).coreHidePassword,
-                  icon: Icon(
-                    _obscure ? Icons.visibility_off : Icons.visibility,
-                    size: 18,
-                  ),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-              ),
-              onSubmitted: (v) {
-                if (v.isNotEmpty) widget.onSubmit(v);
-              },
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  final text = _controller.text.trim();
-                  if (text.isNotEmpty) widget.onSubmit(text);
-                },
-                child: Text(AppLocalizations.of(context).filesAccess),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 保存到"我的文件"的主操作按钮；文件态与文件夹态共用一份，
-/// 避免同一页面出现两处内联转圈。
-class _SaveToMyFilesButton extends StatelessWidget {
-  const _SaveToMyFilesButton({required this.saving, required this.onAccept});
-
-  final bool saving;
-  final VoidCallback onAccept;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: saving ? null : onAccept,
-        icon:
-            saving
-                ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                : const Icon(Icons.save_alt),
-        label: Text(AppLocalizations.of(context).filesSaveToMyFiles),
-      ),
-    );
-  }
-}
-
-/// 预览卡片内容。
-class _PreviewCard extends StatelessWidget {
-  const _PreviewCard({
-    required this.preview,
-    required this.saving,
-    required this.onAccept,
-  });
-
-  final SharePreviewSuccess preview;
-  final bool saving;
-  final VoidCallback onAccept;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        constraints: BoxConstraints(maxWidth: 436),
-        padding: const EdgeInsets.all(32),
-        // 工位规范：hairline 边框替代投影。
-        decoration: BoxDecoration(
-          color: context.filesColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.zero,
-          border: Border.all(color: context.filesColors.outlineVariant),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 文件图标
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.zero,
-              ),
-              child: Icon(
-                _fileIcon(preview.mimeType, preview.resourceType),
-                size: 36,
-                color: context.filesColors.primary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            // 文件名
-            Text(
-              preview.fileName,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppTypography.titleLarge,
-                fontWeight: FontWeight.w700,
-                color: context.filesColors.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            // 文件信息
-            Text(
-              _formatSize(preview.sizeBytes),
-              style: TextStyle(
-                fontSize: AppTypography.bodyLarge,
-                color: context.filesColors.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 28),
-            // 保存按钮
-            _SaveToMyFilesButton(saving: saving, onAccept: onAccept),
-            const SizedBox(height: 12),
-            Text(
-              'Powered by OmniNest',
-              style: TextStyle(
-                fontSize: AppTypography.labelSmall,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  IconData _fileIcon(String? mimeType, String resourceType) {
-    if (resourceType == 'FOLDER') return Icons.folder_rounded;
-    if (mimeType == null) return Icons.insert_drive_file_outlined;
-    if (mimeType.startsWith('image/')) return Icons.image_outlined;
-    if (mimeType.startsWith('video/')) return Icons.movie_outlined;
-    if (mimeType.startsWith('audio/')) return Icons.music_note_outlined;
-    if (mimeType.contains('pdf')) return Icons.picture_as_pdf_outlined;
-    if (mimeType.contains('zip') || mimeType.contains('archive')) {
-      return Icons.archive_outlined;
-    }
-    return Icons.insert_drive_file_outlined;
-  }
-
-  String _formatSize(int bytes) => formatFileSize(bytes);
-}
-
-/// 访客进入分享子树的路径节点，只保留标识与目录名。
-class _ShareFolderCrumb {
-  const _ShareFolderCrumb(this.id, this.name);
-
-  final String id;
-  final String name;
 }

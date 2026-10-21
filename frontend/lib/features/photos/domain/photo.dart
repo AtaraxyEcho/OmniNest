@@ -201,7 +201,18 @@ class PhotoItem {
   }
 
   /// 原图缓存键不包含临时签名参数，避免详情页重复下载同一文件。
-  String get sourceCacheKey => 'photo-source:$id';
+  ///
+  /// 必须带上对象路径：照片编辑或回滚版本后后端会换指另一个文件，只按 id 作键会
+  /// 继续命中未编辑原图的缓存，表现为「编辑保存成功但大图没变」。
+  String get sourceCacheKey {
+    final value = sourceUrl;
+    if (value == null || value.isEmpty) {
+      return 'photo-source:$id';
+    }
+    final uri = Uri.tryParse(value);
+    final objectPath = uri?.path.trim();
+    return 'photo-source:$id:${objectPath?.isNotEmpty == true ? objectPath : value}';
+  }
 
   /// 下载原片时建议的文件名；标题缺少扩展名时按格式补全。
   String get downloadFileName {

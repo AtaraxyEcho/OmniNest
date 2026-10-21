@@ -111,11 +111,11 @@ public class PhotoEditService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权编辑此照片");
         }
 
-        int nextVersion = (int) editVersionRepository.countByPhotoId(photoId) + 1;
+        int nextVersion = nextVersionNumber(photoId);
         String fileName = photoId + "_v" + nextVersion + ".jpg";
-        UUID sourceFileId = photo.getCoverFileId() != null
-                ? photo.getCoverFileId()
-                : photo.getFileNodeId();
+        // 二次编辑必须从当前活动的全分辨率文件起步：从 coverFileId 起步会把已经编辑过的照片
+        // 反复压回缩略图分辨率（缩略图任务产出上限 1024px）。
+        UUID sourceFileId = photo.activeOrSourceFileId();
 
         // 图像解码、变换与对象存储写入在事务外执行
         UUID fileId = transformAndStore(
@@ -137,6 +137,7 @@ public class PhotoEditService {
         transactionTemplate.executeWithoutResult(status -> {
             editVersionRepository.save(version);
             photo.setCoverFileId(fileId);
+            photo.setActiveFileId(fileId);
             photoItemRepository.save(photo);
             enforceMaxVersions(ownerUserId, photoId);
             syncEventService.record(
@@ -178,7 +179,7 @@ public class PhotoEditService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑结果为空");
         }
 
-        int nextVersion = (int) editVersionRepository.countByPhotoId(photoId) + 1;
+        int nextVersion = nextVersionNumber(photoId);
         String fileName = photoId + "_v" + nextVersion + ".jpg";
         inputGuard.validateFileSize(image.length, false);
 
@@ -218,6 +219,7 @@ public class PhotoEditService {
         transactionTemplate.executeWithoutResult(status -> {
             editVersionRepository.save(version);
             photo.setCoverFileId(fileId);
+            photo.setActiveFileId(fileId);
             photoItemRepository.save(photo);
             enforceMaxVersions(ownerUserId, photoId);
             syncEventService.record(
@@ -268,6 +270,7 @@ public class PhotoEditService {
         PhotoItem photo = photoItemRepository.findById(photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         photo.setCoverFileId(version.getFileId());
+        photo.setActiveFileId(version.getFileId());
         photoItemRepository.save(photo);
     }
 
@@ -327,13 +330,38 @@ public class PhotoEditService {
                 default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的编辑类型: " + editType);
             };
             inputGuard.validateDimensions(result.getWidth(), result.getHeight());
-            return ImageIO.write(result, "jpg", outputFile.toFile());
+            // 带透明通道的源图（PNG/WebP 解码为 ARGB）无法直接写 JPEG：OpenJDK 的 JPEG writer
+            // 不支持含 Alpha 的色彩空间，ImageIO.write 会直接返回 false，表现为「编辑操作失败」。
+            return ImageIO.write(ensureOpaqueRgb(result), "jpg", outputFile.toFile());
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
             log.warn("图片编辑失败: editType={}, error={}", editType, ex.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 将可能含透明通道的图像铺到白色底上转成 RGB。
+     *
+     * <p>裁剪、亮度、对比度与卷积滤镜都保留源图类型，只有 saturation/灰度/怀旧分支自带 RGB 画布，
+     * 因此写出前统一兜一次。</p>
+     */
+    private BufferedImage ensureOpaqueRgb(BufferedImage image) {
+        if (!image.getColorModel().hasAlpha()) {
+            return image;
+        }
+        BufferedImage rgb = new BufferedImage(
+                image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = rgb.createGraphics();
+        try {
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+            graphics.drawImage(image, 0, 0, null);
+        } finally {
+            graphics.dispose();
+        }
+        return rgb;
     }
 
     private void deleteQuietly(Path file) {
@@ -509,6 +537,21 @@ public class PhotoEditService {
             refundDeletedVersionQuota(ownerUserId, version);
         }
         editVersionRepository.deleteAll(toDelete);
+    }
+
+    /**
+     * 计算下一个编辑版本号。
+     *
+     * <p>必须取现存最大版本号加一，不能用「条数 + 1」：保留上限会裁掉最早的版本，
+     * 裁满后条数恒等于上限，算出的版本号反复撞在同一个值上，版本列表排序与回滚标识随之错乱。</p>
+     *
+     * @param photoId 照片 ID
+     * @return 下一个版本号
+     */
+    private int nextVersionNumber(UUID photoId) {
+        return editVersionRepository.findFirstByPhotoIdOrderByVersionNumberDesc(photoId)
+                .map(version -> version.getVersionNumber() + 1)
+                .orElse(1);
     }
 
     /**

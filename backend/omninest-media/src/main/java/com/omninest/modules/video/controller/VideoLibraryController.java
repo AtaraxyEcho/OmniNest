@@ -394,14 +394,15 @@ public class VideoLibraryController {
         return ApiResponse.success(moviePlaybackService.playbackPlan(currentUserContext.requireCurrentUserId(), videoItemId));
     }
 
-    @Operation(summary = "更新播放进度", description = "更新指定视频的播放进度")
+    @Operation(summary = "更新播放进度", description = "更新指定视频的播放进度与观看历史；播放计划请按 GET 播放计划接口获取")
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/video/items/{videoItemId}/progress")
-    ApiResponse<PlaybackPlanDto> updateProgress(
+    ApiResponse<Void> updateProgress(
             @PathVariable UUID videoItemId,
             @Valid @RequestBody PlaybackProgressRequest request
     ) {
-        return ApiResponse.success(moviePlaybackService.updateProgress(currentUserContext.requireCurrentUserId(), videoItemId, request));
+        moviePlaybackService.updateProgress(currentUserContext.requireCurrentUserId(), videoItemId, request);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "获取字幕列表", description = "返回指定视频的所有字幕轨道")

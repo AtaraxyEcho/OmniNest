@@ -11,6 +11,7 @@ import com.omninest.modules.quota.QuotaStatus;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.port.StorageMetricsQuery;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
+import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -42,6 +43,7 @@ public class StorageQuotaService {
     private final NotificationPublisher notificationService;
     private final StorageQuotaReservationService reservationService;
     private final AdminActorVerifier adminActorVerifier;
+    private final UserProfileCacheEvictor userProfileCacheEvictor;
 
     /**
      * 为持久业务来源预留存储配额。
@@ -207,6 +209,8 @@ public class StorageQuotaService {
         }
         long oldQuota = user.quotaBytes();
         userStorageCommand.updateQuota(userId, newQuotaBytes);
+        // 资料缓存含配额字段，管理端改完必须驱逐，否则用户五分钟内读到的仍是旧配额
+        userProfileCacheEvictor.evictProfileCache(userId);
         auditRecorder.recordWithPayload(
                 operatorId,
                 "ADMIN_QUOTA_UPDATE",
@@ -258,6 +262,7 @@ public class StorageQuotaService {
             }
             long oldQuota = user.quotaBytes();
             userStorageCommand.updateQuota(userId, newQuotaBytes);
+            userProfileCacheEvictor.evictProfileCache(userId);
             auditRecorder.recordWithPayload(
                     operatorId,
                     "ADMIN_QUOTA_UPDATE",

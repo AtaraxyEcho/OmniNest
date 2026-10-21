@@ -175,6 +175,7 @@ public class AdminOperationsService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminOperationsDto.TaskRecordItem cancelTask(UUID actorUserId, UUID taskId) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         String currentStatus = requireTaskStatus(taskId);
         if (!CANCELLABLE_TASK_STATUS.contains(currentStatus)) {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "仅排队或等待重试的任务可以取消");
@@ -203,6 +204,7 @@ public class AdminOperationsService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminOperationsDto.TaskRecordItem discardDlqTask(UUID actorUserId, UUID taskId) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         String currentStatus = requireTaskStatus(taskId);
         if (!TaskStatus.DLQ.getValue().equals(currentStatus)) {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "仅死信状态的任务可以丢弃");
@@ -496,6 +498,7 @@ public class AdminOperationsService {
             UUID id,
             AdminOperationsDto.UpdateExternalStorageStatusRequest request
     ) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         String status = normalizeText(request.status(), "外部存储状态不能为空").toUpperCase(Locale.ROOT);
         AdminOperationsDto.ExternalStorageItem storage = toExternalStorageItem(
                 externalStorageAdministration.updateStatus(id, status)
@@ -674,8 +677,13 @@ public class AdminOperationsService {
 
     @Transactional(rollbackFor = Exception.class)
     public void revokeSession(UUID actorUserId, UUID sessionId) {
+        AuthUser actor = adminActorGuard.requireFreshAdminActor(actorUserId);
         var session = activeSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在"));
+        // 强制吊销等同于把账户挡在门外，普通管理员不得处置其他管理员的活跃会话
+        authUserRepository.findWithRolesById(session.getUserId())
+                .ifPresent(target -> adminActorGuard.requireSuperAdminForAdminTarget(
+                        actor, target, "强制撤销管理员会话"));
         sessionRevocationService.revokeSession(session.getUserId(), sessionId, Duration.ofDays(30));
         activeSessionRepository.revokeBySessionId(sessionId, "管理员强制撤销");
         auditLogService.record(actorUserId, "ADMIN_SESSION_REVOKE", "auth_active_sessions", sessionId);
@@ -690,6 +698,7 @@ public class AdminOperationsService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int cleanupAuditLogs(UUID actorUserId, int retentionDays) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         Instant cutoff = cleanupCutoff(retentionDays);
         int deleted = auditLogAdminRepository.deleteCreatedBefore(cutoff);
         auditLogService.recordWithMetadata(
@@ -711,6 +720,7 @@ public class AdminOperationsService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int cleanupLoginAuditLogs(UUID actorUserId, int retentionDays) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         int deleted = loginAuditRepository.deleteCreatedBefore(cleanupCutoff(retentionDays));
         auditLogService.recordWithMetadata(
                 actorUserId,
@@ -731,6 +741,7 @@ public class AdminOperationsService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int cleanupSessions(UUID actorUserId, int retentionDays) {
+        adminActorGuard.requireFreshAdminActor(actorUserId);
         int deleted = activeSessionRepository.deleteInactiveBefore(cleanupCutoff(retentionDays));
         auditLogService.recordWithMetadata(
                 actorUserId,

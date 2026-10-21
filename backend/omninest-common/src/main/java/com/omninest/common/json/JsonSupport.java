@@ -12,7 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>面向任务载荷、消息体、Redis 缓存与外部服务报文等非 Web 边界场景；Web 层
  * 的请求与响应序列化由 Spring Boot 自动装配的 JsonMapper 负责，配置见 SerializeConfig。
- * 序列化忽略 null 字段，与历史 fastjson2 默认线格式保持一致。
+ * 序列化忽略 null 字段，与历史 fastjson2 默认线格式保持一致（内部 JSON 工具，非 Web 边界）。
  *
  * @author OmniNest
  */

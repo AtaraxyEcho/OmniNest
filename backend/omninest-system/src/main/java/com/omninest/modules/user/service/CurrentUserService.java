@@ -14,6 +14,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
+import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AuthUserDto;
@@ -49,7 +50,7 @@ import java.util.Iterator;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class CurrentUserService {
+public class CurrentUserService implements UserProfileCacheEvictor {
     private final AuthUserRepository authUserRepository;
     private final ActiveSessionRepository activeSessionRepository;
     private final CurrentUserContext currentUserContext;
@@ -72,11 +73,12 @@ public class CurrentUserService {
     }
 
     private static final long MAX_AVATAR_SIZE = 5L * 1024 * 1024;
+    private static final String PROFILE_CACHE_PREFIX = "omninest:user:profile:";
 
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto currentUser() {
         UUID userId = currentUserId();
-        String cacheKey = "omninest:user:profile:" + userId;
+        String cacheKey = PROFILE_CACHE_PREFIX + userId;
         return readThroughCache.getOrLoad(cacheKey, Duration.ofMinutes(5),
                 () -> {
                     AuthUser profile = authUserRepository.findWithRolesAndPermissionsById(userId)
@@ -84,6 +86,22 @@ public class CurrentUserService {
                     return toDto(profile);
                 },
                 AuthUserDto.class);
+    }
+
+    /**
+     * 驱逐用户资料缓存。
+     *
+     * <p>资料缓存含角色、权限与配额，TTL 五分钟内不会自愈。管理端改动这些字段时必须主动清除，
+     * 否则被改动用户在缓存剩余有效期内读到的仍是旧资料。接口鉴权走 JWT claims，不受此缓存影响。</p>
+     *
+     * @param userId 用户标识
+     */
+    @Override
+    public void evictProfileCache(UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        readThroughCache.invalidate(PROFILE_CACHE_PREFIX + userId);
     }
 
     public UUID currentUserId() {
@@ -121,7 +139,7 @@ public class CurrentUserService {
         passwordPolicy.validate(user.getUsername(), newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         authUserRepository.save(user);
-        readThroughCache.invalidate("omninest:user:profile:" + userId);
+        evictProfileCache(userId);
 
         // 改密后撤销除当前会话外的全部活跃会话，阻断被盗 refresh 会话继续存活
         UUID currentSessionId = currentUserContext.currentSessionId();
@@ -183,7 +201,7 @@ public class CurrentUserService {
                     Map.of()
             ));
         });
-        readThroughCache.invalidate("omninest:user:profile:" + userId);
+        evictProfileCache(userId);
 
         log.info("头像已上传: userId={}, assetType=AVATAR", userId);
 
@@ -275,7 +293,7 @@ public class CurrentUserService {
             return currentUser();
         }
         authUserRepository.save(user);
-        readThroughCache.invalidate("omninest:user:profile:" + userId);
+        evictProfileCache(userId);
         log.info("用户资料已更新: userId={}, fields={}", userId, changedFields);
         syncEventRecorder.record(new SyncEventCommand(
                 userId,

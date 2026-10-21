@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
@@ -29,19 +30,38 @@ PhotoItem _photo(String id, {String? sourceUrl}) {
   );
 }
 
+/// 相册网格内的缩略图入口：顶栏返回钮同样是 InkWell，不限定网格会先命中它。
+Finder _thumbnail() =>
+    find
+        .descendant(of: find.byType(GridView), matching: find.byType(InkWell))
+        .first;
+
 void main() {
   Widget wrap(Widget page, PhotoRepository repository) {
+    // 分享页挂在应用壳层之外，顶栏返回入口按 go_router 的 canPop/pop 走，
+    // 测试宿主必须提供路由，否则与真实运行环境不同形。
+    final router = GoRouter(
+      initialLocation: '/shared/photos/share-token',
+      routes: [
+        GoRoute(path: '/portal', builder: (context, state) => const SizedBox()),
+        GoRoute(
+          path: '/shared/photos/:token',
+          builder: (context, state) => page,
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
     return ProviderScope(
       overrides: [
         authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
         photoRepositoryProvider.overrideWithValue(repository),
       ],
-      child: MaterialApp(
+      child: MaterialApp.router(
+        routerConfig: router,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        home: page,
       ),
     );
   }
@@ -79,7 +99,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(InkWell).first);
+    await tester.tap(_thumbnail());
     await tester.pumpAndSettle();
 
     expect(find.text('1 / 2'), findsOneWidget);
@@ -103,7 +123,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(InkWell).first);
+    await tester.tap(_thumbnail());
     await tester.pumpAndSettle();
 
     final download = tester.widget<IconButton>(
@@ -127,7 +147,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(InkWell).first);
+    await tester.tap(_thumbnail());
     await tester.pumpAndSettle();
 
     verify(

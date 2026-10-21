@@ -59,6 +59,29 @@ public class AdminActorGuard {
     }
 
     /**
+     * 校验对管理员账户的敏感操作只能由超级管理员发起。
+     *
+     * <p>普通管理员之间互为同级，改状态、重置验证器或强制吊销会话都足以把对方挡在门外，
+     * 因此这类操作必须更高层级把关；操作自己的账户不受约束。</p>
+     *
+     * @param actor 已由 {@link #requireFreshAdminActor(UUID)} 加载的操作者
+     * @param target 目标用户
+     * @param action 操作描述，用于错误文案
+     */
+    public void requireSuperAdminForAdminTarget(AuthUser actor, AuthUser target, String action) {
+        if (actor.getId().equals(target.getId())) {
+            return;
+        }
+        Set<String> targetRoles = AuthUserMapper.roleCodes(target);
+        if (!targetRoles.contains(Roles.ADMIN) && !targetRoles.contains(Roles.SUPER_ADMIN)) {
+            return;
+        }
+        if (!isSuperAdmin(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可" + action);
+        }
+    }
+
+    /**
      * 校验待授予的权限编码是操作者自身权限集合的子集，阻止自助提权。
      *
      * <p>角色权限只影响绑定到该角色的用户，操作者将自己角色的权限放大等同于给自己授权，
