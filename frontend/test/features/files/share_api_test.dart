@@ -361,6 +361,29 @@ void main() {
       },
     );
 
+    test('accessAfterPreviewReusesSessionWithoutSecondAuthorize', () async {
+      final adapter = _ShareCapturingAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {
+            'fileName': 'photo.jpg',
+            'sizeBytes': 2048,
+            'resourceType': 'FILE',
+            'hasPassword': true,
+            'downloadUrl': 'https://signed/photo.jpg',
+          },
+        },
+      );
+      final api = _createShareApi(adapter);
+
+      await api.preview('token-abc', password: 'secret123');
+      final access = await api.access('token-abc', password: 'secret123');
+
+      expect(access, isA<ShareAccessSuccess>());
+      expect(adapter.authorizeCount, 1);
+    });
+
     test('listChildren maps the paged share subtree response', () async {
       final adapter = _ShareCapturingAdapter(
         body: {
@@ -699,6 +722,7 @@ class _ShareCapturingAdapter implements HttpClientAdapter {
   Object? lastData;
   Map<String, dynamic>? lastHeaders;
   Object? lastAuthorizeData;
+  int authorizeCount = 0;
 
   @override
   Future<ResponseBody> fetch(
@@ -715,6 +739,7 @@ class _ShareCapturingAdapter implements HttpClientAdapter {
     lastData = options.data;
     lastHeaders = Map<String, dynamic>.from(options.headers);
     if (options.path.endsWith('/authorize') && httpStatusCode == 200) {
+      authorizeCount += 1;
       lastAuthorizeData = options.data;
       return ResponseBody.fromString(
         jsonEncode({

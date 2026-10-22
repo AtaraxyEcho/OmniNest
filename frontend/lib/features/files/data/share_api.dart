@@ -209,8 +209,9 @@ class ShareApi implements PublicShareRepository {
   }
 
   Future<String?> _ensureSession(String token, String? password) async {
+    // 已签发会话优先：带密码再调一次 /authorize 会重复消费分享访问次数。
     final existing = _sessionTokens[token];
-    if (existing != null && (password == null || password.isEmpty)) {
+    if (existing != null && existing.isNotEmpty) {
       return existing;
     }
     final response = await _dio.post<Map<String, dynamic>>(

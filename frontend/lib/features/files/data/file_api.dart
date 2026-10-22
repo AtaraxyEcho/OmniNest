@@ -615,8 +615,9 @@ class FileApi {
   }
 
   Future<String> _ensureShareSession(String token, String? password) async {
+    // 已有会话直接复用，避免带密码重复 authorize 造成访问次数重复扣减。
     final existing = _shareSessionTokens[token];
-    if (existing != null && (password == null || password.isEmpty)) {
+    if (existing != null && existing.isNotEmpty) {
       return existing;
     }
     final authorization = await apiClient.dio.post<Map<String, dynamic>>(

@@ -56,7 +56,7 @@ public class ResourceShareLinkService {
         verifyPassword(link, password);
         ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
                 tokenHash,
-                expectedResourceType,
+                sessionResourceType(expectedResourceType, link),
                 link.getExpiresAt()
         );
         return new ShareAccessSessionDto(session.token(), session.expiresAt());
@@ -77,10 +77,18 @@ public class ResourceShareLinkService {
         consume(link);
         ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
                 tokenHash,
-                expectedResourceType,
+                sessionResourceType(expectedResourceType, link),
                 link.getExpiresAt()
         );
         return new ShareAccessSessionDto(session.token(), session.expiresAt());
+    }
+
+    /**
+     * 会话必须绑定具体资源类型：文件分享调用方传 null（类型由链接决定），
+     * 直接存 null 会让后续 requireAnySession 的 equals 校验抛 NPE。
+     */
+    private String sessionResourceType(String expectedResourceType, ShareLink link) {
+        return expectedResourceType == null ? link.getResourceType() : expectedResourceType;
     }
 
     /** 校验会话并消费一次分享访问次数。 */

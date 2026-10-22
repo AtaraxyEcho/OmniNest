@@ -134,6 +134,25 @@ class ResourceShareLinkServiceTest {
     }
 
     @Test
+    void fileSessionWithoutExpectedTypeBindsTheLinkResourceType() {
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("FILE");
+        share.setResourceId(RESOURCE_ID);
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        when(shareLinkRepository.findByTokenHash(anyString())).thenReturn(Optional.of(share));
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+
+        var session = service.issueConsumedSession("raw-token", null, null, "127.0.0.1");
+        var descriptor = service.requireAnySession("raw-token", session.sessionToken());
+
+        assertThat(descriptor.resourceId()).isEqualTo(RESOURCE_ID);
+        assertThat(descriptor.resourceType()).isEqualTo("FILE");
+    }
+
+    @Test
     void sessionAccessRejectsRateLimitExhaustion() {
         when(rateLimitService.tryAcquire(anyString(),
                 org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(false);
@@ -141,6 +160,22 @@ class ResourceShareLinkServiceTest {
         assertThatThrownBy(() -> service.requireSession("raw-token", "session", "PHOTO_ALBUM"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RATE_LIMITED);
+    }
+
+    @Test
+    void revokeInvalidatesShareLinkCache() {
+        ShareLink share = shareLink(SHARE_ID, null);
+        share.setTokenHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        when(shareLinkRepository.findByIdAndOwnerUserId(SHARE_ID, OWNER_ID))
+                .thenReturn(Optional.of(share));
+        when(shareLinkRepository.save(any(ShareLink.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.revoke(OWNER_ID, SHARE_ID);
+
+        verify(readThroughCache).invalidate(
+                "omninest:share:link:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        assertThat(share.getDisabledAt()).isNotNull();
     }
 
     /**
