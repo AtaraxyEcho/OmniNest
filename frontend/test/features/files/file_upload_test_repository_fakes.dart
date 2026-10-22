@@ -32,6 +32,7 @@ class _FakeFileRepository
   final secondUploadStarted = Completer<void>();
   final firstUploadResult = Completer<String>();
   final secondUploadResult = Completer<String>();
+  final List<Completer<String>> uploadResults = <Completer<String>>[];
   Completer<void>? deleteFileCompleter;
   Completer<List<ExternalFileItem>>? externalBrowseCompleter;
   Object? deleteFileError;
@@ -132,12 +133,63 @@ class _FakeFileRepository
     FileUploadProgressCallback? onProgress,
   }) {
     uploadedPartUrls.add(uploadUrl);
-    if (uploadedPartUrls.length == 1) {
+    final index = uploadedPartUrls.length - 1;
+    final Completer<String> result;
+    if (index == 0) {
+      result = firstUploadResult;
       firstUploadStarted.complete();
-      return firstUploadResult.future;
+    } else if (index == 1) {
+      result = secondUploadResult;
+      secondUploadStarted.complete();
+    } else {
+      result = Completer<String>();
     }
-    secondUploadStarted.complete();
-    return secondUploadResult.future;
+    uploadResults.add(result);
+    return _honorCancellation(result.future, cancellationToken);
+  }
+
+  Future<String> _honorCancellation(
+    Future<String> base,
+    FileUploadCancellationToken? token,
+  ) {
+    if (token == null) {
+      return base;
+    }
+    final cancelled = Completer<String>();
+    token.addListener(() {
+      if (!cancelled.isCompleted) {
+        cancelled.completeError(
+          const AppException(code: 'UPLOAD_CANCELLED', message: 'cancelled'),
+        );
+      }
+    });
+    base.then(
+      (value) {
+        if (!cancelled.isCompleted) {
+          cancelled.complete(value);
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!cancelled.isCompleted) {
+          cancelled.completeError(error, stackTrace);
+        }
+      },
+    );
+    return cancelled.future;
+  }
+
+  /// 等待第 [count] 次分片上传请求进入仓储。
+  Future<void> waitForUploadCount(int count) async {
+    while (uploadedPartUrls.length < count) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  /// 完成指定序号的分片上传请求。
+  void completeUploadAt(int index, String eTag) {
+    if (!uploadResults[index].isCompleted) {
+      uploadResults[index].complete(eTag);
+    }
   }
 
   @override

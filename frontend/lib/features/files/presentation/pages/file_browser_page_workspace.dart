@@ -697,6 +697,7 @@ class _FileViewSwitcher extends ConsumerWidget {
               notification.metrics.axis != Axis.vertical ||
               notification.metrics.extentAfter >= 420 ||
               loadedCount >= meta.totalElements ||
+              meta.page + 1 >= meta.totalPages ||
               state.isBusy) {
             return false;
           }

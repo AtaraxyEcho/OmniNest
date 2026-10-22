@@ -1,6 +1,7 @@
 package com.omninest.modules.task.dto;
 
 import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.support.TaskSensitiveTextMasker;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -54,6 +55,34 @@ public record TaskDto(
                 includeDiagnostics ? record.getStackSummary() : null,
                 record.getResult(),
                 record.getUpdatedAt()
+        );
+    }
+
+    /**
+     * 管理端跨用户查看任务：他人任务的文件名、路径与结果载荷做脱敏。
+     *
+     * @param record 任务记录
+     * @param operatorUserId 当前管理员 ID
+     * @return 脱敏后的任务 DTO
+     */
+    public static TaskDto fromForAdmin(TaskRecord record, UUID operatorUserId) {
+        TaskDto base = from(record, false);
+        if (record.getOwnerUserId() == null || record.getOwnerUserId().equals(operatorUserId)) {
+            return base;
+        }
+        return new TaskDto(
+                base.id(),
+                base.type(),
+                base.status(),
+                base.phase(),
+                base.progress(),
+                base.resourceType(),
+                base.resourceId(),
+                base.retryCount(),
+                TaskSensitiveTextMasker.mask(base.errorSummary()),
+                base.stackSummary(),
+                TaskSensitiveTextMasker.mask(base.result()),
+                base.updatedAt()
         );
     }
 }

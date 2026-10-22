@@ -185,7 +185,7 @@ class CurrentUserServiceTest {
         assertThatThrownBy(() ->
                 service.changePassword(userId, "oldPass", "123")
         ).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("8 到 24 个字符");
+                .hasMessageContaining("8 到 64 个字符");
     }
 
     @Test

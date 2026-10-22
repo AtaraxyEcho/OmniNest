@@ -11,7 +11,7 @@ final localDatabaseProvider = Provider<LocalDatabase>((ref) {
   return database;
 });
 
-/// 离线敏感列加密器（原生平台基于安全存储主密钥；Web 返回 null 保持原样）。
+/// 离线敏感列加密器（原生平台用系统安全存储主密钥，Web 用标签页会话主密钥）。
 ///
 /// 与用户数据清理流程共用同一个进程级实例，清理时才能一并失效派生密钥缓存。
 final offlineColumnCipherProvider = Provider<OfflineTextCipher?>((ref) {

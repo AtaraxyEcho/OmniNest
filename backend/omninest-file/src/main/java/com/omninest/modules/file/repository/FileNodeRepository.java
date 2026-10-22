@@ -666,17 +666,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             """)
     List<FileNode> findImageFilesByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
-    @Query("""
-            SELECT n FROM FileNode n
-            WHERE n.shared = true
-              AND n.ownerUserId != :userId
-              AND n.deleted = false
-              AND n.nodeType = 'FILE'
-              AND n.sourceType <> 'DERIVED'
-              AND n.mimeType LIKE 'image/%'
-            """)
-    List<FileNode> findSharedImageFilesVisibleToUser(@Param("userId") UUID userId);
-
     // ============================================================
     // 共享空间查询
     // ============================================================
@@ -823,11 +812,43 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("spaceType") SpaceType spaceType,
             Pageable pageable);
 
+    /**
+     * 分页查询共享空间中当前用户可查看的文件。
+     *
+     * <p>可见性必须与 {@code FilePermissionService.resolvePermissions} 同口径下推到 SQL：
+     * 用户级覆盖优先于全局默认，两者都没有记录时按拒绝处理。先分页再在内存过滤
+     * 会让 totalElements 虚高，前端触底续载永远取不到更多数据。</p>
+     *
+     * @param userId 当前用户标识
+     * @param pageable 分页参数
+     * @return 可见共享文件分页
+     */
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.shared = true
               AND n.ownerUserId != :userId
               AND n.deleted = false
+              AND (
+                  EXISTS (
+                      SELECT p.id FROM FileNodePermission p
+                      WHERE p.fileNodeId = n.id
+                        AND p.granteeUserId = :userId
+                        AND p.allowView = true
+                  )
+                  OR (
+                      NOT EXISTS (
+                          SELECT own.id FROM FileNodePermission own
+                          WHERE own.fileNodeId = n.id
+                            AND own.granteeUserId = :userId
+                      )
+                      AND EXISTS (
+                          SELECT globalPerm.id FROM FileNodePermission globalPerm
+                          WHERE globalPerm.fileNodeId = n.id
+                            AND globalPerm.granteeUserId IS NULL
+                            AND globalPerm.allowView = true
+                      )
+                  )
+              )
             """)
     Page<FileNode> findSharedFilesVisiblePage(@Param("userId") UUID userId, Pageable pageable);
 

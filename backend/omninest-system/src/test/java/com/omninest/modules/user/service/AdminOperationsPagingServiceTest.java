@@ -58,13 +58,36 @@ class AdminOperationsPagingServiceTest {
         when(taskRepository.findPage(0, 100, "FAILED", "FILE_INDEX", "%index%", "updated_at", false))
                 .thenReturn(new TaskRecordAdminRepository.TaskPage(rows, 101));
 
-        var result = service.taskPage(-1, 500, "failed", "file_index", " INDEX ", "updatedAt", "desc");
+        var result = service.taskPage(UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                -1, 500, "failed", "file_index", " INDEX ", "updatedAt", "desc");
 
         assertThat(result.page()).isZero();
         assertThat(result.size()).isEqualTo(100);
         assertThat(result.totalElements()).isEqualTo(101);
         assertThat(result.totalPages()).isEqualTo(2);
         assertThat(result.items()).extracting("id").containsExactly(taskId);
+    }
+
+    @Test
+    void taskPageMasksForeignOwnerErrorSummary() {
+        UUID adminId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        UUID ownerId = UUID.fromString("10000000-0000-0000-0000-000000000002");
+        List<Object[]> rows = Collections.singletonList(new Object[]{
+                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "FILE_PURGE", "FAILED", 20, "file.purge",
+                "无法删除 C:\\data\\alice\\体检报告.pdf", 1,
+                Instant.parse("2026-08-25T08:00:00Z"), Instant.parse("2026-08-25T08:01:00Z"),
+                ownerId, "bob"
+        });
+        when(taskRepository.findPage(0, 25, "", "", "", "updated_at", false))
+                .thenReturn(new TaskRecordAdminRepository.TaskPage(rows, 1));
+
+        var result = service.taskPage(adminId, 0, 25, "", "", "", "updatedAt", "desc");
+
+        assertThat(result.items().get(0).errorSummary())
+                .doesNotContain("alice")
+                .doesNotContain("体检报告")
+                .contains("已脱敏路径");
     }
 
     @Test

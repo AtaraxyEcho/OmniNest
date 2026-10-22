@@ -188,6 +188,13 @@ class FakeRealtimeRemote implements RealtimeRemoteDataSource {
 }
 
 class FakeRealtimeTransport implements RealtimeTransport {
+  var tokenRefreshNotifications = 0;
+
+  @override
+  void notifyAccessTokenRefreshed() {
+    tokenRefreshNotifications++;
+  }
+
   final StreamController<RealtimeSyncEvent> _events =
       StreamController<RealtimeSyncEvent>.broadcast();
   final StreamController<Map<String, dynamic>> _notifications =

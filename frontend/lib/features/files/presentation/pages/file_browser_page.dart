@@ -24,6 +24,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/file_saver.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/app/theme/mobile_env_theme.dart';
 import 'package:omninest/app/mobile_shell/mobile_environment_scope.dart';

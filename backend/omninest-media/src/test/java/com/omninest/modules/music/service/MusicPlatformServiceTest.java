@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.json.JsonSupport;
 import com.omninest.modules.music.dto.OnlineMusicDtos.DailyRecommendedTracksDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlinePlaylistDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackDto;
@@ -328,6 +329,12 @@ class MusicPlatformServiceTest {
                 values.put(key, value);
             }
             return value;
+        }
+
+        @Override
+        public String take(String key) {
+            Object value = values.remove(key);
+            return value == null ? null : JsonSupport.toJson(value);
         }
 
         @Override

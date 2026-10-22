@@ -205,18 +205,22 @@ public class FileShareAccessService {
     /**
      * 校验文件分享密码并签发短期会话。
      *
+     * <p>访问次数在建立会话时一次性消费：会话有效期内的预览、浏览子目录与下载
+     * 不再重复扣减。文件夹分享没有单文件下载动作，若把消费放在下载上，
+     * {@code maxAccessCount} 永远不会生效。</p>
+     *
      * @param rawToken       分享明文 token
      * @param password       分享密码
      * @param clientAddress  客户端地址
      * @return 短期会话信息
      */
-    @Transactional(readOnly = true)
+    @Transactional(rollbackFor = Exception.class)
     public ShareAccessSessionDto issueShareSession(String rawToken, String password, String clientAddress) {
-        return resourceShareLinkService.issueAnySession(rawToken, password, clientAddress);
+        return resourceShareLinkService.issueConsumedSession(rawToken, password, null, clientAddress);
     }
 
     /**
-     * 使用短期会话访问分享文件并消费一次访问次数。
+     * 使用短期会话访问分享文件；访问次数已在签发会话时消费。
      *
      * @param rawToken     分享明文 token
      * @param sessionToken 短期会话 token
@@ -227,7 +231,7 @@ public class FileShareAccessService {
     public FileShareAccessDto shareAccessSession(String rawToken, String sessionToken, String clientAddress) {
         String tokenHash = FileShareService.sha256(rawToken);
         requireShareRateLimit(tokenHash, clientAddress);
-        resourceShareLinkService.authorizeAnySession(rawToken, sessionToken);
+        resourceShareLinkService.requireAnySession(rawToken, sessionToken);
         ShareLink link = findShareLinkCached(tokenHash);
         FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(), link.getOwnerUserId())
@@ -411,7 +415,7 @@ public class FileShareAccessService {
     ) {
         String tokenHash = FileShareService.sha256(rawToken);
         requireShareRateLimit(tokenHash, clientAddress);
-        resourceShareLinkService.authorizeAnySession(rawToken, sessionToken);
+        resourceShareLinkService.requireAnySession(rawToken, sessionToken);
         ShareLink link = findShareLinkCached(tokenHash);
         FileNode sourceNode = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
                         link.getResourceId(), link.getOwnerUserId())

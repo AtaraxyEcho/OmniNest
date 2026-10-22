@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
@@ -44,21 +45,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class ExternalStorageOAuthService {
 
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
+    private static final String STATE_KEY_PREFIX = "omninest:oauth:state:";
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
-    private final com.github.benmanes.caffeine.cache.Cache<String, String> oauthStates =
-            com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
-                    .expireAfterWrite(STATE_TTL)
-                    .maximumSize(10_000)
-                    .build();
-
     private final StorageConnectorOAuthAppRepository oauthAppRepository;
     private final StorageExternalAccountRepository accountRepository;
     private final ExternalStorageCredentialService credentialService;
     private final CredentialCipher credentialCipher;
+    private final ReadThroughCache readThroughCache;
 
     /**
      * token 校验或刷新结果。
@@ -122,33 +119,53 @@ public class ExternalStorageOAuthService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "连接器与账户类型不一致");
         }
         String state = UUID.randomUUID().toString().replace("-", "");
-        String payload = JsonSupport.toJson(Map.of(
-                "state", state,
-                "userId", ownerUserId.toString(),
-                "accountId", accountId.toString(),
-                "code", code
-        ));
-        oauthStates.put(state, payload);
+        // state 落 Redis：多实例部署或重启后回调仍能定位本次授权，且 TTL 由服务端统一回收。
+        OAuthStatePayload payload = new OAuthStatePayload(
+                ownerUserId.toString(), accountId.toString(), code);
+        readThroughCache.getOrLoad(
+                STATE_KEY_PREFIX + state,
+                STATE_TTL,
+                () -> payload,
+                OAuthStatePayload.class
+        );
         return new OAuthStartResponse(buildAuthorizationUrl(code, app, state), state);
     }
 
     /**
      * 处理 OAuth 回调并绑定 token。
+     *
+     * <p>路径上的连接器编码必须与发起授权时记录的一致，否则同一实例下的
+     * 另一连接器可以拿别人的 state 完成自己的回调。state 使用一次性读取，
+     * 读取即删除，重复回调直接失败。</p>
+     *
+     * @param providerCode 回调路径中的连接器编码
+     * @param state OAuth state
+     * @param code 授权码
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleCallback(String state, String code) {
+    public void handleCallback(String providerCode, String state, String code) {
         if (state == null || state.isBlank() || code == null || code.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 回调参数不完整");
         }
-        String raw = oauthStates.getIfPresent(state);
+        String raw = readThroughCache.take(STATE_KEY_PREFIX + state.trim());
         if (raw == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth state 无效或已过期");
         }
-        oauthStates.invalidate(state);
-        Map<String, Object> payload = parseCredentials(raw);
-        UUID userId = UUID.fromString(textOrNull(payload, "userId"));
-        UUID accountId = UUID.fromString(textOrNull(payload, "accountId"));
-        String connectorCode = textOrNull(payload, "code");
+        OAuthStatePayload statePayload;
+        try {
+            statePayload = JsonSupport.fromJson(raw, OAuthStatePayload.class);
+        } catch (RuntimeException exception) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth state 无效或已过期");
+        }
+        String requestedProvider = providerCode == null
+                ? ""
+                : providerCode.trim().toUpperCase(Locale.ROOT);
+        if (!requestedProvider.equals(statePayload.code())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 提供商与发起授权时的连接器不匹配");
+        }
+        UUID userId = UUID.fromString(statePayload.userId());
+        UUID accountId = UUID.fromString(statePayload.accountId());
+        String connectorCode = statePayload.code();
         StorageConnectorOAuthApp app = requireApp(connectorCode);
         StorageExternalAccount account = accountRepository.findByIdAndOwnerUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
@@ -161,6 +178,16 @@ public class ExternalStorageOAuthService {
         account.setLastCheckedAt(Instant.now());
         accountRepository.save(account);
         log.info("OAuth 授权成功: accountId={}, connector={}", accountId, connectorCode);
+    }
+
+    /**
+     * 已发起的 OAuth 授权会话。
+     *
+     * @param userId 发起授权的用户标识
+     * @param accountId 外部存储账户标识
+     * @param code 连接器编码
+     */
+    private record OAuthStatePayload(String userId, String accountId, String code) {
     }
 
     /**

@@ -5,9 +5,22 @@ import 'package:omninest/features/files/domain/public_share.dart';
 
 /// 公开分享页面使用的应用服务。
 class PublicShareService {
-  const PublicShareService(this._repository);
+  PublicShareService(this._repository);
 
   final PublicShareRepository _repository;
+
+  /// 登录回跳后仍需完成的转存标记；只保存在内存，随服务实例跨页面存活。
+  final Set<String> _pendingAccepts = <String>{};
+
+  /// 标记登录成功后需要自动完成的转存。
+  void markPendingAccept(String token) {
+    _pendingAccepts.add(token);
+  }
+
+  /// 读取并清除待转存标记。
+  bool takePendingAccept(String token) {
+    return _pendingAccepts.remove(token);
+  }
 
   Future<SharePreviewResult> preview(String token, {String? password}) {
     return _repository.preview(token, password: password);

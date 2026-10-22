@@ -428,7 +428,7 @@ final seriesPlayIntentProvider = FutureProvider.autoDispose
         continues = const [];
       }
       try {
-        history = await api.history();
+        history = await api.seriesHistory(seriesId);
       } on Exception {
         history = const [];
       }
@@ -465,8 +465,7 @@ final collectionItemsProvider = FutureProvider.autoDispose
 
 final movieItemHistoryProvider = FutureProvider.autoDispose
     .family<MovieWatchHistory?, String>((ref, videoItemId) async {
-      final history = await ref.watch(movieApiProvider).history();
-      return history.where((h) => h.videoItemId == videoItemId).firstOrNull;
+      return ref.watch(movieApiProvider).itemHistory(videoItemId);
     });
 
 final videoFavoriteStatusProvider = FutureProvider.autoDispose

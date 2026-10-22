@@ -76,6 +76,17 @@ public class RedisUtil implements ReadThroughCache, DistributedLock, ExpiringOwn
     }
 
     /**
+     * 原子读取并删除缓存项。
+     *
+     * @param key 缓存键
+     * @return 原始缓存值；不存在时返回 null
+     */
+    @Override
+    public String take(String key) {
+        return redisTemplate.opsForValue().getAndDelete(key);
+    }
+
+    /**
      * 使指定缓存项失效。
      *
      * @param key 缓存键

@@ -7,6 +7,8 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
 
 /// 公开分享预览页挂在应用壳层之外：安全区与返回入口必须自带，
@@ -82,6 +84,23 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('登录回跳后自动复用授权并完成转存', (tester) async {
+    final repository = _OkShareRepository();
+    final service = PublicShareService(repository);
+    service.markPendingAccept('share-1');
+
+    await tester.pumpWidget(
+      _host(service, session: _AuthenticatedSessionNotifier.new),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.acceptCalls, 1);
+    expect(find.text('files-root'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // 成功提示是 2 秒自动关闭的 Toast，等它走完再结束，避免遗留 Timer。
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('文件夹分享列出子项，点进子目录后可返回上一级', (tester) async {
@@ -165,13 +184,20 @@ void main() {
   });
 }
 
-Widget _host(PublicShareService service) {
+Widget _host(
+  PublicShareService service, {
+  AuthSessionNotifier Function()? session,
+}) {
   final router = GoRouter(
     initialLocation: '/s/share-1',
     routes: [
       GoRoute(
         path: '/portal',
         builder: (context, state) => const Scaffold(body: Text('portal-root')),
+      ),
+      GoRoute(
+        path: '/files',
+        builder: (context, state) => const Scaffold(body: Text('files-root')),
       ),
       GoRoute(
         path: '/s/:token',
@@ -183,7 +209,10 @@ Widget _host(PublicShareService service) {
   );
   addTearDown(router.dispose);
   return ProviderScope(
-    overrides: [publicShareServiceProvider.overrideWithValue(service)],
+    overrides: [
+      publicShareServiceProvider.overrideWithValue(service),
+      if (session != null) authSessionProvider.overrideWith(session),
+    ],
     child: MaterialApp.router(
       routerConfig: router,
       theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -194,8 +223,18 @@ Widget _host(PublicShareService service) {
   );
 }
 
+class _AuthenticatedSessionNotifier extends AuthSessionNotifier {
+  @override
+  Future<AuthSessionState> build() async {
+    return AuthSessionState(
+      user: UserProfile(id: 'user-1', username: 'tester', role: 'MEMBER'),
+    );
+  }
+}
+
 class _OkShareRepository implements PublicShareRepository {
   int accessCalls = 0;
+  int acceptCalls = 0;
 
   @override
   Future<SharePreviewResult> preview(String token, {String? password}) async {
@@ -230,6 +269,7 @@ class _OkShareRepository implements PublicShareRepository {
     String? password,
     String? authToken,
   }) async {
+    acceptCalls += 1;
     return ShareAcceptResult.success();
   }
 }

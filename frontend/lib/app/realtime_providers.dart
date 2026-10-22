@@ -60,6 +60,15 @@ final realtimeCoordinatorProvider = Provider<RealtimeCoordinator?>((ref) {
     headInterval:
         isMobile ? const Duration(minutes: 5) : const Duration(minutes: 2),
   );
+  // 令牌刷新后服务端会拒绝旧令牌握手，退避计时必须重置并立即重连。
+  ref.listen<DateTime?>(
+    authSessionProvider.select((async) => async.value?.expiresAt),
+    (previous, next) {
+      if (previous != null && next != null && next != previous) {
+        coordinator.notifyAccessTokenRefreshed();
+      }
+    },
+  );
   unawaited(coordinator.start());
   ref.onDispose(() => unawaited(coordinator.dispose()));
   return coordinator;

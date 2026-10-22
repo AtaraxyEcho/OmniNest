@@ -485,7 +485,7 @@ abstract class AppLocalizations {
   /// No description provided for @setupPasswordLength.
   ///
   /// In en, this message translates to:
-  /// **'The super administrator password must be between 8 and 24 characters'**
+  /// **'The super administrator password must be between 8 and 64 characters and at most 72 UTF-8 bytes'**
   String get setupPasswordLength;
 
   /// No description provided for @setupTwoFactorSection.
@@ -1583,7 +1583,7 @@ abstract class AppLocalizations {
   /// No description provided for @changePasswordMaxLength.
   ///
   /// In en, this message translates to:
-  /// **'Password must be at most 24 characters'**
+  /// **'Password must be at most 64 characters and 72 UTF-8 bytes'**
   String get changePasswordMaxLength;
 
   /// No description provided for @changePasswordConfirmNew.
@@ -3631,6 +3631,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opened the download in a new tab'**
   String get filesDownloadOpened;
+
+  /// No description provided for @filesDownloadSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'File saved to this device'**
+  String get filesDownloadSaved;
 
   /// No description provided for @filesDownloadFailed.
   ///

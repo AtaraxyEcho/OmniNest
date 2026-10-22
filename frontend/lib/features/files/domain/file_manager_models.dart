@@ -107,6 +107,14 @@ class FileUploadClientTask {
     return (uploadedBytes / sizeBytes).clamp(0, 1);
   }
 
+  /// 已结束且无需用户继续操作；冲突态需要用户抉择，不算终态。
+  bool get isTerminal {
+    final normalized = status.toUpperCase();
+    return normalized == 'COMPLETED' ||
+        normalized == 'FAILED' ||
+        normalized == 'CANCELLED';
+  }
+
   FileUploadClientTask copyWith({
     int? uploadedBytes,
     String? status,
@@ -622,4 +630,3 @@ FileCategoryLabel fileCategoryOfNode(FileNode node) {
   }
   return FileCategoryLabel.other;
 }
-

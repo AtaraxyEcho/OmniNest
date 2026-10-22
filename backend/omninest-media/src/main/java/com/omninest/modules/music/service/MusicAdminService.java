@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -179,8 +180,10 @@ public class MusicAdminService {
             // N+1 优化: artist/album 缓存 + 批量统计刷新
             Map<String, MusicArtist> artistCache = new LinkedHashMap<>();
             Map<String, MusicAlbum> albumCache = new LinkedHashMap<>();
-            Set<UUID> affectedArtistIds = new HashSet<>();
-            Set<UUID> affectedAlbumIds = new HashSet<>();
+            // 统计必须按实际归属人刷新：共享文件首次建索引时曲目落在文件所有者名下，
+            // 记到扫描者账上会让所有者的歌手/专辑曲目数失真。
+            Map<UUID, Set<UUID>> affectedArtistsByOwner = new LinkedHashMap<>();
+            Map<UUID, Set<UUID>> affectedAlbumsByOwner = new LinkedHashMap<>();
             int visited = 0;
 
             for (FileDescriptor file : nodes) {
@@ -193,7 +196,7 @@ public class MusicAdminService {
                         // 逐文件独立事务：单个文件下载/解析/落库失败不阻塞整库扫描。
                         transactionTemplate.executeWithoutResult(status ->
                                 importAudioFileCached(ownerUserId, file, sidecarLyrics,
-                                        artistCache, albumCache, affectedArtistIds, affectedAlbumIds)
+                                        artistCache, albumCache, affectedArtistsByOwner, affectedAlbumsByOwner)
                         );
                         imported++;
                     } catch (Exception perFileError) {
@@ -207,25 +210,39 @@ public class MusicAdminService {
                 }
             }
 
-            // 批量刷新统计
-            catalogService.refreshStatisticsBatch(ownerUserId, affectedArtistIds, affectedAlbumIds);
+            // 批量刷新统计：逐个归属人刷新，包含被扫入共享文件的文件所有者。
+            for (Map.Entry<UUID, Set<UUID>> entry : affectedArtistsByOwner.entrySet()) {
+                catalogService.refreshStatisticsBatch(
+                        entry.getKey(),
+                        entry.getValue(),
+                        affectedAlbumsByOwner.getOrDefault(entry.getKey(), Set.of())
+                );
+            }
             job.setStatus(TaskStatus.COMPLETED.getValue());
             job.setScannedFiles(imported);
             job.setMessage("音乐库扫描完成，已处理 " + imported + " 个音频文件");
             taskRecordService.markCompleted(jobId, Map.of("imported", imported));
-            // 扫描入库改变音乐仪表盘统计与最近列表，需失效缓存。
-            readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
+            // 扫描入库改变音乐仪表盘统计与最近列表，需失效缓存；共享曲目同时影响所有者。
+            Set<UUID> affectedOwners = new LinkedHashSet<>(affectedArtistsByOwner.keySet());
+            affectedOwners.add(ownerUserId);
+            for (UUID affectedOwner : affectedOwners) {
+                readThroughCache.invalidate("omninest:dashboard:music:" + affectedOwner);
+            }
             // 同步事件记录器要求外层事务（MANDATORY 传播），而 executeScanJob
             // 本体刻意无事务（逐文件独立提交），故失效事件在独立短事务内落库；
             // 此前裸调触发 IllegalTransactionStateException 使任务在完成边缘
             // 失败并进入重试死循环（D-009）。
             final int importedCount = imported;
-            transactionTemplate.executeWithoutResult(status -> syncEventService.invalidate(
-                    ownerUserId,
-                    SyncScope.MUSIC,
-                    "MUSIC_LIBRARY",
-                    Map.of("source", "SCAN", "imported", importedCount)
-            ));
+            transactionTemplate.executeWithoutResult(status -> {
+                for (UUID affectedOwner : affectedOwners) {
+                    syncEventService.invalidate(
+                            affectedOwner,
+                            SyncScope.MUSIC,
+                            "MUSIC_LIBRARY",
+                            Map.of("source", "SCAN", "imported", importedCount)
+                    );
+                }
+            });
             log.info("音乐扫描完成: jobId={}, imported={}", jobId, imported);
             // 发送完成通知
             notificationService.notifyOrLog(ownerUserId, "TASK_COMPLETED",
@@ -366,6 +383,18 @@ public class MusicAdminService {
     private void importAudioFile(UUID ownerUserId, FileDescriptor file, FileDescriptor sidecarLyrics) {
         UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
         var existingTrack = trackRepository.findByFileNodeId(file.id());
+        // 单曲导入同样受所有者边界与手动精修保护，避免自动导入冲掉用户编辑。
+        if (!catalogOwnerId.equals(ownerUserId) && existingTrack.isPresent()) {
+            return;
+        }
+        if (existingTrack.isPresent()
+                && MetadataStatus.MANUAL.getValue().equals(existingTrack.get().getMetadataStatus())) {
+            MusicTrack manualTrack = existingTrack.get();
+            manualTrack.setFileSize(file.sizeBytes());
+            manualTrack.setFormat(formatFromFileName(file.name()));
+            trackRepository.save(manualTrack);
+            return;
+        }
         MusicTrack track = existingTrack.orElseGet(() -> {
             MusicTrack created = new MusicTrack();
             created.setOwnerUserId(catalogOwnerId);
@@ -425,12 +454,25 @@ public class MusicAdminService {
     private void importAudioFileCached(
             UUID ownerUserId, FileDescriptor file, FileDescriptor sidecarLyrics,
             Map<String, MusicArtist> artistCache, Map<String, MusicAlbum> albumCache,
-            Set<UUID> affectedArtistIds, Set<UUID> affectedAlbumIds
+            Map<UUID, Set<UUID>> affectedArtistsByOwner, Map<UUID, Set<UUID>> affectedAlbumsByOwner
     ) {
         // 曲目行归属固定为文件所有者：共享空间文件被成员扫描时也由上传者持有，
         // 否则"谁先扫谁拥有"会让非所有者获得元数据写权限，且与唯一约束冲突。
         UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
         var existingTrack = trackRepository.findByFileNodeId(file.id());
+        // 只读成员扫描共享文件时，已有曲目归文件所有者维护，绝不能拿原文件标签覆写。
+        if (!catalogOwnerId.equals(ownerUserId) && existingTrack.isPresent()) {
+            return;
+        }
+        // 所有者手动精修过的曲目只同步物理属性，不覆盖标题、歌手、专辑、歌词与封面。
+        if (existingTrack.isPresent()
+                && MetadataStatus.MANUAL.getValue().equals(existingTrack.get().getMetadataStatus())) {
+            MusicTrack manualTrack = existingTrack.get();
+            manualTrack.setFileSize(file.sizeBytes());
+            manualTrack.setFormat(formatFromFileName(file.name()));
+            trackRepository.save(manualTrack);
+            return;
+        }
         MusicTrack track = existingTrack.orElseGet(() -> {
             MusicTrack created = new MusicTrack();
             created.setOwnerUserId(catalogOwnerId);
@@ -494,14 +536,19 @@ public class MusicAdminService {
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
 
-        // 收集受影响的 ID（不逐个刷新，最后批量刷新）；共享文件属于文件所有者，
-        // 其统计由所有者下次扫描时刷新，不能记到扫描者账上。
-        if (catalogOwnerId.equals(ownerUserId)) {
-            if (previousArtistId != null) affectedArtistIds.add(previousArtistId);
-            affectedArtistIds.add(artist.getId());
-            if (previousAlbumId != null) affectedAlbumIds.add(previousAlbumId);
-            affectedAlbumIds.add(album.getId());
+        // 收集受影响的 ID（不逐个刷新，最后按归属人批量刷新）。
+        Set<UUID> ownerArtistIds = affectedArtistsByOwner.computeIfAbsent(
+                catalogOwnerId, key -> new HashSet<>());
+        Set<UUID> ownerAlbumIds = affectedAlbumsByOwner.computeIfAbsent(
+                catalogOwnerId, key -> new HashSet<>());
+        if (previousArtistId != null) {
+            ownerArtistIds.add(previousArtistId);
         }
+        ownerArtistIds.add(artist.getId());
+        if (previousAlbumId != null) {
+            ownerAlbumIds.add(previousAlbumId);
+        }
+        ownerAlbumIds.add(album.getId());
     }
 
     /**

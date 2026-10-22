@@ -235,7 +235,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                     activeView: data.frameView,
                     onSelectView: notifier.setFrameView,
                     photoCount: data.visiblePhotoTotalElements,
-                    albumCount: data.albums.length,
+                    albumCount: data.dashboard.totalAlbums,
                     trashCount: data.dashboard.trashCount,
                     collapsed: sidebarCollapsed,
                   ),
@@ -346,6 +346,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                   // 图库→清搜索）只留给系统返回，见 PopScope 分支。
                   onBack: () => _leavePhotos(context),
                   actions: [
+                    if (!data.isSelectionMode) const FrameImportAction(),
                     MobileGlassIconButton(
                       tooltip: l10n.photosSearchHint,
                       icon: Icons.search_rounded,
@@ -556,11 +557,13 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
             severity: OmniFeedbackSeverity.success,
           );
         }
-      } on Exception {
+      } on Exception catch (error) {
         if (context.mounted) {
           showOmniFeedback(
             context,
-            AppLocalizations.of(context).photosDeleteFailed,
+            AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
             severity: OmniFeedbackSeverity.error,
           );
         }
@@ -585,11 +588,13 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
           severity: OmniFeedbackSeverity.success,
         );
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (context.mounted) {
         showOmniFeedback(
           context,
-          AppLocalizations.of(context).photosCreateFailed,
+          AppLocalizations.of(
+            context,
+          ).localizeUserFacing(describeUserFacingError(error)),
           severity: OmniFeedbackSeverity.error,
         );
       }

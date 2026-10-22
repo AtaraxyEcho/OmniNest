@@ -173,18 +173,6 @@ public class FileMetadataQueryService {
     }
 
     /**
-     * 查询用户可见的共享图片文件候选。
-     *
-     * @param userId 当前用户 ID
-     * @return 共享图片文件描述符列表
-     */
-    @Transactional(readOnly = true)
-    public List<FileDescriptor> listSharedImagesVisibleToUser(UUID userId) {
-        return fileNodeRepository.findSharedImageFilesVisibleToUser(userId)
-                .stream().map(this::toDescriptor).toList();
-    }
-
-    /**
      * 查询用户指定的未删除路径。
      *
      * @param ownerUserId 所有者用户 ID

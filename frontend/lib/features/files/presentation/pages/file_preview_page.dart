@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
@@ -13,6 +14,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/file_saver.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -599,7 +601,11 @@ class _PdfPreview extends ConsumerWidget {
                 ),
               ),
             ),
-            _PdfActionBar(url: url),
+            _PdfActionBar(
+              url: url,
+              fileName: file.name,
+              sizeBytes: file.sizeBytes,
+            ),
           ],
         );
       },
@@ -611,10 +617,23 @@ class _PdfPreview extends ConsumerWidget {
 ///
 /// 内联渲染与下载走同一条签名地址：浏览器端若被 CORS 或分段读取拦下，
 /// 用户仍然拿得到文件，不必关掉预览回列表里再找下载菜单。
-class _PdfActionBar extends StatelessWidget {
-  const _PdfActionBar({required this.url});
+class _PdfActionBar extends StatefulWidget {
+  const _PdfActionBar({
+    required this.url,
+    required this.fileName,
+    required this.sizeBytes,
+  });
 
   final String url;
+  final String fileName;
+  final int sizeBytes;
+
+  @override
+  State<_PdfActionBar> createState() => _PdfActionBarState();
+}
+
+class _PdfActionBarState extends State<_PdfActionBar> {
+  bool _saving = false;
 
   @override
   Widget build(BuildContext context) {
@@ -624,7 +643,7 @@ class _PdfActionBar extends StatelessWidget {
       child: Align(
         alignment: Alignment.centerRight,
         child: OutlinedButton.icon(
-          onPressed: () => _onDownload(context),
+          onPressed: _saving ? null : _onDownload,
           icon: const Icon(Icons.download_rounded),
           label: Text(l10n.filesDownload),
         ),
@@ -632,22 +651,54 @@ class _PdfActionBar extends StatelessWidget {
     );
   }
 
-  void _onDownload(BuildContext context) {
+  Future<void> _onDownload() async {
     final l10n = AppLocalizations.of(context);
-    if (openDownloadUrl(url)) {
-      showOmniFeedback(
-        context,
-        l10n.filesDownloadOpened,
-        severity: OmniFeedbackSeverity.success,
-      );
+    if (kIsWeb) {
+      if (openDownloadUrl(widget.url)) {
+        showOmniFeedback(
+          context,
+          l10n.filesDownloadOpened,
+          severity: OmniFeedbackSeverity.success,
+        );
+        return;
+      }
+      await _copyLink(context);
       return;
     }
-    unawaited(_copyLink(context));
+    setState(() => _saving = true);
+    try {
+      final result = await saveDownloadUrlToLocalFile(
+        url: widget.url,
+        fileName: widget.fileName,
+        sizeBytes: widget.sizeBytes,
+      );
+      if (!mounted || result is LocalFileSaveCancelled) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        l10n.filesDownloadSaved,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        '${l10n.filesDownloadFailed}: $error',
+        severity: OmniFeedbackSeverity.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   Future<void> _copyLink(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final copied = await copyTextToClipboard(url);
+    final copied = await copyTextToClipboard(widget.url);
     if (!context.mounted) {
       return;
     }

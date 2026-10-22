@@ -203,6 +203,22 @@ public class VideoLibraryController {
                 result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements()));
     }
 
+    @Operation(summary = "获取单集观看历史", description = "只查询指定视频条目的最近一条观看记录")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
+    @GetMapping("/api/v1/video/history/item/{videoItemId}")
+    ApiResponse<MovieWatchHistoryDto> historyForItem(@PathVariable UUID videoItemId) {
+        return ApiResponse.success(movieEngagementService.historyForItem(
+                currentUserContext.requireCurrentUserId(), videoItemId));
+    }
+
+    @Operation(summary = "获取系列观看历史", description = "按系列过滤观看历史，供详情页续播与下一集判断")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
+    @GetMapping("/api/v1/video/history/series/{seriesId}")
+    ApiResponse<List<MovieWatchHistoryDto>> historyForSeries(@PathVariable UUID seriesId) {
+        return ApiResponse.success(movieEngagementService.historyForSeries(
+                currentUserContext.requireCurrentUserId(), seriesId));
+    }
+
     @Operation(summary = "删除观看记录", description = "删除指定的观看历史记录")
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/video/history/{historyId}")
@@ -257,8 +273,8 @@ public class VideoLibraryController {
         return ApiResponse.success(movieLibraryService.seriesDetail(currentUserContext.requireCurrentUserId(), seriesId));
     }
 
-    @Operation(summary = "更新剧集元数据", description = "手动更新剧集的标题与简介")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    @Operation(summary = "更新剧集元数据", description = "手动更新剧集的标题与简介；本人剧集或可管理的公共媒体库")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     @PutMapping("/api/v1/admin/video/series/{seriesId}/metadata")
     ApiResponse<MovieSeriesDto> updateSeriesMetadata(
             @PathVariable UUID seriesId,
@@ -513,9 +529,9 @@ public class VideoLibraryController {
         return ApiResponse.success(movieTaskService.scanLibrary(currentUserContext.requireCurrentUserId(), request));
     }
 
-    @Operation(summary = "更新视频元数据", description = "手动更新视频的标题、年份、简介等元数据")
+    @Operation(summary = "更新视频元数据", description = "手动更新视频的标题、年份、简介等元数据；本人视频或可管理的公共媒体库")
     @PutMapping("/api/v1/admin/video/items/{videoItemId}/metadata")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<MovieVideoItemDto> updateMetadata(
             @PathVariable UUID videoItemId,
             @Valid @RequestBody MovieMetadataUpdateRequest request

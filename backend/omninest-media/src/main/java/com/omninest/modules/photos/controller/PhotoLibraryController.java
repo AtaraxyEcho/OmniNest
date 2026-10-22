@@ -182,7 +182,7 @@ public class PhotoLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_ADMIN + "')")
     @PostMapping("/api/v1/admin/photos/geo/import")
     ApiResponse<GeoDatasetService.GeoImportCreated> importGeoDataset(
-            @RequestBody GeoDatasetService.GeoImportRequest body
+            @Valid @RequestBody GeoDatasetService.GeoImportRequest body
     ) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(geoDatasetService.createImportTask(body, operatorId));
@@ -801,8 +801,8 @@ public class PhotoLibraryController {
 
     // ─── 管理 ───
 
-    @Operation(summary = "扫描照片库", description = "触发照片库扫描，检测新增或变更的照片文件")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_ADMIN + "')")
+    @Operation(summary = "扫描照片库", description = "扫描当前用户自己的照片库，检测新增或变更的照片文件")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
     @PostMapping("/api/v1/admin/photos/scan")
     ApiResponse<PhotoScanJobDto> scanLibrary() {
         UUID userId = currentUserContext.requireCurrentUserId();
@@ -829,8 +829,8 @@ public class PhotoLibraryController {
         return ApiResponse.success(Map.of("url", url));
     }
 
-    @Operation(summary = "重建缩略图", description = "创建异步任务重生成所有缺失的照片缩略图")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_ADMIN + "')")
+    @Operation(summary = "重建缩略图", description = "创建异步任务重生成当前用户缺失的照片缩略图")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
     @PostMapping("/api/v1/admin/photos/thumbnails/regenerate")
     ApiResponse<Map<String, String>> regenerateThumbnails() {
         UUID userId = currentUserContext.requireCurrentUserId();
@@ -838,8 +838,8 @@ public class PhotoLibraryController {
         return ApiResponse.success(Map.of("taskId", taskId.toString()));
     }
 
-    @Operation(summary = "回扫动态照片", description = "创建异步任务为历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_ADMIN + "')")
+    @Operation(summary = "回扫动态照片", description = "为当前用户历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
     @PostMapping("/api/v1/admin/photos/motion/reanalyze")
     ApiResponse<Map<String, String>> reanalyzeMotionPhotos() {
         UUID userId = currentUserContext.requireCurrentUserId();

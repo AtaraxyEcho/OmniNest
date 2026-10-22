@@ -83,25 +83,6 @@ public class ResourceShareLinkService {
         return new ShareAccessSessionDto(session.token(), session.expiresAt());
     }
 
-    /** 为文件分享创建会话，资源类型由数据库中的分享链接决定。 */
-    @Transactional(readOnly = true)
-    public ShareAccessSessionDto issueAnySession(
-            String rawToken,
-            String password,
-            String clientAddress
-    ) {
-        String tokenHash = sha256(rawToken);
-        requireAuthenticationRateLimit(tokenHash, clientAddress);
-        ShareLink link = requireValidLink(tokenHash, null);
-        verifyPassword(link, password);
-        ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
-                tokenHash,
-                link.getResourceType(),
-                link.getExpiresAt()
-        );
-        return new ShareAccessSessionDto(session.token(), session.expiresAt());
-    }
-
     /** 校验会话并消费一次分享访问次数。 */
     @Transactional(rollbackFor = Exception.class)
     public ResourceShareLinkDto authorizeSession(
@@ -141,19 +122,6 @@ public class ResourceShareLinkService {
         ShareLink link = requireValidLink(tokenHash, null);
         shareAccessSessionService.require(sessionToken, tokenHash, link.getResourceType());
         return toDto(link, null);
-    }
-
-    /** 校验并消费文件分享会话。 */
-    @Transactional(rollbackFor = Exception.class)
-    public ResourceShareLinkDto authorizeAnySession(String rawToken, String sessionToken) {
-        String tokenHash = sha256(rawToken);
-        requireSessionRateLimit(tokenHash);
-        ShareLink link = requireValidLink(tokenHash, null);
-        shareAccessSessionService.require(sessionToken, tokenHash, link.getResourceType());
-        consume(link);
-        ShareLink consumed = shareLinkRepository.findById(link.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
-        return toDto(consumed, null);
     }
 
     /**
@@ -339,6 +307,8 @@ public class ResourceShareLinkService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
         share.setDisabledAt(Instant.now());
         shareLinkRepository.save(share);
+        // 单条撤销同样必须失效读缓存，否则访客在 5 分钟内仍能命中旧链接对象。
+        readThroughCache.invalidate("omninest:share:link:" + share.getTokenHash());
     }
 
     /**

@@ -124,6 +124,25 @@ class PhotoAlbumServiceTest {
     }
 
     @Test
+    void listAlbumsPageResolvesFallbackCoversInOneBatchQuery() {
+        PhotoAlbum second = album();
+        second.setId(UUID.fromString("20000000-0000-0000-0000-000000000002"));
+        second.setName("Second");
+        PageRequest pageable = PageRequest.of(0, 2);
+        when(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER, pageable))
+                .thenReturn(new PageImpl<>(List.of(album(), second), pageable, 2));
+        when(albumItemRepository.findFirstActiveCoverFileIdsByAlbumIds(any()))
+                .thenReturn(List.of());
+
+        Page<PhotoAlbumDto> page = service.listAlbumsPage(OWNER, 0, 2);
+
+        assertThat(page.getContent()).hasSize(2);
+        verify(albumItemRepository).findFirstActiveCoverFileIdsByAlbumIds(any());
+        verify(albumItemRepository, never())
+                .findActivePhotoIdsByAlbumId(any(), any());
+    }
+
+    @Test
     void listAlbumsPage_mapsSliceAndKeepsRepositoryTotal() {
         var pageable = PageRequest.of(1, 2);
         when(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER, pageable))

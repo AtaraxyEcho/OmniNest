@@ -11,6 +11,7 @@ import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FileShareRecipient;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.ShareLink;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.AdminFileShareLinkDto;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.FilePermissionDto;
@@ -33,7 +34,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -77,24 +77,21 @@ public class FileShareService {
     @Transactional(readOnly = true)
     public Page<FileSharedItemDto> listSharedWithMePage(UUID ownerUserId, int page, int size) {
         Pageable pageable = FilePageRequests.of(page, size);
+        // 已撤销链接、软删节点与易主资源在 SQL 层过滤，分页总数与返回条目一致。
         Page<FileShareRecipient> recipientPage =
-                shareRecipientRepository.findByRecipientUserIdOrderByCreatedAtDesc(ownerUserId, pageable);
+                shareRecipientRepository.findActiveVisibleByRecipientUserIdPage(ownerUserId, pageable);
         if (recipientPage.isEmpty()) {
             return new PageImpl<>(List.of(), pageable, recipientPage.getTotalElements());
         }
         List<FileShareRecipient> recipients = recipientPage.getContent();
         List<UUID> resourceIds = recipients.stream()
-                .map(FileShareRecipient::getShareLink)
-                .filter(Objects::nonNull)
-                .filter(share -> share.getDisabledAt() == null)
-                .map(ShareLink::getResourceId)
+                .map(recipient -> recipient.getShareLink().getResourceId())
                 .distinct()
                 .toList();
         Map<UUID, FileNode> nodesById = resourceIds.isEmpty()
                 ? Map.of()
                 : fileNodeRepository.findAllById(resourceIds)
                         .stream()
-                        .filter(node -> !node.isDeleted())
                         .collect(Collectors.toMap(FileNode::getId, node -> node, (l, r) -> l, LinkedHashMap::new));
         List<FileSharedItemDto> items = recipients.stream()
                 .map(recipient -> toSharedItemDto(recipient, nodesById))
@@ -155,8 +152,8 @@ public class FileShareService {
         Map<UUID, FilePermission> perms = filePermissionService.resolvePermissions(fileIds, userId);
         List<UUID> ownerIds = sharedNodes.stream().map(FileNode::getOwnerUserId).distinct().toList();
         Map<UUID, String> ownerNames = userAccountQuery.findUsernames(ownerIds);
+        // 可见性已在仓储层过滤；这里只取权限描述填充 DTO，不能再丢弃行，否则总数再次虚高。
         List<SharedFileDto> items = sharedNodes.stream()
-                .filter(n -> perms.getOrDefault(n.getId(), FilePermission.denyAll()).allowView())
                 .map(n -> toSharedFileDto(
                         n,
                         perms.get(n.getId()),
@@ -202,12 +199,16 @@ public class FileShareService {
     /**
      * 分页查询全站未撤销的分享链接，附所有者身份，供管理端治理。
      *
+     * <p>管理权与数据隐私分离：他人私人空间（PERSONAL）的资源名一律脱敏，
+     * 只保留资源类型标识；共享空间资源仍显示名称，便于治理公共内容。</p>
+     *
+     * @param operatorUserId 当前管理员 ID
      * @param page 页码（从 0 开始）
      * @param size 每页条数
      * @return 全站分享分页
      */
     @Transactional(readOnly = true)
-    public Page<AdminFileShareLinkDto> listAllSharesPage(int page, int size) {
+    public Page<AdminFileShareLinkDto> listAllSharesPage(UUID operatorUserId, int page, int size) {
         Pageable pageable = FilePageRequests.of(page, size);
         Page<ShareLink> sharePage = shareLinkRepository.findAllActivePage(pageable);
         if (sharePage.isEmpty()) {
@@ -218,10 +219,10 @@ public class FileShareService {
                 .map(ShareLink::getResourceId)
                 .distinct()
                 .toList();
-        Map<UUID, String> namesById = fileNodeRepository.findAllById(resourceIds)
+        Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(resourceIds)
                 .stream()
                 .collect(Collectors.toMap(
-                        FileNode::getId, FileNode::getName, (l, r) -> l, LinkedHashMap::new));
+                        FileNode::getId, node -> node, (l, r) -> l, LinkedHashMap::new));
         List<UUID> ownerIds = sharePage.getContent()
                 .stream()
                 .map(ShareLink::getOwnerUserId)
@@ -236,7 +237,7 @@ public class FileShareService {
                         ownerNames.getOrDefault(share.getOwnerUserId(), "未知用户"),
                         share.getResourceType(),
                         share.getResourceId(),
-                        namesById.getOrDefault(share.getResourceId(), "已删除文件"),
+                        adminShareResourceLabel(operatorUserId, share, nodesById.get(share.getResourceId())),
                         resolveShareStatus(share),
                         share.getMaxAccessCount(),
                         share.getAccessCount(),
@@ -246,6 +247,22 @@ public class FileShareService {
                 ))
                 .toList();
         return new PageImpl<>(items, pageable, sharePage.getTotalElements());
+    }
+
+    /**
+     * 管理端展示的资源名：他人 PERSONAL 资源只返回类型标签。
+     */
+    private String adminShareResourceLabel(UUID operatorUserId, ShareLink share, FileNode node) {
+        if (node == null) {
+            return "已删除文件";
+        }
+        if (!node.getOwnerUserId().equals(operatorUserId)
+                && SpaceType.PERSONAL == node.getSpaceType()) {
+            return NodeType.FOLDER.getValue().equals(share.getResourceType())
+                    ? "私人文件夹"
+                    : "私人文件";
+        }
+        return node.getName();
     }
 
     /**

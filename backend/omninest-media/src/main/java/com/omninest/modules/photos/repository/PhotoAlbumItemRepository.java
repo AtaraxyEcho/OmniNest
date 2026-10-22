@@ -1,6 +1,7 @@
 package com.omninest.modules.photos.repository;
 
 import com.omninest.modules.photos.domain.PhotoAlbumItem;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,6 +70,37 @@ public interface PhotoAlbumItemRepository extends JpaRepository<PhotoAlbumItem, 
             @Param("albumId") UUID albumId,
             Pageable pageable
     );
+
+    /**
+     * 批量查询多个相册的首张有效照片封面文件。
+     *
+     * <p>相册列表逐相册回查会按相册数量放大成 N+1；窗口函数一次取回当前页
+     * 每个相册排序最靠前且仍可用的封面文件。</p>
+     *
+     * @param albumIds 相册标识集合
+     * @return 相册与其首张封面文件的对应关系
+     */
+    @Query(value = """
+            SELECT ranked.album_id AS "albumId", ranked.cover_file_id AS "coverFileId"
+            FROM (
+                SELECT ai.album_id,
+                       pi.cover_file_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY ai.album_id
+                           ORDER BY ai.sort_order ASC, ai.created_at DESC, ai.id ASC
+                       ) AS rn
+                FROM omni.photo_album_items ai
+                JOIN omni.photo_items pi ON pi.id = ai.photo_id
+                JOIN omni.file_nodes f ON f.id = pi.file_node_id
+                WHERE ai.album_id IN (:albumIds)
+                  AND pi.deleted_at IS NULL
+                  AND f.is_deleted = false
+                  AND pi.cover_file_id IS NOT NULL
+            ) ranked
+            WHERE ranked.rn = 1
+            """, nativeQuery = true)
+    List<PhotoAlbumFirstCoverProjection> findFirstActiveCoverFileIdsByAlbumIds(
+            @Param("albumIds") Collection<UUID> albumIds);
 
     /**
      * 统计相册中的照片数量

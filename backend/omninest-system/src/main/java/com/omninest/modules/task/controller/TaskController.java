@@ -79,7 +79,10 @@ public class TaskController {
     @GetMapping("/api/v1/tasks/dlq")
     @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<List<TaskDto>> listDlq(@RequestParam(defaultValue = "20") int limit) {
-        return ApiResponse.success(taskQueryService.listDlq(PageClamps.safeLimit(limit, 20)));
+        return ApiResponse.success(taskQueryService.listDlq(
+                PageClamps.safeLimit(limit, 20),
+                currentUserContext.requireCurrentUserId()
+        ));
     }
 
     /**

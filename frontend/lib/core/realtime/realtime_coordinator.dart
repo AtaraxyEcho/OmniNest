@@ -69,6 +69,12 @@ class RealtimeCoordinator {
   Stream<Map<String, dynamic>> get notificationMessages =>
       _stompClient.notifications;
 
+  /// 访问令牌刷新完成：让传输层重置退避并立即恢复连接。
+  void notifyAccessTokenRefreshed() {
+    if (_disposed) return;
+    _stompClient.notifyAccessTokenRefreshed();
+  }
+
   /// 当前协调器状态。
   RealtimePhase get phase => _phase;
 

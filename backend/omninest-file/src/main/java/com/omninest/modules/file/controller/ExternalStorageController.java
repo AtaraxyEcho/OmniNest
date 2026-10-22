@@ -4,6 +4,8 @@ import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
@@ -13,7 +15,9 @@ import com.omninest.modules.file.dto.ImportTaskDto;
 import com.omninest.modules.file.service.ExternalStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,6 +43,8 @@ public class ExternalStorageController {
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
     private final com.omninest.modules.file.service.ExternalStorageOAuthService oauthService;
+    private final RateLimitService rateLimitService;
+    private final ClientIpResolver clientIpResolver;
 
     @Operation(summary = "列出连接器目录", description = "返回可接入的远程存储类型")
     @GetMapping("/api/v1/external-connectors")
@@ -71,12 +77,23 @@ public class ExternalStorageController {
             @PathVariable("providerCode") String providerCode,
             @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "code", required = false) String authorizationCode,
-            @RequestParam(value = "error", required = false) String error
+            @RequestParam(value = "error", required = false) String error,
+            HttpServletRequest request
     ) {
+        // 匿名端点：按可信代理边界取客户端地址做限流，避免成为可无限重放的探测入口。
+        String clientIp = clientIpResolver.resolve(
+                request.getRemoteAddr(),
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP")
+        );
+        if (!rateLimitService.tryAcquire(
+                "ip:" + clientIp + ":external-oauth-callback", 20, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "OAuth 回调请求过于频繁，请稍后再试");
+        }
         if (error != null && !error.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "授权被第三方拒绝: " + error);
         }
-        oauthService.handleCallback(state, authorizationCode);
+        oauthService.handleCallback(providerCode, state, authorizationCode);
         return ApiResponse.success();
     }
 

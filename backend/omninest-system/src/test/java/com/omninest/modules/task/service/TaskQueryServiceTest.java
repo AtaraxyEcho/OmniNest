@@ -196,11 +196,28 @@ class TaskQueryServiceTest {
                     .thenReturn(List.of(dlqTask));
 
             // Act
-            List<TaskDto> result = taskQueryService.listDlq(20);
+            List<TaskDto> result = taskQueryService.listDlq(20, OWNER_ID);
 
             // Assert
             assertThat(result).hasSize(1);
             assertThat(result.get(0).status()).isEqualTo(TaskStatus.DLQ.getValue());
+        }
+
+        @Test
+        @DisplayName("跨用户查看死信任务时脱敏私有路径")
+        void listDlq_masksPrivatePathsForOtherUsers() {
+            TaskRecord foreign = createTaskRecord(TaskStatus.DLQ.getValue());
+            foreign.setOwnerUserId(UUID.randomUUID());
+            foreign.setErrorMessage("处理失败: C:\\data\\users\\secret\\报告.pdf");
+            foreign.setResult("{\"filePath\":\"/private/photos/a.jpg\",\"fileId\":\"x\"}");
+            when(taskRecordRepository.findByStatusOrderByCreatedAtDesc(
+                    eq(TaskStatus.DLQ.getValue()), any(PageRequest.class)))
+                    .thenReturn(List.of(foreign));
+
+            List<TaskDto> result = taskQueryService.listDlq(20, OWNER_ID);
+
+            assertThat(result.get(0).errorSummary()).doesNotContain("secret").contains("已脱敏");
+            assertThat(result.get(0).result()).doesNotContain("private").contains("已脱敏");
         }
 
         @Test
@@ -212,7 +229,7 @@ class TaskQueryServiceTest {
                     .thenReturn(List.of());
 
             // Act
-            List<TaskDto> result = taskQueryService.listDlq(20);
+            List<TaskDto> result = taskQueryService.listDlq(20, OWNER_ID);
 
             // Assert
             assertThat(result).isEmpty();

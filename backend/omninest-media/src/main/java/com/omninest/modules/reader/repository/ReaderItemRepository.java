@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -74,6 +76,59 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             ORDER BY ri.updatedAt DESC
             """)
     List<ReaderItem> findItemsVisibleToUser(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
+
+    /**
+     * 分页查询用户可见的阅读条目。
+     *
+     * <p>可见性、条目类型、内容类型、关键词与书架过滤全部下推到 SQL，
+     * 只回当前页实体，避免每翻一页都加载并转换整库。</p>
+     *
+     * @param userId 当前用户标识
+     * @param sharedType 共享空间类型
+     * @param itemType 条目类型过滤，空串表示不限
+     * @param contentKind 内容类型过滤，空串表示不限
+     * @param query 标题或作者关键词，空串表示不限
+     * @param bookshelfOnly 是否只返回已加入书架的条目
+     * @param pageable 分页参数
+     * @return 阅读条目分页
+     */
+    @Query(value = """
+            SELECT ri FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (:itemType IS NULL OR :itemType = '' OR UPPER(ri.itemType) = UPPER(:itemType))
+              AND (:contentKind IS NULL OR :contentKind = '' OR UPPER(ri.contentKind) = UPPER(:contentKind))
+              AND (:query IS NULL OR :query = ''
+                   OR LOWER(ri.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\'
+                   OR LOWER(COALESCE(ri.authorName, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\')
+              AND (:bookshelfOnly = false OR EXISTS (
+                   SELECT b.id FROM ReaderBookshelf b
+                   WHERE b.ownerUserId = :userId AND b.readerItemId = ri.id))
+            ORDER BY ri.updatedAt DESC, ri.createdAt DESC, ri.id ASC
+            """,
+            countQuery = """
+            SELECT COUNT(ri) FROM ReaderItem ri
+            JOIN FileNode f ON ri.fileNodeId = f.id
+            WHERE f.deleted = false
+              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (:itemType IS NULL OR :itemType = '' OR UPPER(ri.itemType) = UPPER(:itemType))
+              AND (:contentKind IS NULL OR :contentKind = '' OR UPPER(ri.contentKind) = UPPER(:contentKind))
+              AND (:query IS NULL OR :query = ''
+                   OR LOWER(ri.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\'
+                   OR LOWER(COALESCE(ri.authorName, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\')
+              AND (:bookshelfOnly = false OR EXISTS (
+                   SELECT b.id FROM ReaderBookshelf b
+                   WHERE b.ownerUserId = :userId AND b.readerItemId = ri.id))
+            """)
+    Page<ReaderItem> findVisibleItemsPage(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            @Param("itemType") String itemType,
+            @Param("contentKind") String contentKind,
+            @Param("query") String query,
+            @Param("bookshelfOnly") boolean bookshelfOnly,
+            Pageable pageable);
 
     /**
      * 按主文件节点查找对当前用户可见的已有条目，共享空间的同一文件对其他用户同样算已导入。

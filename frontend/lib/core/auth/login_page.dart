@@ -12,9 +12,9 @@ import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 
 /// 登录入参长度上界：与后端建号/注册/改密校验一致（用户名 80、口令
-/// 8-24）。超界口令永远无法通过认证，在输入源头即截断。
+/// 8-64 个字符）。超界口令永远无法通过认证，在输入源头即截断。
 const int _loginUsernameMaxLength = 80;
-const int _loginPasswordMaxLength = 24;
+const int _loginPasswordMaxLength = 64;
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});

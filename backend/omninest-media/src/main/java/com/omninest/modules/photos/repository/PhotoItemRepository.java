@@ -536,7 +536,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                   FROM grouped_photos gp
                  WHERE gp.group_key IS NOT NULL
                  GROUP BY gp.group_key
-                 ORDER BY gp.group_key ASC
+                 ORDER BY CASE WHEN CAST(:groupBy AS text) = 'DATE' THEN gp.group_key END DESC,
+                          gp.group_key ASC
                  OFFSET :groupOffset
                  LIMIT :groupLimit
             ), ranked AS (
@@ -570,7 +571,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    r.created_at AS "createdAt"
               FROM ranked r
              WHERE r.preview_rank <= 4
-             ORDER BY r.group_key ASC, r.created_at DESC, r.id ASC
+             ORDER BY CASE WHEN CAST(:groupBy AS text) = 'DATE' THEN r.group_key END DESC,
+                      r.group_key ASC, r.created_at DESC, r.id ASC
             """, nativeQuery = true)
     List<PhotoGroupPreviewProjection> findGroupPreviewPage(
             @Param("ownerUserId") UUID ownerUserId,

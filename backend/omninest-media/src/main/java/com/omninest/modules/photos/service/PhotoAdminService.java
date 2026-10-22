@@ -15,7 +15,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileMetadataQueryService;
-import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.file.service.FilePostProcessingTaskService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -41,7 +40,6 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
@@ -78,7 +76,6 @@ public class PhotoAdminService {
     private final PhotoSourceFileService sourceFileService;
     private final PhotoExifExtractor exifExtractor;
     private final PhotoThumbnailService thumbnailService;
-    private final FilePermissionService filePermissionService;
     private final NotificationPublisher notificationService;
     private final TaskDispatchService taskDispatchService;
     private final PhotoRawPreviewService rawPreviewService;
@@ -159,16 +156,9 @@ public class PhotoAdminService {
 
         int imported = 0;
         try {
-            List<FileDescriptor> ownedNodes = fileMetadataQueryService.listOwnedImages(ownerUserId);
-            List<FileDescriptor> allSharedNodes = fileMetadataQueryService.listSharedImagesVisibleToUser(ownerUserId);
-            var viewableSharedFileIds = filePermissionService.resolveViewableFileIds(
-                    allSharedNodes.stream().map(FileDescriptor::id).toList(), ownerUserId);
-            List<FileDescriptor> sharedNodes = allSharedNodes.stream()
-                    .filter(node -> viewableSharedFileIds.contains(node.id()))
-                    .toList();
-
-            List<FileDescriptor> nodes = new ArrayList<>(ownedNodes);
-            nodes.addAll(sharedNodes);
+            // 个人相册扫描只处理本人文件：共享空间里他人的图片会以扫描者身份
+            // 克隆出影子 PhotoItem，回收站清理时因底层 FileNode 不属于本人而永久失败。
+            List<FileDescriptor> nodes = fileMetadataQueryService.listOwnedImages(ownerUserId);
 
             for (FileDescriptor file : nodes) {
                 try {

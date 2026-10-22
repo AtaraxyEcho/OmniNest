@@ -400,7 +400,7 @@ public class ReaderLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     @PutMapping("/api/v1/admin/reader/items/{itemId}/metadata")
     ApiResponse<Void> updateItemMetadata(@PathVariable UUID itemId, @Valid @RequestBody UpdateItemMetadataRequest request) {
-        readerItemService.updateMetadataAsAdmin(itemId, request);
+        readerItemService.updateMetadataAsAdmin(currentUserContext.requireCurrentUserId(), itemId, request);
         return ApiResponse.success();
     }
 

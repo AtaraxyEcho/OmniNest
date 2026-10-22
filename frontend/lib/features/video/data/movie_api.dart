@@ -137,6 +137,29 @@ class MovieApi {
         .toList();
   }
 
+  /// 只查询单条视频的观看记录；没有记录时返回 null。
+  Future<MovieWatchHistory?> itemHistory(String videoItemId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/history/item/$videoItemId',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '加载观看历史失败');
+    final data = response.data?['data'];
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+    return MovieWatchHistory.fromJson(_resolvePosterJson(data));
+  }
+
+  /// 只查询某个系列下的观看历史，按播放时间倒序。
+  Future<List<MovieWatchHistory>> seriesHistory(String seriesId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/history/series/$seriesId',
+    );
+    return parseList(response.data)
+        .map((json) => MovieWatchHistory.fromJson(_resolvePosterJson(json)))
+        .toList();
+  }
+
   /// 分页获取观看历史：滚动加载消费，按播放时间倒序。
   Future<MediaPage<MovieWatchHistory>> historyPage({
     int page = 0,

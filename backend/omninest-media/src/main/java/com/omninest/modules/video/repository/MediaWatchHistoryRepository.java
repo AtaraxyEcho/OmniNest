@@ -30,6 +30,27 @@ public interface MediaWatchHistoryRepository extends JpaRepository<MediaWatchHis
 
     Optional<MediaWatchHistory> findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(UUID ownerUserId, UUID videoItemId);
 
+    /**
+     * 查询用户在某系列下的全部观看历史，按播放时间倒序。
+     *
+     * <p>详情页续播只需要当前系列的历史，拉全量历史再在客户端过滤既浪费
+     * 带宽，也会在超过历史分页上限后丢失旧进度。</p>
+     *
+     * @param ownerUserId 所有者用户标识
+     * @param seriesId 系列标识
+     * @return 该系列的观看历史
+     */
+    @Query("""
+            SELECT h FROM MediaWatchHistory h
+            JOIN MediaVideoItem i ON i.id = h.videoItemId
+            WHERE h.ownerUserId = :ownerUserId
+              AND i.seriesId = :seriesId
+            ORDER BY h.playedAt DESC
+            """)
+    List<MediaWatchHistory> findByOwnerUserIdAndSeriesIdOrderByPlayedAtDesc(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesId") UUID seriesId);
+
     @Modifying
     @Query("delete from MediaWatchHistory h where h.ownerUserId = :ownerUserId and h.videoItemId in :videoItemIds")
     void deleteByOwnerUserIdAndVideoItemIdIn(@Param("ownerUserId") UUID ownerUserId, @Param("videoItemIds") Collection<UUID> videoItemIds);

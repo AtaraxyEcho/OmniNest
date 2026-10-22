@@ -65,6 +65,21 @@ class ImageBoundaryTest(unittest.TestCase):
             asyncio.run(app._read_bounded_image(_FakeUploadFile(b"not-an-image")))
         self.assertEqual(400, ctx.exception.status_code)
 
+    def test_pillow_pixel_limit_matches_service_limit(self):
+        """Pillow 的解压炸弹阈值必须与服务上限一致。"""
+        self.assertEqual(app.MAX_IMAGE_PIXELS, Image.MAX_IMAGE_PIXELS)
+
+    def test_read_bounded_image_maps_decompression_bomb_to_413(self):
+        """Pillow 炸弹异常按像素超限返回 413，而不是误判为损坏图片。"""
+        with patch.object(
+            app,
+            "_verify_image_bounds",
+            side_effect=Image.DecompressionBombError("too many pixels"),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(app._read_bounded_image(_FakeUploadFile(self.png_bytes())))
+        self.assertEqual(413, ctx.exception.status_code)
+
     def test_read_bounded_image_rejects_dimensions_over_limit(self):
         """像素总数超限返回 413。"""
         data = self.png_bytes(32, 32)
@@ -95,6 +110,12 @@ class FaceOnlyAnalysisTest(unittest.TestCase):
         )
 
         self.assertEqual([], app._legacy_scene_labels(result))
+
+    def test_health_exposes_content_analysis_readiness_flag(self):
+        """内容分析能力必须显式声明为不可用，后端据此跳过空桩上传。"""
+        response = asyncio.run(app.health())
+        self.assertFalse(response["content_analysis"])
+        self.assertFalse(response["content_analysis_ready"])
 
     def test_ready_requires_only_face_recognition_model(self):
         """就绪检查只依赖人脸模型，不要求已移除的内容模型。"""

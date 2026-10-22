@@ -12,6 +12,7 @@ import com.omninest.modules.file.domain.ImportTaskStatus;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.domain.StorageImportTask;
+import com.omninest.modules.file.domain.StorageRemoteMetadataCache;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileItemDto;
 import com.omninest.modules.file.dto.ExternalFileListDto;
@@ -22,9 +23,11 @@ import com.omninest.modules.file.dto.ImportTaskDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,9 +52,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ExternalStorageService {
+
+    /** 远端目录列举的短暂缓存窗口，只用于翻页复用，不承担强一致语义。 */
+    private static final Duration BROWSE_CACHE_TTL = Duration.ofSeconds(60);
+
     private final RcloneGateway rcloneGateway;
     private final StorageExternalAccountRepository accountRepository;
     private final StorageImportTaskRepository importTaskRepository;
+    private final StorageRemoteMetadataCacheRepository remoteMetadataCacheRepository;
     private final TaskDispatchService taskDispatchService;
     private final TaskRecordService taskRecordService;
     private final ExternalStorageCredentialService externalStorageCredentialService;
@@ -112,17 +120,7 @@ public class ExternalStorageService {
         String remote = normalizePath(path);
 
         try {
-            List<ExternalFileItemDto> items = rcloneGateway.listDirectory(fs, remote, false).stream()
-                    .map(entry -> new ExternalFileItemDto(
-                            entry.name(),
-                            entry.name(),
-                            entry.directory(),
-                            entry.sizeBytes(),
-                            entry.modifiedAt(),
-                            entry.mimeType(),
-                            entry.hash()
-                    ))
-                    .toList();
+            List<ExternalFileItemDto> items = listDirectoryCached(account.getId(), fs, remote);
             int total = items.size();
             int safePage = Math.max(page, 0);
             int safeSize = Math.max(size, 1);
@@ -144,6 +142,50 @@ public class ExternalStorageService {
             }
             throw e;
         }
+    }
+
+    /**
+     * 列举远端目录并复用 60 秒内的快照。
+     *
+     * <p>分页只在内存切片，翻页若每次都向 rclone 全量列举，单目录数千条时
+     * 每页都会重复付出一次远端往返。缓存只是翻页复用，过期后照常回源。</p>
+     */
+    private List<ExternalFileItemDto> listDirectoryCached(UUID accountId, String fs, String remote) {
+        Instant now = Instant.now();
+        try {
+            var cached = remoteMetadataCacheRepository
+                    .findFirstByExternalAccountIdAndRemotePathOrderByCachedAtDesc(accountId, remote);
+            if (cached.isPresent() && cached.get().getExpiresAt().isAfter(now)) {
+                return JsonSupport.listFrom(cached.get().getMetadataJson(), ExternalFileItemDto.class);
+            }
+        } catch (RuntimeException exception) {
+            log.warn("读取外部目录缓存失败，回退远端列举: accountId={}", accountId, exception);
+        }
+
+        List<ExternalFileItemDto> items = rcloneGateway.listDirectory(fs, remote, false).stream()
+                .map(entry -> new ExternalFileItemDto(
+                        entry.name(),
+                        entry.name(),
+                        entry.directory(),
+                        entry.sizeBytes(),
+                        entry.modifiedAt(),
+                        entry.mimeType(),
+                        entry.hash()
+                ))
+                .toList();
+        try {
+            remoteMetadataCacheRepository.deleteByExternalAccountIdAndRemotePath(accountId, remote);
+            StorageRemoteMetadataCache cache = new StorageRemoteMetadataCache();
+            cache.setExternalAccountId(accountId);
+            cache.setRemotePath(remote);
+            cache.setMetadataJson(JsonSupport.toJson(items));
+            cache.setCachedAt(now);
+            cache.setExpiresAt(now.plus(BROWSE_CACHE_TTL));
+            remoteMetadataCacheRepository.save(cache);
+        } catch (RuntimeException exception) {
+            log.warn("写入外部目录缓存失败，本次仍返回远端结果: accountId={}", accountId, exception);
+        }
+        return items;
     }
 
     /**

@@ -210,7 +210,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get setupConfirmPassword => '确认密码';
 
   @override
-  String get setupPasswordLength => '超级管理员密码长度必须在 8 到 24 个字符之间';
+  String get setupPasswordLength =>
+      '超级管理员密码长度必须在 8 到 64 个字符之间，且不超过 72 个 UTF-8 字节';
 
   @override
   String get setupTwoFactorSection => '两步验证';
@@ -774,7 +775,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changePasswordMinLength => '密码至少 8 位';
 
   @override
-  String get changePasswordMaxLength => '密码最多 24 位';
+  String get changePasswordMaxLength => '密码最多 64 位，且不超过 72 个 UTF-8 字节';
 
   @override
   String get changePasswordConfirmNew => '确认新密码';
@@ -1851,6 +1852,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesDownloadOpened => '已在新标签页打开下载';
+
+  @override
+  String get filesDownloadSaved => '文件已保存到本地';
 
   @override
   String get filesDownloadFailed => '获取下载链接失败';

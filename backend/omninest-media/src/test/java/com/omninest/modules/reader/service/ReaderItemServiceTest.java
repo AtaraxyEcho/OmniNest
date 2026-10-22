@@ -59,6 +59,10 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -353,6 +357,38 @@ class ReaderItemServiceTest {
     }
 
     @Test
+    void updateMetadataAsAdminRejectsOtherUsersPersonalItem() {
+        ReaderItem personal = newItem(
+                SHARED_ITEM_ID, OTHER_USER_ID, SHARED_FILE_NODE_ID, "Private Book", "TXT");
+        when(itemRepository.findById(SHARED_ITEM_ID)).thenReturn(Optional.of(personal));
+        when(fileMetadataQueryService.findById(SHARED_FILE_NODE_ID)).thenReturn(Optional.of(
+                newFileDescriptor(SHARED_FILE_NODE_ID, SpaceType.PERSONAL, "private.txt", null)));
+        UpdateItemMetadataRequest request = new UpdateItemMetadataRequest(
+                "Changed", null, null, null, null, null, null, null, null, null);
+
+        assertThatThrownBy(() -> itemService.updateMetadataAsAdmin(OWNER_ID, SHARED_ITEM_ID, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("阅读条目不存在");
+        verify(itemRepository, never()).save(any());
+    }
+
+    @Test
+    void updateMetadataAsAdminAllowsOtherUsersSharedItem() {
+        ReaderItem shared = newItem(
+                SHARED_ITEM_ID, OTHER_USER_ID, SHARED_FILE_NODE_ID, "Shared Book", "TXT");
+        when(itemRepository.findById(SHARED_ITEM_ID)).thenReturn(Optional.of(shared));
+        when(fileMetadataQueryService.findById(SHARED_FILE_NODE_ID)).thenReturn(Optional.of(
+                newFileDescriptor(SHARED_FILE_NODE_ID, SpaceType.SHARED, "shared.txt", null)));
+        UpdateItemMetadataRequest request = new UpdateItemMetadataRequest(
+                "Changed", null, null, null, null, null, null, null, null, null);
+
+        itemService.updateMetadataAsAdmin(OWNER_ID, SHARED_ITEM_ID, request);
+
+        assertThat(shared.getTitle()).isEqualTo("Changed");
+        verify(itemRepository).save(shared);
+    }
+
+    @Test
     void deleteItemRemovesLibraryRecordAndRetainsOwnedSourceFileByDefault() {
         ReaderItem item = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Book To Delete", "TXT");
         when(itemRepository.findByIdAndOwnerUserId(ITEM_ID, OWNER_ID)).thenReturn(Optional.of(item));
@@ -607,8 +643,16 @@ class ReaderItemServiceTest {
         ReaderItem a = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "Book A", "TXT");
         ReaderItem b = newItem(SHARED_ITEM_ID, OWNER_ID, SHARED_FILE_NODE_ID, "Book B", "TXT");
         ReaderItem c = newItem(UUID.fromString("30000000-0000-0000-0000-000000000003"), OWNER_ID, UUID.fromString("40000000-0000-0000-0000-000000000003"), "Book C", "TXT");
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
-                .thenReturn(List.of(a, b, c));
+        List<ReaderItem> all = List.of(a, b, c);
+        when(itemRepository.findVisibleItemsPage(
+                eq(OWNER_ID), eq(SpaceType.SHARED), any(), any(), any(), eq(false), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(6);
+                    int from = (int) Math.min((long) pageable.getPageNumber() * pageable.getPageSize(),
+                            all.size());
+                    int to = Math.min(from + pageable.getPageSize(), all.size());
+                    return new PageImpl<>(all.subList(from, to), pageable, all.size());
+                });
         when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
                 .thenReturn(List.of());
 
@@ -640,12 +684,10 @@ class ReaderItemServiceTest {
                 UUID.fromString("40000000-0000-0000-0000-000000000003"),
                 "Book C",
                 "TXT");
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
-                .thenReturn(List.of(a, b, c));
-        ReaderBookshelf shelfEntry = new ReaderBookshelf();
-        shelfEntry.setReaderItemId(c.getId());
-        when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
-                .thenReturn(List.of(shelfEntry));
+        Pageable pageable = PageRequest.of(0, 2);
+        when(itemRepository.findVisibleItemsPage(
+                eq(OWNER_ID), eq(SpaceType.SHARED), any(), any(), any(), eq(true), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(c), pageable, 1));
 
         var only = itemService.listItemsPage(OWNER_ID, null, null, null, true, 0, 2);
 

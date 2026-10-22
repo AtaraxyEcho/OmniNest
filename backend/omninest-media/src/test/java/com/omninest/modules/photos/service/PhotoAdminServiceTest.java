@@ -2,7 +2,6 @@ package com.omninest.modules.photos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -16,7 +15,6 @@ import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.service.FileMetadataQueryService;
-import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.file.service.FilePostProcessingTaskService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -29,7 +27,6 @@ import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.domain.TaskStatus;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,7 +55,6 @@ class PhotoAdminServiceTest {
     private final PhotoSourceFileService sourceFileService = mock(PhotoSourceFileService.class);
     private final PhotoExifExtractor exifExtractor = mock(PhotoExifExtractor.class);
     private final PhotoThumbnailService thumbnailService = mock(PhotoThumbnailService.class);
-    private final FilePermissionService filePermissionService = mock(FilePermissionService.class);
     private final NotificationPublisher notificationService = mock(NotificationPublisher.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final PhotoRawPreviewService rawPreviewService = mock(PhotoRawPreviewService.class);
@@ -81,7 +77,6 @@ class PhotoAdminServiceTest {
             sourceFileService,
             exifExtractor,
             thumbnailService,
-            filePermissionService,
             notificationService,
             taskDispatchService,
             rawPreviewService,
@@ -101,8 +96,6 @@ class PhotoAdminServiceTest {
         service.initTransactionTemplate();
         when(taskRecordService.claimForExecution(JOB_ID, "SCANNING")).thenReturn(true);
         when(fileMetadataQueryService.listOwnedImages(OWNER_ID)).thenReturn(List.of());
-        when(fileMetadataQueryService.listSharedImagesVisibleToUser(OWNER_ID)).thenReturn(List.of());
-        when(filePermissionService.resolveViewableFileIds(anyList(), eq(OWNER_ID))).thenReturn(Set.of());
         when(scanJobRepository.save(any(PhotoScanJob.class))).thenAnswer(invocation -> {
             PhotoScanJob saved = invocation.getArgument(0);
             // 模拟 Hibernate merge：每次保存后 version 前进，返回实例携带新版本号。

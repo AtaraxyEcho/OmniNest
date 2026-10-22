@@ -433,7 +433,7 @@ class FileRepositoryImpl implements FileRepository {
     String accountId,
     String path, {
     int page = 0,
-    int size = 10,
+    int size = 50,
   }) {
     return fileApi.browseExternalStoragePage(
       accountId,

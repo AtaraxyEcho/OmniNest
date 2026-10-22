@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CredentialCipher;
@@ -39,9 +40,10 @@ class ExternalStorageOAuthServiceTest {
     private final ExternalStorageCredentialService credentialService =
             mock(ExternalStorageCredentialService.class);
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
+    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
 
     private final ExternalStorageOAuthService service = new ExternalStorageOAuthService(
-            oauthAppRepository, accountRepository, credentialService, credentialCipher
+            oauthAppRepository, accountRepository, credentialService, credentialCipher, readThroughCache
     );
 
     @BeforeEach
@@ -149,10 +151,21 @@ class ExternalStorageOAuthServiceTest {
 
     @Test
     void handleCallbackRejectsUnknownState() {
-        assertThatThrownBy(() -> service.handleCallback("never-issued", "authorization-code"))
+        assertThatThrownBy(() -> service.handleCallback("GDRIVE", "never-issued", "authorization-code"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    @Test
+    void handleCallbackRejectsProviderThatDoesNotMatchIssuedState() {
+        when(readThroughCache.take("omninest:oauth:state:issued-state"))
+                .thenReturn("{\"userId\":\"" + OWNER_ID + "\",\"accountId\":\"" + ACCOUNT_ID
+                        + "\",\"code\":\"GDRIVE\"}");
+
+        assertThatThrownBy(() -> service.handleCallback("ONEDRIVE", "issued-state", "authorization-code"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不匹配");
     }
 
 

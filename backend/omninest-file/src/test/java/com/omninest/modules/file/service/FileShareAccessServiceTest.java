@@ -16,6 +16,7 @@ import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FileShareChildDto;
+import com.omninest.modules.file.dto.ShareAccessSessionDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
@@ -232,6 +233,19 @@ class FileShareAccessServiceTest {
 
         assertThat(page.getContent()).extracting(FileShareChildDto::downloadUrl)
                 .containsExactly("https://signed/a.mkv");
+    }
+
+    @Test
+    void issuingFileShareSessionConsumesAccessCountAtSessionCreation() {
+        var issued = new ShareAccessSessionDto(
+                SESSION, Instant.now().plusSeconds(600));
+        Mockito.when(resourceShareLinkService.issueConsumedSession(TOKEN, "pw", null, "1.2.3.4"))
+                .thenReturn(issued);
+
+        var result = service.issueShareSession(TOKEN, "pw", "1.2.3.4");
+
+        assertThat(result).isSameAs(issued);
+        Mockito.verify(resourceShareLinkService).issueConsumedSession(TOKEN, "pw", null, "1.2.3.4");
     }
 
     private ShareLink share(String resourceType) {

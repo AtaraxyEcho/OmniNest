@@ -40,6 +40,9 @@ final fileStorageStatsProvider = FutureProvider<FileStorageStats>((ref) {
 class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   FileRepository get _repository => ref.read(fileRepositoryProvider);
 
+  /// 上传动作扩展访问任务轮询接口的出口；扩展不是 Notifier 子类，不能直接用 ref。
+  Ref get uploadRef => ref;
+
   /// 文件仓储（展示层版本历史对话框直接读取）。
   FileBrowserState? get _currentState => state.asData?.value;
 
@@ -603,10 +606,10 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     final meta = metaOf(current);
-    // 续载守卫按「已载入条数 < 总数」判定，不用 meta.hasMore：后端
-    // 最近/收藏这类列表整表返回却按请求 size 折算 totalPages，
-    // hasMore 在数据已取全时仍然为真。
-    if (listOf(current).length >= meta.totalElements) {
+    // 续载守卫同时看已载入条数与页边界：后者能挡住 totalElements 虚高时
+    // 越界请求 page = totalPages, totalPages + 1 的空拉取死循环。
+    if (listOf(current).length >= meta.totalElements ||
+        meta.page + 1 >= meta.totalPages) {
       return;
     }
     await _runAction(operation, () async {
@@ -619,12 +622,21 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       }
       final loaded = listOf(latest);
       final seen = loaded.map((node) => node.id).toSet();
-      state = AsyncData(
-        emit(latest, <FileNode>[
-          ...loaded,
-          ...result.items.where((node) => seen.add(node.id)),
-        ], _metaOfNodePage(result)),
-      );
+      final merged = <FileNode>[
+        ...loaded,
+        ...result.items.where((node) => seen.add(node.id)),
+      ];
+      // 空页说明服务端没有更多可见条目：把总数钳到已载入数量，阻断后续空拉取。
+      final effectiveMeta =
+          result.items.isEmpty
+              ? FilesSubPageMeta(
+                page: result.page,
+                size: result.size,
+                totalElements: merged.length,
+                totalPages: result.page + 1,
+              )
+              : _metaOfNodePage(result);
+      state = AsyncData(emit(latest, merged, effectiveMeta));
     });
   }
 
@@ -678,12 +690,14 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   /// 与我共享滚动续载：下一页按 shareId 去重后追加。
   Future<void> loadMoreSharedWithMe() async {
     final current = state.asData?.value;
+    final meta = current?.sharedWithMeMeta;
     if (current == null ||
+        meta == null ||
         current.isBusy ||
-        current.sharedWithMe.length >= current.sharedWithMeMeta.totalElements) {
+        current.sharedWithMe.length >= meta.totalElements ||
+        meta.page + 1 >= meta.totalPages) {
       return;
     }
-    final meta = current.sharedWithMeMeta;
     await _runAction(FileOperation.loadShared, () async {
       final result = await _repository.listSharedWithMePage(
         page: meta.page + 1,
@@ -695,19 +709,27 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       }
       final loaded = latest.sharedWithMe;
       final seen = loaded.map((item) => item.shareId).toSet();
+      final merged = <SharedFileItem>[
+        ...loaded,
+        ...result.items.where((item) => seen.add(item.shareId)),
+      ];
+      // 空页同样说明没有更多可见分享：钳住总数，避免按虚高的 totalElements 无限续载。
+      final effectiveMeta =
+          result.items.isEmpty
+              ? FilesSubPageMeta(
+                page: result.page,
+                size: result.size,
+                totalElements: merged.length,
+                totalPages: result.page + 1,
+              )
+              : FilesSubPageMeta(
+                page: result.page,
+                size: result.size,
+                totalElements: result.totalElements,
+                totalPages: result.totalPages,
+              );
       state = AsyncData(
-        latest.copyWith(
-          sharedWithMe: <SharedFileItem>[
-            ...loaded,
-            ...result.items.where((item) => seen.add(item.shareId)),
-          ],
-          sharedWithMeMeta: FilesSubPageMeta(
-            page: result.page,
-            size: result.size,
-            totalElements: result.totalElements,
-            totalPages: result.totalPages,
-          ),
-        ),
+        latest.copyWith(sharedWithMe: merged, sharedWithMeMeta: effectiveMeta),
       );
     });
   }

@@ -52,7 +52,7 @@ public class MeController {
     @Operation(summary = "更新当前用户资料", description = "修改显示昵称与邮箱，未提供的字段保持不变")
     @PatchMapping("/api/v1/me")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_WRITE + "')")
-    ApiResponse<AuthUserDto> updateMe(@RequestBody UpdateMeRequest request) {
+    ApiResponse<AuthUserDto> updateMe(@Valid @RequestBody UpdateMeRequest request) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(
                 currentUserService.updateProfile(userId, request.displayName(), request.email())

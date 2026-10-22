@@ -40,7 +40,7 @@ class DatabaseOfflineDataLifecycle implements OfflineDataLifecycle {
   final OfflineDataLifecycle _delegate;
   final LocalDatabase _database;
 
-  /// 派生列密钥缓存所属的加密器；为空（Web 或未注入）时无需失效。
+  /// 派生列密钥缓存所属的加密器；平台无安全存储或未注入时为空，无需失效。
   final OfflineTextCipher? _textCipher;
 
   @override

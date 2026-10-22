@@ -43,12 +43,12 @@ server {
     # TrustedProxyClientIpResolver 按可信代理边界解析），因此后端 request.isSecure()
     # 在反代之后恒为 false，SecurityHeaderFilter 不会输出该头。
     # add_header 在 location 级不继承 server 级，已自声明响应头的 location 必须各自补一行。
-    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     location = /health {
         access_log off;
         add_header Content-Type text/plain;
-        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         return 200 'ok';
     }
 
@@ -96,14 +96,16 @@ server {
         add_header X-Content-Type-Options "nosniff";
         add_header X-Frame-Options "SAMEORIGIN";
         add_header Referrer-Policy "strict-origin-when-cross-origin";
-        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+        add_header X-Permitted-Cross-Domain-Policies "none" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
     location = ${OMNINEST_WEB_BASE_PATH}flutter_service_worker.js {
         add_header Cache-Control "no-cache";
         add_header X-Content-Type-Options "nosniff";
-        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
@@ -112,21 +114,23 @@ server {
     location = ${OMNINEST_WEB_BASE_PATH}flutter_bootstrap.js {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         add_header X-Content-Type-Options "nosniff";
-        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
     location = ${OMNINEST_WEB_BASE_PATH}version.json {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         add_header X-Content-Type-Options "nosniff";
-        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         try_files $uri =404;
     }
 
     location / {
         add_header Cache-Control "public, max-age=3600";
         add_header X-Content-Type-Options "nosniff";
-        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+        add_header X-Permitted-Cross-Domain-Policies "none" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         # 不回退到 $uri/：构建产物里的 assets/canvaskit/css 等真实目录会命中目录索引，
         # autoindex 关闭时直接 403，而前端路由需要的是主文档。
         try_files $uri ${OMNINEST_WEB_BASE_PATH}index.html;

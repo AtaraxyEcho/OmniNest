@@ -356,7 +356,7 @@ public class MusicController {
 
     @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/music/position")
-    ApiResponse<Void> savePosition(@RequestBody SavePositionRequest request) {
+    ApiResponse<Void> savePosition(@Valid @RequestBody SavePositionRequest request) {
         playbackService.savePosition(currentUserContext.requireCurrentUserId(), request.trackId(), request.positionSeconds());
         return ApiResponse.success();
     }
@@ -595,7 +595,7 @@ public class MusicController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     ApiResponse<MusicTrackDto> applyLyrics(
             @PathVariable UUID trackId,
-            @RequestBody ApplyLyricsRequest request
+            @Valid @RequestBody ApplyLyricsRequest request
     ) {
         return ApiResponse.success(musicAdminService.applyLyrics(
                 currentUserContext.requireCurrentUserId(),

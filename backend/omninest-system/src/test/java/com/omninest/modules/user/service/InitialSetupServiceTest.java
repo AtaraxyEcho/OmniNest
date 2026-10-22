@@ -210,7 +210,7 @@ class InitialSetupServiceTest {
                 SETUP_TOKEN,
                 request("short")
         )).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("8 到 24 个字符");
+                .hasMessageContaining("8 到 64 个字符");
 
         Mockito.verify(authUserRepository, Mockito.never()).saveAndFlush(Mockito.any());
     }

@@ -31,6 +31,14 @@ public interface ReadThroughCache {
     <T> T getOrLoad(String key, Duration ttl, Supplier<T> loader, Class<T> type);
 
     /**
+     * 读取并删除缓存项，用于一次性令牌等不可重放的数据。
+     *
+     * @param key 缓存键
+     * @return 原始缓存值；不存在时返回 null
+     */
+    String take(String key);
+
+    /**
      * 按键模式批量失效缓存，用于清理同一归属下的一组动态键。
      *
      * @param pattern Redis 键匹配模式，调用方需保证前缀已按业务和归属命名

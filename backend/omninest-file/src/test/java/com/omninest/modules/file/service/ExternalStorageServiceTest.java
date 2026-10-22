@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,12 +18,14 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
 import com.omninest.modules.file.domain.StorageExternalAccount;
+import com.omninest.modules.file.domain.StorageRemoteMetadataCache;
 import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileListDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.file.repository.StorageRemoteMetadataCacheRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -30,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -48,6 +52,8 @@ class ExternalStorageServiceTest {
             mock(StorageExternalAccountRepository.class);
     private final StorageImportTaskRepository importTaskRepository =
             mock(StorageImportTaskRepository.class);
+    private final StorageRemoteMetadataCacheRepository remoteMetadataCacheRepository =
+            mock(StorageRemoteMetadataCacheRepository.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final ExternalStorageCredentialService credentialService =
@@ -61,7 +67,7 @@ class ExternalStorageServiceTest {
 
     private final ExternalStorageService service = new ExternalStorageService(
             rcloneGateway, accountRepository,
-            importTaskRepository, taskDispatchService, taskRecordService,
+            importTaskRepository, remoteMetadataCacheRepository, taskDispatchService, taskRecordService,
             credentialService, sharedSpaceService, importProperties, oauthService, endpointGuard,
             storageQuotaService
     );
@@ -108,6 +114,34 @@ class ExternalStorageServiceTest {
         assertThat(result.remotePath()).isEqualTo("/documents");
 
         verify(rcloneGateway).listDirectory(eq(remoteName + ":"), eq("documents"), eq(false));
+    }
+
+    @Test
+    void browseExternalStorage_reusesDirectorySnapshotWithinTtl() {
+        StorageExternalAccount account = buildAccount("S3", ExternalStorageStatus.ACTIVE.getValue());
+        when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
+                .thenReturn(Optional.of(account));
+        String remoteName = "omni-" + ACCOUNT_ID.toString().replace("-", "").substring(0, 8);
+        when(rcloneGateway.listRemoteNames()).thenReturn(List.of(remoteName + ":"));
+        RcloneGateway.DirectoryEntry file = new RcloneGateway.DirectoryEntry(
+                "report.pdf", "report.pdf", false, 2048L, null, "application/pdf", null, Map.of());
+        when(rcloneGateway.listDirectory(eq(remoteName + ":"), eq("documents"), eq(false)))
+                .thenReturn(List.of(file));
+        AtomicReference<StorageRemoteMetadataCache> snapshot = new AtomicReference<>();
+        when(remoteMetadataCacheRepository
+                .findFirstByExternalAccountIdAndRemotePathOrderByCachedAtDesc(ACCOUNT_ID, "documents"))
+                .thenAnswer(invocation -> Optional.ofNullable(snapshot.get()));
+        when(remoteMetadataCacheRepository.save(any(StorageRemoteMetadataCache.class)))
+                .thenAnswer(invocation -> {
+                    StorageRemoteMetadataCache saved = invocation.getArgument(0);
+                    snapshot.set(saved);
+                    return saved;
+                });
+
+        service.browse(OWNER_ID, ACCOUNT_ID, "/documents");
+        service.browse(OWNER_ID, ACCOUNT_ID, "/documents");
+
+        verify(rcloneGateway, times(1)).listDirectory(eq(remoteName + ":"), eq("documents"), eq(false));
     }
 
     @Test

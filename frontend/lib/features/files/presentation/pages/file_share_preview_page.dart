@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
@@ -10,6 +11,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/file_saver.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -85,14 +87,12 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     setState(() {
       _loading = false;
       switch (result) {
-        case SharePreviewSuccess(:final hasPassword):
+        case SharePreviewSuccess():
+          // 预览成功即代表已通过服务端授权（口令或缓存会话），不能再以
+          // “链接带口令”为由要求二次输入。
           _preview = result;
           _needPassword = false;
           _passwordError = null;
-          // 如果需要密码但没提供，显示密码输入
-          if (hasPassword && _password == null) {
-            _needPassword = true;
-          }
         case SharePreviewNeedPassword(:final message):
           _needPassword = true;
           // 已经提交过提取码仍被拒，才把服务端文案当错误显示；
@@ -105,6 +105,15 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
 
     if (_preview?.resourceType == 'FOLDER' && !_needPassword) {
       await _loadChildren(null);
+    }
+
+    // 登录回跳后自动完成刚才被登录打断的转存；未登录时保留标记，等用户登录。
+    final session = await ref.read(authSessionProvider.future);
+    if (!mounted) {
+      return;
+    }
+    if (session.isAuthenticated && _service.takePendingAccept(widget.token)) {
+      await _acceptShare();
     }
   }
 
@@ -195,19 +204,31 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     if (url == null || url.isEmpty) {
       return;
     }
-    await _openDownloadUrl(url);
+    await _openDownloadUrl(
+      url,
+      fileName: child.name,
+      sizeBytes: child.sizeBytes,
+    );
   }
 
   /// 单文件分享免登录直接下载：后端 `GET /s/{token}` 凭分享会话即可签发地址。
   Future<void> _downloadCurrentFile() async {
     final l10n = AppLocalizations.of(context);
+    final preview = _preview;
+    if (preview == null) {
+      return;
+    }
     setState(() => _saving = true);
     final result = await _service.access(widget.token, password: _password);
     if (!mounted) return;
     setState(() => _saving = false);
     switch (result) {
       case ShareAccessSuccess(:final downloadUrl):
-        await _openDownloadUrl(downloadUrl);
+        await _openDownloadUrl(
+          downloadUrl,
+          fileName: preview.fileName,
+          sizeBytes: preview.sizeBytes,
+        );
       case ShareAccessFailure(:final message):
         showOmniFeedback(
           context,
@@ -217,26 +238,53 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     }
   }
 
-  /// 与文件页同一口径：Web 直接开新标签，桌面与移动退回复制链接。
-  Future<void> _openDownloadUrl(String url) async {
+  /// 与文件页同一口径：Web 开新标签，桌面与移动流式落盘。
+  Future<void> _openDownloadUrl(
+    String url, {
+    required String fileName,
+    required int sizeBytes,
+  }) async {
     final l10n = AppLocalizations.of(context);
-    if (openDownloadUrl(url)) {
+    if (kIsWeb) {
+      if (openDownloadUrl(url)) {
+        if (!mounted) return;
+        showOmniFeedback(
+          context,
+          l10n.filesDownloadOpened,
+          severity: OmniFeedbackSeverity.success,
+        );
+        return;
+      }
+      final copied = await copyTextToClipboard(url);
       if (!mounted) return;
       showOmniFeedback(
         context,
-        l10n.filesDownloadOpened,
-        severity: OmniFeedbackSeverity.success,
+        copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+        severity:
+            copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
       );
       return;
     }
-    final copied = await copyTextToClipboard(url);
-    if (!mounted) return;
-    showOmniFeedback(
-      context,
-      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
-      severity:
-          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
-    );
+    try {
+      final result = await saveDownloadUrlToLocalFile(
+        url: url,
+        fileName: fileName,
+        sizeBytes: sizeBytes,
+      );
+      if (!mounted || result is LocalFileSaveCancelled) return;
+      showOmniFeedback(
+        context,
+        l10n.filesDownloadSaved,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Exception catch (error) {
+      if (!mounted) return;
+      showOmniFeedback(
+        context,
+        '${l10n.filesDownloadFailed}: $error',
+        severity: OmniFeedbackSeverity.error,
+      );
+    }
   }
 
   Future<void> _onPasswordSubmit(String password) async {
@@ -249,11 +297,14 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     final authState = ref.read(authSessionProvider);
     final isAuthenticated = authState.asData?.value.isAuthenticated ?? false;
     if (!isAuthenticated) {
-      // 密码不进 URL：地址栏/历史/收藏不得留存分享口令，登录回跳后由用户重输
+      // 密码不进 URL：地址栏/历史/收藏不得留存分享口令；已授权的会话令牌
+      // 留在 PublicShareService 内存里，登录回跳后直接复用并继续转存。
+      _service.markPendingAccept(widget.token);
       final redirect = Uri(path: '/s/${widget.token}').toString();
       if (mounted) context.go('/login?redirect=$redirect');
       return;
     }
+    _service.takePendingAccept(widget.token);
 
     setState(() => _saving = true);
 

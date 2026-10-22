@@ -139,19 +139,34 @@ Future<void> _downloadFile(
   try {
     final url = await controller.downloadUrl(file);
     if (!context.mounted) return;
-    // Web 直接开新标签下载；桌面与移动无浏览器上下文时退回复制链接。
-    if (openDownloadUrl(url)) {
+    if (kIsWeb) {
+      // Web 直接开新标签下载；弹窗被拦时退回复制链接。
+      if (openDownloadUrl(url)) {
+        if (!context.mounted) return;
+        showOmniFeedback(context, l10n.filesDownloadOpened);
+        return;
+      }
+      final copied = await copyTextToClipboard(url);
       if (!context.mounted) return;
-      showOmniFeedback(context, l10n.filesDownloadOpened);
+      showOmniFeedback(
+        context,
+        copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+        severity:
+            copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+      );
       return;
     }
-    final copied = await copyTextToClipboard(url);
-    if (!context.mounted) return;
+    // 桌面与移动端没有浏览器上下文：流式落盘后交付到本地。
+    final result = await saveDownloadUrlToLocalFile(
+      url: url,
+      fileName: file.name,
+      sizeBytes: file.sizeBytes,
+    );
+    if (!context.mounted || result is LocalFileSaveCancelled) return;
     showOmniFeedback(
       context,
-      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
-      severity:
-          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+      l10n.filesDownloadSaved,
+      severity: OmniFeedbackSeverity.success,
     );
   } catch (e) {
     if (!context.mounted) return;

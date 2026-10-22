@@ -14,6 +14,7 @@ from typing import Annotated
 
 import numpy as np
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from PIL import Image
 from pydantic import BaseModel, Field
 
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,9 @@ MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)
 MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
 MAX_IMAGE_HEIGHT = int(os.environ.get("AI_MAX_IMAGE_HEIGHT", "30000"))
 MAX_IMAGE_PIXELS = int(os.environ.get("AI_MAX_IMAGE_PIXELS", "100000000"))
+# Pillow 自带解压炸弹阈值约 8948 万像素，低于本服务的 1 亿上限；
+# 不同步会把 89.48MP–100MP 的合规图片判成损坏文件。
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 MAX_CLUSTER_FACES = int(os.environ.get("AI_MAX_CLUSTER_FACES", "10000"))
 FACE_EMBEDDING_DIMENSION = int(os.environ.get("AI_FACE_EMBEDDING_DIMENSION", "512"))
 MAX_CONCURRENT_INFERENCES = int(os.environ.get("AI_MAX_CONCURRENT_INFERENCES", "2"))
@@ -101,8 +105,6 @@ def _require_sidecar_token(
 
 def _verify_image_bounds(chunks: bytes) -> None:
     """同步执行图片解码与边界校验，调用方需放入线程以避免阻塞事件循环。"""
-    from PIL import Image
-
     with Image.open(io.BytesIO(chunks)) as decoded:
         width, height = decoded.size
         if (
@@ -141,6 +143,8 @@ async def _read_bounded_image(image: UploadFile) -> bytes:
         await to_thread(_verify_image_bounds, bytes(chunks))
     except HTTPException:
         raise
+    except Image.DecompressionBombError as exception:
+        raise HTTPException(status_code=413, detail="Image exceeds maximum pixel limit") from exception
     except Exception as exception:
         raise HTTPException(status_code=400, detail="Unable to decode image") from exception
     return bytes(chunks)
@@ -430,6 +434,7 @@ async def health():
         "image_recognition": recognition_ready,
         "face_detection": recognition_ready,
         "content_analysis": False,
+        "content_analysis_ready": False,
         "face_clustering": True,
     }
 
@@ -442,6 +447,7 @@ async def ready():
         "image_recognition": recognition_ready,
         "face_detection": recognition_ready,
         "content_analysis": False,
+        "content_analysis_ready": False,
         "face_clustering": True,
     }
     if not recognition_ready:

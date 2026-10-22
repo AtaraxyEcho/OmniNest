@@ -19,7 +19,7 @@ class ReaderLocalStorage {
 
   final LocalDatabase _db;
 
-  /// 离线敏感列加密器与所属用户；任一为空时列保持原样（Web 或未登录场景）。
+  /// 离线敏感列加密器与所属用户；平台无安全存储或未登录时为空，列保持原样。
   final OfflineTextCipher? _textCipher;
   final String? _columnUserId;
 

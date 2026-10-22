@@ -444,6 +444,88 @@ class MusicAdminServiceTest {
                 });
     }
 
+    @Test
+    void executeScanJobDoesNotOverwriteOtherOwnersTrackFromSharedFile() {
+        UUID scannerId = UUID.fromString("10000000-0000-0000-0000-000000000099");
+        FileDescriptor shared = fileNode(AUDIO_FILE_ID, "Shared.flac", "audio/flac", 12_000_000L);
+        MusicTrack existing = new MusicTrack();
+        existing.setId(UUID.fromString("70000000-0000-0000-0000-000000000001"));
+        existing.setOwnerUserId(OWNER_ID);
+        existing.setFileNodeId(AUDIO_FILE_ID);
+        existing.setTitle("Hand edited");
+        existing.setArtistName("Original Artist");
+        existing.setMetadataStatus("MATCHED");
+
+        stubScanJob();
+        stubMusicPersistence();
+        when(fileMetadataQueryService.listOwnedActive(scannerId)).thenReturn(List.of());
+        when(fileMetadataQueryService.listSharedVisibleToUser(scannerId)).thenReturn(List.of(shared));
+        when(filePermissionService.resolveViewableFileIds(List.of(AUDIO_FILE_ID), scannerId))
+                .thenReturn(Set.of(AUDIO_FILE_ID));
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.of(existing));
+
+        adminService.executeScanJob(SCAN_JOB_ID, scannerId);
+
+        verify(trackRepository, never()).save(any(MusicTrack.class));
+        verify(catalogService, never()).refreshStatisticsBatch(any(), anySet(), anySet());
+        assertThat(existing.getTitle()).isEqualTo("Hand edited");
+        assertThat(existing.getArtistName()).isEqualTo("Original Artist");
+    }
+
+    @Test
+    void executeScanJobKeepsManualMetadataForOwnerAndOnlySyncsPhysicalFields() {
+        FileDescriptor audio = fileNode(AUDIO_FILE_ID, "manual.flac", "audio/flac", 12_000_000L);
+        MusicTrack existing = new MusicTrack();
+        existing.setId(UUID.fromString("70000000-0000-0000-0000-000000000002"));
+        existing.setOwnerUserId(OWNER_ID);
+        existing.setFileNodeId(AUDIO_FILE_ID);
+        existing.setTitle("Hand edited");
+        existing.setArtistName("Original Artist");
+        existing.setAlbumTitle("Original Album");
+        existing.setLyricsRaw("[00:01.00]custom");
+        existing.setMetadataStatus("MANUAL");
+
+        stubScanJob();
+        stubMusicPersistence();
+        when(fileMetadataQueryService.listOwnedActive(OWNER_ID)).thenReturn(List.of(audio));
+        when(fileMetadataQueryService.listSharedVisibleToUser(OWNER_ID)).thenReturn(List.of());
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.of(existing));
+
+        adminService.executeScanJob(SCAN_JOB_ID, OWNER_ID);
+
+        var trackCaptor = ArgumentCaptor.forClass(MusicTrack.class);
+        verify(trackRepository).save(trackCaptor.capture());
+        MusicTrack saved = trackCaptor.getValue();
+        assertThat(saved.getTitle()).isEqualTo("Hand edited");
+        assertThat(saved.getArtistName()).isEqualTo("Original Artist");
+        assertThat(saved.getAlbumTitle()).isEqualTo("Original Album");
+        assertThat(saved.getLyricsRaw()).isEqualTo("[00:01.00]custom");
+        assertThat(saved.getMetadataStatus()).isEqualTo("MANUAL");
+        assertThat(saved.getFileSize()).isEqualTo(12_000_000L);
+        assertThat(saved.getFormat()).isEqualTo("flac");
+    }
+
+    @Test
+    void executeScanJobRefreshesStatisticsForSharedFileOwner() {
+        UUID scannerId = UUID.fromString("10000000-0000-0000-0000-000000000099");
+        FileDescriptor shared = fileNode(AUDIO_FILE_ID, "Shared.flac", "audio/flac", 12_000_000L);
+
+        stubScanJob();
+        stubMusicPersistence();
+        when(fileMetadataQueryService.listOwnedActive(scannerId)).thenReturn(List.of());
+        when(fileMetadataQueryService.listSharedVisibleToUser(scannerId)).thenReturn(List.of(shared));
+        when(filePermissionService.resolveViewableFileIds(List.of(AUDIO_FILE_ID), scannerId))
+                .thenReturn(Set.of(AUDIO_FILE_ID));
+        when(trackRepository.findByFileNodeId(AUDIO_FILE_ID)).thenReturn(Optional.empty());
+
+        adminService.executeScanJob(SCAN_JOB_ID, scannerId);
+
+        var trackCaptor = ArgumentCaptor.forClass(MusicTrack.class);
+        verify(trackRepository).save(trackCaptor.capture());
+        assertThat(trackCaptor.getValue().getOwnerUserId()).isEqualTo(OWNER_ID);
+        verify(catalogService).refreshStatisticsBatch(eq(OWNER_ID), anySet(), anySet());
+    }
+
     private void stubScanJob() {
         MusicScanJob job = new MusicScanJob();
         job.setId(SCAN_JOB_ID);

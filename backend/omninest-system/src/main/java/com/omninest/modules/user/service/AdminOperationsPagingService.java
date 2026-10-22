@@ -14,6 +14,7 @@ import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.user.repository.AuditLogAdminRepository;
 import com.omninest.modules.user.repository.AuthLoginAuditRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
+import com.omninest.modules.task.support.TaskSensitiveTextMasker;
 import com.omninest.modules.user.repository.TaskRecordAdminRepository;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -53,6 +54,7 @@ public class AdminOperationsPagingService {
     /**
      * 分页查询后台任务。
      *
+     * @param operatorUserId 当前管理员 ID
      * @param page 页码，从零开始
      * @param size 每页数量
      * @param status 任务状态
@@ -62,6 +64,7 @@ public class AdminOperationsPagingService {
      */
     @Transactional(readOnly = true)
     public PageResponse<AdminOperationsDto.TaskRecordItem> taskPage(
+            UUID operatorUserId,
             int page,
             int size,
             String status,
@@ -89,7 +92,12 @@ public class AdminOperationsPagingService {
                     sortColumn, ascending
             );
         }
-        return PageResponse.of(toTaskItems(result.items()), pageIndex, pageSize, result.totalElements());
+        return PageResponse.of(
+                toTaskItems(result.items(), operatorUserId),
+                pageIndex,
+                pageSize,
+                result.totalElements()
+        );
     }
 
     /**
@@ -223,13 +231,24 @@ public class AdminOperationsPagingService {
         );
     }
 
-    private List<AdminOperationsDto.TaskRecordItem> toTaskItems(List<Object[]> rows) {
-        return rows.stream().map(row -> new AdminOperationsDto.TaskRecordItem(
-                toUuid(row[0]), toText(row[1]), AdminOperationDescription.task(toText(row[1]), toText(row[4])),
-                toText(row[2]), toInt(row[3]), toText(row[4]), toText(row[5]), toInt(row[6]),
-                toInstant(row[7]), toInstant(row[8]),
-                toUuidOrNull(row[9]), toText(row[10])
-        )).toList();
+    private List<AdminOperationsDto.TaskRecordItem> toTaskItems(
+            List<Object[]> rows,
+            UUID operatorUserId
+    ) {
+        return rows.stream().map(row -> {
+            UUID ownerUserId = toUuidOrNull(row[9]);
+            String errorSummary = toText(row[5]);
+            // 跨用户查看时错误摘要里的文件名与路径必须脱敏，管理员只看处置所需信息。
+            if (ownerUserId != null && !ownerUserId.equals(operatorUserId)) {
+                errorSummary = TaskSensitiveTextMasker.mask(errorSummary);
+            }
+            return new AdminOperationsDto.TaskRecordItem(
+                    toUuid(row[0]), toText(row[1]),
+                    AdminOperationDescription.task(toText(row[1]), toText(row[4])),
+                    toText(row[2]), toInt(row[3]), toText(row[4]), errorSummary, toInt(row[6]),
+                    toInstant(row[7]), toInstant(row[8]), ownerUserId, toText(row[10])
+            );
+        }).toList();
     }
 
     private List<AdminOperationsDto.AuditLogItem> toAuditItems(List<AuditLog> logs) {

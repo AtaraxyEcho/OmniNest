@@ -9,6 +9,7 @@ import com.omninest.modules.photos.event.PhotoGeoBackfillEvent;
 import com.omninest.modules.photos.event.PhotoGeoImportEvent;
 import com.omninest.modules.photos.repository.GeoDatasetRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
+import jakarta.validation.constraints.NotBlank;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -35,7 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class GeoDatasetService {
 
     /** 创建 GeoNames 导入任务请求。 */
-    public record GeoImportRequest(String dumpDate, String sourceHash) {
+    public record GeoImportRequest(
+            @NotBlank(message = "缺少 dumpDate 参数") String dumpDate,
+            String sourceHash
+    ) {
     }
 
     /** 创建导入任务响应。 */

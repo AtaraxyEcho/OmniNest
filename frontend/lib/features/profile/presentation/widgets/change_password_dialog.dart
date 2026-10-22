@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -78,7 +80,9 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
               validator: (v) {
                 if (v == null || v.isEmpty) return l10n.changePasswordEnterNew;
                 if (v.length < 8) return l10n.changePasswordMinLength;
-                if (v.length > 24) return l10n.changePasswordMaxLength;
+                if (v.length > 64 || utf8.encode(v).length > 72) {
+                  return l10n.changePasswordMaxLength;
+                }
                 return null;
               },
             ),
@@ -165,7 +169,9 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
               validator: (v) {
                 if (v == null || v.isEmpty) return l10n.changePasswordEnterNew;
                 if (v.length < 8) return l10n.changePasswordMinLength;
-                if (v.length > 24) return l10n.changePasswordMaxLength;
+                if (v.length > 64 || utf8.encode(v).length > 72) {
+                  return l10n.changePasswordMaxLength;
+                }
                 return null;
               },
             ),

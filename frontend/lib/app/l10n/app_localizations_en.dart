@@ -216,7 +216,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setupPasswordLength =>
-      'The super administrator password must be between 8 and 24 characters';
+      'The super administrator password must be between 8 and 64 characters and at most 72 UTF-8 bytes';
 
   @override
   String get setupTwoFactorSection => 'Two-Factor Verification';
@@ -809,7 +809,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get changePasswordMaxLength =>
-      'Password must be at most 24 characters';
+      'Password must be at most 64 characters and 72 UTF-8 bytes';
 
   @override
   String get changePasswordConfirmNew => 'Confirm New Password';
@@ -1918,6 +1918,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesDownloadOpened => 'Opened the download in a new tab';
+
+  @override
+  String get filesDownloadSaved => 'File saved to this device';
 
   @override
   String get filesDownloadFailed => 'Failed to get download link';

@@ -1267,12 +1267,56 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findAllById(List.of(FILE_ID))).thenReturn(List.of());
 
         AdminFileShareLinkDto listed =
-                fileShareService.listAllSharesPage(0, 50).getContent().get(0);
+                fileShareService.listAllSharesPage(OWNER_ID, 0, 50).getContent().get(0);
 
         assertThat(listed.ownerUserId()).isEqualTo(OWNER_ID);
         assertThat(listed.ownerUsername()).isEqualTo("alice");
         assertThat(listed.resourceName()).isEqualTo("已删除文件");
         assertThat(listed.status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void listAllSharesPageMasksOtherUsersPersonalResourceName() {
+        UUID otherOwner = UUID.fromString("10000000-0000-0000-0000-000000000077");
+        UUID operator = UUID.fromString("10000000-0000-0000-0000-000000000099");
+        ShareLink stored = existingShare(0);
+        stored.setOwnerUserId(otherOwner);
+        when(shareLinkRepository.findAllActivePage(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stored)));
+        when(userAccountQuery.findUsernames(List.of(otherOwner))).thenReturn(Map.of(otherOwner, "bob"));
+        FileNode node = new FileNode();
+        node.setId(FILE_ID);
+        node.setOwnerUserId(otherOwner);
+        node.setName("私密体检报告.pdf");
+        node.setSpaceType(SpaceType.PERSONAL);
+        when(fileNodeRepository.findAllById(List.of(FILE_ID))).thenReturn(List.of(node));
+
+        AdminFileShareLinkDto listed =
+                fileShareService.listAllSharesPage(operator, 0, 50).getContent().get(0);
+
+        assertThat(listed.resourceName()).isEqualTo("私人文件");
+    }
+
+    @Test
+    void listAllSharesPageKeepsSharedSpaceResourceName() {
+        UUID otherOwner = UUID.fromString("10000000-0000-0000-0000-000000000078");
+        UUID operator = UUID.fromString("10000000-0000-0000-0000-000000000099");
+        ShareLink stored = existingShare(0);
+        stored.setOwnerUserId(otherOwner);
+        when(shareLinkRepository.findAllActivePage(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stored)));
+        when(userAccountQuery.findUsernames(List.of(otherOwner))).thenReturn(Map.of(otherOwner, "bob"));
+        FileNode node = new FileNode();
+        node.setId(FILE_ID);
+        node.setOwnerUserId(otherOwner);
+        node.setName("团队公告.pdf");
+        node.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findAllById(List.of(FILE_ID))).thenReturn(List.of(node));
+
+        AdminFileShareLinkDto listed =
+                fileShareService.listAllSharesPage(operator, 0, 50).getContent().get(0);
+
+        assertThat(listed.resourceName()).isEqualTo("团队公告.pdf");
     }
 
     private ShareLink existingShare(int accessCount) {

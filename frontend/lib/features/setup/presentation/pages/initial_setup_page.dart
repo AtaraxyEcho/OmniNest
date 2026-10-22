@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -69,12 +70,15 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
   bool _obscurePassword = true;
   bool _submitting = false;
   String? _errorMessage;
-  bool _twoFactorRequired = false;
   bool _totpLoading = false;
   bool _codesSaved = false;
   TwoFactorSetupData? _totpSetup;
   List<String>? _pendingBackupCodes;
   final _totpCodeController = TextEditingController();
+
+  /// 是否强制两步验证；直接从服务端状态读取，不在 build 内写实例字段。
+  bool get _twoFactorRequired =>
+      ref.read(initialSetupProvider).value?.twoFactorRequired ?? false;
 
   @override
   void dispose() {
@@ -201,16 +205,17 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                       onRetry: ref.read(initialSetupProvider.notifier).refresh,
                     ),
                 data: (status) {
+                  // 一次性备份码必须先于「安装不可用」判断：创建管理员后服务端会把
+                  // setupAvailable 置为 false，状态重算不能把备份码面板顶掉。
+                  final pendingCodes = _pendingBackupCodes;
+                  if (pendingCodes != null) {
+                    return _backupCodesPanel(context, pendingCodes);
+                  }
                   if (!status.setupAvailable) {
                     return _SetupUnavailable(
                       onRetry: ref.read(initialSetupProvider.notifier).refresh,
                     );
                   }
-                  final pendingCodes = _pendingBackupCodes;
-                  if (pendingCodes != null) {
-                    return _backupCodesPanel(context, pendingCodes);
-                  }
-                  _twoFactorRequired = status.twoFactorRequired;
                   return _buildForm(context);
                 },
               ),
@@ -616,7 +621,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                   ),
                 ),
                 validator: (value) {
-                  if (value == null || value.length < 8 || value.length > 24) {
+                  if (value == null ||
+                      value.length < 8 ||
+                      value.length > 64 ||
+                      utf8.encode(value).length > 72) {
                     return l10n.setupPasswordLength;
                   }
                   return null;

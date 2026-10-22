@@ -297,8 +297,8 @@ public final class MusicDtos {
 
     /** 保存播放位置请求。 */
     public record SavePositionRequest(
-            UUID trackId,
-            int positionSeconds
+            @NotNull(message = "曲目标识不能为空") UUID trackId,
+            @Min(value = 0, message = "播放位置不能为负数") int positionSeconds
     ) {
     }
 

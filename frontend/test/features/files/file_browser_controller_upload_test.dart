@@ -47,7 +47,7 @@ void main() {
             .localUploadTasks
             .single;
     controller.pauseLocalUploadTask(task.id);
-    repository.firstUploadResult.complete('etag-1');
+    // 两个在途分片都会收到取消；停留在 PAUSED，不把已取消的分片记成完成。
     await uploadFuture;
 
     final pausedTask =
@@ -57,13 +57,17 @@ void main() {
             .localUploadTasks
             .single;
     expect(pausedTask.status, 'PAUSED');
-    expect(pausedTask.uploadedBytes, 3);
-    expect(repository.uploadedPartUrls, ['http://minio/part-1']);
-    expect(repository.completedPartNumbers, [1]);
+    expect(pausedTask.uploadedBytes, 0);
+    expect(repository.uploadedPartUrls, [
+      'http://minio/part-1',
+      'http://minio/part-2',
+    ]);
+    expect(repository.completedPartNumbers, isEmpty);
 
     final resumeFuture = controller.resumeLocalUploadTask(pausedTask.id);
-    await repository.secondUploadStarted.future;
-    repository.secondUploadResult.complete('etag-2');
+    await repository.waitForUploadCount(4);
+    repository.completeUploadAt(2, 'etag-1');
+    repository.completeUploadAt(3, 'etag-2');
     await resumeFuture;
 
     final completedTask =
@@ -75,6 +79,8 @@ void main() {
     expect(completedTask.status, 'COMPLETED');
     expect(completedTask.uploadedBytes, 6);
     expect(repository.uploadedPartUrls, [
+      'http://minio/part-1',
+      'http://minio/part-2',
       'http://minio/part-1',
       'http://minio/part-2',
     ]);
@@ -109,13 +115,13 @@ void main() {
               .localUploadTasks
               .single;
       controller.pauseLocalUploadTask(task.id);
-      repository.firstUploadResult.complete('etag-1');
       await uploadFuture;
 
       final requestCountBeforeResume = repository.personalPageRequests.length;
       final resumeFuture = controller.resumeLocalUploadTask(task.id);
-      await repository.secondUploadStarted.future;
-      repository.secondUploadResult.complete('etag-2');
+      await repository.waitForUploadCount(4);
+      repository.completeUploadAt(2, 'etag-1');
+      repository.completeUploadAt(3, 'etag-2');
       await resumeFuture;
 
       final completedTask =

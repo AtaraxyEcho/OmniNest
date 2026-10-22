@@ -161,6 +161,35 @@ public class MovieEngagementService {
         );
     }
 
+    /**
+     * 查询单集的最近一条观看历史。
+     *
+     * @param ownerUserId 所有者用户标识
+     * @param videoItemId 视频条目标识
+     * @return 观看历史；不存在或不可见时为空
+     */
+    @Transactional(readOnly = true)
+    public MovieWatchHistoryDto historyForItem(UUID ownerUserId, UUID videoItemId) {
+        return historyRepository.findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(ownerUserId, videoItemId)
+                .flatMap(history -> toHistoryDtos(ownerUserId, List.of(history)).stream().findFirst())
+                .orElse(null);
+    }
+
+    /**
+     * 查询某系列下的观看历史，供详情页续播与下一集判断。
+     *
+     * @param ownerUserId 所有者用户标识
+     * @param seriesId 系列标识
+     * @return 该系列的观看历史，按播放时间倒序
+     */
+    @Transactional(readOnly = true)
+    public List<MovieWatchHistoryDto> historyForSeries(UUID ownerUserId, UUID seriesId) {
+        return toHistoryDtos(
+                ownerUserId,
+                historyRepository.findByOwnerUserIdAndSeriesIdOrderByPlayedAtDesc(ownerUserId, seriesId)
+        );
+    }
+
     private List<MovieWatchHistoryDto> toHistoryDtos(UUID ownerUserId, List<MediaWatchHistory> histories) {
         if (histories.isEmpty()) {
             return List.of();

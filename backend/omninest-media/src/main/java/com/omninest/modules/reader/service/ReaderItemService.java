@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.api.PageClamps;
+import com.omninest.common.util.LikePatterns;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
@@ -67,6 +68,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -129,14 +131,48 @@ public class ReaderItemService {
     public Page<ReaderItemDto> listItemsPage(
             UUID ownerUserId, String itemType, String contentKind, String query,
             boolean bookshelfOnly, int page, int size) {
-        // 过滤链复用 listItems（类型/关键词/书架为内存过滤）：分页解决网络传输与
-        // 前端驻留，全量查询下沉 Specification 留作后续演进。
-        List<ReaderItemDto> all = listItems(ownerUserId, itemType, contentKind, query, bookshelfOnly);
-        int safePage = PageClamps.safePage(page);
-        int safeSize = PageClamps.safeSize(size);
-        int from = (int) Math.min((long) safePage * safeSize, all.size());
-        int to = (int) Math.min((long) from + safeSize, all.size());
-        return new PageImpl<>(all.subList(from, to), PageRequest.of(safePage, safeSize), all.size());
+        Pageable pageable = PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size));
+        String normalizedQuery = query == null || query.isBlank()
+                ? ""
+                : LikePatterns.escapeSpecials(query.trim());
+        Page<ReaderItem> itemPage = itemRepository.findVisibleItemsPage(
+                ownerUserId,
+                SpaceType.SHARED,
+                itemType == null ? "" : itemType.trim(),
+                contentKind == null ? "" : contentKind.trim(),
+                normalizedQuery,
+                bookshelfOnly,
+                pageable
+        );
+        if (itemPage.isEmpty()) {
+            return new PageImpl<>(List.of(), itemPage.getPageable(), itemPage.getTotalElements());
+        }
+        List<ReaderItem> pageItems = itemPage.getContent();
+        List<UUID> itemIds = pageItems.stream().map(ReaderItem::getId).toList();
+        Set<UUID> shelfIds = bookshelfOnly
+                ? Set.copyOf(itemIds)
+                : bookshelfItemIds(ownerUserId, itemIds);
+        List<UUID> fileNodeIds = pageItems.stream()
+                .map(ReaderItem::getFileNodeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, String> spaceTypeMap = fileNodeIds.isEmpty()
+                ? Map.of()
+                : fileMetadataQueryService.findAllByIds(fileNodeIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                FileDescriptor::id,
+                                file -> file.spaceType().getValue()
+                        ));
+        Map<UUID, ReaderProgress> progressMap = progressRepository
+                .findByOwnerUserIdAndReaderItemIdIn(ownerUserId, itemIds)
+                .stream()
+                .collect(Collectors.toMap(ReaderProgress::getReaderItemId, progress -> progress));
+        List<ReaderItemDto> dtos = pageItems.stream()
+                .map(item -> toDto(item, shelfIds.contains(item.getId()), spaceTypeMap, progressMap))
+                .toList();
+        return new PageImpl<>(dtos, itemPage.getPageable(), itemPage.getTotalElements());
     }
 
     public List<ReaderItemDto> listItems(UUID ownerUserId, String itemType, String contentKind, String query) {
@@ -549,22 +585,36 @@ public class ReaderItemService {
     }
 
     /**
-     * 管理员更新任意条目元数据（不校验所有权）。
+     * 管理员更新条目元数据。
      *
-     * @param itemId   条目 ID
-     * @param request  更新请求
+     * <p>管理权只覆盖公共共享空间：他人私人空间（PERSONAL）的条目一律按不存在处理，
+     * 管理员不得借该入口篡改用户私人书库。</p>
+     *
+     * @param operatorUserId 操作者用户 ID
+     * @param itemId         条目 ID
+     * @param request        更新请求
      */
     @Transactional(rollbackFor = Exception.class)
-    public void updateMetadataAsAdmin(UUID itemId, UpdateItemMetadataRequest request) {
+    public void updateMetadataAsAdmin(UUID operatorUserId, UUID itemId, UpdateItemMetadataRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "元数据更新请求参数不能为空");
         }
         ReaderItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
+        if (!item.getOwnerUserId().equals(operatorUserId)) {
+            String spaceType = item.getFileNodeId() == null
+                    ? null
+                    : fileMetadataQueryService.findById(item.getFileNodeId())
+                            .map(file -> file.spaceType().getValue())
+                            .orElse(null);
+            if (!SpaceType.SHARED.getValue().equals(spaceType)) {
+                throw new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在");
+            }
+        }
         applyMetadataUpdate(item, request);
         itemRepository.save(item);
         recordItemEvent(item.getOwnerUserId(), item, SyncAction.UPDATED);
-        log.info("管理员更新条目元数据: itemId={}", itemId);
+        log.info("管理员更新条目元数据: operatorUserId={}, itemId={}", operatorUserId, itemId);
     }
 
     /**

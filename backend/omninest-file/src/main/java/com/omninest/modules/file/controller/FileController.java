@@ -540,7 +540,7 @@ public class FileController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
-        var items = fileShareService.listAllSharesPage(page, size);
+        var items = fileShareService.listAllSharesPage(currentUserContext.requireCurrentUserId(), page, size);
         return ApiResponse.success(PageResponse.of(
                 items.getContent(),
                 items.getNumber(),

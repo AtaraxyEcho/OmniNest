@@ -145,14 +145,15 @@ public class TaskQueryService {
      * 查询死信队列中的任务
      *
      * @param limit 最大返回数量
+     * @param operatorUserId 当前管理员 ID，用于判断是否需要脱敏
      * @return 死信任务列表
      */
     @Transactional(readOnly = true)
-    public List<TaskDto> listDlq(int limit) {
+    public List<TaskDto> listDlq(int limit, UUID operatorUserId) {
         return taskRecordRepository.findByStatusOrderByCreatedAtDesc(
                         TaskStatus.DLQ.getValue(), PageRequest.of(0, limit))
                 .stream()
-                .map(TaskDto::from)
+                .map(record -> TaskDto.fromForAdmin(record, operatorUserId))
                 .toList();
     }
 

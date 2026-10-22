@@ -20,9 +20,12 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoShareLinkDto;
 import com.omninest.modules.photos.dto.PhotoDtos.UpdatePhotoShareRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoSharedAlbumDto;
+import com.omninest.modules.photos.repository.PhotoAlbumFirstCoverProjection;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,10 +64,7 @@ public class PhotoAlbumService {
      */
     @Transactional(readOnly = true)
     public List<PhotoAlbumDto> listAlbums(UUID ownerUserId) {
-        return albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)
-                .stream()
-                .map(this::toDto)
-                .toList();
+        return toDtos(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId));
     }
 
     /**
@@ -79,7 +79,11 @@ public class PhotoAlbumService {
     public Page<PhotoAlbumDto> listAlbumsPage(UUID ownerUserId, int page, int size) {
         Page<PhotoAlbum> result = albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(
                 ownerUserId, PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
-        return result.map(this::toDto);
+        return new PageImpl<>(
+                toDtos(result.getContent()),
+                result.getPageable(),
+                result.getTotalElements()
+        );
     }
 
     /**
@@ -483,44 +487,72 @@ public class PhotoAlbumService {
      * 将相册实体转换为DTO，自动解析封面图片URL
      */
     private PhotoAlbumDto toDto(PhotoAlbum album) {
-        String coverUrl = resolveAlbumCoverUrl(album);
-        return new PhotoAlbumDto(
-                album.getId(),
-                album.getName(),
-                album.getDescription(),
-                coverUrl,
-                album.getPhotoCount(),
-                album.getCreatedAt(),
-                album.getUpdatedAt()
-        );
+        return toDtos(List.of(album)).getFirst();
     }
 
     /**
-     * 解析相册封面URL：优先使用相册自身封面，否则取第一张照片的缩略图
+     * 批量转换相册 DTO：封面兜底文件一次查回，避免逐相册触发 N+1。
+     *
+     * <p>相册自身封面签名失败时仍退回首张有效照片，与单条转换的历史行为一致。</p>
      */
-    private String resolveAlbumCoverUrl(PhotoAlbum album) {
-        if (album.getCoverFileId() != null) {
+    private List<PhotoAlbumDto> toDtos(List<PhotoAlbum> albums) {
+        if (albums.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, String> coverUrls = new HashMap<>();
+        List<UUID> fallbackAlbumIds = new ArrayList<>();
+        for (PhotoAlbum album : albums) {
+            if (album.getCoverFileId() == null) {
+                fallbackAlbumIds.add(album.getId());
+                continue;
+            }
             try {
-                return libraryService.resolveCoverUrl(album.getOwnerUserId(), album.getCoverFileId());
+                coverUrls.put(
+                        album.getId(),
+                        libraryService.resolveCoverUrl(album.getOwnerUserId(), album.getCoverFileId())
+                );
             } catch (Exception ex) {
-                log.warn("相册封面解析失败，尝试从第一张照片获取: albumId={}, error={}", album.getId(), ex.getMessage());
+                log.warn("相册封面解析失败，尝试从第一张照片获取: albumId={}, error={}",
+                        album.getId(), ex.getMessage());
+                fallbackAlbumIds.add(album.getId());
             }
         }
-        // 只为取第一张封面而加载整个相册的照片 ID 列表，会在大相册上按相册数量线性放大；
-        // 复用已有的分页重载，一条 SQL 只回一行。
-        List<UUID> firstPhotoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
-                album.getId(), PageRequest.of(0, 1));
-        if (!firstPhotoIds.isEmpty()) {
-            try {
-                PhotoItem firstPhoto = libraryService.findPhotoById(firstPhotoIds.get(0));
-                if (firstPhoto != null && firstPhoto.getCoverFileId() != null) {
-                    return libraryService.resolveCoverUrl(firstPhoto.getOwnerUserId(), firstPhoto.getCoverFileId());
+        if (!fallbackAlbumIds.isEmpty()) {
+            Map<UUID, UUID> fallbackCoverFileIds = albumItemRepository
+                    .findFirstActiveCoverFileIdsByAlbumIds(fallbackAlbumIds)
+                    .stream()
+                    .collect(Collectors.toMap(
+                            PhotoAlbumFirstCoverProjection::getAlbumId,
+                            PhotoAlbumFirstCoverProjection::getCoverFileId,
+                            (left, right) -> left
+                    ));
+            for (PhotoAlbum album : albums) {
+                UUID coverFileId = fallbackCoverFileIds.get(album.getId());
+                if (coverFileId == null) {
+                    continue;
                 }
-            } catch (Exception ex) {
-                log.warn("相册第一张照片封面解析失败: albumId={}, error={}", album.getId(), ex.getMessage());
+                try {
+                    coverUrls.put(
+                            album.getId(),
+                            libraryService.resolveCoverUrl(album.getOwnerUserId(), coverFileId)
+                    );
+                } catch (Exception ex) {
+                    log.warn("相册第一张照片封面解析失败: albumId={}, error={}",
+                            album.getId(), ex.getMessage());
+                }
             }
         }
-        return null;
+        return albums.stream()
+                .map(album -> new PhotoAlbumDto(
+                        album.getId(),
+                        album.getName(),
+                        album.getDescription(),
+                        coverUrls.get(album.getId()),
+                        album.getPhotoCount(),
+                        album.getCreatedAt(),
+                        album.getUpdatedAt()
+                ))
+                .toList();
     }
 
     private void recordAlbumEvent(UUID ownerUserId, PhotoAlbum album, SyncAction action) {

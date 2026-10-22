@@ -123,7 +123,10 @@ public class AdminOperationsController {
             @RequestParam(defaultValue = "updatedAt") String sort,
             @RequestParam(defaultValue = "desc") String dir
     ) {
-        return ApiResponse.success(adminOperationsPagingService.taskPage(page, size, status, taskType, query, sort, dir));
+        return ApiResponse.success(adminOperationsPagingService.taskPage(
+                currentUserContext.requireCurrentUserId(),
+                page, size, status, taskType, query, sort, dir
+        ));
     }
 
     @Operation(summary = "重试失败任务")

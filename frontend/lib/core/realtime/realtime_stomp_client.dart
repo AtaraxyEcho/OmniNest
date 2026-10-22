@@ -24,6 +24,9 @@ abstract interface class RealtimeTransport {
 
   void pause();
 
+  /// 访问令牌已刷新：重置退避并立即重连（仅当仍期望连接时）。
+  void notifyAccessTokenRefreshed();
+
   Future<void> dispose();
 }
 
@@ -93,6 +96,24 @@ class RealtimeStompClient implements RealtimeTransport {
     if (_state == RealtimeTransportState.connected || _client != null) {
       return;
     }
+    _open();
+  }
+
+  /// 令牌刷新后重置退避并立即重连。
+  ///
+  /// 过期窗口内的握手失败会迅速退避到 30 秒；新令牌到位后继续等待
+  /// 只会让实时通道在本会话内长期失联。
+  @override
+  void notifyAccessTokenRefreshed() {
+    if (_disposed) return;
+    _reconnectAttempt = 0;
+    if (!_desired) return;
+    if (_state == RealtimeTransportState.connected ||
+        _state == RealtimeTransportState.connecting) {
+      return;
+    }
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _open();
   }
 

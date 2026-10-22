@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -9,6 +10,7 @@ import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
+import 'package:omninest/core/utils/file_saver.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/files/application/shared_folder_browse_controller.dart';
@@ -228,26 +230,53 @@ class _SharedFolderBrowserState extends ConsumerState<SharedFolderBrowser> {
       );
       return;
     }
-    if (openDownloadUrl(url)) {
+    if (kIsWeb) {
+      if (openDownloadUrl(url)) {
+        if (!mounted) {
+          return;
+        }
+        showOmniFeedback(
+          context,
+          l10n.filesDownloadOpened,
+          severity: OmniFeedbackSeverity.success,
+        );
+        return;
+      }
+      final copied = await copyTextToClipboard(url);
       if (!mounted) {
         return;
       }
       showOmniFeedback(
         context,
-        l10n.filesDownloadOpened,
-        severity: OmniFeedbackSeverity.success,
+        copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+        severity:
+            copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
       );
       return;
     }
-    final copied = await copyTextToClipboard(url);
-    if (!mounted) {
-      return;
+    try {
+      final result = await saveDownloadUrlToLocalFile(
+        url: url,
+        fileName: child.name,
+        sizeBytes: child.sizeBytes,
+      );
+      if (!mounted || result is LocalFileSaveCancelled) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        l10n.filesDownloadSaved,
+        severity: OmniFeedbackSeverity.success,
+      );
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showOmniFeedback(
+        context,
+        '${l10n.filesDownloadFailed}: $error',
+        severity: OmniFeedbackSeverity.error,
+      );
     }
-    showOmniFeedback(
-      context,
-      copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
-      severity:
-          copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
-    );
   }
 }
