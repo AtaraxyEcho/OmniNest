@@ -100,8 +100,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
               AND (:itemType IS NULL OR :itemType = '' OR UPPER(ri.itemType) = UPPER(:itemType))
               AND (:contentKind IS NULL OR :contentKind = '' OR UPPER(ri.contentKind) = UPPER(:contentKind))
               AND (:query IS NULL OR :query = ''
-                   OR LOWER(ri.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\'
-                   OR LOWER(COALESCE(ri.authorName, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\')
+                   OR LOWER(ri.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                   OR LOWER(COALESCE(ri.authorName, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
               AND (:bookshelfOnly = false OR EXISTS (
                    SELECT b.id FROM ReaderBookshelf b
                    WHERE b.ownerUserId = :userId AND b.readerItemId = ri.id))
@@ -115,8 +115,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
               AND (:itemType IS NULL OR :itemType = '' OR UPPER(ri.itemType) = UPPER(:itemType))
               AND (:contentKind IS NULL OR :contentKind = '' OR UPPER(ri.contentKind) = UPPER(:contentKind))
               AND (:query IS NULL OR :query = ''
-                   OR LOWER(ri.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\'
-                   OR LOWER(COALESCE(ri.authorName, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\')
+                   OR LOWER(ri.title) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\'
+                   OR LOWER(COALESCE(ri.authorName, '')) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '\\')
               AND (:bookshelfOnly = false OR EXISTS (
                    SELECT b.id FROM ReaderBookshelf b
                    WHERE b.ownerUserId = :userId AND b.readerItemId = ri.id))
