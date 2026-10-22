@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.cn.smart.SmartChineseAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -19,7 +19,6 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
@@ -30,12 +29,13 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * 照片 Lucene 全文索引服务，支持标题、描述、标签搜索。
+ * 照片 Lucene 全文索引服务，支持标题、描述、标签、AI 标签与图中文字搜索。
  */
 @Slf4j
 @Service
@@ -45,10 +45,12 @@ public class PhotoSearchIndexService implements Closeable {
     private static final String FIELD_TITLE = "title";
     private static final String FIELD_DESCRIPTION = "description";
     private static final String FIELD_TAGS = "tags";
+    private static final String FIELD_AI_LABELS = "aiLabels";
+    private static final String FIELD_OCR_TEXT = "ocrText";
 
     private final Path indexPath;
     private final Directory directory;
-    private final StandardAnalyzer analyzer = new StandardAnalyzer();
+    private final SmartChineseAnalyzer analyzer = new SmartChineseAnalyzer();
     private volatile IndexWriter writer;
     private volatile DirectoryReader reader;
 
@@ -88,30 +90,65 @@ public class PhotoSearchIndexService implements Closeable {
     /**
      * 索引单张照片，已存在则更新。
      */
-    public void indexPhoto(UUID photoId, UUID ownerUserId, String title, String description, List<String> tags) {
+    public void indexPhoto(PhotoIndexDocument document) {
         try {
             IndexWriter w = getWriter();
-            Document doc = new Document();
-            // photoId 用 StringField：TextField 会被分析器按 UUID 连字符切分，
-            // updateDocument/deleteDocuments 的精确 Term 永远匹配不到，表现为删除不生效、
-            // 同一照片重复索引出多份文档。与 FileSearchIndexService 的 fileId 同口径。
-            doc.add(new StringField(FIELD_PHOTO_ID, photoId.toString(), Field.Store.YES));
-            // 用户 ID 必须不分词：TextField 会被 StandardAnalyzer 按 UUID 连字符切成 5 段，
-            // 多租户过滤依赖精确 Term，分词后既脆弱又无法用 FILTER 严格判定。
-            doc.add(new StringField(FIELD_OWNER_USER_ID, ownerUserId.toString(), Field.Store.NO));
-            doc.add(new TextField(FIELD_TITLE, title != null ? title : "", Field.Store.YES));
-            if (description != null && !description.isBlank()) {
-                doc.add(new TextField(FIELD_DESCRIPTION, description, Field.Store.YES));
-            }
-            if (tags != null && !tags.isEmpty()) {
-                doc.add(new TextField(FIELD_TAGS, String.join(" ", tags), Field.Store.YES));
-            }
-            w.updateDocument(new Term(FIELD_PHOTO_ID, photoId.toString()), doc);
+            w.updateDocument(
+                    new Term(FIELD_PHOTO_ID, document.photoId().toString()),
+                    buildDocument(document)
+            );
             w.commit();
-            log.debug("索引照片: photoId={}", photoId);
+            log.debug("索引照片: photoId={}", document.photoId());
         } catch (Exception exception) {
-            throw indexFailure("写入", photoId, exception);
+            throw indexFailure("写入", document.photoId(), exception);
         }
+    }
+
+    /**
+     * 批量索引照片并在循环结束后仅提交一次。
+     *
+     * @param documents 待写入文档
+     */
+    public void indexPhotosBatch(List<PhotoIndexDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return;
+        }
+        UUID firstPhotoId = documents.getFirst().photoId();
+        try {
+            IndexWriter w = getWriter();
+            for (PhotoIndexDocument document : documents) {
+                w.updateDocument(new Term(FIELD_PHOTO_ID, document.photoId().toString()),
+                        buildDocument(document));
+            }
+            w.commit();
+            log.debug("批量索引照片: count={}", documents.size());
+        } catch (Exception exception) {
+            throw indexFailure("批量写入", firstPhotoId, exception);
+        }
+    }
+
+    private Document buildDocument(PhotoIndexDocument source) {
+        Document doc = new Document();
+        // photoId 用 StringField：TextField 会被分析器按 UUID 连字符切分，
+        // updateDocument/deleteDocuments 的精确 Term 永远匹配不到，表现为删除不生效、
+        // 同一照片重复索引出多份文档。与 FileSearchIndexService 的 fileId 同口径。
+        doc.add(new StringField(FIELD_PHOTO_ID, source.photoId().toString(), Field.Store.YES));
+        // 用户 ID 必须不分词：多租户过滤依赖精确 Term，分词后既脆弱又无法用 FILTER 严格判定。
+        doc.add(new StringField(FIELD_OWNER_USER_ID, source.ownerUserId().toString(), Field.Store.NO));
+        doc.add(new TextField(FIELD_TITLE, source.title() != null ? source.title() : "", Field.Store.YES));
+        if (source.description() != null && !source.description().isBlank()) {
+            doc.add(new TextField(FIELD_DESCRIPTION, source.description(), Field.Store.YES));
+        }
+        if (source.tags() != null && !source.tags().isEmpty()) {
+            doc.add(new TextField(FIELD_TAGS, String.join(" ", source.tags()), Field.Store.YES));
+        }
+        if (source.aiLabels() != null && !source.aiLabels().isEmpty()) {
+            doc.add(new TextField(FIELD_AI_LABELS, String.join(" ", source.aiLabels()), Field.Store.NO));
+        }
+        if (source.ocrText() != null && !source.ocrText().isBlank()) {
+            doc.add(new TextField(FIELD_OCR_TEXT, source.ocrText(), Field.Store.NO));
+        }
+        return doc;
     }
 
     /**
@@ -167,7 +204,7 @@ public class PhotoSearchIndexService implements Closeable {
     /**
      * 清空照片索引并返回被丢弃的文档数。
      *
-     * <p>索引字段口径变更（例如 {@code ownerUserId} 由分词改为精确项）后，旧文档里的词元
+     * <p>索引字段口径变更（例如分析器或字段集合调整）后，旧文档里的词元
      * 不会再被新查询命中，只能整卷丢弃重投；因此全站重建必须先走这里。仅由单写进程调用。</p>
      *
      * @return 清空前的文档数
@@ -188,9 +225,9 @@ public class PhotoSearchIndexService implements Closeable {
     /**
      * 全文搜索照片，返回按相关性排序的 photoId 列表。
      *
-     * <p>查询词必须经同一分词器切分后逐词组合，不能整段包成短语：StandardAnalyzer 把中文
-     * 逐字切分，把「北京 旅游」写成短语查询会要求四个字的词元严格相邻，因此永远命不中
-     * 「2026北京家庭旅游」这类标题。多租户过滤走 FILTER，不参与打分也不允许退化成加分项。</p>
+     * <p>查询词必须经同一分词器切分后逐词组合，不能整段包成短语：中文分词后
+     * 把多词写成短语查询会要求词元严格相邻，容易漏掉标题中的连续描述。
+     * 多租户过滤走 FILTER，不参与打分也不允许退化成加分项。</p>
      */
     public List<UUID> search(UUID ownerUserId, String queryStr, int maxResults) {
         List<UUID> results = new ArrayList<>();
@@ -225,12 +262,16 @@ public class PhotoSearchIndexService implements Closeable {
         Term titleTerm = new Term(FIELD_TITLE, token);
         Term descriptionTerm = new Term(FIELD_DESCRIPTION, token);
         Term tagsTerm = new Term(FIELD_TAGS, token);
+        Term aiLabelsTerm = new Term(FIELD_AI_LABELS, token);
+        Term ocrTextTerm = new Term(FIELD_OCR_TEXT, token);
         return new BooleanQuery.Builder()
                 .add(new BoostQuery(new TermQuery(titleTerm), 2.0f), BooleanClause.Occur.SHOULD)
                 .add(new BoostQuery(new PrefixQuery(titleTerm), 1.2f), BooleanClause.Occur.SHOULD)
-                .add(new TermQuery(descriptionTerm), BooleanClause.Occur.SHOULD)
-                .add(new TermQuery(tagsTerm), BooleanClause.Occur.SHOULD)
+                .add(new BoostQuery(new TermQuery(tagsTerm), 1.5f), BooleanClause.Occur.SHOULD)
                 .add(new BoostQuery(new PrefixQuery(tagsTerm), 1.1f), BooleanClause.Occur.SHOULD)
+                .add(new BoostQuery(new TermQuery(aiLabelsTerm), 1.3f), BooleanClause.Occur.SHOULD)
+                .add(new TermQuery(descriptionTerm), BooleanClause.Occur.SHOULD)
+                .add(new TermQuery(ocrTextTerm), BooleanClause.Occur.SHOULD)
                 .setMinimumNumberShouldMatch(1)
                 .build();
     }
@@ -243,7 +284,6 @@ public class PhotoSearchIndexService implements Closeable {
             while (stream.incrementToken()) {
                 tokens.add(term.toString());
             }
-            stream.end();
         }
         return tokens;
     }
@@ -258,5 +298,27 @@ public class PhotoSearchIndexService implements Closeable {
         }
         analyzer.close();
         directory.close();
+    }
+
+    /**
+     * 照片索引文档。
+     *
+     * @param photoId 照片标识
+     * @param ownerUserId 所有者用户标识
+     * @param title 标题
+     * @param description 描述
+     * @param tags 用户标签
+     * @param aiLabels 受控标签与语义标签展开后的检索词
+     * @param ocrText 图中文字
+     */
+    public record PhotoIndexDocument(
+            UUID photoId,
+            UUID ownerUserId,
+            String title,
+            String description,
+            List<String> tags,
+            List<String> aiLabels,
+            String ocrText
+    ) {
     }
 }

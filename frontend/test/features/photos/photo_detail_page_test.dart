@@ -18,6 +18,7 @@ import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/domain/photo_content_analysis.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
@@ -829,5 +830,57 @@ void main() {
     // 侧栏表现为瞬间出现、瞬间消失。
     final panel = tester.widget<PhotoSharePanel>(find.byType(PhotoSharePanel));
     expect(panel.visible, isFalse);
+  });
+
+  testWidgets('信息面板渲染图像分析标签与图中文字', (tester) async {
+    const ocrText = '星海公园停车场 缴费凭证';
+    final analyzed = PhotoItem(
+      id: 'photo-1',
+      fileNodeId: 'file-photo-1',
+      title: 'Photo photo-1',
+      format: 'JPEG',
+      fileSize: 1024,
+      metadataStatus: 'READY',
+      favorite: false,
+      createdAt: DateTime(2024, 11, 12),
+      contentAnalysis: const PhotoContentAnalysis(
+        status: 'SUCCEEDED',
+        pipelineVersion: 'vision-v7-lightweight-ready+ppocr-v4-onnx-v1',
+        completedAt: null,
+        labels: [
+          PhotoContentLabel(
+            id: 'label-1',
+            namespace: 'SUBJECT',
+            code: 'person',
+            confidence: 0.72,
+            source: 'mobileclip2-s0-onnx',
+            state: 'AUTO',
+            boxes: [],
+          ),
+          PhotoContentLabel(
+            id: 'label-2',
+            namespace: 'SCENE',
+            code: 'lake',
+            confidence: 0.68,
+            source: 'mobileclip2-s0-onnx',
+            state: 'AUTO',
+            boxes: [],
+          ),
+        ],
+        ocrText: ocrText,
+      ),
+    );
+
+    await _pumpDesktop(tester, _harness(scope: [analyzed]).child);
+    await tester.tap(find.byIcon(Icons.info_outline_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Image Analysis'), findsOneWidget);
+    expect(find.text('Text in Image (OCR)'), findsOneWidget);
+    expect(find.text(ocrText), findsOneWidget);
+    expect(find.byTooltip('Copy text'), findsOneWidget);
+    // 标签胶囊按分类本地化：person→People，lake→Nature。
+    expect(find.text('People'), findsWidgets);
+    expect(find.text('Nature'), findsWidgets);
   });
 }

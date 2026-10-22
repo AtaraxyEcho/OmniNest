@@ -1,6 +1,7 @@
 package com.omninest.common.ai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,29 +13,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.channels.FileChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 /**
- * 图像分析侧车客户端流式请求和容量限制测试。
+ * 图像分析侧车客户端请求、解析与容量限制测试。
  *
  * @author OmniNest
  */
 class AiSidecarClientTest {
-
-    @TempDir
-    Path tempDirectory;
 
     private HttpServer server;
     private String endpoint;
@@ -48,7 +39,7 @@ class AiSidecarClientTest {
         properties = new AiSidecarProperties();
         properties.setSecret("test-sidecar-secret");
         properties.setMaxImageBytes(1024);
-        properties.setMaxResponseBytes(1024);
+        properties.setMaxResponseBytes(8192);
     }
 
     @AfterEach
@@ -57,126 +48,103 @@ class AiSidecarClientTest {
     }
 
     @Test
-    void shouldStreamImageFileInMultipartRequest() throws IOException {
+    void shouldSendImageBytesInMultipartRequestWithHintAndSkipOcr() {
         byte[] imageBytes = new byte[]{1, 2, 3, 4, 5};
-        Path imageFile = tempDirectory.resolve("photo.jpg");
-        Files.write(imageFile, imageBytes);
         AtomicReference<byte[]> requestBody = new AtomicReference<>();
         AtomicReference<String> requestContentType = new AtomicReference<>();
-        AtomicReference<String> requestProtocol = new AtomicReference<>();
+        AtomicReference<String> requestQuery = new AtomicReference<>();
         AtomicReference<String> requestToken = new AtomicReference<>();
-        server.createContext("/detect-faces", exchange -> {
-            requestProtocol.set(exchange.getProtocol());
+        server.createContext("/analyze-content", exchange -> {
             requestContentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
             requestToken.set(exchange.getRequestHeaders().getFirst("X-OmniNest-Sidecar-Token"));
+            requestQuery.set(exchange.getRequestURI().getQuery());
             requestBody.set(exchange.getRequestBody().readAllBytes());
-            respond(exchange, "[{\"bbox_x\":1,\"bbox_y\":2,\"bbox_w\":3,\"bbox_h\":4,\"embedding\":[0.5]}]");
+            respond(exchange, """
+                    {"schemaVersion":2,"pipelineVersion":"vision-v6-lightweight+ppocr-v4-onnx-v1",
+                     "ocrPipelineVersion":"ppocr-v4-onnx-v1",
+                     "observations":[{"namespace":"SUBJECT","code":"cat","confidence":0.91,
+                     "source":"mobileclip2-s0-onnx","boxes":[]}],
+                     "semanticTags":["橘猫"],"ocrText":"发票号码 12345"}
+                    """);
         });
+        AiSidecarClient client = new AiSidecarClient(properties);
 
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
-        var result = client.detectFaces(imageFile, endpoint, 5);
+        ContentAnalysis result = client.analyzeContent(
+                imageBytes,
+                "photo.jpg",
+                "TEXT_GRAPHIC",
+                false,
+                endpoint,
+                5
+        );
 
-        assertEquals(1, result.size());
-        assertEquals(1, result.getFirst().bboxX());
-        assertEquals("HTTP/1.1", requestProtocol.get());
         assertTrue(requestContentType.get().startsWith("multipart/form-data;boundary="));
         assertEquals("test-sidecar-secret", requestToken.get());
-        assertTrue(new String(requestBody.get(), StandardCharsets.ISO_8859_1)
-                .contains("name=\"image\""));
+        assertTrue(requestQuery.get().contains("hint=TEXT_GRAPHIC"));
+        assertTrue(requestQuery.get().contains("skipOcr=false"));
+        String body = new String(requestBody.get(), StandardCharsets.ISO_8859_1);
+        assertTrue(body.contains("name=\"image\""));
+        assertTrue(body.contains("filename=\"photo.jpg\""));
         assertTrue(containsSequence(requestBody.get(), imageBytes));
+
+        assertEquals(2, result.schemaVersion());
+        assertEquals("vision-v6-lightweight+ppocr-v4-onnx-v1", result.pipelineVersion());
+        assertEquals("ppocr-v4-onnx-v1", result.ocrPipelineVersion());
+        assertEquals(1, result.observations().size());
+        assertEquals("SUBJECT", result.observations().getFirst().namespace());
+        assertEquals("cat", result.observations().getFirst().code());
+        assertEquals(java.util.List.of("橘猫"), result.semanticTags());
+        assertEquals("发票号码 12345", result.ocrText());
     }
 
     @Test
-    void shouldRejectRequestWhenSidecarSecretIsMissing() throws IOException {
+    void shouldRejectRequestWhenSidecarSecretIsMissing() {
         properties.setSecret(" ");
-        Path imageFile = tempDirectory.resolve("photo.jpg");
-        Files.write(imageFile, new byte[]{1, 2, 3});
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
+        AiSidecarClient client = new AiSidecarClient(properties);
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> client.detectFaces(imageFile, endpoint, 5)
+                () -> client.analyzeContent(new byte[]{1, 2, 3}, "photo.jpg", "AUTO", false, endpoint, 5)
         );
 
         assertTrue(exception.getMessage().contains("认证密钥未配置"));
     }
 
     @Test
-    void shouldStreamLargeImageWithinBoundedHeap() throws IOException {
-        long imageBytes = 64L * 1024 * 1024;
-        properties.setMaxImageBytes(imageBytes + 1);
-        Path imageFile = tempDirectory.resolve("large-photo.jpg");
-        try (FileChannel channel = FileChannel.open(
-                imageFile,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE
-        )) {
-            channel.position(imageBytes - 1);
-            channel.write(ByteBuffer.wrap(new byte[]{1}));
-        }
-        AtomicLong receivedBytes = new AtomicLong();
-        AtomicInteger maxReadBytes = new AtomicInteger();
-        server.createContext("/detect-faces", exchange -> {
-            byte[] buffer = new byte[8192];
-            try (InputStream input = exchange.getRequestBody()) {
-                int readBytes;
-                while ((readBytes = input.read(buffer)) != -1) {
-                    receivedBytes.addAndGet(readBytes);
-                    maxReadBytes.accumulateAndGet(readBytes, Math::max);
-                }
-            }
-            respond(exchange, "[]");
-        });
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
-
-        var result = client.detectFaces(imageFile, endpoint, 30);
-
-        assertTrue(result.isEmpty());
-        assertTrue(receivedBytes.get() > imageBytes);
-        assertTrue(maxReadBytes.get() <= 8192);
-    }
-
-    @Test
-    void shouldRejectImageBeforeSendingWhenFileExceedsLimit() throws IOException {
+    void shouldRejectImageBeforeSendingWhenBytesExceedLimit() {
         properties.setMaxImageBytes(4);
-        Path imageFile = tempDirectory.resolve("oversized.jpg");
-        Files.write(imageFile, new byte[]{1, 2, 3, 4, 5});
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
+        AiSidecarClient client = new AiSidecarClient(properties);
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> client.detectFaces(imageFile, endpoint, 5)
+                () -> client.analyzeContent(new byte[]{1, 2, 3, 4, 5}, "photo.jpg", "AUTO", false, endpoint, 5)
         );
     }
 
     @Test
-    void shouldRejectOversizedSidecarResponse() throws IOException {
+    void shouldRejectOversizedSidecarResponse() {
         properties.setMaxResponseBytes(8);
-        Path imageFile = tempDirectory.resolve("photo.jpg");
-        Files.write(imageFile, new byte[]{1, 2, 3});
-        server.createContext("/classify-scene", exchange -> respond(exchange, "{\"labels\":[]}"));
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
+        server.createContext("/analyze-content", exchange -> respond(exchange, "{\"schemaVersion\":2}"));
+        AiSidecarClient client = new AiSidecarClient(properties);
 
         assertThrows(
                 IllegalStateException.class,
-                () -> client.classifyScene(imageFile, endpoint, 5)
+                () -> client.analyzeContent(new byte[]{1, 2, 3}, "photo.jpg", "AUTO", false, endpoint, 5)
         );
     }
 
     @Test
-    void shouldKeepBoundedSidecarErrorDetails() throws IOException {
-        Path imageFile = tempDirectory.resolve("photo.jpg");
-        Files.write(imageFile, new byte[]{1, 2, 3});
-        server.createContext("/detect-faces", exchange -> respond(
+    void shouldKeepBoundedSidecarErrorDetails() {
+        server.createContext("/analyze-content", exchange -> respond(
                 exchange,
                 422,
                 "{\"detail\":\"missing multipart boundary\"}"
         ));
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
+        AiSidecarClient client = new AiSidecarClient(properties);
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> client.detectFaces(imageFile, endpoint, 5)
+                () -> client.analyzeContent(new byte[]{1, 2, 3}, "photo.jpg", "AUTO", false, endpoint, 5)
         );
 
         assertTrue(exception.getMessage().contains("422"));
@@ -184,55 +152,31 @@ class AiSidecarClientTest {
     }
 
     @Test
-    void shouldMapNumericPlaces365LabelsToReadableNames() throws IOException {
-        Path imageFile = tempDirectory.resolve("photo.jpg");
-        Files.write(imageFile, new byte[]{1, 2, 3});
-        server.createContext("/classify-scene", exchange -> respond(
-                exchange,
-                "{\"labels\":["
-                        + "{\"name\":\"0\",\"confidence\":0.7},"
-                        + "{\"name\":\"8\",\"confidence\":0.2}]}"
-        ));
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
+    void shouldProbeAndCacheRemotePipelineVersion() {
+        AtomicInteger requests = new AtomicInteger();
+        server.createContext("/ready", exchange -> {
+            requests.incrementAndGet();
+            respond(exchange, "{\"status\":\"ok\",\"pipelineVersion\":\"vision-v6-ram_plus_int8+ppocr-v4-onnx-v1\"}");
+        });
+        AiSidecarClient client = new AiSidecarClient(properties);
 
-        var result = client.classifyScene(imageFile, endpoint, 5);
-
-        assertEquals("Airfield", result.labels().get(0).name());
-        assertEquals("Apartment building / outdoor", result.labels().get(1).name());
-        assertEquals(0.7F, result.labels().get(0).confidence());
+        assertEquals(
+                "vision-v6-ram_plus_int8+ppocr-v4-onnx-v1",
+                client.fetchRemotePipelineVersion(endpoint, 5)
+        );
+        assertEquals(
+                "vision-v6-ram_plus_int8+ppocr-v4-onnx-v1",
+                client.fetchRemotePipelineVersion(endpoint, 5)
+        );
+        assertEquals(1, requests.get());
     }
 
     @Test
-    void shouldParseStructuredContentAnalysisWithNamespacesAndBoxes() throws IOException {
-        Path imageFile = tempDirectory.resolve("photo.jpg");
-        Files.write(imageFile, new byte[]{1, 2, 3});
-        server.createContext("/analyze-content", exchange -> respond(
-                exchange,
-                "{\"schemaVersion\":2,\"pipelineVersion\":\"content-analysis-v2\","
-                        + "\"observations\":["
-                        + "{\"namespace\":\"SUBJECT\",\"code\":\"cat\","
-                        + "\"confidence\":0.91,\"source\":\"coco\","
-                        + "\"boxes\":[{\"x\":0.1,\"y\":0.2,\"width\":0.3,\"height\":0.4}]},"
-                        + "{\"namespace\":\"SCENE\",\"code\":\"places365_0\","
-                        + "\"confidence\":0.8,\"source\":\"places365\",\"boxes\":[]}]"
-                        + "}"
-        ));
-        AiSidecarClient client = new AiSidecarClient(properties, new Places365LabelCatalog());
+    void shouldReturnNullWhenPipelineProbeFails() {
+        server.createContext("/ready", exchange -> respond(exchange, 503, "{}"));
+        AiSidecarClient client = new AiSidecarClient(properties);
 
-        ContentAnalysis result = client.analyzeContent(
-                imageFile,
-                endpoint,
-                5
-        );
-
-        assertEquals(2, result.schemaVersion());
-        assertEquals("content-analysis-v2", result.pipelineVersion());
-        assertEquals(2, result.observations().size());
-        assertEquals("SUBJECT", result.observations().get(0).namespace());
-        assertEquals("cat", result.observations().get(0).code());
-        assertEquals(1, result.observations().get(0).boxes().size());
-        assertEquals("SCENE", result.observations().get(1).namespace());
-        assertEquals("Airfield", result.observations().get(1).code());
+        assertNull(client.fetchRemotePipelineVersion(endpoint, 5));
     }
 
     private void respond(HttpExchange exchange, String body) throws IOException {

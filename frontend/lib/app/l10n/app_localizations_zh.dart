@@ -8078,6 +8078,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosAnalysisStyle => '风格';
 
   @override
+  String get photosOcrText => '图中文字 (OCR)';
+
+  @override
+  String get photosCopyOcrText => '复制图中文字';
+
+  @override
+  String get photosOcrTextCopied => '已复制图中文字';
+
+  @override
   String get photosAiCategoryPerson => '人物';
 
   @override

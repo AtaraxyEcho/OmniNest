@@ -113,7 +113,7 @@ OmniNest 内置的开源音乐播放模块并非网易云音乐或其关联公�
 | --- | --- |
 | **Portal** | 统一工作台、动态背景、最近内容、通知与模块入口 |
 | **File Manager** | 上传、目录、搜索、预览、下载、回收站与存储生命周期 |
-| **Photos** | 相册与时间线、缩略图、元数据、位置与可选图像分析（当前侧车以人脸检测/嵌入/聚类为主） |
+| **Photos** | 相册与时间线、缩略图、元数据、位置与可选图像分析（OCR、受控视觉标签与中文全文检索） |
 | **Movies** | 影视库、海报与详情、播放、字幕、进度与本地只读媒体源 |
 | **Music** | 本地曲库、外部平台、队列、封面/歌词与播放进度 |
 | **Reader** | EPUB 等导入、目录、文本/漫画阅读、书签、批注与进度 |
@@ -157,7 +157,7 @@ OmniNest 内置的开源音乐播放模块并非网易云音乐或其关联公�
 | [backend](backend/README.md) | 后端服务、模块与测试（日志：`backend/logs/`） |
 | [frontend](frontend/README.md) | Flutter 客户端与测试（日志：`frontend/logs/`） |
 | [deploy](deploy/README.md) | 开发/生产 Docker 编排与部署说明 |
-| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | 图像分析侧车 |
+| [deploy/vision-sidecar](deploy/vision-sidecar/README.md) | 图像分析侧车 |
 | [imgs](imgs) | 文档用截图资源 |
 
 ---

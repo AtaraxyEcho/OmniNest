@@ -19,8 +19,4 @@ public class AiSidecarProperties {
     private int timeoutSeconds = 30;
     private long maxImageBytes = 64L * 1024 * 1024;
     private int maxResponseBytes = 1024 * 1024;
-    /**
-     * 人脸嵌入向量期望维度，需与侧车 AI_FACE_EMBEDDING_DIMENSION 配置一致。
-     */
-    private int faceEmbeddingDimension = 512;
 }

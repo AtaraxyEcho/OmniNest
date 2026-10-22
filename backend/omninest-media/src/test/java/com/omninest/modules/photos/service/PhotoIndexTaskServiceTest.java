@@ -1,25 +1,33 @@
 package com.omninest.modules.photos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.photos.domain.PhotoContentAnalysisRun;
+import com.omninest.modules.photos.domain.PhotoContentLabel;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.domain.PhotoTag;
 import com.omninest.modules.photos.event.PhotoIndexEvent;
+import com.omninest.modules.photos.repository.PhotoContentAnalysisRunRepository;
+import com.omninest.modules.photos.repository.PhotoContentLabelRepository;
 import com.omninest.modules.photos.repository.PhotoIndexTargetProjection;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
+import com.omninest.modules.photos.search.PhotoSearchIndexService.PhotoIndexDocument;
 import com.omninest.modules.task.service.TaskDispatchService;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -31,28 +39,47 @@ import org.mockito.Mockito;
 class PhotoIndexTaskServiceTest {
     private final PhotoItemRepository photoItemRepository = Mockito.mock(PhotoItemRepository.class);
     private final PhotoTagRepository photoTagRepository = Mockito.mock(PhotoTagRepository.class);
-    private final PhotoSearchIndexService photoSearchIndexService = Mockito.mock(PhotoSearchIndexService.class);
+    private final PhotoContentAnalysisRunRepository analysisRunRepository =
+            Mockito.mock(PhotoContentAnalysisRunRepository.class);
+    private final PhotoContentLabelRepository contentLabelRepository =
+            Mockito.mock(PhotoContentLabelRepository.class);
+    private final PhotoLabelPolicy labelPolicy = new PhotoLabelPolicy();
+    private final PhotoSearchIndexService photoSearchIndexService =
+            Mockito.mock(PhotoSearchIndexService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
     private final TaskDispatchService taskDispatchService = Mockito.mock(TaskDispatchService.class);
     private final PhotoIndexTaskService service = new PhotoIndexTaskService(
             photoItemRepository,
             photoTagRepository,
+            analysisRunRepository,
+            contentLabelRepository,
+            labelPolicy,
             photoSearchIndexService,
             fileLifecycleGuard,
             taskDispatchService
     );
 
+    @BeforeEach
+    void setUp() {
+        Mockito.when(analysisRunRepository
+                        .findTopByOwnerUserIdAndPhotoIdAndStatusOrderByCreatedAtDesc(
+                                Mockito.any(), Mockito.any(), Mockito.anyString()))
+                .thenReturn(null);
+        Mockito.when(contentLabelRepository.findByOwnerUserIdAndPhotoIdAndRunId(
+                        Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(List.of());
+    }
+
     @Test
-    void indexLoadsOwnedPhotoAndTags() {
+    void indexLoadsOwnedPhotoTagsAndCurrentAnalysisLabels() {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
         UUID fileNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setFileNodeId(fileNodeId);
+        PhotoItem photo = photo(photoId, ownerUserId, fileNodeId);
         photo.setTitle("Mountain");
         photo.setDescription("Sunrise");
+        photo.setOcrText("发票号码 12345");
+        PhotoContentAnalysisRun run = run(photoId);
         PhotoTag firstTag = new PhotoTag();
         firstTag.setTag("travel");
         PhotoTag secondTag = new PhotoTag();
@@ -62,17 +89,32 @@ class PhotoIndexTaskServiceTest {
         Mockito.when(photoTagRepository.findByOwnerUserIdAndPhotoId(ownerUserId, photoId))
                 .thenReturn(List.of(firstTag, secondTag));
         Mockito.when(fileLifecycleGuard.isOwnedProcessable(ownerUserId, fileNodeId)).thenReturn(true);
+        Mockito.when(analysisRunRepository
+                        .findTopByOwnerUserIdAndPhotoIdAndStatusOrderByCreatedAtDesc(
+                                ownerUserId, photoId, "SUCCEEDED"))
+                .thenReturn(run);
+        Mockito.when(contentLabelRepository.findByOwnerUserIdAndPhotoIdAndRunId(
+                        ownerUserId, photoId, run.getId()))
+                .thenReturn(List.of(
+                        label(ownerUserId, photoId, run.getId(), "SUBJECT", "cat"),
+                        label(ownerUserId, photoId, run.getId(), "STYLE", "document")
+                ));
 
         boolean indexed = service.index(ownerUserId, photoId);
 
         assertThat(indexed).isTrue();
-        Mockito.verify(photoSearchIndexService).indexPhoto(
-                photoId,
-                ownerUserId,
-                "Mountain",
-                "Sunrise",
-                List.of("travel", "sunrise")
-        );
+        ArgumentCaptor<PhotoIndexDocument> documentCaptor =
+                ArgumentCaptor.forClass(PhotoIndexDocument.class);
+        Mockito.verify(photoSearchIndexService).indexPhoto(documentCaptor.capture());
+        PhotoIndexDocument document = documentCaptor.getValue();
+        assertThat(document.photoId()).isEqualTo(photoId);
+        assertThat(document.ownerUserId()).isEqualTo(ownerUserId);
+        assertThat(document.title()).isEqualTo("Mountain");
+        assertThat(document.description()).isEqualTo("Sunrise");
+        assertThat(document.tags()).containsExactly("travel", "sunrise");
+        assertThat(document.ocrText()).isEqualTo("发票号码 12345");
+        assertThat(document.aiLabels()).anyMatch(keywords -> keywords.contains("猫"));
+        assertThat(document.aiLabels()).anyMatch(keywords -> keywords.contains("发票"));
     }
 
     @Test
@@ -80,10 +122,7 @@ class PhotoIndexTaskServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
         UUID fileNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setFileNodeId(fileNodeId);
+        PhotoItem photo = photo(photoId, ownerUserId, fileNodeId);
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
         Mockito.when(fileLifecycleGuard.isOwnedProcessable(ownerUserId, fileNodeId)).thenReturn(false);
@@ -100,10 +139,7 @@ class PhotoIndexTaskServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
         UUID fileNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setFileNodeId(fileNodeId);
+        PhotoItem photo = photo(photoId, ownerUserId, fileNodeId);
         photo.setDeletedAt(Instant.now());
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
@@ -155,7 +191,36 @@ class PhotoIndexTaskServiceTest {
         assertThat(service.index(ownerUserId, photoId)).isFalse();
 
         Mockito.verify(photoSearchIndexService, Mockito.never())
-                .indexPhoto(eq(photoId), eq(ownerUserId), Mockito.any(), Mockito.any(), anyList());
+                .indexPhoto(Mockito.any(PhotoIndexDocument.class));
+    }
+
+    @Test
+    void indexBatchDirectWritesLivingPhotosAndDeletesTrashedOnes() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID alivePhotoId = UUID.randomUUID();
+        UUID trashedPhotoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem alive = photo(alivePhotoId, ownerUserId, fileNodeId);
+        alive.setTitle("猫咪");
+        PhotoItem trashed = photo(trashedPhotoId, ownerUserId, UUID.randomUUID());
+        trashed.setDeletedAt(Instant.now());
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, alivePhotoId))
+                .thenReturn(Optional.of(alive));
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, trashedPhotoId))
+                .thenReturn(Optional.of(trashed));
+        Mockito.when(fileLifecycleGuard.isOwnedProcessable(ownerUserId, fileNodeId)).thenReturn(true);
+        Mockito.when(photoTagRepository.findByOwnerUserIdAndPhotoId(ownerUserId, alivePhotoId))
+                .thenReturn(List.of());
+
+        int indexed = service.indexBatchDirect(
+                ownerUserId, List.of(alivePhotoId, trashedPhotoId));
+
+        assertThat(indexed).isEqualTo(1);
+        Mockito.verify(photoSearchIndexService).deletePhotos(List.of(trashedPhotoId));
+        ArgumentCaptor<List<PhotoIndexDocument>> documentsCaptor = listCaptor();
+        Mockito.verify(photoSearchIndexService).indexPhotosBatch(documentsCaptor.capture());
+        assertThat(documentsCaptor.getValue()).singleElement()
+                .satisfies(document -> assertThat(document.photoId()).isEqualTo(alivePhotoId));
     }
 
     @Test
@@ -214,6 +279,50 @@ class PhotoIndexTaskServiceTest {
 
         assertThat(dispatched).isEqualTo(fullBatch + 1);
         Mockito.verify(photoItemRepository).findIndexablePhotosAfterId(eq(lastOfFirstPage.getId()), Mockito.any());
+    }
+
+    private PhotoItem photo(UUID photoId, UUID ownerUserId, UUID fileNodeId) {
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        photo.setFileNodeId(fileNodeId);
+        photo.setProviderMetadata(new HashMap<>());
+        return photo;
+    }
+
+    private PhotoContentAnalysisRun run(UUID photoId) {
+        PhotoContentAnalysisRun run = new PhotoContentAnalysisRun();
+        run.setId(UUID.randomUUID());
+        run.setPhotoId(photoId);
+        run.setPipelineVersion("vision-v6-lightweight+ppocr-v4-onnx-v1");
+        run.setStatus("SUCCEEDED");
+        return run;
+    }
+
+    private PhotoContentLabel label(
+            UUID ownerUserId,
+            UUID photoId,
+            UUID runId,
+            String namespace,
+            String code
+    ) {
+        PhotoContentLabel label = new PhotoContentLabel();
+        label.setId(UUID.randomUUID());
+        label.setOwnerUserId(ownerUserId);
+        label.setPhotoId(photoId);
+        label.setRunId(runId);
+        label.setNamespace(namespace);
+        label.setLabelCode(code);
+        label.setConfidence(0.9F);
+        label.setSource("test");
+        label.setState("AUTO");
+        label.setBoxes(new ArrayList<>());
+        return label;
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<List<PhotoIndexDocument>> listCaptor() {
+        return ArgumentCaptor.forClass(List.class);
     }
 
     /**

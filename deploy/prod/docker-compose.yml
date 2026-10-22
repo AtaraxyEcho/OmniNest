@@ -51,7 +51,7 @@ x-backend-environment: &backend-environment
   # GeoNames 离线逆地理编码数据集目录（omninest-geonames 卷；放入 dump 文件并重启即可自动导入）。
   OMNINEST_GEO_IMPORT_DIR: ${OMNINEST_GEO_IMPORT_DIR:-/var/lib/omninest/geonames}
   OMNINEST_NETEASE_API_BASE_URL: http://netease-music-api:3000
-  OMNINEST_PHOTO_AI_ENDPOINT: http://ai-sidecar:8090
+  OMNINEST_PHOTO_AI_ENDPOINT: http://vision-sidecar:8090
   OMNINEST_PHOTO_AI_TIMEOUT_SECONDS: ${OMNINEST_PHOTO_AI_TIMEOUT_SECONDS:-30}
   OMNINEST_PHOTO_AI_MAX_IMAGE_BYTES: ${OMNINEST_PHOTO_AI_MAX_IMAGE_BYTES:-67108864}
   OMNINEST_PHOTO_AI_MAX_RESPONSE_BYTES: ${OMNINEST_PHOTO_AI_MAX_RESPONSE_BYTES:-1048576}
@@ -425,15 +425,17 @@ services:
     logging: *default-logging
 
   # 4C4G 默认不启动照片 AI。启用：COMPOSE_PROFILES=photo-ai
-  ai-sidecar:
+  # 默认 lightweight + RapidOCR 常驻 RSS < 160MB；切换 ram_plus_int8 时必须同时
+  # 把 AI_SIDECAR_MEM_LIMIT 调到 2560m 以上，侧车也会在容器限额 < 2GB 时自动降级。
+  vision-sidecar:
     profiles:
       - photo-ai
     build:
-      context: ../ai-sidecar
+      context: ../vision-sidecar
       dockerfile: Dockerfile
     environment:
-      INSIGHTFACE_ROOT: /app/models/insightface
-      INSIGHTFACE_MODEL_SHA256: ${INSIGHTFACE_MODEL_SHA256:-}
+      AI_VISION_PROFILE: ${AI_VISION_PROFILE:-lightweight}
+      AI_ORT_INTRA_THREADS: ${AI_CPU_THREADS:-1}
       OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:?OMNINEST_AI_SIDECAR_SECRET 必须显式配置}
       OMP_NUM_THREADS: ${AI_CPU_THREADS:-1}
       TZ: Asia/Shanghai

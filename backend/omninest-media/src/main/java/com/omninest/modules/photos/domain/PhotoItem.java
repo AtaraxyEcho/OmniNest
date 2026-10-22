@@ -132,6 +132,10 @@ public class PhotoItem {
     @Column(name = "active_file_id")
     private UUID activeFileId;
 
+    /** RapidOCR 提取的图片内嵌文字；未识别或未执行 OCR 时为 null。 */
+    @Column(name = "ocr_text", columnDefinition = "text")
+    private String ocrText;
+
     /**
      * 全分辨率展示与导出使用的文件节点：编辑产物优先，未编辑时为原图。
      *

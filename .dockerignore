@@ -60,7 +60,7 @@ logo/
 *.sql.xz
 
 # AI 模型缓存不随构建上下文传入镜像
-ai-sidecar/models/
+vision-sidecar/models/
 *.pth
 *.pt
 *.onnx

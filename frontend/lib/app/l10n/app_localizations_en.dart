@@ -8324,6 +8324,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosAnalysisStyle => 'Styles';
 
   @override
+  String get photosOcrText => 'Text in Image (OCR)';
+
+  @override
+  String get photosCopyOcrText => 'Copy text';
+
+  @override
+  String get photosOcrTextCopied => 'Text copied';
+
+  @override
   String get photosAiCategoryPerson => 'People';
 
   @override

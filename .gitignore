@@ -121,7 +121,7 @@ replay_pid*
 **/.venv/
 
 # AI 模型和本地推理缓存
-ai-sidecar/models/
+vision-sidecar/models/
 *.pth
 *.pt
 *.onnx

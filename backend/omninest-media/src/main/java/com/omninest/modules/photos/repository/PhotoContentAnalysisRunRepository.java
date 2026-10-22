@@ -1,7 +1,9 @@
 package com.omninest.modules.photos.repository;
 
 import com.omninest.modules.photos.domain.PhotoContentAnalysisRun;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -25,4 +27,14 @@ public interface PhotoContentAnalysisRunRepository extends JpaRepository<PhotoCo
             UUID photoId,
             String status
     );
+
+    Optional<PhotoContentAnalysisRun>
+            findFirstByOwnerUserIdAndContentHashAndPipelineVersionAndStatusOrderByCompletedAtDesc(
+                    UUID ownerUserId,
+                    String contentHash,
+                    String pipelineVersion,
+                    String status
+            );
+
+    void deleteByPhotoIdIn(Collection<UUID> photoIds);
 }

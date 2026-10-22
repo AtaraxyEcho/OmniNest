@@ -2,15 +2,23 @@ package com.omninest.modules.photos.service;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.photos.domain.PhotoContentAnalysisRun;
+import com.omninest.modules.photos.domain.PhotoContentLabel;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.domain.PhotoTag;
 import com.omninest.modules.photos.event.PhotoIndexEvent;
+import com.omninest.modules.photos.repository.PhotoContentAnalysisRunRepository;
+import com.omninest.modules.photos.repository.PhotoContentLabelRepository;
 import com.omninest.modules.photos.repository.PhotoIndexTargetProjection;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
+import com.omninest.modules.photos.search.PhotoSearchIndexService.PhotoIndexDocument;
 import com.omninest.modules.task.service.TaskDispatchService;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,9 +42,15 @@ public class PhotoIndexTaskService {
      * 全站重建时的单批扫描数量。
      */
     private static final int REBUILD_BATCH_SIZE = 500;
+    private static final String STATUS_SUCCEEDED = "SUCCEEDED";
+    private static final String STATE_AUTO = "AUTO";
+    private static final String METADATA_SEMANTIC_TAGS = "semanticTags";
 
     private final PhotoItemRepository photoItemRepository;
     private final PhotoTagRepository photoTagRepository;
+    private final PhotoContentAnalysisRunRepository analysisRunRepository;
+    private final PhotoContentLabelRepository contentLabelRepository;
+    private final PhotoLabelPolicy labelPolicy;
     private final PhotoSearchIndexService photoSearchIndexService;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final TaskDispatchService taskDispatchService;
@@ -60,18 +74,41 @@ public class PhotoIndexTaskService {
             photoSearchIndexService.deletePhoto(photoId);
             return false;
         }
-        List<String> tags = photoTagRepository.findByOwnerUserIdAndPhotoId(ownerUserId, photoId)
-                .stream()
-                .map(PhotoTag::getTag)
-                .toList();
-        photoSearchIndexService.indexPhoto(
-                photo.getId(),
-                photo.getOwnerUserId(),
-                photo.getTitle(),
-                photo.getDescription(),
-                tags
-        );
+        photoSearchIndexService.indexPhoto(buildDocument(ownerUserId, photo));
         return true;
+    }
+
+    /**
+     * 在 Worker 内批量同步一页照片的分析结果。
+     *
+     * <p>每页仅提交一次 Lucene 写入，避免全库重分析时逐张 commit。
+     * 只能在 Worker 运行时调用，不得从 API 进程调用。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param photoIds 已成功分析的当页照片
+     * @return 实际写入索引的照片数
+     */
+    public int indexBatchDirect(UUID ownerUserId, List<UUID> photoIds) {
+        if (photoIds == null || photoIds.isEmpty()) {
+            return 0;
+        }
+        List<PhotoIndexDocument> documents = new ArrayList<>();
+        List<UUID> removalIds = new ArrayList<>();
+        for (UUID photoId : photoIds) {
+            PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId).orElse(null);
+            if (photo == null) {
+                continue;
+            }
+            if (photo.getDeletedAt() != null
+                    || !fileLifecycleGuard.isOwnedProcessable(ownerUserId, photo.getFileNodeId())) {
+                removalIds.add(photoId);
+                continue;
+            }
+            documents.add(buildDocument(ownerUserId, photo));
+        }
+        photoSearchIndexService.deletePhotos(removalIds);
+        photoSearchIndexService.indexPhotosBatch(documents);
+        return documents.size();
     }
 
     /**
@@ -126,5 +163,57 @@ public class PhotoIndexTaskService {
         }
         log.info("照片索引重建派发完成: 待派发照片数={}, 已派发={}", total, dispatched);
         return dispatched;
+    }
+
+    private PhotoIndexDocument buildDocument(UUID ownerUserId, PhotoItem photo) {
+        List<String> tags = photoTagRepository
+                .findByOwnerUserIdAndPhotoId(ownerUserId, photo.getId())
+                .stream()
+                .map(PhotoTag::getTag)
+                .toList();
+        List<String> aiLabels = new ArrayList<>();
+        PhotoContentAnalysisRun run = analysisRunRepository
+                .findTopByOwnerUserIdAndPhotoIdAndStatusOrderByCreatedAtDesc(
+                        ownerUserId,
+                        photo.getId(),
+                        STATUS_SUCCEEDED
+                );
+        if (run != null) {
+            for (PhotoContentLabel label : contentLabelRepository
+                    .findByOwnerUserIdAndPhotoIdAndRunId(ownerUserId, photo.getId(), run.getId())) {
+                if (!STATE_AUTO.equals(label.getState())) {
+                    continue;
+                }
+                aiLabels.addAll(labelPolicy.expandSearchKeywords(
+                        label.getNamespace(),
+                        label.getLabelCode()
+                ));
+            }
+        }
+        aiLabels.addAll(semanticTags(photo));
+        return new PhotoIndexDocument(
+                photo.getId(),
+                ownerUserId,
+                photo.getTitle(),
+                photo.getDescription(),
+                tags,
+                aiLabels,
+                photo.getOcrText()
+        );
+    }
+
+    private List<String> semanticTags(PhotoItem photo) {
+        if (photo.getProviderMetadata() == null) {
+            return List.of();
+        }
+        Object value = photo.getProviderMetadata().get(METADATA_SEMANTIC_TAGS);
+        if (!(value instanceof Collection<?> collection)) {
+            return List.of();
+        }
+        return collection.stream()
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .filter(tag -> !tag.isBlank())
+                .toList();
     }
 }

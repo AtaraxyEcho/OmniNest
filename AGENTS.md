@@ -2,7 +2,7 @@
 
 本文件适用于 `D:\Development\Project Collection\OmniNest`。后续 Agent 在本项目修改代码、文档、迁移脚本、配置或测试时，必须优先遵循本文件。
 
-本文件是整个项目唯一的 Agent 规范入口。不得在 `frontend/`、`backend/`、`ai-sidecar/` 或其他子目录创建额外的 `AGENTS.md`；模块专项约束应写入集中维护的项目文档，并由本文件引用，避免同一任务因目录层级产生冲突规则。
+本文件是整个项目唯一的 Agent 规范入口。不得在 `frontend/`、`backend/`、`vision-sidecar/` 或其他子目录创建额外的 `AGENTS.md`；模块专项约束应写入集中维护的项目文档，并由本文件引用，避免同一任务因目录层级产生冲突规则。
 
 ## 项目与事实来源
 
@@ -34,11 +34,11 @@ AGENTS.md
 backend/           Spring Boot API、Worker、Scheduler、Flyway 与后端测试
 frontend/          Flutter Web、Android、Desktop 与前端测试
 deploy/            dev/prod Docker Compose、环境模板与共享镜像定义
-deploy/ai-sidecar/ 图像分析侧车服务、模型适配与容器定义
+deploy/vision-sidecar/ 图像分析侧车服务、模型适配与容器定义
 ```
 
 - 项目根目录是唯一 Git 仓库，统一追踪后端、前端、图片分析侧车和部署配置。
-- 不得在 `backend/`、`frontend/`、`ai-sidecar/` 或其他子目录创建嵌套 `.git`、Git submodule 或独立仓库；调整仓库边界前必须获得用户明确同意。
+- 不得在 `backend/`、`frontend/`、`vision-sidecar/` 或其他子目录创建嵌套 `.git`、Git submodule 或独立仓库；调整仓库边界前必须获得用户明确同意。
 - 每项任务完成后必须在根仓库创建 commit，默认不 push；用户明确要求推送时再推送到当前根仓库远端。
 - Windows 环境执行仓库命令时优先使用 Git Bash；不要因方便混用 PowerShell 与 Git Bash 进行跨 shell 的文件删除或移动。
 

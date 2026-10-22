@@ -223,6 +223,9 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.photoAi.endpoint", "图像分析服务地址", false, 512));
         add(values, number("photo.ai.timeout", "30", "photo", ConfigSurface.INTEGRATION,
                 "config.integration.photoAi.timeout", "图像分析请求超时（秒）", 3, 120));
+        add(values, string("photo.ai.pipeline-version", "", "photo", ConfigSurface.INTEGRATION,
+                "config.integration.photoAi.pipelineVersion",
+                "图像分析流水线版本覆盖值（留空则自动探测侧车）", false, 128));
         // 背景库。视频上界低于 spring.servlet.multipart 的 512MB，留出 multipart 信封开销余量。
         add(values, number("backdrop.max-image-bytes", "20971520", "backdrop", ConfigSurface.GENERAL,
                 "config.backdrop.maxImageBytes", "背景图片单文件大小上限（字节）", 1024 * 1024, 128 * 1024 * 1024));

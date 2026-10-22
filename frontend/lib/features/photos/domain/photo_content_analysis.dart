@@ -5,10 +5,12 @@ class PhotoContentAnalysis {
     required this.pipelineVersion,
     required this.completedAt,
     required this.labels,
+    this.ocrText,
   });
 
   factory PhotoContentAnalysis.fromJson(Map<String, dynamic> json) {
     final rawLabels = json['labels'];
+    final rawOcr = json['ocrText']?.toString().trim();
     return PhotoContentAnalysis(
       status: json['status']?.toString() ?? 'UNKNOWN',
       pipelineVersion: json['pipelineVersion']?.toString(),
@@ -25,6 +27,7 @@ class PhotoContentAnalysis {
                   )
                   .toList(growable: false)
               : const [],
+      ocrText: (rawOcr != null && rawOcr.isNotEmpty) ? rawOcr : null,
     );
   }
 
@@ -32,6 +35,11 @@ class PhotoContentAnalysis {
   final String? pipelineVersion;
   final DateTime? completedAt;
   final List<PhotoContentLabel> labels;
+
+  /// OCR 提取的图片内嵌文字；未识别或未执行 OCR 时为 null。
+  final String? ocrText;
+
+  bool get hasOcrText => ocrText != null && ocrText!.isNotEmpty;
 
   Map<String, List<PhotoContentLabel>> get labelsByNamespace {
     final groups = <String, List<PhotoContentLabel>>{};

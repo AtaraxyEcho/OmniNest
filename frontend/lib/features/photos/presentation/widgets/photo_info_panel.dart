@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -168,42 +169,99 @@ class PhotoInfoPanel extends ConsumerWidget {
     }
   }
 
-  /// AI 识别分区：按命名空间分组的识别标签胶囊。
+  /// AI 识别分区：按命名空间分组的识别标签胶囊与图中文字。
   List<Widget> _buildAiSection(BuildContext context, PhotoItem fresh) {
     final analysis = fresh.contentAnalysis;
-    if (analysis?.labels.isNotEmpty != true) {
+    final hasLabels = analysis?.labels.isNotEmpty == true;
+    final hasOcr = analysis?.hasOcrText == true;
+    if (!hasLabels && !hasOcr) {
       return const [];
     }
+    final l10n = AppLocalizations.of(context);
     return [
       const SizedBox(height: 24),
-      Text(
-        AppLocalizations.of(context).photosAIRecognition,
-        style: _eyebrowStyle,
-      ),
-      const SizedBox(height: 12),
-      for (final entry in analysis!.labelsByNamespace.entries) ...[
-        Text(
-          _localizedPhotoAnalysisNamespace(context, entry.key),
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.45),
-            fontSize: AppTypography.labelSmall,
-            fontWeight: FontWeight.w700,
+      Text(l10n.photosAIRecognition, style: _eyebrowStyle),
+      if (hasLabels) ...[
+        const SizedBox(height: 12),
+        for (final entry in analysis!.labelsByNamespace.entries) ...[
+          Text(
+            _localizedPhotoAnalysisNamespace(context, entry.key),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.45),
+              fontSize: AppTypography.labelSmall,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final label in entry.value)
+                _InfoPill(
+                  text: _localizedPhotoContentLabel(context, label.code),
+                  background: _pillBackground,
+                  foreground: _pillForeground,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+      if (hasOcr) ...[
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            for (final label in entry.value)
-              _InfoPill(
-                text: _localizedPhotoContentLabel(context, label.code),
-                background: _pillBackground,
-                foreground: _pillForeground,
+            Text(
+              l10n.photosOcrText,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.45),
+                fontSize: AppTypography.labelSmall,
+                fontWeight: FontWeight.w700,
               ),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.copy_rounded,
+                size: 16,
+                color: PhotosChromeColors.white59,
+              ),
+              tooltip: l10n.photosCopyOcrText,
+              visualDensity: VisualDensity.compact,
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(text: analysis!.ocrText!),
+                );
+                if (!context.mounted) return;
+                showOmniFeedback(
+                  context,
+                  l10n.photosOcrTextCopied,
+                  severity: OmniFeedbackSeverity.success,
+                );
+              },
+            ),
           ],
         ),
-        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxHeight: 160),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              analysis!.ocrText!,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.82),
+                fontSize: AppTypography.bodySmall,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ),
       ],
     ];
   }

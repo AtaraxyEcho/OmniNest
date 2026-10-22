@@ -206,7 +206,7 @@ public class TaskRedispatchService {
                 Map<String, Object> analysis = new LinkedHashMap<>();
                 analysis.put("taskId", taskId.toString());
                 analysis.put("ownerUserId", requireOwner(payload, fallbackOwnerUserId).toString());
-                // 库级模式（重分析、重聚类）本就没有 photoId，事件里必须保持 null 而不是报错。
+                // 库级模式（全库重分析）本就没有 photoId，事件里必须保持 null 而不是报错。
                 analysis.put("photoId", nullableUuid(payload.get("photoId")));
                 // 丢失 mode 会让库级任务退化成单张分析，消费端按 SINGLE_PHOTO 处理空 photoId 直接失败。
                 analysis.put("mode", nullableText(payload.get("mode")));

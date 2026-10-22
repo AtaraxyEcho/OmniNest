@@ -23,28 +23,13 @@ class PhotoLabelPolicyTest {
 
     @Test
     void shouldKeepSubjectAndSceneNamespacesIndependent() {
-        ContentAnalysis analysis = new ContentAnalysis(
-                2,
-                "content-analysis-v2",
-                List.of(
-                        new ContentObservation(
-                                "SUBJECT",
-                                "cat",
-                                0.91F,
-                                "coco",
-                                List.of(new BoundingBox(0.1F, 0.1F, 0.4F, 0.4F))
-                        ),
-                        new ContentObservation(
-                                "SCENE",
-                                "office",
-                                0.88F,
-                                "places365",
-                                List.of()
-                        )
-                )
+        ContentAnalysis analysis = analysis(
+                observation("SUBJECT", "cat", 0.91F, "mobileclip2-s0-onnx",
+                        List.of(new BoundingBox(0.1F, 0.1F, 0.4F, 0.4F))),
+                observation("SCENE", "office", 0.88F, "mobileclip2-s0-onnx", List.of())
         );
 
-        Set<String> labels = policy.classify(analysis, false).stream()
+        Set<String> labels = policy.classify(analysis).stream()
                 .map(label -> label.namespace() + ":" + label.code())
                 .collect(Collectors.toSet());
 
@@ -55,60 +40,103 @@ class PhotoLabelPolicyTest {
 
     @Test
     void shouldNotInferIndoorOrAnimalFromUncontrolledSceneText() {
-        ContentAnalysis analysis = new ContentAnalysis(
-                2,
-                "content-analysis-v2",
-                List.of(new ContentObservation(
-                        "SCENE",
-                        "veterinarians office",
-                        0.99F,
-                        "places365",
-                        List.of()
-                ))
+        ContentAnalysis analysis = analysis(
+                observation("SCENE", "veterinarians office", 0.99F, "unknown", List.of())
         );
 
-        List<PhotoLabelPolicy.PhotoLabel> labels = policy.classify(analysis, false);
+        List<PhotoLabelPolicy.PhotoLabel> labels = policy.classify(analysis);
 
         assertTrue(labels.isEmpty());
     }
 
     @Test
-    void shouldKeepOnlyTheMostConfidentSceneLabel() {
-        ContentAnalysis analysis = new ContentAnalysis(
-                2,
-                "content-analysis-v2",
-                List.of(
-                        new ContentObservation("SCENE", "indoor", 0.91F, "places365", List.of()),
-                        new ContentObservation("SCENE", "office", 0.74F, "places365", List.of()),
-                        new ContentObservation("SUBJECT", "cat", 0.89F, "coco", List.of())
-                )
+    void shouldKeepOnlyTheMostConfidentSceneAndStyleLabel() {
+        ContentAnalysis analysis = analysis(
+                observation("SCENE", "indoor", 0.91F, "mobileclip2-s0-onnx", List.of()),
+                observation("SCENE", "office", 0.74F, "mobileclip2-s0-onnx", List.of()),
+                observation("STYLE", "photograph", 0.89F, "mobileclip2-s0-onnx", List.of()),
+                observation("STYLE", "artwork", 0.72F, "mobileclip2-s0-onnx", List.of()),
+                observation("SUBJECT", "cat", 0.89F, "mobileclip2-s0-onnx", List.of())
         );
 
-        Set<String> labels = policy.classify(analysis, false).stream()
+        Set<String> labels = policy.classify(analysis).stream()
                 .map(label -> label.namespace() + ":" + label.code())
                 .collect(Collectors.toSet());
 
-        assertEquals(Set.of("SCENE:indoor", "SUBJECT:cat"), labels);
+        assertEquals(Set.of("SCENE:indoor", "STYLE:photograph", "SUBJECT:cat"), labels);
     }
 
     @Test
-    void shouldAddPersonOnlyWhenFaceDetectorConfirmsIt() {
-        ContentAnalysis analysis = new ContentAnalysis(
-                2,
-                "content-analysis-v2",
-                List.of(new ContentObservation(
-                        "STYLE",
-                        "illustration",
-                        0.93F,
-                        "style-policy",
-                        List.of()
-                ))
+    void shouldDropObservationsBelowNamespaceThreshold() {
+        ContentAnalysis analysis = analysis(
+                observation("SUBJECT", "cat", 0.64F, "mobileclip2-s0-onnx", List.of()),
+                observation("SCENE", "office", 0.54F, "mobileclip2-s0-onnx", List.of()),
+                observation("STYLE", "photograph", 0.69F, "mobileclip2-s0-onnx", List.of())
         );
 
-        Set<String> labels = policy.classify(analysis, true).stream()
+        assertTrue(policy.classify(analysis).isEmpty());
+    }
+
+    @Test
+    void shouldAcceptPersonSubjectObservationWithoutFaceDetector() {
+        ContentAnalysis analysis = analysis(
+                observation("STYLE", "illustration", 0.93F, "mobileclip2-s0-onnx", List.of()),
+                observation("SUBJECT", "person", 0.88F, "mobileclip2-s0-onnx", List.of())
+        );
+
+        Set<String> labels = policy.classify(analysis).stream()
                 .map(label -> label.namespace() + ":" + label.code())
                 .collect(Collectors.toSet());
 
         assertEquals(Set.of("SUBJECT:person", "STYLE:illustration"), labels);
+    }
+
+    @Test
+    void shouldAcceptOcrLayoutStyleCodes() {
+        ContentAnalysis analysis = analysis(
+                observation("STYLE", "screenshot", 0.96F, PhotoContentAnalysisService.OCR_LAYOUT_SOURCE, List.of()),
+                observation("STYLE", "document", 0.91F, PhotoContentAnalysisService.OCR_LAYOUT_SOURCE, List.of())
+        );
+
+        List<PhotoLabelPolicy.PhotoLabel> labels = policy.classify(analysis);
+
+        assertEquals(1, labels.size());
+        assertEquals("screenshot", labels.getFirst().code());
+        assertEquals(PhotoContentAnalysisService.OCR_LAYOUT_SOURCE, labels.getFirst().source());
+    }
+
+    @Test
+    void shouldExpandSearchKeywordsWithChineseSynonyms() {
+        List<String> personKeywords = policy.expandSearchKeywords("SUBJECT", "person");
+        List<String> documentKeywords = policy.expandSearchKeywords("STYLE", "document");
+        List<String> unknownKeywords = policy.expandSearchKeywords("SCENE", "unknown_code");
+
+        assertTrue(personKeywords.getFirst().contains("人物"));
+        assertTrue(personKeywords.getFirst().contains("person"));
+        assertTrue(documentKeywords.getFirst().contains("发票"));
+        assertTrue(documentKeywords.getFirst().contains("document"));
+        assertEquals(List.of("unknown code"), unknownKeywords);
+        assertTrue(policy.expandSearchKeywords(null, "cat").isEmpty());
+    }
+
+    private ContentAnalysis analysis(ContentObservation... observations) {
+        return new ContentAnalysis(
+                2,
+                "vision-v6-lightweight+ppocr-v4-onnx-v1",
+                PhotoContentAnalysisService.EXPECTED_OCR_VERSION,
+                List.of(observations),
+                List.of(),
+                null
+        );
+    }
+
+    private ContentObservation observation(
+            String namespace,
+            String code,
+            float confidence,
+            String source,
+            List<BoundingBox> boxes
+    ) {
+        return new ContentObservation(namespace, code, confidence, source, boxes);
     }
 }

@@ -83,6 +83,7 @@ void main() {
       'contentAnalysis': <String, dynamic>{
         'status': 'SUCCEEDED',
         'pipelineVersion': 'content-analysis-v2',
+        'ocrText': '发票号码 12345',
         'labels': <Object>[
           <String, dynamic>{
             'id': 'label-1',
@@ -115,6 +116,8 @@ void main() {
       photo.contentAnalysis!.labelsByNamespace['SCENE']!.single.code,
       'office',
     );
+    expect(photo.contentAnalysis!.hasOcrText, isTrue);
+    expect(photo.contentAnalysis!.ocrText, '发票号码 12345');
   });
 
   test('照片详情按国家省市区生成可读地点', () {

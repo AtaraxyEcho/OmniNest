@@ -179,7 +179,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(79);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(80);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -242,6 +242,7 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('photo.ai.enabled'),
                         ('photo.ai.url'),
                         ('photo.ai.timeout'),
+                        ('photo.ai.pipeline-version'),
                         ('backdrop.max-image-bytes'),
                         ('backdrop.max-video-bytes'),
                         ('backdrop.max-assets-per-user'),

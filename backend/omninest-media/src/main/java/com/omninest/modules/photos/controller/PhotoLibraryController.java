@@ -19,7 +19,6 @@ import com.omninest.modules.photos.dto.PhotoDtos.CreateAlbumShareRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.CreateBatchTaskRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.DeletePhotosRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.EditRequest;
-import com.omninest.modules.photos.dto.PhotoDtos.NameClusterRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDetailDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAiTaskDto;
@@ -27,7 +26,6 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoBatchDownloadTicketDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoBatchTaskDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoDashboardDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoEditVersionDto;
-import com.omninest.modules.photos.dto.PhotoDtos.PhotoFaceClusterDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoGroupDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoListItemDto;
@@ -39,7 +37,6 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoSharedAlbumDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
 import com.omninest.modules.photos.service.PhotoAdminService;
-import com.omninest.modules.photos.service.PhotoAiService;
 import com.omninest.modules.photos.service.PhotoAiTaskService;
 import com.omninest.modules.photos.service.PhotoAlbumService;
 import com.omninest.modules.photos.service.PhotoBatchService;
@@ -88,7 +85,6 @@ public class PhotoLibraryController {
     private final PhotoBatchService batchService;
     private final PhotoEditService editService;
     private final GeoDatasetService geoDatasetService;
-    private final PhotoAiService photoAiService;
     private final PhotoAiTaskService photoAiTaskService;
     private final PhotosRuntimeConfigService photosRuntimeConfigService;
     private final PhotoRelationService relationService;
@@ -851,49 +847,9 @@ public class PhotoLibraryController {
         return ApiResponse.success(Map.of("taskId", taskId.toString()));
     }
 
-    // ─── 图像分析与人脸聚类 ───
+    // ─── 图像分析 ───
 
-    @Operation(summary = "获取人脸聚类列表", description = "返回图像分析识别的人脸聚类分组")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
-    @GetMapping("/api/v1/photos/people")
-    ApiResponse<List<PhotoFaceClusterDto>> faceClusters() {
-        requireAiEnabled();
-        UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(photoAiService.getClusters(userId));
-    }
-
-    @Operation(summary = "获取聚类照片列表", description = "返回指定人脸聚类中的所有照片")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
-    @GetMapping("/api/v1/photos/people/{clusterId}")
-    ApiResponse<List<PhotoItemDto>> photosByCluster(@PathVariable UUID clusterId) {
-        requireAiEnabled();
-        UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(photoAiService.getPhotosByCluster(userId, clusterId));
-    }
-
-    @Operation(summary = "命名人物聚类", description = "为指定的人脸聚类设置人物名称")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PutMapping("/api/v1/photos/people/{clusterId}")
-    ApiResponse<Void> nameCluster(
-            @PathVariable UUID clusterId,
-            @Valid @RequestBody NameClusterRequest body
-    ) {
-        requireAiEnabled();
-        UUID userId = currentUserContext.requireCurrentUserId();
-        photoAiService.nameCluster(userId, clusterId, body.name());
-        return ApiResponse.success();
-    }
-
-    @Operation(summary = "重新聚类人脸", description = "异步重新聚类已有的人脸分析结果")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PostMapping("/api/v1/photos/ai/recluster")
-    ApiResponse<PhotoAiTaskDto> reclusterFaces() {
-        requireAiEnabled();
-        UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(photoAiTaskService.queueFaceRecluster(userId));
-    }
-
-    @Operation(summary = "重分析照片库", description = "异步分页重建当前用户全部照片的图像分析和人脸聚类结果")
+    @Operation(summary = "重分析照片库", description = "异步分页重建当前用户全部照片的文字识别与视觉标签")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
     @PostMapping("/api/v1/photos/ai/reanalyze")
     ApiResponse<PhotoAiTaskDto> reanalyzeLibrary() {

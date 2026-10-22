@@ -1783,34 +1783,6 @@ CREATE TABLE "omni"."photo_edit_versions" (
 )
 ;
 
-CREATE TABLE "omni"."photo_face_clusters" (
-  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
-  "owner_user_id" uuid NOT NULL,
-  "name" varchar(200),
-  "cover_face_id" uuid,
-  "face_count" int4 NOT NULL DEFAULT 0,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "version" int8 NOT NULL DEFAULT 0
-)
-;
-
-CREATE TABLE "omni"."photo_faces" (
-  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
-  "photo_id" uuid NOT NULL,
-  "owner_user_id" uuid NOT NULL,
-  "bbox_x" int4 NOT NULL,
-  "bbox_y" int4 NOT NULL,
-  "bbox_w" int4 NOT NULL,
-  "bbox_h" int4 NOT NULL,
-  "embedding" bytea,
-  "cluster_id" uuid,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "version" int8 NOT NULL DEFAULT 0
-)
-;
-
 CREATE TABLE "omni"."photo_favorites" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "owner_user_id" uuid NOT NULL,
@@ -1854,7 +1826,8 @@ CREATE TABLE "omni"."photo_items" (
   "deleted_at" timestamptz(6),
   "motion_state" varchar(16),
   "motion_video_file_node_id" uuid,
-  "active_file_id" uuid
+  "active_file_id" uuid,
+  "ocr_text" text
 )
 ;
 
@@ -3307,24 +3280,6 @@ ALTER TABLE "omni"."photo_edit_versions" ADD CONSTRAINT "ck_photo_edit_versions_
 
 ALTER TABLE "omni"."photo_edit_versions" ADD CONSTRAINT "photo_edit_versions_pkey" PRIMARY KEY ("id");
 
-CREATE INDEX "idx_photo_face_clusters_owner" ON "omni"."photo_face_clusters" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-
-ALTER TABLE "omni"."photo_face_clusters" ADD CONSTRAINT "photo_face_clusters_pkey" PRIMARY KEY ("id");
-
-CREATE INDEX "idx_photo_faces_cluster" ON "omni"."photo_faces" USING btree (
-  "cluster_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-CREATE INDEX "idx_photo_faces_owner" ON "omni"."photo_faces" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-CREATE INDEX "idx_photo_faces_photo" ON "omni"."photo_faces" USING btree (
-  "photo_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-
-ALTER TABLE "omni"."photo_faces" ADD CONSTRAINT "photo_faces_pkey" PRIMARY KEY ("id");
-
 CREATE INDEX "idx_photo_favorites_owner" ON "omni"."photo_favorites" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
@@ -3408,6 +3363,14 @@ CREATE INDEX "idx_photo_content_analysis_runs_photo" ON "omni"."photo_content_an
   "status",
   "created_at" DESC
 );
+
+CREATE INDEX "idx_photo_analysis_runs_hash_reuse" ON "omni"."photo_content_analysis_runs" USING btree (
+  "owner_user_id",
+  "content_hash",
+  "pipeline_version",
+  "status"
+) WHERE "status" = 'SUCCEEDED' AND "content_hash" IS NOT NULL
+;
 
 CREATE INDEX "idx_photo_content_labels_photo" ON "omni"."photo_content_labels" USING btree (
   "owner_user_id",
@@ -3882,27 +3845,6 @@ COMMENT ON COLUMN "omni"."photo_edit_versions"."file_id" IS '编辑结果文件�
 COMMENT ON COLUMN "omni"."photo_edit_versions"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."photo_edit_versions"."version" IS '乐观锁版本号';
 
-COMMENT ON TABLE "omni"."photo_face_clusters" IS '照片人脸聚类表，保存同一人物的人脸集合';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."id" IS '人脸聚类唯一标识，主键';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."owner_user_id" IS '所属用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."name" IS '人物显示名称';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."cover_face_id" IS '聚类封面人脸ID，关联photo_faces';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."face_count" IS '聚类包含的人脸数量';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."created_at" IS '创建时间';
-COMMENT ON COLUMN "omni"."photo_face_clusters"."updated_at" IS '更新时间';
-
-COMMENT ON TABLE "omni"."photo_faces" IS '照片人脸检测结果表，保存位置、特征向量和聚类关系';
-COMMENT ON COLUMN "omni"."photo_faces"."id" IS '人脸检测结果唯一标识，主键';
-COMMENT ON COLUMN "omni"."photo_faces"."photo_id" IS '照片ID，关联photo_items';
-COMMENT ON COLUMN "omni"."photo_faces"."owner_user_id" IS '所属用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."photo_faces"."bbox_x" IS '人脸边界框左上角横坐标比例';
-COMMENT ON COLUMN "omni"."photo_faces"."bbox_y" IS '人脸边界框左上角纵坐标比例';
-COMMENT ON COLUMN "omni"."photo_faces"."bbox_w" IS '人脸边界框宽度比例';
-COMMENT ON COLUMN "omni"."photo_faces"."bbox_h" IS '人脸边界框高度比例';
-COMMENT ON COLUMN "omni"."photo_faces"."embedding" IS '人脸特征向量';
-COMMENT ON COLUMN "omni"."photo_faces"."cluster_id" IS '所属人脸聚类ID，关联photo_face_clusters';
-COMMENT ON COLUMN "omni"."photo_faces"."created_at" IS '创建时间';
-
 COMMENT ON TABLE "omni"."photo_favorites" IS '照片收藏表，保存用户收藏的照片';
 COMMENT ON COLUMN "omni"."photo_favorites"."id" IS '照片收藏唯一标识，主键';
 COMMENT ON COLUMN "omni"."photo_favorites"."owner_user_id" IS '所属用户ID，关联auth_users';
@@ -3942,6 +3884,7 @@ COMMENT ON COLUMN "omni"."photo_items"."metering_mode" IS '测光模式';
 COMMENT ON COLUMN "omni"."photo_items"."lens_model" IS '镜头型号';
 COMMENT ON COLUMN "omni"."photo_items"."gps_location" IS '照片地理位置 JSON，保存 GPS 反向地理编码结果';
 COMMENT ON COLUMN "omni"."photo_items"."active_file_id" IS '当前活动全分辨率文件节点，编辑产物或空（空表示原图 file_node_id）';
+COMMENT ON COLUMN "omni"."photo_items"."ocr_text" IS 'RapidOCR 提取的图片内嵌文字，用于全文检索与详情面板展示';
 
 COMMENT ON TABLE "omni"."photo_scan_jobs" IS '照片库扫描任务表，记录扫描进度和执行结果';
 COMMENT ON COLUMN "omni"."photo_scan_jobs"."id" IS '照片扫描任务唯一标识，主键';

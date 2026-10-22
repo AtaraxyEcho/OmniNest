@@ -120,7 +120,7 @@ Screenshot folders:
 | --- | --- |
 | Portal | Unified workspace, backdrops, recent content, notifications, module entry points |
 | File Manager | Uploads, folders, search, preview, downloads, recycle bin, storage lifecycle |
-| Photos | Albums and timeline, thumbnails, metadata, location, optional image analysis (sidecar currently focused on face detect / embed / cluster) |
+| Photos | Albums and timeline, thumbnails, metadata, location, optional image analysis (OCR, controlled visual labels and Chinese full-text search) |
 | Movies | Library, posters and details, playback, subtitles, progress, local read-only sources |
 | Music | Local library, external platforms, queue, covers/lyrics, playback progress |
 | Reader | EPUB and more, catalogs, text/comic reading, bookmarks, annotations, progress |
@@ -157,7 +157,7 @@ Screenshot folders:
 | [backend](backend/README.en.md) | Server modules and tests; runtime logs under `backend/logs/` |
 | [frontend](frontend/README.en.md) | Flutter clients and tests; build/test logs under `frontend/logs/` |
 | [deploy](deploy/README.md) | Dev/prod Compose and deployment |
-| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | Image analysis sidecar |
+| [deploy/vision-sidecar](deploy/vision-sidecar/README.md) | Image analysis sidecar |
 | [imgs](imgs) | Documentation screenshots |
 
 ---

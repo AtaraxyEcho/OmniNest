@@ -12,12 +12,12 @@ import com.omninest.modules.media.service.MediaFileVisibilitySyncParticipant;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoAlbum;
 import com.omninest.modules.photos.domain.PhotoEditVersion;
-import com.omninest.modules.photos.domain.PhotoFace;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
+import com.omninest.modules.photos.repository.PhotoContentAnalysisRunRepository;
+import com.omninest.modules.photos.repository.PhotoContentLabelRepository;
 import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
-import com.omninest.modules.photos.repository.PhotoFaceRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
@@ -58,11 +58,11 @@ public class PhotoFileCleanupService implements
     private final PhotoAlbumRepository albumRepository;
     private final PhotoTagRepository tagRepository;
     private final PhotoEditVersionRepository editVersionRepository;
-    private final PhotoFaceRepository faceRepository;
+    private final PhotoContentLabelRepository contentLabelRepository;
+    private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository;
     private final PhotoSearchIndexService photoSearchIndexService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
-    private final PhotoFaceClusterMaintenanceService clusterMaintenanceService;
 
     /**
      * 查询目标文件的照片条目引用。
@@ -173,9 +173,8 @@ public class PhotoFileCleanupService implements
         List<UUID> photoIds = photos.stream().map(PhotoItem::getId).toList();
         tagRepository.deleteByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds);
         editVersionRepository.deleteByPhotoIdIn(photoIds);
-        List<PhotoFace> removedFaces = faceRepository.findByPhotoIdIn(photoIds);
-        faceRepository.deleteAll(removedFaces);
-        clusterMaintenanceService.onFacesRemoved(ownerUserId, removedFaces);
+        contentLabelRepository.deleteByPhotoIdIn(photoIds);
+        contentAnalysisRunRepository.deleteByPhotoIdIn(photoIds);
         List<UUID> affectedAlbumIds = albumItemRepository.findAlbumIdsByPhotoIdIn(photoIds);
         albumItemRepository.deleteByPhotoIdIn(photoIds);
         favoriteRepository.deleteByPhotoIdIn(photoIds);

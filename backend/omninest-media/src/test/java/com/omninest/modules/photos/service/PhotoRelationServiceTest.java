@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationEdgeDto;
-import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationEdgeDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationNodeDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationsDto;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
@@ -34,21 +33,14 @@ class PhotoRelationServiceTest {
     void assemblesTypedEdgesFromRepositoryProjections() {
         when(repository.findAlbumRelationNodes(OWNER_ID, 400))
                 .thenReturn(List.of(node("album-1", "旅行相册", 12)));
-        when(repository.findPersonRelationNodes(OWNER_ID, 400)).thenReturn(List.of());
         when(repository.findTimeRelationNodes(eq(OWNER_ID), anyString(), anyInt()))
                 .thenReturn(List.of(node("2024-05", null, 30)));
         when(repository.findLocationRelationNodes(OWNER_ID, 400)).thenReturn(List.of());
         when(repository.findAlbumAlbumRelationEdges(OWNER_ID, 250))
                 .thenReturn(List.of(edge("album-1", "album-2", 3)));
-        when(repository.findAlbumPersonRelationEdges(OWNER_ID, 250))
-                .thenReturn(List.of(edge("album-1", "cluster-9", 5)));
         when(repository.findAlbumTimeRelationEdges(eq(OWNER_ID), anyString(), anyInt()))
                 .thenReturn(List.of(edge("album-1", "2024-05", 7)));
         when(repository.findAlbumLocationRelationEdges(OWNER_ID, 250))
-                .thenReturn(List.of());
-        when(repository.findPersonTimeRelationEdges(eq(OWNER_ID), anyString(), anyInt()))
-                .thenReturn(List.of());
-        when(repository.findPersonLocationRelationEdges(OWNER_ID, 250))
                 .thenReturn(List.of());
         when(repository.findTimeLocationRelationEdges(eq(OWNER_ID), anyString(), anyInt()))
                 .thenReturn(List.of(edge("2024-05", "杭州", 2)));
@@ -62,7 +54,6 @@ class PhotoRelationServiceTest {
         );
         assertThat(result.edges()).containsExactly(
                 new PhotoRelationEdgeDto("ALBUM", "album-1", "ALBUM", "album-2", 3),
-                new PhotoRelationEdgeDto("ALBUM", "album-1", "PERSON", "cluster-9", 5),
                 new PhotoRelationEdgeDto("ALBUM", "album-1", "TIME", "2024-05", 7),
                 new PhotoRelationEdgeDto("TIME", "2024-05", "LOCATION", "杭州", 2)
         );
@@ -74,17 +65,12 @@ class PhotoRelationServiceTest {
                 .mapToObj(index -> edge("album-" + index, "album-x" + index, 1))
                 .toList();
         when(repository.findAlbumRelationNodes(OWNER_ID, 400)).thenReturn(List.of());
-        when(repository.findPersonRelationNodes(OWNER_ID, 400)).thenReturn(List.of());
         when(repository.findTimeRelationNodes(eq(OWNER_ID), anyString(), anyInt())).thenReturn(List.of());
         when(repository.findLocationRelationNodes(OWNER_ID, 400)).thenReturn(List.of());
         when(repository.findAlbumAlbumRelationEdges(OWNER_ID, 250)).thenReturn(fullPage);
-        when(repository.findAlbumPersonRelationEdges(OWNER_ID, 250)).thenReturn(List.of());
         when(repository.findAlbumTimeRelationEdges(eq(OWNER_ID), anyString(), anyInt()))
                 .thenReturn(List.of());
         when(repository.findAlbumLocationRelationEdges(OWNER_ID, 250)).thenReturn(List.of());
-        when(repository.findPersonTimeRelationEdges(eq(OWNER_ID), anyString(), anyInt()))
-                .thenReturn(List.of());
-        when(repository.findPersonLocationRelationEdges(OWNER_ID, 250)).thenReturn(List.of());
         when(repository.findTimeLocationRelationEdges(eq(OWNER_ID), anyString(), anyInt()))
                 .thenReturn(List.of());
 

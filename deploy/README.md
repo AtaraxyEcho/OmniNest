@@ -6,7 +6,7 @@
 - `prod/` 启动 Nginx、API、Worker、Scheduler、Certbot 和生产依赖。
 - 每个环境内的组件目录保存对应镜像定义或运行脚本，打开目录即可查看全部 Docker 配置。
 
-组件镜像定义统一放在 deploy 根目录：`ai-sidecar/`（含侧车源码）、`backend/`、
+组件镜像定义统一放在 deploy 根目录：`vision-sidecar/`（含侧车源码）、`backend/`、
 `netease-api/`；nginx、certbot 等生产专属组件位于 `prod/`。dev/prod Compose 以
 项目 `backend/` 源码目录与上述镜像定义目录作为构建上下文。
 backend 镜像的公共构建逻辑只有一份；backend 的默认 Profile 等环境差异通过构建参数或运行时环境变量注入，不在镜像定义中分叉。
@@ -27,9 +27,9 @@ docker compose up -d
 `.env` 不会自动注入后端裸进程。各 `.env.example` 模板（本目录 `dev/`、`prod/` 与
 `backend/`）均提供英文版 `.env.en.example`，变量一致，仅注释语言不同。
 
-镜像定义统一位于 deploy 根目录的 `ai-sidecar/`、`backend/`、`netease-api/`。
+镜像定义统一位于 deploy 根目录的 `vision-sidecar/`、`backend/`、`netease-api/`。
 开发编排默认只构建图像分析侧车和网易云 API，后端仍由 Maven 或 IDE 运行；图像分析侧车
-继续使用 `ai-sidecar/` 作为源码构建上下文。
+继续使用 `vision-sidecar/` 作为源码构建上下文。
 
 ### 基线重写后重建开发库
 
@@ -53,6 +53,11 @@ Lucene 索引本就是可重建数据，不随库清理。生产环境在未发�
 重建只清数据库，MinIO 卷里的对象字节仍在：新库没有任何 `file_objects` 行，桶内**全部**对象
 都会被原件桶孤儿审计判成无主字节。重设基线之后不得开启
 `omninest.storage.user-file-orphan-scan.delete-enabled`，否则等价于清空用户文件。
+
+若确需保留开发库数据，必须先手工执行本次基线涉及的全部结构 DDL，再修正
+`omni.flyway_schema_history` 中对应版本的校验和；只 repair 校验和、不补齐列、索引或删除表
+仍被禁止。图像分析链路从 `StandardAnalyzer` 切换到 `SmartChineseAnalyzer` 后，旧照片索引
+不能可靠命中中文 `aiLabels` 与 `ocrText` 字段；后端升级启动后还需调用管理端“重建搜索索引”一次。
 
 ### ClamAV 可选开关
 
@@ -128,7 +133,7 @@ UPDATE omni.config_entries SET config_value = 'false' WHERE config_key = 'clamav
 **4C4G 建议内存边界（约，Spring Boot 4 + Hibernate 7 实测）**：Postgres 768M、
 API/Worker 各 768M（堆 ≤320M，**不要设置 MaxMetaspaceSize**）、Scheduler 512M
 （堆 ≤192M）、Rabbit/MinIO 各约 320M、Redis ≤192M、其余辅件合计约 400M。
-不要同时开启 ClamAV（约 1.5G）或 InsightFace 侧车（约 768M+）。
+不要同时开启 ClamAV（约 1.5G）或图像分析侧车（lightweight 约 200M，RAM++ 需 2.5G+）。
 
 **首次启动建议串行**：先 `docker compose up -d backend-api`，待
 `/api/v1/setup/status` 返回 200 后再启动 worker、scheduler，避免三角色同时
@@ -139,7 +144,10 @@ API/Worker 各 768M（堆 ≤320M，**不要设置 MaxMetaspaceSize**）、Sched
 `mem_limit` 约 896m、堆 ≤384m；仍不要设置过小的 `MaxMetaspaceSize`。
 
 Photos 图像分析侧车使用 CPU 推理，无需 GPU；仅在 `COMPOSE_PROFILES=photo-ai`
-时启动。模型首次启动自动下载，预留最多 10 分钟启动窗口。
+时启动。RapidOCR 模型随镜像内置，视觉档的 `mobileclip2_s0_vision_int8.onnx` 与
+`policy_text_embeds.npz` 不会自动下载，必须按 `vision-sidecar/DEPLOYMENT.md` 预先放入
+`omninest-ai-models` 卷。侧车就绪后还要在配置中心把 `photo.ai.enabled` 置为 `true`：
+基线内置值为 `false`，图像分析在管理员显式开启前不会对任何照片执行。
 
 ### 构建与启动
 
@@ -462,7 +470,7 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
 | Redis | `REDIS_PASSWORD` | 更新 redis 配置与 `.env`，重启 redis 与后端。 |
 | MinIO | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | 更新 MinIO 凭据与 `.env`，重启 minio 与后端。 |
 | Rclone RC | `RCLONE_RC_PASS` | 更新 `.env` 后重启 rclone 与后端；口令仅经环境注入，不写入 command 行。 |
-| AI Sidecar | `OMNINEST_AI_SIDECAR_SECRET` | 更新 `.env` 后重启 ai-sidecar 与后端（启用 photo-ai 时）。 |
+| Vision Sidecar | `OMNINEST_AI_SIDECAR_SECRET` | 更新 `.env` 后重启 vision-sidecar 与后端（启用 photo-ai 时）。 |
 
 轮换后请确认：`docker compose config` 不再出现示例默认值；`ps`/`docker inspect` 中不残留旧口令明文。
 

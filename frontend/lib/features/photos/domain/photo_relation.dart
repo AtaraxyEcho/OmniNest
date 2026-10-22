@@ -1,4 +1,4 @@
-/// 关系图谱数据模型：节点（相册/时间/地点/人物）与共现边。
+/// 关系图谱数据模型：节点（相册/时间/地点）与共现边。
 ///
 /// 数据来自 `/photos/relations` 聚合端点，自洽且与分页列表无关。
 library;
@@ -7,8 +7,7 @@ library;
 enum PhotoRelationNodeType {
   album('ALBUM'),
   time('TIME'),
-  location('LOCATION'),
-  person('PERSON');
+  location('LOCATION');
 
   const PhotoRelationNodeType(this.value);
 

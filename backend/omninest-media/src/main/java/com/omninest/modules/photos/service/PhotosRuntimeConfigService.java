@@ -1,5 +1,6 @@
 package com.omninest.modules.photos.service;
 
+import com.omninest.common.ai.ImageAnalysisGateway;
 import com.omninest.common.config.BaseRuntimeConfigService;
 import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.config.ConfigValueProvider;
@@ -19,6 +20,7 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
     public static final String PHOTO_AI_ENABLED = "photo.ai.enabled";
     public static final String PHOTO_AI_ENDPOINT = "photo.ai.url";
     public static final String PHOTO_AI_TIMEOUT = "photo.ai.timeout";
+    public static final String PHOTO_AI_PIPELINE_VERSION = "photo.ai.pipeline-version";
     public static final String PHOTO_GEO_RATE = "photo.geo.rate";
     public static final String PHOTO_GEO_OFFLINE = "photo.geo.offline";
     public static final String PHOTO_GEO_NOMINATIM = "photo.geo.nominatim";
@@ -28,6 +30,7 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
 
     private final AiSidecarProperties deploymentProperties;
     private final LegacyDeploymentConfigResolver legacyDeploymentConfigResolver;
+    private final ImageAnalysisGateway imageAnalysisGateway;
 
     /**
      * 创建照片运行时配置服务。
@@ -39,11 +42,13 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
             ConfigValueProvider configValueProvider,
             RuntimeConfigCache runtimeConfigCache,
             AiSidecarProperties deploymentProperties,
-            LegacyDeploymentConfigResolver legacyDeploymentConfigResolver
+            LegacyDeploymentConfigResolver legacyDeploymentConfigResolver,
+            ImageAnalysisGateway imageAnalysisGateway
     ) {
         super(configValueProvider, runtimeConfigCache);
         this.deploymentProperties = deploymentProperties;
         this.legacyDeploymentConfigResolver = legacyDeploymentConfigResolver;
+        this.imageAnalysisGateway = imageAnalysisGateway;
     }
 
     /** @return 是否启用照片图像分析 */
@@ -73,6 +78,28 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
                 3,
                 120
         );
+    }
+
+    /**
+     * 返回当前应生效的分析流水线版本。
+     *
+     * <p>优先使用配置中心覆盖值，其次探测侧车 {@code /ready}。两者都不可用时返回 null，
+     * 调用方据此关闭幂等短路与克隆，不能拿硬编码版本冒充侧车当前版本。</p>
+     *
+     * @return 分析流水线版本；无法确定时返回 null
+     */
+    public String expectedPipelineVersion() {
+        var configured = nonDefaultConfigValue(PHOTO_AI_PIPELINE_VERSION, "")
+                .map(String::trim)
+                .filter(value -> !value.isEmpty());
+        if (configured.isPresent()) {
+            return configured.get();
+        }
+        String remote = imageAnalysisGateway.fetchRemotePipelineVersion(
+                aiEndpoint(),
+                Math.min(aiTimeoutSeconds(), 5)
+        );
+        return remote == null || remote.isBlank() ? null : remote;
     }
 
     /** @return Nominatim 每秒请求上限 */

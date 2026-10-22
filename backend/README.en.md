@@ -94,4 +94,4 @@ Changes involving databases, permissions, tasks, storage, or security boundaries
 - [Chinese backend guide](README.md)
 - [Frontend (English)](../frontend/README.en.md)
 - [Deployment guide](../deploy/README.md)
-- [Image-analysis Sidecar](../deploy/ai-sidecar/README.md)
+- [Image-analysis Sidecar](../deploy/vision-sidecar/README.md)

@@ -35,7 +35,6 @@ public class PhotoAiTaskService {
 
     public static final String TASK_TYPE_SINGLE = "PHOTO_AI_ANALYSIS";
     public static final String TASK_TYPE_REANALYSIS = "PHOTO_AI_REANALYSIS";
-    public static final String TASK_TYPE_RECLUSTER = "PHOTO_AI_RECLUSTER";
     private static final int PAGE_SIZE = 25;
     private static final int MAX_FAILED_PHOTO_SAMPLES = 20;
     private static final List<String> ACTIVE_STATUSES = List.of(
@@ -50,6 +49,7 @@ public class PhotoAiTaskService {
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
     private final PhotoAiTaskCompletionService completionService;
+    private final PhotoIndexTaskService photoIndexTaskService;
 
     /**
      * 为新导入照片创建单张分析任务。
@@ -94,18 +94,6 @@ public class PhotoAiTaskService {
     }
 
     /**
-     * 创建当前用户已有脸部数据的重新聚类任务。
-     *
-     * @param ownerUserId 所属用户标识
-     * @return 任务提交结果
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public PhotoAiTaskDto queueFaceRecluster(UUID ownerUserId) {
-        requireNoActiveTask(ownerUserId, TASK_TYPE_RECLUSTER, Mode.FACE_RECLUSTER);
-        return queueLibraryTask(ownerUserId, TASK_TYPE_RECLUSTER, Mode.FACE_RECLUSTER, 0L);
-    }
-
-    /**
      * 执行照片图像分析事件并维护通用任务状态。
      *
      * <p>生命周期冲突（源文件已删除或正在删除）在此取消任务；
@@ -130,7 +118,6 @@ public class PhotoAiTaskService {
             switch (mode) {
                 case SINGLE_PHOTO -> executeSingle(event);
                 case LIBRARY_REANALYSIS -> executeLibraryReanalysis(event);
-                case FACE_RECLUSTER -> executeFaceRecluster(event);
                 default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的照片图像分析任务模式");
             }
         } catch (BusinessException exception) {
@@ -186,7 +173,7 @@ public class PhotoAiTaskService {
         if (event.photoId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "单张照片图像分析任务缺少照片标识");
         }
-        photoAiService.processPhoto(event.ownerUserId(), event.photoId());
+        photoAiService.processPhoto(event.ownerUserId(), event.photoId(), true);
         completionService.complete(
                 event.taskId(),
                 event.ownerUserId(),
@@ -214,10 +201,12 @@ public class PhotoAiTaskService {
                     event.ownerUserId(),
                     PageRequest.of(pageNumber, PAGE_SIZE, Sort.by(Sort.Direction.ASC, "id"))
             );
+            List<UUID> pageSucceededPhotoIds = new ArrayList<>();
             for (UUID photoId : page.getContent()) {
                 try {
-                    photoAiService.processPhoto(event.ownerUserId(), photoId);
+                    photoAiService.processPhoto(event.ownerUserId(), photoId, false);
                     succeededItems++;
+                    pageSucceededPhotoIds.add(photoId);
                 } catch (BusinessException exception) {
                     if (isLifecycleCancellation(exception)) {
                         log.info("照片已删除或正在永久删除，跳过图像分析重分析: taskId={}, photoId={}",
@@ -250,6 +239,9 @@ public class PhotoAiTaskService {
                 }
             }
             pageNumber++;
+            if (!pageSucceededPhotoIds.isEmpty()) {
+                photoIndexTaskService.indexBatchDirect(event.ownerUserId(), pageSucceededPhotoIds);
+            }
             taskRecordService.updateResult(
                     event.taskId(),
                     Map.of(
@@ -263,7 +255,6 @@ public class PhotoAiTaskService {
         if (failedItems > 0 && succeededItems == 0) {
             throw new IllegalStateException("照片图像分析重分析全部失败");
         }
-        photoAiService.clusterFaces(event.ownerUserId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("processedItems", processedItems);
         result.put("succeededItems", succeededItems);
@@ -291,24 +282,12 @@ public class PhotoAiTaskService {
                 || ErrorCode.NOT_FOUND.equals(exception.errorCode());
     }
 
-    private void executeFaceRecluster(PhotoAiEvent event) {
-        photoAiService.clusterFaces(event.ownerUserId());
-        completionService.complete(
-                event.taskId(),
-                event.ownerUserId(),
-                Mode.FACE_RECLUSTER,
-                Map.of("reclustered", true),
-                0L,
-                0L
-        );
-    }
-
     private void executeLegacyEvent(PhotoAiEvent event) {
         if (event.photoId() == null) {
             log.warn("忽略缺少任务标识和照片标识的旧版照片图像分析消息");
             return;
         }
-        photoAiService.processPhoto(event.ownerUserId(), event.photoId());
+        photoAiService.processPhoto(event.ownerUserId(), event.photoId(), true);
         completionService.invalidate(
                 event.ownerUserId(),
                 event.photoId(),

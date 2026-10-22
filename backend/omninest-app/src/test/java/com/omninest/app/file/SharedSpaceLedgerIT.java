@@ -228,11 +228,6 @@ class SharedSpaceLedgerIT {
         assertThat(photoItemRepository.findTimeRelationNodes(owner, "UTC", 50)).isEmpty();
         assertThat(photoItemRepository.findAlbumLocationRelationEdges(owner, 50)).hasSize(2)
                 .allSatisfy(edge -> assertThat(edge.getWeight()).isEqualTo(1L));
-        // 没有人脸数据时人物维度为空，但同样要能在真实 PostgreSQL 上执行。
-        assertThat(photoItemRepository.findPersonTimeRelationEdges(owner, "UTC", 50)).isEmpty();
-        assertThat(photoItemRepository.findPersonLocationRelationEdges(owner, 50)).isEmpty();
-        assertThat(photoItemRepository.findAlbumPersonRelationEdges(owner, 50)).isEmpty();
-        assertThat(photoItemRepository.findPersonRelationNodes(owner, 50)).isEmpty();
         assertThat(photoItemRepository.findAlbumRelationNodes(owner, 50)).hasSize(2);
         var locationNodes = photoItemRepository.findLocationRelationNodes(owner, 50);
         assertThat(locationNodes).hasSize(1);

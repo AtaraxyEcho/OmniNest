@@ -174,7 +174,7 @@ class PhotoAiTaskRetryServiceTest {
         UUID taskId = UUID.randomUUID();
         Mockito.when(taskRecordService.taskPayload(taskId)).thenReturn(Map.of(
                 "ownerUserId", UUID.randomUUID().toString(),
-                "mode", Mode.FACE_RECLUSTER.name()));
+                "mode", Mode.LIBRARY_REANALYSIS.name()));
         Mockito.when(taskRecordService.recoverStaleTask(
                         Mockito.eq(taskId), Mockito.eq(TASK_TYPE),
                         Mockito.any(Instant.class), Mockito.any(Instant.class),

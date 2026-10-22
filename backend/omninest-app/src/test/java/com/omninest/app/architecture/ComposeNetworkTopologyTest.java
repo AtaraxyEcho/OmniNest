@@ -51,13 +51,13 @@ class ComposeNetworkTopologyTest {
     private static final Map<String, ExpectedTopology> FILES = Map.of(
             "deploy/dev/docker-compose.yml", new ExpectedTopology(
                     Set.of("postgres", "redis", "rabbitmq", "minio", "clamav", "netease-music-api",
-                            "ffmpeg", "rclone", "ai-sidecar"),
+                            "ffmpeg", "rclone", "vision-sidecar"),
                     Set.of("rclone"),
                     Set.of("ffmpeg", "minio")),
             "deploy/prod/docker-compose.yml", new ExpectedTopology(
                     Set.of("nginx", "certbot", "backend-api", "backend-worker", "backend-scheduler", "postgres",
                             "redis", "rabbitmq", "minio", "ffmpeg", "clamav", "netease-music-api",
-                            "rclone", "ai-sidecar"),
+                            "rclone", "vision-sidecar"),
                     Set.of("rclone", "backend-api", "backend-worker", "backend-scheduler"),
                     Set.of("ffmpeg", "minio"))
     );

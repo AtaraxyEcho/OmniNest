@@ -1,7 +1,10 @@
 __pycache__
 *.pyc
 *.pyo
+.pytest_cache
 .git
 .gitignore
 .env
 *.md
+models
+scripts

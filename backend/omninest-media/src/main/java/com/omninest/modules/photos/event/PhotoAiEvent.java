@@ -25,7 +25,6 @@ public record PhotoAiEvent(
      */
     public enum Mode {
         SINGLE_PHOTO,
-        LIBRARY_REANALYSIS,
-        FACE_RECLUSTER
+        LIBRARY_REANALYSIS
     }
 }

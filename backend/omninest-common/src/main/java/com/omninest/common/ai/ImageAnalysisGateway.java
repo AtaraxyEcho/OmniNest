@@ -1,10 +1,9 @@
 package com.omninest.common.ai;
 
-import java.nio.file.Path;
 import java.util.List;
 
 /**
- * 提供图片内容分析、人脸检测和人脸聚类能力。
+ * 提供图片文字识别与受控视觉标签分析能力。
  *
  * @author OmniNest
  */
@@ -18,66 +17,56 @@ public interface ImageAnalysisGateway {
     long maxImageBytes();
 
     /**
-     * 检测图片中的人脸。
+     * 探测侧车当前生效的分析流水线版本。
      *
-     * @param imagePath 图片文件路径
      * @param endpoint 分析服务端点
      * @param timeoutSeconds 请求超时秒数
-     * @return 人脸检测结果
+     * @return 流水线版本；侧车不可用或响应无效时返回 null
      */
-    List<FaceDetection> detectFaces(Path imagePath, String endpoint, int timeoutSeconds);
+    String fetchRemotePipelineVersion(String endpoint, int timeoutSeconds);
 
     /**
-     * 对图片执行结构化内容分析。
+     * 对图片执行文字识别与视觉标签分析。
      *
-     * @param imagePath 图片文件路径
+     * @param imageBytes 图片字节
+     * @param filename 上传文件名
+     * @param hint 分析提示，取值 AUTO、TEXT_GRAPHIC、NATURAL_PHOTO
+     * @param skipOcr 是否跳过重复 OCR
      * @param endpoint 分析服务端点
      * @param timeoutSeconds 请求超时秒数
      * @return 结构化分析结果
      */
-    ContentAnalysis analyzeContent(Path imagePath, String endpoint, int timeoutSeconds);
-
-    /**
-     * 对图片进行场景分类。
-     *
-     * @param imagePath 图片文件路径
-     * @param endpoint 分析服务端点
-     * @param timeoutSeconds 请求超时秒数
-     * @return 场景分类结果
-     */
-    SceneClassification classifyScene(Path imagePath, String endpoint, int timeoutSeconds);
-
-    /**
-     * 对人脸嵌入向量进行聚类。
-     *
-     * @param embeddings 人脸嵌入向量
-     * @param endpoint 分析服务端点
-     * @param timeoutSeconds 请求超时秒数
-     * @return 每个向量对应的聚类 ID
-     */
-    List<Integer> clusterFaces(List<float[]> embeddings, String endpoint, int timeoutSeconds);
-
-    /**
-     * 人脸检测结果。
-     *
-     * @param bboxX 边界框横坐标
-     * @param bboxY 边界框纵坐标
-     * @param bboxW 边界框宽度
-     * @param bboxH 边界框高度
-     * @param embedding 人脸嵌入向量
-     */
-    record FaceDetection(int bboxX, int bboxY, int bboxW, int bboxH, float[] embedding) {
-    }
+    ContentAnalysis analyzeContent(
+            byte[] imageBytes,
+            String filename,
+            String hint,
+            boolean skipOcr,
+            String endpoint,
+            int timeoutSeconds
+    );
 
     /**
      * 结构化图像分析结果。
      *
      * @param schemaVersion 响应契约版本
      * @param pipelineVersion 分析流水线版本
+     * @param ocrPipelineVersion OCR 流水线版本
      * @param observations 分析观察项
+     * @param semanticTags 开放集语义标签
+     * @param ocrText 图片内嵌文字
      */
-    record ContentAnalysis(int schemaVersion, String pipelineVersion,
-                           List<ContentObservation> observations) {
+    record ContentAnalysis(
+            int schemaVersion,
+            String pipelineVersion,
+            String ocrPipelineVersion,
+            List<ContentObservation> observations,
+            List<String> semanticTags,
+            String ocrText
+    ) {
+        public ContentAnalysis {
+            observations = observations == null ? List.of() : List.copyOf(observations);
+            semanticTags = semanticTags == null ? List.of() : List.copyOf(semanticTags);
+        }
     }
 
     /**
@@ -91,6 +80,9 @@ public interface ImageAnalysisGateway {
      */
     record ContentObservation(String namespace, String code, float confidence,
                               String source, List<BoundingBox> boxes) {
+        public ContentObservation {
+            boxes = boxes == null ? List.of() : List.copyOf(boxes);
+        }
     }
 
     /**
@@ -102,22 +94,5 @@ public interface ImageAnalysisGateway {
      * @param height 高度比例
      */
     record BoundingBox(float x, float y, float width, float height) {
-    }
-
-    /**
-     * 旧版场景分类结果，供已有兼容调用使用。
-     *
-     * @param labels 场景标签
-     */
-    record SceneClassification(List<SceneLabel> labels) {
-    }
-
-    /**
-     * 场景标签。
-     *
-     * @param name 标签名称
-     * @param confidence 置信度
-     */
-    record SceneLabel(String name, float confidence) {
     }
 }

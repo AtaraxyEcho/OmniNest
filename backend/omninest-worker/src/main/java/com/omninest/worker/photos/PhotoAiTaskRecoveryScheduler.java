@@ -28,8 +28,7 @@ public class PhotoAiTaskRecoveryScheduler {
     private static final int RECOVERY_BATCH_SIZE = 100;
     private static final String[] RECOVERED_TASK_TYPES = {
             PhotoAiTaskService.TASK_TYPE_SINGLE,
-            PhotoAiTaskService.TASK_TYPE_REANALYSIS,
-            PhotoAiTaskService.TASK_TYPE_RECLUSTER
+            PhotoAiTaskService.TASK_TYPE_REANALYSIS
     };
 
     private final TaskRecordService taskRecordService;

@@ -9,12 +9,12 @@ import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.PurgeContext;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoAlbum;
-import com.omninest.modules.photos.domain.PhotoFace;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
+import com.omninest.modules.photos.repository.PhotoContentAnalysisRunRepository;
+import com.omninest.modules.photos.repository.PhotoContentLabelRepository;
 import com.omninest.modules.photos.repository.PhotoEditVersionRepository;
-import com.omninest.modules.photos.repository.PhotoFaceRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
@@ -46,12 +46,13 @@ class PhotoFileCleanupServiceTest {
     private final PhotoTagRepository tagRepository = Mockito.mock(PhotoTagRepository.class);
     private final PhotoEditVersionRepository editVersionRepository =
             Mockito.mock(PhotoEditVersionRepository.class);
-    private final PhotoFaceRepository faceRepository = Mockito.mock(PhotoFaceRepository.class);
+    private final PhotoContentLabelRepository contentLabelRepository =
+            Mockito.mock(PhotoContentLabelRepository.class);
+    private final PhotoContentAnalysisRunRepository contentAnalysisRunRepository =
+            Mockito.mock(PhotoContentAnalysisRunRepository.class);
     private final PhotoSearchIndexService photoSearchIndexService = Mockito.mock(PhotoSearchIndexService.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
-    private final PhotoFaceClusterMaintenanceService clusterMaintenanceService =
-            Mockito.mock(PhotoFaceClusterMaintenanceService.class);
     private final PhotoFileCleanupService service = new PhotoFileCleanupService(
             itemRepository,
             albumItemRepository,
@@ -59,11 +60,11 @@ class PhotoFileCleanupServiceTest {
             albumRepository,
             tagRepository,
             editVersionRepository,
-            faceRepository,
+            contentLabelRepository,
+            contentAnalysisRunRepository,
             photoSearchIndexService,
             syncEventService,
-            readThroughCache,
-            clusterMaintenanceService
+            readThroughCache
     );
 
     @Test
@@ -78,9 +79,6 @@ class PhotoFileCleanupServiceTest {
         coverReference.setCoverFileId(FILE_NODE_ID);
         PhotoAlbum album = new PhotoAlbum();
         album.setId(ALBUM_ID);
-        PhotoFace removedFace = new PhotoFace();
-        removedFace.setId(UUID.randomUUID());
-        removedFace.setPhotoId(PHOTO_ID);
         Mockito.when(itemRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
                 .thenReturn(List.of(photo));
         Mockito.when(albumItemRepository.findAlbumIdsByPhotoIdIn(List.of(PHOTO_ID)))
@@ -90,15 +88,14 @@ class PhotoFileCleanupServiceTest {
         Mockito.when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(2L);
         Mockito.when(itemRepository.findByCoverFileIdIn(Set.of(FILE_NODE_ID)))
                 .thenReturn(List.of(coverReference));
-        Mockito.when(faceRepository.findByPhotoIdIn(List.of(PHOTO_ID)))
-                .thenReturn(List.of(removedFace));
 
         service.finalizePurge(purgeContext());
 
         Mockito.verify(tagRepository).deleteByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID));
         Mockito.verify(editVersionRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
-        Mockito.verify(faceRepository).deleteAll(List.of(removedFace));
-        Mockito.verify(clusterMaintenanceService).onFacesRemoved(OWNER_ID, List.of(removedFace));
+        // 永久删除必须同步清掉分析标签与运行记录，避免孤儿行继续参与关系/统计查询。
+        Mockito.verify(contentLabelRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
+        Mockito.verify(contentAnalysisRunRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(albumItemRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(favoriteRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(photoSearchIndexService).deletePhotos(List.of(PHOTO_ID));
@@ -127,7 +124,12 @@ class PhotoFileCleanupServiceTest {
         ));
 
         Mockito.verify(itemRepository, Mockito.never()).deleteAllInBatch(Mockito.anyList());
-        Mockito.verifyNoInteractions(tagRepository, editVersionRepository, faceRepository);
+        Mockito.verifyNoInteractions(
+                tagRepository,
+                editVersionRepository,
+                contentLabelRepository,
+                contentAnalysisRunRepository
+        );
     }
 
     @Test

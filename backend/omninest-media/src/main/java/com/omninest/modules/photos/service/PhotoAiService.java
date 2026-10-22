@@ -1,50 +1,32 @@
 package com.omninest.modules.photos.service;
 
 import com.omninest.common.ai.ImageAnalysisGateway;
-import com.omninest.common.ai.ImageAnalysisGateway.FaceDetection;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
-import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileContentStream;
-import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
-import com.omninest.modules.photos.domain.PhotoFace;
-import com.omninest.modules.photos.domain.PhotoFaceCluster;
 import com.omninest.modules.photos.domain.PhotoItem;
-import com.omninest.modules.photos.domain.PhotoTag;
-import com.omninest.modules.photos.dto.PhotoDtos.PhotoFaceClusterDto;
-import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
-import com.omninest.modules.photos.repository.PhotoFaceClusterRepository;
-import com.omninest.modules.photos.repository.PhotoFaceRepository;
-import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
-import com.omninest.modules.photos.repository.PhotoTagRepository;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.Locale;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 照片图像分析服务。
- * 负责内容分析、人脸检测和人脸聚类的编排。
+ * 负责 OCR 与视觉标签的编排、原图哈希幂等短路和大图下采样。
  * 始终注册为 Bean，由调用方通过 PhotosRuntimeConfigService.isAiEnabled() 做运行时开关检查。
  *
  * @author OmniNest
@@ -53,270 +35,264 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhotoAiService {
-    private static final int MAX_CLUSTER_FACES = 10_000;
-    /** 内容分析契约版本，与侧车结构化接口保持一致。 */
-    private static final int CONTENT_ANALYSIS_SCHEMA_VERSION = 2;
-    /** 本地构造的内容分析流水线标识：分类模型已下线，观察项恒为空。 */
-    private static final String CONTENT_ANALYSIS_PIPELINE_VERSION = "content-analysis-disabled";
+
+    public static final String EXPECTED_OCR_VERSION = PhotoContentAnalysisService.EXPECTED_OCR_VERSION;
+    public static final String OCR_LAYOUT_SOURCE = PhotoContentAnalysisService.OCR_LAYOUT_SOURCE;
+
+    private static final String HINT_AUTO = "AUTO";
+    private static final String HINT_TEXT_GRAPHIC = "TEXT_GRAPHIC";
+    private static final String HINT_NATURAL_PHOTO = "NATURAL_PHOTO";
+    private static final long MAX_DIRECT_ORIGINAL_BYTES = 2L * 1024 * 1024;
+    private static final long MAX_DOWNSAMPLE_SOURCE_BYTES = 32L * 1024 * 1024;
+    private static final int MAX_DIRECT_ORIGINAL_SIDE = 2560;
+    private static final int OCR_DOWNSAMPLE_MAX_SIDE = 2048;
+    private static final double OCR_DOWNSAMPLE_QUALITY = 0.82;
 
     private final ImageAnalysisGateway imageAnalysisGateway;
-    private final AiSidecarProperties aiSidecarProperties;
     private final PhotoLabelPolicy labelPolicy;
     private final PhotoContentAnalysisService contentAnalysisService;
     private final PhotosRuntimeConfigService configService;
-    private final PhotoFaceClusterMaintenanceService clusterMaintenanceService;
-    private final PhotoFaceRepository faceRepository;
-    private final PhotoFaceClusterRepository clusterRepository;
     private final PhotoItemRepository photoItemRepository;
-    private final PhotoFavoriteRepository favoriteRepository;
-    private final PhotoTagRepository tagRepository;
+    private final PhotoFileDetector fileDetector;
     private final FileQueryService fileQueryService;
     private final FileLifecycleGuard fileLifecycleGuard;
 
     /**
-     * 处理单张照片：人脸检测 + 主体检测 + 场景分析。
+     * 处理单张照片：OCR、视觉标签、幂等短路与索引投递。
+     *
+     * @param ownerUserId 所属用户标识
+     * @param photoId 照片标识
+     * @param triggerImmediateIndex 成功后是否立即投递单图搜索索引
      */
-    public void processPhoto(UUID ownerUserId, UUID photoId) {
+    public void processPhoto(UUID ownerUserId, UUID photoId, boolean triggerImmediateIndex) {
         PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         requirePhotoProcessable(ownerUserId, photo);
 
-        Path imageFile = stagePhotoFile(ownerUserId, photo);
-        try {
-            String endpoint = configService.aiEndpoint();
-            int timeout = configService.aiTimeoutSeconds();
-            List<FaceDetection> faces = imageAnalysisGateway.detectFaces(imageFile, endpoint, timeout);
-            // 侧车已移除场景与主体分类模型，/analyze-content 恒返回空观察项，但仍会收完整图片、
-            // 占用推理信号量并全量解码校验。这里不再整图二次上传，标签只由人脸结果推导。
-            ContentAnalysis analysis = new ContentAnalysis(
-                    CONTENT_ANALYSIS_SCHEMA_VERSION,
-                    CONTENT_ANALYSIS_PIPELINE_VERSION,
-                    List.of()
-            );
-            requireValidAnalysis(faces, analysis);
-
-            List<PhotoFace> faceEntities = faces.stream()
-                    .map(face -> toFaceEntity(ownerUserId, photoId, face))
-                    .toList();
-            List<PhotoLabelPolicy.PhotoLabel> labels = labelPolicy.classify(
-                    analysis,
-                    !faceEntities.isEmpty()
-            );
-            contentAnalysisService.apply(ownerUserId, photoId, faceEntities, analysis, labels);
-            log.info(
-                    "照片图像分析完成: photoId={}, faceCount={}, labelCount={}",
-                    photoId,
-                    faceEntities.size(),
-                    labels.size()
-            );
-        } finally {
-            deleteStagedFile(imageFile);
-        }
-    }
-
-    /**
-     * 对用户所有人脸进行聚类。
-     *
-     * <p>侧车调用在事务外执行；聚类归属的清空、旧聚类删除与新聚类写入由
-     * 聚类维护服务在同一短事务内原子完成，避免外呼期间长时间占用数据库连接。</p>
-     */
-    public void clusterFaces(UUID ownerUserId) {
-        List<PhotoFace> allFaces = faceRepository.findByOwnerUserId(ownerUserId);
-        if (allFaces.isEmpty()) {
-            log.info("用户没有人脸数据，跳过聚类: ownerUserId={}", ownerUserId);
-            return;
-        }
-        if (allFaces.size() > MAX_CLUSTER_FACES) {
-            throw new BusinessException(
-                    ErrorCode.RATE_LIMITED,
-                    "人脸数量超过单次聚类限制，请分批执行"
-            );
-        }
-
-        int embeddingDimension = aiSidecarProperties.getFaceEmbeddingDimension();
-        List<float[]> embeddings = new ArrayList<>();
-        List<UUID> faceIds = new ArrayList<>();
-        for (PhotoFace face : allFaces) {
-            float[] embedding = bytesToFloatArray(face.getEmbedding(), embeddingDimension);
-            if (embedding == null) {
-                log.warn("人脸嵌入向量缺失或维度异常，跳过聚类: ownerUserId={}, faceId={}, byteLength={}",
+        String originalContentHash = contentHash(photo);
+        String expectedPipeline = configService.expectedPipelineVersion();
+        if (expectedPipeline != null
+                && contentAnalysisService.isAlreadyAnalyzed(
                         ownerUserId,
-                        face.getId(),
-                        face.getEmbedding() == null ? 0 : face.getEmbedding().length);
-                continue;
-            }
-            embeddings.add(embedding);
-            faceIds.add(face.getId());
+                        photoId,
+                        originalContentHash,
+                        expectedPipeline
+                )) {
+            return;
         }
-
-        if (embeddings.isEmpty()) {
-            log.info("用户没有有效的人脸嵌入向量，跳过聚类: ownerUserId={}", ownerUserId);
+        if (originalContentHash != null && expectedPipeline != null && contentAnalysisService.tryCloneFromSameHash(
+                ownerUserId,
+                photo,
+                originalContentHash,
+                expectedPipeline,
+                triggerImmediateIndex
+        )) {
+            log.info("相同原图哈希命中分析克隆: photoId={}", photoId);
             return;
         }
 
-        String endpoint = configService.aiEndpoint();
-        int timeout = configService.aiTimeoutSeconds();
-        List<Integer> clusterAssignments = imageAnalysisGateway.clusterFaces(embeddings, endpoint, timeout);
-        if (clusterAssignments == null || clusterAssignments.size() != faceIds.size()) {
-            throw new IllegalStateException("图像分析人脸聚类结果数量与输入数量不一致");
-        }
-        Map<Integer, List<UUID>> clusterMap = new HashMap<>();
-        for (int i = 0; i < faceIds.size(); i++) {
-            int clusterId = clusterAssignments.get(i);
-            if (clusterId < 0) {
-                continue;
-            }
-            clusterMap.computeIfAbsent(clusterId, k -> new ArrayList<>()).add(faceIds.get(i));
-        }
-        int createdClusterCount = clusterMaintenanceService.replaceClusters(ownerUserId, allFaces, clusterMap);
-        log.info("人脸聚类完成: ownerUserId={}, 聚类数={}", ownerUserId, createdClusterCount);
-    }
-
-    /**
-     * 获取用户的人脸聚类列表。
-     */
-    @Transactional(readOnly = true)
-    public List<PhotoFaceClusterDto> getClusters(UUID ownerUserId) {
-        List<PhotoFaceCluster> clusters = clusterRepository.findByOwnerUserIdOrderByFaceCountDesc(ownerUserId);
-        if (clusters.isEmpty()) {
-            return List.of();
-        }
-        List<UUID> coverFaceIds = clusters.stream()
-                .map(PhotoFaceCluster::getCoverFaceId)
-                .filter(Objects::nonNull)
-                .toList();
-        Map<UUID, PhotoFace> coverFaces = coverFaceIds.isEmpty()
-                ? Map.of()
-                : faceRepository.findAllById(coverFaceIds).stream()
-                        .collect(Collectors.toMap(PhotoFace::getId, Function.identity()));
-        List<UUID> coverPhotoIds = coverFaces.values().stream()
-                .map(PhotoFace::getPhotoId)
-                .distinct()
-                .toList();
-        Map<UUID, PhotoItem> coverPhotos = coverPhotoIds.isEmpty()
-                ? Map.of()
-                : photoItemRepository.findAllById(coverPhotoIds).stream()
-                        .collect(Collectors.toMap(PhotoItem::getId, Function.identity()));
-        return clusters.stream()
-                .map(cluster -> {
-                    String coverUrl = resolveClusterCoverUrl(ownerUserId, cluster, coverFaces, coverPhotos);
-                    return new PhotoFaceClusterDto(
-                            cluster.getId(),
-                            cluster.getName(),
-                            cluster.getFaceCount(),
-                            coverUrl
-                    );
-                })
-                .toList();
-    }
-
-    private String resolveClusterCoverUrl(
-            UUID ownerUserId,
-            PhotoFaceCluster cluster,
-            Map<UUID, PhotoFace> coverFaces,
-            Map<UUID, PhotoItem> coverPhotos
-    ) {
-        if (cluster.getCoverFaceId() == null) {
-            return null;
-        }
-        PhotoFace face = coverFaces.get(cluster.getCoverFaceId());
-        PhotoItem photo = face == null ? null : coverPhotos.get(face.getPhotoId());
-        if (photo == null) {
-            return null;
-        }
-        return resolveCoverUrl(ownerUserId, photo.getCoverFileId());
-    }
-
-    /**
-     * 获取聚类中的所有照片。
-     */
-    @Transactional(readOnly = true)
-    public List<PhotoItemDto> getPhotosByCluster(UUID ownerUserId, UUID clusterId) {
-        PhotoFaceCluster cluster = clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "聚类不存在"));
-
-        List<UUID> photoIds = faceRepository.findByClusterId(clusterId).stream()
-                .map(PhotoFace::getPhotoId)
-                .distinct()
-                .toList();
-        if (photoIds.isEmpty()) {
-            return List.of();
-        }
-        Map<UUID, PhotoItem> photosById = photoItemRepository.findAllById(photoIds).stream()
-                .filter(photo -> photo.getDeletedAt() == null)
-                .collect(Collectors.toMap(PhotoItem::getId, Function.identity()));
-        Set<UUID> favoritePhotoIds = favoriteRepository
-                .findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds)
-                .stream()
-                .collect(Collectors.toSet());
-        Map<UUID, List<String>> tagsByPhotoId = tagRepository.findByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds)
-                .stream()
-                .collect(Collectors.groupingBy(PhotoTag::getPhotoId,
-                        Collectors.mapping(PhotoTag::getTag, Collectors.toList())));
-        return photoIds.stream()
-                .map(photosById::get)
-                .filter(Objects::nonNull)
-                .map(photo -> toDto(ownerUserId, photo,
-                        favoritePhotoIds.contains(photo.getId()),
-                        tagsByPhotoId.getOrDefault(photo.getId(), List.of())))
-                .toList();
-    }
-
-    /**
-     * 为聚类命名。
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void nameCluster(UUID ownerUserId, UUID clusterId, String name) {
-        PhotoFaceCluster cluster = clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "聚类不存在"));
-        cluster.setName(name);
-        clusterRepository.save(cluster);
-    }
-
-    private Path stagePhotoFile(UUID ownerUserId, PhotoItem photo) {
-        if (photo.getCoverFileId() == null) {
-            // 封面由异步缩略图任务回填，导入后短暂缺失属预期；按依赖未就绪
-            // 抛出以进入短间隔重试，与真实分析失败区分。
-            throw new BusinessException(
-                    ErrorCode.TASK_DEPENDENCY_NOT_READY,
-                    "照片封面尚未生成，等待缩略图任务回填"
-            );
-        }
-        Path tempFile = null;
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
+        boolean skipOcr = isOcrAlreadyUpToDate(photo);
+        if (skipOcr && expectedPipeline != null && contentAnalysisService.tryShortCircuitDenseTextReanalysis(
                 ownerUserId,
-                photo.getCoverFileId()
+                photo,
+                expectedPipeline,
+                triggerImmediateIndex
         )) {
-            long maxImageBytes = imageAnalysisGateway.maxImageBytes();
+            log.info("密集文本照片继承 OCR 标签完成重分析: photoId={}", photoId);
+            return;
+        }
+
+        String hint = computeAnalysisHint(photo);
+        byte[] imageBytes = readAnalysisImageBytes(ownerUserId, photo, skipOcr);
+        ContentAnalysis analysis = imageAnalysisGateway.analyzeContent(
+                imageBytes,
+                photoId + ".jpg",
+                hint,
+                skipOcr,
+                configService.aiEndpoint(),
+                configService.aiTimeoutSeconds()
+        );
+        requireValidAnalysis(analysis);
+
+        ContentAnalysis mergedAnalysis = skipOcr
+                ? contentAnalysisService.mergePreservedOcrObservations(ownerUserId, photoId, analysis)
+                : analysis;
+        List<PhotoLabelPolicy.PhotoLabel> labels = labelPolicy.classify(mergedAnalysis);
+        contentAnalysisService.apply(
+                ownerUserId,
+                photoId,
+                mergedAnalysis,
+                labels,
+                skipOcr,
+                triggerImmediateIndex
+        );
+        log.info(
+                "照片图像分析完成: photoId={}, skipOcr={}, labelCount={}, ocrTextLength={}",
+                photoId,
+                skipOcr,
+                labels.size(),
+                mergedAnalysis.ocrText() == null ? 0 : mergedAnalysis.ocrText().length()
+        );
+    }
+
+    private boolean isOcrAlreadyUpToDate(PhotoItem photo) {
+        if (photo.getProviderMetadata() == null) {
+            return false;
+        }
+        Object version = photo.getProviderMetadata().get("ocrPipelineVersion");
+        return EXPECTED_OCR_VERSION.equals(String.valueOf(version));
+    }
+
+    private String computeAnalysisHint(PhotoItem photo) {
+        if (photo.getCameraMake() != null && !photo.getCameraMake().isBlank()) {
+            return HINT_NATURAL_PHOTO;
+        }
+        String format = photo.getFormat() == null ? "" : photo.getFormat().toLowerCase(Locale.ROOT);
+        if ("png".equals(format)) {
+            return HINT_TEXT_GRAPHIC;
+        }
+        return HINT_AUTO;
+    }
+
+    private byte[] readAnalysisImageBytes(UUID ownerUserId, PhotoItem photo, boolean skipOcr) {
+        if (skipOcr) {
+            return readCompactImage(ownerUserId, photo);
+        }
+        if (photo.getFileNodeId() == null || isRaw(photo)) {
+            return readCover(ownerUserId, photo);
+        }
+        if (photo.getFileSize() > MAX_DOWNSAMPLE_SOURCE_BYTES && photo.getCoverFileId() != null) {
+            return readCover(ownerUserId, photo);
+        }
+        byte[] original = readFileBytes(ownerUserId, photo.getFileNodeId(), "照片原图");
+        try {
+            return maybeDownsample(photo, original);
+        } catch (RuntimeException exception) {
+            if (photo.getCoverFileId() == null) {
+                throw exception;
+            }
+            log.warn("原图无法解码为分析输入，回退封面: photoId={}, errorType={}",
+                    photo.getId(), exception.getClass().getSimpleName());
+            return readCover(ownerUserId, photo);
+        }
+    }
+
+    private byte[] readCompactImage(UUID ownerUserId, PhotoItem photo) {
+        if (photo.getCoverFileId() != null) {
+            return readFileBytes(ownerUserId, photo.getCoverFileId(), "照片封面");
+        }
+        if (photo.getFileNodeId() == null) {
+            throw dependencyNotReady();
+        }
+        return maybeDownsample(photo, readFileBytes(ownerUserId, photo.getFileNodeId(), "照片原图"));
+    }
+
+    private byte[] readCover(UUID ownerUserId, PhotoItem photo) {
+        if (photo.getCoverFileId() == null) {
+            throw dependencyNotReady();
+        }
+        return readFileBytes(ownerUserId, photo.getCoverFileId(), "照片封面");
+    }
+
+    private boolean isRaw(PhotoItem photo) {
+        String format = photo.getFormat();
+        return format != null && fileDetector.isRaw("photo." + format);
+    }
+
+    private byte[] maybeDownsample(PhotoItem photo, byte[] original) {
+        long longSide = resolveLongSide(photo, original);
+        if (original.length <= MAX_DIRECT_ORIGINAL_BYTES && longSide <= MAX_DIRECT_ORIGINAL_SIDE) {
+            return original;
+        }
+        return downsample(original);
+    }
+
+    private long resolveLongSide(PhotoItem photo, byte[] imageBytes) {
+        if (photo.getWidth() != null && photo.getHeight() != null) {
+            return Math.max(photo.getWidth(), photo.getHeight());
+        }
+        try (ImageInputStream imageInput = ImageIO.createImageInputStream(
+                new ByteArrayInputStream(imageBytes))) {
+            if (imageInput == null) {
+                return Long.MAX_VALUE;
+            }
+            var readers = ImageIO.getImageReaders(imageInput);
+            if (!readers.hasNext()) {
+                return Long.MAX_VALUE;
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(imageInput, true, true);
+                return Math.max(reader.getWidth(0), reader.getHeight(0));
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException exception) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private byte[] downsample(byte[] original) {
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream(
+                    Math.min(original.length, 1024 * 1024));
+            Thumbnails.of(new ByteArrayInputStream(original))
+                    .size(OCR_DOWNSAMPLE_MAX_SIDE, OCR_DOWNSAMPLE_MAX_SIDE)
+                    .keepAspectRatio(true)
+                    .outputFormat("jpg")
+                    .outputQuality(OCR_DOWNSAMPLE_QUALITY)
+                    .toOutputStream(output);
+            return output.toByteArray();
+        } catch (IOException exception) {
+            throw new IllegalStateException("照片分析图像下采样失败", exception);
+        }
+    }
+
+    private byte[] readFileBytes(UUID ownerUserId, UUID fileId, String description) {
+        long maxImageBytes = imageAnalysisGateway.maxImageBytes();
+        try (FileContentStream content = fileQueryService.openOwnedFileContent(ownerUserId, fileId)) {
             if (content.sizeBytes() > maxImageBytes) {
                 log.warn(
-                        "照片超过图像分析输入限制: photoId={}, sizeBytes={}, maxBytes={}",
-                        photo.getId(),
+                        "照片超过图像分析输入限制: fileId={}, sizeBytes={}, maxBytes={}",
+                        fileId,
                         content.sizeBytes(),
                         maxImageBytes
                 );
-                throw new IllegalStateException("照片超过图像分析输入大小限制");
+                throw new IllegalStateException(description + "超过图像分析输入大小限制");
             }
-            tempFile = Files.createTempFile("omninest-photo-analysis-", ".img");
-            try (InputStream stream = content.inputStream();
-                 OutputStream output = Files.newOutputStream(tempFile)) {
-                byte[] chunk = new byte[8192];
-                long totalBytes = 0;
-                int bytesRead;
+            ByteArrayOutputStream output = new ByteArrayOutputStream(
+                    (int) Math.min(Math.max(content.sizeBytes(), 0), 8L * 1024 * 1024));
+            byte[] chunk = new byte[8192];
+            long totalBytes = 0;
+            int bytesRead;
+            try (InputStream stream = content.inputStream()) {
                 while ((bytesRead = stream.read(chunk)) != -1) {
                     totalBytes += bytesRead;
                     if (totalBytes > maxImageBytes) {
-                        throw new IOException("图像分析输入文件超过大小限制");
+                        throw new IllegalStateException(description + "超过图像分析输入大小限制");
                     }
                     output.write(chunk, 0, bytesRead);
                 }
             }
-            return tempFile;
-        } catch (Exception ex) {
-            log.warn("读取照片文件失败: photoId={}", photo.getId(), ex);
-            deleteStagedFile(tempFile);
-            throw new IllegalStateException("读取照片文件失败", ex);
+            if (totalBytes == 0) {
+                throw new IllegalStateException(description + "为空");
+            }
+            return output.toByteArray();
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (IOException exception) {
+            log.warn("读取{}失败: fileId={}", description, fileId, exception);
+            throw new IllegalStateException("读取" + description + "失败", exception);
         }
+    }
+
+    private BusinessException dependencyNotReady() {
+        // 封面由异步缩略图任务回填，导入后短暂缺失属预期；按依赖未就绪
+        // 抛出以进入短间隔重试，与真实分析失败区分。
+        return new BusinessException(
+                ErrorCode.TASK_DEPENDENCY_NOT_READY,
+                "照片封面尚未生成，等待缩略图任务回填"
+        );
     }
 
     private void requirePhotoProcessable(UUID ownerUserId, PhotoItem photo) {
@@ -327,93 +303,17 @@ public class PhotoAiService {
         }
     }
 
-    /**
-     * 校验图像分析侧车返回的结构化结果。
-     */
-    private void requireValidAnalysis(List<FaceDetection> faces, ContentAnalysis analysis) {
-        if (faces == null || analysis == null || analysis.observations() == null) {
+    private void requireValidAnalysis(ContentAnalysis analysis) {
+        if (analysis == null || analysis.observations() == null || analysis.schemaVersion() < 1) {
             throw new IllegalStateException("图像分析侧车返回了不完整的分析结果");
         }
-        int embeddingDimension = aiSidecarProperties.getFaceEmbeddingDimension();
-        for (FaceDetection face : faces) {
-            if (face == null
-                    || face.bboxW() <= 0
-                    || face.bboxH() <= 0
-                    || face.embedding() == null
-                    || face.embedding().length != embeddingDimension) {
-                throw new IllegalStateException("图像分析侧车返回了无效的人脸检测结果");
-            }
-        }
     }
 
-    private PhotoFace toFaceEntity(UUID ownerUserId, UUID photoId, FaceDetection face) {
-        PhotoFace faceEntity = new PhotoFace();
-        faceEntity.setPhotoId(photoId);
-        faceEntity.setOwnerUserId(ownerUserId);
-        faceEntity.setBboxX(face.bboxX());
-        faceEntity.setBboxY(face.bboxY());
-        faceEntity.setBboxW(face.bboxW());
-        faceEntity.setBboxH(face.bboxH());
-        faceEntity.setEmbedding(floatArrayToBytes(face.embedding()));
-        return faceEntity;
-    }
-
-    private void deleteStagedFile(Path tempFile) {
-        if (tempFile == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(tempFile);
-        } catch (IOException exception) {
-            log.warn("图像分析临时文件删除失败", exception);
-        }
-    }
-
-    private byte[] floatArrayToBytes(float[] floats) {
-        ByteBuffer buffer = ByteBuffer.allocate(floats.length * 4);
-        buffer.order(ByteOrder.LITTLE_ENDIAN);
-        for (float f : floats) {
-            buffer.putFloat(f);
-        }
-        return buffer.array();
-    }
-
-    /**
-     * 将小端字节序列还原为浮点向量。
-     * 字节序列为空、长度不是 4 的倍数或维度与期望值不符时返回 null，由调用方跳过。
-     */
-    private float[] bytesToFloatArray(byte[] bytes, int expectedDimension) {
-        if (bytes == null || bytes.length == 0 || bytes.length % 4 != 0) {
+    private String contentHash(PhotoItem photo) {
+        if (photo.getProviderMetadata() == null) {
             return null;
         }
-        int dimension = bytes.length / 4;
-        if (dimension != expectedDimension) {
-            return null;
-        }
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        buffer.order(ByteOrder.LITTLE_ENDIAN);
-        float[] floats = new float[dimension];
-        for (int i = 0; i < dimension; i++) {
-            floats[i] = buffer.getFloat();
-        }
-        return floats;
-    }
-
-    private PhotoItemDto toDto(UUID ownerUserId, PhotoItem photo, boolean isFavorite, List<String> tags) {
-        String coverUrl = resolveCoverUrl(ownerUserId, photo.getCoverFileId());
-        return PhotoItemDto.fromEntity(photo, coverUrl, isFavorite, tags);
-    }
-
-    private String resolveCoverUrl(UUID ownerUserId, UUID coverFileId) {
-        if (coverFileId == null) {
-            return null;
-        }
-        try {
-            FileDownloadUrlDto url = fileQueryService.createDownloadUrl(ownerUserId, coverFileId);
-            return url.downloadUrl();
-        } catch (Exception e) {
-            log.warn("解析封面 URL 失败: coverFileId={}, error={}", coverFileId, e.getMessage());
-            return null;
-        }
+        Object value = photo.getProviderMetadata().get("contentHash");
+        return value == null ? null : value.toString();
     }
 }

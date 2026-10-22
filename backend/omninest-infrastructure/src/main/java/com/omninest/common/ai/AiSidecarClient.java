@@ -1,11 +1,8 @@
 package com.omninest.common.ai;
 
-import com.omninest.common.ai.ImageAnalysisGateway.FaceDetection;
 import com.omninest.common.ai.ImageAnalysisGateway.BoundingBox;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
-import com.omninest.common.ai.ImageAnalysisGateway.SceneClassification;
-import com.omninest.common.ai.ImageAnalysisGateway.SceneLabel;
 import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.json.JsonSupport;
 import java.io.ByteArrayOutputStream;
@@ -15,30 +12,25 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.JsonNode;
 
 /**
  * 图像分析侧车服务 HTTP 客户端。
  *
- * <p>图片请求通过标准 multipart 编码器流式发送，响应按配置限制最大字节数。
+ * <p>图片请求通过标准 multipart 编码器发送，响应按配置限制最大字节数。
  *
  * @author OmniNest
  */
@@ -48,24 +40,21 @@ public class AiSidecarClient implements ImageAnalysisGateway {
 
     private static final int BUFFER_SIZE = 8192;
     private static final int MAX_ERROR_SUMMARY_CHARS = 512;
+    private static final long PIPELINE_VERSION_CACHE_MILLIS = 60_000L;
     private static final String SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token";
 
     private final AiSidecarProperties properties;
-    private final Places365LabelCatalog places365LabelCatalog;
     private final HttpClient httpClient;
+    private final Object pipelineVersionLock = new Object();
+    private volatile PipelineVersionCache pipelineVersionCache;
 
     /**
      * 创建图像分析侧车客户端。
      *
      * @param properties 图像分析侧车配置
-     * @param places365LabelCatalog Places365 标签目录
      */
-    public AiSidecarClient(
-            AiSidecarProperties properties,
-            Places365LabelCatalog places365LabelCatalog
-    ) {
+    public AiSidecarClient(AiSidecarProperties properties) {
         this.properties = properties;
-        this.places365LabelCatalog = places365LabelCatalog;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -84,66 +73,89 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         return properties.getMaxImageBytes();
     }
 
-    /**
-     * 检测图片中的人脸。
-     *
-     * @param imagePath 图片文件路径
-     * @return 人脸检测结果
-     */
-    public List<FaceDetection> detectFaces(Path imagePath) {
-        return detectFaces(imagePath, properties.getEndpoint(), properties.getTimeoutSeconds());
+    @Override
+    public String fetchRemotePipelineVersion(String endpoint, int timeoutSeconds) {
+        String normalizedEndpoint = normalizeEndpoint(endpoint);
+        if (normalizedEndpoint.isEmpty()) {
+            return null;
+        }
+        long now = System.currentTimeMillis();
+        PipelineVersionCache cached = pipelineVersionCache;
+        if (cached != null
+                && cached.endpoint().equals(normalizedEndpoint)
+                && now - cached.fetchedAtMillis() < PIPELINE_VERSION_CACHE_MILLIS) {
+            return cached.version();
+        }
+        synchronized (pipelineVersionLock) {
+            cached = pipelineVersionCache;
+            now = System.currentTimeMillis();
+            if (cached != null
+                    && cached.endpoint().equals(normalizedEndpoint)
+                    && now - cached.fetchedAtMillis() < PIPELINE_VERSION_CACHE_MILLIS) {
+                return cached.version();
+            }
+            String version = probePipelineVersion(normalizedEndpoint, timeoutSeconds);
+            pipelineVersionCache = new PipelineVersionCache(
+                    normalizedEndpoint,
+                    version,
+                    System.currentTimeMillis()
+            );
+            return version;
+        }
     }
 
-    /**
-     * 使用动态端点和超时检测图片中的人脸。
-     *
-     * @param imagePath 图片文件路径
-     * @param endpoint 侧车服务端点
-     * @param timeoutSeconds 请求超时秒数
-     * @return 人脸检测结果
-     */
     @Override
-    public List<FaceDetection> detectFaces(Path imagePath, String endpoint, int timeoutSeconds) {
-        JsonNode array = JsonSupport.readTree(sendImageRequest(
-                imagePath,
-                endpoint + "/detect-faces",
-                timeoutSeconds
-        ));
-        List<FaceDetection> result = new ArrayList<>();
-        if (!array.isArray()) {
-            return result;
+    public ContentAnalysis analyzeContent(
+            byte[] imageBytes,
+            String filename,
+            String hint,
+            boolean skipOcr,
+            String endpoint,
+            int timeoutSeconds
+    ) {
+        if (imageBytes == null || imageBytes.length == 0) {
+            throw new IllegalArgumentException("图像分析输入不能为空");
         }
-        for (JsonNode object : array) {
-            result.add(new FaceDetection(
-                    object.path("bbox_x").asInt(),
-                    object.path("bbox_y").asInt(),
-                    object.path("bbox_w").asInt(),
-                    object.path("bbox_h").asInt(),
-                    parseFloatArray(object.path("embedding"))
-            ));
+        if (imageBytes.length > properties.getMaxImageBytes()) {
+            throw new IllegalArgumentException("图像分析输入大小超出限制");
         }
-        return result;
+        String normalizedEndpoint = requireEndpoint(endpoint);
+        URI uri = UriComponentsBuilder.fromUriString(normalizedEndpoint)
+                .path("/analyze-content")
+                .queryParam("hint", hint == null || hint.isBlank() ? "AUTO" : hint)
+                .queryParam("skipOcr", skipOcr)
+                .build()
+                .encode()
+                .toUri();
+        MultiValueMap<String, Object> multipartBody = new LinkedMultiValueMap<>();
+        multipartBody.add("image", new InMemoryImageResource(imageBytes, safeFilename(filename)));
+        String responseBody = sendMultipart(uri, multipartBody, timeoutSeconds);
+        return parseContentAnalysis(JsonSupport.readTree(responseBody));
     }
 
-    /**
-     * 执行结构化图像内容分析。
-     *
-     * @param imagePath 图片文件路径
-     * @param endpoint 侧车服务端点
-     * @param timeoutSeconds 请求超时秒数
-     * @return 结构化内容分析结果
-     */
-    @Override
-    public ContentAnalysis analyzeContent(Path imagePath, String endpoint, int timeoutSeconds) {
-        JsonNode object = JsonSupport.readTree(sendImageRequest(
-                imagePath,
-                endpoint + "/analyze-content",
-                timeoutSeconds
-        ));
+    private String probePipelineVersion(String endpoint, int timeoutSeconds) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint + "/ready"))
+                    .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 30)))
+                    .headers(tokenHeaders())
+                    .GET()
+                    .build();
+            String responseBody = sendRequest(request);
+            String version = JsonSupport.readTree(responseBody).path("pipelineVersion").asString(null);
+            return version == null || version.isBlank() ? null : version.trim();
+        } catch (RuntimeException exception) {
+            log.warn("侧车流水线版本探测失败: endpoint={}, errorType={}",
+                    endpoint, exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private ContentAnalysis parseContentAnalysis(JsonNode object) {
         List<ContentObservation> observations = new ArrayList<>();
         for (JsonNode observation : object.path("observations")) {
             String namespace = observation.path("namespace").asString(null);
-            String code = normalizeObservationCode(namespace, observation.path("code").asString(null));
+            String code = observation.path("code").asString(null);
             float confidence = (float) observation.path("confidence").asDouble();
             if (namespace == null || namespace.isBlank()
                     || code == null || code.isBlank()
@@ -158,57 +170,25 @@ public class AiSidecarClient implements ImageAnalysisGateway {
                     parseBoundingBoxes(observation.path("boxes"))
             ));
         }
+        List<String> semanticTags = new ArrayList<>();
+        for (JsonNode tag : object.path("semanticTags")) {
+            String value = tag.asString(null);
+            if (value != null && !value.isBlank()) {
+                semanticTags.add(value.trim());
+            }
+        }
+        String ocrText = object.path("ocrText").asString(null);
+        if (ocrText != null && ocrText.isBlank()) {
+            ocrText = null;
+        }
         return new ContentAnalysis(
                 Math.max(1, object.path("schemaVersion").asInt()),
                 object.path("pipelineVersion").asString(null),
-                observations
+                object.path("ocrPipelineVersion").asString(null),
+                observations,
+                semanticTags,
+                ocrText
         );
-    }
-
-    /**
-     * 对图片进行场景分类。
-     *
-     * @param imagePath 图片文件路径
-     * @return 场景分类结果
-     */
-    public SceneClassification classifyScene(Path imagePath) {
-        return classifyScene(imagePath, properties.getEndpoint(), properties.getTimeoutSeconds());
-    }
-
-    /**
-     * 使用动态端点和超时对图片进行场景分类。
-     *
-     * @param imagePath 图片文件路径
-     * @param endpoint 侧车服务端点
-     * @param timeoutSeconds 请求超时秒数
-     * @return 场景分类结果
-     */
-    @Override
-    public SceneClassification classifyScene(Path imagePath, String endpoint, int timeoutSeconds) {
-        JsonNode object = JsonSupport.readTree(sendImageRequest(
-                imagePath,
-                endpoint + "/classify-scene",
-                timeoutSeconds
-        ));
-        List<SceneLabel> labels = new ArrayList<>();
-        for (JsonNode labelObject : object.path("labels")) {
-            labels.add(new SceneLabel(
-                    places365LabelCatalog.normalize(labelObject.path("name").asString(null)),
-                    (float) labelObject.path("confidence").asDouble()
-            ));
-        }
-        return new SceneClassification(labels);
-    }
-
-    private String normalizeObservationCode(String namespace, String code) {
-        if (!"SCENE".equalsIgnoreCase(namespace) || code == null || code.isBlank()) {
-            return code;
-        }
-        if (code.startsWith("places365_")) {
-            String index = code.substring("places365_".length());
-            return places365LabelCatalog.normalize(index);
-        }
-        return places365LabelCatalog.normalize(code);
     }
 
     private List<BoundingBox> parseBoundingBoxes(JsonNode boxesArray) {
@@ -230,78 +210,16 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         return List.copyOf(boxes);
     }
 
-    /**
-     * 对人脸嵌入向量进行聚类。
-     *
-     * @param embeddings 人脸嵌入向量
-     * @return 每个向量对应的聚类 ID
-     */
-    public List<Integer> clusterFaces(List<float[]> embeddings) {
-        return clusterFaces(embeddings, properties.getEndpoint(), properties.getTimeoutSeconds());
-    }
-
-    /**
-     * 使用动态端点和超时对人脸嵌入向量进行聚类。
-     *
-     * @param embeddings 人脸嵌入向量
-     * @param endpoint 侧车服务端点
-     * @param timeoutSeconds 请求超时秒数
-     * @return 每个向量对应的聚类 ID
-     */
-    @Override
-    public List<Integer> clusterFaces(List<float[]> embeddings, String endpoint, int timeoutSeconds) {
-        if (embeddings.isEmpty()) {
-            return List.of();
-        }
-        int dimension = embeddings.getFirst().length;
-        ByteBuffer matrix = ByteBuffer
-                .allocate(Math.multiplyExact(Math.multiplyExact(embeddings.size(), dimension), Float.BYTES))
-                .order(ByteOrder.LITTLE_ENDIAN);
-        for (float[] embedding : embeddings) {
-            if (embedding == null || embedding.length != dimension) {
-                throw new IllegalArgumentException("人脸嵌入向量维度不一致");
-            }
-            for (float value : embedding) {
-                matrix.putFloat(value);
-            }
-        }
-        // 逐元素 JSON 数组在 1 万张人脸时会产生数十 MB 文本，改为一次性 base64 矩阵。
-        Map<String, Object> requestBody = Map.of(
-                "dimension", dimension,
-                "count", embeddings.size(),
-                "embeddingsBase64", Base64.getEncoder().encodeToString(matrix.array())
-        );
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(endpoint + "/cluster-faces"))
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .header("Content-Type", "application/json")
-                .header(SIDECAR_TOKEN_HEADER, requireSecret())
-                .POST(HttpRequest.BodyPublishers.ofString(JsonSupport.toJson(requestBody), StandardCharsets.UTF_8))
-                .build();
-
-        JsonNode array = JsonSupport.readTree(sendRequest(request));
-        List<Integer> result = new ArrayList<>();
-        if (array.isArray()) {
-            for (JsonNode value : array) {
-                result.add(value.asInt());
-            }
-        }
-        return result;
-    }
-
-    private String sendImageRequest(Path imagePath, String endpoint, int timeoutSeconds) {
-        Path normalizedPath = requireImageFile(imagePath);
+    private String sendMultipart(URI uri, MultiValueMap<String, Object> multipartBody, int timeoutSeconds) {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
-        MultiValueMap<String, Object> multipartBody = new LinkedMultiValueMap<>();
-        multipartBody.add("image", new FileSystemResource(normalizedPath));
         try {
             return RestClient.builder()
                     .requestFactory(requestFactory)
                     .build()
                     .post()
-                    .uri(URI.create(endpoint))
-                    .header(SIDECAR_TOKEN_HEADER, requireSecret())
+                    .uri(uri)
+                    .headers(headers -> headers.add(SIDECAR_TOKEN_HEADER, requireSecret()))
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(multipartBody)
                     .exchange((request, response) -> {
@@ -317,33 +235,6 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         } catch (Exception exception) {
             throw new IllegalStateException("图像分析侧车调用失败", exception);
         }
-    }
-
-    private Path requireImageFile(Path imagePath) {
-        if (imagePath == null) {
-            throw new IllegalArgumentException("图像分析输入文件不能为空");
-        }
-        Path normalizedPath = imagePath.toAbsolutePath().normalize();
-        try {
-            if (!Files.isRegularFile(normalizedPath)) {
-            throw new IllegalArgumentException("图像分析输入文件不存在");
-            }
-            long sizeBytes = Files.size(normalizedPath);
-            if (sizeBytes <= 0 || sizeBytes > properties.getMaxImageBytes()) {
-            throw new IllegalArgumentException("图像分析输入文件大小超出限制");
-            }
-            return normalizedPath;
-        } catch (IOException exception) {
-            throw new IllegalStateException("图像分析输入文件检查失败", exception);
-        }
-    }
-
-    private String requireSecret() {
-        String secret = properties.getSecret();
-        if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException("图像分析侧车认证密钥未配置");
-        }
-        return secret;
     }
 
     private String sendRequest(HttpRequest request) {
@@ -368,6 +259,49 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         }
     }
 
+    private String[] tokenHeaders() {
+        String secret = properties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            return new String[0];
+        }
+        return new String[]{SIDECAR_TOKEN_HEADER, secret};
+    }
+
+    private String requireSecret() {
+        String secret = properties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("图像分析侧车认证密钥未配置");
+        }
+        return secret;
+    }
+
+    private String requireEndpoint(String endpoint) {
+        String normalizedEndpoint = normalizeEndpoint(endpoint);
+        if (normalizedEndpoint.isEmpty()) {
+            throw new IllegalArgumentException("图像分析侧车地址不能为空");
+        }
+        return normalizedEndpoint;
+    }
+
+    private String normalizeEndpoint(String endpoint) {
+        if (endpoint == null) {
+            return "";
+        }
+        String normalized = endpoint.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String safeFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "image.jpg";
+        }
+        String sanitized = filename.replaceAll("[\\r\\n\\\"\\\\/]", "_").trim();
+        return sanitized.isEmpty() ? "image.jpg" : sanitized;
+    }
+
     private void requireSuccessfulResponse(int statusCode, String responseBody) {
         if (statusCode < 400) {
             return;
@@ -381,7 +315,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
 
     private String readBoundedUtf8(InputStream input, int maxBytes) throws IOException {
         if (maxBytes <= 0) {
-                throw new IllegalStateException("图像分析响应大小限制无效");
+            throw new IllegalStateException("图像分析响应大小限制无效");
         }
         ByteArrayOutputStream output = new ByteArrayOutputStream(Math.min(maxBytes, BUFFER_SIZE));
         byte[] buffer = new byte[BUFFER_SIZE];
@@ -390,7 +324,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         while ((read = input.read(buffer)) != -1) {
             totalRead += read;
             if (totalRead > maxBytes) {
-            throw new IllegalStateException("图像分析侧车响应超过大小限制");
+                throw new IllegalStateException("图像分析侧车响应超过大小限制");
             }
             output.write(buffer, 0, read);
         }
@@ -408,15 +342,23 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         return normalized.substring(0, MAX_ERROR_SUMMARY_CHARS);
     }
 
-    private float[] parseFloatArray(JsonNode array) {
-        if (array == null || array.isMissingNode()) {
-            return new float[0];
-        }
-        float[] result = new float[array.size()];
-        for (int index = 0; index < array.size(); index++) {
-            result[index] = array.get(index).floatValue();
-        }
-        return result;
+    private record PipelineVersionCache(String endpoint, String version, long fetchedAtMillis) {
     }
 
+    /**
+     * 内存图片 multipart 资源；文件名来自调用方受控值。
+     */
+    private static final class InMemoryImageResource extends ByteArrayResource {
+        private final String filename;
+
+        private InMemoryImageResource(byte[] byteArray, String filename) {
+            super(byteArray);
+            this.filename = filename;
+        }
+
+        @Override
+        public String getFilename() {
+            return filename;
+        }
+    }
 }

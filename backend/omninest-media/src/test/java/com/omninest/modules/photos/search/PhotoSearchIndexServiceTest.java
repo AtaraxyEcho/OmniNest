@@ -1,12 +1,13 @@
 package com.omninest.modules.photos.search;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.omninest.modules.photos.search.PhotoSearchIndexService.PhotoIndexDocument;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.cn.smart.SmartChineseAnalyzer;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.FSDirectory;
@@ -16,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * 照片搜索索引服务测试：锁冲突必须作为失败冒泡，不能只留日志。
+ * 照片搜索索引服务测试：锁冲突、多租户隔离与中文词元检索。
  *
  * @author OmniNest
  */
@@ -28,13 +29,13 @@ class PhotoSearchIndexServiceTest {
     @Test
     @DisplayName("索引卷被其他写者持有时抛出锁冲突，交由消费侧重试进 DLQ")
     void propagatesWriteLockConflictInsteadOfSwallowingIt() throws Exception {
-        IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
+        IndexWriterConfig config = new IndexWriterConfig(new SmartChineseAnalyzer());
         try (IndexWriter holder = new IndexWriter(FSDirectory.open(indexDir), config);
              PhotoSearchIndexService service = new PhotoSearchIndexService(indexDir.toString())) {
             holder.commit();
 
-            assertThatThrownBy(() -> service.indexPhoto(
-                    UUID.randomUUID(), UUID.randomUUID(), "标题", null, List.of("标签")))
+            assertThatThrownBy(() -> service.indexPhoto(document(
+                    UUID.randomUUID(), UUID.randomUUID(), "标题", null, List.of("标签"), List.of(), null)))
                     .isInstanceOf(IllegalStateException.class)
                     .hasCauseInstanceOf(LockObtainFailedException.class);
         }
@@ -48,9 +49,10 @@ class PhotoSearchIndexServiceTest {
         try (PhotoSearchIndexService writer = new PhotoSearchIndexService(indexDir.toString());
              PhotoSearchIndexService readerSide = new PhotoSearchIndexService(indexDir.toString())) {
             // 写侧打开 IndexWriter 并提交，读侧实例从未写过，只能靠重新打开目录读到新段。
-            writer.indexPhoto(photoId, ownerUserId, "sunset", "sunset", List.of("sunset"));
+            writer.indexPhoto(document(photoId, ownerUserId, "sunset", "sunset", List.of("sunset"), List.of(), null));
             // 同一照片重复索引必须替换文档，不能累积成多份命中。
-            writer.indexPhoto(photoId, ownerUserId, "sunset", "sunset", List.of("sunset", "sea"));
+            writer.indexPhoto(document(
+                    photoId, ownerUserId, "sunset", "sunset", List.of("sunset", "sea"), List.of(), null));
             assertThat(writer.search(ownerUserId, "sunset", 10)).as("写侧自身可读且未重复").containsExactly(photoId);
             assertThat(readerSide.search(ownerUserId, "sunset", 10)).as("只读实例可见").containsExactly(photoId);
 
@@ -67,8 +69,24 @@ class PhotoSearchIndexServiceTest {
         try {
             UUID photoId = UUID.randomUUID();
             UUID ownerUserId = UUID.randomUUID();
-            service.indexPhoto(photoId, ownerUserId, "sunset ridge", "黄昏的海边", List.of("travel"));
-            service.indexPhoto(photoId, ownerUserId, "sunset ridge", "黄昏的海边", List.of("travel", "sea"));
+            service.indexPhoto(document(
+                    photoId,
+                    ownerUserId,
+                    "sunset ridge",
+                    "黄昏的海边",
+                    List.of("travel"),
+                    List.of(),
+                    null
+            ));
+            service.indexPhoto(document(
+                    photoId,
+                    ownerUserId,
+                    "sunset ridge",
+                    "黄昏的海边",
+                    List.of("travel", "sea"),
+                    List.of(),
+                    null
+            ));
             service.deletePhoto(photoId);
             service.deletePhotos(List.of(photoId, UUID.randomUUID()));
         } finally {
@@ -91,8 +109,24 @@ class PhotoSearchIndexServiceTest {
         try {
             // 两人写入同一个目录：照片索引不像文件索引按用户分目录，
             // ownerUserId 一旦被分词，过滤条件就可能被同名片段命中，因此必须逐租户精确匹配。
-            service.indexPhoto(firstPhoto, firstOwner, "sunset ridge", "黄昏的海边", List.of("travel"));
-            service.indexPhoto(secondPhoto, secondOwner, "sunset ridge", "黄昏的海边", List.of("travel"));
+            service.indexPhoto(document(
+                    firstPhoto,
+                    firstOwner,
+                    "sunset ridge",
+                    "黄昏的海边",
+                    List.of("travel"),
+                    List.of(),
+                    null
+            ));
+            service.indexPhoto(document(
+                    secondPhoto,
+                    secondOwner,
+                    "sunset ridge",
+                    "黄昏的海边",
+                    List.of("travel"),
+                    List.of(),
+                    null
+            ));
 
             assertThat(service.search(firstOwner, "sunset", 10)).containsExactly(firstPhoto);
             assertThat(service.search(secondOwner, "sunset", 10)).containsExactly(secondPhoto);
@@ -106,4 +140,79 @@ class PhotoSearchIndexServiceTest {
         }
     }
 
+    @Test
+    @DisplayName("AI 标签与图中文字可通过中文词元命中")
+    void searchMatchesAiLabelsAndOcrTextWithChineseTokens() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID invoicePhoto = UUID.randomUUID();
+        UUID catPhoto = UUID.randomUUID();
+        PhotoSearchIndexService service = new PhotoSearchIndexService(indexDir.toString());
+        try {
+            service.indexPhoto(new PhotoIndexDocument(
+                    invoicePhoto,
+                    ownerUserId,
+                    "扫描件",
+                    null,
+                    List.of(),
+                    List.of("document 文档 发票 身份证 快递单 合同"),
+                    "增值税发票 号码 12345"
+            ));
+            service.indexPhoto(new PhotoIndexDocument(
+                    catPhoto,
+                    ownerUserId,
+                    "IMG_001",
+                    null,
+                    List.of(),
+                    List.of("cat 猫 猫咪 小猫 宠物"),
+                    null
+            ));
+
+            assertThat(service.search(ownerUserId, "发票", 10)).containsExactly(invoicePhoto);
+            assertThat(service.search(ownerUserId, "猫咪", 10)).containsExactly(catPhoto);
+            assertThat(service.search(ownerUserId, "身份证", 10)).containsExactly(invoicePhoto);
+            assertThat(service.search(ownerUserId, "航班", 10)).isEmpty();
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
+    @DisplayName("批量索引只提交一次且可立即检索")
+    void batchIndexCommitsOnceAndIsSearchable() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID firstPhoto = UUID.randomUUID();
+        UUID secondPhoto = UUID.randomUUID();
+        PhotoSearchIndexService service = new PhotoSearchIndexService(indexDir.toString());
+        try {
+            service.indexPhotosBatch(List.of(
+                    document(firstPhoto, ownerUserId, "猫咪", null, List.of(), List.of("cat 猫"), null),
+                    document(secondPhoto, ownerUserId, "狗狗", null, List.of(), List.of("dog 狗"), null)
+            ));
+
+            assertThat(service.search(ownerUserId, "猫", 10)).containsExactly(firstPhoto);
+            assertThat(service.search(ownerUserId, "狗", 10)).containsExactly(secondPhoto);
+        } finally {
+            service.close();
+        }
+    }
+
+    private PhotoIndexDocument document(
+            UUID photoId,
+            UUID ownerUserId,
+            String title,
+            String description,
+            List<String> tags,
+            List<String> aiLabels,
+            String ocrText
+    ) {
+        return new PhotoIndexDocument(
+                photoId,
+                ownerUserId,
+                title,
+                description,
+                tags,
+                aiLabels,
+                ocrText
+        );
+    }
 }

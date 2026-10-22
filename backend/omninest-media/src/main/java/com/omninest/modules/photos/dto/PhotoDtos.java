@@ -143,12 +143,14 @@ public final class PhotoDtos {
      * @param pipelineVersion 分析流水线版本
      * @param completedAt 完成时间
      * @param labels 结构化自动标签
+     * @param ocrText 图片内嵌文字
      */
     public record PhotoContentAnalysisDto(
             String status,
             String pipelineVersion,
             Instant completedAt,
-            List<PhotoContentLabelDto> labels
+            List<PhotoContentLabelDto> labels,
+            String ocrText
     ) {
     }
 
@@ -408,20 +410,6 @@ public final class PhotoDtos {
             int page,
             int size,
             long total
-    ) {}
-
-    // ─── AI 人脸聚类 DTO ───
-
-    public record PhotoFaceClusterDto(
-            UUID id,
-            String name,
-            int faceCount,
-            String coverPhotoUrl
-    ) {}
-
-    public record NameClusterRequest(
-            @NotBlank
-            @Size(max = 200) String name
     ) {}
 
     /**

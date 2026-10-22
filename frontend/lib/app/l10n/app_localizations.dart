@@ -15167,6 +15167,24 @@ abstract class AppLocalizations {
   /// **'Styles'**
   String get photosAnalysisStyle;
 
+  /// No description provided for @photosOcrText.
+  ///
+  /// In en, this message translates to:
+  /// **'Text in Image (OCR)'**
+  String get photosOcrText;
+
+  /// No description provided for @photosCopyOcrText.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy text'**
+  String get photosCopyOcrText;
+
+  /// No description provided for @photosOcrTextCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Text copied'**
+  String get photosOcrTextCopied;
+
   /// No description provided for @photosAiCategoryPerson.
   ///
   /// In en, this message translates to:

@@ -1,413 +1,471 @@
 package com.omninest.modules.photos.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.AdditionalMatchers.aryEq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 
 import com.omninest.common.ai.ImageAnalysisGateway;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
-import com.omninest.common.ai.ImageAnalysisGateway.FaceDetection;
-import com.omninest.common.config.AiSidecarProperties;
+import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
-import com.omninest.modules.photos.domain.PhotoFace;
-import com.omninest.modules.photos.domain.PhotoFaceCluster;
 import com.omninest.modules.photos.domain.PhotoItem;
-import com.omninest.modules.photos.repository.PhotoFaceClusterRepository;
-import com.omninest.modules.photos.repository.PhotoFaceRepository;
-import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
-import com.omninest.modules.photos.repository.PhotoTagRepository;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * 照片图像分析文件解析、临时文件生命周期与聚类编排测试。
+ * 照片图像分析编排测试：选源、短路、下采样与生命周期边界。
  *
  * @author OmniNest
  */
-@ExtendWith(MockitoExtension.class)
 class PhotoAiServiceTest {
 
-    @Mock
-    private ImageAnalysisGateway imageAnalysisGateway;
-    @Spy
-    private AiSidecarProperties aiSidecarProperties = new AiSidecarProperties();
-    @Spy
-    private PhotoLabelPolicy labelPolicy = new PhotoLabelPolicy();
-    @Mock
-    private PhotoContentAnalysisService contentAnalysisService;
-    @Mock
-    private PhotosRuntimeConfigService configService;
-    @Mock
-    private PhotoFaceClusterMaintenanceService clusterMaintenanceService;
-    @Mock
-    private PhotoFaceRepository faceRepository;
-    @Mock
-    private PhotoFaceClusterRepository clusterRepository;
-    @Mock
-    private PhotoItemRepository photoItemRepository;
-    @Mock
-    private PhotoFavoriteRepository favoriteRepository;
-    @Mock
-    private PhotoTagRepository tagRepository;
-    @Mock
-    private FileQueryService fileQueryService;
-    @Mock
-    private FileLifecycleGuard fileLifecycleGuard;
+    private static final String PIPELINE = "vision-v6-lightweight+ppocr-v4-onnx-v1";
 
-    @InjectMocks
-    private PhotoAiService service;
+    private final ImageAnalysisGateway imageAnalysisGateway = Mockito.mock(ImageAnalysisGateway.class);
+    private final PhotoLabelPolicy labelPolicy = new PhotoLabelPolicy();
+    private final PhotoContentAnalysisService contentAnalysisService =
+            Mockito.mock(PhotoContentAnalysisService.class);
+    private final PhotosRuntimeConfigService configService = Mockito.mock(PhotosRuntimeConfigService.class);
+    private final PhotoItemRepository photoItemRepository = Mockito.mock(PhotoItemRepository.class);
+    private final PhotoFileDetector fileDetector = new PhotoFileDetector();
+    private final FileQueryService fileQueryService = Mockito.mock(FileQueryService.class);
+    private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
+    private final PhotoAiService service = new PhotoAiService(
+            imageAnalysisGateway,
+            labelPolicy,
+            contentAnalysisService,
+            configService,
+            photoItemRepository,
+            fileDetector,
+            fileQueryService,
+            fileLifecycleGuard
+    );
 
     @Test
-    void shouldResolveCoverNodeAndDeleteStagedFileAfterProcessing() {
+    void shouldReadOriginalAndApplyOcrAnalysis() {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
-        UUID coverNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setCoverFileId(coverNodeId);
-        photo.setProviderMetadata(new HashMap<>());
-        AtomicReference<Path> stagedFile = new AtomicReference<>();
-
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        photo.setCameraMake("Apple");
+        photo.getProviderMetadata().put("contentHash", "hash-1");
+        stubConfig();
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
-        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(1024L);
-        Mockito.when(configService.aiEndpoint()).thenReturn("http://localhost:8090");
-        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
-        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverNodeId))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(new byte[]{1, 2, 3, 4}),
-                        "cover.jpg",
-                        4,
-                        "image/jpeg"
-                ));
-        Mockito.when(imageAnalysisGateway.detectFaces(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenAnswer(invocation -> {
-                    Path path = invocation.getArgument(0);
-                    stagedFile.set(path);
-                    return List.of();
-                });
+        byte[] imageBytes = new byte[]{1, 2, 3, 4, 5};
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(imageBytes));
+        ContentAnalysis analysis = analysis("增值税发票");
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(analysis);
 
-        service.processPhoto(ownerUserId, photoId);
+        service.processPhoto(ownerUserId, photoId, true);
 
-        Mockito.verify(fileQueryService).openOwnedFileContent(ownerUserId, coverNodeId);
-        assertTrue(stagedFile.get() != null);
-        assertFalse(Files.exists(stagedFile.get()));
-    }
-
-    @Test
-    void shouldPropagateSidecarFailureWithoutReplacingExistingAnalysis() {
-        UUID ownerUserId = UUID.randomUUID();
-        UUID photoId = UUID.randomUUID();
-        UUID coverNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setCoverFileId(coverNodeId);
-        photo.setProviderMetadata(new HashMap<>());
-
-        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
-                .thenReturn(Optional.of(photo));
-        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(1024L);
-        Mockito.when(configService.aiEndpoint()).thenReturn("http://localhost:8090");
-        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
-        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverNodeId))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(new byte[]{1, 2, 3, 4}),
-                        "cover.jpg",
-                        4,
-                        "image/jpeg"
-                ));
-        Mockito.when(imageAnalysisGateway.detectFaces(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenThrow(new IllegalStateException("sidecar unavailable"));
-
-        assertThrows(IllegalStateException.class, () -> service.processPhoto(ownerUserId, photoId));
-
-        Mockito.verify(contentAnalysisService, Mockito.never()).apply(
-                ArgumentMatchers.any(),
-                ArgumentMatchers.any(),
-                ArgumentMatchers.anyList(),
-                ArgumentMatchers.any(),
-                ArgumentMatchers.anyList()
+        Mockito.verify(imageAnalysisGateway).analyzeContent(
+                aryEq(imageBytes),
+                eq(photoId + ".jpg"),
+                eq("NATURAL_PHOTO"),
+                eq(false),
+                eq("http://sidecar"),
+                eq(5)
         );
-    }
-
-    @Test
-    void shouldReplaceFaceAnalysisWhenPhotoIsProcessedAgain() {
-        UUID ownerUserId = UUID.randomUUID();
-        UUID photoId = UUID.randomUUID();
-        UUID coverNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setCoverFileId(coverNodeId);
-        photo.setProviderMetadata(new HashMap<>());
-
-        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
-                .thenReturn(Optional.of(photo));
-        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(1024L);
-        Mockito.when(configService.aiEndpoint()).thenReturn("http://localhost:8090");
-        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
-        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverNodeId))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(new byte[]{1, 2, 3, 4}),
-                        "cover.jpg",
-                        4,
-                        "image/jpeg"
-                ));
-        Mockito.when(imageAnalysisGateway.detectFaces(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(List.of(new FaceDetection(1, 2, 3, 4, embedding512())));
-
-        service.processPhoto(ownerUserId, photoId);
-
+        ArgumentCaptor<ContentAnalysis> analysisCaptor = ArgumentCaptor.forClass(ContentAnalysis.class);
         Mockito.verify(contentAnalysisService).apply(
-                ArgumentMatchers.eq(ownerUserId),
-                ArgumentMatchers.eq(photoId),
-                ArgumentMatchers.anyList(),
-                ArgumentMatchers.any(ContentAnalysis.class),
-                ArgumentMatchers.anyList()
+                eq(ownerUserId),
+                eq(photoId),
+                analysisCaptor.capture(),
+                Mockito.anyList(),
+                eq(false),
+                eq(true)
         );
+        assertSame(analysis, analysisCaptor.getValue());
     }
 
     @Test
-    void shouldRejectFaceEmbeddingWithUnexpectedDimension() {
+    void shouldUseCoverAndSkipOcrWhenOcrVersionIsCurrent() {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
-        UUID coverNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setCoverFileId(coverNodeId);
-        photo.setProviderMetadata(new HashMap<>());
-
+        UUID fileNodeId = UUID.randomUUID();
+        UUID coverFileId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, coverFileId);
+        photo.getProviderMetadata().put("ocrPipelineVersion", PhotoAiService.EXPECTED_OCR_VERSION);
+        stubConfig();
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
-        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(1024L);
-        Mockito.when(configService.aiEndpoint()).thenReturn("http://localhost:8090");
-        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
-        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverNodeId))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(new byte[]{1, 2, 3, 4}),
-                        "cover.jpg",
-                        4,
-                        "image/jpeg"
-                ));
-        Mockito.when(imageAnalysisGateway.detectFaces(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(List.of(new FaceDetection(1, 2, 3, 4, new float[]{0.5F})));
+        byte[] coverBytes = new byte[]{9, 8, 7};
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverFileId))
+                .thenReturn(content(coverBytes));
+        ContentAnalysis analysis = analysis("old text");
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(analysis);
+        Mockito.when(contentAnalysisService.mergePreservedOcrObservations(ownerUserId, photoId, analysis))
+                .thenReturn(analysis);
 
-        assertThrows(IllegalStateException.class, () -> service.processPhoto(ownerUserId, photoId));
+        service.processPhoto(ownerUserId, photoId, false);
 
-        Mockito.verify(contentAnalysisService, Mockito.never()).apply(
-                ArgumentMatchers.any(),
-                ArgumentMatchers.any(),
-                ArgumentMatchers.anyList(),
-                ArgumentMatchers.any(),
-                ArgumentMatchers.anyList()
+        Mockito.verify(fileQueryService).openOwnedFileContent(ownerUserId, coverFileId);
+        Mockito.verify(fileQueryService, Mockito.never()).openOwnedFileContent(ownerUserId, fileNodeId);
+        Mockito.verify(imageAnalysisGateway).analyzeContent(
+                aryEq(coverBytes),
+                eq(photoId + ".jpg"),
+                eq("AUTO"),
+                eq(true),
+                eq("http://sidecar"),
+                eq(5)
         );
-    }
-
-    @Test
-    void shouldSkipContentUploadAndDeriveLabelsFromFacesOnly() {
-        UUID ownerUserId = UUID.randomUUID();
-        UUID photoId = UUID.randomUUID();
-        UUID coverNodeId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setCoverFileId(coverNodeId);
-        photo.setProviderMetadata(new HashMap<>());
-
-        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
-                .thenReturn(Optional.of(photo));
-        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(1024L);
-        Mockito.when(configService.aiEndpoint()).thenReturn("http://localhost:8090");
-        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
-        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverNodeId))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(new byte[]{1, 2, 3, 4}),
-                        "cover.jpg",
-                        4,
-                        "image/jpeg"
-                ));
-        Mockito.when(imageAnalysisGateway.detectFaces(
-                        ArgumentMatchers.any(Path.class),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(List.of(new FaceDetection(1, 2, 3, 4, embedding512())));
-        service.processPhoto(ownerUserId, photoId);
-
-        // 侧车的场景/主体分类模型已下线，接口恒返回空观察项：
-        // 再为每张照片二次上传整图只会翻倍网络与侧车 I/O，并白占推理槽位。
-        Mockito.verify(imageAnalysisGateway, Mockito.never()).analyzeContent(
-                ArgumentMatchers.any(Path.class),
-                ArgumentMatchers.anyString(),
-                ArgumentMatchers.anyInt());
-        // 命名空间之间不得互相推导由 PhotoLabelPolicyTest 覆盖，这里只确认标签来自人脸。
         Mockito.verify(contentAnalysisService).apply(
-                ArgumentMatchers.eq(ownerUserId),
-                ArgumentMatchers.eq(photoId),
-                ArgumentMatchers.anyList(),
-                ArgumentMatchers.argThat(analysis ->
-                        analysis.observations().isEmpty()
-                                && "content-analysis-disabled".equals(analysis.pipelineVersion())),
-                ArgumentMatchers.argThat(labels -> labels.stream().allMatch(label ->
-                        label.namespace().equals(PhotoLabelPolicy.SUBJECT)
-                                && label.code().equals("person"))
-                        && labels.size() == 1)
+                eq(ownerUserId),
+                eq(photoId),
+                eq(analysis),
+                Mockito.anyList(),
+                eq(true),
+                eq(false)
         );
     }
 
     @Test
-    void shouldSignalDependencyNotReadyWhenCoverMissing() {
+    void shouldShortCircuitDenseTextWithoutCallingSidecar() {
         UUID ownerUserId = UUID.randomUUID();
         UUID photoId = UUID.randomUUID();
-        PhotoItem photo = new PhotoItem();
-        photo.setId(photoId);
-        photo.setOwnerUserId(ownerUserId);
-        photo.setProviderMetadata(new HashMap<>());
+        PhotoItem photo = photo(ownerUserId, photoId, UUID.randomUUID(), UUID.randomUUID());
+        photo.getProviderMetadata().put("ocrPipelineVersion", PhotoAiService.EXPECTED_OCR_VERSION);
+        photo.getProviderMetadata().put("ocrDenseStyle", "document");
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(contentAnalysisService.tryShortCircuitDenseTextReanalysis(
+                ownerUserId, photo, PIPELINE, true)).thenReturn(true);
 
+        service.processPhoto(ownerUserId, photoId, true);
+
+        Mockito.verifyNoInteractions(imageAnalysisGateway, fileQueryService);
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void shouldCloneAnalysisWhenSameContentHashWasAlreadyAnalyzed() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, UUID.randomUUID(), null);
+        photo.getProviderMetadata().put("contentHash", "hash-1");
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(contentAnalysisService.tryCloneFromSameHash(
+                ownerUserId, photo, "hash-1", PIPELINE, false)).thenReturn(true);
+
+        service.processPhoto(ownerUserId, photoId, false);
+
+        Mockito.verifyNoInteractions(imageAnalysisGateway, fileQueryService);
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void shouldSkipWhenPhotoIsAlreadyAnalyzedWithExpectedPipeline() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, UUID.randomUUID(), null);
+        photo.getProviderMetadata().put("contentHash", "hash-1");
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(contentAnalysisService.isAlreadyAnalyzed(
+                ownerUserId, photoId, "hash-1", PIPELINE)).thenReturn(true);
+
+        service.processPhoto(ownerUserId, photoId, true);
+
+        Mockito.verifyNoInteractions(imageAnalysisGateway, fileQueryService);
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .tryCloneFromSameHash(any(), any(), any(), any(), anyBoolean());
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void shouldSignalDependencyNotReadyWhenRawPhotoHasNoCover() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, UUID.randomUUID(), null);
+        photo.setFormat("dng");
+        stubConfig();
         Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
                 .thenReturn(Optional.of(photo));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.processPhoto(ownerUserId, photoId));
+                () -> service.processPhoto(ownerUserId, photoId, true));
 
         assertEquals(ErrorCode.TASK_DEPENDENCY_NOT_READY, exception.errorCode());
         Mockito.verifyNoInteractions(fileQueryService, imageAnalysisGateway);
     }
 
     @Test
-    void shouldDelegateClusterRebuildOutsideTransactionAndSkipInvalidEmbeddings() {
+    void shouldDownsampleOriginalWhenLongSideExceedsDirectLimit() throws IOException {
         UUID ownerUserId = UUID.randomUUID();
-        UUID staleClusterId = UUID.randomUUID();
-        PhotoFace first = face(ownerUserId, staleClusterId);
-        PhotoFace second = face(ownerUserId, staleClusterId);
-        PhotoFace noise = face(ownerUserId, staleClusterId);
-        PhotoFace corrupt = face(ownerUserId, staleClusterId);
-        corrupt.setEmbedding(new byte[]{1, 2, 3});
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        photo.setFileSize(3L * 1024 * 1024);
+        photo.setWidth(3000);
+        photo.setHeight(100);
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        byte[] original = jpegBytes(3000, 100);
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(original));
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(analysis(null));
 
-        Mockito.when(faceRepository.findByOwnerUserId(ownerUserId))
-                .thenReturn(List.of(first, second, noise, corrupt));
-        Mockito.when(configService.aiEndpoint()).thenReturn("http://localhost:8090");
-        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
-        Mockito.when(imageAnalysisGateway.clusterFaces(
-                        ArgumentMatchers.anyList(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyInt()))
-                .thenReturn(List.of(0, 0, -1));
+        service.processPhoto(ownerUserId, photoId, false);
 
-        service.clusterFaces(ownerUserId);
-
-        Mockito.verify(imageAnalysisGateway).clusterFaces(
-                ArgumentMatchers.argThat((List<float[]> embeddings) -> embeddings.size() == 3),
-                ArgumentMatchers.eq("http://localhost:8090"),
-                ArgumentMatchers.eq(5));
-        Mockito.verify(clusterMaintenanceService).replaceClusters(
-                ArgumentMatchers.eq(ownerUserId),
-                ArgumentMatchers.argThat(faces -> faces.size() == 4),
-                ArgumentMatchers.argThat(this::isExpectedClusterMap));
-        Mockito.verifyNoInteractions(clusterRepository);
-    }
-
-    private boolean isExpectedClusterMap(Map<Integer, List<UUID>> clusterMap) {
-        return clusterMap.size() == 1
-                && clusterMap.get(0).size() == 2
-                && clusterMap.get(0).stream().allMatch(id -> id != null);
-    }
-
-    private PhotoFace face(UUID ownerUserId, UUID clusterId) {
-        PhotoFace face = new PhotoFace();
-        face.setId(UUID.randomUUID());
-        face.setPhotoId(UUID.randomUUID());
-        face.setOwnerUserId(ownerUserId);
-        face.setClusterId(clusterId);
-        ByteBuffer buffer = ByteBuffer.allocate(Float.BYTES * 512)
-                .order(ByteOrder.LITTLE_ENDIAN);
-        for (int i = 0; i < 512; i++) {
-            buffer.putFloat(0.1F);
-        }
-        face.setEmbedding(buffer.array());
-        return face;
-    }
-
-    private float[] embedding512() {
-        float[] embedding = new float[512];
-        embedding[0] = 0.5F;
-        return embedding;
+        ArgumentCaptor<byte[]> bytesCaptor = ArgumentCaptor.forClass(byte[].class);
+        Mockito.verify(imageAnalysisGateway).analyzeContent(
+                bytesCaptor.capture(),
+                anyString(),
+                anyString(),
+                anyBoolean(),
+                anyString(),
+                anyInt()
+        );
+        byte[] sent = bytesCaptor.getValue();
+        assertNotEquals(original.length, sent.length);
+        assertEquals(0xFF, sent[0] & 0xFF);
+        assertEquals(0xD8, sent[1] & 0xFF);
     }
 
     @Test
-    void clusterListingExcludesTrashedPhotos() {
+    void shouldFallbackToCoverWhenOriginalExceedsDownsampleSourceLimit() {
         UUID ownerUserId = UUID.randomUUID();
-        UUID clusterId = UUID.randomUUID();
-        PhotoFaceCluster cluster = new PhotoFaceCluster();
-        cluster.setId(clusterId);
-        cluster.setOwnerUserId(ownerUserId);
-        Mockito.when(clusterRepository.findByIdAndOwnerUserId(clusterId, ownerUserId))
-                .thenReturn(Optional.of(cluster));
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        UUID coverFileId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, coverFileId);
+        photo.setFileSize(40L * 1024 * 1024);
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        byte[] coverBytes = new byte[]{5, 5, 5};
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, coverFileId))
+                .thenReturn(content(coverBytes));
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(analysis(null));
 
-        UUID alivePhotoId = UUID.randomUUID();
-        UUID trashedPhotoId = UUID.randomUUID();
-        PhotoFace aliveFace = new PhotoFace();
-        aliveFace.setPhotoId(alivePhotoId);
-        PhotoFace trashedFace = new PhotoFace();
-        trashedFace.setPhotoId(trashedPhotoId);
-        Mockito.when(faceRepository.findByClusterId(clusterId)).thenReturn(List.of(aliveFace, trashedFace));
+        service.processPhoto(ownerUserId, photoId, false);
 
-        PhotoItem alive = new PhotoItem();
-        alive.setId(alivePhotoId);
-        alive.setOwnerUserId(ownerUserId);
-        PhotoItem trashed = new PhotoItem();
-        trashed.setId(trashedPhotoId);
-        trashed.setOwnerUserId(ownerUserId);
-        trashed.setDeletedAt(Instant.now());
-        List<UUID> photoIds = List.of(alivePhotoId, trashedPhotoId);
-        Mockito.when(photoItemRepository.findAllById(photoIds)).thenReturn(List.of(alive, trashed));
-        Mockito.when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds))
-                .thenReturn(List.of());
-        Mockito.when(tagRepository.findByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds))
-                .thenReturn(List.of());
+        Mockito.verify(fileQueryService).openOwnedFileContent(ownerUserId, coverFileId);
+        Mockito.verify(fileQueryService, Mockito.never()).openOwnedFileContent(ownerUserId, fileNodeId);
+    }
 
-        var result = service.getPhotosByCluster(ownerUserId, clusterId);
+    @Test
+    void shouldRejectOriginalLargerThanGatewayInputLimit() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(4L);
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(new byte[]{1, 2, 3, 4, 5}));
 
-        // 相册回收站只写 media_photos.deleted_at，不移动 file_nodes，必须在此显式过滤
-        assertEquals(1, result.size());
-        assertEquals(alivePhotoId, result.getFirst().id());
+        assertThrows(IllegalStateException.class,
+                () -> service.processPhoto(ownerUserId, photoId, false));
+
+        Mockito.verify(imageAnalysisGateway, Mockito.never()).analyzeContent(
+                any(), anyString(), anyString(), anyBoolean(), anyString(), anyInt());
+    }
+
+    @Test
+    void shouldRejectIncompleteSidecarAnalysis() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(new byte[]{1, 2, 3}));
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(new ContentAnalysis(0, null, null, List.of(), List.of(), null));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.processPhoto(ownerUserId, photoId, false));
+
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void shouldKeepExistingAnalysisWhenSidecarFails() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(new byte[]{1, 2, 3}));
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenThrow(new IllegalStateException("sidecar unavailable"));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.processPhoto(ownerUserId, photoId, false));
+
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .apply(any(), any(), any(), any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void shouldNotShortCircuitOrCloneWhenPipelineVersionIsUnavailable() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        photo.getProviderMetadata().put("contentHash", "hash-1");
+        photo.getProviderMetadata().put("ocrPipelineVersion", PhotoAiService.EXPECTED_OCR_VERSION);
+        Mockito.when(configService.expectedPipelineVersion()).thenReturn(null);
+        Mockito.when(configService.aiEndpoint()).thenReturn("http://sidecar");
+        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
+        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(64L * 1024 * 1024);
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(new byte[]{1, 2, 3}));
+        ContentAnalysis analysis = analysis(null);
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(analysis);
+        Mockito.when(contentAnalysisService.mergePreservedOcrObservations(ownerUserId, photoId, analysis))
+                .thenReturn(analysis);
+
+        service.processPhoto(ownerUserId, photoId, false);
+
+        Mockito.verify(contentAnalysisService, Mockito.never()).isAlreadyAnalyzed(
+                any(), any(), any(), any());
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .tryCloneFromSameHash(any(), any(), any(), any(), anyBoolean());
+        Mockito.verify(contentAnalysisService, Mockito.never())
+                .tryShortCircuitDenseTextReanalysis(any(), any(), any(), anyBoolean());
+        Mockito.verify(imageAnalysisGateway).analyzeContent(
+                any(byte[].class), anyString(), anyString(), eq(true), anyString(), anyInt());
+    }
+
+    @Test
+    void shouldUseTextGraphicHintForPngWithoutCameraMetadata() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        PhotoItem photo = photo(ownerUserId, photoId, fileNodeId, null);
+        photo.setFormat("png");
+        stubConfig();
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+        Mockito.when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
+                .thenReturn(content(new byte[]{1, 2, 3}));
+        Mockito.when(imageAnalysisGateway.analyzeContent(
+                        any(byte[].class), anyString(), anyString(), anyBoolean(), anyString(), anyInt()))
+                .thenReturn(analysis(null));
+
+        service.processPhoto(ownerUserId, photoId, false);
+
+        Mockito.verify(imageAnalysisGateway).analyzeContent(
+                any(byte[].class),
+                eq(photoId + ".jpg"),
+                eq("TEXT_GRAPHIC"),
+                eq(false),
+                eq("http://sidecar"),
+                eq(5)
+        );
+    }
+
+    private PhotoItem photo(UUID ownerUserId, UUID photoId, UUID fileNodeId, UUID coverFileId) {
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        photo.setFileNodeId(fileNodeId);
+        photo.setCoverFileId(coverFileId);
+        photo.setFormat("jpg");
+        photo.setFileSize(1024);
+        photo.setWidth(100);
+        photo.setHeight(100);
+        photo.setProviderMetadata(new HashMap<>());
+        return photo;
+    }
+
+    private void stubConfig() {
+        Mockito.when(configService.expectedPipelineVersion()).thenReturn(PIPELINE);
+        Mockito.when(configService.aiEndpoint()).thenReturn("http://sidecar");
+        Mockito.when(configService.aiTimeoutSeconds()).thenReturn(5);
+        Mockito.when(imageAnalysisGateway.maxImageBytes()).thenReturn(64L * 1024 * 1024);
+    }
+
+    private FileContentStream content(byte[] bytes) {
+        return new FileContentStream(
+                new ByteArrayInputStream(bytes),
+                "photo.jpg",
+                bytes.length,
+                "image/jpeg"
+        );
+    }
+
+    private ContentAnalysis analysis(String ocrText) {
+        return new ContentAnalysis(
+                2,
+                PIPELINE,
+                PhotoAiService.EXPECTED_OCR_VERSION,
+                List.of(new ContentObservation(
+                        "SUBJECT",
+                        "cat",
+                        0.9F,
+                        "mobileclip2-s0-onnx",
+                        List.of()
+                )),
+                List.of("橘猫"),
+                ocrText
+        );
+    }
+
+    private byte[] jpegBytes(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int x = 0; x < width; x++) {
+            image.setRGB(x, height / 2, 0x336699);
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpg", output);
+        return output.toByteArray();
     }
 }

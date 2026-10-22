@@ -124,7 +124,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 - JDK 21、Maven 3.9 或兼容版本。
 - Docker Desktop 与 Docker Compose v2，用于启动开发依赖。
 - PostgreSQL、Redis、RabbitMQ 和 MinIO；可直接使用 [开发编排](../deploy/README.md)。
-- 若启用图像分析，需要同时配置并启动 [ai-sidecar](../deploy/ai-sidecar/README.md)。
+- 若启用图像分析，需要同时配置并启动 [vision-sidecar](../deploy/vision-sidecar/README.md)。
 
 ### 创建本地配置
 
@@ -203,5 +203,5 @@ git diff --check
 - [根目录项目总览](../README.md)
 - [前端开发指南](../frontend/README.md)
 - [部署指南](../deploy/README.md)
-- [Photos 图像分析侧车](../deploy/ai-sidecar/README.md)
+- [Photos 图像分析侧车](../deploy/vision-sidecar/README.md)
 - [英文后端指南](README.en.md)
