@@ -7,6 +7,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.security.Security;
 import java.util.Locale;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,19 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public final class SsrfSafeUrlValidator implements SafeUrlValidator {
+
+    static {
+        // 校验与 HttpClient 请求之间会再次解析域名；把 JVM 正向解析结果缓存到至少 60 秒，
+        // 使紧随其后的请求复用同一次已验证解析，缩小 DNS Rebinding 窗口。
+        String ttl = Security.getProperty("networkaddress.cache.ttl");
+        try {
+            if (ttl == null || Integer.parseInt(ttl) < 60) {
+                Security.setProperty("networkaddress.cache.ttl", "60");
+            }
+        } catch (NumberFormatException ignored) {
+            Security.setProperty("networkaddress.cache.ttl", "60");
+        }
+    }
 
     /**
      * 主机名解析器：生产用系统 DNS，测试可注入以固定公网/内网结果。
@@ -179,6 +193,16 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
             if ((first & 0xFE) == 0xFC) {
                 return !scope.allowSiteLocal;
             }
+            // Teredo 2001:0000::/32：内嵌的客户端 IPv4 位取反，不能按普通公网地址放行
+            if ((bytes[0] & 0xFF) == 0x20 && (bytes[1] & 0xFF) == 0x01
+                    && (bytes[2] & 0xFF) == 0x00 && (bytes[3] & 0xFF) == 0x00) {
+                return true;
+            }
+            // 2001:db8::/32 为文档保留地址，出网请求不应落到该段
+            if ((bytes[0] & 0xFF) == 0x20 && (bytes[1] & 0xFF) == 0x01
+                    && (bytes[2] & 0xFF) == 0x0D && (bytes[3] & 0xFF) == 0xB8) {
+                return true;
+            }
             return false;
         }
         if (address instanceof Inet4Address inet4Address) {
@@ -193,6 +217,10 @@ public final class SsrfSafeUrlValidator implements SafeUrlValidator {
     private static byte[] extractEmbeddedIpv4(byte[] bytes) {
         if (bytes.length != 16) {
             return null;
+        }
+        // IPv4-compatible IPv6：::a.b.c.d（前 96 位全 0；:: 与 ::1 已由 loopback/any 拦截）
+        if (isZeroPrefix(bytes, 0, 12)) {
+            return new byte[] {bytes[12], bytes[13], bytes[14], bytes[15]};
         }
         // IPv4-mapped IPv6：::ffff:a.b.c.d
         if (isZeroPrefix(bytes, 0, 10)

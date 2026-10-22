@@ -793,6 +793,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             WHERE n.ownerUserId = :ownerUserId
               AND n.spaceType = :spaceType
               AND n.deleted = true
+              AND n.purgeState = 'NONE'
+              AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
+              AND (n.parentId IS NULL OR NOT EXISTS (
+                  SELECT p.id FROM FileNode p WHERE p.id = n.parentId AND p.deleted = true
+              ))
             ORDER BY n.deletedAt DESC
             """)
     Page<FileNode> findPersonalRecyclePage(
@@ -805,6 +810,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             WHERE n.deletedBy = :deletedBy
               AND n.spaceType = :spaceType
               AND n.deleted = true
+              AND n.purgeState = 'NONE'
+              AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
+              AND (n.parentId IS NULL OR NOT EXISTS (
+                  SELECT p.id FROM FileNode p WHERE p.id = n.parentId AND p.deleted = true
+              ))
             ORDER BY n.deletedAt DESC
             """)
     Page<FileNode> findSharedRecyclePage(

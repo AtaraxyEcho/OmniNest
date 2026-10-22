@@ -32,6 +32,7 @@ import com.omninest.common.security.MalwareScanGateway.Status;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.service.NotificationService;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -70,6 +71,8 @@ class ExternalImportExecutionServiceTest {
 
     private final StorageImportTaskRepository importTaskRepository =
             mock(StorageImportTaskRepository.class);
+    private final FileIngressItemRepository ingressItemRepository =
+            mock(FileIngressItemRepository.class);
     private final StorageExternalAccountRepository accountRepository =
             mock(StorageExternalAccountRepository.class);
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
@@ -91,7 +94,7 @@ class ExternalImportExecutionServiceTest {
     private final FileIngressLifecycleService ingressLifecycleService = mock(FileIngressLifecycleService.class);
 
     private final ExternalImportExecutionService service = new ExternalImportExecutionService(
-            importTaskRepository, accountRepository, fileNodeRepository, fileObjectRepository,
+            importTaskRepository, ingressItemRepository, accountRepository, fileNodeRepository, fileObjectRepository,
             storageQuotaService, mock(SharedSpaceQuotaService.class), objectStorageClient, domainEventPublisher, postProcessingTaskService,
             rcloneGateway, localStorageSettings, externalStorageService,
             objectStorageBuckets, transactionTemplate, notificationService, taskRecordService,

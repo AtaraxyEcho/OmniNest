@@ -60,6 +60,9 @@ public class AuthService {
     public static final String CHALLENGE_TYPE_VERIFY = "verify";
     public static final String CHALLENGE_TYPE_ENROLL = "enroll";
     private static final Duration TWO_FACTOR_CHALLENGE_TTL = Duration.ofMinutes(5);
+    /** 不存在的用户也执行一次同强度 BCrypt，消除用户名枚举的响应时间差。 */
+    private static final String DUMMY_PASSWORD_HASH =
+            "$2a$12$/cjZ3pCwj52WIu8AMPS.CerPeJL5LZfZz/tNsDY/ZXBpkEKbni0oO";
 
     private final AuthUserRepository authUserRepository;
     private final AuthRoleRepository authRoleRepository;
@@ -340,13 +343,16 @@ public class AuthService {
                                           String deviceId, String deviceName,
                                           String ipAddress, String userAgent) {
         String username = normalizeUsername(request.username());
-        AuthUser profile = authUserRepository.findByUsername(username)
-                .orElseThrow(() -> {
-                    auditLogin(null, username, clientPlatform, deviceId, deviceName,
-                            ipAddress, userAgent, "FAILED", "用户不存在");
-                    return new BusinessException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
-                });
+        AuthUser profile = authUserRepository.findByUsername(username).orElse(null);
+        if (profile == null) {
+            // 与真实用户的 BCrypt 成本对齐，避免通过响应时间枚举用户名。
+            passwordEncoder.matches(request.password(), DUMMY_PASSWORD_HASH);
+            auditLogin(null, username, clientPlatform, deviceId, deviceName,
+                    ipAddress, userAgent, "FAILED", "用户不存在");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
+        }
         if (!"ACTIVE".equals(profile.getStatus())) {
+            passwordEncoder.matches(request.password(), profile.getPasswordHash());
             auditLogin(profile, username, clientPlatform, deviceId, deviceName,
                     ipAddress, userAgent, "DISABLED", "账号已被禁用");
             // 对外文案与“用户名或密码错误”一致，避免账号存在性与状态被枚举；

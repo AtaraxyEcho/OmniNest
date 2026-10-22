@@ -11,10 +11,13 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
+import com.omninest.common.storage.ObjectStorageBuckets;
+import com.omninest.common.storage.ObjectStorageClient;
 import java.util.List;
 
 import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.preferences.service.UserPreferenceService;
+import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.quota.service.StorageQuotaReservationService;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -50,6 +53,10 @@ class AdminUserDeletionServiceTest {
     private final AdminAuditLogService auditLogService = Mockito.mock(AdminAuditLogService.class);
     private final CurrentUserContext currentUserContext = Mockito.mock(CurrentUserContext.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
+    private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
+    private final ObjectStorageBuckets objectStorageBuckets = Mockito.mock(ObjectStorageBuckets.class);
+    private final UserProfileCacheEvictor userProfileCacheEvictor =
+            Mockito.mock(UserProfileCacheEvictor.class);
     private final AdminUserDeletionService service = new AdminUserDeletionService(
             authUserRepository,
             activeSessionRepository,
@@ -62,7 +69,10 @@ class AdminUserDeletionServiceTest {
             adminUserContentGuardRepository,
             auditLogService,
             currentUserContext,
-            adminActorGuard
+            adminActorGuard,
+            objectStorageClient,
+            objectStorageBuckets,
+            userProfileCacheEvictor
     );
 
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");

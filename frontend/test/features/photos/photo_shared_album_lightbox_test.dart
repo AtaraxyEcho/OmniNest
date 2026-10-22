@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -67,7 +68,10 @@ void main() {
   }
 
   /// 访客页只需两张无封面的照片：覆盖层断言只看页码与下载入口，不依赖真实图片解码。
-  Future<_MockPhotoRepository> stubAlbum(List<PhotoItem> photos) async {
+  Future<_MockPhotoRepository> stubAlbum(
+    List<PhotoItem> photos, {
+    int? total,
+  }) async {
     final repository = _MockPhotoRepository();
     when(
       () => repository.authorizeSharedAlbum(
@@ -86,7 +90,7 @@ void main() {
       (_) async => PhotoSharedAlbum(
         albumName: '共享相册',
         photos: photos,
-        total: photos.length,
+        total: total ?? photos.length,
       ),
     );
     return repository;
@@ -158,5 +162,25 @@ void main() {
         size: 50,
       ),
     ).called(1);
+  });
+
+  testWidgets('覆盖层显示相册总数并支持键盘左右切换', (tester) async {
+    final repository = await stubAlbum([_photo('a'), _photo('b')], total: 5);
+    await tester.pumpWidget(
+      wrap(const PhotoSharedAlbumPage(token: 'share-token'), repository),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(_thumbnail());
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 5'), findsOneWidget);
   });
 }

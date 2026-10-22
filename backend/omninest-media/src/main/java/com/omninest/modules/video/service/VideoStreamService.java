@@ -2,6 +2,7 @@ package com.omninest.modules.video.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.video.config.VideoStreamProperties;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.io.IOException;
@@ -30,8 +31,6 @@ public class VideoStreamService {
     /** 流式转码超时（秒）：4 小时 */
     private static final long STREAM_TRANSCODE_TIMEOUT_SECONDS = 4 * 3600;
     private static final long TIMEOUT_JOIN_MILLIS = 5_000L;
-    /** 同一时刻允许的实时 ffmpeg 流上限。 */
-    private static final int MAX_CONCURRENT_FFMPEG_STREAMS = 4;
 
     /** Web 端浏览器原生不支持的音频编码（flac/vorbis 现代浏览器已支持，不再列入） */
     public static final List<String> WEB_UNSUPPORTED_AUDIO = List.of(
@@ -41,23 +40,32 @@ public class VideoStreamService {
     private final MediaVideoItemRepository videoItemRepository;
     private final VideoSourceInputResolver sourceInputResolver;
     private final MediaContentAccessService mediaContentAccessService;
+    private final VideoStreamProperties streamProperties;
 
     /**
      * 同一时刻允许的实时 ffmpeg 流数。
      *
      * <p>每次 Seek 都会另起一路 HTTP 流请求，无上限时连续拖动进度条会让多个 ffmpeg
-     * 同时全速拉取源视频，打满宿主机 CPU 与对象存储带宽。槽位耗尽即拒绝新流，
-     * 由播放器按普通失败处理，而不是让既有播放一起卡死。</p>
+     * 同时全速拉取源视频，打满宿主机 CPU 与对象存储带宽。槽位耗尽时短暂等待
+     * 客户端已断开的旧进程释放槽位，仍取不到才拒绝新流。</p>
      */
-    private final Semaphore streamSlots = new Semaphore(MAX_CONCURRENT_FFMPEG_STREAMS);
+    private final Semaphore streamSlots;
 
     /**
      * 占用一路实时转码槽位，取不到时返回可重试的业务错误。
      */
     private void requireStreamSlot(UUID videoItemId) {
-        if (!streamSlots.tryAcquire()) {
+        boolean acquired;
+        try {
+            acquired = streamSlots.tryAcquire(
+                    Math.max(0L, streamProperties.getSlotWaitTimeout().toMillis()), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "实时转码通道已满，请稍后重试");
+        }
+        if (!acquired) {
             log.warn("实时音频转码并发已达上限: limit={}, videoItemId={}",
-                    MAX_CONCURRENT_FFMPEG_STREAMS, videoItemId);
+                    streamProperties.getMaxConcurrentStreams(), videoItemId);
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "实时转码通道已满，请稍后重试");
         }
     }
@@ -69,11 +77,14 @@ public class VideoStreamService {
     public VideoStreamService(
             MediaVideoItemRepository videoItemRepository,
             VideoSourceInputResolver sourceInputResolver,
-            MediaContentAccessService mediaContentAccessService
+            MediaContentAccessService mediaContentAccessService,
+            VideoStreamProperties streamProperties
     ) {
         this.videoItemRepository = videoItemRepository;
         this.sourceInputResolver = sourceInputResolver;
         this.mediaContentAccessService = mediaContentAccessService;
+        this.streamProperties = streamProperties;
+        this.streamSlots = new Semaphore(Math.max(1, streamProperties.getMaxConcurrentStreams()), true);
     }
 
     /**

@@ -463,10 +463,21 @@ class MusicLibraryServiceTest {
         assertThat(history.getTrackId()).isNull();
         assertThat(history.getPlayableKey()).isEqualTo("online:netease:song-1");
         assertThat(history.getTitle()).isEqualTo("Cloud Song");
-        verify(playHistoryRepository).deleteExpiredHistory(
-                ArgumentMatchers.eq(OWNER_ID),
-                ArgumentMatchers.any(Instant.class)
-        );
+        // 过期清理已移交调度器，记录播放历史不再触发全表范围删除。
+        verify(playHistoryRepository, never()).deleteAllExpiredHistory(ArgumentMatchers.any(Instant.class));
+    }
+
+    @Test
+    void cleanupExpiredPlayHistoryDeletesRowsOlderThanRetention() {
+        when(playHistoryRepository.deleteAllExpiredHistory(ArgumentMatchers.any(Instant.class)))
+                .thenReturn(3);
+
+        int deleted = libraryService.cleanupExpiredPlayHistory();
+
+        assertThat(deleted).isEqualTo(3);
+        ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(playHistoryRepository).deleteAllExpiredHistory(cutoffCaptor.capture());
+        assertThat(cutoffCaptor.getValue()).isBefore(Instant.now());
     }
 
     @Test

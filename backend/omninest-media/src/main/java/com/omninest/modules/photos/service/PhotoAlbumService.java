@@ -3,6 +3,7 @@ package com.omninest.modules.photos.service;
 import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.ResourceShareLinkDto;
@@ -24,7 +25,12 @@ import com.omninest.modules.photos.repository.PhotoAlbumFirstCoverProjection;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +64,7 @@ public class PhotoAlbumService {
     private final PhotoLibraryService libraryService;
     private final ResourceShareLinkService resourceShareLinkService;
     private final MediaSyncEventService syncEventService;
+    private final RateLimitService rateLimitService;
 
     /**
      * 查询用户所有相册，按更新时间倒序
@@ -365,7 +372,8 @@ public class PhotoAlbumService {
      * 通过短期分享会话访问共享单张照片。
      */
     @Transactional(rollbackFor = Exception.class)
-    public PhotoItemDto accessSharedPhoto(String rawToken, String sessionToken) {
+    public PhotoItemDto accessSharedPhoto(String rawToken, String sessionToken, String clientAddress) {
+        requirePhotoShareRateLimit(rawToken, clientAddress);
         ResourceShareLinkDto link = resourceShareLinkService.requireSession(
                 rawToken, sessionToken, "PHOTO_ITEM");
         PhotoItem photo = photoItemRepository.findById(link.resourceId())
@@ -423,6 +431,32 @@ public class PhotoAlbumService {
         );
     }
 
+    /**
+     * 照片分享的内容访问限流：会话令牌可被高频复用来刷预签名地址，
+     * 必须与文件分享一样按 IP + token 双阈值限制。
+     */
+    private void requirePhotoShareRateLimit(String rawToken, String clientAddress) {
+        String tokenHash = sha256(rawToken);
+        if (clientAddress != null && !rateLimitService.tryAcquire(
+                "photo-share:ip:" + sha256(clientAddress) + ":" + tokenHash,
+                30,
+                Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+        }
+        if (!rateLimitService.tryAcquire("photo-share:" + tokenHash, 300, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+        }
+    }
+
+    private static String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 不可用", exception);
+        }
+    }
+
     private PhotoItem requirePhoto(UUID ownerUserId, UUID photoId) {
         return photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
@@ -446,9 +480,11 @@ public class PhotoAlbumService {
     public PhotoSharedAlbumDto accessSharedAlbum(
             String rawToken,
             String sessionToken,
+            String clientAddress,
             int page,
             int size
     ) {
+        requirePhotoShareRateLimit(rawToken, clientAddress);
         ResourceShareLinkDto link = resourceShareLinkService.requireSession(
                 rawToken, sessionToken, "PHOTO_ALBUM");
         UUID albumId = link.resourceId();

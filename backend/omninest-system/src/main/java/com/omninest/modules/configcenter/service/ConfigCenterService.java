@@ -106,9 +106,11 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                 ? credentialCipher.encrypt(normalized)
                 : normalized;
         entry.setConfigValue(storedValue);
+        entry.setUpdatedBy(changedBy);
         applyDefinitionMetadata(entry, definition);
         ConfigEntry saved = configEntryRepository.save(entry);
         configHistoryRepository.save(history(key, oldValue, storedValue, reason, changedBy));
+        runtimeConfigCache.evict(key);
         publishRefresh(key);
         return toDto(saved, definition);
     }
@@ -197,6 +199,8 @@ public class ConfigCenterService implements RuntimeConfigCommand {
         String currentValue = entry.getConfigValue();
         String rollbackValue = normalizeHistoryValue(definition, historyRecord.getOldValue());
         entry.setConfigValue(rollbackValue);
+        entry.setUpdatedBy(changedBy);
+        applyDefinitionMetadata(entry, definition);
         ConfigEntry saved = configEntryRepository.save(entry);
         configHistoryRepository.save(history(
                 configKey,
@@ -205,6 +209,7 @@ public class ConfigCenterService implements RuntimeConfigCommand {
                 "回滚至历史记录 " + historyId,
                 changedBy
         ));
+        runtimeConfigCache.evict(configKey);
         publishRefresh(configKey);
         log.info("配置回滚成功: key={}, historyId={}", configKey, historyId);
         return toDto(saved, definition);

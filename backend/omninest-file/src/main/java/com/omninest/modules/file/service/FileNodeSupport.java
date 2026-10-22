@@ -163,8 +163,7 @@ public class FileNodeSupport {
      * 引用漏到前端造成无效签名请求）。
      */
     private Map<UUID, UUID> resolveAliveCovers(List<FileNode> nodes) {
-        UUID ownerUserId = null;
-        Set<UUID> mediaFileIds = new HashSet<>();
+        Map<UUID, Set<UUID>> mediaIdsByOwner = new HashMap<>();
         for (FileNode node : nodes) {
             if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
                 continue;
@@ -172,15 +171,16 @@ public class FileNodeSupport {
             if (!isMediaCategory(node)) {
                 continue;
             }
-            if (ownerUserId == null) {
-                ownerUserId = node.getOwnerUserId();
-            }
-            mediaFileIds.add(node.getId());
+            mediaIdsByOwner
+                    .computeIfAbsent(node.getOwnerUserId(), key -> new HashSet<>())
+                    .add(node.getId());
         }
-        if (ownerUserId == null || mediaFileIds.isEmpty()) {
+        if (mediaIdsByOwner.isEmpty()) {
             return Map.of();
         }
-        Map<UUID, UUID> covers = mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds);
+        Map<UUID, UUID> covers = new HashMap<>();
+        mediaIdsByOwner.forEach((ownerUserId, mediaFileIds) ->
+                covers.putAll(mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds)));
         if (covers.isEmpty()) {
             return Map.of();
         }

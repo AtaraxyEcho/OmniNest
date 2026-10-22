@@ -396,6 +396,11 @@ class _UserManagementPanel extends ConsumerWidget {
                 state.query.isEmpty && state.roleFilter == 'ALL'
                     ? l10n.adminNoUsers
                     : l10n.adminNoMatch,
+            actionLabel:
+                state.query.isEmpty && state.roleFilter == 'ALL'
+                    ? null
+                    : l10n.adminClearFilters,
+            onAction: controller.clearFilters,
           ),
         ),
         WorkstationPaginationBar(

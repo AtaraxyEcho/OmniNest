@@ -8,6 +8,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.NodeType;
@@ -35,6 +36,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -320,7 +322,8 @@ public class FileQueryService {
         // 共享空间删除者可能不是上传者，不能把操作者当成所有者使用。
         UUID nodeOwnerUserId = node.getOwnerUserId();
         fileLifecycleGuard.requireRestorable(nodeOwnerUserId, fileId);
-        ensureParentAvailable(nodeOwnerUserId, node);
+        List<FileNode> restoredAncestors = collectDeletedAncestors(node);
+        ensureParentAvailable(restoredAncestors.isEmpty() ? node : restoredAncestors.getFirst());
         if (sameNameExists(nodeOwnerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
@@ -330,9 +333,13 @@ public class FileQueryService {
             sharedSpaceQuotaService.checkQuota(sharedStats.totalBytes());
         }
 
+        restoredAncestors.forEach(this::markRestored);
         markRestored(node);
         List<FileNode> descendants = deletedSubtreeNodes(node);
         descendants.forEach(this::markRestored);
+        if (!restoredAncestors.isEmpty()) {
+            fileNodeRepository.saveAll(restoredAncestors);
+        }
         fileNodeRepository.saveAll(descendants);
         FileNode saved = fileNodeRepository.save(node);
         if (sharedStats != null) {
@@ -342,6 +349,9 @@ public class FileQueryService {
         // 发布恢复事件，触发 Lucene 重新索引：按节点真实所有者分组投递，
         // 共享子树里别人上传的子文件不能挂到操作者名下重建索引。
         Map<UUID, List<UUID>> restoredIdsByOwner = new LinkedHashMap<>();
+        restoredAncestors.forEach(ancestor -> restoredIdsByOwner
+                .computeIfAbsent(ancestor.getOwnerUserId(), key -> new ArrayList<>())
+                .add(ancestor.getId()));
         restoredIdsByOwner
                 .computeIfAbsent(saved.getOwnerUserId(), key -> new ArrayList<>())
                 .add(saved.getId());
@@ -468,10 +478,12 @@ public class FileQueryService {
             }
             UUID nodeOwnerUserId = node.getOwnerUserId();
             SharedSpaceService.SubtreeStats sharedStats = null;
+            List<FileNode> restoredAncestors;
             try {
                 requireManagedNode(node);
                 fileLifecycleGuard.requireRestorable(nodeOwnerUserId, node.getId());
-                ensureParentAvailable(nodeOwnerUserId, node);
+                restoredAncestors = collectDeletedAncestors(node);
+                ensureParentAvailable(restoredAncestors.isEmpty() ? node : restoredAncestors.getFirst());
                 if (sameNameExists(nodeOwnerUserId, node.getSpaceType(), node.getParentId(), node.getName())) {
                     throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件: " + node.getName());
                 }
@@ -483,6 +495,11 @@ public class FileQueryService {
                 results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
                 continue;
             }
+            restoredAncestors.forEach(this::markRestored);
+            allToSave.addAll(restoredAncestors);
+            restoredAncestors.forEach(ancestor -> restoredIdsByOwner
+                    .computeIfAbsent(ancestor.getOwnerUserId(), key -> new ArrayList<>())
+                    .add(ancestor.getId()));
             markRestored(node);
             allToSave.add(node);
             restoredIdsByOwner.computeIfAbsent(nodeOwnerUserId, key -> new ArrayList<>()).add(node.getId());
@@ -820,11 +837,55 @@ public class FileQueryService {
         }
     }
 
-    private void ensureParentAvailable(UUID ownerUserId, FileNode node) {
+    /**
+     * 收集目标节点上方仍处于回收站的祖先链，供恢复时一并还原。
+     *
+     * <p>只做校验与收集，不修改实体：批量恢复里任一检查失败都不能把祖先提前标记为已恢复。</p>
+     */
+    private List<FileNode> collectDeletedAncestors(FileNode node) {
+        List<FileNode> ancestors = new ArrayList<>();
+        UUID parentId = node.getParentId();
+        while (parentId != null) {
+            FileNode parent = fileNodeRepository.findById(parentId).orElse(null);
+            if (parent == null || !parent.isDeleted()) {
+                break;
+            }
+            if (parent.getSpaceType() != node.getSpaceType()) {
+                throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "上级文件夹与当前文件空间不一致");
+            }
+            if (parent.getSpaceType() == SpaceType.PERSONAL
+                    && !Objects.equals(parent.getOwnerUserId(), node.getOwnerUserId())) {
+                throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在");
+            }
+            if (parent.getPurgeState() != FilePurgeState.NONE) {
+                throw new BusinessException(ErrorCode.CONFLICT, "上级文件夹正在永久删除");
+            }
+            ancestors.add(parent);
+            parentId = parent.getParentId();
+        }
+        Collections.reverse(ancestors);
+        for (FileNode ancestor : ancestors) {
+            if (sameNameExists(ancestor.getOwnerUserId(), ancestor.getSpaceType(),
+                    ancestor.getParentId(), ancestor.getName())) {
+                throw new BusinessException(ErrorCode.CONFLICT, "上级文件夹同名冲突: " + ancestor.getName());
+            }
+        }
+        return ancestors;
+    }
+
+    private void ensureParentAvailable(FileNode node) {
         if (node.getParentId() == null) {
             return;
         }
-        resolveParent(ownerUserId, node.getParentId());
+        // 共享空间的父目录可能由其他成员上传，不能按节点所有者查父级。
+        FileNode parent = node.getSpaceType() == SpaceType.SHARED
+                ? fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(node.getParentId(), SpaceType.SHARED)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"))
+                : fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(node.getParentId(), node.getOwnerUserId())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+        if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+        }
     }
 
     /**
@@ -1020,8 +1081,7 @@ public class FileQueryService {
      * 批量解析本组节点的存活媒体封面（媒体类 FILE 节点才发起反查）。
      */
     private Map<UUID, UUID> resolveAliveCovers(List<FileNode> nodes) {
-        UUID ownerUserId = null;
-        Set<UUID> mediaFileIds = new HashSet<>();
+        Map<UUID, Set<UUID>> mediaIdsByOwner = new HashMap<>();
         for (FileNode node : nodes) {
             if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
                 continue;
@@ -1035,15 +1095,16 @@ public class FileQueryService {
             if (!mediaCategory) {
                 continue;
             }
-            if (ownerUserId == null) {
-                ownerUserId = node.getOwnerUserId();
-            }
-            mediaFileIds.add(node.getId());
+            mediaIdsByOwner
+                    .computeIfAbsent(node.getOwnerUserId(), key -> new HashSet<>())
+                    .add(node.getId());
         }
-        if (ownerUserId == null || mediaFileIds.isEmpty()) {
+        if (mediaIdsByOwner.isEmpty()) {
             return Map.of();
         }
-        Map<UUID, UUID> covers = mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds);
+        Map<UUID, UUID> covers = new HashMap<>();
+        mediaIdsByOwner.forEach((ownerUserId, mediaFileIds) ->
+                covers.putAll(mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds)));
         if (covers.isEmpty()) {
             return Map.of();
         }

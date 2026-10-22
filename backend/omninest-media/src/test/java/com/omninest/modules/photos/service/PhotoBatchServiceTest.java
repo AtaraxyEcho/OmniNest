@@ -235,9 +235,7 @@ class PhotoBatchServiceTest {
         AtomicReference<Path> uploadedPath = new AtomicReference<>();
 
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID)).thenReturn(Optional.of(photo));
-        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(fileNode));
-        when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(fileObject));
+        stubDownloadArchiveSource(photo);
         when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(contentStream(image));
         doAnswer(invocation -> {
@@ -285,9 +283,7 @@ class PhotoBatchServiceTest {
             saved.setVersion(saved.getVersion() + 1);
             return saved;
         }).when(batchTaskRepository).save(any(PhotoBatchTask.class));
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID)).thenReturn(Optional.of(photo()));
-        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(fileNode));
-        when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(fileObject));
+        stubDownloadArchiveSource(photo());
         when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_NODE_ID)).thenReturn(contentStream(image));
         when(derivedAssetStorageService.store(
                 eq(OWNER_ID),
@@ -324,9 +320,8 @@ class PhotoBatchServiceTest {
         );
 
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID)).thenReturn(Optional.of(photo()));
-        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(fileNode()));
-        when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(fileObject));
+        stubDownloadArchiveSource(photo());
+        when(fileMetadataQueryService.findObjectsByIds(any())).thenReturn(List.of(fileObject));
         when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(
                         new FileContentStream(source, "photo.jpg", sourceBytes, "image/jpeg"));
@@ -358,9 +353,7 @@ class PhotoBatchServiceTest {
     void executeDownloadTaskRejectsSourceSizeMismatchWithoutPublishingArchive() {
         PhotoBatchTask task = downloadTask();
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID)).thenReturn(Optional.of(photo()));
-        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(fileNode()));
-        when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(fileObject()));
+        stubDownloadArchiveSource(photo());
         when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(contentStream(new byte[]{1, 2, 3}));
 
@@ -386,9 +379,7 @@ class PhotoBatchServiceTest {
         constrainedProperties.setMinFreeBytes(Long.MAX_VALUE / 2);
         PhotoBatchService constrainedService = createService(constrainedProperties);
         when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-        when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID)).thenReturn(Optional.of(photo()));
-        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(fileNode()));
-        when(fileMetadataQueryService.findObjectById(FILE_OBJECT_ID)).thenReturn(Optional.of(fileObject()));
+        stubDownloadArchiveSource(photo());
 
         constrainedService.executeBatchTask(TASK_ID, OWNER_ID);
 
@@ -509,6 +500,13 @@ class PhotoBatchServiceTest {
                 properties,
                 transactionTemplate
         );
+    }
+
+    private void stubDownloadArchiveSource(PhotoItem photo) {
+        when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of(photo));
+        when(fileMetadataQueryService.findAllByIds(any())).thenReturn(List.of(fileNode()));
+        when(fileMetadataQueryService.findObjectsByIds(any())).thenReturn(List.of(fileObject()));
     }
 
     private PhotoItem photo() {

@@ -449,10 +449,10 @@ public class FileShareAccessService {
                         throw new BusinessException(ErrorCode.CONFLICT, "文件已存在，请先彻底删除后再保存");
                     });
         }
-        FileNode targetParent = null;
-        if (targetParentId != null) {
-            targetParent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetParentId, userId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
+        FileNode targetParent = resolveAcceptTargetParent(userId, targetParentId);
+        if (fileNodeSupport.sameNameExists(
+                userId, SpaceType.PERSONAL, targetParentId, source.getName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "目标位置已存在同名文件");
         }
         FileNode newNode = new FileNode();
         newNode.setOwnerUserId(userId);
@@ -470,6 +470,23 @@ public class FileShareAccessService {
         chargePersonalQuota(userId, newNode.getSizeBytes());
         fileIndexSyncService.scheduleAfterCommit(userId, List.of(saved.getId()));
         recordFileEvent(userId, saved.getId(), SyncAction.CREATED);
+    }
+
+    /**
+     * 转存目标必须是个人空间里的文件夹，不能把共享空间节点或普通文件当作父目录。
+     */
+    private FileNode resolveAcceptTargetParent(UUID userId, UUID targetParentId) {
+        if (targetParentId == null) {
+            return null;
+        }
+        FileNode targetParent = fileNodeRepository
+                .findByIdAndOwnerUserIdAndDeletedFalse(targetParentId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
+        if (!NodeType.FOLDER.getValue().equals(targetParent.getNodeType())
+                || targetParent.getSpaceType() != SpaceType.PERSONAL) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "目标必须是个人空间文件夹");
+        }
+        return targetParent;
     }
 
     /**
@@ -496,11 +513,7 @@ public class FileShareAccessService {
     }
 
     private void acceptFolderShare(UUID userId, FileNode sourceFolder, UUID targetParentId) {
-        FileNode targetParent = null;
-        if (targetParentId != null) {
-            targetParent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetParentId, userId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
-        }
+        FileNode targetParent = resolveAcceptTargetParent(userId, targetParentId);
         UUID targetParentNodeId = targetParent != null ? targetParent.getId() : null;
         if (fileNodeSupport.sameNameExists(
                 userId, SpaceType.PERSONAL, targetParentNodeId, sourceFolder.getName())) {
@@ -533,7 +546,8 @@ public class FileShareAccessService {
         long totalBytes = 0L;
         for (FileNode child : descendants) {
             String relativePath = child.getNormalizedPath().substring(sourceFolder.getNormalizedPath().length());
-            String[] segments = relativePath.split("/");
+            String trimmedRelative = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
+            String[] segments = trimmedRelative.isEmpty() ? new String[0] : trimmedRelative.split("/");
             FileNode parentNode = newFolder;
             StringBuilder currentPath = new StringBuilder(sourceFolder.getNormalizedPath());
 
@@ -541,14 +555,14 @@ public class FileShareAccessService {
                 currentPath.append("/").append(segments[i]);
                 parentNode = pathToNewNode.get(currentPath.toString());
                 if (parentNode == null) {
-                    break;
+                    throw new IllegalStateException("文件夹分享子树父节点缺失: " + currentPath);
                 }
             }
 
             FileNode newChild = new FileNode();
             newChild.setId(UUID.randomUUID());
             newChild.setOwnerUserId(userId);
-            newChild.setParentId(parentNode != null ? parentNode.getId() : null);
+            newChild.setParentId(parentNode.getId());
             newChild.setNodeType(child.getNodeType());
             newChild.setName(child.getName());
             newChild.setNormalizedPath(fileNodeSupport.resolveChildPath(parentNode, child.getName()));

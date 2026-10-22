@@ -20,8 +20,23 @@ public record UserAccountSummary(
         Set<UUID> roleIds,
         boolean superAdmin,
         long quotaBytes,
-        long usedBytes
+        long usedBytes,
+        long reservedBytes
 ) {
+
+    /**
+     * 兼容既有调用方的六参数构造：未提供在途预留时按 0 处理。
+     */
+    public UserAccountSummary(
+            UUID id,
+            String username,
+            Set<UUID> roleIds,
+            boolean superAdmin,
+            long quotaBytes,
+            long usedBytes
+    ) {
+        this(id, username, roleIds, superAdmin, quotaBytes, usedBytes, 0L);
+    }
 
     /**
      * 复制角色集合，防止调用方修改摘要内容。

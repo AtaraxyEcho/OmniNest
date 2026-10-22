@@ -745,9 +745,11 @@ public class PhotoLibraryController {
             @PathVariable String token,
             @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @RequestParam(defaultValue = "50") int size,
+            HttpServletRequest request
     ) {
-        return ApiResponse.success(albumService.accessSharedAlbum(token, sessionToken, page, size));
+        return ApiResponse.success(albumService.accessSharedAlbum(
+                token, sessionToken, resolveClientIp(request), page, size));
     }
 
     // ─── 照片分享 ───
@@ -794,9 +796,11 @@ public class PhotoLibraryController {
     @GetMapping("/api/v1/public/photos/item/{token}")
     ApiResponse<PhotoItemDto> accessSharedPhoto(
             @PathVariable String token,
-            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken
+            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken,
+            HttpServletRequest request
     ) {
-        return ApiResponse.success(albumService.accessSharedPhoto(token, sessionToken));
+        return ApiResponse.success(albumService.accessSharedPhoto(
+                token, sessionToken, resolveClientIp(request)));
     }
 
     // ─── 管理 ───

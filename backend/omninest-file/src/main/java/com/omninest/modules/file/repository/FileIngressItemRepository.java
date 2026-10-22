@@ -47,6 +47,23 @@ public interface FileIngressItemRepository extends JpaRepository<FileIngressItem
      * @param objectKeys 候选对象键
      * @return 被在途入库记录持有的目标对象键
      */
+    /**
+     * 统计某个导入任务已成功晋升为文件节点的字节数。
+     *
+     * <p>任务进度列里的 transferredBytes 包含临时下载与失败文件，不能用于配额结算；
+     * 只统计 result_file_node_id 非空的入库记录才是真实占用空间。</p>
+     *
+     * @param sourceTaskId 导入任务标识
+     * @return 已入库字节数
+     */
+    @Query("""
+            select coalesce(sum(item.sizeBytes), 0)
+            from FileIngressItem item
+            where item.sourceTaskId = :sourceTaskId
+              and item.resultFileNodeId is not null
+            """)
+    long sumImportedBytesByTaskId(@Param("sourceTaskId") UUID sourceTaskId);
+
     @Query("""
             select item.targetObjectKey
             from FileIngressItem item

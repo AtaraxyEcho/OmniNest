@@ -100,6 +100,7 @@
   "setupFeatureReader": "阅读 · 离线同步",
   "adminSearchHint": "搜索…",
   "adminNoMatch": "未找到匹配数据。",
+  "adminClearFilters": "清空筛选",
   "notificationTitle": "通知",
   "notificationTitleWithCount": "通知 ({count})",
   "@notificationTitleWithCount": {
@@ -872,6 +873,7 @@
   "filesEnterSharePassword": "请输入分享密码以查看文件",
   "filesAccess": "访问",
   "filesSaveToMyFiles": "保存到我的文件",
+  "filesSaveWholeSharedFolder": "保存整个分享文件夹",
   "filesDelete": "删除",
   "filesCancel": "取消",
   "filesConfirm": "确认",
@@ -3048,6 +3050,7 @@
   "videoSubtitleManagement": "字幕管理",
   "videoNoSubtitles": "暂无可用字幕",
   "videoSubtitleLoadFailed": "加载字幕信息失败",
+  "videoSubtitleDisplayFailed": "字幕加载失败",
   "videoUploading": "上传中...",
   "videoUploadSubtitle": "上传字幕文件",
   "videoSubtitleUploaded": "字幕上传成功",
@@ -3699,6 +3702,7 @@
     }
   },
   "photosSharedAlbumAccessError": "无法访问共享相册：{error}",
+  "photosSharedAlbumLoadMoreFailed": "加载更多照片失败：{message}",
   "@photosSharedAlbumAccessError": {
     "placeholders": {
       "error": {}
@@ -3877,6 +3881,7 @@
   "musicPlaylistCoverPick": "选择封面",
   "musicPlaylistCoverChange": "更换封面",
   "musicPlaylistCoverHint": "未选择时使用第一首歌曲的封面",
+  "musicPlaylistCoverTooLarge": "封面图片不能超过 8 MB",
   "musicPlaylistSaveFailed": "歌单保存失败：{error}",
   "@musicPlaylistSaveFailed": {
     "placeholders": {
@@ -4916,6 +4921,7 @@
   "errorUnnamedFile": "未命名",
   "errorUnnamedResource": "未命名资源",
   "errorUploadUrlMissing": "上传地址无效",
+  "filesVersionUploadIncomplete": "新版本上传未完成",
   "errorSecurityScanFailed": "安全扫描未完成，文件已保留；请稍后在书库查看，或重新导入",
   "errorOtherCategory": "其他",
   "musicBatchFailedTitles": "失败：{titles}",

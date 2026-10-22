@@ -581,7 +581,8 @@ public class DerivedAssetStorageService {
             tempFile = downloaded.path();
             String mimeType = firstNonBlank(downloaded.mimeType(), request.mimeType(), "application/octet-stream");
             Path downloadedFile = tempFile;
-            return executeWithConflictRetry(transactionTemplate, () -> {
+            // 必须使用 REQUIRES_NEW：唯一键冲突会把外层事务标记 rollback-only，重试不能复用。
+            return storeInNewTransactionWithRetry(() -> {
                 try {
                     return storeFile(
                             request.ownerUserId(),

@@ -99,7 +99,10 @@ public class DeadLetterConsumer {
             if (json.path("instanceId").asString(null) != null) {
                 summary.append(" @").append(json.path("instanceId").asString(null));
             }
-            summary.append("; 死信载荷: ").append(body);
+            String taskId = json.path("taskId").asString(null);
+            if (taskId != null && !taskId.isBlank() && taskId.length() <= 64) {
+                summary.append("; taskId: ").append(taskId);
+            }
         }
         return summary.toString();
     }

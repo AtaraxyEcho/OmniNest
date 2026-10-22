@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/environment_providers.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/files/data/share_api.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 
@@ -44,8 +45,14 @@ class PublicShareService {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) {
-    return _repository.accept(token, password: password, authToken: authToken);
+    return _repository.accept(
+      token,
+      password: password,
+      authToken: authToken,
+      targetParentId: targetParentId,
+    );
   }
 
   /// 匿名获取单文件的短期下载地址。
@@ -60,7 +67,10 @@ final publicShareServiceProvider = Provider<PublicShareService>((ref) {
   if (environment == null) {
     throw StateError('服务器地址未配置');
   }
-  final api = ShareApi(environment.apiBaseUrl);
+  final api = ShareApi(
+    environment.apiBaseUrl,
+    authDio: ref.watch(apiClientProvider).dio,
+  );
   ref.onDispose(api.close);
   return PublicShareService(api);
 });

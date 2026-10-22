@@ -41,11 +41,14 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.UUID;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
@@ -394,22 +397,41 @@ public class PhotoBatchService {
     }
 
     private PhotoArchivePlan resolveArchiveSources(UUID ownerUserId, List<UUID> photoIds) {
+        Map<UUID, PhotoItem> photosById = photoItemRepository
+                .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
+                .stream()
+                .collect(Collectors.toMap(PhotoItem::getId, photo -> photo, (first, second) -> first));
+        List<PhotoItem> photos = photoIds.stream()
+                .map(photosById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        Set<UUID> fileIds = photos.stream()
+                .map(PhotoItem::activeOrSourceFileId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, FileDescriptor> fileNodes = fileMetadataQueryService.findAllByIds(fileIds).stream()
+                .collect(Collectors.toMap(FileDescriptor::id, file -> file, (first, second) -> first));
+        Set<UUID> objectIds = fileNodes.values().stream()
+                .map(FileDescriptor::currentObjectId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, FileObjectDescriptor> fileObjects = fileMetadataQueryService.findObjectsByIds(objectIds)
+                .stream()
+                .collect(Collectors.toMap(FileObjectDescriptor::id, object -> object, (first, second) -> first));
+
         List<PhotoArchiveSource> sources = new ArrayList<>();
         Set<String> entryNames = new HashSet<>();
         long totalBytes = 0;
-        for (UUID photoId : photoIds) {
-            PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId).orElse(null);
-            if (photo == null) {
-                continue;
-            }
+        for (PhotoItem photo : photos) {
             UUID activeFileId = photo.activeOrSourceFileId();
-            FileDescriptor fileNode = fileMetadataQueryService.findById(activeFileId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件节点不存在"));
-            if (fileNode.currentObjectId() == null) {
+            FileDescriptor fileNode = fileNodes.get(activeFileId);
+            if (fileNode == null || fileNode.currentObjectId() == null) {
                 continue;
             }
-            FileObjectDescriptor fileObject = fileMetadataQueryService.findObjectById(fileNode.currentObjectId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件对象不存在"));
+            FileObjectDescriptor fileObject = fileObjects.get(fileNode.currentObjectId());
+            if (fileObject == null) {
+                continue;
+            }
             if (fileObject.sizeBytes() < 0 || fileObject.sizeBytes() > downloadProperties.getMaxSingleFileBytes()) {
                 throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "批量下载单个文件大小超过限制");
             }
@@ -460,6 +482,8 @@ public class PhotoBatchService {
             PhotoBatchTask task
     ) throws IOException {
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(zipFile))) {
+            // 照片本身是已压缩格式，再做 DEFLATE 只烧 CPU 不会明显变小。
+            zipOutputStream.setLevel(Deflater.NO_COMPRESSION);
             for (int index = 0; index < sources.size(); index++) {
                 PhotoArchiveSource source = sources.get(index);
                 zipOutputStream.putNextEntry(new ZipEntry(source.entryName()));

@@ -7,7 +7,7 @@ import 'package:omninest/features/files/domain/public_share.dart';
 /// 本地兜底文案使用稳定错误码，由 presentation 层映射 l10n；
 /// 服务端 message 非空时优先透传。
 class ShareApi implements PublicShareRepository {
-  ShareApi(String baseUrl)
+  ShareApi(String baseUrl, {Dio? authDio})
     : _dio = Dio(
         BaseOptions(
           baseUrl: baseUrl,
@@ -15,12 +15,16 @@ class ShareApi implements PublicShareRepository {
           sendTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(seconds: 30),
         ),
-      );
+      ),
+      _authDio = authDio;
 
   /// 从已有 Dio 实例创建，用于测试注入。
-  ShareApi.fromDio(this._dio);
+  ShareApi.fromDio(this._dio, {Dio? authDio}) : _authDio = authDio;
 
   final Dio _dio;
+
+  /// 已认证的客户端：转存必须走统一刷新链路，分享浏览仍用匿名客户端。
+  final Dio? _authDio;
   final Map<String, String> _sessionTokens = <String, String>{};
 
   void close() => _dio.close(force: true);
@@ -129,14 +133,22 @@ class ShareApi implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     try {
       final sessionToken = await _ensureSession(token, password);
-      final response = await _dio.post<Map<String, dynamic>>(
+      final client = _authDio ?? _dio;
+      final response = await client.post<Map<String, dynamic>>(
         '/s/$token/accept',
+        data:
+            targetParentId == null || targetParentId.isEmpty
+                ? null
+                : {'targetParentId': targetParentId},
         options: Options(
           headers: {
-            if (authToken != null) 'Authorization': 'Bearer $authToken',
+            // 已认证客户端由拦截器注入并自动刷新，手工头只在匿名客户端上使用。
+            if (authToken != null && _authDio == null)
+              'Authorization': 'Bearer $authToken',
             'X-OmniNest-Share-Session': sessionToken,
           },
         ),

@@ -705,9 +705,23 @@ String? _safeRedirectTarget(String? redirect) {
   if (redirect == null || redirect.isEmpty) {
     return null;
   }
+  // 反斜杠与协议相对地址都可能被浏览器解释成外部跳转；控制路由不能作为登录回跳目标。
   if (!redirect.startsWith('/') ||
       redirect.startsWith('//') ||
-      redirect.startsWith('/login')) {
+      redirect.contains('\\') ||
+      redirect.contains(RegExp(r'[\x00-\x1f\x7f]'))) {
+    return null;
+  }
+  final uri = Uri.tryParse(redirect);
+  if (uri == null) {
+    return null;
+  }
+  final path = uri.path;
+  if (path == '/login' ||
+      path.startsWith('/login/') ||
+      path == '/boot' ||
+      path == '/setup' ||
+      path == '/server-setup') {
     return null;
   }
   return redirect;

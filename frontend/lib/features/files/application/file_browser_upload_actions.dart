@@ -46,6 +46,20 @@ class _UploadRuntime {
   }
 }
 
+class _PreparedUpload {
+  const _PreparedUpload({
+    required this.taskId,
+    required this.file,
+    required this.fileName,
+    required this.sizeBytes,
+  });
+
+  final String taskId;
+  final XFile file;
+  final String fileName;
+  final int sizeBytes;
+}
+
 extension FileBrowserUploadActions on FileBrowserController {
   Future<FileUploadSession> createUploadSession({
     required String fileName,
@@ -70,11 +84,31 @@ extension FileBrowserUploadActions on FileBrowserController {
         asVersionOfFileId: asVersionOfFileId,
       );
       final live = _liveOr(current);
+      // 会话列表只用于本地审计展示，保留最近 20 条，避免长会话下无界增长。
+      final sessions = [session, ...live.uploadSessions];
       _emitState(
-        live.copyWith(uploadSessions: [session, ...live.uploadSessions]),
+        live.copyWith(
+          uploadSessions:
+              sessions.length > 20 ? sessions.sublist(0, 20) : sessions,
+        ),
       );
       return session;
     });
+  }
+
+  void _discardUploadSession(String uploadId) {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    final remaining =
+        current.uploadSessions
+            .where((session) => session.uploadId != uploadId)
+            .toList();
+    if (remaining.length == current.uploadSessions.length) {
+      return;
+    }
+    _emitState(current.copyWith(uploadSessions: remaining));
   }
 
   Future<void> completeUploadSession(
@@ -86,6 +120,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         sessionId: session.uploadId,
         sha256: sha256,
       );
+      _discardUploadSession(session.uploadId);
       final currentSection = _currentState?.section;
       if (currentSection == FileManagerSection.sharedSpace) {
         await showSharedSpace();
@@ -98,11 +133,17 @@ extension FileBrowserUploadActions on FileBrowserController {
   /// 用本地文件替换现有文件内容，并将旧内容保存为历史版本。
   Future<void> replaceFileWithNewVersion(FileNode file, XFile source) async {
     await _runAction(FileOperation.saveVersion, () async {
-      await _uploadSingleFile(
+      final result = await _uploadSingleFile(
         source,
         fileName: file.name,
         asVersionOfFileId: file.id,
       );
+      if (result != _UploadFileResult.completed) {
+        throw const AppException(
+          code: AppErrorCodes.versionUploadIncomplete,
+          message: AppErrorCodes.versionUploadIncomplete,
+        );
+      }
       await refreshFileNodesForCurrentSection();
     });
   }
@@ -170,6 +211,7 @@ extension FileBrowserUploadActions on FileBrowserController {
           task?.status != 'COMPLETED';
       if (shouldCancelServerSession) {
         await _repository.cancelUploadSession(uploadId);
+        _discardUploadSession(uploadId);
         if (_currentState?.section == FileManagerSection.uploadQueue) {
           await showUploadQueue();
         }
@@ -180,6 +222,7 @@ extension FileBrowserUploadActions on FileBrowserController {
   Future<void> deleteServerUploadSession(FileUploadQueueItem item) async {
     await _runAction(FileOperation.deleteServerSession, () async {
       await _repository.cancelUploadSession(item.uploadId);
+      _discardUploadSession(item.uploadId);
       final current = _currentState;
       if (current == null) {
         return;
@@ -282,30 +325,76 @@ extension FileBrowserUploadActions on FileBrowserController {
     var paused = 0;
     try {
       final policy = await _repository.uploadPolicy();
-      for (final file in files) {
-        try {
-          final result = await _uploadSingleFile(file, policy: policy);
-          switch (result) {
-            case _UploadFileResult.completed:
-              completed += 1;
-              break;
-            case _UploadFileResult.conflict:
-              conflicts += 1;
-              break;
-            case _UploadFileResult.failed:
-              failed += 1;
-              break;
-            case _UploadFileResult.paused:
-              paused += 1;
-              break;
-            case _UploadFileResult.cancelled:
-              break;
+      // 先把整批文件登记进上传队列，用户能看到所有待传文件而不是只看到当前一个。
+      final prepared = <_PreparedUpload>[];
+      final baseId = DateTime.now().microsecondsSinceEpoch;
+      for (var index = 0; index < files.length; index++) {
+        final file = files[index];
+        final sizeBytes = await file.length();
+        final fileName = _uploadFileName(file);
+        final taskId = '$baseId-$index';
+        prepared.add(
+          _PreparedUpload(
+            taskId: taskId,
+            file: file,
+            fileName: fileName,
+            sizeBytes: sizeBytes,
+          ),
+        );
+        _upsertLocalUploadTask(
+          FileUploadClientTask(
+            id: taskId,
+            fileName: fileName,
+            sizeBytes: sizeBytes,
+            uploadedBytes: 0,
+            status: 'QUEUED',
+            messageCode: FileUploadTaskMessageCode.waiting,
+          ),
+        );
+      }
+
+      var cursor = 0;
+      Future<void> runWorker() async {
+        while (true) {
+          if (cursor >= prepared.length) {
+            return;
           }
-        } catch (error) {
-          failed += 1;
-          _recordActionError(FileOperation.upload, error);
+          final item = prepared[cursor++];
+          try {
+            final result = await _uploadSingleFile(
+              item.file,
+              policy: policy,
+              taskId: item.taskId,
+              fileName: item.fileName,
+              sizeBytes: item.sizeBytes,
+            );
+            switch (result) {
+              case _UploadFileResult.completed:
+                completed += 1;
+                break;
+              case _UploadFileResult.conflict:
+                conflicts += 1;
+                break;
+              case _UploadFileResult.failed:
+                failed += 1;
+                break;
+              case _UploadFileResult.paused:
+                paused += 1;
+                break;
+              case _UploadFileResult.cancelled:
+                break;
+            }
+          } catch (error) {
+            failed += 1;
+            _recordActionError(FileOperation.upload, error);
+          }
         }
       }
+
+      final workerCount = math.min(_uploadBatchConcurrency, prepared.length);
+      await Future.wait(
+        List<Future<void>>.generate(workerCount, (_) => runWorker()),
+      );
       await _refreshAfterLocalUploadSettled();
       return FileUploadBatchResult(
         total: files.length,
@@ -325,6 +414,9 @@ extension FileBrowserUploadActions on FileBrowserController {
     final currentSection = _currentState?.section;
     if (currentSection == FileManagerSection.uploadQueue) {
       await showUploadQueue();
+    } else if (currentSection == FileManagerSection.sharedSpace) {
+      // 共享空间上传会改变共享用量，必须重载空间视图而不是只刷新目录。
+      await showSharedSpace();
     } else {
       await refreshFileNodesForCurrentSection();
     }
@@ -526,6 +618,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     );
     runtime.completed = true;
     _uploadRuntimes.remove(taskId);
+    _discardUploadSession(runtime.session.uploadId);
     _upsertLocalUploadTask(
       task.copyWith(
         uploadedBytes: runtime.session.sizeBytes,
@@ -539,6 +632,9 @@ extension FileBrowserUploadActions on FileBrowserController {
   /// 分片上传并发度：3 个在途分片足以吃满常见上行带宽，又不会让
   /// 单个大文件占满连接池。
   static const int _multipartConcurrency = 3;
+
+  /// 批量上传并发文件数：小文件不必排在大文件后面，同时限制连接总量。
+  static const int _uploadBatchConcurrency = 3;
 
   Future<void> _runMultipartUpload(
     String taskId,
@@ -588,6 +684,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     );
     runtime.completed = true;
     _uploadRuntimes.remove(taskId);
+    _discardUploadSession(runtime.session.uploadId);
     final completedTask = _findLocalUploadTask(taskId);
     if (runtime.removed || completedTask == null) {
       return;

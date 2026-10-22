@@ -15,11 +15,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -247,7 +250,27 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      */
     @Override
     public List<Integer> clusterFaces(List<float[]> embeddings, String endpoint, int timeoutSeconds) {
-        Map<String, Object> requestBody = Map.of("embeddings", embeddings);
+        if (embeddings.isEmpty()) {
+            return List.of();
+        }
+        int dimension = embeddings.getFirst().length;
+        ByteBuffer matrix = ByteBuffer
+                .allocate(Math.multiplyExact(Math.multiplyExact(embeddings.size(), dimension), Float.BYTES))
+                .order(ByteOrder.LITTLE_ENDIAN);
+        for (float[] embedding : embeddings) {
+            if (embedding == null || embedding.length != dimension) {
+                throw new IllegalArgumentException("人脸嵌入向量维度不一致");
+            }
+            for (float value : embedding) {
+                matrix.putFloat(value);
+            }
+        }
+        // 逐元素 JSON 数组在 1 万张人脸时会产生数十 MB 文本，改为一次性 base64 矩阵。
+        Map<String, Object> requestBody = Map.of(
+                "dimension", dimension,
+                "count", embeddings.size(),
+                "embeddingsBase64", Base64.getEncoder().encodeToString(matrix.array())
+        );
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/cluster-faces"))
                 .timeout(Duration.ofSeconds(timeoutSeconds))

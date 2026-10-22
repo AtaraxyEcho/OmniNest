@@ -27,6 +27,33 @@ void main() {
       expect(isMoviePlaybackCompleted(100, 0), isFalse);
     });
 
+    test('续播进度在片尾 95% 以上归零且切集不继承主条目进度', () {
+      expect(
+        resolveMovieResumeSeconds(
+          isMainItem: true,
+          positionSeconds: 600,
+          durationSeconds: 3600,
+        ),
+        600,
+      );
+      expect(
+        resolveMovieResumeSeconds(
+          isMainItem: true,
+          positionSeconds: 3500,
+          durationSeconds: 3600,
+        ),
+        0,
+      );
+      expect(
+        resolveMovieResumeSeconds(
+          isMainItem: false,
+          positionSeconds: 600,
+          durationSeconds: 3600,
+        ),
+        0,
+      );
+    });
+
     test('字幕命中保持最后一个重叠提示', () {
       const cues = <SubtitleCue>[
         SubtitleCue(startMs: 1000, endMs: 3000, text: 'first'),

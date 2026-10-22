@@ -1,5 +1,15 @@
 part of 'file_browser_page.dart';
 
+/// 打开个人空间文件夹选择器。
+///
+/// 返回 `''` 表示个人空间根目录，`null` 表示用户取消。
+Future<String?> showFilesFolderPickerDialog({required BuildContext context}) {
+  return showFilesDialog<String>(
+    context: context,
+    builder: (ctx) => const _FolderPickerDialog(),
+  );
+}
+
 class _FolderPickerDialog extends ConsumerStatefulWidget {
   const _FolderPickerDialog({this.excludeIds = const {}});
   final Set<String> excludeIds;

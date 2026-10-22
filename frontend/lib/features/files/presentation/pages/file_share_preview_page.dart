@@ -14,10 +14,13 @@ import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_saver.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/infinite_scroll.dart';
+import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
+import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/widgets/files_dialog.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
@@ -113,7 +116,8 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       return;
     }
     if (session.isAuthenticated && _service.takePendingAccept(widget.token)) {
-      await _acceptShare();
+      // 登录回跳的自动转存沿用根目录，避免恢复流程里再弹出目录选择。
+      await _acceptShare(askTarget: false);
     }
   }
 
@@ -292,7 +296,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     await _loadPreview();
   }
 
-  Future<void> _acceptShare() async {
+  Future<void> _acceptShare({bool askTarget = true}) async {
     // 检查登录状态
     final authState = ref.read(authSessionProvider);
     final isAuthenticated = authState.asData?.value.isAuthenticated ?? false;
@@ -306,13 +310,20 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     }
     _service.takePendingAccept(widget.token);
 
+    String? targetParentId;
+    if (askTarget) {
+      targetParentId = await showFilesFolderPickerDialog(context: context);
+      if (!mounted || targetParentId == null) {
+        return;
+      }
+    }
+
     setState(() => _saving = true);
 
-    final authToken = ref.read(authSessionStoreProvider).readAccessToken();
     final result = await _service.accept(
       widget.token,
       password: _password,
-      authToken: authToken,
+      targetParentId: targetParentId,
     );
 
     if (!mounted) return;
@@ -320,6 +331,13 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
 
     switch (result) {
       case ShareAcceptSuccess():
+        try {
+          // 转存直接写入个人空间，回到文件页前必须重载列表，否则看不到新文件。
+          await ref.read(fileBrowserControllerProvider.notifier).showFiles();
+        } on Exception catch (error) {
+          devLog('转存后刷新文件列表失败: $error');
+        }
+        if (!mounted) return;
         showOmniFeedback(
           context,
           AppLocalizations.of(context).filesSavedToMyFiles,
@@ -415,7 +433,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     return _PreviewCard(
       preview: _preview!,
       saving: _saving,
-      onAccept: _acceptShare,
+      onAccept: () => _acceptShare(),
       onDownload: _downloadCurrentFile,
     );
   }
@@ -428,7 +446,14 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
         Expanded(child: _buildChildList(context)),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: _SaveToMyFilesButton(saving: _saving, onAccept: _acceptShare),
+          child: _SaveToMyFilesButton(
+            saving: _saving,
+            onAccept: () => _acceptShare(),
+            label:
+                _trail.isEmpty
+                    ? null
+                    : AppLocalizations.of(context).filesSaveWholeSharedFolder,
+          ),
         ),
       ],
     );

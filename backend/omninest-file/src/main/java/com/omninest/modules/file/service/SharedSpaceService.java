@@ -1,6 +1,11 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.config.ConfigValueProvider;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncEventCommand;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.NodeType;
@@ -12,6 +17,8 @@ import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileNodePermission;
 import com.omninest.modules.file.domain.SharedSpacePermission;
 import com.omninest.modules.file.domain.SharedSpacePermission.Action;
+import com.omninest.modules.file.domain.ShareLink;
+import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -21,7 +28,11 @@ import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -57,6 +68,9 @@ public class SharedSpaceService {
     private final FileNodePermissionRepository fileNodePermissionRepository;
     private final ConfigValueProvider configValueProvider;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final FileIndexSyncService fileIndexSyncService;
+    private final UserSyncEventRecorder syncEventRecorder;
+    private final ReadThroughCache readThroughCache;
 
     /**
      * 检查共享空间是否启用。
@@ -156,13 +170,18 @@ public class SharedSpaceService {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
+        List<FileNode> subtree = collectSharedSubtreeNodes(node.getId());
+        subtree.add(node);
         String oldPath = node.getNormalizedPath();
         String parentPath = oldPath.substring(0, Math.max(oldPath.lastIndexOf('/'), 0));
         String newPath = parentPath.isEmpty() ? "/" + newName : parentPath + "/" + newName;
         node.setName(newName);
         node.setNormalizedPath(newPath);
         rewriteSubtreePaths(oldPath, newPath, SpaceType.SHARED);
-        return fileNodeRepository.save(node);
+        fileNodeRepository.save(node);
+        // 共享文件夹里可能有其他成员上传的子项，索引重建必须落到各自所有者名下。
+        scheduleIndexAndEventByOwner(subtree, node.getId(), SyncAction.UPDATED);
+        return node;
     }
 
     /**
@@ -215,10 +234,13 @@ public class SharedSpaceService {
         if (node.getSpaceType() == SpaceType.SHARED) {
             throw new BusinessException(ErrorCode.CONFLICT, "文件已在共享空间中");
         }
+        List<FileNode> subtree = collectPersonalSubtreeNodes(node);
+        requireMovableSources(subtree);
         // 移入共享空间根目录，检查共享空间根目录下的同名冲突
         checkSharedSpaceNameConflict(node.getName(), null);
-        revokeShareLinks(fileNodeId);
-        revokeFilePermissions(fileNodeId);
+        List<UUID> subtreeIds = subtree.stream().map(FileNode::getId).toList();
+        revokeShareLinksForNodes(subtreeIds);
+        revokeFilePermissionsForNodes(subtreeIds);
         SubtreeStats stats = calculateSubtreeStats(node);
         // 检查共享空间配额
         sharedSpaceQuotaService.checkQuota(stats.totalBytes());
@@ -234,6 +256,7 @@ public class SharedSpaceService {
         }
         storageQuotaService.decrementUsage(operatorId, stats.totalBytes());
         sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount());
+        scheduleIndexAndEvent(operatorId, collectSubtreeIds(node), node.getId(), SyncAction.UPDATED);
         log.info("文件从个人空间移入共享空间: fileId={}, operatorId={}, totalSize={}, fileCount={}",
                 fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
@@ -273,6 +296,7 @@ public class SharedSpaceService {
         }
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
         storageQuotaService.incrementUsage(targetUserId, stats.totalBytes());
+        scheduleIndexAndEvent(targetUserId, collectSubtreeIds(node), node.getId(), SyncAction.UPDATED);
         log.info("文件从共享空间移入个人空间: fileId={}, targetUserId={}, totalSize={}, fileCount={}",
                 fileNodeId, targetUserId, stats.totalBytes(), stats.fileCount());
     }
@@ -305,9 +329,31 @@ public class SharedSpaceService {
 
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
 
-        // 进程内事件，ownerUserId 用上传者（非操作者），确保 MediaFileSyncService 查询正确
-        UUID fileOwnerUserId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
-        applicationEventPublisher.publishEvent(new FileNodesSoftDeletedEvent(fileOwnerUserId, allIds, Instant.now()));
+        // 按实际归属人分组：共享文件夹里可能有多个成员上传的媒体，漏掉任何一组都会让
+        // 对应成员的媒体库继续显示已删除内容。
+        Map<UUID, List<UUID>> idsByOwner = new HashMap<>();
+        Set<UUID> groupedIds = new HashSet<>();
+        for (FileNode deletedNode : fileNodeRepository.findAllById(allIds)) {
+            UUID owner = deletedNode.getUploadedBy() != null
+                    ? deletedNode.getUploadedBy() : deletedNode.getOwnerUserId();
+            idsByOwner.computeIfAbsent(owner, key -> new ArrayList<>()).add(deletedNode.getId());
+            groupedIds.add(deletedNode.getId());
+        }
+        // 查询未命中（并发清理或仓储未回表）时仍要保证根节点与后代能收到失效事件。
+        UUID fallbackOwner = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
+        for (UUID id : allIds) {
+            if (groupedIds.add(id)) {
+                idsByOwner.computeIfAbsent(fallbackOwner, key -> new ArrayList<>()).add(id);
+            }
+        }
+        Instant deletedAt = Instant.now();
+        idsByOwner.forEach((owner, ids) -> {
+            applicationEventPublisher.publishEvent(new FileNodesSoftDeletedEvent(owner, ids, deletedAt));
+            fileIndexSyncService.scheduleAfterCommit(owner, ids);
+            syncEventRecorder.record(new SyncEventCommand(
+                    owner, SyncScope.FILES, "FILE_NODE", ids.getFirst().toString(),
+                    SyncAction.DELETED, null, Map.of()));
+        });
         log.info("共享空间文件删除: fileId={}, operatorId={}, totalSize={}, fileCount={}",
                 fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
@@ -551,17 +597,90 @@ public class SharedSpaceService {
     }
 
     /**
-     * 撤销文件关联的所有分享链接（移入共享空间时）。
+     * 撤销整棵子树的公开分享链接，并同步清掉读穿透缓存。
      */
-    private void revokeShareLinks(UUID fileNodeId) {
-        shareLinkRepository.disableByResourceId(fileNodeId, Instant.now());
+    private void revokeShareLinksForNodes(List<UUID> fileNodeIds) {
+        for (UUID fileNodeId : fileNodeIds) {
+            List<ShareLink> active = shareLinkRepository.findByResourceIdAndDisabledAtIsNull(fileNodeId);
+            shareLinkRepository.disableByResourceId(fileNodeId, Instant.now());
+            for (ShareLink link : active) {
+                readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
+            }
+        }
     }
 
     /**
-     * 撤销文件关联的所有权限（移入共享空间时）。
+     * 撤销整棵子树的细粒度权限（移入共享空间时）。
      */
-    private void revokeFilePermissions(UUID fileNodeId) {
-        fileNodePermissionRepository.deleteByFileNodeId(fileNodeId);
+    private void revokeFilePermissionsForNodes(List<UUID> fileNodeIds) {
+        if (!fileNodeIds.isEmpty()) {
+            fileNodePermissionRepository.deleteByFileNodeIdIn(fileNodeIds);
+        }
+    }
+
+    /**
+     * 本地只读与系统派生节点不参与个人/共享配额结算，禁止跨空间移动。
+     */
+    private void requireMovableSources(List<FileNode> nodes) {
+        for (FileNode node : nodes) {
+            if ("DERIVED".equals(node.getSourceType())
+                    || SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "只读或派生文件不能移入共享空间");
+            }
+        }
+    }
+
+    private List<FileNode> collectPersonalSubtreeNodes(FileNode root) {
+        List<FileNode> nodes = new ArrayList<>();
+        nodes.add(root);
+        if (!NodeType.FOLDER.getValue().equals(root.getNodeType())) {
+            return nodes;
+        }
+        List<FileNode> descendants = fileNodeRepository
+                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        root.getOwnerUserId(),
+                        SpaceType.PERSONAL,
+                        LikePatterns.escapeSpecials(root.getNormalizedPath() + "/"));
+        nodes.addAll(descendants);
+        return nodes;
+    }
+
+    private List<FileNode> collectSharedSubtreeNodes(UUID folderId) {
+        List<FileNode> nodes = new ArrayList<>();
+        for (FileNode child : fileNodeRepository
+                .findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, folderId)) {
+            nodes.add(child);
+            if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
+                nodes.addAll(collectSharedSubtreeNodes(child.getId()));
+            }
+        }
+        return nodes;
+    }
+
+    private List<UUID> collectSubtreeIds(FileNode root) {
+        List<UUID> ids = new ArrayList<>();
+        ids.add(root.getId());
+        ids.addAll(collectAllDescendantIds(root.getId()));
+        return ids;
+    }
+
+    private void scheduleIndexAndEvent(
+            UUID ownerUserId, List<UUID> ids, UUID rootId, SyncAction action) {
+        if (ids.isEmpty()) {
+            return;
+        }
+        fileIndexSyncService.scheduleAfterCommit(ownerUserId, ids);
+        syncEventRecorder.record(new SyncEventCommand(
+                ownerUserId, SyncScope.FILES, "FILE_NODE", rootId.toString(), action, null, Map.of()));
+    }
+
+    private void scheduleIndexAndEventByOwner(List<FileNode> nodes, UUID rootId, SyncAction action) {
+        Map<UUID, List<UUID>> idsByOwner = new LinkedHashMap<>();
+        for (FileNode node : nodes) {
+            idsByOwner.computeIfAbsent(node.getOwnerUserId(), key -> new ArrayList<>()).add(node.getId());
+        }
+        idsByOwner.forEach((ownerUserId, ids) ->
+                scheduleIndexAndEvent(ownerUserId, ids, rootId, action));
     }
 
     /**

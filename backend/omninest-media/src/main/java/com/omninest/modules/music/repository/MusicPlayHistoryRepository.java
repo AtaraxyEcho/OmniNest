@@ -31,18 +31,14 @@ public interface MusicPlayHistoryRepository extends JpaRepository<MusicPlayHisto
     );
 
     /**
-     * 批量删除用户指定时间之前的播放历史。
+     * 批量删除所有用户指定时间之前的播放历史。
      *
-     * @param ownerUserId 用户 ID
      * @param cutoff 截止时间
      * @return 删除数量
      */
     @Modifying(clearAutomatically = true)
-    @Query("DELETE FROM MusicPlayHistory h WHERE h.ownerUserId = :ownerUserId AND h.playedAt < :cutoff")
-    int deleteExpiredHistory(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("cutoff") Instant cutoff
-    );
+    @Query("DELETE FROM MusicPlayHistory h WHERE h.playedAt < :cutoff")
+    int deleteAllExpiredHistory(@Param("cutoff") Instant cutoff);
 
     /**
      * 查询用户最后播放的本地音乐历史。

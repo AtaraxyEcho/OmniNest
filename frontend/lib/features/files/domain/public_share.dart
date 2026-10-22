@@ -14,6 +14,7 @@ abstract interface class PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   });
 
   /// 凭短期分享会话匿名取单文件的下载地址，不需要系统账号。

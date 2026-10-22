@@ -138,6 +138,23 @@ bool isMoviePlaybackCompleted(int positionSeconds, int durationSeconds) {
   return durationSeconds > 0 && positionSeconds >= durationSeconds - 20;
 }
 
+/// 计算打开播放器时应恢复的秒数。
+///
+/// 只对主条目恢复进度；已播放到片尾 95% 以上时从头播放。
+int resolveMovieResumeSeconds({
+  required bool isMainItem,
+  required int positionSeconds,
+  required int durationSeconds,
+}) {
+  if (!isMainItem || positionSeconds <= 0) {
+    return 0;
+  }
+  if (durationSeconds > 0 && positionSeconds >= durationSeconds * 0.95) {
+    return 0;
+  }
+  return positionSeconds;
+}
+
 /// 查找当前位置最后一个有效的字幕提示。
 /// 使用二分定位上界，再向前找最后一个有效 cue，避免逐条线性扫描。
 int findActiveSubtitleCueIndex(List<SubtitleCue> cues, Duration position) {

@@ -268,6 +268,7 @@ class _OkShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     acceptCalls += 1;
     return ShareAcceptResult.success();
@@ -337,6 +338,7 @@ class _FolderShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     return ShareAcceptResult.success();
   }
@@ -368,6 +370,7 @@ class _PasswordShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     return ShareAcceptResult.error('SHARE_NEED_PASSWORD');
   }
@@ -399,6 +402,7 @@ class _FailingShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     return const ShareAcceptError('SHARE_EXPIRED');
   }
@@ -431,6 +435,7 @@ class _WrongPasswordShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     return const ShareAcceptError('提取码不正确');
   }
@@ -496,6 +501,7 @@ class _PagedShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     return ShareAcceptResult.success();
   }

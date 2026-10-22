@@ -33,6 +33,8 @@ extension AppErrorCodeL10n on AppLocalizations {
         return errorUnnamedResource;
       case AppErrorCodes.uploadUrlMissing:
         return errorUploadUrlMissing;
+      case AppErrorCodes.versionUploadIncomplete:
+        return filesVersionUploadIncomplete;
       case AppErrorCodes.securityScanFailed:
         return errorSecurityScanFailed;
       case AppErrorCodes.other:

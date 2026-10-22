@@ -350,7 +350,7 @@ public class MoviePlaybackService {
             return;
         }
         try {
-            movieTaskService.createTranscodeTask(ownerUserId, videoItemId, true);
+            movieTaskService.createTranscodeTask(catalogOwnerId, videoItemId, true);
             log.info("自动触发音频转码: videoItemId={}", videoItemId);
         } catch (Exception e) {
             log.debug("自动触发音频转码失败（可能已存在任务）: videoItemId={}, message={}",

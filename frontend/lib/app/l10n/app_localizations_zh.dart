@@ -275,6 +275,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminNoMatch => '未找到匹配数据。';
 
   @override
+  String get adminClearFilters => '清空筛选';
+
+  @override
   String get notificationTitle => '通知';
 
   @override
@@ -2401,6 +2404,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesSaveToMyFiles => '保存到我的文件';
+
+  @override
+  String get filesSaveWholeSharedFolder => '保存整个分享文件夹';
 
   @override
   String get filesDelete => '删除';
@@ -6984,6 +6990,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoSubtitleLoadFailed => '加载字幕信息失败';
 
   @override
+  String get videoSubtitleDisplayFailed => '字幕加载失败';
+
+  @override
   String get videoUploading => '上传中...';
 
   @override
@@ -8417,6 +8426,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String photosSharedAlbumLoadMoreFailed(Object message) {
+    return '加载更多照片失败：$message';
+  }
+
+  @override
   String get photosSharedAlbumPasswordRequired => '此相册需要密码访问';
 
   @override
@@ -8810,6 +8824,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicPlaylistCoverHint => '未选择时使用第一首歌曲的封面';
+
+  @override
+  String get musicPlaylistCoverTooLarge => '封面图片不能超过 8 MB';
 
   @override
   String musicPlaylistSaveFailed(Object error) {
@@ -10865,6 +10882,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorUploadUrlMissing => '上传地址无效';
+
+  @override
+  String get filesVersionUploadIncomplete => '新版本上传未完成';
 
   @override
   String get errorSecurityScanFailed => '安全扫描未完成，文件已保留；请稍后在书库查看，或重新导入';

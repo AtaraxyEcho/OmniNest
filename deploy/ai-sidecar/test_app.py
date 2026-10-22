@@ -1,14 +1,16 @@
 """AI 侧车人脸识别与边界逻辑测试。"""
 
 import asyncio
+import base64
 import io
+import struct
 import unittest
 from unittest.mock import patch
 
 import app
 from fastapi import HTTPException
 from PIL import Image
-from pydantic import Field, ValidationError, create_model
+from pydantic import ValidationError
 
 
 class _FakeUploadFile:
@@ -187,13 +189,35 @@ class SidecarBoundaryTest(unittest.TestCase):
 
     def test_cluster_request_rejects_excessive_face_count(self):
         """聚类请求不能超过服务端硬上限。"""
-        with patch.object(app, "MAX_CLUSTER_FACES", 1):
-            constrained_model = create_model(
-                "ConstrainedClusterRequest",
-                embeddings=(list[list[float]], Field(max_length=1)),
+        with self.assertRaises(ValidationError):
+            app.ClusterRequest(
+                dimension=app.FACE_EMBEDDING_DIMENSION,
+                count=app.MAX_CLUSTER_FACES + 1,
+                embeddingsBase64="",
             )
-            with self.assertRaises(ValidationError):
-                constrained_model(embeddings=[[0.0], [1.0]])
+
+    def test_decode_cluster_embeddings_reads_float32_matrix(self):
+        """base64 矩阵按 float32 小端还原，维度与长度都受校验。"""
+        with patch.object(app, "FACE_EMBEDDING_DIMENSION", 4):
+            payload = struct.pack("<8f", 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+            request = app.ClusterRequest(
+                dimension=4,
+                count=2,
+                embeddingsBase64=base64.b64encode(payload).decode("ascii"),
+            )
+            decoded = app._decode_cluster_embeddings(request)
+
+            self.assertEqual((2, 4), decoded.shape)
+            self.assertAlmostEqual(0.5, float(decoded[1][0]), places=6)
+
+            broken = app.ClusterRequest(
+                dimension=4,
+                count=2,
+                embeddingsBase64=base64.b64encode(payload[:-4]).decode("ascii"),
+            )
+            with self.assertRaises(HTTPException) as mismatch:
+                app._decode_cluster_embeddings(broken)
+            self.assertEqual(422, mismatch.exception.status_code)
 
 
 if __name__ == "__main__":

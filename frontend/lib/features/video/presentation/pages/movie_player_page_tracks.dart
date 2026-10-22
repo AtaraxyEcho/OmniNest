@@ -70,14 +70,11 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
     // 仅主条目套用进度，播放器内切集不携带主条目位置；
     // 进度接近片尾（≥95%）视为已看完，从头播放。
     final isMainItem = plan.videoItemId == widget.videoItemId;
-    final totalSeconds = plan.durationSeconds;
-    final savedSeconds = plan.positionSeconds;
-    final resumeSeconds =
-        isMainItem &&
-                savedSeconds > 0 &&
-                (totalSeconds <= 0 || savedSeconds < totalSeconds * 0.95)
-            ? savedSeconds
-            : 0;
+    final resumeSeconds = resolveMovieResumeSeconds(
+      isMainItem: isMainItem,
+      positionSeconds: plan.positionSeconds,
+      durationSeconds: plan.durationSeconds,
+    );
 
     // 取消上一次的 tracks 监听
     _tracksSub?.cancel();
@@ -132,6 +129,8 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
       _bufferPollTimer?.cancel();
       _bufferPollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
         if (!mounted) return;
+        // 暂停且不在缓冲时浏览器不会继续消费流，轮询只会制造无意义的重建。
+        if (!_player.state.playing && !_isBuffering) return;
         final buffer = _player.state.buffer;
         // fMP4 流的 duration 不可靠，优先使用播放计划的时长
         final durationMs =
@@ -151,7 +150,7 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
       _positionPollTimer = Timer.periodic(const Duration(milliseconds: 250), (
         _,
       ) {
-        if (!mounted || _isSeeking) return;
+        if (!mounted || _isSeeking || !_player.state.playing) return;
         final pos = _player.state.position;
         if ((pos - _polledPosition.value).inMilliseconds.abs() > 200) {
           _polledPosition.value = pos;
@@ -161,19 +160,24 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
       // 显式激活音频和字幕轨道
       _activateTracks();
 
-      // 优先 seek 到用户拖拽目标（_seekStart），其次恢复上次播放进度
+      // 优先 seek 到用户拖拽目标（_seekStart），其次恢复上次播放进度。
+      // Web 转码流已在 URL 的 start 参数上完成定位，不能再对 MSE 时间轴 seek。
+      final streamStartApplied =
+          isWebPlatform && plan.streamUrl?.isNotEmpty == true;
       if (_seekStart > 0) {
-        await _player.seek(Duration(seconds: _seekStart));
-        if (!mounted || generation != _openGeneration) {
-          return;
+        if (!streamStartApplied) {
+          await _player.seek(Duration(seconds: _seekStart));
+          if (!mounted || generation != _openGeneration) {
+            return;
+          }
         }
         _polledPosition.value = Duration(seconds: _seekStart);
         _updateState(() {
           _isSeeking = false;
         });
         _seekStart = 0;
-      } else if (plan.positionSeconds > 0) {
-        await _player.seek(Duration(seconds: plan.positionSeconds));
+      } else if (resumeSeconds > 0) {
+        await _player.seek(Duration(seconds: resumeSeconds));
         if (!mounted || generation != _openGeneration) {
           return;
         }

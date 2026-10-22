@@ -238,6 +238,15 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
     _fetch(page: 0, roleFilter: role, resetSelection: true);
   }
 
+  /// 一次清空搜索词与角色筛选，避免空态下需要分别操作两处。
+  void clearFilters() {
+    if (state.asData?.value == null) {
+      return;
+    }
+    _searchDebounce?.cancel();
+    _fetch(page: 0, query: '', roleFilter: 'ALL', resetSelection: true);
+  }
+
   /// 切换服务端排序；同字段同方向不重复请求，变更后回第一页并清空
   /// 批量选择（行序变化后跨序保留选择没有操作意义）。
   void setSort(String sortField, bool ascending) {

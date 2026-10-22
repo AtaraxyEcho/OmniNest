@@ -7,6 +7,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.modules.video.config.VideoStreamProperties;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.io.ByteArrayOutputStream;
@@ -30,7 +31,7 @@ class VideoStreamServiceTest {
     private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
 
     private final VideoStreamService service = new VideoStreamService(
-            videoItemRepository, sourceInputResolver, mediaContentAccessService
+            videoItemRepository, sourceInputResolver, mediaContentAccessService, new VideoStreamProperties()
     );
 
     @Test

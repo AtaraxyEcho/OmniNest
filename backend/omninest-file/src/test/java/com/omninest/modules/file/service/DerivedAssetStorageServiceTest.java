@@ -362,6 +362,7 @@ class DerivedAssetStorageServiceTest {
                 return node;
             });
             allowTransactionCallback();
+            allowStoreTransaction();
             DerivedAssetStorageService service = new DerivedAssetStorageService(
                     objectStorageBuckets(),
                     objectStorageClient,

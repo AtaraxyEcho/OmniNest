@@ -608,6 +608,12 @@ abstract class AppLocalizations {
   /// **'No matching data found.'**
   String get adminNoMatch;
 
+  /// No description provided for @adminClearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get adminClearFilters;
+
   /// No description provided for @notificationTitle.
   ///
   /// In en, this message translates to:
@@ -4650,6 +4656,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Save to my files'**
   String get filesSaveToMyFiles;
+
+  /// No description provided for @filesSaveWholeSharedFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the entire shared folder'**
+  String get filesSaveWholeSharedFolder;
 
   /// No description provided for @filesDelete.
   ///
@@ -13127,6 +13139,12 @@ abstract class AppLocalizations {
   /// **'Failed to load subtitle info'**
   String get videoSubtitleLoadFailed;
 
+  /// No description provided for @videoSubtitleDisplayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load subtitles'**
+  String get videoSubtitleDisplayFailed;
+
   /// No description provided for @videoUploading.
   ///
   /// In en, this message translates to:
@@ -15833,6 +15851,12 @@ abstract class AppLocalizations {
   /// **'Cannot access shared album: {error}'**
   String photosSharedAlbumAccessError(Object error);
 
+  /// No description provided for @photosSharedAlbumLoadMoreFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load more photos: {message}'**
+  String photosSharedAlbumLoadMoreFailed(Object message);
+
   /// No description provided for @photosSharedAlbumPasswordRequired.
   ///
   /// In en, this message translates to:
@@ -16570,6 +16594,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Uses the first song cover when no image is selected'**
   String get musicPlaylistCoverHint;
+
+  /// No description provided for @musicPlaylistCoverTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Cover image must be 8 MB or smaller'**
+  String get musicPlaylistCoverTooLarge;
 
   /// No description provided for @musicPlaylistSaveFailed.
   ///
@@ -20391,6 +20421,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invalid upload URL'**
   String get errorUploadUrlMissing;
+
+  /// No description provided for @filesVersionUploadIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'The new version was not uploaded'**
+  String get filesVersionUploadIncomplete;
 
   /// No description provided for @errorSecurityScanFailed.
   ///

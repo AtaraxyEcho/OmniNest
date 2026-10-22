@@ -282,6 +282,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminNoMatch => 'No matching data found.';
 
   @override
+  String get adminClearFilters => 'Clear filters';
+
+  @override
   String get notificationTitle => 'Notifications';
 
   @override
@@ -2480,6 +2483,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesSaveToMyFiles => 'Save to my files';
+
+  @override
+  String get filesSaveWholeSharedFolder => 'Save the entire shared folder';
 
   @override
   String get filesDelete => 'Delete';
@@ -7206,6 +7212,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoSubtitleLoadFailed => 'Failed to load subtitle info';
 
   @override
+  String get videoSubtitleDisplayFailed => 'Failed to load subtitles';
+
+  @override
   String get videoUploading => 'Uploading...';
 
   @override
@@ -8665,6 +8674,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String photosSharedAlbumLoadMoreFailed(Object message) {
+    return 'Failed to load more photos: $message';
+  }
+
+  @override
   String get photosSharedAlbumPasswordRequired =>
       'This album requires password access';
 
@@ -9073,6 +9087,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get musicPlaylistCoverHint =>
       'Uses the first song cover when no image is selected';
+
+  @override
+  String get musicPlaylistCoverTooLarge =>
+      'Cover image must be 8 MB or smaller';
 
   @override
   String musicPlaylistSaveFailed(Object error) {
@@ -11208,6 +11226,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorUploadUrlMissing => 'Invalid upload URL';
+
+  @override
+  String get filesVersionUploadIncomplete => 'The new version was not uploaded';
 
   @override
   String get errorSecurityScanFailed =>

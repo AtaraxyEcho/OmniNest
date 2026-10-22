@@ -22,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 集中存储配额管理服务。
@@ -74,6 +76,8 @@ public class StorageQuotaService {
      */
     public void settleReservation(String sourceType, UUID sourceId, long committedBytes) {
         reservationService.settle(sourceType, sourceId, committedBytes);
+        reservationService.ownerUserId(sourceType, sourceId)
+                .ifPresent(this::evictProfileCacheAfterCommit);
     }
 
     /**
@@ -132,7 +136,16 @@ public class StorageQuotaService {
         if (owner.superAdmin() || owner.quotaBytes() <= 0) {
             return;
         }
-        if (owner.usedBytes() + incomingBytes > owner.quotaBytes()) {
+        long projected;
+        try {
+            projected = Math.addExact(
+                    Math.addExact(owner.usedBytes(), owner.reservedBytes()),
+                    Math.max(0L, incomingBytes)
+            );
+        } catch (ArithmeticException overflow) {
+            throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足");
+        }
+        if (projected > owner.quotaBytes()) {
             throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足");
         }
     }
@@ -149,6 +162,7 @@ public class StorageQuotaService {
             return;
         }
         UserAccountSummary owner = userStorageCommand.incrementUsage(userId, bytes);
+        evictProfileCacheAfterCommit(userId);
 
         // 检查配额状态，发送预警通知
         try {
@@ -182,6 +196,23 @@ public class StorageQuotaService {
             return;
         }
         userStorageCommand.decrementUsage(userId, bytes);
+        evictProfileCacheAfterCommit(userId);
+    }
+
+    /**
+     * 配额变更提交后再清用户资料缓存，避免并发读在提交前把旧用量重新写回缓存。
+     */
+    private void evictProfileCacheAfterCommit(UUID userId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            userProfileCacheEvictor.evictProfileCache(userId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                userProfileCacheEvictor.evictProfileCache(userId);
+            }
+        });
     }
 
     /**

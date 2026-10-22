@@ -30,6 +30,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -76,6 +77,9 @@ public class BackdropAssetService {
     private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4", "webm", "mov", "m4v");
     private static final int THUMBNAIL_MAX_WIDTH = 1024;
     private static final int THUMBNAIL_MAX_HEIGHT = 1024;
+    /** 解码前置上限：单边 16384、总像素 64MP，超过即拒绝，避免解压炸弹打爆 Worker。 */
+    private static final int MAX_IMAGE_DIMENSION = 16384;
+    private static final long MAX_IMAGE_PIXELS = 64_000_000L;
     private static final double THUMBNAIL_QUALITY = 0.82;
     private static final Duration VIDEO_THUMBNAIL_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration VIDEO_PLAYBACK_ENCODE_TIMEOUT = Duration.ofSeconds(90);
@@ -412,12 +416,31 @@ public class BackdropAssetService {
         if (media.mediaType() == BackdropMediaType.VIDEO) {
             return null;
         }
-        try {
-            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(stagingFile.toFile());
-            if (image == null) {
+        try (javax.imageio.stream.ImageInputStream input =
+                     javax.imageio.ImageIO.createImageInputStream(stagingFile.toFile())) {
+            if (input == null) {
                 return null;
             }
-            return new ImageDimensions(image.getWidth(), image.getHeight());
+            Iterator<javax.imageio.ImageReader> readers = javax.imageio.ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                return null;
+            }
+            javax.imageio.ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                if (width <= 0 || height <= 0
+                        || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION
+                        || (long) width * height > MAX_IMAGE_PIXELS) {
+                    throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "图片分辨率超过壁纸上限");
+                }
+                return new ImageDimensions(width, height);
+            } finally {
+                reader.dispose();
+            }
+        } catch (BusinessException ex) {
+            throw ex;
         } catch (IOException | RuntimeException ex) {
             log.debug("背景素材尺寸解析失败: extension={}, message={}", media.extension(), ex.getMessage());
             return null;
@@ -476,12 +499,13 @@ public class BackdropAssetService {
         if (media.mediaType() == BackdropMediaType.VIDEO) {
             return generateAndStoreVideoThumbnail(ownerUserId, assetId, stagingFile, publishedNodeId);
         }
-        if (media.mediaType() != BackdropMediaType.IMAGE) {
+        if (media.mediaType() != BackdropMediaType.IMAGE
+                && media.mediaType() != BackdropMediaType.GIF) {
             return null;
         }
         Path thumbnailFile = null;
         try {
-            thumbnailFile = Files.createTempFile("backdrop-thumb-", "." + thumbnailExtension());
+            thumbnailFile = Files.createTempFile("backdrop-thumb-", thumbnailExtension());
             Thumbnails.of(stagingFile.toFile())
                     .size(THUMBNAIL_MAX_WIDTH, THUMBNAIL_MAX_HEIGHT)
                     .keepAspectRatio(true)
@@ -587,10 +611,11 @@ public class BackdropAssetService {
         try {
             stagingFile = ingressStagingService.copyToTempFile(ingressItemId);
             DetectedMedia media = detectMedia(stagingFile, extensionOf(originalFileName));
+            // 先只读文件头校验像素上限，再落原片与生成缩略图。
+            ImageDimensions dimensions = readImageDimensions(stagingFile, media);
             UUID publishedNodeId = derivedAssetStorageService.store(
                     ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
                     originalFileName, media.mimeType(), stagingFile);
-            ImageDimensions dimensions = readImageDimensions(stagingFile, media);
             // 不做服务端降质衍生:壁纸默认原片,由客户端可选本地缓存。
             UUID thumbNodeId = generateAndStoreThumbnail(
                     ownerUserId, assetId, stagingFile, media, publishedNodeId);

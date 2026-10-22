@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 
 /// 歌单编辑器提交的数据。
@@ -73,12 +74,27 @@ class _MusicDeckCreatePlaylistDialogState
     setState(() {});
   }
 
+  /// 服务端歌单封面上限为 8 MB，选图阶段先按同一阈值拒绝。
+  static const int _maxCoverBytes = 8 * 1024 * 1024;
+
   Future<void> _pickCover() async {
     final result = await FilePicker.pickFiles(type: FileType.image);
     if (!mounted || result.isEmpty) {
       return;
     }
     final file = result.first;
+    final length = await file.length();
+    if (!mounted) {
+      return;
+    }
+    if (length != null && length > _maxCoverBytes) {
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).musicPlaylistCoverTooLarge,
+        severity: OmniFeedbackSeverity.error,
+      );
+      return;
+    }
     final bytes = await file.readAsBytes();
     if (!mounted) {
       return;
@@ -105,7 +121,13 @@ class _MusicDeckCreatePlaylistDialogState
 
   /// 将封面降采样为 ≤512px 的缩略字节，仅用于 UI 预览，避免全分辨率解码。
   Future<Uint8List> _downsampleCover(Uint8List source) async {
-    final ui.Image decoded = await decodeImageFromList(source);
+    final codec = await ui.instantiateImageCodec(
+      source,
+      targetWidth: 512,
+      targetHeight: 512,
+    );
+    final frame = await codec.getNextFrame();
+    final decoded = frame.image;
     try {
       final targetWidth =
           decoded.width > decoded.height
@@ -144,6 +166,7 @@ class _MusicDeckCreatePlaylistDialogState
       }
     } finally {
       decoded.dispose();
+      codec.dispose();
     }
   }
 

@@ -26,6 +26,7 @@ import com.omninest.modules.file.service.FileIngressLifecycleService.IngressComm
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.file.repository.FileIngressItemRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -73,6 +74,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class ExternalImportExecutionService {
     private final StorageImportTaskRepository importTaskRepository;
+    private final FileIngressItemRepository ingressItemRepository;
     private final StorageExternalAccountRepository accountRepository;
     private final FileNodeRepository fileNodeRepository;
     private final FileObjectRepository fileObjectRepository;
@@ -862,7 +864,8 @@ public class ExternalImportExecutionService {
      * 不能因任务未完成而漏记；个人任务沿用预留结算（失败路径即释放差额）。
      */
     private void settleImportQuota(StorageImportTask task) {
-        long importedBytes = task.getTransferredBytes();
+        // 进度列含临时下载与失败文件字节，不能作为入库量；按实际生成 FileNode 的入库记录结算。
+        long importedBytes = ingressItemRepository.sumImportedBytesByTaskId(task.getId());
         if (SpaceType.SHARED == resolveSpaceType(task)) {
             if (importedBytes > 0) {
                 sharedSpaceQuotaService.increaseUsage(importedBytes, task.getCompletedFiles());

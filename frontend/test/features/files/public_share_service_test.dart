@@ -112,6 +112,7 @@ class _FakePublicShareRepository implements PublicShareRepository {
     String token, {
     String? password,
     String? authToken,
+    String? targetParentId,
   }) async {
     acceptCalls += 1;
     lastPassword = password;

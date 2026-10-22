@@ -130,10 +130,15 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
 /// 保存到"我的文件"的主操作按钮；文件态与文件夹态共用一份，
 /// 避免同一页面出现两处内联转圈。
 class _SaveToMyFilesButton extends StatelessWidget {
-  const _SaveToMyFilesButton({required this.saving, required this.onAccept});
+  const _SaveToMyFilesButton({
+    required this.saving,
+    required this.onAccept,
+    this.label,
+  });
 
   final bool saving;
   final VoidCallback onAccept;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +154,7 @@ class _SaveToMyFilesButton extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
                 : const Icon(Icons.save_alt),
-        label: Text(AppLocalizations.of(context).filesSaveToMyFiles),
+        label: Text(label ?? AppLocalizations.of(context).filesSaveToMyFiles),
       ),
     );
   }

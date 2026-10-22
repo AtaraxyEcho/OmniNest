@@ -118,6 +118,11 @@ file:
     max-files-per-task: 10000
     max-derived-asset-bytes: 536870912
 
+video:
+  stream:
+    max-concurrent-streams: ${OMNINEST_VIDEO_STREAM_MAX_CONCURRENT:4}
+    slot-wait-timeout: 2s
+
 reader:
   archive-limits:
     max-archive-bytes: 2147483648

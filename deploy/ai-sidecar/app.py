@@ -3,6 +3,8 @@ OmniNest 图像识别侧车服务。
 提供人脸检测、人脸嵌入和人脸聚类功能。
 """
 
+import base64
+import binascii
 import hashlib
 import hmac
 import io
@@ -139,15 +141,16 @@ async def _read_bounded_image(image: UploadFile) -> bytes:
     if not chunks:
         raise HTTPException(status_code=400, detail="Image is empty")
 
+    payload = bytes(chunks)
     try:
-        await to_thread(_verify_image_bounds, bytes(chunks))
+        await to_thread(_verify_image_bounds, payload)
     except HTTPException:
         raise
     except Image.DecompressionBombError as exception:
         raise HTTPException(status_code=413, detail="Image exceeds maximum pixel limit") from exception
     except Exception as exception:
         raise HTTPException(status_code=400, detail="Unable to decode image") from exception
-    return bytes(chunks)
+    return payload
 
 
 @asynccontextmanager
@@ -241,7 +244,25 @@ class ContentAnalysis(BaseModel):
 
 
 class ClusterRequest(BaseModel):
-    embeddings: list[list[float]] = Field(max_length=MAX_CLUSTER_FACES)
+    dimension: int
+    count: int = Field(ge=0, le=MAX_CLUSTER_FACES)
+    embeddings_base64: str = Field(alias="embeddingsBase64")
+
+    model_config = {"populate_by_name": True}
+
+
+def _decode_cluster_embeddings(request: ClusterRequest) -> "np.ndarray":
+    """把 base64 浮点矩阵还原为二维数组，并校验长度与维度。"""
+    if request.dimension != FACE_EMBEDDING_DIMENSION:
+        raise HTTPException(status_code=422, detail="Invalid face embedding dimension")
+    try:
+        raw = base64.b64decode(request.embeddings_base64, validate=True)
+    except (binascii.Error, ValueError) as exception:
+        raise HTTPException(status_code=422, detail="Invalid face embedding payload") from exception
+    expected_bytes = request.count * request.dimension * 4
+    if len(raw) != expected_bytes:
+        raise HTTPException(status_code=422, detail="Face embedding payload size mismatch")
+    return np.frombuffer(raw, dtype="<f4").reshape(request.count, request.dimension)
 
 
 def _analyze_content_sync(contents: bytes) -> ContentAnalysis:
@@ -379,10 +400,7 @@ async def cluster_faces(request: ClusterRequest):
         from sklearn.cluster import DBSCAN
         from sklearn.preprocessing import normalize
 
-        if any(len(embedding) != FACE_EMBEDDING_DIMENSION for embedding in request.embeddings):
-            raise HTTPException(status_code=422, detail="Invalid face embedding dimension")
-
-        embeddings = np.asarray(request.embeddings, dtype=np.float32)
+        embeddings = _decode_cluster_embeddings(request)
         if not np.isfinite(embeddings).all():
             raise HTTPException(status_code=422, detail="Face embeddings must be finite")
         if len(embeddings) == 0:

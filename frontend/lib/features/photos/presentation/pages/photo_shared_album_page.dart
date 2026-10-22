@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -52,23 +53,12 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
   /// 共享相册续页：页码递增追加以 id 去重，失败静默等待下次触底。
   Future<void> _loadMore() async {
     final album = _album;
-    final sessionToken = _sessionToken;
-    if (album == null ||
-        sessionToken == null ||
-        !album.hasMore ||
-        _loadingMore) {
+    if (album == null || !album.hasMore || _loadingMore) {
       return;
     }
     _loadingMore = true;
     try {
-      // 分享访客页绕开照片中心控制器，见 photo_shared_item_page 同处注释。
-      final repo = ref.read(photoRepositoryProvider);
-      final next = await repo.accessSharedAlbum(
-        widget.token,
-        sessionToken: sessionToken,
-        page: album.page + 1,
-        size: album.size,
-      );
+      final next = await _accessSharedPage(album.page + 1, album.size);
       if (!mounted) {
         return;
       }
@@ -86,10 +76,59 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
           total: next.total,
         );
       });
-    } on Object {
-      // 续页失败静默：访客页无重试条，下次触底自动重试。
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      // 会话过期与网络失败都不能静默：访客会误以为相册到底了。
+      showOmniFeedback(
+        context,
+        AppLocalizations.of(context).photosSharedAlbumLoadMoreFailed(
+          describeUserFacingError(error).displayMessage,
+        ),
+        severity: OmniFeedbackSeverity.error,
+      );
     } finally {
       _loadingMore = false;
+    }
+  }
+
+  /// 读取共享相册分页；访客会话过期时自动重新授权一次再重试。
+  Future<PhotoSharedAlbum> _accessSharedPage(int page, int size) async {
+    final repo = ref.read(photoRepositoryProvider);
+    var sessionToken = _sessionToken;
+    if (sessionToken == null) {
+      sessionToken = await repo.authorizeSharedAlbum(
+        widget.token,
+        password: _password,
+      );
+      _sessionToken = sessionToken;
+    }
+    try {
+      return await repo.accessSharedAlbum(
+        widget.token,
+        sessionToken: sessionToken,
+        page: page,
+        size: size,
+      );
+    } on Object catch (error) {
+      final code = describeUserFacingError(error).code;
+      final expired =
+          code == AppErrorCodes.shareSessionInvalid || code == 'UNAUTHORIZED';
+      if (!expired) {
+        rethrow;
+      }
+      final renewed = await repo.authorizeSharedAlbum(
+        widget.token,
+        password: _password,
+      );
+      _sessionToken = renewed;
+      return repo.accessSharedAlbum(
+        widget.token,
+        sessionToken: renewed,
+        page: page,
+        size: size,
+      );
     }
   }
 
@@ -208,6 +247,7 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
           _SharedPhotoLightbox(
             photos: album.photos,
             index: index,
+            total: album.total > 0 ? album.total : album.photos.length,
             onIndexChanged: (next) => setState(() => _lightboxIndex = next),
             onClose: () => setState(() => _lightboxIndex = null),
           ),
@@ -552,110 +592,199 @@ class _SharedAlbumTile extends StatelessWidget {
 }
 
 /// 公开相册的页内全屏预览覆盖层：大图、左右翻页与下载，不改分享令牌语义。
-class _SharedPhotoLightbox extends StatelessWidget {
+class _SharedPhotoLightbox extends StatefulWidget {
   const _SharedPhotoLightbox({
     required this.photos,
     required this.index,
+    required this.total,
     required this.onIndexChanged,
     required this.onClose,
   });
 
   final List<PhotoItem> photos;
   final int index;
+  final int total;
   final ValueChanged<int> onIndexChanged;
   final VoidCallback onClose;
 
   @override
+  State<_SharedPhotoLightbox> createState() => _SharedPhotoLightboxState();
+}
+
+class _SharedPhotoLightboxState extends State<_SharedPhotoLightbox> {
+  late final PageController _controller;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.index;
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SharedPhotoLightbox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index == _index) {
+      return;
+    }
+    _index = widget.index;
+    if (!_controller.hasClients) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _controller.hasClients) {
+        _controller.jumpToPage(_index);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int next) {
+    if (next < 0 || next >= widget.photos.length) {
+      return;
+    }
+    _controller.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      _goTo(_index - 1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      _goTo(_index + 1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      widget.onClose();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final photo = photos[index];
-    // 关闭原图质量时服务端不签发 sourceUrl：预览退回封面，下载入口隐藏。
-    final displayUrl = photo.sourceUrl ?? photo.coverUrl;
-    final sourceUrl = photo.sourceUrl;
+    final total = widget.total > 0 ? widget.total : widget.photos.length;
     return Positioned.fill(
-      child: ColoredBox(
-        color: const Color(0xF2000000),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '${index + 1} / ${photos.length}',
-                        style: const TextStyle(color: Colors.white),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: _handleKey,
+        child: ColoredBox(
+          color: const Color(0xF2000000),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          '${_index + 1} / $total',
+                          style: const TextStyle(color: Colors.white),
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip:
-                        sourceUrl == null
-                            ? l10n.photosDownloadSourceUnavailable
-                            : l10n.photosDownloadPhoto,
-                    icon: const Icon(Icons.download_rounded),
-                    color: Colors.white,
-                    onPressed:
-                        sourceUrl == null
-                            ? null
-                            : () => _download(context, sourceUrl, photo),
-                  ),
-                  IconButton(
-                    tooltip: l10n.corePrevious,
-                    icon: const Icon(Icons.chevron_left_rounded),
-                    color: Colors.white,
-                    onPressed:
-                        index > 0 ? () => onIndexChanged(index - 1) : null,
-                  ),
-                  IconButton(
-                    tooltip: l10n.coreNext,
-                    icon: const Icon(Icons.chevron_right_rounded),
-                    color: Colors.white,
-                    onPressed:
-                        index < photos.length - 1
-                            ? () => onIndexChanged(index + 1)
-                            : null,
-                  ),
-                  IconButton(
-                    tooltip: l10n.coreClose,
-                    icon: const Icon(Icons.close_rounded),
-                    color: Colors.white,
-                    onPressed: onClose,
-                  ),
-                ],
-              ),
-              Expanded(
-                child:
-                    displayUrl == null || displayUrl.isEmpty
-                        ? Center(
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            size: 48,
-                            color: Colors.white54,
-                          ),
-                        )
-                        : InteractiveViewer(
-                          child: Center(
-                            // 分享页大图同样按屏宽量化解码档位：手机浏览器直接解码
-                            // 高像素原图会卡住主线程并把位图堆满内存。
-                            child: CachedNetworkImage(
-                              imageUrl: displayUrl,
-                              fit: BoxFit.contain,
-                              memCacheWidth: quantizedDecodeWidth(
-                                logicalWidth: MediaQuery.sizeOf(context).width,
-                                devicePixelRatio: MediaQuery.devicePixelRatioOf(
-                                  context,
-                                ),
-                                step: 256,
-                                min: 512,
-                                max: 4096,
+                    IconButton(
+                      tooltip:
+                          widget.photos[_index].sourceUrl == null
+                              ? l10n.photosDownloadSourceUnavailable
+                              : l10n.photosDownloadPhoto,
+                      icon: const Icon(Icons.download_rounded),
+                      color: Colors.white,
+                      onPressed:
+                          widget.photos[_index].sourceUrl == null
+                              ? null
+                              : () => _download(
+                                context,
+                                widget.photos[_index].sourceUrl!,
+                                widget.photos[_index],
                               ),
-                            ),
-                          ),
-                        ),
-              ),
-            ],
+                    ),
+                    IconButton(
+                      tooltip: l10n.corePrevious,
+                      icon: const Icon(Icons.chevron_left_rounded),
+                      color: Colors.white,
+                      onPressed: _index > 0 ? () => _goTo(_index - 1) : null,
+                    ),
+                    IconButton(
+                      tooltip: l10n.coreNext,
+                      icon: const Icon(Icons.chevron_right_rounded),
+                      color: Colors.white,
+                      onPressed:
+                          _index < widget.photos.length - 1
+                              ? () => _goTo(_index + 1)
+                              : null,
+                    ),
+                    IconButton(
+                      tooltip: l10n.coreClose,
+                      icon: const Icon(Icons.close_rounded),
+                      color: Colors.white,
+                      onPressed: widget.onClose,
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: widget.photos.length,
+                    onPageChanged: (next) {
+                      setState(() => _index = next);
+                      widget.onIndexChanged(next);
+                    },
+                    itemBuilder:
+                        (context, photoIndex) =>
+                            _buildPhoto(context, widget.photos[photoIndex]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhoto(BuildContext context, PhotoItem photo) {
+    // 关闭原图质量时服务端不签发 sourceUrl：预览退回封面，下载入口隐藏。
+    final displayUrl = photo.sourceUrl ?? photo.coverUrl;
+    if (displayUrl == null || displayUrl.isEmpty) {
+      return const Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          size: 48,
+          color: Colors.white54,
+        ),
+      );
+    }
+    return InteractiveViewer(
+      child: Center(
+        // 分享页大图同样按屏宽量化解码档位：手机浏览器直接解码
+        // 高像素原图会卡住主线程并把位图堆满内存。
+        child: CachedNetworkImage(
+          imageUrl: displayUrl,
+          fit: BoxFit.contain,
+          memCacheWidth: quantizedDecodeWidth(
+            logicalWidth: MediaQuery.sizeOf(context).width,
+            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+            step: 256,
+            min: 512,
+            max: 4096,
           ),
         ),
       ),

@@ -486,8 +486,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
                                 onVolumeChanged: (v) {
                                   _volume = v;
                                   _isMuted = v <= 0;
+                                  // 音量滑块本身由 _volumeListenable 重建，无需整页 setState。
                                   _volumeListenable.value = v;
-                                  setState(() {});
                                 },
                                 setPlayerVolume: _player.setVolume,
                                 playbackSpeed: _playbackSpeed,
@@ -795,8 +795,15 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
       final cues = parseSubtitleContent(subtitleContent);
       devLog('字幕解析完成: ${cues.length} 条字幕');
       _displaySubtitleCues(cues, generation);
-    } catch (_) {
-      devLog('WebVTT 获取失败');
+    } catch (error) {
+      devLog('WebVTT 获取失败: $error');
+      if (!mounted || generation != _subtitleGeneration) return;
+      _disableSubtitle();
+      showMovieFeedback(
+        context,
+        AppLocalizations.of(context).videoSubtitleDisplayFailed,
+        isError: true,
+      );
     }
   }
 

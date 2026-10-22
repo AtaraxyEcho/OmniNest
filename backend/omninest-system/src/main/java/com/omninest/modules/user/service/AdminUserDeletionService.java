@@ -4,8 +4,12 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
+import com.omninest.common.storage.ObjectStorageBuckets;
+import com.omninest.common.storage.ObjectStorageClient;
+import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.preferences.service.UserPreferenceService;
+import com.omninest.modules.quota.port.UserProfileCacheEvictor;
 import com.omninest.modules.quota.service.StorageQuotaReservationService;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
@@ -14,10 +18,12 @@ import com.omninest.modules.user.repository.AuthBackupCodeRepository;
 import com.omninest.modules.user.repository.AuthTotpCredentialRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.util.AuthUserMapper;
+import com.omninest.modules.user.util.UserAvatarObjectKeys;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @author OmniNest
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminUserDeletionService {
     private static final String DELETE_AUDIT_ACTION = "ADMIN_USER_DELETE";
@@ -49,6 +56,9 @@ public class AdminUserDeletionService {
     private final AdminAuditLogService auditLogService;
     private final CurrentUserContext currentUserContext;
     private final AdminActorGuard adminActorGuard;
+    private final ObjectStorageClient objectStorageClient;
+    private final ObjectStorageBuckets objectStorageBuckets;
+    private final UserProfileCacheEvictor userProfileCacheEvictor;
 
     /**
      * 物理删除空账户用户。
@@ -63,6 +73,7 @@ public class AdminUserDeletionService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteUser(UUID userId) {
         UUID actorUserId = currentUserContext.requireCurrentUserId();
+        UUID avatarFileId = null;
         if (actorUserId.equals(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "不能删除当前登录账户");
         }
@@ -76,6 +87,7 @@ public class AdminUserDeletionService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "仅超级管理员可删除管理员账户");
         }
         requireEmptyAccount(user);
+        avatarFileId = user.getAvatarFileId();
         // 先撤销全部令牌并保留撤销记录：认证过滤器按撤销记录拒绝已签发
         // access token（记录随保留期清理），避免删除会话行后旧令牌在 TTL
         // 窗口内继续可用。
@@ -90,6 +102,8 @@ public class AdminUserDeletionService {
         // 清空角色集合使 Hibernate 在删除用户行之前先移除全部绑定行。
         user.getRoles().clear();
         authUserRepository.delete(user);
+        userProfileCacheEvictor.evictProfileCache(userId);
+        removeAvatarQuietly(userId, avatarFileId);
         auditLogService.recordWithPayload(
                 actorUserId,
                 DELETE_AUDIT_ACTION,
@@ -97,6 +111,21 @@ public class AdminUserDeletionService {
                 userId,
                 Map.of("username", user.getUsername())
         );
+    }
+
+    private void removeAvatarQuietly(UUID userId, UUID avatarFileId) {
+        if (avatarFileId == null) {
+            return;
+        }
+        try {
+            objectStorageClient.removeObject(new ObjectStorageKey(
+                    objectStorageBuckets.derivedAssets(),
+                    UserAvatarObjectKeys.objectKey(userId, avatarFileId)
+            ));
+        } catch (RuntimeException exception) {
+            log.warn("删除用户时头像对象清理失败: userId={}, errorType={}",
+                    userId, exception.getClass().getSimpleName());
+        }
     }
 
     /**

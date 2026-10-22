@@ -137,7 +137,8 @@ public class UserStorageCommandService implements UserStorageCommand {
                 user.getRoles().stream().map(AuthRole::getId).collect(Collectors.toSet()),
                 user.getRoles().stream().anyMatch(role -> Roles.SUPER_ADMIN.equals(role.getCode())),
                 user.getQuotaBytes(),
-                user.getUsedBytes()
+                user.getUsedBytes(),
+                user.getReservedBytes()
         );
     }
 }

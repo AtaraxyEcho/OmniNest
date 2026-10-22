@@ -165,7 +165,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             int startIndex = startIndexForQuality(quality);
             for (int i = startIndex; i < QUALITY_LEVELS.size(); i++) {
                 String level = QUALITY_LEVELS.get(i);
-                String path = "/song/url/v1?id=" + songId
+                String path = "/song/url/v1?id=" + encode(songId)
                         + "&level=" + level
                         + "&timestamp=" + System.currentTimeMillis();
                 JsonNode json = requestJson(path, cookie(ownerUserId));
@@ -207,7 +207,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         }
         try {
             String cookie = cookie(ownerUserId);
-            String path = "/lyric?id=" + songId
+            String path = "/lyric?id=" + encode(songId)
                     + "&timestamp=" + System.currentTimeMillis();
             JsonNode json = requestJson(path, cookie);
             if (json == null) {
@@ -250,7 +250,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
      */
     private String fetchWordLyrics(String songId, String cookie) {
         try {
-            String path = "/lyric/new?id=" + songId
+            String path = "/lyric/new?id=" + encode(songId)
                     + "&timestamp=" + System.currentTimeMillis();
             JsonNode json = requestJson(path, cookie);
             if (json == null) {

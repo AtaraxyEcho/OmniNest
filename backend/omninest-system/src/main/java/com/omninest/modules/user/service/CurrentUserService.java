@@ -172,6 +172,7 @@ public class CurrentUserService implements UserProfileCacheEvictor {
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
         // 每次上传换一个新标识，对象键随之改变：旧头像对象既不会被读到，也不会因浏览器
         // 按同键缓存而停留在旧图。
+        UUID oldAvatarFileId = user.getAvatarFileId();
         UUID avatarFileId = UUID.randomUUID();
         ObjectStorageKey storageKey = new ObjectStorageKey(
                 objectStorageBuckets.derivedAssets(),
@@ -202,10 +203,29 @@ public class CurrentUserService implements UserProfileCacheEvictor {
             ));
         });
         evictProfileCache(userId);
+        removeAvatarQuietly(userId, oldAvatarFileId);
 
         log.info("头像已上传: userId={}, assetType=AVATAR", userId);
 
         return objectStorageClient.createDownloadUrl(storageKey, Duration.ofHours(24)).toString();
+    }
+
+    /**
+     * 旧头像不再被任何资料引用，提交新头像后删除其对象，避免每次换头像留下孤儿。
+     */
+    private void removeAvatarQuietly(UUID userId, UUID avatarFileId) {
+        if (avatarFileId == null) {
+            return;
+        }
+        try {
+            objectStorageClient.removeObject(new ObjectStorageKey(
+                    objectStorageBuckets.derivedAssets(),
+                    UserAvatarObjectKeys.objectKey(userId, avatarFileId)
+            ));
+        } catch (RuntimeException exception) {
+            log.warn("旧头像对象清理失败: userId={}, assetType=AVATAR, errorType={}",
+                    userId, exception.getClass().getSimpleName());
+        }
     }
 
     private String requireSafeAvatar(MultipartFile file) {

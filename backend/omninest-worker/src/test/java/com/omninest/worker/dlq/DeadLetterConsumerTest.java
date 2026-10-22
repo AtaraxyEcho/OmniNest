@@ -60,7 +60,8 @@ class DeadLetterConsumerTest {
                 .contains("原始路由键: media.scrape")
                 .contains("投递失败: AmqpConnectException/BROKER_UNAVAILABLE")
                 .contains("@api-1")
-                .contains("死信载荷:");
+                .contains("taskId: " + taskId)
+                .doesNotContain("payload");
     }
 
     @Test

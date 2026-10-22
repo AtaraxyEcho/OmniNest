@@ -581,6 +581,39 @@ class FileQueryServiceTest {
     }
 
     @Test
+    void restoreNodeRestoresDeletedAncestorChain() {
+        UUID parentId = UUID.fromString("40000000-0000-0000-0000-000000000030");
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000031");
+        FileNode parent = node(OWNER_ID, null, "FOLDER", "folder", "/folder");
+        parent.setId(parentId);
+        parent.setDeleted(true);
+        parent.setDeletedBy(OWNER_ID);
+        FileNode child = node(OWNER_ID, parentId, "FILE", "old.txt", "/folder/old.txt");
+        child.setId(fileId);
+        child.setDeleted(true);
+        child.setDeletedBy(OWNER_ID);
+        when(fileNodeRepository.findByIdAndOwnerUserId(fileId, OWNER_ID)).thenReturn(Optional.of(child));
+        when(fileNodeRepository.findById(parentId)).thenReturn(Optional.of(parent));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "folder")).thenReturn(false);
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, parentId, "old.txt")).thenReturn(false);
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "/folder/old.txt/")).thenReturn(List.of());
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileQueryService.restoreNode(OWNER_ID, fileId);
+
+        assertThat(parent.isDeleted()).isFalse();
+        assertThat(child.isDeleted()).isFalse();
+        ArgumentCaptor<FileNodesRestoredEvent> captor =
+                ArgumentCaptor.forClass(FileNodesRestoredEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().fileNodeIds()).containsExactlyInAnyOrder(parentId, fileId);
+    }
+
+    @Test
     void restoreNodePersonalSpaceKeepsOwnerScopeAndSkipsSharedLedger() {
         UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000022");
         FileNode deleted = node(OWNER_ID, null, "FILE", "old.txt", "/old.txt");

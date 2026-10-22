@@ -71,9 +71,16 @@ class AdminTableSection extends StatelessWidget {
 
 /// 列表空态：左对齐行式提示（符合 admin 页面布局惯例）。
 class AdminListEmptyState extends StatelessWidget {
-  const AdminListEmptyState({required this.message, super.key});
+  const AdminListEmptyState({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    super.key,
+  });
 
   final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +94,13 @@ class AdminListEmptyState extends StatelessWidget {
             color: Theme.of(context).colorScheme.outline,
           ),
           const SizedBox(width: 8),
-          Text(message, style: Theme.of(context).textTheme.bodyMedium),
+          Flexible(
+            child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 12),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
         ],
       ),
     );

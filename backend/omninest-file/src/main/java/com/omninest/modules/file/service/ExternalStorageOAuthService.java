@@ -90,7 +90,7 @@ public class ExternalStorageOAuthService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Client ID 与回调地址不能为空");
         }
         StorageConnectorOAuthApp app = oauthAppRepository
-                .findFirstByConnectorCodeAndEnabledTrue(code)
+                .findFirstByConnectorCode(code)
                 .orElseGet(StorageConnectorOAuthApp::new);
         boolean secretMissing = request.clientSecret() == null || request.clientSecret().isBlank();
         if (secretMissing && app.getClientSecretEncrypted() == null) {

@@ -138,6 +138,10 @@ public class TranscodeExecutionService {
      */
     public boolean executeAudioTranscode(UUID taskId, UUID videoItemId, UUID ownerUserId, boolean markTaskCompleted) {
         log.info("音频提取任务开始: taskId={}, videoItemId={}, ownerUserId={}", taskId, videoItemId, ownerUserId);
+        if (markTaskCompleted && !taskRecordService.claimForExecution(taskId, "TRANSCODING")) {
+            return false;
+        }
+
         MediaVideoItem sourceItem = findActiveSource(taskId, videoItemId, ownerUserId);
         if (sourceItem == null) {
             return false;
@@ -151,6 +155,9 @@ public class TranscodeExecutionService {
                 .findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(ownerUserId, videoItemId, "AUDIO_ONLY");
         if (existing.isPresent()) {
             log.info("音频缓存已存在，跳过: videoItemId={}, existingId={}", videoItemId, existing.get().getId());
+            if (markTaskCompleted) {
+                taskRecordService.markCompleted(taskId, Map.of("status", "skipped", "reason", "already exists"));
+            }
             return true;
         }
 
@@ -277,6 +284,10 @@ public class TranscodeExecutionService {
      */
     public void executeWebOptimize(UUID taskId, UUID videoItemId, UUID ownerUserId, boolean markTaskCompleted) {
         log.info("Web 优化转码开始: taskId={}, videoItemId={}, ownerUserId={}", taskId, videoItemId, ownerUserId);
+        if (markTaskCompleted && !taskRecordService.claimForExecution(taskId, "TRANSCODING")) {
+            return;
+        }
+
         MediaVideoItem sourceItem = findActiveSource(taskId, videoItemId, ownerUserId);
         if (sourceItem == null) {
             return;

@@ -10,6 +10,7 @@ import com.omninest.modules.quota.repository.StorageQuotaReservationRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -118,6 +119,20 @@ public class StorageQuotaReservationService {
                 .findBySourceTypeAndSourceId(normalizeSourceType(sourceType), sourceId)
                 .map(StorageQuotaReservation::getCommittedBytes)
                 .orElse(0L);
+    }
+
+    /**
+     * 查询来源预留的归属用户，供缓存失效使用。
+     *
+     * @param sourceType 来源类型
+     * @param sourceId 来源业务 ID
+     * @return 归属用户；无预留时为空
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> ownerUserId(String sourceType, UUID sourceId) {
+        return reservationRepository
+                .findBySourceTypeAndSourceId(normalizeSourceType(sourceType), sourceId)
+                .map(StorageQuotaReservation::getOwnerUserId);
     }
 
     private UserAccountSummary requireAccount(UUID userId) {

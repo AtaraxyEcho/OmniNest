@@ -100,6 +100,7 @@
   "setupFeatureReader": "Reader · offline sync",
   "adminSearchHint": "Search…",
   "adminNoMatch": "No matching data found.",
+  "adminClearFilters": "Clear filters",
   "notificationTitle": "Notifications",
   "notificationTitleWithCount": "Notifications ({count})",
   "@notificationTitleWithCount": {
@@ -988,6 +989,7 @@
   "filesEnterSharePassword": "Enter share password to view the file",
   "filesAccess": "Access",
   "filesSaveToMyFiles": "Save to my files",
+  "filesSaveWholeSharedFolder": "Save the entire shared folder",
   "filesDelete": "Delete",
   "filesCancel": "Cancel",
   "filesConfirm": "Confirm",
@@ -3174,6 +3176,7 @@
   "videoSubtitleManagement": "Subtitle Management",
   "videoNoSubtitles": "No subtitles available",
   "videoSubtitleLoadFailed": "Failed to load subtitle info",
+  "videoSubtitleDisplayFailed": "Failed to load subtitles",
   "videoUploading": "Uploading...",
   "videoUploadSubtitle": "Upload Subtitle File",
   "videoSubtitleUploaded": "Subtitle uploaded successfully",
@@ -3825,9 +3828,15 @@
     }
   },
   "photosSharedAlbumAccessError": "Cannot access shared album: {error}",
+  "photosSharedAlbumLoadMoreFailed": "Failed to load more photos: {message}",
   "@photosSharedAlbumAccessError": {
     "placeholders": {
       "error": {}
+    }
+  },
+  "@photosSharedAlbumLoadMoreFailed": {
+    "placeholders": {
+      "message": {}
     }
   },
   "photosSharedAlbumPasswordRequired": "This album requires password access",
@@ -4003,6 +4012,7 @@
   "musicPlaylistCoverPick": "Choose cover",
   "musicPlaylistCoverChange": "Change cover",
   "musicPlaylistCoverHint": "Uses the first song cover when no image is selected",
+  "musicPlaylistCoverTooLarge": "Cover image must be 8 MB or smaller",
   "musicPlaylistSaveFailed": "Could not save playlist: {error}",
   "@musicPlaylistSaveFailed": {
     "placeholders": {
@@ -5043,6 +5053,7 @@
   "errorUnnamedFile": "Unnamed",
   "errorUnnamedResource": "Unnamed resource",
   "errorUploadUrlMissing": "Invalid upload URL",
+  "filesVersionUploadIncomplete": "The new version was not uploaded",
   "errorSecurityScanFailed": "Security scan did not finish. The file is kept; check the library later or import again.",
   "errorOtherCategory": "Other",
   "musicBatchFailedTitles": "Failed: {titles}",

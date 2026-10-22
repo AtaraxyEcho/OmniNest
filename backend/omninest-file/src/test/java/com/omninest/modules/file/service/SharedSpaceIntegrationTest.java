@@ -13,6 +13,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
@@ -78,6 +80,9 @@ class SharedSpaceIntegrationTest {
     private final ConfigValueProvider configValueProvider = mock(ConfigValueProvider.class);
     private final ApplicationEventPublisher eventPublisher =
             mock(ApplicationEventPublisher.class);
+    private final FileIndexSyncService fileIndexSyncService = mock(FileIndexSyncService.class);
+    private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
+    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
 
     private SharedSpaceService service;
 
@@ -91,7 +96,8 @@ class SharedSpaceIntegrationTest {
         service = new SharedSpaceService(
                 fileNodeRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, shareLinkRepository,
-                fileNodePermissionRepository, configValueProvider, eventPublisher
+                fileNodePermissionRepository, configValueProvider, eventPublisher,
+                fileIndexSyncService, syncEventRecorder, readThroughCache
         );
     }
 

@@ -482,7 +482,10 @@ public class MusicLibraryService {
     public MusicTrackDto getLastPlayed(UUID ownerUserId) {
         return playHistoryRepository
                 .findFirstByOwnerUserIdAndTrackIdIsNotNullOrderByPlayedAtDesc(ownerUserId)
-                .flatMap(history -> trackRepository.findById(history.getTrackId()))
+                .flatMap(history -> trackRepository
+                        .findTracksVisibleToUserByIds(ownerUserId, List.of(history.getTrackId()))
+                        .stream()
+                        .findFirst())
                 .map(track -> toTrackDto(
                         track,
                         favoriteRepository.existsByOwnerUserIdAndTrackId(ownerUserId, track.getId())
@@ -555,13 +558,24 @@ public class MusicLibraryService {
                 history.getVersion(),
                 Map.of()
         );
-        int deleted = playHistoryRepository.deleteExpiredHistory(
-                ownerUserId,
-                history.getPlayedAt().minus(playHistoryRetention())
-        );
+    }
+
+    /**
+     * 清理全部用户过期的音乐播放历史。
+     *
+     * <p>过期清理由调度器统一执行，不再挂在每次记录播放历史的事务里，
+     * 避免单曲记录路径反复执行全表范围的删除。</p>
+     *
+     * @return 删除条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int cleanupExpiredPlayHistory() {
+        int deleted = playHistoryRepository.deleteAllExpiredHistory(
+                Instant.now().minus(playHistoryRetention()));
         if (deleted > 0) {
-            log.debug("已清理过期音乐播放历史: userId={}, count={}", ownerUserId, deleted);
+            log.info("已清理过期音乐播放历史: count={}", deleted);
         }
+        return deleted;
     }
 
     private OnlineTrackDto toOnlineTrackDto(MusicPlayHistory history) {
