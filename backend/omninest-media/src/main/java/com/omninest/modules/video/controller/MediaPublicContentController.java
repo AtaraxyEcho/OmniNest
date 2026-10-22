@@ -2,7 +2,6 @@ package com.omninest.modules.video.controller;
 
 import com.omninest.modules.file.dto.FileContentResource;
 import com.omninest.modules.file.dto.FileContentStream;
-import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.service.MediaContentAccessService;
 import com.omninest.modules.video.service.MoviePlaybackService;
 import com.omninest.modules.video.service.VideoStreamService;
@@ -67,13 +66,15 @@ public class MediaPublicContentController {
             @RequestParam(defaultValue = "cached") String audioMode,
             HttpServletResponse response
     ) throws IOException {
-        MediaVideoItem item = mediaContentAccessService.requireTokenVideo(token, videoItemId);
+        MediaContentAccessService.TokenVideoAccess access =
+                mediaContentAccessService.requireTokenVideoAccess(token, videoItemId);
         response.setContentType("video/mp4");
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader("Transfer-Encoding", "chunked");
         videoStreamService.streamByAudioMode(
-                item.getOwnerUserId(),
-                item.getId(),
+                access.item().getOwnerUserId(),
+                access.item().getId(),
+                access.requesterUserId(),
                 Math.max(0, start),
                 audioMode,
                 response.getOutputStream()

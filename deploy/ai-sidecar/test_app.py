@@ -219,6 +219,15 @@ class SidecarBoundaryTest(unittest.TestCase):
                 app._decode_cluster_embeddings(broken)
             self.assertEqual(422, mismatch.exception.status_code)
 
+    def test_decode_cluster_embeddings_accepts_legacy_json_array(self):
+        """滚动升级期间仍接受旧后端的 JSON 浮点数组。"""
+        with patch.object(app, "FACE_EMBEDDING_DIMENSION", 4):
+            request = app.ClusterRequest(embeddings=[[0.1, 0.2, 0.3, 0.4]])
+            decoded = app._decode_cluster_embeddings(request)
+
+            self.assertEqual((1, 4), decoded.shape)
+            self.assertAlmostEqual(0.4, float(decoded[0][3]), places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

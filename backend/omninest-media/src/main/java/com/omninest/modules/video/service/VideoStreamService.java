@@ -10,7 +10,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,6 +52,9 @@ public class VideoStreamService {
      * 客户端已断开的旧进程释放槽位，仍取不到才拒绝新流。</p>
      */
     private final Semaphore streamSlots;
+
+    /** 同一观看者同一影片只保留最新一路 ffmpeg；拖动进度条重开流时先杀掉旧进程。 */
+    private final Map<String, Process> activeStreams = new ConcurrentHashMap<>();
 
     /**
      * 占用一路实时转码槽位，取不到时返回可重试的业务错误。
@@ -119,8 +124,30 @@ public class VideoStreamService {
             String audioMode,
             OutputStream output
     ) {
+        streamByAudioMode(ownerUserId, videoItemId, null, startSeconds, audioMode, output);
+    }
+
+    /**
+     * 按音频模式输出转码流，并按观看者替换上一次未结束的流。
+     *
+     * @param ownerUserId 目录所有者
+     * @param videoItemId 视频条目标识
+     * @param viewerUserId 实际观看者；为空时不启用同观看者旧流替换
+     * @param startSeconds 起始秒数
+     * @param audioMode 音频模式
+     * @param output HTTP 响应输出流
+     */
+    public void streamByAudioMode(
+            UUID ownerUserId,
+            UUID videoItemId,
+            UUID viewerUserId,
+            long startSeconds,
+            String audioMode,
+            OutputStream output
+    ) {
         MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
         UUID catalogOwnerId = sourceItem.getOwnerUserId();
+        String streamKey = streamKey(viewerUserId, videoItemId);
         var audioCached = videoItemRepository
                 .findByOwnerUserIdAndSourceVideoItemIdAndVersionLabel(
                         catalogOwnerId,
@@ -130,7 +157,12 @@ public class VideoStreamService {
         if ("cached".equals(audioMode) && audioCached.isPresent()) {
             UUID audioFileNodeId = audioCached.get().getFileNodeId();
             log.info("使用缓存音频 mux: videoItemId={}, audioFileNodeId={}", videoItemId, audioFileNodeId);
-            streamWithCachedAudio(catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, output);
+            if (streamKey == null) {
+                streamWithCachedAudio(catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, output);
+            } else {
+                streamWithCachedAudio(
+                        catalogOwnerId, videoItemId, audioFileNodeId, startSeconds, streamKey, output);
+            }
             return;
         }
         if ("cached".equals(audioMode)) {
@@ -138,7 +170,38 @@ public class VideoStreamService {
         } else {
             log.info("使用原始音频实时转码: videoItemId={}", videoItemId);
         }
-        streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, output);
+        if (streamKey == null) {
+            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, output);
+        } else {
+            streamAudioTranscoded(catalogOwnerId, videoItemId, startSeconds, streamKey, output);
+        }
+    }
+
+    private String streamKey(UUID viewerUserId, UUID videoItemId) {
+        return viewerUserId == null ? null : viewerUserId + ":" + videoItemId;
+    }
+
+    private void terminateActiveStream(String streamKey) {
+        if (streamKey == null) {
+            return;
+        }
+        Process previous = activeStreams.remove(streamKey);
+        if (previous != null) {
+            log.info("替换同一观看者的旧转码流: streamKey={}", streamKey);
+            terminateProcess(previous);
+        }
+    }
+
+    private void registerActiveStream(String streamKey, Process process) {
+        if (streamKey != null) {
+            activeStreams.put(streamKey, process);
+        }
+    }
+
+    private void unregisterActiveStream(String streamKey, Process process) {
+        if (streamKey != null) {
+            activeStreams.remove(streamKey, process);
+        }
     }
 
     /**
@@ -153,6 +216,12 @@ public class VideoStreamService {
     public void streamAudioTranscoded(
             UUID ownerUserId, UUID videoItemId, long startSeconds, OutputStream output
     ) {
+        streamAudioTranscoded(ownerUserId, videoItemId, startSeconds, null, output);
+    }
+
+    private void streamAudioTranscoded(
+            UUID ownerUserId, UUID videoItemId, long startSeconds, String streamKey, OutputStream output
+    ) {
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
 
         String internalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, item.getFileNodeId());
@@ -160,6 +229,7 @@ public class VideoStreamService {
                 videoItemId, item.getAudioCodec(), item.getContainerFormat(), startSeconds);
 
         String[] command = buildFfmpegTranscodeCommand(internalUrl, startSeconds);
+        terminateActiveStream(streamKey);
         requireStreamSlot(videoItemId);
 
         Process process = null;
@@ -167,6 +237,7 @@ public class VideoStreamService {
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(false);
             process = pb.start();
+            registerActiveStream(streamKey, process);
             log.info("ffmpeg 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
             AtomicBoolean timedOut = new AtomicBoolean();
@@ -202,6 +273,7 @@ public class VideoStreamService {
             Thread.currentThread().interrupt();
             log.warn("流式转码被中断: videoItemId={}", videoItemId);
         } finally {
+            unregisterActiveStream(streamKey, process);
             terminateProcess(process);
             releaseStreamSlot();
         }
@@ -220,6 +292,13 @@ public class VideoStreamService {
     public void streamWithCachedAudio(
             UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
             long startSeconds, OutputStream output
+    ) {
+        streamWithCachedAudio(ownerUserId, sourceVideoItemId, audioFileNodeId, startSeconds, null, output);
+    }
+
+    private void streamWithCachedAudio(
+            UUID ownerUserId, UUID sourceVideoItemId, UUID audioFileNodeId,
+            long startSeconds, String streamKey, OutputStream output
     ) {
         MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId);
 
@@ -253,6 +332,7 @@ public class VideoStreamService {
         ));
 
         String[] command = cmd.toArray(new String[0]);
+        terminateActiveStream(streamKey);
         requireStreamSlot(sourceVideoItemId);
 
         Process process = null;
@@ -260,6 +340,7 @@ public class VideoStreamService {
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(false);
             process = pb.start();
+            registerActiveStream(streamKey, process);
             log.info("ffmpeg mux 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
             AtomicBoolean timedOut = new AtomicBoolean();
@@ -299,6 +380,7 @@ public class VideoStreamService {
             Thread.currentThread().interrupt();
             log.warn("mux 被中断: sourceVideoItemId={}", sourceVideoItemId);
         } finally {
+            unregisterActiveStream(streamKey, process);
             terminateProcess(process);
             releaseStreamSlot();
         }

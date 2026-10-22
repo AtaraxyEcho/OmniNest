@@ -244,17 +244,26 @@ class ContentAnalysis(BaseModel):
 
 
 class ClusterRequest(BaseModel):
-    dimension: int
-    count: int = Field(ge=0, le=MAX_CLUSTER_FACES)
-    embeddings_base64: str = Field(alias="embeddingsBase64")
+    dimension: int | None = None
+    count: int | None = Field(default=None, ge=0, le=MAX_CLUSTER_FACES)
+    embeddings_base64: str | None = Field(default=None, alias="embeddingsBase64")
+    # 兼容滚动升级期间仍在发送旧 JSON 数组的后端实例。
+    embeddings: list[list[float]] | None = Field(default=None, max_length=MAX_CLUSTER_FACES)
 
     model_config = {"populate_by_name": True}
 
 
 def _decode_cluster_embeddings(request: ClusterRequest) -> "np.ndarray":
-    """把 base64 浮点矩阵还原为二维数组，并校验长度与维度。"""
+    """把 base64 浮点矩阵或旧 JSON 数组还原为二维数组，并校验长度与维度。"""
+    if request.embeddings_base64 is None and request.embeddings is not None:
+        embeddings = np.asarray(request.embeddings, dtype=np.float32)
+        if embeddings.ndim != 2 or embeddings.shape[1] != FACE_EMBEDDING_DIMENSION:
+            raise HTTPException(status_code=422, detail="Invalid face embedding dimension")
+        return embeddings
     if request.dimension != FACE_EMBEDDING_DIMENSION:
         raise HTTPException(status_code=422, detail="Invalid face embedding dimension")
+    if request.count is None or request.embeddings_base64 is None:
+        raise HTTPException(status_code=422, detail="Invalid face embedding payload")
     try:
         raw = base64.b64decode(request.embeddings_base64, validate=True)
     except (binascii.Error, ValueError) as exception:

@@ -144,11 +144,23 @@ public class MediaContentAccessService {
         return content;
     }
 
-    /** 校验短期令牌并返回可读影片，用于转码流。 */
+    /** 校验短期令牌并返回可读影片与请求者，用于按观看者替换旧转码流。 */
     @Transactional(readOnly = true)
-    public MediaVideoItem requireTokenVideo(String token, UUID videoItemId) {
+    public TokenVideoAccess requireTokenVideoAccess(String token, UUID videoItemId) {
         MediaPlaybackTokenService.MediaGrant grant = tokenService.requireGrant(token, videoItemId);
-        return requireReadableVideo(grant.requesterUserId(), videoItemId);
+        return new TokenVideoAccess(
+                requireReadableVideo(grant.requesterUserId(), videoItemId),
+                grant.requesterUserId()
+        );
+    }
+
+    /**
+     * 转码流令牌解析结果。
+     *
+     * @param item 可读影片
+     * @param requesterUserId 实际请求者
+     */
+    public record TokenVideoAccess(MediaVideoItem item, UUID requesterUserId) {
     }
 
     /** 使用影片令牌读取与该影片关联的 MinIO 派生资源。 */
