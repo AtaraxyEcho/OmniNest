@@ -74,7 +74,12 @@ public class FileManagerService {
     /** 单次打包总字节上限；默认 5GB，超限让客户端分批下载。 */
     private long maxBatchDownloadTotalBytes = 5L * 1024 * 1024 * 1024;
 
-    /** 同实例并发打包上限：防止多个同步流同时占满 Servlet 线程与对象存储带宽。 */
+    /**
+     * 同实例并发打包上限：防止多个同步流同时占满 Servlet 线程与对象存储带宽。
+     *
+     * <p>跨 API 副本的全局上限由生产入口 Nginx 的 {@code limit_conn} 按凭据计数；
+     * 后端端口只绑定回环地址，外部请求不会绕过该入口。两层上限必须同时存在。</p>
+     */
     private final Semaphore batchDownloadSlots = new Semaphore(2);
 
     @Value("${file.batch-download.max-total-bytes:5368709120}")

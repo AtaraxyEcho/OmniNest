@@ -3,6 +3,10 @@ map $http_upgrade $connection_upgrade {
     '' close;
 }
 
+# 批量下载是同步长连接流；后端只能限制单实例并发，而生产后端端口仅绑定回环地址，
+# 外部请求全部经过这个单入口。按凭据做跨 API 副本的全局并发上限，超出返回 429。
+limit_conn_zone $http_authorization zone=omninest_batch_download:10m;
+
 server {
     listen 80;
     server_name ${OMNINEST_PUBLIC_HOST};
@@ -20,6 +24,22 @@ server {
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/certbot;
         default_type text/plain;
+    }
+
+    location = /api/v1/files/batch/download {
+        client_max_body_size 64k;
+        limit_conn omninest_batch_download 2;
+        limit_conn_status 429;
+        limit_conn_log_level warn;
+        proxy_pass http://$omninest_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 
     location /api/ {

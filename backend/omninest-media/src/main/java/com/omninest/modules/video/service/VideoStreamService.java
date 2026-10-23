@@ -234,11 +234,12 @@ public class VideoStreamService {
     ) {
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
 
+        String demuxer = VideoLiveInputFormats.requireDemuxer(item.getContainerFormat());
         String internalUrl = resolveInput(ownerUserId, item.getFileNodeId());
-        log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, startSeconds={}",
-                videoItemId, item.getAudioCodec(), item.getContainerFormat(), startSeconds);
+        log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, demuxer={}, startSeconds={}",
+                videoItemId, item.getAudioCodec(), item.getContainerFormat(), demuxer, startSeconds);
 
-        List<String> ffmpegArgs = buildTranscodeArgs(internalUrl, startSeconds);
+        List<String> ffmpegArgs = buildTranscodeArgs(demuxer, internalUrl, startSeconds);
         StreamCommand streamCommand = buildStreamCommand(ffmpegArgs, List.of(internalUrl));
         terminateActiveStream(streamKey);
         requireStreamSlot(videoItemId);
@@ -314,13 +315,15 @@ public class VideoStreamService {
     ) {
         MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId);
 
+        String videoDemuxer = VideoLiveInputFormats.requireDemuxer(sourceItem.getContainerFormat());
         String videoInternalUrl = resolveInput(ownerUserId, sourceItem.getFileNodeId());
         String audioInternalUrl = resolveInput(ownerUserId, audioFileNodeId);
 
-        log.info("缓存音频 mux 开始: sourceVideoItemId={}, startSeconds={}", sourceVideoItemId, startSeconds);
+        log.info("缓存音频 mux 开始: sourceVideoItemId={}, demuxer={}, startSeconds={}",
+                sourceVideoItemId, videoDemuxer, startSeconds);
 
         List<String> ffmpegArgs = buildCachedAudioArgs(
-                videoInternalUrl, audioInternalUrl, startSeconds);
+                videoDemuxer, videoInternalUrl, audioInternalUrl, startSeconds);
         StreamCommand streamCommand = buildStreamCommand(
                 ffmpegArgs, List.of(videoInternalUrl, audioInternalUrl));
         terminateActiveStream(streamKey);
@@ -381,13 +384,14 @@ public class VideoStreamService {
     /**
      * 构建实时转码的 ffmpeg 参数（不含执行前缀，不含 -i 之前的协议白名单）。
      */
-    private List<String> buildTranscodeArgs(String inputUrl, long startSeconds) {
+    List<String> buildTranscodeArgs(String demuxer, String inputUrl, long startSeconds) {
         List<String> args = new ArrayList<>();
         if (startSeconds > 0) {
             args.addAll(List.of("-ss", String.valueOf(startSeconds)));
         }
         // 不映射字幕流：字幕通过独立的 /vtt 端点按需提取为 WebVTT
         args.addAll(List.of(
+                "-f", demuxer,
                 "-i", inputUrl,
                 "-map", "0:v",
                 "-map", "0:a"
@@ -407,13 +411,17 @@ public class VideoStreamService {
     /**
      * 构建缓存音频 mux 的 ffmpeg 参数。
      */
-    private List<String> buildCachedAudioArgs(String videoUrl, String audioUrl, long startSeconds) {
+    List<String> buildCachedAudioArgs(
+            String videoDemuxer, String videoUrl, String audioUrl, long startSeconds) {
         List<String> args = new ArrayList<>();
         if (startSeconds > 0) {
             args.addAll(List.of("-ss", String.valueOf(startSeconds)));
         }
         args.addAll(List.of(
+                "-f", videoDemuxer,
                 "-i", videoUrl,
+                // 派生音频固定为 ADTS AAC，同样不允许自动探测。
+                "-f", "aac",
                 "-i", audioUrl,
                 "-map", "0:v", "-map", "1:a"
         ));
@@ -431,20 +439,17 @@ public class VideoStreamService {
     }
 
     /**
-     * 按运行位置构建完整命令：本地模式直接起 ffmpeg 并限制协议；
-     * docker 模式用带 PID 文件的 shell 包装，便于收尾时精确终止容器内进程。
+     * 按运行位置构建完整命令：两种模式都限制协议，docker 模式另加带 PID 文件的 shell 包装。
      */
-    private StreamCommand buildStreamCommand(List<String> ffmpegArgs, List<String> inputs) {
+    StreamCommand buildStreamCommand(List<String> ffmpegArgs, List<String> inputs) {
         if (ffmpegRuntime.isDisabled()) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ffmpeg 不可用，无法实时转码");
         }
         List<String> args = new ArrayList<>();
-        if (!ffmpegRuntime.isDocker()) {
-            // 协议白名单必须出现在第一个 -i 之前；本地后端容器有出网能力，
-            // 不能让媒体内容里的 file:/concat: 引用把进程当作跳板。
-            args.add("-protocol_whitelist");
-            args.add(combinedProtocolWhitelist(inputs));
-        }
+        // 协议白名单必须出现在第一个 -i 之前。本地后端容器与 ffmpeg 容器都持有本地挂载，
+        // 且本机进程还有出网能力，不能让媒体内容里的 file:/concat: 引用成为读取或跳板。
+        args.add("-protocol_whitelist");
+        args.add(combinedProtocolWhitelist(inputs));
         args.addAll(ffmpegArgs);
         if (ffmpegRuntime.isDocker()) {
             String marker = ffmpegRuntime.newMarker();
@@ -486,7 +491,7 @@ public class VideoStreamService {
         }
     }
 
-    private record StreamCommand(List<String> command, String marker) {
+    record StreamCommand(List<String> command, String marker) {
     }
 
     private void terminateProcess(Process process) {

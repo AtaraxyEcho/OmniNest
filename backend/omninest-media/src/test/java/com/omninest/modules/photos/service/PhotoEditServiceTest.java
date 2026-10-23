@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -40,6 +41,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
@@ -71,7 +77,8 @@ class PhotoEditServiceTest {
             storageQuotaService,
             fileMetadataQueryService,
             transactionTemplate,
-            5
+            5,
+            2
     );
 
     {
@@ -235,6 +242,70 @@ class PhotoEditServiceTest {
 
         // 节点未消失时不得退款，避免与每日配额对账双重扣减。
         verify(storageQuotaService, never()).decrementUsage(any(), anyLong());
+    }
+
+    @Test
+    void rejectsConcurrentEditsWhenHeapHeavySlotsAreExhausted() throws Exception {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        UUID sourceFileId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        photo.setFileNodeId(sourceFileId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        when(editVersionRepository.countByPhotoId(photoId)).thenReturn(0L);
+        when(editVersionRepository.findByPhotoIdOrderByVersionNumberDesc(photoId)).thenReturn(List.of());
+        Path sourceFile = createImage();
+        CountDownLatch staging = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(sourceFileService.stageOwned(ownerUserId, sourceFileId)).thenAnswer(invocation -> {
+            staging.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            return new PhotoSourceFileService.StagedPhotoFile(
+                    sourceFile, "photo.png", Files.size(sourceFile), "image/png", false);
+        });
+        when(storageService.store(
+                eq(ownerUserId), anyString(), eq(photoId), anyString(), anyString(),
+                eq("image/jpeg"), any(Path.class)
+        )).thenReturn(UUID.randomUUID());
+
+        PhotoEditService singleSlotService = new PhotoEditService(
+                editVersionRepository,
+                photoItemRepository,
+                storageService,
+                syncEventService,
+                sourceFileService,
+                inputGuard,
+                storageQuotaService,
+                fileMetadataQueryService,
+                transactionTemplate,
+                5,
+                1
+        );
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<PhotoEditVersionDto> running = executor.submit(() -> singleSlotService.applyEdit(
+                    ownerUserId,
+                    photoId,
+                    new EditRequest("BRIGHTNESS", Map.of("factor", 1.1))
+            ));
+            assertThat(staging.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> singleSlotService.applyEdit(
+                    ownerUserId,
+                    photoId,
+                    new EditRequest("BRIGHTNESS", Map.of("factor", 1.1))
+            )).isInstanceOfSatisfying(BusinessException.class,
+                    exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.RATE_LIMITED));
+
+            release.countDown();
+            assertThat(running.get(10, TimeUnit.SECONDS).versionNumber()).isEqualTo(1);
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            Files.deleteIfExists(sourceFile);
+        }
     }
 
     private List<PhotoEditVersion> versionsWithEvictedFile(

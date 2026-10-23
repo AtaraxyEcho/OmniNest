@@ -32,6 +32,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
@@ -52,7 +53,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class PhotoEditService {
 
-    /** 编辑解码上限：超过时在解码阶段等间隔抽样，避免在 320MB 堆内展开 100MP 画布。 */
+    /** 编辑解码上限：超过时在解码阶段等间隔抽样，避免在受限堆内展开 100MP 画布。 */
     private static final long MAX_EDIT_DECODE_PIXELS = 24_000_000L;
 
     private final PhotoEditVersionRepository editVersionRepository;
@@ -66,6 +67,14 @@ public class PhotoEditService {
     private final TransactionTemplate transactionTemplate;
     private final int maxHistoryVersions;
 
+    /**
+     * 同一时刻的编辑解码数上限。
+     *
+     * <p>单张 24MP 的整型画布约 96MB；512MB 堆下放开并发会让多张画布与 HTTP 线程
+     * 同时驻留，触发 {@code ExitOnOutOfMemoryError}。槽位取不到时直接拒绝，不排队。</p>
+     */
+    private final Semaphore editSlots;
+
     public PhotoEditService(
             PhotoEditVersionRepository editVersionRepository,
             PhotoItemRepository photoItemRepository,
@@ -76,7 +85,8 @@ public class PhotoEditService {
             StorageQuotaService storageQuotaService,
             FileMetadataQueryService fileMetadataQueryService,
             TransactionTemplate transactionTemplate,
-            @Value("${photo.edit.max-history-versions:5}") int maxHistoryVersions) {
+            @Value("${photo.edit.max-history-versions:5}") int maxHistoryVersions,
+            @Value("${photo.edit.max-concurrent:2}") int maxConcurrentEdits) {
         this.editVersionRepository = editVersionRepository;
         this.photoItemRepository = photoItemRepository;
         this.derivedAssetStorageService = derivedAssetStorageService;
@@ -87,6 +97,7 @@ public class PhotoEditService {
         this.fileMetadataQueryService = fileMetadataQueryService;
         this.transactionTemplate = transactionTemplate;
         this.maxHistoryVersions = maxHistoryVersions;
+        this.editSlots = new Semaphore(Math.max(1, maxConcurrentEdits), true);
     }
 
     /**
@@ -289,6 +300,9 @@ public class PhotoEditService {
             String fileName,
             EditRequest request
     ) {
+        if (!editSlots.tryAcquire()) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "图像编辑任务过多，请稍后重试");
+        }
         Path editedFile = null;
         try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageOwned(
                 ownerUserId,
@@ -314,6 +328,7 @@ public class PhotoEditService {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
         } finally {
             deleteQuietly(editedFile);
+            editSlots.release();
         }
     }
 

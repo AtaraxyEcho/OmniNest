@@ -52,6 +52,7 @@ public enum ErrorCode {
     MUSIC_PLATFORM_NOT_CONNECTED(5003, "音乐平台未连接"),
     MUSIC_PLATFORM_AUTH_EXPIRED(5004, "音乐平台登录已失效"),
     MUSIC_RECOMMENDATION_UNAVAILABLE(5005, "每日推荐暂不可用"),
+    MEDIA_FORMAT_UNSUPPORTED(5006, "媒体格式不支持"),
 
     // ==================== 阅读 6xxx ====================
     BOOK_NOT_FOUND(6001, "书籍不存在"),

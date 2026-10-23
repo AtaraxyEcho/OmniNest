@@ -78,7 +78,7 @@ class AiSidecarClientTest {
                 5
         );
 
-        assertTrue(requestContentType.get().startsWith("multipart/form-data;boundary="));
+        assertTrue(requestContentType.get().replace(" ", "").startsWith("multipart/form-data;boundary="));
         assertEquals("test-sidecar-secret", requestToken.get());
         assertTrue(requestQuery.get().contains("hint=TEXT_GRAPHIC"));
         assertTrue(requestQuery.get().contains("skipOcr=false"));
@@ -95,6 +95,24 @@ class AiSidecarClientTest {
         assertEquals("cat", result.observations().getFirst().code());
         assertEquals(java.util.List.of("橘猫"), result.semanticTags());
         assertEquals("发票号码 12345", result.ocrText());
+    }
+
+    @Test
+    void shouldStreamLargeMultipartBodyWithoutTruncation() {
+        int imageSize = 1024 * 1024;
+        byte[] imageBytes = new byte[imageSize];
+        java.util.Arrays.fill(imageBytes, (byte) 0x5A);
+        properties.setMaxImageBytes(imageSize);
+        AtomicReference<byte[]> requestBody = new AtomicReference<>();
+        server.createContext("/analyze-content", exchange -> {
+            requestBody.set(exchange.getRequestBody().readAllBytes());
+            respond(exchange, "{\"schemaVersion\":2,\"observations\":[],\"semanticTags\":[]}");
+        });
+        AiSidecarClient client = new AiSidecarClient(properties);
+
+        client.analyzeContent(imageBytes, "large.jpg", "AUTO", false, endpoint, 5);
+
+        assertThatBodyContainsImageBytes(requestBody.get(), imageBytes);
     }
 
     @Test
@@ -177,6 +195,11 @@ class AiSidecarClientTest {
         AiSidecarClient client = new AiSidecarClient(properties);
 
         assertNull(client.fetchRemotePipelineVersion(endpoint, 5));
+    }
+
+    private void assertThatBodyContainsImageBytes(byte[] requestBody, byte[] imageBytes) {
+        assertTrue(requestBody != null && requestBody.length > imageBytes.length);
+        assertTrue(containsSequence(requestBody, imageBytes));
     }
 
     private void respond(HttpExchange exchange, String body) throws IOException {

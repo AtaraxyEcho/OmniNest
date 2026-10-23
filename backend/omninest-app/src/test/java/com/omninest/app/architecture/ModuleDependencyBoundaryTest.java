@@ -27,9 +27,39 @@ class ModuleDependencyBoundaryTest {
 
     private static final long MAX_PRODUCTION_SOURCE_LINES = 1200;
     private static final long MAX_WORKER_CONSUMER_SOURCE_LINES = 150;
+    /** 800 行软上限：超过后必须规划拆分，禁止在未登记的情况下继续增长。 */
+    private static final long MAX_SOFT_PRODUCTION_SOURCE_LINES = 800;
     /** 0.1.0 发布前登记的存量超长源码；禁止新增，拆分完成后移除。 */
     private static final Set<String> ALLOWED_OVERSIZED_SOURCES = Set.of(
             "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java"
+    );
+    /** 已登记的 800-1200 行存量；禁止新增，拆分完成后移除。 */
+    private static final Set<String> ALLOWED_SOFT_OVERSIZED_SOURCES = Set.of(
+            "omninest-file/src/main/java/com/omninest/modules/file/controller/FileController.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/repository/FileNodeRepository.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/ExternalImportExecutionService.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/FileQueryService.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/FileUploadSessionService.java",
+            "omninest-file/src/main/java/com/omninest/modules/search/service/FileSearchIndexService.java",
+            "omninest-media/src/main/java/com/omninest/modules/backdrop/service/BackdropAssetService.java",
+            "omninest-media/src/main/java/com/omninest/modules/music/controller/MusicController.java",
+            "omninest-media/src/main/java/com/omninest/modules/music/service/MusicAdminService.java",
+            "omninest-media/src/main/java/com/omninest/modules/music/service/MusicLibraryService.java",
+            "omninest-media/src/main/java/com/omninest/modules/music/service/MusicMetadataExtractor.java",
+            "omninest-media/src/main/java/com/omninest/modules/music/service/platform/NeteaseMusicProxy.java",
+            "omninest-media/src/main/java/com/omninest/modules/photos/controller/PhotoLibraryController.java",
+            "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java",
+            "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoLibraryService.java",
+            "omninest-media/src/main/java/com/omninest/modules/reader/service/ComicEpubParser.java",
+            "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderComicManifestService.java",
+            "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderImportService.java",
+            "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderItemService.java",
+            "omninest-media/src/main/java/com/omninest/modules/video/service/MovieLibraryService.java",
+            "omninest-media/src/main/java/com/omninest/modules/video/service/MovieScrapeExecutionService.java",
+            "omninest-media/src/main/java/com/omninest/modules/weather/service/WeatherService.java",
+            "omninest-system/src/main/java/com/omninest/modules/task/service/TaskRecordService.java",
+            "omninest-system/src/main/java/com/omninest/modules/user/service/AdminOperationsService.java",
+            "omninest-system/src/main/java/com/omninest/modules/user/service/AuthService.java"
     );
     private static final List<String> MODULES = List.of(
             "omninest-common",
@@ -228,6 +258,30 @@ class ModuleDependencyBoundaryTest {
     @Test
     void productionJavaSourcesMustStayWithinSizeLimit() throws IOException {
         Path root = findBackendRoot();
+        Set<String> oversizedSources = collectOversizedProductionSources(
+                root, MAX_PRODUCTION_SOURCE_LINES, ALLOWED_OVERSIZED_SOURCES);
+
+        assertTrue(
+                oversizedSources.isEmpty(),
+                () -> "生产 Java 源码超过 1200 行，请按职责拆分：\n" + String.join("\n", oversizedSources)
+        );
+    }
+
+    @Test
+    void productionJavaSourcesMustNotAddUnregisteredSoftOversizedFiles() throws IOException {
+        Path root = findBackendRoot();
+        Set<String> oversizedSources = collectOversizedProductionSources(
+                root, MAX_SOFT_PRODUCTION_SOURCE_LINES, ALLOWED_SOFT_OVERSIZED_SOURCES);
+
+        assertTrue(
+                oversizedSources.isEmpty(),
+                () -> "生产 Java 源码超过 800 行且未登记，请先规划拆分并登记存量：\n"
+                        + String.join("\n", oversizedSources)
+        );
+    }
+
+    private Set<String> collectOversizedProductionSources(
+            Path root, long maxLines, Set<String> allowedSources) throws IOException {
         Set<String> oversizedSources = new TreeSet<>();
         for (String module : MODULES) {
             Path sourceRoot = root.resolve(module).resolve("src/main/java");
@@ -240,18 +294,14 @@ class ModuleDependencyBoundaryTest {
                     try (Stream<String> lines = Files.lines(path)) {
                         lineCount = lines.count();
                     }
-                    if (lineCount > MAX_PRODUCTION_SOURCE_LINES
-                            && !ALLOWED_OVERSIZED_SOURCES.contains(normalize(root.relativize(path)))) {
-                        oversizedSources.add(normalize(root.relativize(path)) + " lines=" + lineCount);
+                    String relativePath = normalize(root.relativize(path));
+                    if (lineCount > maxLines && !allowedSources.contains(relativePath)) {
+                        oversizedSources.add(relativePath + " lines=" + lineCount);
                     }
                 }
             }
         }
-
-        assertTrue(
-                oversizedSources.isEmpty(),
-                () -> "生产 Java 源码超过 1200 行，请按职责拆分：\n" + String.join("\n", oversizedSources)
-        );
+        return oversizedSources;
     }
 
     /**

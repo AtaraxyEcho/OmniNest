@@ -8,29 +8,28 @@ import com.omninest.common.json.JsonSupport;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.JsonNode;
 
 /**
  * 图像分析侧车服务 HTTP 客户端。
  *
- * <p>图片请求通过标准 multipart 编码器发送，响应按配置限制最大字节数。
+ * <p>图片请求落临时文件后由 JDK HTTP 客户端按文件流式发送，响应按配置限制最大字节数；
+ * 避免为 multipart 再在堆内拼一份与图片等大的请求体。</p>
  *
  * @author OmniNest
  */
@@ -127,9 +126,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
                 .build()
                 .encode()
                 .toUri();
-        MultiValueMap<String, Object> multipartBody = new LinkedMultiValueMap<>();
-        multipartBody.add("image", new InMemoryImageResource(imageBytes, safeFilename(filename)));
-        String responseBody = sendMultipart(uri, multipartBody, timeoutSeconds);
+        String responseBody = sendMultipart(uri, imageBytes, safeFilename(filename), timeoutSeconds);
         return parseContentAnalysis(JsonSupport.readTree(responseBody));
     }
 
@@ -210,30 +207,52 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         return List.copyOf(boxes);
     }
 
-    private String sendMultipart(URI uri, MultiValueMap<String, Object> multipartBody, int timeoutSeconds) {
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
+    private String sendMultipart(URI uri, byte[] imageBytes, String filename, int timeoutSeconds) {
+        String secret = requireSecret();
+        String boundary = "----OmniNest" + UUID.randomUUID().toString().replace("-", "");
+        Path multipartFile = null;
         try {
-            return RestClient.builder()
-                    .requestFactory(requestFactory)
-                    .build()
-                    .post()
+            multipartFile = Files.createTempFile("omninest-sidecar-", ".multipart");
+            writeMultipart(multipartFile, boundary, imageBytes, filename);
+            HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
-                    .headers(headers -> headers.add(SIDECAR_TOKEN_HEADER, requireSecret()))
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(multipartBody)
-                    .exchange((request, response) -> {
-                        String responseBody;
-                        try (InputStream body = response.getBody()) {
-                            responseBody = readBoundedUtf8(body, properties.getMaxResponseBytes());
-                        }
-                        requireSuccessfulResponse(response.getStatusCode().value(), responseBody);
-                        return responseBody;
-                    });
-        } catch (IllegalStateException exception) {
-            throw exception;
-        } catch (Exception exception) {
+                    .timeout(Duration.ofSeconds(Math.clamp(timeoutSeconds, 1, 600)))
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .header(SIDECAR_TOKEN_HEADER, secret)
+                    .POST(HttpRequest.BodyPublishers.ofFile(multipartFile))
+                    .build();
+            return sendRequest(request);
+        } catch (IOException exception) {
             throw new IllegalStateException("图像分析侧车调用失败", exception);
+        } finally {
+            deleteQuietly(multipartFile);
+        }
+    }
+
+    private void writeMultipart(Path target, String boundary, byte[] imageBytes, String filename)
+            throws IOException {
+        try (OutputStream output = Files.newOutputStream(target)) {
+            writeUtf8(output, "--" + boundary + "\r\n");
+            writeUtf8(output, "Content-Disposition: form-data; name=\"image\"; filename=\""
+                    + filename + "\"\r\n");
+            writeUtf8(output, "Content-Type: application/octet-stream\r\n\r\n");
+            output.write(imageBytes);
+            writeUtf8(output, "\r\n--" + boundary + "--\r\n");
+        }
+    }
+
+    private void writeUtf8(OutputStream output, String value) throws IOException {
+        output.write(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void deleteQuietly(Path file) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException exception) {
+            log.debug("侧车 multipart 临时文件清理失败: errorType={}", exception.getClass().getSimpleName());
         }
     }
 
@@ -343,22 +362,5 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     }
 
     private record PipelineVersionCache(String endpoint, String version, long fetchedAtMillis) {
-    }
-
-    /**
-     * 内存图片 multipart 资源；文件名来自调用方受控值。
-     */
-    private static final class InMemoryImageResource extends ByteArrayResource {
-        private final String filename;
-
-        private InMemoryImageResource(byte[] byteArray, String filename) {
-            super(byteArray);
-            this.filename = filename;
-        }
-
-        @Override
-        public String getFilename() {
-            return filename;
-        }
     }
 }
