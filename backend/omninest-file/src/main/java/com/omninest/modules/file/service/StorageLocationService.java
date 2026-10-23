@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.config.LocalMediaStorageProperties;
@@ -11,12 +12,14 @@ import com.omninest.modules.file.dto.StorageLocationDtos.UpdateStorageLocationRe
 import com.omninest.modules.file.dto.StorageLocationDtos.TrustedMountDto;
 import com.omninest.modules.file.repository.FileContentRefRepository;
 import com.omninest.modules.file.repository.StorageLocationRepository;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +48,8 @@ public class StorageLocationService {
     private final LocalMediaRuntimeConfigService runtimeConfigService;
     private final StorageLocationInserter locationInserter;
     private final List<StorageLocationUsageInspector> usageInspectors;
+    private final AdminActorVerifier adminActorVerifier;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /**
      * 管理员列出全部存储位置。
@@ -84,6 +89,7 @@ public class StorageLocationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public StorageLocationDto create(UUID operatorId, CreateStorageLocationRequest request) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
         StorageLocation location = new StorageLocation();
         location.setName(normalizeName(request.name()));
         location.setProviderType(LOCAL_FILESYSTEM);
@@ -98,6 +104,12 @@ public class StorageLocationService {
         }
         validateLocation(location);
         StorageLocation saved = storageLocationRepository.save(location);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "STORAGE_LOCATION_CREATE",
+                "storage_locations",
+                saved.getId(),
+                Map.of("mountKey", saved.getMountKey(), "scopeType", saved.getScopeType()));
         log.info("本地媒体存储位置已创建: locationId={}, mountKey={}, scopeType={}",
                 saved.getId(), saved.getMountKey(), saved.getScopeType());
         return toDto(saved);
@@ -111,7 +123,8 @@ public class StorageLocationService {
      * @return 已更新存储位置
      */
     @Transactional(rollbackFor = Exception.class)
-    public StorageLocationDto update(UUID locationId, UpdateStorageLocationRequest request) {
+    public StorageLocationDto update(UUID operatorId, UUID locationId, UpdateStorageLocationRequest request) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
         StorageLocation location = requireLocation(locationId);
         location.setName(normalizeName(request.name()));
         location.setEnabled(request.enabled());
@@ -119,6 +132,12 @@ public class StorageLocationService {
             validateLocation(location);
         }
         StorageLocation saved = storageLocationRepository.save(location);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "STORAGE_LOCATION_UPDATE",
+                "storage_locations",
+                locationId,
+                Map.of("enabled", saved.isEnabled()));
         log.info("本地媒体存储位置状态已更新: locationId={}, enabled={}", saved.getId(), saved.isEnabled());
         return toDto(saved);
     }
@@ -129,7 +148,8 @@ public class StorageLocationService {
      * @param locationId 存储位置 ID
      */
     @Transactional(rollbackFor = Exception.class)
-    public void delete(UUID locationId) {
+    public void delete(UUID operatorId, UUID locationId) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
         StorageLocation location = requireLocation(locationId);
         if (contentRefRepository.countByStorageLocationId(locationId) > 0) {
             throw new BusinessException(ErrorCode.RESOURCE_IN_USE, "存储位置仍被文件内容引用");
@@ -138,6 +158,12 @@ public class StorageLocationService {
             throw new BusinessException(ErrorCode.RESOURCE_IN_USE, "存储位置仍被业务来源引用");
         }
         storageLocationRepository.delete(location);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "STORAGE_LOCATION_DELETE",
+                "storage_locations",
+                locationId,
+                Map.of("mountKey", location.getMountKey()));
         log.info("本地媒体存储位置已删除: locationId={}", locationId);
     }
 

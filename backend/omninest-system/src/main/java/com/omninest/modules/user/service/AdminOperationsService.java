@@ -331,6 +331,7 @@ public class AdminOperationsService {
                 new AdminOperationsDto.MonitoringMetric("死信任务", String.valueOf(dlqTasks), "count",
                         dlqTasks > 0 ? "WARN" : "UP")
         );
+        String luceneStatus = componentStatus("luceneIndex");
         List<AdminOperationsDto.MonitoringComponent> components = List.of(
                 component("PostgreSQL", componentStatus("db"), Map.of(
                         "连接池", "OmniNestHikariPool",
@@ -349,9 +350,9 @@ public class AdminOperationsService {
                 component("MinIO", componentStatus("minio"), Map.of(
                         "userFilesBucket", objectStorageBuckets.userFiles()
                 )),
-                component("Lucene Index", "UP", Map.of(
+                component("Lucene Index", luceneStatus, Map.of(
                         "mode", "embedded",
-                        "writable", true
+                        "writable", "UP".equals(luceneStatus)
                 )),
                 component("ClamAV", componentStatus("clamAv"), Map.of(
                         "用途", "上传与外部导入入库前病毒扫描",
@@ -620,7 +621,7 @@ public class AdminOperationsService {
         SystemMetricsCollector.Snapshot metrics = systemMetricsCollector.collect();
         return new SystemSnapshot(
                 metrics.cpuUsagePercent(),
-                metrics.runtimeMemoryUsagePercent(),
+                metrics.systemMemoryUsagePercent(),
                 metrics.diskUsagePercent(),
                 metrics.heapUsagePercent()
         );
@@ -687,8 +688,8 @@ public class AdminOperationsService {
         authUserRepository.findWithRolesById(session.getUserId())
                 .ifPresent(target -> adminActorGuard.requireSuperAdminForAdminTarget(
                         actor, target, "强制撤销管理员会话"));
-        sessionRevocationService.revokeSession(session.getUserId(), sessionId, Duration.ofDays(30));
-        activeSessionRepository.revokeBySessionId(sessionId, "管理员强制撤销");
+        sessionRevocationService.revokeSessionAndDeactivate(
+                session.getUserId(), sessionId, "管理员强制撤销", Duration.ofDays(30));
         auditLogService.record(actorUserId, "ADMIN_SESSION_REVOKE", "auth_active_sessions", sessionId);
     }
 

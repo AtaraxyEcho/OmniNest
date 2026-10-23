@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.config.LocalMediaStorageProperties;
@@ -10,6 +11,7 @@ import com.omninest.modules.file.domain.StorageLocation;
 import com.omninest.modules.file.dto.StorageLocationDtos.CreateStorageLocationRequest;
 import com.omninest.modules.file.repository.FileContentRefRepository;
 import com.omninest.modules.file.repository.StorageLocationRepository;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +37,9 @@ class StorageLocationServiceTest {
             new LocalMediaStorageProperties(),
             runtimeConfigService,
             locationInserter,
-            List.of()
+            List.of(),
+            Mockito.mock(AdminActorVerifier.class),
+            Mockito.mock(AdminAuditRecorder.class)
     );
 
     @Test

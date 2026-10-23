@@ -80,6 +80,7 @@ public class FileQueryService {
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final TransactionTemplate transactionTemplate;
     private final FileDownloadService fileDownloadService;
+    private final FilePathRewriter filePathRewriter;
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId) {
@@ -218,7 +219,7 @@ public class FileQueryService {
         String newPath = resolveSiblingPath(node, newName);
         node.setName(newName);
         node.setNormalizedPath(newPath);
-        updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
+        filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
         // 更新 Lucene 搜索索引中的文件名，空间类型必须跟随节点本身，
         // 否则共享文件重命名后会在索引里被写成个人空间。索引写入由 Worker 单进程执行。
@@ -250,7 +251,7 @@ public class FileQueryService {
         String newPath = resolveChildPath(targetParent, node.getName());
         node.setParentId(targetParentId);
         node.setNormalizedPath(newPath);
-        updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
+        filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
         return toDto(saved);
@@ -345,6 +346,7 @@ public class FileQueryService {
         restoredAncestors.forEach(this::markRestored);
         markRestored(node);
         List<FileNode> descendants = deletedSubtreeNodes(node);
+        filePathRewriter.recomputeRestoredPaths(node, restoredAncestors, descendants);
         descendants.forEach(this::markRestored);
         if (!restoredAncestors.isEmpty()) {
             fileNodeRepository.saveAll(restoredAncestors);
@@ -564,6 +566,7 @@ public class FileQueryService {
             allToSave.add(node);
             restoredIdsByOwner.computeIfAbsent(nodeOwnerUserId, key -> new ArrayList<>()).add(node.getId());
             List<FileNode> descendants = deletedSubtreeNodes(node);
+            filePathRewriter.recomputeRestoredPaths(node, restoredAncestors, descendants);
             descendants.forEach(this::markRestored);
             allToSave.addAll(descendants);
             // 共享子树的子孙可能属于其他上传者，索引事件按真实所有者分组投递。
@@ -620,7 +623,7 @@ public class FileQueryService {
                     String newPath = resolveChildPath(targetParent, node.getName());
                     node.setParentId(targetParentId);
                     node.setNormalizedPath(newPath);
-                    updateActiveDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
+                    filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
                     fileNodeRepository.save(node);
                     movedCount++;
                 }
@@ -976,24 +979,6 @@ public class FileQueryService {
     private boolean isSelfOrDescendant(FileNode node, FileNode targetParent) {
         return targetParent.getId().equals(node.getId())
                 || targetParent.getNormalizedPath().startsWith(node.getNormalizedPath() + "/");
-    }
-
-    private void updateActiveDescendantPaths(
-            UUID ownerUserId,
-            SpaceType spaceType,
-            String oldPath,
-            String newPath
-    ) {
-        List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        ownerUserId,
-                        spaceType,
-                        subtreePrefix(oldPath)
-                );
-        for (FileNode descendant : descendants) {
-            descendant.setNormalizedPath(newPath + descendant.getNormalizedPath().substring(oldPath.length()));
-        }
-        fileNodeRepository.saveAll(descendants);
     }
 
     private void markDeleted(FileNode node, UUID deletedBy, Instant deletedAt) {

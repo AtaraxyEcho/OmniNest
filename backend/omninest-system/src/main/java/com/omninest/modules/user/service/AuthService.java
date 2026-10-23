@@ -489,8 +489,12 @@ public class AuthService {
                 );
                 return issueToken(toDto(profile), sessionId, session.getExpiresAt(), currentJti);
             }
-            sessionRevocationService.revokeSession(userId, sessionId, authenticationTokenPolicy.refreshTokenTtl());
-            activeSessionRepository.revokeBySessionId(sessionId, "刷新令牌重放，会话已撤销");
+            sessionRevocationService.revokeSessionAndDeactivate(
+                    userId,
+                    sessionId,
+                    "刷新令牌重放，会话已撤销",
+                    authenticationTokenPolicy.refreshTokenTtl()
+            );
             log.warn("检测到刷新令牌重放，撤销会话: userId={}, sessionId={}", userId, sessionId);
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "刷新凭证已失效，请重新登录");
         }
@@ -578,8 +582,8 @@ public class AuthService {
         if (activeSessionRepository.findByIdAndUserId(sessionId, userId).isEmpty()) {
             return;
         }
-        sessionRevocationService.revokeSession(userId, sessionId, authenticationTokenPolicy.refreshTokenTtl());
-        activeSessionRepository.revokeBySessionId(sessionId, "用户退出登录");
+        sessionRevocationService.revokeSessionAndDeactivate(
+                userId, sessionId, "用户退出登录", authenticationTokenPolicy.refreshTokenTtl());
     }
 
     private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId) {

@@ -27,16 +27,19 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,6 +70,17 @@ public class FileManagerService {
     private final SharedSpaceService sharedSpaceService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final FileIndexSyncService fileIndexSyncService;
+
+    /** 单次打包总字节上限；默认 5GB，超限让客户端分批下载。 */
+    private long maxBatchDownloadTotalBytes = 5L * 1024 * 1024 * 1024;
+
+    /** 同实例并发打包上限：防止多个同步流同时占满 Servlet 线程与对象存储带宽。 */
+    private final Semaphore batchDownloadSlots = new Semaphore(2);
+
+    @Value("${file.batch-download.max-total-bytes:5368709120}")
+    void setMaxBatchDownloadTotalBytes(long maxBatchDownloadTotalBytes) {
+        this.maxBatchDownloadTotalBytes = maxBatchDownloadTotalBytes;
+    }
 
     /**
      * 查询用户最近访问的文件。
@@ -298,7 +312,31 @@ public class FileManagerService {
      * @param out     输出流
      */
     public void packAsZip(UUID userId, List<String> fileIds, OutputStream out) {
-        packZipEntries(planZipEntries(userId, fileIds), out);
+        try (BatchDownloadLease ignored = acquireBatchDownloadLease()) {
+            packZipEntries(planZipEntries(userId, fileIds), out);
+        }
+    }
+
+    /**
+     * 获取一个批量打包槽位；拿不到时快速失败，而不是再拉起一条同步压缩流。
+     *
+     * @return 需要关闭的槽位租约
+     */
+    public BatchDownloadLease acquireBatchDownloadLease() {
+        if (!batchDownloadSlots.tryAcquire()) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "批量下载任务过多，请稍后重试");
+        }
+        return new BatchDownloadLease(batchDownloadSlots);
+    }
+
+    /**
+     * 批量打包并发槽位租约。
+     */
+    public record BatchDownloadLease(Semaphore slots) implements AutoCloseable {
+        @Override
+        public void close() {
+            slots.release();
+        }
     }
 
     /**
@@ -323,7 +361,7 @@ public class FileManagerService {
      */
     @Transactional(readOnly = true)
     public List<ZipPackEntry> planZipEntries(UUID userId, List<String> fileIds) {
-        List<UUID> nodeIds = fileIds.stream().map(this::parseFileId).toList();
+        List<UUID> nodeIds = fileIds.stream().map(this::parseFileId).distinct().toList();
         Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(nodeIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node));
         List<UUID> objectIds = nodesById.values().stream()
@@ -337,6 +375,7 @@ public class FileManagerService {
 
         Set<String> usedEntryNames = new HashSet<>();
         List<ZipPackEntry> entries = new ArrayList<>(nodeIds.size());
+        long totalBytes = 0L;
         boolean sharedChecked = false;
         boolean sharedDownloadAllowed = false;
         for (UUID nodeId : nodeIds) {
@@ -373,6 +412,11 @@ public class FileManagerService {
                     obj.getBucketName(),
                     obj.getObjectKey()
             ));
+            totalBytes += Math.max(0, obj.getSizeBytes());
+            if (totalBytes > maxBatchDownloadTotalBytes) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "打包总大小超过限制，请分批下载或单独下载大文件");
+            }
         }
         return entries;
     }

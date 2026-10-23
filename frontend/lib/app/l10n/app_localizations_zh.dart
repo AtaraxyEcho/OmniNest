@@ -2115,6 +2115,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesResumingUpload => '继续上传中';
 
   @override
+  String get filesUploadPurgingConflict => '正在清理回收站同名文件';
+
+  @override
   String get filesUploadRetrying => '清理完成，正在重新上传';
 
   @override

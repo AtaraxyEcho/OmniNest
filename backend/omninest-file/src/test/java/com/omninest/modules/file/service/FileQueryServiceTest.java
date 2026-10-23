@@ -109,7 +109,8 @@ class FileQueryServiceTest {
             sharedSpaceService,
             sharedSpaceQuotaService,
             transactionTemplate,
-            fileDownloadService
+            fileDownloadService,
+            new FilePathRewriter(fileNodeRepository)
     );
 
     private static TransactionTemplate transactionTemplate() {
@@ -397,9 +398,10 @@ class FileQueryServiceTest {
         when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
                 OWNER_ID, SpaceType.PERSONAL, "Archive"))
                 .thenReturn(false);
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, SpaceType.PERSONAL, "/Docs/"))
-                .thenReturn(List.of(child));
+        when(fileNodeRepository.findPersonalSubtreeAfterId(
+                ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
+                ArgumentMatchers.eq("/Docs/"), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(List.of(child), List.of());
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
@@ -424,9 +426,10 @@ class FileQueryServiceTest {
                 OWNER_ID, SpaceType.PERSONAL, "Archive"))
                 .thenReturn(false);
         // 前缀进 LIKE 必须带转义；未转义时 /S01XE01/ 这类兄弟目录会被一起改名。
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, SpaceType.PERSONAL, "/S01\\_E01/"))
-                .thenReturn(List.of(child));
+        when(fileNodeRepository.findPersonalSubtreeAfterId(
+                ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
+                ArgumentMatchers.eq("/S01\\_E01/"), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(List.of(child), List.of());
         when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
@@ -434,8 +437,9 @@ class FileQueryServiceTest {
 
         fileQueryService.renameNode(OWNER_ID, folderId, new RenameFileNodeRequest("Archive"));
 
-        verify(fileNodeRepository).findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                OWNER_ID, SpaceType.PERSONAL, "/S01\\_E01/");
+        verify(fileNodeRepository, times(2)).findPersonalSubtreeAfterId(
+                ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.eq(SpaceType.PERSONAL),
+                ArgumentMatchers.eq("/S01\\_E01/"), ArgumentMatchers.any(), ArgumentMatchers.any());
         // 子节点路径重写仍按原始 oldPath 定位，转义串不得进 substring。
         assertThat(child.getNormalizedPath()).isEqualTo("/Archive/a.txt");
     }
@@ -542,6 +546,37 @@ class FileQueryServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.CONFLICT);
+    }
+
+    @Test
+    void restoreNodeRecomputesPathFromRenamedParentAndCascadesToDescendants() {
+        UUID parentId = UUID.fromString("40000000-0000-0000-0000-000000000030");
+        UUID folderId = UUID.fromString("40000000-0000-0000-0000-000000000031");
+        FileNode parent = node(OWNER_ID, null, "FOLDER", "Archive", "/Archive");
+        parent.setId(parentId);
+        FileNode folder = node(OWNER_ID, parentId, "FOLDER", "old", "/Docs/old");
+        folder.setId(folderId);
+        folder.setDeleted(true);
+        FileNode child = node(OWNER_ID, folderId, "FILE", "a.txt", "/Docs/old/a.txt");
+        child.setDeleted(true);
+        when(fileNodeRepository.findByIdAndOwnerUserId(folderId, OWNER_ID)).thenReturn(Optional.of(folder));
+        when(fileNodeRepository.findById(parentId)).thenReturn(Optional.of(parent));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(parentId, OWNER_ID))
+                .thenReturn(Optional.of(parent));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, parentId, "old")).thenReturn(false);
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "/Docs/old/")).thenReturn(List.of(child));
+        when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileNodeRepository.save(ArgumentMatchers.any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileQueryService.restoreNode(OWNER_ID, folderId);
+
+        // 父目录已改名为 /Archive：恢复出的子树必须整体落到新前缀，而不是旧 /Docs/old。
+        assertThat(folder.getNormalizedPath()).isEqualTo("/Archive/old");
+        assertThat(child.getNormalizedPath()).isEqualTo("/Archive/old/a.txt");
     }
 
     @Test
@@ -1059,7 +1094,8 @@ class FileQueryServiceTest {
                 sharedSpaceService,
                 sharedSpaceQuotaService,
                 transactionTemplate,
-                fileDownloadService
+                fileDownloadService,
+                new FilePathRewriter(fileNodeRepository)
         );
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000001");
@@ -1118,7 +1154,8 @@ class FileQueryServiceTest {
                 sharedSpaceService,
                 sharedSpaceQuotaService,
                 transactionTemplate,
-                fileDownloadService
+                fileDownloadService,
+                new FilePathRewriter(fileNodeRepository)
         );
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000003");

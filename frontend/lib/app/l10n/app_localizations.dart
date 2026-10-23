@@ -4093,6 +4093,12 @@ abstract class AppLocalizations {
   /// **'Resuming upload'**
   String get filesResumingUpload;
 
+  /// No description provided for @filesUploadPurgingConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleaning up the conflicting item in trash'**
+  String get filesUploadPurgingConflict;
+
   /// No description provided for @filesUploadRetrying.
   ///
   /// In en, this message translates to:

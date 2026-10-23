@@ -733,8 +733,11 @@ class AuthServiceTest {
             assertThatThrownBy(() -> service.refresh("refresh-token"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("刷新凭证已失效");
-            verify(activeSessionRepository).revokeBySessionId(session.getId(), "刷新令牌重放，会话已撤销");
-            verify(sessionRevocationService).revokeSession(eq(user.getId()), eq(session.getId()), any(Duration.class));
+            verify(sessionRevocationService).revokeSessionAndDeactivate(
+                    eq(user.getId()),
+                    eq(session.getId()),
+                    eq("刷新令牌重放，会话已撤销"),
+                    any(Duration.class));
         }
 
         @Test
@@ -1010,8 +1013,8 @@ class AuthServiceTest {
 
             service.logout("refresh-token");
 
-            verify(sessionRevocationService).revokeSession(user.getId(), sessionId, Duration.ofDays(30));
-            verify(activeSessionRepository).revokeBySessionId(sessionId, "用户退出登录");
+            verify(sessionRevocationService).revokeSessionAndDeactivate(
+                    user.getId(), sessionId, "用户退出登录", Duration.ofDays(30));
         }
 
         @Test

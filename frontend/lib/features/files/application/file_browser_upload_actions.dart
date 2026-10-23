@@ -254,6 +254,15 @@ extension FileBrowserUploadActions on FileBrowserController {
     if (pending == null) return;
     if (_findLocalUploadTask(taskId) == null) return;
 
+    final originalTask = _findLocalUploadTask(taskId);
+    if (originalTask != null) {
+      _upsertLocalUploadTask(
+        originalTask.copyWith(
+          messageCode: FileUploadTaskMessageCode.purgingConflict,
+        ),
+      );
+    }
+
     try {
       final submission = await _repository.purgeFile(
         pending.conflict.softDeletedFileId,
@@ -705,11 +714,12 @@ extension FileBrowserUploadActions on FileBrowserController {
     _UploadRuntime runtime,
     FileUploadPart part,
   ) async {
-    final uploadUrl = part.uploadUrl;
+    var uploadUrl = part.uploadUrl;
     if (uploadUrl == null || uploadUrl.isEmpty) {
-      throw AppException(
-        code: AppErrorCodes.uploadUrlMissing,
-        message: '${AppErrorCodes.uploadUrlMissing}:${part.partNumber}',
+      // 创建会话只预签名首批分片，其余分片在上传前逐个按需获取。
+      uploadUrl = await _repository.getUploadPartUrl(
+        uploadId: runtime.session.uploadId,
+        partNumber: part.partNumber,
       );
     }
     final start = (part.partNumber - 1) * runtime.session.partSizeBytes;

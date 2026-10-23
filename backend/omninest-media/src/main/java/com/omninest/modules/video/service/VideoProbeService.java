@@ -406,6 +406,7 @@ public class VideoProbeService {
             VideoProcessExecutor.Result result = processExecutor.execute(List.of(
                     "ffprobe",
                     "-v", "quiet",
+                    "-protocol_whitelist", "file,crypto,data",
                     "-print_format", "json",
                     "-show_format",
                     "-show_streams",
@@ -451,6 +452,7 @@ public class VideoProbeService {
                     "docker", "exec", DOCKER_CONTAINER,
                     "ffprobe",
                     "-v", "quiet",
+                    "-protocol_whitelist", "file,crypto,data",
                     "-print_format", "json",
                     "-show_format",
                     "-show_streams",

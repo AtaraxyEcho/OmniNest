@@ -22,15 +22,20 @@ import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.ByteLookupTable;
 import java.awt.image.ConvolveOp;
+import java.awt.image.DataBufferInt;
 import java.awt.image.Kernel;
 import java.awt.image.LookupOp;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +51,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Service
 public class PhotoEditService {
+
+    /** 编辑解码上限：超过时在解码阶段等间隔抽样，避免在 320MB 堆内展开 100MP 画布。 */
+    private static final long MAX_EDIT_DECODE_PIXELS = 24_000_000L;
 
     private final PhotoEditVersionRepository editVersionRepository;
     private final PhotoItemRepository photoItemRepository;
@@ -316,13 +324,14 @@ public class PhotoEditService {
             Map<String, Object> params
     ) {
         try {
-            BufferedImage image = ImageIO.read(imageFile.toFile());
-            if (image == null) {
+            EditSource source = readForEdit(imageFile);
+            if (source == null) {
                 return false;
             }
+            BufferedImage image = source.image();
             BufferedImage result = switch (editType.toUpperCase()) {
                 case "ROTATE" -> applyRotation(image, params);
-                case "CROP" -> applyCrop(image, params);
+                case "CROP" -> applyCrop(image, params, source.subsample());
                 case "BRIGHTNESS" -> applyBrightness(image, params);
                 case "CONTRAST" -> applyContrast(image, params);
                 case "FILTER" -> applyFilter(image, params);
@@ -339,6 +348,64 @@ public class PhotoEditService {
             log.warn("图片编辑失败: editType={}, error={}", editType, ex.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 按需抽样解码编辑源图。
+     *
+     * <p>超过 {@link #MAX_EDIT_DECODE_PIXELS} 时用 ImageReadParam 在解码阶段抽样，
+     * 不先展开全尺寸 BufferedImage；返回的 subsample 供裁剪坐标换算。</p>
+     */
+    private EditSource readForEdit(Path imageFile) throws IOException {
+        try (ImageInputStream input = ImageIO.createImageInputStream(imageFile.toFile())) {
+            if (input == null) {
+                return null;
+            }
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                return null;
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                long pixels = (long) width * height;
+                int step = 1;
+                while (pixels / ((long) step * step) > MAX_EDIT_DECODE_PIXELS) {
+                    step++;
+                }
+                ImageReadParam param = reader.getDefaultReadParam();
+                if (step > 1) {
+                    param.setSourceSubsampling(step, step, 0, 0);
+                }
+                return new EditSource(reader.read(0, param), step);
+            } finally {
+                reader.dispose();
+            }
+        }
+    }
+
+    private record EditSource(BufferedImage image, int subsample) {
+    }
+
+    /**
+     * 在 ARGB/RGB 整型画布上逐像素处理，避免 getRGB/setRGB 的逐点颜色模型转换。
+     */
+    private BufferedImage copyToIntRgb(BufferedImage image) {
+        BufferedImage result = new BufferedImage(
+                image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = result.createGraphics();
+        try {
+            graphics.drawImage(image, 0, 0, null);
+        } finally {
+            graphics.dispose();
+        }
+        return result;
+    }
+
+    private int[] pixelData(BufferedImage image) {
+        return ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
     }
 
     /**
@@ -405,20 +472,18 @@ public class PhotoEditService {
     /** 饱和度调整：factor 1 为原图，0 为灰度，2 为两倍饱和度。 */
     private BufferedImage applySaturation(BufferedImage image, Map<String, Object> params) {
         float factor = ((Number) params.getOrDefault("factor", 1.0f)).floatValue();
-        BufferedImage result = new BufferedImage(
-                image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int rgb = image.getRGB(x, y);
-                int r = (rgb >> 16) & 0xFF;
-                int g = (rgb >> 8) & 0xFF;
-                int b = rgb & 0xFF;
-                float gray = 0.299f * r + 0.587f * g + 0.114f * b;
-                int nr = clampColor(Math.round(gray + (r - gray) * factor));
-                int ng = clampColor(Math.round(gray + (g - gray) * factor));
-                int nb = clampColor(Math.round(gray + (b - gray) * factor));
-                result.setRGB(x, y, (nr << 16) | (ng << 8) | nb);
-            }
+        BufferedImage result = copyToIntRgb(image);
+        int[] pixels = pixelData(result);
+        for (int index = 0; index < pixels.length; index++) {
+            int rgb = pixels[index];
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+            int nr = clampColor(Math.round(gray + (r - gray) * factor));
+            int ng = clampColor(Math.round(gray + (g - gray) * factor));
+            int nb = clampColor(Math.round(gray + (b - gray) * factor));
+            pixels[index] = (nr << 16) | (ng << 8) | nb;
         }
         return result;
     }
@@ -427,15 +492,16 @@ public class PhotoEditService {
         return Math.min(255, Math.max(0, value));
     }
 
-    private BufferedImage applyCrop(BufferedImage image, Map<String, Object> params) {
-        int x = ((Number) params.getOrDefault("x", 0)).intValue();
-        int y = ((Number) params.getOrDefault("y", 0)).intValue();
-        int w = ((Number) params.getOrDefault("width", image.getWidth())).intValue();
-        int h = ((Number) params.getOrDefault("height", image.getHeight())).intValue();
+    private BufferedImage applyCrop(BufferedImage image, Map<String, Object> params, int subsample) {
+        int scale = Math.max(1, subsample);
+        int x = ((Number) params.getOrDefault("x", 0)).intValue() / scale;
+        int y = ((Number) params.getOrDefault("y", 0)).intValue() / scale;
+        int w = ((Number) params.getOrDefault("width", image.getWidth() * scale)).intValue() / scale;
+        int h = ((Number) params.getOrDefault("height", image.getHeight() * scale)).intValue() / scale;
         x = Math.max(0, Math.min(x, image.getWidth() - 1));
         y = Math.max(0, Math.min(y, image.getHeight() - 1));
-        w = Math.min(w, image.getWidth() - x);
-        h = Math.min(h, image.getHeight() - y);
+        w = Math.max(1, Math.min(w, image.getWidth() - x));
+        h = Math.max(1, Math.min(h, image.getHeight() - y));
         return image.getSubimage(x, y, w, h);
     }
 
@@ -472,36 +538,31 @@ public class PhotoEditService {
     }
 
     private BufferedImage applyGrayscale(BufferedImage image) {
-        BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = result.createGraphics();
-        g.drawImage(image, 0, 0, null);
-        g.dispose();
-        for (int y = 0; y < result.getHeight(); y++) {
-            for (int x = 0; x < result.getWidth(); x++) {
-                int rgb = result.getRGB(x, y);
-                int r = (rgb >> 16) & 0xFF;
-                int g2 = (rgb >> 8) & 0xFF;
-                int b = rgb & 0xFF;
-                int gray = (int) (0.299 * r + 0.587 * g2 + 0.114 * b);
-                result.setRGB(x, y, (gray << 16) | (gray << 8) | gray);
-            }
+        BufferedImage result = copyToIntRgb(image);
+        int[] pixels = pixelData(result);
+        for (int index = 0; index < pixels.length; index++) {
+            int rgb = pixels[index];
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            int gray = (int) (0.299 * r + 0.587 * g + 0.114 * b);
+            pixels[index] = (gray << 16) | (gray << 8) | gray;
         }
         return result;
     }
 
     private BufferedImage applySepia(BufferedImage image) {
-        BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int rgb = image.getRGB(x, y);
-                int r = (rgb >> 16) & 0xFF;
-                int g = (rgb >> 8) & 0xFF;
-                int b = rgb & 0xFF;
-                int newR = Math.min(255, (int) (0.393 * r + 0.769 * g + 0.189 * b));
-                int newG = Math.min(255, (int) (0.349 * r + 0.686 * g + 0.168 * b));
-                int newB = Math.min(255, (int) (0.272 * r + 0.534 * g + 0.131 * b));
-                result.setRGB(x, y, (newR << 16) | (newG << 8) | newB);
-            }
+        BufferedImage result = copyToIntRgb(image);
+        int[] pixels = pixelData(result);
+        for (int index = 0; index < pixels.length; index++) {
+            int rgb = pixels[index];
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            int newR = Math.min(255, (int) (0.393 * r + 0.769 * g + 0.189 * b));
+            int newG = Math.min(255, (int) (0.349 * r + 0.686 * g + 0.168 * b));
+            int newB = Math.min(255, (int) (0.272 * r + 0.534 * g + 0.131 * b));
+            pixels[index] = (newR << 16) | (newG << 8) | newB;
         }
         return result;
     }

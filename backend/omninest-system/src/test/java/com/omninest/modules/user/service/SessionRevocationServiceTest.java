@@ -7,13 +7,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 会话撤销业务服务测试。
@@ -24,20 +22,15 @@ class SessionRevocationServiceTest {
 
     private SessionRevocationJpaRepository repository;
     private SessionRevocationCache cache;
-    private TransactionTemplate transactionTemplate;
+    private SessionRevocationWriter writer;
     private SessionRevocationService service;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
         repository = Mockito.mock(SessionRevocationJpaRepository.class);
         cache = Mockito.mock(SessionRevocationCache.class);
-        transactionTemplate = Mockito.mock(TransactionTemplate.class);
-        Mockito.doAnswer(invocation -> {
-            invocation.getArgument(0, Consumer.class).accept(null);
-            return null;
-        }).when(transactionTemplate).executeWithoutResult(Mockito.any());
-        service = new SessionRevocationService(repository, cache, transactionTemplate);
+        writer = Mockito.mock(SessionRevocationWriter.class);
+        service = new SessionRevocationService(repository, cache, writer);
     }
 
     @Test
@@ -110,10 +103,19 @@ class SessionRevocationServiceTest {
 
         service.revokeSession(userId, sessionId, ttl);
 
-        ArgumentCaptor<SessionRevocationEntity> captor = ArgumentCaptor.forClass(SessionRevocationEntity.class);
-        Mockito.verify(repository).save(captor.capture());
-        Assertions.assertThat(captor.getValue().getUserId()).isEqualTo(userId);
-        Assertions.assertThat(captor.getValue().getSessionId()).isEqualTo(sessionId);
+        Mockito.verify(writer).persistRevocation(userId, sessionId);
+        Mockito.verify(cache).markRevoked(userId, List.of(sessionId), ttl);
+    }
+
+    @Test
+    void revokeSessionAndDeactivateWritesBothRowsThroughIndependentWriter() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        Duration ttl = Duration.ofDays(30);
+
+        service.revokeSessionAndDeactivate(userId, sessionId, "刷新令牌重放，会话已撤销", ttl);
+
+        Mockito.verify(writer).persistRevocationAndDeactivate(userId, sessionId, "刷新令牌重放，会话已撤销");
         Mockito.verify(cache).markRevoked(userId, List.of(sessionId), ttl);
     }
 

@@ -158,6 +158,44 @@ class SharedSpaceLedgerIT {
     }
 
     @Test
+    @DisplayName("版本字节按对象去重：重复 RESTORE 行不会放大删除/恢复配额")
+    void versionBytesDeduplicateObjects() {
+        UUID owner = UUID.randomUUID();
+        UUID nodeId = UUID.randomUUID();
+        UUID currentObject = insertObject("current-object", 1024);
+        insertPersonalFileNode(nodeId, owner, "/docs/file.bin", 1024, currentObject, false);
+        UUID versionObject = insertObject("version-object", 4096);
+        insertVersion(nodeId, versionObject, 1);
+        insertVersion(nodeId, versionObject, 2);
+
+        long nodeBytes = fileMetricsRepository.sumVersionBytesForNode(
+                nodeId, SpaceType.PERSONAL.getValue(), false);
+        long ownerBytes = fileMetricsRepository.sumVersionBytesUnderPathByOwner(
+                owner, "/docs/", false);
+
+        assertThat(nodeBytes).isEqualTo(4096L);
+        assertThat(ownerBytes).isEqualTo(4096L);
+    }
+
+    @Test
+    @DisplayName("共享子树的版本字节按节点+对象去重")
+    void sharedSubtreeVersionBytesDeduplicateObjects() {
+        UUID owner = UUID.randomUUID();
+        UUID nodeId = UUID.randomUUID();
+        UUID currentObject = insertObject("shared-current", 1024);
+        insertPersonalFileNode(nodeId, owner, "/share/file.bin", 1024, currentObject, false);
+        jdbcTemplate.update("UPDATE omni.file_nodes SET space_type = 'SHARED' WHERE id = ?", nodeId);
+        UUID versionObject = insertObject("shared-version", 2048);
+        insertVersion(nodeId, versionObject, 1);
+        insertVersion(nodeId, versionObject, 2);
+
+        long sharedBytes = fileMetricsRepository.sumVersionBytesUnderPathInSpace(
+                SpaceType.SHARED.getValue(), "/share/", false);
+
+        assertThat(sharedBytes).isEqualTo(2048L);
+    }
+
+    @Test
     @DisplayName("共享子树统计按空间与前缀，含其他成员文件且转义生效")
     void sharedSubtreeAggregateCoversEveryOwnerAndEscapesPrefix() {
         UUID ownerA = UUID.randomUUID();

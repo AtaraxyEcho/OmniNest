@@ -99,7 +99,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> {
                     authorize
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        // 指标/环境等其它 Actuator 端点含内部拓扑与 SQL 信息，只允许系统配置读权限
+                        .requestMatchers("/actuator/**").hasAuthority(Permissions.SYSTEM_CONFIG_READ)
                         // 错误派发必须匿名可达，否则流式响应失败后二次 Access Denied 并掩盖真实异常
                         .requestMatchers("/error").permitAll()
                         // 托管的前端 SPA（分享链接的 Web 入口）：hash 路由仅需首页与静态资源匿名可达

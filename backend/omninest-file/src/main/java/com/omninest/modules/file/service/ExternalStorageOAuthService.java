@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
@@ -14,6 +15,7 @@ import com.omninest.modules.file.dto.OAuthStartResponse;
 import com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest;
 import com.omninest.modules.file.repository.StorageConnectorOAuthAppRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -60,6 +62,8 @@ public class ExternalStorageOAuthService {
     private final CredentialCipher credentialCipher;
     private final ReadThroughCache readThroughCache;
     private final DistributedLock distributedLock;
+    private final AdminActorVerifier adminActorVerifier;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /** 同账户刷新在本实例内串行；跨实例由分布式锁协调。 */
     private final ConcurrentMap<UUID, Object> refreshLocalLocks = new ConcurrentHashMap<>();
@@ -90,7 +94,9 @@ public class ExternalStorageOAuthService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public ConnectorOAuthAppDto saveApp(SaveConnectorOAuthAppRequest request) {
+    public ConnectorOAuthAppDto saveApp(UUID actorUserId, SaveConnectorOAuthAppRequest request) {
+        // 令牌里的权限声明可能已过期，实例级 OAuth 应用配置必须按库内当前角色复核。
+        adminActorVerifier.requireFreshAdminActor(actorUserId);
         String code = ExternalStorageProviders.requireAllowed(request.connectorCode());
         if (request.clientId() == null || request.clientId().isBlank()
                 || request.redirectUri() == null || request.redirectUri().isBlank()) {
@@ -110,7 +116,15 @@ public class ExternalStorageOAuthService {
         }
         app.setRedirectUri(request.redirectUri().trim());
         app.setEnabled(request.enabled());
-        return toDto(oauthAppRepository.save(app));
+        ConnectorOAuthAppDto saved = toDto(oauthAppRepository.save(app));
+        // 审计只落连接器与启用状态，Client Secret 及其密文一律不进载荷。
+        adminAuditRecorder.recordWithMetadata(
+                actorUserId,
+                "EXTERNAL_OAUTH_APP_SAVE",
+                "storage_connector_oauth_apps",
+                saved.id(),
+                Map.of("connectorCode", code, "enabled", request.enabled()));
+        return saved;
     }
 
     /**

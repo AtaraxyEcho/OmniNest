@@ -362,10 +362,9 @@ public class CurrentUserService implements UserProfileCacheEvictor {
         if (session.isRevoked()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "会话已被撤销");
         }
-        // 先更新即时撤销状态
-        sessionRevocationService.revokeSession(userId, sessionId, Duration.ofDays(30));
-        // 再持久化会话状态
-        activeSessionRepository.revokeBySessionId(sessionId, "用户主动撤销");
+        // 先更新即时撤销状态并同步落库会话状态（独立事务），任一后续失败都不会回滚吊销。
+        sessionRevocationService.revokeSessionAndDeactivate(
+                userId, sessionId, "用户主动撤销", Duration.ofDays(30));
     }
 
     private AuthUserDto toDto(AuthUser profile) {

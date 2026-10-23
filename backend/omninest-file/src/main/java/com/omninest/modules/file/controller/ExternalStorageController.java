@@ -230,6 +230,6 @@ public class ExternalStorageController {
     ApiResponse<ConnectorOAuthAppDto> saveOAuthApp(
             @Valid @RequestBody SaveConnectorOAuthAppRequest body
     ) {
-        return ApiResponse.success(oauthService.saveApp(body));
+        return ApiResponse.success(oauthService.saveApp(currentUserContext.requireCurrentUserId(), body));
     }
 }

@@ -2184,6 +2184,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesResumingUpload => 'Resuming upload';
 
   @override
+  String get filesUploadPurgingConflict =>
+      'Cleaning up the conflicting item in trash';
+
+  @override
   String get filesUploadRetrying => 'Cleanup complete. Retrying upload';
 
   @override

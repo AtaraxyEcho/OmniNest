@@ -9,6 +9,7 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
+import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AdminBatchUserStatusResult;
 import com.omninest.modules.user.dto.AdminCreateUserRequest;
 import com.omninest.modules.user.dto.AuthUserDto;
@@ -190,7 +191,11 @@ public class AdminUserService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员状态不能通过管理端修改");
         }
         adminActorGuard.requireSuperAdminForAdminTarget(actor, user, "修改管理员账户状态");
-        user.setStatus(normalizeStatus(rawStatus));
+        String normalizedStatus = normalizeStatus(rawStatus);
+        if (actor.getId().equals(userId) && !UserStatus.ACTIVE.getValue().equals(normalizedStatus)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "不能禁用当前登录的管理员账号");
+        }
+        user.setStatus(normalizedStatus);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户状态");
         currentUserService.evictProfileCache(userId);
@@ -274,8 +279,14 @@ public class AdminUserService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员角色不能通过管理端修改");
         }
         adminActorGuard.requireSuperAdminForAdminTarget(actor, user, "修改管理员角色");
+        Set<AuthRole> resolvedRoles = resolveRolesForActor(actor, requestedRoles);
+        if (actor.getId().equals(userId)
+                && resolvedRoles.stream().noneMatch(role -> Roles.ADMIN.equals(role.getCode())
+                        || Roles.SUPER_ADMIN.equals(role.getCode()))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "不能移除当前登录账号的管理员角色");
+        }
         user.getRoles().clear();
-        resolveRolesForActor(actor, requestedRoles).forEach(user.getRoles()::add);
+        resolvedRoles.forEach(user.getRoles()::add);
         AuthUserDto saved = toDto(authUserRepository.save(user));
         userSessionRevocationService.revokeAll(List.of(userId), "管理员更新用户角色");
         currentUserService.evictProfileCache(userId);

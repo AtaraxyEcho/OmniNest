@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
@@ -18,6 +19,7 @@ import com.omninest.modules.file.domain.StorageConnectorOAuthApp;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.repository.StorageConnectorOAuthAppRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,7 +50,8 @@ class ExternalStorageOAuthServiceTest {
 
     private final ExternalStorageOAuthService service = new ExternalStorageOAuthService(
             oauthAppRepository, accountRepository, credentialService, credentialCipher,
-            readThroughCache, distributedLock
+            readThroughCache, distributedLock,
+            mock(AdminActorVerifier.class), mock(AdminAuditRecorder.class)
     );
 
     @BeforeEach

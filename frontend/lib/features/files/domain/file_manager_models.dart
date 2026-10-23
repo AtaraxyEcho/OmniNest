@@ -69,6 +69,7 @@ abstract final class FileUploadTaskMessageCode {
   static const scanPending = 'scanPending';
   static const conflict = 'conflict';
   static const partCompleted = 'partCompleted';
+  static const purgingConflict = 'purgingConflict';
   static const retrying = 'retrying';
   static const failed = 'failed';
 }

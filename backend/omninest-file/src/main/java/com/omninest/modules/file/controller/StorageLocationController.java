@@ -85,14 +85,15 @@ public class StorageLocationController {
             @PathVariable UUID locationId,
             @Valid @RequestBody UpdateStorageLocationRequest request
     ) {
-        return ApiResponse.success(storageLocationService.update(locationId, request));
+        return ApiResponse.success(storageLocationService.update(
+                currentUserContext.requireCurrentUserId(), locationId, request));
     }
 
     @Operation(summary = "删除未被引用的存储位置")
     @DeleteMapping("/api/v1/admin/storage/locations/{locationId}")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<Void> delete(@PathVariable UUID locationId) {
-        storageLocationService.delete(locationId);
+        storageLocationService.delete(currentUserContext.requireCurrentUserId(), locationId);
         return ApiResponse.success();
     }
 

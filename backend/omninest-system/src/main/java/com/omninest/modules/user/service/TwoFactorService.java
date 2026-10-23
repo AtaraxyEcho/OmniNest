@@ -169,14 +169,21 @@ public class TwoFactorService {
         if (secret == null || secret.isBlank()) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "请先生成两步验证秘钥");
         }
-        long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, Long.MIN_VALUE);
+        String strongSecret;
+        try {
+            strongSecret = TotpUtil.requireStrongSecret(secret);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, exception.getMessage());
+        }
+        long step = TotpUtil.matchingStep(
+                strongSecret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, Long.MIN_VALUE);
         if (step == TotpUtil.NO_MATCH) {
             throw new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误");
         }
         AuthTotpCredential credential = totpCredentialRepository.findByUserId(userId)
                 .orElseGet(AuthTotpCredential::new);
         credential.setUserId(userId);
-        credential.setSecret(credentialCipher.encrypt(secret));
+        credential.setSecret(credentialCipher.encrypt(strongSecret));
         credential.setEnabled(true);
         credential.setConfirmedAt(Instant.now());
         credential.setLastUsedStep(step);

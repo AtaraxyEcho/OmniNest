@@ -37,6 +37,18 @@ Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 MAX_CONCURRENT_INFERENCES = max(1, int(os.environ.get("AI_MAX_CONCURRENT_INFERENCES", "1")))
 ORT_INTRA_THREADS = max(1, int(os.environ.get("AI_ORT_INTRA_THREADS", "2")))
+# GPU 开关：显式启用时才把 CUDA 放在 CPU 前；CUDA 不可用时 ORT 会回落到第二个 provider。
+VISION_ENABLE_GPU = os.environ.get("VISION_ENABLE_GPU", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+VISION_EXECUTION_PROVIDERS = (
+    ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    if VISION_ENABLE_GPU
+    else ["CPUExecutionProvider"]
+)
 UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
 MIN_RAM_PLUS_CONTAINER_BYTES = 2 * 1024 * 1024 * 1024
 
@@ -224,9 +236,9 @@ class ModelLifecycleManager:
                         OCR_DET_LIMIT_SIDE_LEN,
                     )
                     self._ocr = RapidOCR(
-                        det_use_cuda=False,
-                        cls_use_cuda=False,
-                        rec_use_cuda=False,
+                        det_use_cuda=VISION_ENABLE_GPU,
+                        cls_use_cuda=VISION_ENABLE_GPU,
+                        rec_use_cuda=VISION_ENABLE_GPU,
                         det_limit_side_len=OCR_DET_LIMIT_SIDE_LEN,
                         det_limit_type="max",
                         intra_op_num_threads=ORT_INTRA_THREADS,
@@ -261,7 +273,7 @@ class ModelLifecycleManager:
                     self._lw_session = ort.InferenceSession(
                         LIGHTWEIGHT_VISION_ONNX_PATH,
                         sess_options=options,
-                        providers=["CPUExecutionProvider"],
+                        providers=VISION_EXECUTION_PROVIDERS,
                     )
                     with np.load(LIGHTWEIGHT_TEXT_EMBEDS_PATH, allow_pickle=False) as data:
                         namespaces = [str(value) for value in data["namespaces"]]
@@ -302,7 +314,7 @@ class ModelLifecycleManager:
                 self._ram_session = ort.InferenceSession(
                     RAM_ONNX_PATH,
                     sess_options=options,
-                    providers=["CPUExecutionProvider"],
+                    providers=VISION_EXECUTION_PROVIDERS,
                 )
                 if not self._ram_tags and os.path.isfile(RAM_TAGS_PATH):
                     with open(RAM_TAGS_PATH, "r", encoding="utf-8") as handle:

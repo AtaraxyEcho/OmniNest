@@ -186,7 +186,7 @@ services:
       <<: *backend-environment
       OMNINEST_ROLE: api
       # 4C4G：显式堆上限；不设 MaxMetaspaceSize，由 mem_limit 约束，避免 Boot4 启动期 Metaspace OOM。
-      JAVA_OPTS: ${JAVA_OPTS_API:--Xms128m -Xmx320m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
+      JAVA_OPTS: ${JAVA_OPTS_API:--Xms128m -Xmx512m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_API:-10}
     ports:
       - "127.0.0.1:${OMNINEST_SERVER_PORT:-8080}:8080"
@@ -197,7 +197,7 @@ services:
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: worker
-      JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx320m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
+      JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx512m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_WORKER:-6}
       OMNINEST_WORKER_FILE_INDEX_CONCURRENCY: "1"
       OMNINEST_WORKER_TEXT_EXTRACTION_CONCURRENCY: "1"

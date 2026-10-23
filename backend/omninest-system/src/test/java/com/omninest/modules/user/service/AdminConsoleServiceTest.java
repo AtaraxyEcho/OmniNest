@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.data.domain.Sort;
 
 /**
@@ -43,6 +44,7 @@ class AdminConsoleServiceTest {
     private final AdminAnalyticsRepository analyticsRepository = mock(AdminAnalyticsRepository.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
     private final SystemMetricsCollector systemMetricsCollector = new SystemMetricsCollector();
+    private final HealthEndpoint healthEndpoint = mock(HealthEndpoint.class);
     private final AdminConsoleService service = new AdminConsoleService(
             authUserRepository,
             authRoleRepository,
@@ -53,7 +55,8 @@ class AdminConsoleServiceTest {
             storageMetricsQuery,
             analyticsRepository,
             storageQuotaService,
-            systemMetricsCollector
+            systemMetricsCollector,
+            healthEndpoint
     );
 
     @Test

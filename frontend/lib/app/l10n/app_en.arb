@@ -873,6 +873,7 @@
   "filesUploadPausedMsg": "Paused, can resume",
   "filesUploadPausePending": "Stopping the current transfer",
   "filesResumingUpload": "Resuming upload",
+  "filesUploadPurgingConflict": "Cleaning up the conflicting item in trash",
   "filesUploadRetrying": "Cleanup complete. Retrying upload",
   "filesUploadDone": "Upload complete",
   "filesUploadScanPending": "Upload complete. Security scan in progress; the file will appear once it passes.",

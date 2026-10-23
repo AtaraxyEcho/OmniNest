@@ -225,13 +225,16 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
      */
     @Query(value = """
             select coalesce(sum(f.size_bytes), 0)
-            from omni.file_versions v
-            join omni.file_nodes n on n.id = v.file_node_id
-            join omni.file_objects f on f.id = v.object_id
-            where n.space_type = :spaceType
-              and n.is_deleted = :deleted
-              and n.normalized_path like concat(:prefix, '%') escape '\\'
-              and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            from (
+                select distinct v.file_node_id, v.object_id
+                from omni.file_versions v
+                join omni.file_nodes n on n.id = v.file_node_id
+                where n.space_type = :spaceType
+                  and n.is_deleted = :deleted
+                  and n.normalized_path like concat(:prefix, '%') escape '\\'
+                  and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            ) distinct_versions
+            join omni.file_objects f on f.id = distinct_versions.object_id
             """, nativeQuery = true)
     long sumVersionBytesUnderPathInSpace(
             @Param("spaceType") String spaceType,
@@ -248,14 +251,17 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
      */
     @Query(value = """
             select coalesce(sum(f.size_bytes), 0)
-            from omni.file_versions v
-            join omni.file_nodes n on n.id = v.file_node_id
-            join omni.file_objects f on f.id = v.object_id
-            where n.owner_user_id = :ownerUserId
-              and n.space_type = 'PERSONAL'
-              and n.is_deleted = :deleted
-              and n.normalized_path like concat(:prefix, '%') escape '\\'
-              and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            from (
+                select distinct v.file_node_id, v.object_id
+                from omni.file_versions v
+                join omni.file_nodes n on n.id = v.file_node_id
+                where n.owner_user_id = :ownerUserId
+                  and n.space_type = 'PERSONAL'
+                  and n.is_deleted = :deleted
+                  and n.normalized_path like concat(:prefix, '%') escape '\\'
+                  and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            ) distinct_versions
+            join omni.file_objects f on f.id = distinct_versions.object_id
             """, nativeQuery = true)
     long sumVersionBytesUnderPathByOwner(
             @Param("ownerUserId") UUID ownerUserId,
@@ -272,13 +278,16 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
      */
     @Query(value = """
             select coalesce(sum(f.size_bytes), 0)
-            from omni.file_versions v
-            join omni.file_nodes n on n.id = v.file_node_id
-            join omni.file_objects f on f.id = v.object_id
-            where n.id = :fileNodeId
-              and n.space_type = :spaceType
-              and n.is_deleted = :deleted
-              and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            from (
+                select distinct v.file_node_id, v.object_id
+                from omni.file_versions v
+                join omni.file_nodes n on n.id = v.file_node_id
+                where n.id = :fileNodeId
+                  and n.space_type = :spaceType
+                  and n.is_deleted = :deleted
+                  and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            ) distinct_versions
+            join omni.file_objects f on f.id = distinct_versions.object_id
             """, nativeQuery = true)
     long sumVersionBytesForNode(
             @Param("fileNodeId") UUID fileNodeId,

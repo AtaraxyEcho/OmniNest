@@ -153,6 +153,20 @@ public class PhotoMotionRescanService {
         }
     }
 
+    /**
+     * 消费端兜底失败处理：服务内未捕获的异常（如 Error）也必须把任务置为死信，
+     * 不能让任务停留在 RUNNING 等心跳超时。
+     *
+     * @param taskId 任务标识
+     * @param error 未捕获异常
+     */
+    public void failFromConsumer(UUID taskId, Throwable error) {
+        String errorSummary = error == null ? "UNKNOWN" : error.getClass().getSimpleName();
+        String stackSummary = error == null ? "" : StackSummaries.summarize(error);
+        taskRecordService.markDeadLetter(taskId, errorSummary, stackSummary);
+        log.error("动态照片回扫任务因未捕获异常进入死信: taskId={}, errorType={}", taskId, errorSummary);
+    }
+
     private void handleRescanFailure(UUID taskId, UUID ownerUserId, RuntimeException exception) {
         String errorSummary = exception instanceof BusinessException businessException
                 ? businessException.errorCode().name()

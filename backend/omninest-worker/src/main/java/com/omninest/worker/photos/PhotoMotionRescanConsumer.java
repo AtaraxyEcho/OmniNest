@@ -43,6 +43,13 @@ public class PhotoMotionRescanConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Throwable e) {
             log.error("动态照片回扫任务执行异常: taskId={}", event.taskId(), e);
+            try {
+                // 服务内的 RuntimeException 已走重试/死信分支；这里兜住 Error 等未被捕获的情况，
+                // 避免把消息 ACK 掉却让任务永远停在 RUNNING。
+                photoMotionRescanService.failFromConsumer(event.taskId(), e);
+            } catch (RuntimeException markFailure) {
+                log.error("动态照片回扫任务失败状态回写失败: taskId={}", event.taskId(), markFailure);
+            }
             channel.basicAck(deliveryTag, false);
         }
     }

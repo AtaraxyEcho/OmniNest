@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.config.ProcessingTempProperties;
+import com.omninest.modules.file.service.FileQueryService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -53,7 +54,8 @@ class VideoTranscodeLocalIntegrationTest {
         UUID fileNodeId = UUID.randomUUID();
         when(resolver.resolveLocalInput(ownerId, fileNodeId)).thenReturn(input.toAbsolutePath().toString());
 
-        VideoTranscodeService service = new VideoTranscodeService(properties, resolver, executor, runtime);
+        VideoTranscodeService service = new VideoTranscodeService(
+                properties, resolver, executor, runtime, mock(FileQueryService.class));
         Path output = service.transcodeToWebOptimized(ownerId, fileNodeId, UUID.randomUUID(), "h264");
 
         assertThat(Files.size(output)).isPositive();

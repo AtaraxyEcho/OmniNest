@@ -1,8 +1,10 @@
 package com.omninest.modules.file.service;
 
 import com.omninest.common.access.SharedSpaceAccessQuery;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.config.ConfigValueProvider;
+import com.omninest.common.config.RuntimeConfigCommand;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
@@ -27,7 +29,9 @@ import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodePermissionRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import com.omninest.modules.quota.service.StorageQuotaService;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,6 +65,10 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     /** 子树路径重写的单批条目数。 */
     private static final int SUBTREE_REWRITE_BATCH_SIZE = 500;
 
+    /** 共享空间配置的审计资源标识（配置本身不是业务实体）。 */
+    private static final UUID SHARED_SPACE_CONFIG_AUDIT_ID =
+            UUID.nameUUIDFromBytes("shared-space-config".getBytes(StandardCharsets.UTF_8));
+
     private final FileNodeRepository fileNodeRepository;
     private final FileMetricsRepository fileMetricsRepository;
     private final SharedSpacePermissionRepository permissionRepository;
@@ -74,6 +82,9 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     private final FileIndexSyncService fileIndexSyncService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final ReadThroughCache readThroughCache;
+    private final RuntimeConfigCommand runtimeConfigCommand;
+    private final AdminActorVerifier adminActorVerifier;
+    private final AdminAuditRecorder adminAuditRecorder;
 
     /**
      * 检查共享空间是否启用。
@@ -713,12 +724,37 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     }
 
     /**
+     * 更新共享空间容量与启用状态；写配置前复核操作者当前仍具备管理权限。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateConfig(UUID operatorId, String maxBytes, String enabled) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
+        if (maxBytes != null && !maxBytes.isBlank()) {
+            runtimeConfigCommand.updateValue(
+                    "share.max-bytes", maxBytes, "管理员更新共享空间容量", operatorId);
+        }
+        if (enabled != null && !enabled.isBlank()) {
+            runtimeConfigCommand.updateValue(
+                    "share.enabled", enabled, "管理员更新共享空间启用状态", operatorId);
+        }
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "SHARED_SPACE_CONFIG_UPDATE",
+                "shared_space_config",
+                SHARED_SPACE_CONFIG_AUDIT_ID,
+                Map.of(
+                        "maxBytes", maxBytes == null ? "" : maxBytes,
+                        "enabled", enabled == null ? "" : enabled));
+    }
+
+    /**
      * 设置角色的共享空间权限。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void setRolePermission(UUID roleId, Boolean canBrowse, Boolean canUpload,
+    public void setRolePermission(UUID operatorId, UUID roleId, Boolean canBrowse, Boolean canUpload,
             Boolean canDownload, Boolean canDeleteOwn, Boolean canDeleteAny,
             Boolean canMoveTo, Boolean canMoveFrom, Boolean canCreateFolder) {
+        adminActorVerifier.requireFreshAdminActor(operatorId);
         SharedSpacePermission perm = permissionRepository.findByRoleId(roleId)
                 .orElseGet(() -> {
                     SharedSpacePermission p = new SharedSpacePermission();
@@ -734,6 +770,21 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         if (canMoveFrom != null) perm.setCanMoveFrom(canMoveFrom);
         if (canCreateFolder != null) perm.setCanCreateFolder(canCreateFolder);
         permissionRepository.save(perm);
+        Map<String, Object> auditPayload = new HashMap<>();
+        auditPayload.put("canBrowse", canBrowse);
+        auditPayload.put("canUpload", canUpload);
+        auditPayload.put("canDownload", canDownload);
+        auditPayload.put("canDeleteOwn", canDeleteOwn);
+        auditPayload.put("canDeleteAny", canDeleteAny);
+        auditPayload.put("canMoveTo", canMoveTo);
+        auditPayload.put("canMoveFrom", canMoveFrom);
+        auditPayload.put("canCreateFolder", canCreateFolder);
+        adminAuditRecorder.recordWithMetadata(
+                operatorId,
+                "SHARED_SPACE_PERMISSION_UPDATE",
+                "shared_space_permissions",
+                roleId,
+                auditPayload);
         log.info("共享空间权限更新: roleId={}", roleId);
     }
 }

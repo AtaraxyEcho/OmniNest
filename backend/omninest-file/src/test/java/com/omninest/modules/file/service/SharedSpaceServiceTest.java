@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.config.RuntimeConfigCommand;
+import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.NodeType;
@@ -30,6 +32,7 @@ import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.quota.service.StorageQuotaService;
+import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -84,7 +87,9 @@ class SharedSpaceServiceTest {
                 fileNodeRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, shareLinkRepository,
                 fileNodePermissionRepository, configValueProvider, eventPublisher,
-                fileIndexSyncService, syncEventRecorder, readThroughCache
+                fileIndexSyncService, syncEventRecorder, readThroughCache,
+                mock(RuntimeConfigCommand.class), mock(AdminActorVerifier.class),
+                mock(AdminAuditRecorder.class)
         );
     }
 

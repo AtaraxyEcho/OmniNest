@@ -24,16 +24,21 @@ public class SystemMetricsCollector {
      * @return 四项使用率
      */
     public Snapshot collect() {
-        Runtime runtime = Runtime.getRuntime();
         MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
         var heap = memoryMXBean.getHeapMemoryUsage();
         File disk = new File(System.getProperty("user.dir", "/"));
         long totalSpace = disk.getTotalSpace();
+        long totalSystemMemory = 0;
+        long freeSystemMemory = 0;
+        if (ManagementFactory.getOperatingSystemMXBean() instanceof OperatingSystemMXBean operatingSystem) {
+            totalSystemMemory = operatingSystem.getTotalMemorySize();
+            freeSystemMemory = operatingSystem.getFreeMemorySize();
+        }
         return new Snapshot(
                 round(Math.max(0, cpuLoad()) * 100),
                 ratio(heap.getUsed(), heap.getMax()),
                 ratio(totalSpace - disk.getFreeSpace(), totalSpace),
-                ratio(runtime.totalMemory() - runtime.freeMemory(), runtime.maxMemory())
+                ratio(totalSystemMemory - freeSystemMemory, totalSystemMemory)
         );
     }
 
@@ -72,13 +77,13 @@ public class SystemMetricsCollector {
      * @param cpuUsagePercent CPU 使用率
      * @param heapUsagePercent JVM 堆使用率（以最大堆为分母）
      * @param diskUsagePercent 进程工作目录所在卷的磁盘使用率
-     * @param runtimeMemoryUsagePercent JVM 已分配内存占最大堆的比例
+     * @param systemMemoryUsagePercent 宿主机/容器物理内存使用率
      */
     public record Snapshot(
             double cpuUsagePercent,
             double heapUsagePercent,
             double diskUsagePercent,
-            double runtimeMemoryUsagePercent
+            double systemMemoryUsagePercent
     ) {
     }
 }

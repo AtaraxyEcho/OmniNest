@@ -262,6 +262,18 @@ class TwoFactorServiceTest {
     }
 
     @Test
+    @DisplayName("新用户直落凭据：低熵或非规范秘钥被拒绝")
+    void provisionForNewUserRejectsWeakSecret() {
+        assertThatThrownBy(() -> service.provisionForNewUser(userId, "AAAAAAAAAAAAAAAA", "123456"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("长度不足");
+        assertThatThrownBy(() -> service.provisionForNewUser(userId, "AAAABBBB!CCCCDDDD", "123456"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Base32");
+        verify(totpCredentialRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("新用户直落凭据：验证码错误被拒绝")
     void provisionForNewUserRejectsWrongCode() {
         String secret = TotpUtil.generateSecret();

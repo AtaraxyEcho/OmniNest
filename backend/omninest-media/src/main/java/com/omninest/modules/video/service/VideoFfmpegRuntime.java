@@ -116,6 +116,9 @@ public class VideoFfmpegRuntime {
     /**
      * 判断输入需要的协议白名单。
      *
+     * <p>本地转码输入已由调用方落到受控临时文件，只允许 file/crypto/data；
+     * HTTP 分支仅保留给实时播放（需要 Range/跳转，无法整文件落盘）。</p>
+     *
      * @param input ffmpeg 输入
      * @return 协议白名单
      */

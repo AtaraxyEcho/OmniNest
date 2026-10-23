@@ -114,6 +114,8 @@ photo:
     max-decoded-bytes: 419430400
 
 file:
+  batch-download:
+    max-total-bytes: 5368709120
   transfer-limits:
     max-files-per-task: 10000
     max-derived-asset-bytes: 536870912

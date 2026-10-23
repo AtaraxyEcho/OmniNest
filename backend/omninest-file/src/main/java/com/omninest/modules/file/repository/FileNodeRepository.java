@@ -206,6 +206,31 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 按主键游标翻页读取个人空间某目录下的全部后代（含回收站节点）。
+     *
+     * <p>改名/移动必须同步软删除子孙的规范化路径，否则从回收站恢复后
+     * {@code parent_id} 与 {@code normalized_path} 指向两个位置。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀
+     * @param afterId 上一页最大节点 ID，首页传最小 UUID
+     * @param limit 单批数量
+     * @return 按 ID 升序的节点批次
+     */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' "
+            + "and node.id > :afterId order by node.id asc")
+    List<FileNode> findPersonalSubtreeAfterId(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix,
+            @Param("afterId") UUID afterId,
+            Pageable limit
+    );
+
+    /**
      * 读取指定空间与路径前缀下所有活动节点 ID（不区分所有者）。
      *
      * <p>共享空间目录可能包含多个成员上传的子项，按所有者过滤会漏掉其他成员的文件。</p>
@@ -722,6 +747,15 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             @Param("ownerUserId") UUID ownerUserId,
             @Param("objectId") UUID objectId
     );
+
+    /**
+     * 判断对象是否已是其它节点（含回收站节点）的当前内容。
+     *
+     * @param objectId 文件对象 ID
+     * @param fileNodeId 允许持有该引用的节点 ID
+     * @return 其它节点是否已引用
+     */
+    boolean existsByCurrentObjectIdAndIdNot(UUID objectId, UUID fileNodeId);
 
     @Query("""
             SELECT n FROM FileNode n

@@ -26,6 +26,15 @@ public interface FileVersionRepository extends JpaRepository<FileVersion, UUID> 
     long countByObjectIdAndFileNodeIdNotIn(UUID objectId, Collection<UUID> excludedFileNodeIds);
 
     /**
+     * 判断对象是否已被其它文件节点作为历史版本引用。
+     *
+     * @param objectId 文件对象 ID
+     * @param fileNodeId 允许持有该引用的节点 ID
+     * @return 其它节点是否已引用
+     */
+    boolean existsByObjectIdAndFileNodeIdNot(UUID objectId, UUID fileNodeId);
+
+    /**
      * 批量查询仍由永久删除任务外历史版本引用的对象。
      *
      * @param objectIds 待检查对象 ID

@@ -71,11 +71,16 @@ class _UserAvatar extends StatelessWidget {
     if (imageUrl == null || imageUrl!.isEmpty) {
       return fallback;
     }
+    // 头像按实际显示尺寸解码：后端允许上传 5MB 原图，直接解码会在图片缓存里
+    // 驻留整张高清位图，翻页浏览用户列表时迅速放大内存占用。
+    final cacheSide = (26 * MediaQuery.devicePixelRatioOf(context)).round();
     return ClipOval(
       child: Image.network(
         imageUrl!,
         width: 26,
         height: 26,
+        cacheWidth: cacheSide,
+        cacheHeight: cacheSide,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => fallback,
       ),

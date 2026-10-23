@@ -24,6 +24,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,7 @@ public class AdminConsoleService {
     private final AdminAnalyticsRepository analyticsRepository;
     private final StorageQuotaService storageQuotaService;
     private final SystemMetricsCollector systemMetricsCollector;
+    private final HealthEndpoint healthEndpoint;
 
     @Transactional(readOnly = true)
     public AdminConsoleSummaryDto summary() {
@@ -173,13 +176,27 @@ public class AdminConsoleService {
             AdminConsoleSummaryDto.StorageStats storageStats
     ) {
         String taskStatus = taskStats.failed() + taskStats.dlq() > 0 ? "WARN" : "UP";
+        String storageStatus = componentStatus("minio");
         return List.of(
                 new AdminConsoleSummaryDto.HealthItem("API 服务", "UP", "管理接口可访问"),
                 new AdminConsoleSummaryDto.HealthItem("用户中心", "UP", userStats.total() + " 个账号"),
                 new AdminConsoleSummaryDto.HealthItem("配置中心", "UP", configStats.hot() + " 个热更新配置"),
                 new AdminConsoleSummaryDto.HealthItem("任务队列", taskStatus, taskStats.running() + " 个运行中任务"),
-                new AdminConsoleSummaryDto.HealthItem("对象存储", "UP", storageStats.objectCount() + " 个对象")
+                new AdminConsoleSummaryDto.HealthItem(
+                        "对象存储", storageStatus, storageStats.objectCount() + " 个对象")
         );
+    }
+
+    private String componentStatus(String componentName) {
+        try {
+            var health = healthEndpoint.healthForPath(componentName);
+            if (health == null) {
+                return "DOWN";
+            }
+            return Status.UP.equals(health.getStatus()) ? "UP" : "WARN";
+        } catch (RuntimeException exception) {
+            return "DOWN";
+        }
     }
 
     /**
@@ -235,7 +252,7 @@ public class AdminConsoleService {
         SystemMetricsCollector.Snapshot metrics = systemMetricsCollector.collect();
         return new AdminAnalyticsDto.SystemLoadSnapshot(
                 metrics.cpuUsagePercent(),
-                metrics.runtimeMemoryUsagePercent(),
+                metrics.systemMemoryUsagePercent(),
                 metrics.diskUsagePercent(),
                 metrics.heapUsagePercent()
         );

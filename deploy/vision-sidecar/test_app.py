@@ -193,9 +193,9 @@ class AnalysisPipelineTest(unittest.TestCase):
         self.assertEqual("cat", result.observations[0].code)
 
     def test_pipeline_version_contains_profile_model_state_and_ocr_version(self):
-        self.assertIn(app.VISION_PROFILE, app.CONTENT_ANALYSIS_PIPELINE_VERSION)
-        self.assertIn(app.VISION_MODEL_STATE, app.CONTENT_ANALYSIS_PIPELINE_VERSION)
-        self.assertIn(app.OCR_PIPELINE_VERSION, app.CONTENT_ANALYSIS_PIPELINE_VERSION)
+        self.assertIn(app.VISION_PROFILE, app.current_content_pipeline_version())
+        self.assertIn(app._vision_model_state(app.VISION_PROFILE), app.current_content_pipeline_version())
+        self.assertIn(app.OCR_PIPELINE_VERSION, app.current_content_pipeline_version())
 
     def test_vision_model_state_requires_all_profile_files(self):
         with patch.object(app.os.path, "isfile", return_value=True):
@@ -261,8 +261,8 @@ class AnalysisPipelineTest(unittest.TestCase):
         response = asyncio.run(app.ready())
         self.assertEqual("ok", response["status"])
         self.assertEqual(app.VISION_PROFILE, response["visionProfile"])
-        self.assertEqual(app.VISION_MODEL_STATE, response["visionModelState"])
-        self.assertEqual(app.CONTENT_ANALYSIS_PIPELINE_VERSION, response["pipelineVersion"])
+        self.assertEqual(app._vision_model_state(app.VISION_PROFILE), response["visionModelState"])
+        self.assertEqual(app.current_content_pipeline_version(), response["pipelineVersion"])
         self.assertEqual(app.OCR_PIPELINE_VERSION, response["ocrVersion"])
 
 

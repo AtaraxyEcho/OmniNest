@@ -125,6 +125,12 @@ class _FakeFileRepository
   }
 
   @override
+  Future<String> getUploadPartUrl({
+    required String uploadId,
+    required int partNumber,
+  }) async => 'https://storage.test/$uploadId/part-$partNumber';
+
+  @override
   Future<String> putUploadUrl({
     required String uploadUrl,
     required Stream<List<int>> data,

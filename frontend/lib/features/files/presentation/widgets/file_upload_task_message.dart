@@ -22,6 +22,8 @@ String localizedFileUploadTaskMessage(
       task.messageCurrent ?? 0,
       task.messageTotal ?? 0,
     ),
+    FileUploadTaskMessageCode.purgingConflict =>
+      l10n.filesUploadPurgingConflict,
     FileUploadTaskMessageCode.retrying => l10n.filesUploadRetrying,
     FileUploadTaskMessageCode.failed => task.message ?? l10n.filesStatusFailed,
     _ => task.message ?? '',

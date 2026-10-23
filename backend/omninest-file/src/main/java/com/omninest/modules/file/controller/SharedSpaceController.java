@@ -2,7 +2,6 @@ package com.omninest.modules.file.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
-import com.omninest.common.config.RuntimeConfigCommand;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.domain.FileNode;
@@ -44,7 +43,6 @@ public class SharedSpaceController {
     private final SharedSpaceService sharedSpaceService;
     private final FileNodeSupport fileNodeSupport;
     private final SharedSpaceQuotaService quotaService;
-    private final RuntimeConfigCommand runtimeConfigCommand;
     private final CurrentUserContext currentUserContext;
 
     @Operation(summary = "浏览共享空间目录")
@@ -122,14 +120,7 @@ public class SharedSpaceController {
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     public ApiResponse<Void> updateConfig(@RequestBody @Valid SharedSpaceConfigRequest request) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
-        if (request.maxBytes() != null && !request.maxBytes().isBlank()) {
-            runtimeConfigCommand.updateValue("share.max-bytes", request.maxBytes(),
-                    "管理员更新共享空间容量", operatorId);
-        }
-        if (request.enabled() != null && !request.enabled().isBlank()) {
-            runtimeConfigCommand.updateValue("share.enabled", request.enabled(),
-                    "管理员更新共享空间启用状态", operatorId);
-        }
+        sharedSpaceService.updateConfig(operatorId, request.maxBytes(), request.enabled());
         return ApiResponse.success();
     }
 
@@ -139,8 +130,9 @@ public class SharedSpaceController {
     public ApiResponse<Void> setRolePermission(
             @PathVariable UUID roleId,
             @RequestBody @Valid SharedSpacePermissionRequest request) {
+        UUID operatorId = currentUserContext.requireCurrentUserId();
         sharedSpaceService.setRolePermission(
-                roleId, request.canBrowse(), request.canUpload(),
+                operatorId, roleId, request.canBrowse(), request.canUpload(),
                 request.canDownload(), request.canDeleteOwn(), request.canDeleteAny(),
                 request.canMoveTo(), request.canMoveFrom(), request.canCreateFolder());
         return ApiResponse.success();

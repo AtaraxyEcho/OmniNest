@@ -3,9 +3,13 @@ package com.omninest.modules.video.service;
 import com.omninest.common.config.ProcessingTempProperties;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.service.FileQueryService;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +32,7 @@ public class VideoTranscodeService {
     private final VideoSourceInputResolver sourceInputResolver;
     private final VideoProcessExecutor processExecutor;
     private final VideoFfmpegRuntime ffmpegRuntime;
+    private final FileQueryService fileQueryService;
 
     /**
      * 创建视频转码服务。
@@ -40,12 +45,14 @@ public class VideoTranscodeService {
             ProcessingTempProperties processingTempProperties,
             VideoSourceInputResolver sourceInputResolver,
             VideoProcessExecutor processExecutor,
-            VideoFfmpegRuntime ffmpegRuntime
+            VideoFfmpegRuntime ffmpegRuntime,
+            FileQueryService fileQueryService
     ) {
         this.processingTempProperties = processingTempProperties;
         this.sourceInputResolver = sourceInputResolver;
         this.processExecutor = processExecutor;
         this.ffmpegRuntime = ffmpegRuntime;
+        this.fileQueryService = fileQueryService;
     }
 
     private static final Duration TRANSCODE_TIMEOUT = Duration.ofMinutes(180);
@@ -125,7 +132,19 @@ public class VideoTranscodeService {
                     "ffmpeg 不可用，无法提取内嵌字幕");
         }
         if (!ffmpegRuntime.isDocker()) {
-            return extractSubtitleLocally(internalUrl, videoItemId, streamIndex);
+            // 本地 ffmpeg 必须吃受控本地文件：预签名 URL 交给本地进程后，
+            // 恶意媒体内嵌的远程引用（HLS 分片、concat）会绕开出站地址校验。
+            Path staged = null;
+            try {
+                staged = stageLocalInput(ownerUserId, fileNodeId, internalUrl);
+                String localInput = staged != null ? staged.toAbsolutePath().toString() : internalUrl;
+                return extractSubtitleLocally(localInput, videoItemId, streamIndex);
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
+                        "字幕提取源暂存失败: " + exception.getMessage());
+            } finally {
+                deleteQuietly(staged);
+            }
         }
 
         String containerDir = DOCKER_TRANSCODE_DIR + "/" + videoItemId + "-sub-" + streamIndex;
@@ -227,7 +246,17 @@ public class VideoTranscodeService {
         }
         String internalUrl = resolveInput(ownerUserId, fileNodeId);
         if (!ffmpegRuntime.isDocker()) {
-            return executeLocalTranscode(internalUrl, videoItemId, ext, ffmpegArgs, logLabel);
+            Path staged = null;
+            try {
+                staged = stageLocalInput(ownerUserId, fileNodeId, internalUrl);
+                String localInput = staged != null ? staged.toAbsolutePath().toString() : internalUrl;
+                return executeLocalTranscode(localInput, videoItemId, ext, ffmpegArgs, logLabel);
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
+                        logLabel + "源暂存失败: " + exception.getMessage());
+            } finally {
+                deleteQuietly(staged);
+            }
         }
 
         String containerDir = DOCKER_TRANSCODE_DIR + "/" + videoItemId + suffix;
@@ -313,6 +342,35 @@ public class VideoTranscodeService {
         return ffmpegRuntime.isDocker()
                 ? sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId)
                 : sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
+    }
+
+    /**
+     * 把非本地来源的内容落到受控临时文件，供本地 ffmpeg 以 file 协议读取。
+     *
+     * @return 本地临时文件；输入本来就是本地路径时返回 null，调用方直接使用原路径
+     */
+    private Path stageLocalInput(UUID ownerUserId, UUID fileNodeId, String input) throws IOException {
+        if (!isHttpInput(input)) {
+            return null;
+        }
+        Path staged = Files.createTempFile(
+                processingTempProperties.ensureSubdirectory("transcode"), "input-", ".bin");
+        try (FileContentStream content = fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId);
+                InputStream stream = content.inputStream()) {
+            Files.copy(stream, staged, StandardCopyOption.REPLACE_EXISTING);
+            return staged;
+        } catch (IOException | RuntimeException exception) {
+            deleteQuietly(staged);
+            throw exception;
+        }
+    }
+
+    private boolean isHttpInput(String input) {
+        if (input == null) {
+            return false;
+        }
+        String lower = input.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://");
     }
 
     private void runLocalFfmpeg(List<String> command, Duration timeout, String logLabel)

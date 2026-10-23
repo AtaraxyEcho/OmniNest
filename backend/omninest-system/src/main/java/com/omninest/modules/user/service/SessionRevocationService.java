@@ -14,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 编排会话撤销记录、撤销黑名单缓存、未撤销短期判定和安全降级判定。
@@ -37,10 +36,12 @@ public class SessionRevocationService implements SessionRevocationChecker {
 
     private final SessionRevocationJpaRepository repository;
     private final SessionRevocationCache cache;
-    private final TransactionTemplate transactionTemplate;
+    private final SessionRevocationWriter writer;
 
     /**
      * 撤销单个会话，并将撤销结果写入持久层和缓存。
+     *
+     * <p>持久化走独立事务：调用方随后抛错回滚时，吊销记录仍然保留。</p>
      *
      * @param userId 用户标识
      * @param sessionId 会话标识
@@ -48,7 +49,27 @@ public class SessionRevocationService implements SessionRevocationChecker {
      */
     public void revokeSession(UUID userId, UUID sessionId, Duration ttl) {
         try {
-            transactionTemplate.executeWithoutResult(status -> repository.save(entity(userId, sessionId)));
+            writer.persistRevocation(userId, sessionId);
+        } catch (RuntimeException exception) {
+            log.error("数据库会话撤销写入失败: userId={}, sessionId={}", userId, sessionId, exception);
+        }
+        publishRevocations(userId, List.of(sessionId), ttl);
+    }
+
+    /**
+     * 撤销会话并同时落库会话撤销状态；两步在独立事务中一起提交。
+     *
+     * <p>刷新重放、主动登出与管理端强制退出使用本入口：调用方在吊销后通常会抛错或继续
+     * 其它写操作，会话行与撤销记录的落库不能被后续失败回滚。</p>
+     *
+     * @param userId 用户标识
+     * @param sessionId 会话标识
+     * @param reason 写入会话行的撤销原因
+     * @param ttl 撤销缓存保留时间
+     */
+    public void revokeSessionAndDeactivate(UUID userId, UUID sessionId, String reason, Duration ttl) {
+        try {
+            writer.persistRevocationAndDeactivate(userId, sessionId, reason);
         } catch (RuntimeException exception) {
             log.error("数据库会话撤销写入失败: userId={}, sessionId={}", userId, sessionId, exception);
         }

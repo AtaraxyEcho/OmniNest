@@ -172,6 +172,12 @@ abstract interface class FileRepository {
     FileUploadProgressCallback? onProgress,
   });
 
+  /// 按需拉取单个分片的预签名上传地址。
+  Future<String> getUploadPartUrl({
+    required String uploadId,
+    required int partNumber,
+  });
+
   Future<FileUploadCompleteResult> completeUploadSession({
     required String sessionId,
     String? sha256,

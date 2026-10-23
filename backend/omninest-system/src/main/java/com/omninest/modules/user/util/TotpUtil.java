@@ -56,6 +56,35 @@ public final class TotpUtil {
     }
 
     /**
+     * 校验客户端提交的 Base32 秘钥并返回规范形式。
+     *
+     * <p>客户端可用更短或夹带非法字符的字符串蒙混过关，导致实际熵远低于 160 bit；
+     * 这里要求字符集合法、解码后至少 {@value #SECRET_BYTES} 字节，且重新编码与
+     * 去填充后的输入逐字一致（排除被解码器忽略的尾部残位）。</p>
+     *
+     * @param secret 客户端提交的秘钥
+     * @return 大写、去空白的规范秘钥
+     * @throws IllegalArgumentException 秘钥为空、字符集非法、长度不足或非规范编码
+     */
+    public static String requireStrongSecret(String secret) {
+        if (secret == null) {
+            throw new IllegalArgumentException("两步验证秘钥不能为空");
+        }
+        String normalized = secret.replace(" ", "").replace("-", "").trim().toUpperCase(Locale.ROOT);
+        if (normalized.isEmpty() || !normalized.matches("[A-Z2-7]+=*")) {
+            throw new IllegalArgumentException("两步验证秘钥不是合法的 Base32 字符串");
+        }
+        byte[] decoded = base32Decode(normalized);
+        if (decoded.length < SECRET_BYTES) {
+            throw new IllegalArgumentException("两步验证秘钥长度不足，至少需要 160 bit");
+        }
+        if (!base32Encode(decoded).equals(normalized.replace("=", ""))) {
+            throw new IllegalArgumentException("两步验证秘钥不是规范的 Base32 编码");
+        }
+        return normalized;
+    }
+
+    /**
      * 构造认证器扫码使用的 otpauth URI。
      *
      * @param issuer 签发者名称

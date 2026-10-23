@@ -9,6 +9,7 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import lombok.RequiredArgsConstructor;
@@ -233,16 +235,39 @@ public class PhotoAiService {
     }
 
     private byte[] downsample(byte[] original) {
-        try {
-            ByteArrayOutputStream output = new ByteArrayOutputStream(
-                    Math.min(original.length, 1024 * 1024));
-            Thumbnails.of(new ByteArrayInputStream(original))
-                    .size(OCR_DOWNSAMPLE_MAX_SIDE, OCR_DOWNSAMPLE_MAX_SIDE)
-                    .keepAspectRatio(true)
-                    .outputFormat("jpg")
-                    .outputQuality(OCR_DOWNSAMPLE_QUALITY)
-                    .toOutputStream(output);
-            return output.toByteArray();
+        try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(original))) {
+            if (input == null) {
+                throw new IllegalStateException("照片分析图像下采样失败: 无法读取图像流");
+            }
+            var readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                throw new IllegalStateException("照片分析图像下采样失败: 没有可用解码器");
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                int step = 1;
+                while (Math.max(width, height) / step > OCR_DOWNSAMPLE_MAX_SIDE) {
+                    step++;
+                }
+                var param = reader.getDefaultReadParam();
+                if (step > 1) {
+                    // 解码阶段直接抽样：避免先在堆内展开全尺寸 BufferedImage 再缩放。
+                    param.setSourceSubsampling(step, step, 0, 0);
+                }
+                BufferedImage sampled = reader.read(0, param);
+                ByteArrayOutputStream output = new ByteArrayOutputStream(512 * 1024);
+                Thumbnails.of(sampled)
+                        .scale(1)
+                        .outputFormat("jpg")
+                        .outputQuality(OCR_DOWNSAMPLE_QUALITY)
+                        .toOutputStream(output);
+                return output.toByteArray();
+            } finally {
+                reader.dispose();
+            }
         } catch (IOException exception) {
             throw new IllegalStateException("照片分析图像下采样失败", exception);
         }

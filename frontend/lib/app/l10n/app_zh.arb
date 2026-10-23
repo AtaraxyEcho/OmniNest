@@ -768,6 +768,7 @@
   "filesUploadPausedMsg": "已暂停，可继续上传",
   "filesUploadPausePending": "正在暂停当前传输",
   "filesResumingUpload": "继续上传中",
+  "filesUploadPurgingConflict": "正在清理回收站同名文件",
   "filesUploadRetrying": "清理完成，正在重新上传",
   "filesUploadDone": "上传完成",
   "filesUploadScanPending": "上传完成，安全扫描中，文件通过后自动显示",

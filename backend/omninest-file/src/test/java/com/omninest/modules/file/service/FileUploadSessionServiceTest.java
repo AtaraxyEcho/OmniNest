@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -94,6 +95,8 @@ class FileUploadSessionServiceTest {
         when(uploadSettings.presignedPartBurstCapacity()).thenReturn(8);
         when(uploadSettings.bandwidthLimitEnabled()).thenReturn(true);
         TokenBucketRateLimiter bandwidthLimiter = mock(TokenBucketRateLimiter.class);
+        when(bandwidthLimiter.tryConsumeToken(anyString(), anyInt(), anyDouble()))
+                .thenReturn(new TokenBucketRateLimiter.TokenBucketResult(true, 0));
         ingressLifecycleService = mock(FileIngressLifecycleService.class);
         configValueProvider = mock(ConfigValueProvider.class);
         RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);

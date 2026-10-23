@@ -201,6 +201,37 @@ class AdminUserServiceTest {
     }
 
     @Test
+    void updateUserStatusRejectsDisablingSelf() {
+        UUID actorId = UUID.fromString("10000000-0000-0000-0000-00000000000e");
+        givenActorAs(actorId, Roles.SUPER_ADMIN);
+        AuthUser self = new AuthUser();
+        self.setId(actorId);
+        self.setUsername("admin-self");
+        self.getRoles().add(role(UUID.randomUUID(), Roles.ADMIN));
+        when(authUserRepository.findWithRolesById(actorId)).thenReturn(Optional.of(self));
+
+        assertThatThrownBy(() -> service.updateUserStatus(actorId, "DISABLED"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能禁用当前登录的管理员账号");
+    }
+
+    @Test
+    void updateUserRolesRejectsRemovingOwnAdminRole() {
+        UUID actorId = UUID.fromString("10000000-0000-0000-0000-00000000000f");
+        givenActorAs(actorId, Roles.SUPER_ADMIN);
+        AuthUser self = new AuthUser();
+        self.setId(actorId);
+        self.setUsername("admin-self");
+        self.getRoles().add(role(UUID.randomUUID(), Roles.ADMIN));
+        when(authUserRepository.findWithRolesById(actorId)).thenReturn(Optional.of(self));
+        when(authRoleRepository.findByCode("MEMBER")).thenReturn(Optional.of(role(UUID.randomUUID(), "MEMBER")));
+
+        assertThatThrownBy(() -> service.updateUserRoles(actorId, Set.of("MEMBER")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能移除当前登录账号的管理员角色");
+    }
+
+    @Test
     void batchUpdateUserStatusSkipsFailuresAndReturnsPerItemResult() {
         UUID okId = UUID.fromString("10000000-0000-0000-0000-00000000000a");
         UUID missingId = UUID.fromString("10000000-0000-0000-0000-00000000000b");
@@ -216,7 +247,8 @@ class AdminUserServiceTest {
         when(authUserRepository.findWithRolesById(missingId)).thenReturn(Optional.empty());
         when(authUserRepository.findWithRolesById(superAdminId)).thenReturn(Optional.of(superAdmin));
         when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        givenActorAs(okId, Roles.SUPER_ADMIN);
+        // 操作者与目标分离：自身状态变更是另一条自锁用例，批量这里验证逐项成功/失败。
+        givenActorAs(UUID.fromString("10000000-0000-0000-0000-00000000000d"), Roles.SUPER_ADMIN);
 
         var result = service.batchUpdateUserStatus(
                 List.of(okId, missingId, superAdminId), "DISABLED");
@@ -226,7 +258,8 @@ class AdminUserServiceTest {
         assertThat(member.getStatus()).isEqualTo("DISABLED");
         verify(userSessionRevocationService).revokeAll(List.of(okId), "管理员更新用户状态");
         verify(auditLogService).recordWithMetadata(
-                eq(okId), eq("ADMIN_USER_STATUS_UPDATE"), eq("auth_users"), eq(okId), any());
+                eq(UUID.fromString("10000000-0000-0000-0000-00000000000d")),
+                eq("ADMIN_USER_STATUS_UPDATE"), eq("auth_users"), eq(okId), any());
     }
 
     @Test

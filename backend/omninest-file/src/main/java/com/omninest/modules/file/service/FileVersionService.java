@@ -213,6 +213,14 @@ public class FileVersionService {
                 .ifPresent(existing -> {
                     throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件使用");
                 });
+        // 回收站节点同样占用配额，历史版本也持有对象引用；只查活跃节点的当前对象
+        // 会让同一份字节挂到多个节点上，删除/清空时按节点重复释放配额。
+        if (fileNodeRepository.existsByCurrentObjectIdAndIdNot(objectId, fileNodeId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件或回收站占用");
+        }
+        if (fileVersionRepository.existsByObjectIdAndFileNodeIdNot(objectId, fileNodeId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件的版本引用");
+        }
     }
 
     private boolean isObjectOwnedByUser(FileObject object, UUID ownerUserId) {

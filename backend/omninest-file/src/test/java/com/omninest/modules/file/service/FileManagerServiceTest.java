@@ -880,6 +880,61 @@ class FileManagerServiceTest {
     }
 
     @Test
+    void planZipEntriesDeduplicatesRepeatedFileIds() {
+        UUID fileId = UUID.fromString("70000000-0000-0000-0000-000000000031");
+        UUID objectId = UUID.fromString("80000000-0000-0000-0000-000000000031");
+        FileNode file = node("same.pdf", "application/pdf", 1024);
+        file.setId(fileId);
+        file.setCurrentObjectId(objectId);
+        FileObject object = new FileObject();
+        object.setId(objectId);
+        object.setBucketName("files");
+        object.setObjectKey("obj31");
+        object.setSizeBytes(1024);
+        when(fileNodeRepository.findAllById(any())).thenReturn(List.of(file));
+        when(fileObjectRepository.findAllById(any())).thenReturn(List.of(object));
+
+        var entries = fileManagerService.planZipEntries(
+                OWNER_ID, List.of(fileId.toString(), fileId.toString()));
+
+        assertThat(entries).hasSize(1);
+    }
+
+    @Test
+    void planZipEntriesRejectsPackagesAboveTotalByteLimit() {
+        UUID fileId = UUID.fromString("70000000-0000-0000-0000-000000000032");
+        UUID objectId = UUID.fromString("80000000-0000-0000-0000-000000000032");
+        FileNode file = node("large.mkv", "video/x-matroska", 2048);
+        file.setId(fileId);
+        file.setCurrentObjectId(objectId);
+        FileObject object = new FileObject();
+        object.setId(objectId);
+        object.setBucketName("files");
+        object.setObjectKey("obj32");
+        object.setSizeBytes(2048);
+        when(fileNodeRepository.findAllById(any())).thenReturn(List.of(file));
+        when(fileObjectRepository.findAllById(any())).thenReturn(List.of(object));
+        fileManagerService.setMaxBatchDownloadTotalBytes(1024);
+
+        assertThatThrownBy(() -> fileManagerService.planZipEntries(OWNER_ID, List.of(fileId.toString())))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("打包总大小超过限制");
+    }
+
+    @Test
+    void batchDownloadLeaseCapsConcurrentPackages() {
+        var first = fileManagerService.acquireBatchDownloadLease();
+        var second = fileManagerService.acquireBatchDownloadLease();
+        assertThatThrownBy(fileManagerService::acquireBatchDownloadLease)
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("批量下载任务过多");
+        first.close();
+        var third = fileManagerService.acquireBatchDownloadLease();
+        second.close();
+        third.close();
+    }
+
+    @Test
     void packAsZip_skipsFolders() throws IOException {
         UUID folderId = UUID.fromString("70000000-0000-0000-0000-000000000010");
         UUID fileId = UUID.fromString("70000000-0000-0000-0000-000000000011");

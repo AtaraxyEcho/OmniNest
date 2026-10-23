@@ -30,6 +30,8 @@ public class BackdropVideoThumbnailExtractor {
 
     private static final String DOCKER_CONTAINER = "omninest-ffmpeg";
     private static final String DOCKER_PROBE_DIR = "/tmp/probe";
+    /** 本地抽帧/探测只处理已落盘的 staging 文件，禁止媒体内嵌引用再出网。 */
+    private static final String LOCAL_PROTOCOL_WHITELIST = "file,crypto,data";
     private static final Duration COMMAND_CHECK_TIMEOUT = Duration.ofSeconds(10);
     /** 编码名落库列长度上限，与 backdrop_assets.video_codec 保持一致。 */
     private static final int PROBE_CODEC_MAX_LENGTH = 32;
@@ -103,6 +105,8 @@ public class BackdropVideoThumbnailExtractor {
             List<String> command = new ArrayList<>();
             command.add("ffmpeg");
             command.add("-y");
+            command.add("-protocol_whitelist");
+            command.add(LOCAL_PROTOCOL_WHITELIST);
             command.add("-i");
             command.add(stagingFile.toAbsolutePath().toString());
             command.add("-vf");
@@ -152,6 +156,7 @@ public class BackdropVideoThumbnailExtractor {
             VideoProcessExecutor.Result result = processExecutor.execute(List.of(
                     "ffprobe",
                     "-v", "error",
+                    "-protocol_whitelist", LOCAL_PROTOCOL_WHITELIST,
                     "-select_streams", "v:0",
                     "-show_entries", "stream=codec_name",
                     "-of", "default=noprint_wrappers=1:nokey=1",
@@ -192,6 +197,8 @@ public class BackdropVideoThumbnailExtractor {
             List<String> command = new ArrayList<>();
             command.add("ffmpeg");
             command.add("-y");
+            command.add("-protocol_whitelist");
+            command.add(LOCAL_PROTOCOL_WHITELIST);
             command.add("-ss");
             command.add("00:00:01");
             command.add("-i");

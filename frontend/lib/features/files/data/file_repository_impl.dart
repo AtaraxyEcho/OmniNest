@@ -356,6 +356,14 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<String> getUploadPartUrl({
+    required String uploadId,
+    required int partNumber,
+  }) {
+    return fileApi.getUploadPartUrl(uploadId: uploadId, partNumber: partNumber);
+  }
+
+  @override
   Future<FileUploadCompleteResult> completeUploadSession({
     required String sessionId,
     String? sha256,

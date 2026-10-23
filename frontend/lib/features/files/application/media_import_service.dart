@@ -432,11 +432,12 @@ class MediaImportService {
       cancellationToken?.throwIfCancelled();
       final start = (part.partNumber - 1) * session.partSizeBytes;
       final end = math.min(start + part.sizeBytes, sizeBytes);
-      final uploadUrl = part.uploadUrl;
+      var uploadUrl = part.uploadUrl;
       if (uploadUrl == null || uploadUrl.isEmpty) {
-        throw AppException(
-          code: AppErrorCodes.uploadUrlMissing,
-          message: '${AppErrorCodes.uploadUrlMissing}:${part.partNumber}',
+        // 创建会话只预签名首批分片，其余分片在上传前逐个按需获取。
+        uploadUrl = await _fileApi.getUploadPartUrl(
+          uploadId: session.uploadId,
+          partNumber: part.partNumber,
         );
       }
       final eTag = await _fileApi.putUploadUrl(

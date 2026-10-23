@@ -74,6 +74,9 @@ public class FileUploadSessionService {
     private static final int MAX_PART_SIZE_BYTES = 100 * 1024 * 1024;
     private static final int MAX_TOTAL_PARTS = 1000;
     private static final int TARGET_PARTS = 64;
+
+    /** 创建会话时只预签名前若干分片，其余由客户端按需拉取，避免事务内生成 1000 个 URL。 */
+    private static final int INITIAL_PRESIGNED_PARTS = 10;
     private static final Duration SCAN_WINDOW = Duration.ofHours(24);
 
     private final FileUploadSessionRepository fileUploadSessionRepository;
@@ -201,6 +204,8 @@ public class FileUploadSessionService {
         session.setSpaceType(spaceType);
         FileUploadSession saved = fileUploadSessionRepository.save(session);
         List<FileUploadPart> parts = fileUploadPartRepository.saveAll(buildParts(saved));
+        // 预签名消耗签名配额：一次会话只发首批，后续分片由按需接口限额拉取。
+        checkBandwidthLimit(ownerUserId);
         return toSessionDto(saved, parts, true);
     }
 
@@ -819,7 +824,8 @@ public class FileUploadSessionService {
     }
 
     private FileUploadSessionDto toSessionDto(FileUploadSession session, List<FileUploadPart> parts, boolean includeUrls) {
-        List<FileUploadPartDto> partDtos = toPartDtos(session, parts, includeUrls);
+        List<FileUploadPartDto> partDtos = toPartDtos(
+                session, parts, includeUrls, includeUrls ? INITIAL_PRESIGNED_PARTS : 0);
         String uploadUrl = null;
         if (includeUrls && isDirectUpload(session)) {
             uploadUrl = objectStorageClient.createUploadUrl(
@@ -848,7 +854,7 @@ public class FileUploadSessionService {
     }
 
     private FileUploadPartsDto toPartsDto(FileUploadSession session, List<FileUploadPart> parts, boolean includeUrls) {
-        List<FileUploadPartDto> partDtos = toPartDtos(session, parts, includeUrls);
+        List<FileUploadPartDto> partDtos = toPartDtos(session, parts, includeUrls, 0);
         List<Integer> completedPartNumbers = parts.stream()
                 .filter(this::isCompletedPart)
                 .map(FileUploadPart::getPartNumber)
@@ -867,7 +873,8 @@ public class FileUploadSessionService {
         return session.getUploadId() != null && session.getUploadId().startsWith("DIRECT-");
     }
 
-    private List<FileUploadPartDto> toPartDtos(FileUploadSession session, List<FileUploadPart> parts, boolean includeUrls) {
+    private List<FileUploadPartDto> toPartDtos(
+            FileUploadSession session, List<FileUploadPart> parts, boolean includeUrls, int presignLimit) {
         if (isDirectUpload(session)) {
             return List.of();
         }
@@ -880,7 +887,7 @@ public class FileUploadSessionService {
                         part.getSizeBytes(),
                         part.getStatus(),
                         part.getETag(),
-                        includeUrls && !isCompletedPart(part)
+                        includeUrls && part.getPartNumber() <= presignLimit && !isCompletedPart(part)
                                 ? objectStorageClient.createMultipartUploadPartUrl(
                                         key,
                                         session.getUploadId(),

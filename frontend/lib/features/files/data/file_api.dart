@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
@@ -712,6 +713,28 @@ class FileApi {
       '/uploads/$uploadId/parts',
     );
     return parseUploadPartsResponse(response.data);
+  }
+
+  /// 按需获取单个分片的预签名上传地址。
+  ///
+  /// 创建会话只返回前若干个分片的地址，其余分片在上传前逐个拉取，
+  /// 避免一次请求在事务内生成上千个签名。
+  Future<String> getUploadPartUrl({
+    required String uploadId,
+    required int partNumber,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/uploads/$uploadId/parts/$partNumber/url',
+    );
+    final data = parseData(response.data);
+    final uploadUrl = data['uploadUrl']?.toString();
+    if (uploadUrl == null || uploadUrl.isEmpty) {
+      throw const AppException(
+        code: AppErrorCodes.uploadUrlMissing,
+        message: AppErrorCodes.uploadUrlMissing,
+      );
+    }
+    return uploadUrl;
   }
 
   Future<String> putUploadUrl({

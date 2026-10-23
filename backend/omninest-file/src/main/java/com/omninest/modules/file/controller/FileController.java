@@ -408,11 +408,14 @@ public class FileController {
             HttpServletResponse response
     ) throws IOException {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        // 先完成校验再写响应头：ZIP 是流式响应，半途报错只能留下解压失败的半截文件
-        var entries = fileManagerService.planZipEntries(ownerUserId, body.fileIds());
-        response.setContentType("application/zip");
-        response.setHeader("Content-Disposition", "attachment; filename=\"omninest-batch.zip\"");
-        fileManagerService.packZipEntries(entries, response.getOutputStream());
+        // 先占并发槽位再解析：plan 抛错时直接释放，且超限请求不会进入流式响应阶段。
+        try (var ignored = fileManagerService.acquireBatchDownloadLease()) {
+            // 先完成校验再写响应头：ZIP 是流式响应，半途报错只能留下解压失败的半截文件
+            var entries = fileManagerService.planZipEntries(ownerUserId, body.fileIds());
+            response.setContentType("application/zip");
+            response.setHeader("Content-Disposition", "attachment; filename=\"omninest-batch.zip\"");
+            fileManagerService.packZipEntries(entries, response.getOutputStream());
+        }
     }
 
     /**
@@ -694,7 +697,7 @@ public class FileController {
 
     @Operation(summary = "获取分片上传地址", description = "获取指定分片的预签名上传地址")
     @GetMapping("/api/v1/uploads/{uploadId}/parts/{partNumber}/url")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<FileUploadPartDto> getUploadPartUrl(
             @PathVariable String uploadId,
             @PathVariable int partNumber
