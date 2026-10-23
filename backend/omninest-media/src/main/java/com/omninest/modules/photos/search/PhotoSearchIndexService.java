@@ -26,6 +26,8 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.SearcherFactory;
+import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
@@ -52,7 +54,11 @@ public class PhotoSearchIndexService implements Closeable {
     private final Directory directory;
     private final SmartChineseAnalyzer analyzer = new SmartChineseAnalyzer();
     private volatile IndexWriter writer;
-    private volatile DirectoryReader reader;
+    /**
+     * 引用计数的近实时检索器。不能直接缓存并在刷新时关闭旧 DirectoryReader：
+     * 并发搜索仍在使用旧 reader 时关闭会抛 AlreadyClosedException。
+     */
+    private volatile SearcherManager searcherManager;
 
     public PhotoSearchIndexService(
             @Value("${omninest.search.photo-index-path:${user.home}/.omninest/lucene-photo-index}")
@@ -72,21 +78,28 @@ public class PhotoSearchIndexService implements Closeable {
         return writer;
     }
 
-    private synchronized DirectoryReader getReader() throws IOException {
-        // 首次读取必须先打开目录：openIfChanged(null) 会直接 NPE，而 search 把异常吞成
-        // 空结果，表现为"新进程里照片搜索永远搜不到"。
-        if (reader == null) {
-            reader = DirectoryReader.open(directory);
-            return reader;
+    private synchronized SearcherManager getSearcherManager() throws IOException {
+        if (searcherManager == null) {
+            // 基于目录而不是 IndexWriter：读侧实例要能看到其他进程/实例已提交的段，
+            // NRT writer 检索器只能看到本实例自己的写入。
+            searcherManager = new SearcherManager(directory, new SearcherFactory());
         }
-        DirectoryReader newReader = DirectoryReader.openIfChanged(reader);
-        if (newReader != null) {
-            reader.close();
-            reader = newReader;
-        }
-        return reader;
+        return searcherManager;
     }
 
+    /**
+     * 提交后刷新检索器；旧 searcher 由引用计数在最后一个使用者释放后关闭。
+     */
+    private void refreshSearcher() {
+        try {
+            if (!DirectoryReader.indexExists(directory)) {
+                return;
+            }
+            getSearcherManager().maybeRefresh();
+        } catch (IOException exception) {
+            log.warn("照片索引检索器刷新失败: errorType={}", exception.getClass().getSimpleName());
+        }
+    }
     /**
      * 索引单张照片，已存在则更新。
      */
@@ -98,6 +111,7 @@ public class PhotoSearchIndexService implements Closeable {
                     buildDocument(document)
             );
             w.commit();
+            refreshSearcher();
             log.debug("索引照片: photoId={}", document.photoId());
         } catch (Exception exception) {
             throw indexFailure("写入", document.photoId(), exception);
@@ -121,6 +135,7 @@ public class PhotoSearchIndexService implements Closeable {
                         buildDocument(document));
             }
             w.commit();
+            refreshSearcher();
             log.debug("批量索引照片: count={}", documents.size());
         } catch (Exception exception) {
             throw indexFailure("批量写入", firstPhotoId, exception);
@@ -159,6 +174,7 @@ public class PhotoSearchIndexService implements Closeable {
             IndexWriter w = getWriter();
             w.deleteDocuments(new Term(FIELD_PHOTO_ID, photoId.toString()));
             w.commit();
+            refreshSearcher();
             log.debug("删除照片索引: photoId={}", photoId);
         } catch (Exception exception) {
             throw indexFailure("删除", photoId, exception);
@@ -193,6 +209,7 @@ public class PhotoSearchIndexService implements Closeable {
                 w.deleteDocuments(new Term(FIELD_PHOTO_ID, photoId.toString()));
             }
             w.commit();
+            refreshSearcher();
             log.debug("批量删除照片索引: count={}", photoIds.size());
         } catch (Exception e) {
             // 永久删除流程里文档已随业务行消失，搜索侧还会用活动照片二次过滤，
@@ -215,6 +232,7 @@ public class PhotoSearchIndexService implements Closeable {
             int docs = w.getDocStats().numDocs;
             w.deleteAll();
             w.commit();
+            refreshSearcher();
             log.info("清空照片索引: 丢弃文档数={}, 目录={}", docs, indexPath);
             return docs;
         } catch (Exception e) {
@@ -231,9 +249,17 @@ public class PhotoSearchIndexService implements Closeable {
      */
     public List<UUID> search(UUID ownerUserId, String queryStr, int maxResults) {
         List<UUID> results = new ArrayList<>();
+        // 新建部署尚未索引任何照片时目录里没有段文件；直接返回空，避免每次搜索都打 ERROR 堆栈。
+        SearcherManager manager = null;
+        IndexSearcher searcher = null;
         try {
-            DirectoryReader r = getReader();
-            IndexSearcher searcher = new IndexSearcher(r);
+            if (!DirectoryReader.indexExists(directory)) {
+                return results;
+            }
+            manager = getSearcherManager();
+            // 只读实例没有本地 commit，必须在每次检索前检查目录是否有新段。
+            manager.maybeRefresh();
+            searcher = manager.acquire();
             List<String> tokens = analyzeTokens(queryStr);
             if (tokens.isEmpty()) {
                 return results;
@@ -254,6 +280,15 @@ public class PhotoSearchIndexService implements Closeable {
             // 搜索异常若只记 warn 会表现为"搜不到"，与索引写失败同属必须可见的故障。
             log.error("Lucene 照片搜索失败: queryLength={}, errorType={}",
                     queryStr.length(), e.getClass().getSimpleName(), e);
+        } finally {
+            if (manager != null && searcher != null) {
+                try {
+                    manager.release(searcher);
+                } catch (IOException exception) {
+                    log.warn("释放照片索引 searcher 失败: errorType={}",
+                            exception.getClass().getSimpleName());
+                }
+            }
         }
         return results;
     }
@@ -290,11 +325,11 @@ public class PhotoSearchIndexService implements Closeable {
 
     @Override
     public void close() throws IOException {
+        if (searcherManager != null) {
+            searcherManager.close();
+        }
         if (writer != null && writer.isOpen()) {
             writer.close();
-        }
-        if (reader != null) {
-            reader.close();
         }
         analyzer.close();
         directory.close();

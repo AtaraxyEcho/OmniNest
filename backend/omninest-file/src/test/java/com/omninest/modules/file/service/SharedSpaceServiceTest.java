@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -24,6 +25,7 @@ import com.omninest.modules.file.domain.SharedSpacePermission;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileNodePermissionRepository;
+import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
@@ -57,6 +59,7 @@ class SharedSpaceServiceTest {
     private static final UUID CHILD_FILE_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
+    private final FileMetricsRepository fileMetricsRepository = mock(FileMetricsRepository.class);
     private final SharedSpacePermissionRepository permissionRepository = mock(SharedSpacePermissionRepository.class);
     private final SharedSpaceQuotaService sharedSpaceQuotaService = mock(SharedSpaceQuotaService.class);
     private final StorageQuotaService storageQuotaService = mock(StorageQuotaService.class);
@@ -78,7 +81,7 @@ class SharedSpaceServiceTest {
         when(configValueProvider.findByKey("shared_space.enabled"))
                 .thenReturn(Optional.of("true"));
         service = new SharedSpaceService(
-                fileNodeRepository, permissionRepository, sharedSpaceQuotaService,
+                fileNodeRepository, fileMetricsRepository, permissionRepository, sharedSpaceQuotaService,
                 storageQuotaService, userAccountQuery, shareLinkRepository,
                 fileNodePermissionRepository, configValueProvider, eventPublisher,
                 fileIndexSyncService, syncEventRecorder, readThroughCache
@@ -156,7 +159,7 @@ class SharedSpaceServiceTest {
 
             service.moveToSharedSpace(FILE_ID, USER_A);
 
-            verify(shareLinkRepository).disableByResourceId(eq(FILE_ID), any());
+            verify(shareLinkRepository).disableByResourceIdIn(eq(List.of(FILE_ID)), any());
             verify(fileNodePermissionRepository).deleteByFileNodeIdIn(eq(List.of(FILE_ID)));
         }
 
@@ -183,6 +186,7 @@ class SharedSpaceServiceTest {
             FileNode folder = personalFolder(FOLDER_ID, USER_A, "movies");
             FileNode child = personalFile(CHILD_FILE_ID, USER_A, "movie.mkv", 1024L);
             child.setParentId(FOLDER_ID);
+            child.setNormalizedPath("/movies/movie.mkv");
 
             when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FOLDER_ID, USER_A))
                     .thenReturn(Optional.of(folder));
@@ -191,15 +195,12 @@ class SharedSpaceServiceTest {
             when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                     USER_A, SpaceType.PERSONAL, "/movies/"))
                     .thenReturn(List.of(child));
-            when(fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(USER_A, FOLDER_ID))
-                    .thenReturn(List.of(child));
-
             service.moveToSharedSpace(FOLDER_ID, USER_A);
 
             assertThat(folder.getSpaceType()).isEqualTo(SpaceType.SHARED);
             assertThat(child.getSpaceType()).isEqualTo(SpaceType.SHARED);
             assertThat(child.getUploadedBy()).isEqualTo(USER_A);
-            assertThat(child.getParentId()).isEqualTo(FOLDER_ID);  // 保留层级结构
+            assertThat(child.getParentId()).isEqualTo(FOLDER_ID);
         }
 
         @Test
@@ -219,9 +220,6 @@ class SharedSpaceServiceTest {
             when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                     USER_A, SpaceType.PERSONAL, "/archive/movies/"))
                     .thenReturn(List.of(child));
-            when(fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(USER_A, FOLDER_ID))
-                    .thenReturn(List.of(child));
-
             service.moveToSharedSpace(FOLDER_ID, USER_A);
 
             assertThat(folder.getNormalizedPath()).isEqualTo("/movies");
@@ -457,15 +455,15 @@ class SharedSpaceServiceTest {
             when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                     USER_A, SpaceType.PERSONAL, "/movies/"))
                     .thenReturn(List.of(child));
-            when(fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, FOLDER_ID))
-                    .thenReturn(List.of(child));
-            when(fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, CHILD_FILE_ID))
-                    .thenReturn(List.of());
+            when(fileNodeRepository.findActiveIdsUnderPathInSpace(SpaceType.SHARED, "/movies/"))
+                    .thenReturn(List.of(CHILD_FILE_ID));
+            when(fileNodeRepository.findAllById(any())).thenReturn(List.of(child));
 
             service.deleteSharedFile(FOLDER_ID, USER_A);
 
             assertThat(folder.isDeleted()).isTrue();
-            assertThat(child.isDeleted()).isTrue();
+            verify(fileNodeRepository).softDeleteSubtreeInSpace(
+                    eq(SpaceType.SHARED), eq("/movies/"), any(Instant.class), eq(USER_A));
         }
     }
 

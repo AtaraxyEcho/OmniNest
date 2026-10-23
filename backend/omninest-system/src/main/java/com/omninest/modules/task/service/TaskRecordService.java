@@ -471,6 +471,24 @@ public class TaskRecordService {
     }
 
     /**
+     * 查询指定用户某类任务的活跃记录（不限定资源），用于全库扫描等任务的幂等去重。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param taskType 任务类型
+     * @param statuses 活跃状态集合
+     * @return 最近活跃任务
+     */
+    @Transactional(readOnly = true)
+    public Optional<TaskRecord> findActiveTaskForOwner(
+            UUID ownerUserId,
+            String taskType,
+            Collection<String> statuses
+    ) {
+        return taskRecordRepository.findFirstByOwnerUserIdAndTaskTypeAndStatusInOrderByUpdatedAtDesc(
+                ownerUserId, taskType, statuses);
+    }
+
+    /**
      * 批量取消指定文件资源上的活跃任务。
      *
      * @param ownerUserId 所属用户 ID

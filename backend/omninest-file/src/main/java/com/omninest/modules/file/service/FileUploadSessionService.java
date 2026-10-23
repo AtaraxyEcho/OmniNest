@@ -145,7 +145,6 @@ public class FileUploadSessionService {
                 }
             } else {
                 checkActiveNameConflict(ownerUserId, spaceType, request.parentId(), fileName);
-                checkSoftDeletedConflict(ownerUserId, spaceType, request.parentId(), fileName);
             }
         }
 
@@ -556,6 +555,12 @@ public class FileUploadSessionService {
         return configured;
     }
 
+    /**
+     * 检查同名活动文件并抛出冲突异常。
+     *
+     * <p>只检查活动节点：软删除节点与新节点可以并存（唯一索引仅约束 {@code is_deleted = false}），
+     * 回收站里的同名项由恢复时的同名检查拦截，不再阻塞重新上传。</p>
+     */
     private void checkActiveNameConflict(UUID ownerUserId, SpaceType spaceType, UUID parentId, String fileName) {
         fileNodeRepository.findActiveNameConflict(ownerUserId, spaceType, parentId, fileName)
                 .ifPresent(node -> {
@@ -565,25 +570,6 @@ public class FileUploadSessionService {
                             conflictDetails("existingFileId", node)
                     );
                 });
-    }
-
-    /**
-     * 检查回收站是否存在同名文件，如果存在则抛出冲突异常。
-     * 前端收到 409 + details 后弹窗提示用户确认清理。
-     */
-    private void checkSoftDeletedConflict(UUID ownerUserId, SpaceType spaceType, UUID parentId, String fileName) {
-        Optional<FileNode> conflict;
-        if (parentId == null) {
-            conflict = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedTrue(
-                    ownerUserId, spaceType, fileName);
-        } else {
-            conflict = fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedTrue(
-                    ownerUserId, spaceType, parentId, fileName);
-        }
-        conflict.ifPresent(node -> {
-            throw new BusinessException(ErrorCode.CONFLICT, "回收站存在同名文件，请先清理后再上传",
-                    conflictDetails("softDeletedFileId", node));
-        });
     }
 
     private Map<String, Object> conflictDetails(String fileIdKey, FileNode node) {

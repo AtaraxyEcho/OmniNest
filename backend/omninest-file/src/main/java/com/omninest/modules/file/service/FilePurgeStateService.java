@@ -361,14 +361,16 @@ public class FilePurgeStateService {
         versions.stream().map(FileVersion::getObjectId).forEach(objectIds::add);
         List<FileObject> batchObjects = fileObjectRepository.findAllById(objectIds);
 
-        eventPublisher.publishEvent(new FileNodesDeletedEvent(
-                event.ownerUserId(),
-                List.copyOf(nodeIds),
-                Instant.now()
-        ));
+        // 共享空间一个目录可能混有多个成员上传的文件，失效事件必须按真实归属人分组：
+        // 只按任务发起者投递会漏清其他人名下的分享链接与客户端缓存。
+        Map<UUID, List<UUID>> idsByOwner = groupNodeIdsByOwner(nodes);
+        Instant deletedAt = Instant.now();
+        idsByOwner.forEach((owner, ids) -> eventPublisher.publishEvent(
+                new FileNodesDeletedEvent(owner, List.copyOf(ids), deletedAt)));
         permissionRepository.deleteByFileNodeIdIn(nodeIds);
         fileVersionRepository.deleteByFileNodeIdIn(nodeIds);
         long releasedBytes = quotaReleaseBytes(nodes, versions, sizeByObjectId(batchObjects));
+        // 索引删除覆盖个人与共享两个索引目录，节点归属人不影响清理结果。
         fileSearchIndexService.deleteFiles(nodeIds, event.ownerUserId());
         fileNodeRepository.deleteAllInBatch(nodes);
         fileNodeRepository.flush();
@@ -485,12 +487,26 @@ public class FilePurgeStateService {
         fileNodeRepository.updatePurgeStateByTaskId(taskId, state);
     }
 
-    private void validateTaskNodes(FilePurgeRequestedEvent event, List<FileNode> nodes) {
+    static Map<UUID, List<UUID>> groupNodeIdsByOwner(List<FileNode> nodes) {
+        Map<UUID, List<UUID>> idsByOwner = new LinkedHashMap<>();
+        for (FileNode node : nodes) {
+            UUID owner = node.getSpaceType() == SpaceType.SHARED && node.getUploadedBy() != null
+                    ? node.getUploadedBy()
+                    : node.getOwnerUserId();
+            idsByOwner.computeIfAbsent(owner, key -> new ArrayList<>()).add(node.getId());
+        }
+        return idsByOwner;
+    }
+
+    static void validateTaskNodes(FilePurgeRequestedEvent event, List<FileNode> nodes) {
         if (nodes.isEmpty()) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "永久删除任务没有关联文件");
         }
+        // 共享空间目录可由不同成员上传子文件，owner_user_id 因此天然不一致；
+        // 只有个人空间节点必须与任务发起者一致。
         boolean invalidOwner = nodes.stream()
-                .anyMatch(node -> !event.ownerUserId().equals(node.getOwnerUserId()));
+                .anyMatch(node -> node.getSpaceType() != SpaceType.SHARED
+                        && !event.ownerUserId().equals(node.getOwnerUserId()));
         if (invalidOwner) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "永久删除任务文件归属不一致");
         }

@@ -29,50 +29,53 @@ class MoviePlayerIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.videoColors;
     final targetSize = size ?? (isMobilePlatform ? 48.0 : 44.0);
-    return Tooltip(
-      message: tooltip ?? '',
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon, size: iconSize),
-        constraints: BoxConstraints.tightFor(
-          width: targetSize,
-          height: targetSize,
+    final button = IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, size: iconSize),
+      constraints: BoxConstraints.tightFor(
+        width: targetSize,
+        height: targetSize,
+      ),
+      padding: EdgeInsets.zero,
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return colors.playerControlMuted.withValues(alpha: 0.38);
+          }
+          return selected
+              ? colors.playerControlForeground
+              : colors.playerControlMuted;
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed)) {
+            return colors.playerControlHover.withValues(alpha: 0.90);
+          }
+          if (states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.focused) ||
+              selected ||
+              filled) {
+            return colors.playerControlHover;
+          }
+          return Colors.transparent;
+        }),
+        overlayColor: WidgetStatePropertyAll(
+          colors.playerControlForeground.withValues(alpha: 0.08),
         ),
-        padding: EdgeInsets.zero,
-        style: ButtonStyle(
-          foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled)) {
-              return colors.playerControlMuted.withValues(alpha: 0.38);
-            }
-            return selected
-                ? colors.playerControlForeground
-                : colors.playerControlMuted;
-          }),
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.pressed)) {
-              return colors.playerControlHover.withValues(alpha: 0.90);
-            }
-            if (states.contains(WidgetState.hovered) ||
-                states.contains(WidgetState.focused) ||
-                selected ||
-                filled) {
-              return colors.playerControlHover;
-            }
-            return Colors.transparent;
-          }),
-          overlayColor: WidgetStatePropertyAll(
-            colors.playerControlForeground.withValues(alpha: 0.08),
-          ),
-          shape: const WidgetStatePropertyAll(CircleBorder()),
-          side: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.focused)) {
-              return BorderSide(color: colors.playerFocusRing, width: 1.5);
-            }
-            return BorderSide.none;
-          }),
-        ),
+        shape: const WidgetStatePropertyAll(CircleBorder()),
+        side: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.focused)) {
+            return BorderSide(color: colors.playerFocusRing, width: 1.5);
+          }
+          return BorderSide.none;
+        }),
       ),
     );
+    // 空 tooltip 会生成空无障碍标签；没有说明时不要包裹 Tooltip。
+    final label = tooltip;
+    if (label == null || label.trim().isEmpty) {
+      return button;
+    }
+    return Tooltip(message: label, child: button);
   }
 }
 

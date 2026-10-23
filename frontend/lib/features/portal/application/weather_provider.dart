@@ -200,7 +200,8 @@ class WeatherData {
     return const WeatherData(
       temp: 0,
       feelsLike: 0,
-      text: '加载中',
+      // 占位态文案由展示层按 ARB 区分加载/未配置/失败，模型不再硬编码中文。
+      text: '',
       icon: '999',
       humidity: '--',
       windSpeed: '--',

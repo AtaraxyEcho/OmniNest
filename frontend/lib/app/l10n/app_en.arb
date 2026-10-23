@@ -5067,6 +5067,7 @@
   },
   "readerPdfTitle": "PDF Reader",
   "readerPdfLoadFailed": "Failed to load PDF",
+  "readerPdfDataNotReady": "PDF data is not ready",
   "readerPdfPageIndicator": "Page {page} of {total}",
   "@readerPdfPageIndicator": {
     "placeholders": {

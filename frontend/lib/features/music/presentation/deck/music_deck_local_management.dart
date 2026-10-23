@@ -40,6 +40,9 @@ class _LocalManagementContent extends ConsumerWidget {
                   await ref
                       .read(musicScanJobControllerProvider.notifier)
                       .startScan();
+                  if (!context.mounted) {
+                    return;
+                  }
                   await ref
                       .read(musicCenterControllerProvider.notifier)
                       .refresh();

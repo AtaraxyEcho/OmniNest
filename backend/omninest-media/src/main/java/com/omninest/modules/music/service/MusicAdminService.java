@@ -68,6 +68,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MusicAdminService {
 
+    private static final List<String> ACTIVE_TASK_STATUSES = List.of(
+            TaskStatus.QUEUED.getValue(),
+            TaskStatus.RUNNING.getValue(),
+            TaskStatus.RETRY_WAIT.getValue()
+    );
+
     /** 派生封面存储的资源类型与资产类型，与手动上传共用同一前缀。 */
     private static final String COVER_RESOURCE_TYPE = "MUSIC_COVER";
     private static final String COVER_ASSET_TYPE = "COVER";
@@ -113,6 +119,13 @@ public class MusicAdminService {
     @Transactional(rollbackFor = Exception.class)
     public MusicScanJobDto createScanJob(UUID ownerUserId) {
         log.info("创建音乐扫描任务: userId={}", ownerUserId);
+        MusicScanJob existing = taskRecordService
+                .findActiveTaskForOwner(ownerUserId, "MUSIC_SCAN", ACTIVE_TASK_STATUSES)
+                .flatMap(task -> scanJobRepository.findByIdAndOwnerUserId(task.getId(), ownerUserId))
+                .orElse(null);
+        if (existing != null) {
+            return toDto(existing);
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(taskId, ownerUserId, "MUSIC_SCAN", QueueNames.MUSIC_SCAN_ROUTING_KEY, Map.of(
                 "jobId", taskId.toString(),

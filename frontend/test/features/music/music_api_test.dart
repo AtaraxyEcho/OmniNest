@@ -462,7 +462,7 @@ void main() {
     expect(status.userInfo?.userId, 'user-1');
   });
 
-  test('scan job status endpoint uses admin status path', () async {
+  test('scan job status endpoint uses personal status path', () async {
     final adapter = _CapturingHttpClientAdapter(
       body: {
         'code': 200,
@@ -480,7 +480,7 @@ void main() {
     await api.scanJobStatus('job-1');
 
     expect(adapter.lastMethod, 'GET');
-    expect(adapter.lastPath, '/admin/music/scan/job-1/status');
+    expect(adapter.lastPath, '/music/scan/job-1/status');
   });
 
   test('create playlist posts metadata and custom cover id', () async {

@@ -160,6 +160,20 @@ public interface TaskRecordRepository extends JpaRepository<TaskRecord, UUID> {
     );
 
     /**
+     * 查询指定用户某类任务的最近活跃记录，用于高成本任务触发前的幂等去重。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param taskType 任务类型
+     * @param statuses 活跃状态集合
+     * @return 最近活跃任务
+     */
+    Optional<TaskRecord> findFirstByOwnerUserIdAndTaskTypeAndStatusInOrderByUpdatedAtDesc(
+            UUID ownerUserId,
+            String taskType,
+            Collection<String> statuses
+    );
+
+    /**
      * 批量取消指定文件资源上的活跃任务。
      *
      * @param ownerUserId 所属用户 ID

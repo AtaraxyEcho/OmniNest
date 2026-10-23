@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.sync.SyncAction;
@@ -22,6 +23,7 @@ import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.FileNodePermissionRepository;
 import com.omninest.modules.file.repository.SharedSpacePermissionRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
@@ -54,12 +56,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class SharedSpaceService {
+public class SharedSpaceService implements SharedSpaceAccessQuery {
 
     /** 子树路径重写的单批条目数。 */
     private static final int SUBTREE_REWRITE_BATCH_SIZE = 500;
 
     private final FileNodeRepository fileNodeRepository;
+    private final FileMetricsRepository fileMetricsRepository;
     private final SharedSpacePermissionRepository permissionRepository;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final StorageQuotaService storageQuotaService;
@@ -170,9 +173,15 @@ public class SharedSpaceService {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
-        List<FileNode> subtree = collectSharedSubtreeNodes(node.getId());
-        subtree.add(node);
         String oldPath = node.getNormalizedPath();
+        Map<UUID, List<UUID>> idsByOwner = new LinkedHashMap<>();
+        idsByOwner.computeIfAbsent(node.getOwnerUserId(), key -> new ArrayList<>()).add(node.getId());
+        for (Object[] row : fileNodeRepository.findActiveIdOwnerPairsUnderPathInSpace(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(oldPath + "/"))) {
+            UUID ownerId = (UUID) row[0];
+            UUID nodeId = (UUID) row[1];
+            idsByOwner.computeIfAbsent(ownerId, key -> new ArrayList<>()).add(nodeId);
+        }
         String parentPath = oldPath.substring(0, Math.max(oldPath.lastIndexOf('/'), 0));
         String newPath = parentPath.isEmpty() ? "/" + newName : parentPath + "/" + newName;
         node.setName(newName);
@@ -180,7 +189,8 @@ public class SharedSpaceService {
         rewriteSubtreePaths(oldPath, newPath, SpaceType.SHARED);
         fileNodeRepository.save(node);
         // 共享文件夹里可能有其他成员上传的子项，索引重建必须落到各自所有者名下。
-        scheduleIndexAndEventByOwner(subtree, node.getId(), SyncAction.UPDATED);
+        idsByOwner.forEach((ownerId, ids) ->
+                scheduleIndexAndEvent(ownerId, ids, node.getId(), SyncAction.UPDATED));
         return node;
     }
 
@@ -244,6 +254,7 @@ public class SharedSpaceService {
         SubtreeStats stats = calculateSubtreeStats(node);
         // 检查共享空间配额
         sharedSpaceQuotaService.checkQuota(stats.totalBytes());
+        String oldPath = node.getNormalizedPath();
         node.setSpaceType(SpaceType.SHARED);
         node.setUploadedBy(operatorId);
         // 移入共享空间根目录：规范化路径必须跟着父级重算，否则节点会以旧父级前缀
@@ -252,11 +263,11 @@ public class SharedSpaceService {
         node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-            batchMoveChildrenToShared(node.getId(), node.getNormalizedPath(), operatorId);
+            moveDescendants(subtree, node, oldPath, SpaceType.SHARED, operatorId, operatorId);
         }
         storageQuotaService.decrementUsage(operatorId, stats.totalBytes());
         sharedSpaceQuotaService.increaseUsage(stats.totalBytes(), stats.fileCount());
-        scheduleIndexAndEvent(operatorId, collectSubtreeIds(node), node.getId(), SyncAction.UPDATED);
+        scheduleIndexAndEvent(operatorId, subtreeIds, node.getId(), SyncAction.UPDATED);
         log.info("文件从个人空间移入共享空间: fileId={}, operatorId={}, totalSize={}, fileCount={}",
                 fileNodeId, operatorId, stats.totalBytes(), stats.fileCount());
     }
@@ -283,6 +294,13 @@ public class SharedSpaceService {
                 targetUserId, SpaceType.PERSONAL, node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "个人空间根目录已存在同名节点");
         }
+        // 子孙节点在改空间后会退出 SHARED 查询条件，必须在变更前收集索引同步范围。
+        String oldPath = node.getNormalizedPath();
+        String descendantPrefix = oldPath + "/";
+        List<UUID> subtreeIds = new ArrayList<>(
+                fileNodeRepository.findActiveIdsUnderPathInSpace(
+                        SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix)));
+        subtreeIds.add(node.getId());
         node.setSpaceType(SpaceType.PERSONAL);
         node.setOwnerUserId(targetUserId);
         // 个人空间文件不需要 uploaded_by
@@ -292,11 +310,16 @@ public class SharedSpaceService {
         node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-            batchMoveChildrenToPersonal(node.getId(), node.getNormalizedPath(), targetUserId);
+            List<FileNode> descendants = fileNodeRepository.findAllById(subtreeIds).stream()
+                    .filter(candidate -> !candidate.getId().equals(node.getId()))
+                    .toList();
+            moveDescendants(descendants, node, oldPath, SpaceType.PERSONAL, targetUserId, null);
         }
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
         storageQuotaService.incrementUsage(targetUserId, stats.totalBytes());
-        scheduleIndexAndEvent(targetUserId, collectSubtreeIds(node), node.getId(), SyncAction.UPDATED);
+        // 按变更前收集的完整子树投递索引同步：此刻子孙已变为 PERSONAL，
+        // 再按 SHARED 条件查询会返回空列表，导致整棵子树搜索索引漏更新。
+        scheduleIndexAndEvent(targetUserId, subtreeIds, node.getId(), SyncAction.UPDATED);
         log.info("文件从共享空间移入个人空间: fileId={}, targetUserId={}, totalSize={}, fileCount={}",
                 fileNodeId, targetUserId, stats.totalBytes(), stats.fileCount());
     }
@@ -313,18 +336,26 @@ public class SharedSpaceService {
         validateSharedLifecycleOperator(operatorId, node);
 
         // 先收集所有后代 ID（软删除后查询会返回空）
-        List<UUID> allIds = new ArrayList<>(collectAllDescendantIds(node.getId()));
+        String descendantPrefix = node.getNormalizedPath() + "/";
+        List<UUID> allIds = new ArrayList<>(fileNodeRepository.findActiveIdsUnderPathInSpace(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix)));
         allIds.add(node.getId());
 
         SubtreeStats stats = calculateSubtreeStats(node);
 
-        // 批量软删除
+        // 批量软删除：按空间与路径前缀一次更新，避免逐层递归逐行保存。
+        Instant deletedAt = Instant.now();
         node.setDeleted(true);
-        node.setDeletedAt(Instant.now());
+        node.setDeletedAt(deletedAt);
         node.setDeletedBy(operatorId);
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-            batchSoftDeleteChildren(node.getId(), operatorId);
+            fileNodeRepository.softDeleteSubtreeInSpace(
+                    SpaceType.SHARED,
+                    LikePatterns.escapeSpecials(descendantPrefix),
+                    deletedAt,
+                    operatorId
+            );
         }
 
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
@@ -346,7 +377,6 @@ public class SharedSpaceService {
                 idsByOwner.computeIfAbsent(fallbackOwner, key -> new ArrayList<>()).add(id);
             }
         }
-        Instant deletedAt = Instant.now();
         idsByOwner.forEach((owner, ids) -> {
             applicationEventPublisher.publishEvent(new FileNodesSoftDeletedEvent(owner, ids, deletedAt));
             fileIndexSyncService.scheduleAfterCommit(owner, ids);
@@ -396,8 +426,52 @@ public class SharedSpaceService {
      * @param userId 用户 ID
      * @return 共享空间启用且角色授予 CAN_BROWSE 时返回 true
      */
+    @Override
     @Transactional(readOnly = true)
     public boolean canBrowse(UUID userId) {
+        return canAccess(userId, Action.CAN_BROWSE);
+    }
+
+    /**
+     * 判断用户能否下载共享空间内容，用于批量下载的逐项过滤。
+     *
+     * <p>下载同时要求浏览与下载两个权限位；任一未授予都返回 false，不抛出异常。</p>
+     *
+     * @param userId 用户 ID
+     * @return 可下载时返回 true
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canDownload(UUID userId) {
+        return canAccess(userId, Action.CAN_BROWSE) && canAccess(userId, Action.CAN_DOWNLOAD);
+    }
+
+    /**
+     * 校验共享空间浏览权限（含共享空间开关）。
+     *
+     * @param userId 用户 ID
+     */
+    public void validateBrowsePermission(UUID userId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(userId, Action.CAN_BROWSE);
+    }
+
+    /**
+     * 校验共享空间下载权限（含浏览权限与共享空间开关）。
+     *
+     * <p>{@code CAN_DOWNLOAD} 是独立权限位，只校验 CAN_BROWSE 会让关闭下载的角色
+     * 仍能通过下载地址接口取到内容。</p>
+     *
+     * @param userId 用户 ID
+     */
+    @Override
+    public void validateDownloadPermission(UUID userId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(userId, Action.CAN_BROWSE);
+        validatePermission(userId, Action.CAN_DOWNLOAD);
+    }
+
+    private boolean canAccess(UUID userId, Action action) {
         if (!isSharedSpaceEnabled()) {
             return false;
         }
@@ -406,7 +480,7 @@ public class SharedSpaceService {
             return false;
         }
         return permissionRepository.findByRoleIdIn(user.roleIds()).stream()
-                .anyMatch(permission -> permission.isAllowed(Action.CAN_BROWSE));
+                .anyMatch(permission -> permission.isAllowed(action));
     }
 
     /**
@@ -449,19 +523,29 @@ public class SharedSpaceService {
      * 其他人上传的字节与文件，因此共享空间按空间类型加路径前缀统计，个人空间按所有者统计。</p>
      */
     private SubtreeStats calculateSubtreeStats(FileNode node) {
-        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
-            return new SubtreeStats(node.getSizeBytes(), 1L);
-        }
         String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
+        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+            long versionBytes = node.getSpaceType() == SpaceType.SHARED
+                    ? fileMetricsRepository.sumSharedVersionBytesForNode(node.getId(), false)
+                    : 0L;
+            return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
+        }
         List<Object[]> rows = node.getSpaceType() == SpaceType.SHARED
                 ? fileNodeRepository.sumActiveFilesUnderPathInSpace(node.getSpaceType(), prefix)
                 : fileNodeRepository.sumActiveFilesUnderPathByOwner(
                         node.getOwnerUserId(), node.getSpaceType(), prefix);
-        if (rows.isEmpty()) {
-            return new SubtreeStats(0L, 0L);
+        long totalBytes = 0L;
+        long fileCount = 0L;
+        if (!rows.isEmpty()) {
+            Object[] row = rows.getFirst();
+            totalBytes = toLong(row[0]);
+            fileCount = toLong(row[1]);
         }
-        Object[] row = rows.getFirst();
-        return new SubtreeStats(toLong(row[0]), toLong(row[1]));
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            // 账本与夜间重算都把历史版本对象计入字节，删除/移动同口径释放。
+            totalBytes += fileMetricsRepository.sumSharedVersionBytesUnderPath(prefix, false);
+        }
+        return new SubtreeStats(totalBytes, fileCount);
     }
 
     /**
@@ -475,16 +559,57 @@ public class SharedSpaceService {
      * @return 恢复后应补记的字节数与文件数
      */
     public SubtreeStats calculateRestoreSubtreeStats(FileNode node) {
-        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
-            return new SubtreeStats(node.getSizeBytes(), 1L);
-        }
         String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
-        List<Object[]> rows = fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, prefix);
-        if (rows.isEmpty()) {
-            return new SubtreeStats(0L, 0L);
+        if (NodeType.FILE.getValue().equals(node.getNodeType())) {
+            long versionBytes = fileMetricsRepository.sumSharedVersionBytesForNode(node.getId(), true);
+            return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
         }
-        Object[] row = rows.getFirst();
-        return new SubtreeStats(toLong(row[0]), toLong(row[1]));
+        List<Object[]> rows = fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, prefix);
+        long totalBytes = 0L;
+        long fileCount = 0L;
+        if (!rows.isEmpty()) {
+            Object[] row = rows.getFirst();
+            totalBytes = toLong(row[0]);
+            fileCount = toLong(row[1]);
+        }
+        totalBytes += fileMetricsRepository.sumSharedVersionBytesUnderPath(prefix, true);
+        return new SubtreeStats(totalBytes, fileCount);
+    }
+
+    /**
+     * 把子树后代迁入目标空间并按新根路径重写规范化路径。
+     *
+     * <p>路径在 Java 侧按旧根路径长度精确截取，避免数据库 {@code substring} 的
+     * 1-based 偏移与根路径斜杠拼接出错；后代实体已由一次子树查询载入，不产生逐层 N+1。</p>
+     */
+    private void moveDescendants(
+            List<FileNode> descendants,
+            FileNode root,
+            String oldRootPath,
+            SpaceType targetSpace,
+            UUID targetOwner,
+            UUID uploadedBy
+    ) {
+        List<FileNode> changed = new ArrayList<>();
+        for (FileNode descendant : descendants) {
+            if (descendant.getId().equals(root.getId())) {
+                continue;
+            }
+            String oldPath = descendant.getNormalizedPath();
+            if (oldPath == null || oldPath.length() <= oldRootPath.length()
+                    || !oldPath.startsWith(oldRootPath + "/")) {
+                continue;
+            }
+            descendant.setSpaceType(targetSpace);
+            descendant.setOwnerUserId(targetOwner);
+            descendant.setUploadedBy(uploadedBy);
+            descendant.setNormalizedPath(root.getNormalizedPath()
+                    + oldPath.substring(oldRootPath.length()));
+            changed.add(descendant);
+        }
+        if (!changed.isEmpty()) {
+            fileNodeRepository.saveAll(changed);
+        }
     }
 
     private long toLong(Object value) {
@@ -502,110 +627,18 @@ public class SharedSpaceService {
     }
 
     /**
-     * 批量移动子文件到共享空间，并按目标层级逐个重写规范化路径。
-     * 保留文件夹层级：子文件的 parentId 指向其在共享空间中的父文件夹（同一个 node，只是 spaceType 变了）。
-     *
-     * <p>路径必须由父节点向下精确推导，不能按旧路径前缀盲扫：跨空间移动后旧前缀已经不属于
-     * 本节点，按前缀批量改写会命中其他用户或其他成员的同名子树。</p>
-     *
-     * @param folderId 父文件夹 ID
-     * @param parentPath 父文件夹在目标空间中的规范化路径
-     * @param previousOwner 移动操作者，即子节点原所有者
-     */
-    private void batchMoveChildrenToShared(UUID folderId, String parentPath, UUID previousOwner) {
-        List<FileNode> children = fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(previousOwner, folderId);
-        for (FileNode child : children) {
-            child.setSpaceType(SpaceType.SHARED);
-            child.setUploadedBy(previousOwner);
-            child.setNormalizedPath(childPath(parentPath, child.getName()));
-            // parentId 保持不变，指向已移动的父文件夹
-        }
-        fileNodeRepository.saveAll(children);
-        for (FileNode child : children) {
-            if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                batchMoveChildrenToShared(child.getId(), child.getNormalizedPath(), previousOwner);
-            }
-        }
-    }
-
-    /**
-     * 批量移动子文件到个人空间，并按目标层级逐个重写规范化路径。
-     * 保留文件夹层级：子文件的 parentId 指向其在个人空间中的父文件夹。
-     *
-     * <p>路径必须由父节点向下精确推导：子孙此刻仍是 SHARED 空间，而目标前缀属于接收者的
-     * 个人空间，按前缀批量改写会把其他用户个人空间里的同名路径一起改掉。</p>
-     *
-     * @param folderId 父文件夹 ID
-     * @param parentPath 父文件夹在目标空间中的规范化路径
-     * @param targetUserId 接收者用户 ID
-     */
-    private void batchMoveChildrenToPersonal(UUID folderId, String parentPath, UUID targetUserId) {
-        List<FileNode> children = fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, folderId);
-        for (FileNode child : children) {
-            child.setSpaceType(SpaceType.PERSONAL);
-            child.setOwnerUserId(targetUserId);
-            child.setUploadedBy(null);
-            child.setNormalizedPath(childPath(parentPath, child.getName()));
-            // parentId 保持不变，指向已移动的父文件夹
-        }
-        fileNodeRepository.saveAll(children);
-        for (FileNode child : children) {
-            if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                batchMoveChildrenToPersonal(child.getId(), child.getNormalizedPath(), targetUserId);
-            }
-        }
-    }
-
-    private String childPath(String parentPath, String name) {
-        if (parentPath == null || parentPath.isEmpty() || "/".equals(parentPath)) {
-            return "/" + name;
-        }
-        return parentPath + "/" + name;
-    }
-
-    /**
-     * 批量软删除子文件。
-     */
-    private void batchSoftDeleteChildren(UUID folderId, UUID operatorId) {
-        List<FileNode> children = fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, folderId);
-        for (FileNode child : children) {
-            child.setDeleted(true);
-            child.setDeletedAt(Instant.now());
-            child.setDeletedBy(operatorId);
-        }
-        fileNodeRepository.saveAll(children);
-        for (FileNode child : children) {
-            if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                batchSoftDeleteChildren(child.getId(), operatorId);
-            }
-        }
-    }
-
-    /**
-     * 收集所有后代文件 ID。
-     */
-    private List<UUID> collectAllDescendantIds(UUID folderId) {
-        List<UUID> ids = new ArrayList<>();
-        List<FileNode> children = fileNodeRepository.findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, folderId);
-        for (FileNode child : children) {
-            ids.add(child.getId());
-            if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                ids.addAll(collectAllDescendantIds(child.getId()));
-            }
-        }
-        return ids;
-    }
-
-    /**
      * 撤销整棵子树的公开分享链接，并同步清掉读穿透缓存。
+     *
+     * <p>按资源集合一次查询、一次批量停用，避免对子树每个节点各跑一轮全表扫描。</p>
      */
     private void revokeShareLinksForNodes(List<UUID> fileNodeIds) {
-        for (UUID fileNodeId : fileNodeIds) {
-            List<ShareLink> active = shareLinkRepository.findByResourceIdAndDisabledAtIsNull(fileNodeId);
-            shareLinkRepository.disableByResourceId(fileNodeId, Instant.now());
-            for (ShareLink link : active) {
-                readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
-            }
+        if (fileNodeIds.isEmpty()) {
+            return;
+        }
+        List<ShareLink> active = shareLinkRepository.findByResourceIdInAndDisabledAtIsNull(fileNodeIds);
+        shareLinkRepository.disableByResourceIdIn(fileNodeIds, Instant.now());
+        for (ShareLink link : active) {
+            readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
         }
     }
 
@@ -645,25 +678,6 @@ public class SharedSpaceService {
         return nodes;
     }
 
-    private List<FileNode> collectSharedSubtreeNodes(UUID folderId) {
-        List<FileNode> nodes = new ArrayList<>();
-        for (FileNode child : fileNodeRepository
-                .findBySpaceTypeAndParentIdAndDeletedFalse(SpaceType.SHARED, folderId)) {
-            nodes.add(child);
-            if (NodeType.FOLDER.getValue().equals(child.getNodeType())) {
-                nodes.addAll(collectSharedSubtreeNodes(child.getId()));
-            }
-        }
-        return nodes;
-    }
-
-    private List<UUID> collectSubtreeIds(FileNode root) {
-        List<UUID> ids = new ArrayList<>();
-        ids.add(root.getId());
-        ids.addAll(collectAllDescendantIds(root.getId()));
-        return ids;
-    }
-
     private void scheduleIndexAndEvent(
             UUID ownerUserId, List<UUID> ids, UUID rootId, SyncAction action) {
         if (ids.isEmpty()) {
@@ -672,15 +686,6 @@ public class SharedSpaceService {
         fileIndexSyncService.scheduleAfterCommit(ownerUserId, ids);
         syncEventRecorder.record(new SyncEventCommand(
                 ownerUserId, SyncScope.FILES, "FILE_NODE", rootId.toString(), action, null, Map.of()));
-    }
-
-    private void scheduleIndexAndEventByOwner(List<FileNode> nodes, UUID rootId, SyncAction action) {
-        Map<UUID, List<UUID>> idsByOwner = new LinkedHashMap<>();
-        for (FileNode node : nodes) {
-            idsByOwner.computeIfAbsent(node.getOwnerUserId(), key -> new ArrayList<>()).add(node.getId());
-        }
-        idsByOwner.forEach((ownerUserId, ids) ->
-                scheduleIndexAndEvent(ownerUserId, ids, rootId, action));
     }
 
     /**

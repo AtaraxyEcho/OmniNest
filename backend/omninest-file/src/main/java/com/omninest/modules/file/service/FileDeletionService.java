@@ -421,6 +421,10 @@ public class FileDeletionService {
     ) {
         for (FileNode root : roots) {
             accumulateImpactBatch(ownerUserId, representativeRootId, List.of(root), origins, accumulator);
+            if (root.getSpaceType() == SpaceType.SHARED) {
+                accumulateSharedImpact(ownerUserId, representativeRootId, root, origins, accumulator);
+                continue;
+            }
             int pageNumber = 0;
             Page<FileNode> page;
             do {
@@ -439,6 +443,36 @@ public class FileDeletionService {
                 );
                 pageNumber++;
             } while (page.hasNext());
+        }
+    }
+
+    /**
+     * 共享空间按空间与路径前缀统计影响面：目录内可能混有多个成员上传的文件，
+     * 按 owner_user_id 过滤会漏算其他成员的节点与字节。
+     */
+    private void accumulateSharedImpact(
+            UUID ownerUserId,
+            UUID representativeRootId,
+            FileNode root,
+            List<FilePurgeOrigin> origins,
+            ImpactAccumulator accumulator
+    ) {
+        UUID afterId = new UUID(0L, 0L);
+        while (true) {
+            List<FileNode> batch = fileNodeRepository.findSubtreeBySpaceTypeAfterId(
+                    SpaceType.SHARED,
+                    subtreePrefix(root),
+                    afterId,
+                    PageRequest.of(0, LIFECYCLE_BATCH_SIZE)
+            );
+            if (batch.isEmpty()) {
+                return;
+            }
+            accumulateImpactBatch(ownerUserId, representativeRootId, batch, origins, accumulator);
+            afterId = batch.getLast().getId();
+            if (batch.size() < LIFECYCLE_BATCH_SIZE) {
+                return;
+            }
         }
     }
 

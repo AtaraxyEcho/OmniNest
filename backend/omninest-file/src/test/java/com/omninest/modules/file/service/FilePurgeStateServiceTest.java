@@ -1,11 +1,15 @@
 package com.omninest.modules.file.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.event.FilePurgeRequestedEvent;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -153,6 +157,56 @@ class FilePurgeStateServiceTest {
                 Map.of(OBJECT_A, 10L));
 
         assertThat(released).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("共享空间粉碎任务允许目录内多成员上传的子文件")
+    void allowsSharedSubtreeWithDifferentUploaders() {
+        UUID taskId = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+        FileNode shared = fileNode(UUID.randomUUID(), OBJECT_A, 10L);
+        shared.setSpaceType(SpaceType.SHARED);
+        shared.setOwnerUserId(UUID.randomUUID());
+
+        FilePurgeStateService.validateTaskNodes(
+                new FilePurgeRequestedEvent(taskId, owner, shared.getId()), List.of(shared));
+    }
+
+    @Test
+    @DisplayName("个人空间粉碎任务仍拒绝混入他人的节点")
+    void rejectsPersonalNodeOwnedByAnotherUser() {
+        UUID taskId = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+        FileNode personal = fileNode(UUID.randomUUID(), OBJECT_A, 10L);
+        personal.setSpaceType(SpaceType.PERSONAL);
+        personal.setOwnerUserId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> FilePurgeStateService.validateTaskNodes(
+                        new FilePurgeRequestedEvent(taskId, owner, personal.getId()), List.of(personal)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).errorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("失效事件按真实上传者分组，共享子文件的删除者不会吞掉上传者事件")
+    void groupsNodeIdsByRealOwner() {
+        UUID uploaderA = UUID.randomUUID();
+        UUID uploaderB = UUID.randomUUID();
+        FileNode first = fileNode(UUID.randomUUID(), OBJECT_A, 10L);
+        first.setSpaceType(SpaceType.SHARED);
+        first.setOwnerUserId(uploaderA);
+        first.setUploadedBy(uploaderA);
+        FileNode second = fileNode(UUID.randomUUID(), OBJECT_B, 20L);
+        second.setSpaceType(SpaceType.SHARED);
+        second.setOwnerUserId(uploaderB);
+        second.setUploadedBy(uploaderB);
+
+        Map<UUID, List<UUID>> grouped = FilePurgeStateService.groupNodeIdsByOwner(List.of(first, second));
+
+        assertThat(grouped)
+                .containsEntry(uploaderA, List.of(first.getId()))
+                .containsEntry(uploaderB, List.of(second.getId()));
     }
 
     private static FileNode fileNode(UUID nodeId, UUID currentObjectId, long sizeBytes) {

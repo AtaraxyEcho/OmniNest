@@ -217,7 +217,11 @@ public class WeatherService {
                             finalResolved.locationName() != null && !finalResolved.locationName().isBlank()
                                     ? finalResolved.locationName()
                                     : effectiveDisplayName);
-                    weatherCacheStore.saveWeather(requestKey, result);
+                    // 外部接口返回非 200 业务码时 aggregateWeather 返回空对象；
+                    // 把空结果写缓存会让一次瞬时故障在整个 TTL 内都表现为"无天气"。
+                    if (!result.equals(WeatherDto.empty())) {
+                        weatherCacheStore.saveWeather(requestKey, result);
+                    }
                     return result;
                 } catch (Exception e) {
                     log.error("获取天气数据失败", e);
@@ -515,9 +519,9 @@ public class WeatherService {
         return new WeatherDto(
             now.path("temp").asDouble(), now.path("feelsLike").asDouble(),
             now.path("text").asString(null), now.path("icon").asString(null),
-            now.path("humidity").asString(null) + "%", now.path("windSpeed").asString(null) + " km/h",
-            now.path("windDir").asString(null), now.path("pressure").asString(null) + " hPa",
-            now.path("vis").asString(null) + " km",
+            valueWithUnit(now, "humidity", "%"), valueWithUnit(now, "windSpeed", " km/h"),
+            now.path("windDir").asString(null), valueWithUnit(now, "pressure", " hPa"),
+            valueWithUnit(now, "vis", " km"),
             today != null ? today.path("uvIndex").asInt() : 0,
             today != null ? today.path("sunrise").asString(null) : "--",
             today != null ? today.path("sunset").asString(null) : "--",
@@ -528,7 +532,7 @@ public class WeatherService {
             air != null ? getStringSafe(air, "advice", "") : "",
             today != null ? today.path("tempMax").asDouble() : 0.0,
             today != null ? today.path("tempMin").asDouble() : 0.0,
-            now.path("precip").asString(null) + " mm",
+            valueWithUnit(now, "precip", " mm"),
             getStringSafe(now, "windScale", "--"),
             today != null ? getStringSafe(today, "textDay", "--") : "--",
             today != null ? getStringSafe(today, "textNight", "--") : "--",
@@ -536,6 +540,17 @@ public class WeatherService {
             dailyForecasts,
             locationName != null ? locationName : ""
         );
+    }
+
+    /**
+     * 字段缺失时返回 "--" 而不是拼出 "null%"、"null km/h"。
+     */
+    private String valueWithUnit(JsonNode node, String field, String unit) {
+        String value = node.path(field).asString(null);
+        if (value == null || value.isBlank() || "null".equalsIgnoreCase(value)) {
+            return "--";
+        }
+        return value + unit;
     }
 
     private List<WeatherDto.HourlyForecast> parseHourlyForecasts(JsonNode hourly) {
@@ -667,11 +682,21 @@ public class WeatherService {
                             .or(() -> legacyConfigKey(key))
                             .ifPresent(value -> newConfig.put(key, value));
                 }
+                newConfig.putIfAbsent("weather.enabled", "true");
                 newConfig.putIfAbsent("weather.qweather.url", "https://devapi.qweather.com");
                 newConfig.putIfAbsent("weather.location", "北京");
             } catch (Exception e) {
-                newConfig.clear();
-                log.debug("加载天气配置失败，使用空配置", e);
+                // 配置读取抖动不能把"全站天气禁用"写进 5 分钟缓存：
+                // 有上一次成功配置就继续用，没有则返回默认值但本次不缓存。
+                log.warn("加载天气配置失败，本次不写缓存: errorType={}", e.getClass().getSimpleName());
+                if (cached != null) {
+                    return cached;
+                }
+                return Map.of(
+                        "weather.enabled", "true",
+                        "weather.qweather.url", "https://devapi.qweather.com",
+                        "weather.location", "北京"
+                );
             }
             this.configCache = Map.copyOf(newConfig);
             this.configCacheExpiry = now.plus(CONFIG_CACHE_TTL);

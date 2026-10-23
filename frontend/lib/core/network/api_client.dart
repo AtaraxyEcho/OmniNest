@@ -66,71 +66,39 @@ class ApiClient {
             handler.next(response);
             return;
           }
-
           try {
-            final originalToken =
-                response.requestOptions.extra[_requestTokenKey]?.toString();
-            final currentToken = _currentAccessToken();
-            var refreshed =
-                currentToken != null &&
-                        currentToken.isNotEmpty &&
-                        originalToken != null &&
-                        currentToken != originalToken
-                    ? true
-                    : await _refreshOnce();
-            if (!refreshed) {
-              // 刷新调用失败但令牌可能已被并发路径更新（如周期刷新恰好
-              // 成功），复核一次签名避免把可恢复请求误判为会话失效。
-              final latestToken = _currentAccessToken();
-              refreshed =
-                  latestToken != null &&
-                  latestToken.isNotEmpty &&
-                  originalToken != null &&
-                  latestToken != originalToken;
-            }
-
-            if (!refreshed) {
-              final sessionToken = _currentAccessToken();
-              if (sessionToken == null || sessionToken.isEmpty) {
-                _refreshRejected = true;
-              }
-              // 会话清理由会话通知器按刷新结果分级处理：服务端明确拒绝
-              // 才清除；瞬时网络故障保留会话，这里不再无条件登出。
-              handler.reject(
-                DioException.badResponse(
-                  statusCode: response.statusCode ?? 401,
-                  requestOptions: response.requestOptions,
-                  response: response,
-                ),
-              );
-              return;
-            }
-
-            try {
-              final retryResponse = await _retry(response.requestOptions);
-              handler.resolve(retryResponse);
-            } on DioException catch (error) {
-              handler.reject(error);
-            } catch (error) {
-              handler.reject(
-                DioException(
-                  requestOptions: response.requestOptions,
-                  error: error,
-                ),
-              );
-            }
-          } catch (_) {
-            // _refreshOnce() 或后续逻辑抛出异常时拒绝请求，由会话通知器判定是否清会话。
+            handler.resolve(
+              await _refreshAndReplay(response.requestOptions, response),
+            );
+          } on DioException catch (error) {
+            handler.reject(error);
+          } catch (error) {
             handler.reject(
-              DioException.badResponse(
-                statusCode: response.statusCode ?? 401,
+              DioException(
                 requestOptions: response.requestOptions,
-                response: response,
+                error: error,
               ),
             );
           }
         },
-        onError: (error, handler) {
+        onError: (error, handler) async {
+          // 二进制/流式接口在请求级覆写 validateStatus 为 2xx-only，401 会直接
+          // 进入 onError 而不是 onResponse；刷新逻辑必须在这里同样生效。
+          final response = error.response;
+          if (response != null && _shouldRefresh(response)) {
+            try {
+              handler.resolve(
+                await _refreshAndReplay(error.requestOptions, response),
+              );
+              return;
+            } on DioException catch (retryError) {
+              handler.next(retryError);
+              return;
+            } catch (_) {
+              handler.next(error);
+              return;
+            }
+          }
           // 全局错误日志（避免未捕获异常导致 UI 崩溃）
           if (kDebugMode) {
             devLog(
@@ -237,6 +205,55 @@ class ApiClient {
       }
     }
     return response.requestOptions.extra[_retriedKey] != true;
+  }
+
+  /// 401 后刷新令牌并重放原请求；刷新失败时抛出携带原响应的 401。
+  Future<Response<dynamic>> _refreshAndReplay(
+    RequestOptions requestOptions,
+    Response<dynamic> response,
+  ) async {
+    final originalToken = requestOptions.extra[_requestTokenKey]?.toString();
+    final currentToken = _currentAccessToken();
+    var refreshed =
+        currentToken != null &&
+                currentToken.isNotEmpty &&
+                originalToken != null &&
+                currentToken != originalToken
+            ? true
+            : await _refreshOnce();
+    if (!refreshed) {
+      // 刷新调用失败但令牌可能已被并发路径更新（如周期刷新恰好成功），
+      // 复核一次签名避免把可恢复请求误判为会话失效。
+      final latestToken = _currentAccessToken();
+      refreshed =
+          latestToken != null &&
+          latestToken.isNotEmpty &&
+          originalToken != null &&
+          latestToken != originalToken;
+    }
+    if (!refreshed) {
+      final sessionToken = _currentAccessToken();
+      if (sessionToken == null || sessionToken.isEmpty) {
+        _refreshRejected = true;
+      }
+      // 会话清理由会话通知器按刷新结果分级处理：服务端明确拒绝才清除；
+      // 瞬时网络故障保留会话，这里不再无条件登出。
+      throw DioException.badResponse(
+        statusCode: response.statusCode ?? 401,
+        requestOptions: requestOptions,
+        response: response,
+      );
+    }
+    if (requestOptions.data is FormData) {
+      // 重放已 finalize 的 FormData 会抛 StateError；上传请求只刷新令牌，
+      // 由调用方按 401 提示重试。
+      throw DioException.badResponse(
+        statusCode: response.statusCode ?? 401,
+        requestOptions: requestOptions,
+        response: response,
+      );
+    }
+    return _retry(requestOptions);
   }
 
   Future<bool> _refreshOnce() {

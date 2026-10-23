@@ -10913,6 +10913,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerPdfLoadFailed => 'PDF 加载失败';
 
   @override
+  String get readerPdfDataNotReady => 'PDF 数据未就绪';
+
+  @override
   String readerPdfPageIndicator(Object page, Object total) {
     return '第 $page / $total 页';
   }

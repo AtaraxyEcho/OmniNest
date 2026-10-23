@@ -11258,6 +11258,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerPdfLoadFailed => 'Failed to load PDF';
 
   @override
+  String get readerPdfDataNotReady => 'PDF data is not ready';
+
+  @override
   String readerPdfPageIndicator(Object page, Object total) {
     return 'Page $page of $total';
   }

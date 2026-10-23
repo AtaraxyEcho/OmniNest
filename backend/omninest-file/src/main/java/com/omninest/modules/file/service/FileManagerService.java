@@ -64,6 +64,7 @@ public class FileManagerService {
     private final FileNodeSupport fileNodeSupport;
     private final StorageQuotaService storageQuotaService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
+    private final SharedSpaceService sharedSpaceService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final FileIndexSyncService fileIndexSyncService;
 
@@ -336,10 +337,24 @@ public class FileManagerService {
 
         Set<String> usedEntryNames = new HashSet<>();
         List<ZipPackEntry> entries = new ArrayList<>(nodeIds.size());
+        boolean sharedChecked = false;
+        boolean sharedDownloadAllowed = false;
         for (UUID nodeId : nodeIds) {
             FileNode node = nodesById.get(nodeId);
-            if (node == null || !Objects.equals(node.getOwnerUserId(), userId)) {
+            if (node == null) {
                 throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在: " + nodeId);
+            }
+            if (!Objects.equals(node.getOwnerUserId(), userId)) {
+                if (node.getSpaceType() != SpaceType.SHARED) {
+                    throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在: " + nodeId);
+                }
+                if (!sharedChecked) {
+                    sharedDownloadAllowed = sharedSpaceService.canDownload(userId);
+                    sharedChecked = true;
+                }
+                if (!sharedDownloadAllowed) {
+                    throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在: " + nodeId);
+                }
             }
             // 回收站节点与文件夹不产出条目，但请求本身合法，沿用既有跳过口径
             if (node.isDeleted() || !NodeType.FILE.getValue().equals(node.getNodeType())) {

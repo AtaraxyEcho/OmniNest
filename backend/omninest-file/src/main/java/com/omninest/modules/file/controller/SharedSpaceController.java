@@ -66,7 +66,10 @@ public class SharedSpaceController {
     public ApiResponse<FileNodeDto> createFolder(
             @RequestParam(required = false) UUID parentId,
             @RequestBody @Valid CreateFolderRequest request) {
-        FileNode folder = sharedSpaceService.createFolder(parentId, request.name(), currentUserContext.requireCurrentUserId());
+        // 客户端把父目录放在请求体里，与个人空间建夹契约一致；查询参数保留给旧调用方。
+        UUID effectiveParentId = parentId != null ? parentId : request.parentId();
+        FileNode folder = sharedSpaceService.createFolder(
+                effectiveParentId, request.name(), currentUserContext.requireCurrentUserId());
         return ApiResponse.success(toDto(folder));
     }
 

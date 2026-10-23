@@ -29,9 +29,16 @@ class VideoStreamServiceTest {
             mock(MediaVideoItemRepository.class);
     private final VideoSourceInputResolver sourceInputResolver = mock(VideoSourceInputResolver.class);
     private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
+    private final VideoFfmpegRuntime ffmpegRuntime = mock(VideoFfmpegRuntime.class);
+    private final VideoProcessExecutor processExecutor = mock(VideoProcessExecutor.class);
 
     private final VideoStreamService service = new VideoStreamService(
-            videoItemRepository, sourceInputResolver, mediaContentAccessService, new VideoStreamProperties()
+            videoItemRepository,
+            sourceInputResolver,
+            mediaContentAccessService,
+            new VideoStreamProperties(),
+            ffmpegRuntime,
+            processExecutor
     );
 
     @Test

@@ -85,7 +85,7 @@ server {
     gzip_vary on;
     gzip_min_length 1024;
     gzip_comp_level 5;
-    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_types text/css application/javascript application/json image/svg+xml font/ttf font/otf;
 
     # SPA 主文档与静态回退：补齐后端 SecurityHeaderFilter 同款安全响应头
     #（该 Filter 只覆盖 /api/ 响应，nginx 直发的主文档不经过后端）。

@@ -48,12 +48,22 @@ public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
 
     List<ShareLink> findByResourceIdAndDisabledAtIsNull(UUID resourceId);
 
+    List<ShareLink> findByResourceIdInAndDisabledAtIsNull(Collection<UUID> resourceIds);
+
     /**
      * 批量禁用指定资源的所有分享链接。
      */
     @Modifying(clearAutomatically = true)
     @Query("UPDATE ShareLink s SET s.disabledAt = :now WHERE s.resourceId = :resourceId AND s.disabledAt IS NULL")
     void disableByResourceId(@Param("resourceId") UUID resourceId, @Param("now") Instant now);
+
+    /**
+     * 一次禁用一批资源上的所有有效分享链接。
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ShareLink s SET s.disabledAt = :now "
+            + "WHERE s.resourceId IN :resourceIds AND s.disabledAt IS NULL")
+    int disableByResourceIdIn(@Param("resourceIds") Collection<UUID> resourceIds, @Param("now") Instant now);
 
     /**
      * 在链接仍有效且未达到上限时原子消费一次访问次数。

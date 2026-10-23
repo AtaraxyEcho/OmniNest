@@ -182,7 +182,18 @@ public class FileIngressPromotionService {
     }
 
     private PromotionOutcome promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
-        return transactionTemplate.execute(txStatus -> promoteInTransaction(item, sha256, event));
+        try {
+            return transactionTemplate.execute(txStatus -> promoteInTransaction(item, sha256, event));
+        } catch (BusinessException exception) {
+            if (exception.errorCode() != ErrorCode.FILE_QUOTA_EXCEEDED) {
+                throw exception;
+            }
+            // 容量在晋升阶段才失败时，事务已回滚；上传会话必须落到明确终态，
+            // 否则会停在 SCANNING 并触发 Worker 的无效重试。
+            settleTerminalFailure(item, true, ErrorCode.FILE_QUOTA_EXCEEDED.name(), "存储配额不足",
+                    "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成");
+            throw new FileIngressRejectedException("存储配额不足", exception);
+        }
     }
 
     private PromotionOutcome promoteInTransaction(
@@ -194,20 +205,26 @@ public class FileIngressPromotionService {
             // 配额结算以服务端核实的实际大小为准
             session.setTotalSizeBytes(item.getSizeBytes());
         }
+        if (session != null && session.getSpaceType() == SpaceType.SHARED) {
+            // 复制对象前先做一次容量预检，避免超限时在对象存储留下无主副本；
+            // 真正的并发上限仍由 increaseUsage 的原子条件更新兜底。
+            sharedSpaceQuotaService.checkQuota(session.getTotalSizeBytes());
+        }
         ObjectStorageKey quarantineKey = quarantineKey(item);
         ObjectStorageKey targetKey = new ObjectStorageKey(item.getTargetBucket(), item.getTargetObjectKey());
         // 以服务端核实的魔数类型重写对象元数据：下载侧判定与存储层直出行为一致，
         // 关闭"申报 text/html 而魔数判为 text/plain"时按存储 Content-Type 内联直出的窗口
         objectStorageClient.copyObject(quarantineKey, targetKey, item.getMimeType());
         FileObject savedObject = fileObjectRepository.save(toFileObject(item, sha256));
-        FileNode promotedNode = event.asVersionOfFileId() != null
+        boolean versionUpload = event.asVersionOfFileId() != null;
+        FileNode promotedNode = versionUpload
                 ? promoteAsVersion(item, event.asVersionOfFileId(), savedObject)
                 : promoteAsNewNode(item, savedObject);
         UUID mediaAutoImportTaskId = null;
         if (session != null) {
-            mediaAutoImportTaskId = applySessionResult(session, item, savedObject, promotedNode);
+            mediaAutoImportTaskId = applySessionResult(session, item, savedObject, promotedNode, versionUpload);
         }
-        if (event.asVersionOfFileId() == null) {
+        if (!versionUpload) {
             recordFileCreated(item.getOwnerUserId(), promotedNode);
         }
         registerFinalization(item.getId(), quarantineKey, targetKey, promotedNode.getId());
@@ -242,14 +259,15 @@ public class FileIngressPromotionService {
             FileUploadSession session,
             FileIngressItem item,
             FileObject savedObject,
-            FileNode promotedNode
+            FileNode promotedNode,
+            boolean versionUpload
     ) {
         UUID mediaAutoImportTaskId =
                 fileContentChangePublisher.publish(promotedNode, savedObject, item.getOwnerUserId());
         session.setIngressItemId(item.getId());
         session.setResultFileNodeId(promotedNode.getId());
         session.setResultObjectId(savedObject.getId());
-        settleUploadQuota(session);
+        settleUploadQuota(session, versionUpload);
         session.setUploadedParts(session.getTotalParts());
         session.setStatus(UploadStatus.COMPLETED.getValue());
         session.setCompletionTaskId(mediaAutoImportTaskId);
@@ -290,11 +308,12 @@ public class FileIngressPromotionService {
         });
     }
 
-    private void settleUploadQuota(FileUploadSession session) {
+    private void settleUploadQuota(FileUploadSession session, boolean versionUpload) {
         if (session.getSpaceType() != SpaceType.PERSONAL) {
-            // 共享空间无预留机制：晋升时按实际结算量复核容量并计入用量
-            sharedSpaceQuotaService.checkQuota(session.getTotalSizeBytes());
-            sharedSpaceQuotaService.increaseUsage(session.getTotalSizeBytes(), 1);
+            // 共享空间按实际字节结算：版本上传只增加新对象字节，文件数不增加，
+            // 否则每传一个历史版本都会让 fileCount 虚增一。容量预检已在上游完成，
+            // 并发上限由 increaseUsage 的原子条件更新兜底。
+            sharedSpaceQuotaService.increaseUsage(session.getTotalSizeBytes(), versionUpload ? 0 : 1);
             return;
         }
         if (session.getQuotaReservationId() == null) {

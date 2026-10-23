@@ -109,7 +109,14 @@ def _vision_model_state(profile: str) -> str:
     return "ready" if all(os.path.isfile(path) for path in required_paths) else "missing"
 
 
-VISION_MODEL_STATE = _vision_model_state(VISION_PROFILE)
+def current_vision_pipeline_version() -> str:
+    """模型目录可能在容器启动后才挂载，版本串必须在每次响应时重新计算。"""
+    return f"vision-v7-{VISION_PROFILE}-{_vision_model_state(VISION_PROFILE)}"
+
+
+def current_content_pipeline_version() -> str:
+    return f"{current_vision_pipeline_version()}+{OCR_PIPELINE_VERSION}"
+
 
 OCR_DET_LIMIT_SIDE_LEN = int(os.environ.get("AI_OCR_DET_LIMIT_SIDE_LEN", "2048"))
 OCR_MIN_SCORE = float(os.environ.get("AI_OCR_MIN_SCORE", "0.65"))
@@ -121,8 +128,6 @@ OCR_MAX_TEXT_CHARS = int(os.environ.get("AI_OCR_MAX_TEXT_CHARS", "4000"))
 
 CONTENT_ANALYSIS_SCHEMA_VERSION = 2
 OCR_PIPELINE_VERSION = "ppocr-v4-onnx-v1"
-VISION_PIPELINE_VERSION = f"vision-v7-{VISION_PROFILE}-{VISION_MODEL_STATE}"
-CONTENT_ANALYSIS_PIPELINE_VERSION = f"{VISION_PIPELINE_VERSION}+{OCR_PIPELINE_VERSION}"
 
 inference_slots = Semaphore(MAX_CONCURRENT_INFERENCES)
 
@@ -612,7 +617,7 @@ def _analyze_content_sync(contents: bytes, hint: str, skip_ocr: bool) -> Content
 
     return ContentAnalysis(
         schemaVersion=CONTENT_ANALYSIS_SCHEMA_VERSION,
-        pipelineVersion=CONTENT_ANALYSIS_PIPELINE_VERSION,
+        pipelineVersion=current_content_pipeline_version(),
         ocrPipelineVersion=OCR_PIPELINE_VERSION,
         observations=observations,
         semanticTags=semantic_tags,
@@ -633,7 +638,7 @@ async def lifespan(app: FastAPI):
     logger.info(
         "OmniNest Vision Sidecar V6 已启动 (profile=%s, visionModel=%s)",
         VISION_PROFILE,
-        VISION_MODEL_STATE,
+        _vision_model_state(VISION_PROFILE),
     )
     yield
     stop_event.set()
@@ -650,8 +655,8 @@ async def ready():
     return {
         "status": "ok",
         "visionProfile": VISION_PROFILE,
-        "visionModelState": VISION_MODEL_STATE,
-        "pipelineVersion": CONTENT_ANALYSIS_PIPELINE_VERSION,
+        "visionModelState": _vision_model_state(VISION_PROFILE),
+        "pipelineVersion": current_content_pipeline_version(),
         "ocrVersion": OCR_PIPELINE_VERSION,
     }
 

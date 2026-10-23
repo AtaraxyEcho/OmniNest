@@ -307,6 +307,38 @@ class FileIngressPromotionServiceTest {
     }
 
     @Test
+    void processSettlesSharedVersionWithoutIncreasingFileCount() {
+        FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
+        FileUploadSession session = session();
+        session.setSpaceType(SpaceType.SHARED);
+        session.setQuotaReservationId(null);
+        FileNode target = new FileNode();
+        target.setId(UUID.randomUUID());
+        target.setSpaceType(SpaceType.SHARED);
+        target.setOwnerUserId(OWNER_ID);
+        target.setNodeType("FILE");
+        when(ingressItemRepository.findById(INGRESS_ID)).thenReturn(Optional.of(item));
+        when(uploadSessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(target.getId(), OWNER_ID))
+                .thenReturn(Optional.of(target));
+        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), any(), anyString(), any(UUID.class)))
+                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", SHA256));
+        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
+            FileObject object = invocation.getArgument(0);
+            object.setId(UUID.randomUUID());
+            return object;
+        });
+        when(postProcessingTaskService.enqueueMediaAutoImport(any())).thenReturn(UUID.randomUUID());
+
+        service.process(new FileSecurityScanRequestedEvent(
+                UUID.randomUUID(), OWNER_ID, INGRESS_ID, target.getId(), null));
+
+        assertThat(session.getStatus()).isEqualTo("COMPLETED");
+        // 版本上传只增加新对象字节，fileCount 不得增加，否则每次版本都会虚增一。
+        verify(sharedSpaceQuotaService).increaseUsage(512L, 0L);
+    }
+
+    @Test
     void processRejectsUploadLargerThanDeclaredSize() {
         FileIngressItem item = ingressItem(FileIngressStatus.PENDING_SCAN, null);
         FileUploadSession session = session();

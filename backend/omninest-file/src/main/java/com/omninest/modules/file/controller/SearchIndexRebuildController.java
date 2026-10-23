@@ -1,11 +1,15 @@
 package com.omninest.modules.file.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.service.SearchIndexRebuildService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,7 @@ public class SearchIndexRebuildController {
 
     private final SearchIndexRebuildService searchIndexRebuildService;
     private final CurrentUserContext currentUserContext;
+    private final RateLimitService rateLimitService;
 
     /**
      * 管理员触发全站搜索索引重建：受理后异步清空索引并按存量文件重新派发，接口只返回任务 ID。
@@ -37,6 +42,9 @@ public class SearchIndexRebuildController {
     @PostMapping("/rebuild")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     ApiResponse<Map<String, Object>> rebuildIndex() {
+        if (!rateLimitService.tryAcquire("search:rebuild", 3, Duration.ofHours(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "重建操作过于频繁，请稍后再试");
+        }
         UUID taskId = searchIndexRebuildService.start(currentUserContext.requireCurrentUserId());
         return ApiResponse.success(Map.of(
                 "taskId", taskId.toString(),

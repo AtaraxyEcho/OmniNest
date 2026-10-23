@@ -4,6 +4,8 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Roles;
+import com.omninest.common.storage.ObjectStorageBuckets;
+import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -69,6 +71,8 @@ public class AdminUserService {
     private final AdminActorGuard adminActorGuard;
     private final CurrentUserService currentUserService;
     private final TransactionTemplate transactionTemplate;
+    private final ObjectStorageClient objectStorageClient;
+    private final ObjectStorageBuckets objectStorageBuckets;
 
     /**
      * 分页查询用户，支持按用户名、展示名、邮箱模糊搜索、角色编码精确过滤
@@ -98,7 +102,10 @@ public class AdminUserService {
                 authRoleRepository.findPermissionCodesByRoleIds(roleIds);
         Set<UUID> twoFactorUserIds = twoFactorEnabledUserIds(users);
         return users.map(user -> AuthUserMapper.toDto(
-                user, null, permissionCodesByRoleId, twoFactorUserIds.contains(user.getId())));
+                user,
+                AuthUserMapper.resolveAvatarUrl(user, objectStorageClient, objectStorageBuckets),
+                permissionCodesByRoleId,
+                twoFactorUserIds.contains(user.getId())));
     }
 
     /**
@@ -362,7 +369,8 @@ public class AdminUserService {
     }
 
     private String normalizeUsername(String rawUsername) {
-        String username = rawUsername == null ? "" : rawUsername.trim();
+        // 与登录入口同一口径：唯一索引建在 lower(username) 上，大小写变体不能注册成两个账户。
+        String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase(Locale.ROOT);
         if (username.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名不能为空");
         }
@@ -391,7 +399,9 @@ public class AdminUserService {
 
     private AuthUserDto toDto(AuthUser user) {
         return authUserRepository.findWithRolesAndPermissionsById(user.getId())
-                .map(found -> AuthUserMapper.toDto(found, null))
-                .orElseGet(() -> AuthUserMapper.toDto(user, null));
+                .map(found -> AuthUserMapper.toDto(
+                        found, AuthUserMapper.resolveAvatarUrl(found, objectStorageClient, objectStorageBuckets)))
+                .orElseGet(() -> AuthUserMapper.toDto(
+                        user, AuthUserMapper.resolveAvatarUrl(user, objectStorageClient, objectStorageBuckets)));
     }
 }

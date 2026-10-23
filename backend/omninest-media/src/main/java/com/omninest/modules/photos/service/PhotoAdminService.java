@@ -3,6 +3,7 @@ package com.omninest.modules.photos.service;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.media.domain.MetadataStatus;
+import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
@@ -45,7 +46,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -67,6 +70,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhotoAdminService {
+
+    private static final List<String> ACTIVE_TASK_STATUSES = List.of(
+            TaskStatus.QUEUED.getValue(),
+            TaskStatus.RUNNING.getValue(),
+            TaskStatus.RETRY_WAIT.getValue()
+    );
 
     private final PhotoScanJobRepository scanJobRepository;
     private final PhotoItemRepository photoItemRepository;
@@ -109,6 +118,14 @@ public class PhotoAdminService {
      */
     @Transactional(rollbackFor = Exception.class)
     public PhotoScanJobDto createScanJob(UUID ownerUserId) {
+        // 已有排队/执行中的扫描直接复用，避免连点把全库扫描刷进队列耗尽 Worker IO。
+        PhotoScanJob existing = taskRecordService
+                .findActiveTaskForOwner(ownerUserId, "PHOTO_SCAN", ACTIVE_TASK_STATUSES)
+                .flatMap(task -> scanJobRepository.findByIdAndOwnerUserId(task.getId(), ownerUserId))
+                .orElse(null);
+        if (existing != null) {
+            return toDto(existing);
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(taskId, ownerUserId, "PHOTO_SCAN", QueueNames.PHOTO_SCAN_ROUTING_KEY, Map.of(
                 "jobId", taskId.toString(),
@@ -542,6 +559,13 @@ public class PhotoAdminService {
      */
     @Transactional(rollbackFor = Exception.class)
     public UUID createThumbnailRegenerationTask(UUID ownerUserId) {
+        UUID existingTaskId = taskRecordService
+                .findActiveTaskForOwner(ownerUserId, "PHOTO_THUMBNAILS", ACTIVE_TASK_STATUSES)
+                .map(TaskRecord::getId)
+                .orElse(null);
+        if (existingTaskId != null) {
+            return existingTaskId;
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(
                 taskId,
@@ -576,18 +600,27 @@ public class PhotoAdminService {
         List<UUID> photoIds = photoItemRepository.findIdsMissingCover(ownerUserId);
         int total = photoIds.size();
         int regenerated = 0;
+        int lastReported = -1;
         try {
+            // 批量读取照片与源文件描述，避免逐张 findById 造成 N+1。
+            Map<UUID, PhotoItem> photosById = photoItemRepository.findAllById(photoIds).stream()
+                    .filter(item -> ownerUserId.equals(item.getOwnerUserId()))
+                    .collect(Collectors.toMap(PhotoItem::getId, item -> item));
+            List<UUID> fileNodeIds = photosById.values().stream()
+                    .map(PhotoItem::getFileNodeId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            Map<UUID, FileDescriptor> filesById = fileMetadataQueryService.findAllByIds(fileNodeIds).stream()
+                    .collect(Collectors.toMap(FileDescriptor::id, file -> file));
             for (int index = 0; index < total; index++) {
-                PhotoItem photo = photoItemRepository.findById(photoIds.get(index))
-                        .filter(item -> ownerUserId.equals(item.getOwnerUserId()))
-                        .orElse(null);
+                PhotoItem photo = photosById.get(photoIds.get(index));
                 if (photo == null || photo.getCoverFileId() != null) {
-                    taskRecordService.updateProgress(taskId, progressPercent(index + 1, total));
+                    lastReported = reportThrottled(taskId, index + 1, total, lastReported);
                     continue;
                 }
-                FileDescriptor file = fileMetadataQueryService.findById(photo.getFileNodeId()).orElse(null);
+                FileDescriptor file = filesById.get(photo.getFileNodeId());
                 if (file == null) {
-                    taskRecordService.updateProgress(taskId, progressPercent(index + 1, total));
+                    lastReported = reportThrottled(taskId, index + 1, total, lastReported);
                     continue;
                 }
                 try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
@@ -600,17 +633,39 @@ public class PhotoAdminService {
                         photoItemRepository.save(photo);
                         regenerated++;
                     }
-                } catch (BusinessException exception) {
-                    log.warn("缩略图源文件处理失败: fileNodeId={}, error={}", file.id(), exception.getMessage());
+                } catch (Exception exception) {
+                    // 单张损坏图片的解码/IO 异常不能中断整批任务；记录后继续下一张。
+                    log.warn("缩略图重生成失败: fileNodeId={}, errorType={}, message={}",
+                            file.id(), exception.getClass().getSimpleName(), exception.getMessage());
                 }
-                taskRecordService.updateProgress(taskId, progressPercent(index + 1, total));
+                lastReported = reportThrottled(taskId, index + 1, total, lastReported);
             }
+            taskRecordService.updateProgress(taskId, 100);
             taskRecordService.markCompleted(taskId, Map.of("regenerated", regenerated));
+            invalidateDashboardCache(ownerUserId);
+            syncEventService.invalidate(
+                    ownerUserId,
+                    SyncScope.PHOTOS,
+                    "PHOTO_LIBRARY",
+                    Map.of("source", "THUMBNAIL_REGENERATE", "regenerated", regenerated)
+            );
             log.info("缩略图重新生成完成: ownerUserId={}, total={}, regenerated={}", ownerUserId, total, regenerated);
         } catch (RuntimeException ex) {
             taskRecordService.markFailed(taskId, ex.getMessage(), ThrowableDescriber.describe(ex));
             throw ex;
         }
+    }
+
+    /**
+     * 进度按每 25 张或最后一张写库，避免逐张更新 task_record。
+     */
+    private int reportThrottled(UUID taskId, int finished, int total, int lastReported) {
+        int percent = progressPercent(finished, total);
+        if (percent == lastReported || (finished % 25 != 0 && finished < total)) {
+            return lastReported;
+        }
+        taskRecordService.updateProgress(taskId, percent);
+        return percent;
     }
 
     /**

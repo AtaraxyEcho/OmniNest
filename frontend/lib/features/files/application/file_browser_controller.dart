@@ -817,6 +817,8 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> deleteSharedFile(FileNode file) async {
     await _runAction(FileOperation.deleteSharedFile, () async {
       await _repository.deleteSharedFile(file.id);
+      // 删除后必须重拉当前目录，否则已删节点会留在共享空间列表直到手动刷新。
+      await refreshFileNodesForCurrentSection();
       final current = state.asData?.value;
       final usage = await _repository.getSharedSpaceUsage();
       state = AsyncData(_liveOr(current).copyWith(sharedSpaceUsage: usage));

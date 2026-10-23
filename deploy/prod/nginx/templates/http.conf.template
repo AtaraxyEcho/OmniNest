@@ -55,7 +55,7 @@ server {
     gzip_vary on;
     gzip_min_length 1024;
     gzip_comp_level 5;
-    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_types text/css application/javascript application/json image/svg+xml font/ttf font/otf;
 
     location = ${OMNINEST_WEB_BASE_PATH}flutter_service_worker.js {
         add_header Cache-Control "no-cache";

@@ -4,6 +4,7 @@ import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
@@ -50,6 +51,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,6 +93,7 @@ public class PhotoLibraryController {
     private final PhotoMotionRescanService motionRescanService;
     private final CurrentUserContext currentUserContext;
     private final ClientIpResolver clientIpResolver;
+    private final RateLimitService rateLimitService;
 
     // ─── 浏览 ───
 
@@ -803,15 +806,16 @@ public class PhotoLibraryController {
 
     @Operation(summary = "扫描照片库", description = "扫描当前用户自己的照片库，检测新增或变更的照片文件")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PostMapping("/api/v1/admin/photos/scan")
+    @PostMapping({"/api/v1/photos/scan", "/api/v1/admin/photos/scan"})
     ApiResponse<PhotoScanJobDto> scanLibrary() {
         UUID userId = currentUserContext.requireCurrentUserId();
+        requireTaskRateLimit("photo:scan:" + userId, 6);
         return ApiResponse.success(adminService.createScanJob(userId));
     }
 
     @Operation(summary = "查询扫描任务状态", description = "查询指定照片扫描任务的执行状态")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
-    @GetMapping("/api/v1/admin/photos/scan/{jobId}/status")
+    @GetMapping({"/api/v1/photos/scan/{jobId}/status", "/api/v1/admin/photos/scan/{jobId}/status"})
     ApiResponse<PhotoScanJobDto> scanStatus(@PathVariable UUID jobId) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(adminService.scanJob(userId, jobId));
@@ -831,11 +835,18 @@ public class PhotoLibraryController {
 
     @Operation(summary = "重建缩略图", description = "创建异步任务重生成当前用户缺失的照片缩略图")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PostMapping("/api/v1/admin/photos/thumbnails/regenerate")
+    @PostMapping({"/api/v1/photos/thumbnails/regenerate", "/api/v1/admin/photos/thumbnails/regenerate"})
     ApiResponse<Map<String, String>> regenerateThumbnails() {
         UUID userId = currentUserContext.requireCurrentUserId();
+        requireTaskRateLimit("photo:thumbnails:" + userId, 3);
         UUID taskId = adminService.createThumbnailRegenerationTask(userId);
         return ApiResponse.success(Map.of("taskId", taskId.toString()));
+    }
+
+    private void requireTaskRateLimit(String key, int limitPerHour) {
+        if (!rateLimitService.tryAcquire(key, limitPerHour, Duration.ofHours(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "操作过于频繁，请稍后再试");
+        }
     }
 
     @Operation(summary = "回扫动态照片", description = "为当前用户历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频")

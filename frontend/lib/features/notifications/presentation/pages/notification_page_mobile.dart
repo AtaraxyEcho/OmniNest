@@ -77,6 +77,9 @@ class _NotificationMobileViewState
     await ref
         .read(notificationControllerProvider.notifier)
         .refreshForRealtime(size: _pageSize);
+    if (!mounted) {
+      return;
+    }
     await ref.read(unreadCountProvider.notifier).refresh();
   }
 

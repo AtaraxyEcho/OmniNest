@@ -7,6 +7,7 @@ import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.user.UserDataPurgePort;
 import com.omninest.modules.notification.port.NotificationMaintenance;
 import com.omninest.modules.preferences.service.UserPreferenceService;
 import com.omninest.modules.quota.port.UserProfileCacheEvictor;
@@ -58,6 +59,7 @@ public class AdminUserDeletionService {
     private final AdminActorGuard adminActorGuard;
     private final ObjectStorageClient objectStorageClient;
     private final ObjectStorageBuckets objectStorageBuckets;
+    private final List<UserDataPurgePort> userDataPurgePorts;
     private final UserProfileCacheEvictor userProfileCacheEvictor;
 
     /**
@@ -95,6 +97,8 @@ public class AdminUserDeletionService {
         notificationMaintenance.adminPurgeForUser(userId);
         userPreferenceService.adminPurgeForUser(userId);
         storageQuotaReservationService.adminPurgeForUser(userId);
+        // 文件/媒体模块的授权绑定与索引目录由各模块端口清理，系统模块不直接依赖其仓储。
+        userDataPurgePorts.forEach(port -> port.purgeUserData(userId));
         authTotpCredentialRepository.deleteByUserId(userId);
         authBackupCodeRepository.deleteByUserId(userId);
         activeSessionRepository.deleteByUserId(userId);

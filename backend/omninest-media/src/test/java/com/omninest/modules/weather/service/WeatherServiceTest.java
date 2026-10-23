@@ -250,8 +250,8 @@ class WeatherServiceTest {
             WeatherDto result = weatherService.getRealtimeWeather(null);
 
             assertThat(result.text()).isEqualTo("未知");
-            assertThat(ReflectionTestUtils.getField(weatherService, "configCache"))
-                    .isEqualTo(Map.of());
+            // 读取失败时返回默认配置供本次请求使用，但不写入缓存；下一次请求会重试。
+            assertThat(ReflectionTestUtils.getField(weatherService, "configCache")).isNull();
         }
 
         @Test

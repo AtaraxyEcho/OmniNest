@@ -2,6 +2,9 @@ package com.omninest.modules.music.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.FilePurgeTaskDto;
@@ -59,6 +62,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -113,6 +117,7 @@ public class MusicController {
     private static final String UNCACHEABLE_CACHE_CONTROL = "no-store";
 
     private final CurrentUserContext currentUserContext;
+    private final RateLimitService rateLimitService;
     private final MusicOnlineDispatcher onlineDispatcher;
     private final MusicLibraryService musicLibraryService;
     private final MusicPlaylistService playlistService;
@@ -539,13 +544,17 @@ public class MusicController {
         };
     }
 
-    @PostMapping("/api/v1/admin/music/scan")
+    @PostMapping({"/api/v1/music/scan", "/api/v1/admin/music/scan"})
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     ApiResponse<MusicScanJobDto> createScanJob() {
-        return ApiResponse.success(musicAdminService.createScanJob(currentUserContext.requireCurrentUserId()));
+        UUID userId = currentUserContext.requireCurrentUserId();
+        if (!rateLimitService.tryAcquire("music:scan:" + userId, 6, Duration.ofHours(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "扫描操作过于频繁，请稍后再试");
+        }
+        return ApiResponse.success(musicAdminService.createScanJob(userId));
     }
 
-    @GetMapping("/api/v1/admin/music/scan/{jobId}/status")
+    @GetMapping({"/api/v1/music/scan/{jobId}/status", "/api/v1/admin/music/scan/{jobId}/status"})
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     ApiResponse<MusicScanJobDto> scanJob(@PathVariable UUID jobId) {
         return ApiResponse.success(musicAdminService.scanJob(currentUserContext.requireCurrentUserId(), jobId));

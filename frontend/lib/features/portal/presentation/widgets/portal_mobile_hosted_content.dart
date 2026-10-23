@@ -254,6 +254,10 @@ class _SpatialEnvironmentHeaderState
           const SizedBox(height: 8),
           weather.when(
             data: (value) {
+              // 后端未配置天气或请求失败时返回占位对象；不能渲染成 "0° 加载中"。
+              if (value.updateTime.isEmpty) {
+                return const SizedBox.shrink();
+              }
               final location =
                   value.locationName.isNotEmpty ? ' ${value.locationName}' : '';
               return _WeatherLinePill(

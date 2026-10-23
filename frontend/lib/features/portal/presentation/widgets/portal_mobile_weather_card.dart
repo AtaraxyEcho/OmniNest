@@ -71,7 +71,10 @@ class _WeatherCardState extends ConsumerState<_WeatherCard>
         onTap: weatherAsync.whenOrNull(
           data:
               (weather) =>
-                  () => showWeatherDetailDialog(context, weather: weather),
+                  weather.updateTime.isEmpty
+                      ? null
+                      : () =>
+                          showWeatherDetailDialog(context, weather: weather),
         ),
         child: ClipRect(
           child: Stack(
@@ -139,6 +142,41 @@ class _WeatherContent extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final labelStyle = Theme.of(context).textTheme.labelSmall;
     final detailColor = scheme.onSurfaceVariant;
+
+    if (weather.updateTime.isEmpty) {
+      // 后端未配置或请求失败：不显示 0°，只保留标题与未连接说明。
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                weather.weatherIcon,
+                size: 28,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.portalWeatherTitle,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.portalWeatherDisconnected,
+                      style: labelStyle?.copyWith(color: detailColor),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -206,6 +206,57 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 读取指定空间与路径前缀下所有活动节点 ID（不区分所有者）。
+     *
+     * <p>共享空间目录可能包含多个成员上传的子项，按所有者过滤会漏掉其他成员的文件。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀（含结尾分隔符）
+     * @return 活动节点 ID
+     */
+    @Query("select node.id from FileNode node where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
+    List<UUID> findActiveIdsUnderPathInSpace(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
+     * 读取指定空间与路径前缀下活动节点的所有者与 ID，用于按上传者分组投递索引事件。
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀（含结尾分隔符）
+     * @return 每行二元组：所有者 ID、节点 ID
+     */
+    @Query("select node.ownerUserId, node.id from FileNode node where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
+    List<Object[]> findActiveIdOwnerPairsUnderPathInSpace(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
+     * 按空间与路径前缀批量软删除整棵子树。
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀（含结尾分隔符）
+     * @param deletedAt 删除时间
+     * @param deletedBy 删除操作者
+     * @return 更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update FileNode node set node.deleted = true, node.deletedAt = :deletedAt, "
+            + "node.deletedBy = :deletedBy, node.updatedAt = :deletedAt, node.version = node.version + 1 "
+            + "where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
+    int softDeleteSubtreeInSpace(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix,
+            @Param("deletedAt") Instant deletedAt,
+            @Param("deletedBy") UUID deletedBy
+    );
+
+    /**
      * 分页读取指定空间与路径下尚未软删除节点的 ID。
      *
      * @param ownerUserId 所属用户 ID
@@ -298,6 +349,34 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             """)
     List<FileNode> findSearchablePersonalNodes(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("ids") Collection<UUID> ids,
+            @Param("purgeState") FilePurgeState purgeState,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("derivedSource") String derivedSource
+    );
+
+    /**
+     * 批量复核共享空间搜索候选节点的当前数据库状态。
+     *
+     * <p>共享空间可见性由角色权限单独判定，这里不按 owner_user_id 过滤；
+     * 节点仍须活动、未进入永久删除且非系统派生。</p>
+     *
+     * @param ids Lucene 候选文件 ID
+     * @param purgeState 永久删除状态
+     * @param spaceType 空间类型
+     * @param derivedSource 派生文件来源编码
+     * @return 当前仍可搜索的共享空间节点
+     */
+    @Query("""
+            select node
+            from FileNode node
+            where node.id in :ids
+              and node.deleted = false
+              and node.purgeState = :purgeState
+              and node.spaceType = :spaceType
+              and (node.sourceType is null or node.sourceType <> :derivedSource)
+            """)
+    List<FileNode> findSearchableSharedNodes(
             @Param("ids") Collection<UUID> ids,
             @Param("purgeState") FilePurgeState purgeState,
             @Param("spaceType") SpaceType spaceType,

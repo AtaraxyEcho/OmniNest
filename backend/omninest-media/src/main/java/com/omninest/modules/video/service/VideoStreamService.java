@@ -8,8 +8,10 @@ import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,14 +23,13 @@ import org.springframework.stereotype.Service;
 
 /**
  * Web 端流式音频转码服务。
- * 通过 Docker exec 启动 ffmpeg，从 MinIO URL 读取源视频。
+ * 优先在后端容器本地启动 ffmpeg；缺少本地 ffmpeg 时回退到 docker exec。
  *
  * @author OmniNest
  */
 @Slf4j
 @Service
 public class VideoStreamService {
-    private static final String DOCKER_CONTAINER = "omninest-ffmpeg";
     private static final int BUFFER_SIZE = 64 * 1024;
     /** 流式转码超时（秒）：4 小时 */
     private static final long STREAM_TRANSCODE_TIMEOUT_SECONDS = 4 * 3600;
@@ -43,6 +44,8 @@ public class VideoStreamService {
     private final VideoSourceInputResolver sourceInputResolver;
     private final MediaContentAccessService mediaContentAccessService;
     private final VideoStreamProperties streamProperties;
+    private final VideoFfmpegRuntime ffmpegRuntime;
+    private final VideoProcessExecutor processExecutor;
 
     /**
      * 同一时刻允许的实时 ffmpeg 流数。
@@ -55,6 +58,9 @@ public class VideoStreamService {
 
     /** 同一观看者同一影片只保留最新一路 ffmpeg；拖动进度条重开流时先杀掉旧进程。 */
     private final Map<String, Process> activeStreams = new ConcurrentHashMap<>();
+
+    /** docker 模式下的容器内进程标记，用于 destroy 客户端后终止容器内 ffmpeg。 */
+    private final Map<Process, String> containerStreamMarkers = new ConcurrentHashMap<>();
 
     /**
      * 占用一路实时转码槽位，取不到时返回可重试的业务错误。
@@ -83,12 +89,16 @@ public class VideoStreamService {
             MediaVideoItemRepository videoItemRepository,
             VideoSourceInputResolver sourceInputResolver,
             MediaContentAccessService mediaContentAccessService,
-            VideoStreamProperties streamProperties
+            VideoStreamProperties streamProperties,
+            VideoFfmpegRuntime ffmpegRuntime,
+            VideoProcessExecutor processExecutor
     ) {
         this.videoItemRepository = videoItemRepository;
         this.sourceInputResolver = sourceInputResolver;
         this.mediaContentAccessService = mediaContentAccessService;
         this.streamProperties = streamProperties;
+        this.ffmpegRuntime = ffmpegRuntime;
+        this.processExecutor = processExecutor;
         this.streamSlots = new Semaphore(Math.max(1, streamProperties.getMaxConcurrentStreams()), true);
     }
 
@@ -228,15 +238,17 @@ public class VideoStreamService {
         log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, startSeconds={}",
                 videoItemId, item.getAudioCodec(), item.getContainerFormat(), startSeconds);
 
-        String[] command = buildFfmpegTranscodeCommand(internalUrl, startSeconds);
+        List<String> ffmpegArgs = buildTranscodeArgs(internalUrl, startSeconds);
+        StreamCommand streamCommand = buildStreamCommand(ffmpegArgs, List.of(internalUrl));
         terminateActiveStream(streamKey);
         requireStreamSlot(videoItemId);
 
         Process process = null;
         try {
-            ProcessBuilder pb = new ProcessBuilder(command);
+            ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
             pb.redirectErrorStream(false);
             process = pb.start();
+            registerContainerMarker(process, streamCommand.marker());
             registerActiveStream(streamKey, process);
             log.info("ffmpeg 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
@@ -307,39 +319,19 @@ public class VideoStreamService {
 
         log.info("缓存音频 mux 开始: sourceVideoItemId={}, startSeconds={}", sourceVideoItemId, startSeconds);
 
-        List<String> cmd = new ArrayList<>(List.of(
-                "docker", "exec", DOCKER_CONTAINER,
-                "ffmpeg", "-y"
-        ));
-        if (startSeconds > 0) {
-            cmd.addAll(List.of("-ss", String.valueOf(startSeconds)));
-        }
-        cmd.addAll(List.of(
-                "-i", videoInternalUrl,
-                "-i", audioInternalUrl,
-                "-map", "0:v", "-map", "1:a"
-        ));
-        // 视频流直接 copy（零编码开销），浏览器负责解码
-        // hevc/h265: Chrome 107+ 支持硬件解码，Safari 原生支持
-        cmd.addAll(List.of("-c:v", "copy"));
-        // 音频重新编码为 AAC-LC：原始 ADTS 流的元数据（时长/码率）可能不准确，
-        // copy 会导致浏览器收到畸形数据断开连接；re-encode 确保输出正确的 ASC 头和 MP4 兼容格式
-        cmd.addAll(List.of(
-                "-c:a", "aac", "-b:a", "192k", "-ac", "2",
-                "-f", "mp4",
-                "-movflags", "frag_keyframe+empty_moov",
-                "pipe:1"
-        ));
-
-        String[] command = cmd.toArray(new String[0]);
+        List<String> ffmpegArgs = buildCachedAudioArgs(
+                videoInternalUrl, audioInternalUrl, startSeconds);
+        StreamCommand streamCommand = buildStreamCommand(
+                ffmpegArgs, List.of(videoInternalUrl, audioInternalUrl));
         terminateActiveStream(streamKey);
         requireStreamSlot(sourceVideoItemId);
 
         Process process = null;
         try {
-            ProcessBuilder pb = new ProcessBuilder(command);
+            ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
             pb.redirectErrorStream(false);
             process = pb.start();
+            registerContainerMarker(process, streamCommand.marker());
             registerActiveStream(streamKey, process);
             log.info("ffmpeg mux 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
@@ -387,37 +379,118 @@ public class VideoStreamService {
     }
 
     /**
-     * 构建 ffmpeg 转码命令（DRY：seek 参数条件插入）。
+     * 构建实时转码的 ffmpeg 参数（不含执行前缀，不含 -i 之前的协议白名单）。
      */
-    private String[] buildFfmpegTranscodeCommand(String minioUrl, long startSeconds) {
-        List<String> cmd = new ArrayList<>(List.of(
-                "docker", "exec", DOCKER_CONTAINER,
-                "ffmpeg", "-y"
-        ));
+    private List<String> buildTranscodeArgs(String inputUrl, long startSeconds) {
+        List<String> args = new ArrayList<>();
         if (startSeconds > 0) {
-            cmd.addAll(List.of("-ss", String.valueOf(startSeconds)));
+            args.addAll(List.of("-ss", String.valueOf(startSeconds)));
         }
         // 不映射字幕流：字幕通过独立的 /vtt 端点按需提取为 WebVTT
-        cmd.addAll(List.of(
-                "-i", minioUrl,
+        args.addAll(List.of(
+                "-i", inputUrl,
                 "-map", "0:v",
                 "-map", "0:a"
         ));
         // 视频流直接 copy（零编码开销），浏览器负责解码
         // hevc/h265: Chrome 107+ 支持硬件解码，Safari 原生支持
-        cmd.addAll(List.of("-c:v", "copy"));
-        cmd.addAll(List.of(
+        args.addAll(List.of("-c:v", "copy"));
+        args.addAll(List.of(
                 "-c:a", "aac", "-b:a", "192k",
                 "-f", "mp4",
                 "-movflags", "frag_keyframe+empty_moov",
                 "pipe:1"
         ));
-        return cmd.toArray(new String[0]);
+        return args;
+    }
+
+    /**
+     * 构建缓存音频 mux 的 ffmpeg 参数。
+     */
+    private List<String> buildCachedAudioArgs(String videoUrl, String audioUrl, long startSeconds) {
+        List<String> args = new ArrayList<>();
+        if (startSeconds > 0) {
+            args.addAll(List.of("-ss", String.valueOf(startSeconds)));
+        }
+        args.addAll(List.of(
+                "-i", videoUrl,
+                "-i", audioUrl,
+                "-map", "0:v", "-map", "1:a"
+        ));
+        // 视频流直接 copy（零编码开销），浏览器负责解码
+        args.addAll(List.of("-c:v", "copy"));
+        // 音频重新编码为 AAC-LC：原始 ADTS 流的元数据（时长/码率）可能不准确，
+        // copy 会导致浏览器收到畸形数据断开连接；re-encode 确保输出正确的 ASC 头和 MP4 兼容格式
+        args.addAll(List.of(
+                "-c:a", "aac", "-b:a", "192k", "-ac", "2",
+                "-f", "mp4",
+                "-movflags", "frag_keyframe+empty_moov",
+                "pipe:1"
+        ));
+        return args;
+    }
+
+    /**
+     * 按运行位置构建完整命令：本地模式直接起 ffmpeg 并限制协议；
+     * docker 模式用带 PID 文件的 shell 包装，便于收尾时精确终止容器内进程。
+     */
+    private StreamCommand buildStreamCommand(List<String> ffmpegArgs, List<String> inputs) {
+        if (ffmpegRuntime.isDisabled()) {
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ffmpeg 不可用，无法实时转码");
+        }
+        List<String> args = new ArrayList<>();
+        if (!ffmpegRuntime.isDocker()) {
+            // 协议白名单必须出现在第一个 -i 之前；本地后端容器有出网能力，
+            // 不能让媒体内容里的 file:/concat: 引用把进程当作跳板。
+            args.add("-protocol_whitelist");
+            args.add(combinedProtocolWhitelist(inputs));
+        }
+        args.addAll(ffmpegArgs);
+        if (ffmpegRuntime.isDocker()) {
+            String marker = ffmpegRuntime.newMarker();
+            return new StreamCommand(ffmpegRuntime.dockerStreamCommand(marker, args), marker);
+        }
+        List<String> command = new ArrayList<>();
+        command.add("ffmpeg");
+        command.add("-y");
+        command.addAll(args);
+        return new StreamCommand(command, null);
+    }
+
+    private String combinedProtocolWhitelist(List<String> inputs) {
+        boolean hasHttp = inputs.stream().anyMatch(this::isHttpInput);
+        boolean hasLocal = inputs.stream().anyMatch(input -> !isHttpInput(input));
+        if (hasHttp && hasLocal) {
+            return "file,crypto,data,http,https,tcp,tls";
+        }
+        return hasLocal ? "file,crypto,data" : "http,https,tcp,tls";
+    }
+
+    private boolean isHttpInput(String input) {
+        if (input == null) {
+            return false;
+        }
+        String lower = input.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://");
+    }
+
+    private void registerContainerMarker(Process process, String marker) {
+        if (process != null && marker != null) {
+            containerStreamMarkers.put(process, marker);
+        }
+    }
+
+    private record StreamCommand(List<String> command, String marker) {
     }
 
     private void terminateProcess(Process process) {
         if (process == null) {
             return;
+        }
+        // docker exec 客户端被销毁后容器内 ffmpeg 仍可能存活；先按 PID 文件终止容器内进程。
+        String marker = containerStreamMarkers.remove(process);
+        if (marker != null) {
+            terminateContainerProcess(marker);
         }
         process.destroyForcibly();
         try {
@@ -439,6 +512,23 @@ public class VideoStreamService {
             process.getOutputStream().close();
         } catch (IOException e) {
             log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
+    }
+
+    private void terminateContainerProcess(String marker) {
+        try {
+            VideoProcessExecutor.Result result = processExecutor.execute(
+                    ffmpegRuntime.dockerKillCommand(marker),
+                    Duration.ofSeconds(10)
+            );
+            if (!result.succeeded()) {
+                log.debug("终止容器内 ffmpeg 未确认: timedOut={}, exitCode={}",
+                        result.timedOut(), result.exitCode());
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        } catch (IOException exception) {
+            log.debug("终止容器内 ffmpeg 失败: errorType={}", exception.getClass().getSimpleName());
         }
     }
 

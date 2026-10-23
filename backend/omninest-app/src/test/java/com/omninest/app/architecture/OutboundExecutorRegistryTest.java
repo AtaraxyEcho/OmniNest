@@ -32,7 +32,9 @@ class OutboundExecutorRegistryTest {
     /** 出网位置的识别标记：自建 HTTP 客户端、起子进程、驱动下载器/远端网关、直连 SMTP。都是代码形状，不匹配注释里的词。 */
     private static final Pattern OUTBOUND_MARKER = Pattern.compile(
             "^import java\\.net\\.http\\.HttpClient;|HttpClient\\.(newBuilder|newHttpClient)"
+                    + "|^import java\\.net\\.Socket;|new Socket\\("
                     + "|new ProcessBuilder|VideoProcessExecutor|\\.exec\\("
+                    + "|\\bRestTemplate\\b|\\bRestClient\\b"
                     + "|RcloneGateway|RcloneRcClient"
                     + "|^import org\\.springframework\\.mail\\.javamail\\.JavaMailSenderImpl;",
             Pattern.MULTILINE
@@ -92,12 +94,19 @@ class OutboundExecutorRegistryTest {
                     "ffprobe 子进程；先部分下载到本地临时文件再探测"),
             Map.entry("omninest-media/src/main/java/com/omninest/modules/video/service/VideoProcessExecutor.java",
                     "子进程执行、超时与输出回收的统一出口"),
+            Map.entry("omninest-media/src/main/java/com/omninest/modules/video/service/VideoFfmpegRuntime.java",
+                    "ffmpeg/docker CLI 可用性探测；不处理用户输入地址，仅本地或容器内固定命令"),
             Map.entry("omninest-media/src/main/java/com/omninest/modules/video/service/VideoStreamService.java",
                     "ffmpeg 实时 remux；输入为我们自己的预签名地址（L2：待评估本地暂存）"),
             Map.entry("omninest-media/src/main/java/com/omninest/modules/video/service/VideoTranscodeService.java",
                     "ffmpeg 转码；输入为我们自己的预签名地址（L2：待评估本地暂存）"),
             Map.entry("omninest-media/src/main/java/com/omninest/modules/backdrop/service/BackdropVideoThumbnailExtractor.java",
                     "ffmpeg 截帧；优先读本地 staging 文件"),
+            Map.entry("omninest-media/src/main/java/com/omninest/modules/weather/service/WeatherService.java",
+                    "RestTemplate 端点来自 config-center 的 weather.qweather.url（管理员维护，默认公共 API）；"
+                            + "仅拼接固定路径与编码后的位置参数"),
+            Map.entry("omninest-infrastructure/src/main/java/com/omninest/common/security/ClamAvScanner.java",
+                    "TCP Socket 连接 clamd；主机与端口来自 config-center 的 clamav.* （内网自建服务属认可形态）"),
             Map.entry("omninest-worker/src/main/java/com/omninest/worker/runtime/WorkerRuntimeReporter.java",
                     "端点来自 config-center 的 superAdminOnly 键")
     );

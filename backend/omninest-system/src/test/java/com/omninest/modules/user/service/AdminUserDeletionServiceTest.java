@@ -72,6 +72,7 @@ class AdminUserDeletionServiceTest {
             adminActorGuard,
             objectStorageClient,
             objectStorageBuckets,
+            List.of(),
             userProfileCacheEvictor
     );
 

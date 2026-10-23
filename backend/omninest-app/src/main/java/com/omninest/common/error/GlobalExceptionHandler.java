@@ -11,6 +11,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -49,7 +51,7 @@ public class GlobalExceptionHandler {
                     MEDIA_NOT_FOUND, BOOK_NOT_FOUND, BACKDROP_NOT_FOUND,
                     CHAPTER_TEXT_UNAVAILABLE -> HttpStatus.NOT_FOUND;
             case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
-            case BACKDROP_FILE_TOO_LARGE -> HttpStatus.CONTENT_TOO_LARGE;
+            case FILE_SIZE_EXCEEDED, BACKDROP_FILE_TOO_LARGE -> HttpStatus.CONTENT_TOO_LARGE;
             case BACKDROP_UNSUPPORTED_FORMAT -> HttpStatus.UNPROCESSABLE_CONTENT;
             case DEPENDENCY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case CONFLICT, TASK_STATUS_ILLEGAL, TASK_ALREADY_COMPLETED,
@@ -81,6 +83,28 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiResponse<Void>> handleValidation(Exception exception) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(ErrorCode.PARAM_ERROR, resolveValidationMessage(exception)));
+    }
+
+    /**
+     * 并发写入触发数据库唯一约束或数据完整性冲突时返回 409，而不是落到兜底 500。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+        // 数据库异常消息可能带唯一键里的文件名等业务数据，只记录异常类型。
+        log.warn("数据完整性冲突: errorType={}", exception.getClass().getSimpleName());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ErrorCode.CONFLICT, "数据冲突，请稍后重试"));
+    }
+
+    /**
+     * Multipart 上传超过容器或框架限制时返回 413，避免客户端误以为服务端故障。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+        log.warn("上传文件超过大小限制: maxUploadSize={}",
+                exception.getMaxUploadSize() > 0 ? exception.getMaxUploadSize() : "unknown");
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ApiResponse.error(ErrorCode.FILE_SIZE_EXCEEDED, "上传文件超过大小限制"));
     }
 
     @ExceptionHandler(BindException.class)

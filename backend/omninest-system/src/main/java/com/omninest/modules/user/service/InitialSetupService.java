@@ -113,7 +113,7 @@ public class InitialSetupService {
         if (authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN)) {
             throw new BusinessException(ErrorCode.CONFLICT, "首次安装已经完成");
         }
-        String username = request.username().trim();
+        String username = request.username().trim().toLowerCase(Locale.ROOT);
         if (authUserRepository.existsByUsername(username)) {
             throw new BusinessException(ErrorCode.CONFLICT, "用户名已存在");
         }

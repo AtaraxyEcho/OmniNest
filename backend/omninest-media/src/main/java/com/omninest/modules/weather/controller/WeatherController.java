@@ -61,7 +61,7 @@ public class WeatherController {
      */
     @Operation(summary = "获取实时天气", description = "根据用户位置获取实时天气信息，位置优先级：Redis GPS > 前端坐标 > 用户偏好城市 > 默认值")
     @GetMapping("/realtime")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.ACTIVITY_READ + "', '" + Permissions.PREFERENCE_READ + "')")
     public ApiResponse<WeatherDto> getRealtimeWeather(
             @RequestParam(required = false) String location,
             HttpServletRequest httpRequest) {
@@ -72,35 +72,26 @@ public class WeatherController {
         }
 
         // 优先级：Redis GPS（设备上报） > 前端 GPS 坐标 > 用户偏好城市 > 配置中心默认值
-        String resolvedLocation = null;
-        String displayName = null;
-        String lang = null;
-        try {
-            UUID userId = currentUserContext.requireCurrentUserId();
-            lang = getPreferenceLanguage(userId);
-            // 1. 最高优先级：设备上报的 GPS 坐标（最精确、最实时）
-            resolvedLocation = userLocationService.getLocation(userId);
-            // 2. 无 Redis GPS 时，使用前端传参（仅接受坐标格式，拒绝城市名覆盖）
-            if (resolvedLocation == null || resolvedLocation.isBlank()) {
-                if (location != null && !location.isBlank() && isLatLon(location.trim())) {
-                    resolvedLocation = location.trim();
-                }
-            }
-            // 3. 用户偏好城市（用于展示名；也可能是 API 查询位置）
-            String preferenceLocation = getPreferenceLocation(userId);
-            if (resolvedLocation == null || resolvedLocation.isBlank()) {
-                resolvedLocation = preferenceLocation;
-            } else if (preferenceLocation != null
-                    && !preferenceLocation.isBlank()
-                    && !isLatLon(preferenceLocation)) {
-                // GPS 已定位时仍用用户设置的城市名作为展示地区
-                displayName = preferenceLocation;
-            }
-        } catch (Exception e) {
-            // 未登录，前端坐标可直接使用
+        UUID userId = currentUserContext.requireCurrentUserId();
+        String lang = getPreferenceLanguage(userId);
+        // 1. 最高优先级：设备上报的 GPS 坐标（最精确、最实时）
+        String resolvedLocation = userLocationService.getLocation(userId);
+        // 2. 无 Redis GPS 时，使用前端传参（仅接受坐标格式，拒绝城市名覆盖）
+        if (resolvedLocation == null || resolvedLocation.isBlank()) {
             if (location != null && !location.isBlank() && isLatLon(location.trim())) {
                 resolvedLocation = location.trim();
             }
+        }
+        // 3. 用户偏好城市（用于展示名；也可能是 API 查询位置）
+        String displayName = null;
+        String preferenceLocation = getPreferenceLocation(userId);
+        if (resolvedLocation == null || resolvedLocation.isBlank()) {
+            resolvedLocation = preferenceLocation;
+        } else if (preferenceLocation != null
+                && !preferenceLocation.isBlank()
+                && !isLatLon(preferenceLocation)) {
+            // GPS 已定位时仍用用户设置的城市名作为展示地区
+            displayName = preferenceLocation;
         }
         WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation, displayName, lang);
         return ApiResponse.success(weather);

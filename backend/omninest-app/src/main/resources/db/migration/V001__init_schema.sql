@@ -2620,7 +2620,11 @@ CREATE INDEX "idx_auth_user_roles_role" ON "omni"."auth_user_roles" USING btree 
 
 ALTER TABLE "omni"."auth_user_roles" ADD CONSTRAINT "auth_user_roles_pkey" PRIMARY KEY ("user_id", "role_id");
 
-ALTER TABLE "omni"."auth_users" ADD CONSTRAINT "uniq_auth_users_username" UNIQUE ("username");
+-- 用户名按不区分大小写唯一：否则可注册 Admin 与 admin 两个账户，
+-- 而登录限流键按小写归一，攻击者可跨大小写别名把真实账户的限流桶打满。
+CREATE UNIQUE INDEX "uniq_auth_users_username_lower" ON "omni"."auth_users" USING btree (
+  lower("username")
+);
 
 ALTER TABLE "omni"."auth_users" ADD CONSTRAINT "chk_auth_users_status" CHECK (status::text = ANY (ARRAY['ACTIVE'::character varying::text, 'DISABLED'::character varying::text]));
 ALTER TABLE "omni"."auth_users" ADD CONSTRAINT "chk_auth_users_quota" CHECK (quota_bytes >= 0 AND used_bytes >= 0 AND reserved_bytes >= 0);
@@ -2762,7 +2766,18 @@ CREATE INDEX "idx_file_nodes_uploaded_by" ON "omni"."file_nodes" USING btree (
   "uploaded_by" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE space_type::text = 'SHARED'::text AND is_deleted = false;
 
-ALTER TABLE "omni"."file_nodes" ADD CONSTRAINT "uniq_file_nodes_sibling_name" UNIQUE ("owner_user_id", "parent_id", "name", "is_deleted");
+-- 同级同名唯一性只约束活动节点：软删除节点允许与新节点同名，否则二次软删除会撞唯一键。
+-- 根目录 parent_id 为 NULL，PostgreSQL 认为 NULL 互不相等，必须用 COALESCE 收敛成同一哨兵值。
+-- 共享空间的 owner_user_id 是上传者，不同成员在同一目录上传同名文件属正常场景，唯一键不能带 owner。
+CREATE UNIQUE INDEX "uniq_file_nodes_sibling_name_personal" ON "omni"."file_nodes" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid) "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "name" "pg_catalog"."text_ops" ASC NULLS LAST
+) WHERE is_deleted = false AND space_type::text = 'PERSONAL'::text;
+CREATE UNIQUE INDEX "uniq_file_nodes_sibling_name_shared" ON "omni"."file_nodes" USING btree (
+  COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid) "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "name" "pg_catalog"."text_ops" ASC NULLS LAST
+) WHERE is_deleted = false AND space_type::text = 'SHARED'::text;
 
 ALTER TABLE "omni"."file_nodes" ADD CONSTRAINT "chk_file_nodes_source" CHECK (source_type::text = ANY (ARRAY['LOCAL'::character varying::text, 'LOCAL_FILESYSTEM'::character varying::text, 'EXTERNAL'::character varying::text, 'DERIVED'::character varying::text, 'RCLONE'::character varying::text, 'SHARE'::character varying::text]));
 ALTER TABLE "omni"."file_nodes" ADD CONSTRAINT "chk_file_nodes_type" CHECK (node_type::text = ANY (ARRAY['FILE'::character varying::text, 'FOLDER'::character varying::text]));
@@ -2939,12 +2954,6 @@ ALTER TABLE "omni"."media_subtitle_tracks" ADD CONSTRAINT "chk_media_subtitle_tr
 
 ALTER TABLE "omni"."media_subtitle_tracks" ADD CONSTRAINT "media_subtitle_tracks_pkey" PRIMARY KEY ("id");
 
-CREATE INDEX "idx_media_tv_episodes_series" ON "omni"."media_tv_episodes" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  "series_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  "season_number" "pg_catalog"."int4_ops" ASC NULLS LAST,
-  "episode_number" "pg_catalog"."int4_ops" ASC NULLS LAST
-);
 CREATE UNIQUE INDEX "uk_episode_owner_series_season_ep" ON "omni"."media_tv_episodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "series_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
@@ -3581,6 +3590,10 @@ ALTER TABLE "omni"."search_index_states" ADD CONSTRAINT "search_index_states_pke
 CREATE INDEX "idx_share_links_owner_created" ON "omni"."share_links" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+);
+-- 按资源撤销分享链接是移动/删除路径上的热点查询，缺少该索引会退化为全表顺序扫描。
+CREATE INDEX "idx_share_links_resource" ON "omni"."share_links" USING btree (
+  "resource_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
 
 ALTER TABLE "omni"."share_links" ADD CONSTRAINT "uniq_share_links_token_hash" UNIQUE ("token_hash");

@@ -167,6 +167,7 @@ class FileManagerServiceTest {
             fileNodeSupport,
             storageQuotaService,
             sharedSpaceQuotaService,
+            mock(SharedSpaceService.class),
             syncEventRecorder,
             mock(FileIndexSyncService.class)
     );

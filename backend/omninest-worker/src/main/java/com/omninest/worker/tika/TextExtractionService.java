@@ -6,9 +6,8 @@ import com.omninest.modules.file.service.FileQueryService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.exception.TikaException;
@@ -23,7 +22,7 @@ import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
 
 /**
- * 文本提取服务：使用 Apache Tika 从文件内容流解析正文并按块返回。
+ * 文本提取服务：使用 Apache Tika 从文件内容流解析正文，按块回调交给调用方消费。
  *
  * @author OmniNest
  */
@@ -44,18 +43,21 @@ public class TextExtractionService {
     private final FileQueryService fileQueryService;
 
     /**
-     * 从受控文件内容流提取文本块。
+     * 从受控文件内容流提取文本块，并把每个完成的块立即交给消费者。
      *
-     * <p>达到块数上限时必须中断解析：只置截断标志会让 Tika 继续把剩余数 GB 的字节流
-     * 解完再逐字丢弃，任务墙钟时间与临时对象都按整个文件计费。嵌套文档一律不解析，
-     * 否则一个内层归档就能把解析深度和解压字节量放大到不可控。</p>
+     * <p>回调在解析过程中触发，调用方必须直接把块写入索引或落盘：如果攒成
+     * {@code List<String>} 再统一处理，最高 1 亿字符会同时驻留堆内存，在 Worker
+     * 默认 320MB 堆上限下必然 OOM。达到块数上限时中断解析，不再把剩余数 GB
+     * 字节流解完再逐字丢弃。</p>
      *
      * @param ownerUserId 文件所有者
      * @param fileNodeId 文件节点 ID
-     * @return 分块提取结果
+     * @param chunkConsumer 分块消费者
+     * @return 分块提取统计
      */
-    public ExtractionResult extract(UUID ownerUserId, UUID fileNodeId) {
-        ChunkingTextCollector collector = new ChunkingTextCollector(CHUNK_SIZE_CHARS, MAX_CHUNKS);
+    public ExtractionResult extract(UUID ownerUserId, UUID fileNodeId, Consumer<String> chunkConsumer) {
+        ChunkingTextCollector collector = new ChunkingTextCollector(
+                CHUNK_SIZE_CHARS, MAX_CHUNKS, chunkConsumer);
         try (FileContentStream contentStream = fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId);
              InputStream inputStream = contentStream.inputStream()) {
             AutoDetectParser parser = new AutoDetectParser();
@@ -74,7 +76,7 @@ public class TextExtractionService {
             log.info("文本提取按块数上限提前终止解析: fileNodeId={}, maxChunks={}", fileNodeId, MAX_CHUNKS);
         }
         return new ExtractionResult(
-                List.copyOf(collector.chunks()),
+                collector.chunkCount(),
                 collector.textLength(),
                 collector.truncated(),
                 CHUNK_SIZE_CHARS,
@@ -145,14 +147,14 @@ public class TextExtractionService {
     /**
      * 文本提取结果。
      *
-     * @param chunks 分块正文
+     * @param chunkCount 已交付的分块数
      * @param textLength 正文字符数
      * @param truncated 是否因块数上限截断
      * @param chunkSize 单块字符数
      * @param maxChunks 最大块数
      */
     public record ExtractionResult(
-            List<String> chunks,
+            int chunkCount,
             int textLength,
             boolean truncated,
             int chunkSize,
@@ -161,19 +163,21 @@ public class TextExtractionService {
     }
 
     /**
-     * 将 Tika 抽出的正文流式切块，避免把千万字全文同时堆进单个字符串或单条 Lucene 文档。
+     * 将 Tika 抽出的正文流式切块：每凑满一块立即回调并清空缓冲，不再累积全部块。
      */
     static final class ChunkingTextCollector extends Writer {
         private final int chunkSizeChars;
         private final int maxChunks;
-        private final List<String> chunks = new ArrayList<>();
+        private final Consumer<String> chunkConsumer;
         private final StringBuilder buffer;
         private int textLength;
+        private int chunkCount;
         private boolean truncated;
 
-        ChunkingTextCollector(int chunkSizeChars, int maxChunks) {
+        ChunkingTextCollector(int chunkSizeChars, int maxChunks, Consumer<String> chunkConsumer) {
             this.chunkSizeChars = chunkSizeChars;
             this.maxChunks = maxChunks;
+            this.chunkConsumer = chunkConsumer;
             this.buffer = new StringBuilder(Math.min(chunkSizeChars, 8192));
         }
 
@@ -208,13 +212,12 @@ public class TextExtractionService {
 
         void finish() {
             if (!truncated && !buffer.isEmpty()) {
-                chunks.add(buffer.toString());
-                buffer.setLength(0);
+                emitChunk();
             }
         }
 
-        List<String> chunks() {
-            return chunks;
+        int chunkCount() {
+            return chunkCount;
         }
 
         int textLength() {
@@ -226,14 +229,31 @@ public class TextExtractionService {
         }
 
         private void flushBufferedChunk() {
-            if (chunks.size() >= maxChunks) {
+            if (truncated) {
+                return;
+            }
+            if (chunkCount >= maxChunks) {
                 truncated = true;
                 buffer.setLength(0);
                 log.warn("文本提取达到最大分块数，后续内容不再索引: maxChunks={}", maxChunks);
                 return;
             }
-            chunks.add(buffer.toString());
+            emitChunk();
+        }
+
+        private void emitChunk() {
+            if (buffer.isEmpty()) {
+                return;
+            }
+            chunkCount++;
+            chunkConsumer.accept(buffer.toString());
             buffer.setLength(0);
+            // 第 maxChunks 块交付后立即终止：否则剩余缓冲会在 finish 时作为第 201 块落入索引。
+            if (chunkCount >= maxChunks) {
+                truncated = true;
+                buffer.setLength(0);
+                log.warn("文本提取达到最大分块数，后续内容不再索引: maxChunks={}", maxChunks);
+            }
         }
     }
 }

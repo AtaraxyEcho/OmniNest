@@ -49,7 +49,10 @@ part 'portal_desktop_gallery_styles.dart';
 part 'portal_desktop_quick_actions.dart';
 
 void _openWeatherDetails(BuildContext context, _PortalDesktopData data) {
-  final weather = data.weatherData ?? WeatherData.empty();
+  final weather = data.connectedWeatherData;
+  if (weather == null) {
+    return;
+  }
   showWeatherDetailDialog(context, weather: weather);
 }
 

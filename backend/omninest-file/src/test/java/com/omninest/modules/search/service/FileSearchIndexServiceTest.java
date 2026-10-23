@@ -320,6 +320,45 @@ class FileSearchIndexServiceTest {
     }
 
     @Test
+    @DisplayName("共享空间文档写入全局索引，任一成员可按共享空间检索")
+    void sharedDocumentsLiveInGlobalIndexVisibleToAnyMember() {
+        UUID sharedFileId = UUID.randomUUID();
+        service.indexFile(sharedFileId, USER_A, "共享项目报告", "第一季度共享正文", "SHARED");
+
+        assertThat(service.search(USER_B, "共享项目报告", 10, "SHARED"))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(sharedFileId);
+        assertThat(service.search(USER_B, "共享项目报告", 10, "PERSONAL")).isEmpty();
+        assertThat(service.search(USER_B, "共享项目报告", 10))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(sharedFileId);
+    }
+
+    @Test
+    @DisplayName("多关键词按词元组合查询，不要求词元在原文中相邻")
+    void multiKeywordQueryMatchesTokensAcrossFields() {
+        UUID fileId = UUID.randomUUID();
+        service.indexFile(fileId, USER_A, "2026 年度报告", "财务 分析", "PERSONAL");
+
+        // 旧实现把整串包成短语，会要求 “2026 财务” 连续出现而漏掉本条。
+        assertThat(service.search(USER_A, "2026 财务", 10))
+                .extracting(SearchResultDto::fileId)
+                .containsExactly(fileId);
+    }
+
+    @Test
+    @DisplayName("命中结果返回正文摘要而不是恒定 null")
+    void searchReturnsStoredSnippet() {
+        UUID fileId = UUID.randomUUID();
+        service.indexFile(fileId, USER_A, "项目报告", "这是用于摘要展示的正文内容，包含季度财务分析。", "PERSONAL");
+
+        List<SearchResultDto> results = service.search(USER_A, "季度财务", 10);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.getFirst().snippet()).contains("季度财务");
+    }
+
+    @Test
     @DisplayName("用户索引缓存超过容量后关闭旧资源并可从磁盘重新打开")
     void indexCache_exceedsCapacity_evictsAndReopensIndex() throws Exception {
         service.close();

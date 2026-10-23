@@ -33,6 +33,7 @@ public class NotificationTypeController {
      */
     @Operation(summary = "查询启用的通知类型", description = "查询所有启用的通知类型，用于前端动态渲染通知设置项")
     @GetMapping("/api/v1/notification-types")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     ApiResponse<List<NotificationTypeDto>> listEnabled() {
         return ApiResponse.success(notificationTypeService.listEnabled());
     }

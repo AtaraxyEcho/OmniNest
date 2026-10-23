@@ -157,6 +157,33 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("用户名统一按小写存储与查重")
+        void registerNormalizesUsernameToLowercase() {
+            when(authUserRepository.existsByUsername("admin")).thenReturn(false);
+            when(storageQuotaService.getDefaultQuotaBytes()).thenReturn(1024L);
+            AuthRole memberRole = role(Roles.MEMBER, "file:read");
+            when(authRoleRepository.findByCode(Roles.MEMBER)).thenReturn(Optional.of(memberRole));
+            when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> {
+                AuthUser profile = invocation.getArgument(0);
+                profile.setId(UUID.randomUUID());
+                return profile;
+            });
+
+            service.register(
+                    new RegisterRequest("  Admin  ", "Admin", "admin@example.com", "secret123"),
+                    "web",
+                    null,
+                    null,
+                    "127.0.0.1",
+                    "test");
+
+            verify(authUserRepository).existsByUsername("admin");
+            ArgumentCaptor<AuthUser> captor = ArgumentCaptor.forClass(AuthUser.class);
+            verify(authUserRepository, times(2)).save(captor.capture());
+            assertThat(captor.getValue().getUsername()).isEqualTo("admin");
+        }
+
+        @Test
         @DisplayName("注册失败：用户名已存在")
         void registerFailsWhenUsernameExists() {
             when(authUserRepository.existsByUsername("existing")).thenReturn(true);
@@ -326,7 +353,10 @@ class AuthServiceTest {
             UUID oldSessionId = UUID.fromString("11111111-1111-1111-1111-111111111111");
             when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
-            when(activeSessionRegistry.find(user.getId(), "android")).thenReturn(Optional.of(oldSessionId));
+            AuthActiveSession oldSession = activeSession(user.getId());
+            oldSession.setId(oldSessionId);
+            when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
+                    user.getId(), "android")).thenReturn(List.of(oldSession));
 
             service.login(new LoginRequest("admin", "pass"), "android", "new-device", "Pixel 8", "10.0.0.1", "okhttp");
 
@@ -349,7 +379,8 @@ class AuthServiceTest {
             when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             // Android 没有旧会话
-            when(activeSessionRegistry.find(user.getId(), "android")).thenReturn(Optional.empty());
+            when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
+                    user.getId(), "android")).thenReturn(List.of());
 
             service.login(new LoginRequest("admin", "pass"), "android", "device", "Pixel", "10.0.0.1", "okhttp");
 

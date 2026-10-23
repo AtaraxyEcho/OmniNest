@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CurrentUserContext;
+import com.omninest.common.storage.ObjectStorageBuckets;
+import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
 import com.omninest.modules.quota.service.StorageQuotaService;
@@ -56,6 +58,8 @@ class AdminUserServiceTest {
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final TransactionTemplate transactionTemplate =
             new TransactionTemplate(mock(PlatformTransactionManager.class));
+    private final ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
+    private final ObjectStorageBuckets objectStorageBuckets = mock(ObjectStorageBuckets.class);
     private final AdminUserService service = new AdminUserService(
             authUserRepository,
             authRoleRepository,
@@ -69,7 +73,9 @@ class AdminUserServiceTest {
             twoFactorService,
             adminActorGuard,
             currentUserService,
-            transactionTemplate
+            transactionTemplate,
+            objectStorageClient,
+            objectStorageBuckets
     );
 
     @Test

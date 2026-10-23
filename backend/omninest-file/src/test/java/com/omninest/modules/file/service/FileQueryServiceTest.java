@@ -51,6 +51,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.data.domain.SliceImpl;
 
 /**
@@ -75,6 +77,7 @@ class FileQueryServiceTest {
     private final SharedSpaceService sharedSpaceService = Mockito.mock(SharedSpaceService.class);
     private final SharedSpaceQuotaService sharedSpaceQuotaService =
             Mockito.mock(SharedSpaceQuotaService.class);
+    private final TransactionTemplate transactionTemplate = transactionTemplate();
     private final MinioFileContentProvider minioFileContentProvider = new MinioFileContentProvider(
             fileObjectRepository,
             objectStorageClient
@@ -84,6 +87,12 @@ class FileQueryServiceTest {
             fileNodeRepository,
             fileObjectRepository,
             new LocalContentAccessTokenService()
+    );
+    private final FileDownloadService fileDownloadService = new FileDownloadService(
+            fileNodeRepository,
+            fileContentAccessService,
+            filePermissionService,
+            sharedSpaceService
     );
     private final FileQueryService fileQueryService = new FileQueryService(
             fileNodeRepository,
@@ -98,8 +107,19 @@ class FileQueryServiceTest {
             new MediaProbeSourceStager(fileContentAccessService),
             (owner, ids) -> Map.of(),
             sharedSpaceService,
-            sharedSpaceQuotaService
+            sharedSpaceQuotaService,
+            transactionTemplate,
+            fileDownloadService
     );
+
+    private static TransactionTemplate transactionTemplate() {
+        TransactionTemplate template = Mockito.mock(TransactionTemplate.class);
+        Mockito.lenient().when(template.execute(Mockito.any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        return template;
+    }
 
     @Test
     void rootListOnlyReturnsCurrentUsersNodesAndSortsFoldersFirst() {
@@ -1037,7 +1057,9 @@ class FileQueryServiceTest {
                 new MediaProbeSourceStager(access),
                 (owner, ids) -> Map.of(),
                 sharedSpaceService,
-                sharedSpaceQuotaService
+                sharedSpaceQuotaService,
+                transactionTemplate,
+                fileDownloadService
         );
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000001");
@@ -1094,7 +1116,9 @@ class FileQueryServiceTest {
                 new MediaProbeSourceStager(access),
                 (owner, ids) -> Map.of(),
                 sharedSpaceService,
-                sharedSpaceQuotaService
+                sharedSpaceQuotaService,
+                transactionTemplate,
+                fileDownloadService
         );
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000003");

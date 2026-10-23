@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,8 +27,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
@@ -64,13 +63,13 @@ class TextExtractionConsumerTest {
     @Mock
     private Channel channel;
 
+    @Mock
+    private FileSearchIndexService.ChunkIndexSession chunkIndexSession;
+
     private TextExtractionConsumer textExtractionConsumer;
 
-    @Captor
-    private ArgumentCaptor<String> textCaptor;
-
-    @Captor
-    private ArgumentCaptor<List<String>> chunksCaptor;
+    /** 流式索引会话收到的正文块，替代原先一次性 List 的分块断言。 */
+    private final List<String> appendedChunks = new ArrayList<>();
 
     @BeforeEach
     void allowFileProcessing() {
@@ -82,6 +81,13 @@ class TextExtractionConsumerTest {
         );
         when(fileLifecycleGuard.findOwnedProcessable(any(), any()))
                 .thenReturn(Optional.of(describedFile(SpaceType.PERSONAL)));
+        lenient().when(fileSearchIndexService.openChunkIndex(any(), any(), any(), anyString()))
+                .thenReturn(chunkIndexSession);
+        lenient().doAnswer(invocation -> {
+            appendedChunks.add(invocation.getArgument(0));
+            return null;
+        }).when(chunkIndexSession).append(anyString());
+        lenient().when(chunkIndexSession.complete()).thenAnswer(invocation -> appendedChunks.size());
         lenient().when(taskTracker.begin(any(), anyString(), any(), anyString()))
                 .thenReturn(new FilePostProcessingTaskTracker.TrackedTask(UUID.randomUUID(), true));
     }
@@ -145,13 +151,13 @@ class TextExtractionConsumerTest {
 
         // 索引写入会先按 fileId 删旧文档再写空间字段：这里写错就让共享检索丢文件、
         // 上传者个人检索越权命中。
-        verify(fileSearchIndexService).indexFileChunks(
+        verify(fileSearchIndexService).openChunkIndex(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                any(),
                 eq("SHARED")
         );
+        verify(chunkIndexSession).append(anyString());
     }
 
     /**
@@ -174,16 +180,15 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFileChunks(
+        verify(fileSearchIndexService).openChunkIndex(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                chunksCaptor.capture(),
                 eq("PERSONAL")
         );
-        // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 trim 比较
-        assertThat(chunksCaptor.getValue()).hasSize(1);
-        assertThat(chunksCaptor.getValue().get(0)).contains(fileContent);
+        // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 contains 比较
+        assertThat(appendedChunks).hasSize(1);
+        assertThat(appendedChunks.get(0)).contains(fileContent);
         verify(channel).basicAck(1L, false);
     }
 
@@ -198,15 +203,14 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFileChunks(
+        verify(fileSearchIndexService).openChunkIndex(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                chunksCaptor.capture(),
                 eq("PERSONAL")
         );
-        assertThat(chunksCaptor.getValue().size()).isGreaterThanOrEqualTo(3);
-        int total = chunksCaptor.getValue().stream().mapToInt(String::length).sum();
+        assertThat(appendedChunks.size()).isGreaterThanOrEqualTo(3);
+        int total = appendedChunks.stream().mapToInt(String::length).sum();
         assertThat(total).isGreaterThan(1_000_000);
         verify(taskTracker).complete(any(), any());
         verify(taskTracker, never()).handleFailure(any(), any(), any(), any(), any());
@@ -222,9 +226,7 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService, never()).indexFileChunks(
-                any(), any(), any(), any(), any()
-        );
+        verify(chunkIndexSession, never()).append(anyString());
         verify(taskTracker).handleFailure(
                 eq("TEXT_EXTRACTION"),
                 eq(QueueNames.TEXT_EXTRACTION_ROUTING_KEY),
@@ -245,9 +247,7 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService, never()).indexFileChunks(
-                any(), any(), any(), any(), any()
-        );
+        verify(chunkIndexSession, never()).append(anyString());
         verify(taskTracker).handleFailure(
                 eq("TEXT_EXTRACTION"),
                 eq(QueueNames.TEXT_EXTRACTION_ROUTING_KEY),
@@ -268,9 +268,7 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService, never()).indexFileChunks(
-                any(), any(), any(), any(), any()
-        );
+        verify(chunkIndexSession, never()).append(anyString());
         verify(taskTracker).handleFailure(
                 eq("TEXT_EXTRACTION"),
                 eq(QueueNames.TEXT_EXTRACTION_ROUTING_KEY),
@@ -316,14 +314,13 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFileChunks(
+        verify(fileSearchIndexService).openChunkIndex(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                chunksCaptor.capture(),
                 eq("PERSONAL")
         );
-        assertThat(chunksCaptor.getValue().get(0)).contains("内嵌字体文本提取回归测试内容");
+        assertThat(appendedChunks.get(0)).contains("内嵌字体文本提取回归测试内容");
         verify(channel).basicAck(1L, false);
     }
 
@@ -432,15 +429,14 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFileChunks(
+        verify(fileSearchIndexService).openChunkIndex(
                 eq(fileNodeId),
                 eq(ownerUserId),
                 eq("notes.txt"),
-                chunksCaptor.capture(),
                 eq("PERSONAL")
         );
         // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 trim 比较
-        assertThat(chunksCaptor.getValue().get(0).trim()).isEqualTo("some text content");
+        assertThat(appendedChunks.get(0).trim()).isEqualTo("some text content");
         verify(channel).basicAck(1L, false);
     }
 }

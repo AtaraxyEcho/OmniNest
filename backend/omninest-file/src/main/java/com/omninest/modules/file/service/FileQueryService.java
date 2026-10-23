@@ -54,6 +54,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 文件节点查询与个人空间写操作服务。
@@ -77,6 +78,8 @@ public class FileQueryService {
     private final MediaCoverDirectory mediaCoverDirectory;
     private final SharedSpaceService sharedSpaceService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
+    private final TransactionTemplate transactionTemplate;
+    private final FileDownloadService fileDownloadService;
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId) {
@@ -256,6 +259,12 @@ public class FileQueryService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteNode(UUID ownerUserId, UUID fileId) {
         FileNode node = findActiveNode(ownerUserId, fileId);
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            // 共享空间删除必须走 CAN_DELETE_OWN/CAN_DELETE_ANY 校验并扣减共享空间账本，
+            // 个人删除路径既不知道权限矩阵也不维护 shared_space_usage。
+            sharedSpaceService.deleteSharedFile(fileId, ownerUserId);
+            return;
+        }
         requireManagedNode(node);
         Instant deletedAt = Instant.now();
         markDeleted(node, ownerUserId, deletedAt);
@@ -369,23 +378,74 @@ public class FileQueryService {
     }
 
     /**
-     * 批量软删除文件节点及其后代
+     * 批量软删除文件节点及其后代。
+     *
+     * <p>共享空间节点逐项委托 {@link SharedSpaceService#deleteSharedFile}：它负责权限矩阵与
+     * 共享空间账本。该方法本身不包事务，否则某一项权限失败会把整批个人删除标记为
+     * rollback-only；个人节点在独立事务里成批处理。</p>
+     *
+     * @param ownerUserId 操作用户 ID
+     * @param fileIds 文件节点 ID 列表
+     * @return 与输入顺序一致的逐项结果
      */
-    @Transactional(rollbackFor = Exception.class)
     public List<BatchItemResult> batchDeleteNodes(UUID ownerUserId, List<UUID> fileIds) {
-        List<BatchItemResult> results = new ArrayList<>();
-        Map<UUID, FileNode> nodesById = fileNodeRepository
+        Map<UUID, FileNode> ownedNodes = fileNodeRepository
                 .findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds).stream()
                 .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left));
+        // 共享空间文件可能由其他成员上传：按 ID 全量读取后交给共享权限矩阵判定。
+        Map<UUID, FileNode> sharedCandidates = fileNodeRepository.findAllById(fileIds).stream()
+                .filter(node -> !node.isDeleted() && node.getSpaceType() == SpaceType.SHARED)
+                .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left));
+        Map<UUID, BatchItemResult> resultsById = new LinkedHashMap<>();
+        List<UUID> personalIds = new ArrayList<>();
+        List<UUID> sharedIds = new ArrayList<>();
+        for (UUID fileId : fileIds) {
+            FileNode owned = ownedNodes.get(fileId);
+            if (owned != null && owned.getSpaceType() == SpaceType.SHARED) {
+                sharedIds.add(fileId);
+                continue;
+            }
+            if (owned != null) {
+                personalIds.add(fileId);
+                continue;
+            }
+            FileNode shared = sharedCandidates.get(fileId);
+            if (shared != null) {
+                sharedIds.add(fileId);
+                continue;
+            }
+            resultsById.put(fileId, BatchItemResult.skipped(fileId, "文件不存在或已删除"));
+        }
+        if (!personalIds.isEmpty()) {
+            List<BatchItemResult> personalResults = transactionTemplate.execute(
+                    status -> deletePersonalBatch(ownerUserId, ownedNodes, personalIds));
+            if (personalResults != null) {
+                personalResults.forEach(result -> resultsById.put(result.id(), result));
+            }
+        }
+        for (UUID fileId : sharedIds) {
+            try {
+                sharedSpaceService.deleteSharedFile(fileId, ownerUserId);
+                resultsById.put(fileId, BatchItemResult.success(fileId));
+            } catch (BusinessException exception) {
+                resultsById.put(fileId, BatchItemResult.failed(
+                        fileId, exception.errorCode().name(), exception.getMessage()));
+            }
+        }
+        return fileIds.stream()
+                .map(resultsById::get)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private List<BatchItemResult> deletePersonalBatch(
+            UUID ownerUserId, Map<UUID, FileNode> nodesById, List<UUID> fileIds) {
+        List<BatchItemResult> results = new ArrayList<>();
         Instant deletedAt = Instant.now();
         List<UUID> allDeletedIds = new ArrayList<>();
         List<FileNode> allToSave = new ArrayList<>();
         for (UUID fileId : fileIds) {
             FileNode node = nodesById.get(fileId);
-            if (node == null) {
-                results.add(BatchItemResult.skipped(fileId, "文件不存在或已删除"));
-                continue;
-            }
             try {
                 requireManagedNode(node);
             } catch (BusinessException exception) {
@@ -576,17 +636,11 @@ public class FileQueryService {
     }
     @Transactional(readOnly = true)
     public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹不能直接下载");
-        }
-        return fileContentAccessService.createDownloadUrl(node);
+        return fileDownloadService.createDownloadUrl(ownerUserId, fileId);
     }
 
     /**
-     * 批量为当前用户拥有的文件创建短期下载地址。
-     *
-     * <p>缺失、已删除、非 FILE 节点或解析失败的文件不会出现在结果中。</p>
+     * 批量为当前用户可下载的文件创建短期下载地址。
      *
      * @param ownerUserId 所有者用户 ID
      * @param fileIds 文件节点 ID 集合
@@ -594,15 +648,7 @@ public class FileQueryService {
      */
     @Transactional(readOnly = true)
     public Map<UUID, FileDownloadUrlDto> createDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
-        if (fileIds == null || fileIds.isEmpty()) {
-            return Map.of();
-        }
-        List<FileNode> nodes = fileNodeRepository.findAllById(fileIds).stream()
-                .filter(node -> !node.isDeleted()
-                        && NodeType.FILE.getValue().equals(node.getNodeType())
-                        && ownerUserId.equals(node.getOwnerUserId()))
-                .toList();
-        return fileContentAccessService.createDownloadUrls(nodes);
+        return fileDownloadService.createDownloadUrls(ownerUserId, fileIds);
     }
 
     /**
@@ -695,6 +741,11 @@ public class FileQueryService {
         if (node.getOwnerUserId().equals(userId)) {
             return node;
         }
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            // 共享空间成员凭角色权限读取，不依赖 personal share 的 shared 标记。
+            sharedSpaceService.validateBrowsePermission(userId);
+            return node;
+        }
         FilePermission permission = filePermissionService.resolvePermission(fileId, userId);
         if (!node.isShared() || !permission.allowView()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
@@ -725,22 +776,7 @@ public class FileQueryService {
      */
     @Transactional(readOnly = true)
     public FileDownloadUrlDto createDownloadUrlForShared(UUID userId, UUID fileId) {
-        FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-        if (node.getOwnerUserId().equals(userId)) {
-            return createDownloadUrl(userId, fileId);
-        }
-        if (!node.isShared()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "文件未共享");
-        }
-        FilePermission perm = filePermissionService.resolvePermission(fileId, userId);
-        if (!perm.allowDownload()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
-        }
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹不能直接下载");
-        }
-        return fileContentAccessService.createDownloadUrl(node);
+        return fileDownloadService.createDownloadUrlForShared(userId, fileId);
     }
 
     /**

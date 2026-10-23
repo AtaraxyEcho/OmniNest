@@ -29,8 +29,8 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 
 | 层次 | 技术 |
 | --- | --- |
-| 语言与构建 | Java 21、Maven |
-| 应用框架 | Spring Boot 4.0.x、Spring Web MVC、Spring Security |
+| 语言与构建 | Java 25、Maven |
+| 应用框架 | Spring Boot 4.1.1、Spring Web MVC、Spring Security |
 | 数据访问 | Spring Data JPA、Hibernate、Flyway、PostgreSQL |
 | 后台任务 | Spring AMQP、RabbitMQ、Redis |
 | 内容与媒体 | MinIO SDK、受控 Storage Provider、Apache Tika |

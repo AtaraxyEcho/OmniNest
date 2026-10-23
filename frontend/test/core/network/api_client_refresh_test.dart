@@ -39,6 +39,41 @@ void main() {
     expect(adapter.secureRequestCount, 4);
   });
 
+  test('二进制接口的 401 也刷新令牌并重放请求', () async {
+    var accessToken = 'expired-token';
+    var refreshCount = 0;
+    final adapter = _ReplayAdapter();
+
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => accessToken,
+      refreshSession: () async {
+        refreshCount++;
+        accessToken = 'fresh-token';
+        return true;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    final response = await client.dio.get<List<int>>(
+      '/binary',
+      options: Options(
+        responseType: ResponseType.bytes,
+        // 二进制接口在请求级覆写为仅 2xx 成功，401 会走 onError 而不是 onResponse。
+        validateStatus:
+            (status) => status != null && status >= 200 && status < 300,
+      ),
+    );
+
+    expect(response.statusCode, 200);
+    expect(response.data, [1, 2, 3]);
+    expect(refreshCount, 1);
+    expect(adapter.binaryRequestCount, 2);
+  });
+
   test('外部签名地址不会携带 JWT 或触发会话刷新', () async {
     var refreshCount = 0;
     final adapter = _ReplayAdapter();
@@ -204,6 +239,7 @@ void main() {
 class _ReplayAdapter implements HttpClientAdapter {
   int secureRequestCount = 0;
   int forbiddenRequestCount = 0;
+  int binaryRequestCount = 0;
   String? externalAuthorization;
   final claimAuthorizationHeaders = <String>[];
 
@@ -246,6 +282,17 @@ class _ReplayAdapter implements HttpClientAdapter {
         headers: {
           Headers.contentTypeHeader: ['application/json; charset=utf-8'],
         },
+      );
+    }
+    if (options.path.endsWith('/binary')) {
+      binaryRequestCount++;
+      final authorization = options.headers['Authorization']?.toString();
+      if (authorization == 'Bearer fresh-token') {
+        return ResponseBody.fromBytes([1, 2, 3], 200);
+      }
+      return ResponseBody.fromString(
+        '{"code":401,"message":"未认证","data":null}',
+        401,
       );
     }
     if (options.path.endsWith('/secure')) {

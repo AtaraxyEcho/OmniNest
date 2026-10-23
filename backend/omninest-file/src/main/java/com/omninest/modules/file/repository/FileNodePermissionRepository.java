@@ -27,6 +27,15 @@ public interface FileNodePermissionRepository extends JpaRepository<FileNodePerm
 
     void deleteByFileNodeId(UUID fileNodeId);
 
+    /**
+     * 删除授予指定用户的全部细粒度权限行（用户删除时清理）。
+     *
+     * @param granteeUserId 被授权用户 ID
+     */
+    @Modifying
+    @Query("DELETE FROM FileNodePermission p WHERE p.granteeUserId = :granteeUserId")
+    void deleteByGranteeUserId(@Param("granteeUserId") UUID granteeUserId);
+
     @Modifying
     @Query("DELETE FROM FileNodePermission p WHERE p.fileNodeId IN :fileIds")
     void deleteByFileNodeIdIn(@Param("fileIds") List<UUID> fileIds);

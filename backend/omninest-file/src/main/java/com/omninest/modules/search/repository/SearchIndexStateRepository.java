@@ -11,4 +11,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SearchIndexStateRepository extends JpaRepository<SearchIndexState, UUID> {
 
     Optional<SearchIndexState> findByOwnerUserIdIsNull();
+
+    /**
+     * 删除指定用户的索引状态行（用户删除时清理）。
+     *
+     * @param ownerUserId 用户 ID
+     */
+    void deleteByOwnerUserId(UUID ownerUserId);
 }

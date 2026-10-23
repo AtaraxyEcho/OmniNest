@@ -5,9 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.modules.search.dto.SearchResultDto;
 import java.util.List;
 import java.util.Map;
@@ -36,16 +38,21 @@ class FileSearchServiceTest {
     @Mock
     private SearchableFileQuery searchableFileQuery;
 
+    @Mock
+    private SharedSpaceAccessQuery sharedSpaceAccessQuery;
+
     private FileSearchService service;
 
     @BeforeEach
     void setUp() {
-        service = new FileSearchService(fileSearchIndexService, searchableFileQuery);
+        lenient().when(sharedSpaceAccessQuery.canBrowse(USER_ID)).thenReturn(false);
+        service = new FileSearchService(
+                fileSearchIndexService, searchableFileQuery, sharedSpaceAccessQuery);
     }
 
     @Test
     void filtersStaleCandidatesAndUsesCurrentDatabaseTitle() {
-        when(fileSearchIndexService.search(eq(USER_ID), eq("报告"), anyInt())).thenReturn(List.of(
+        when(fileSearchIndexService.search(eq(USER_ID), eq("报告"), anyInt(), any())).thenReturn(List.of(
                 new SearchResultDto(STALE_FILE_ID, "已删除标题", null, 2.0),
                 new SearchResultDto(ACTIVE_FILE_ID, "旧标题", null, 1.0)
         ));
@@ -57,7 +64,7 @@ class FileSearchServiceTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).fileId()).isEqualTo(ACTIVE_FILE_ID);
         assertThat(results.get(0).title()).isEqualTo("数据库最新标题");
-        verify(fileSearchIndexService).search(USER_ID, "报告", 150);
+        verify(fileSearchIndexService).search(USER_ID, "报告", 150, "PERSONAL");
     }
 
     @Test

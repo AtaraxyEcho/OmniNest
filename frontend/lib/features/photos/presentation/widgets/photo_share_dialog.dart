@@ -24,6 +24,8 @@ Future<(String, String)?> showPhotoShareDialog(
   String expiryOption = 'never';
   final remainingShares = [...shares];
   String? revokeError;
+  var revokingAll = false;
+  final revokingIds = <String>{};
 
   return showWorkstationDialog<(String, String)>(
     context: context,
@@ -144,43 +146,54 @@ Future<(String, String)?> showPhotoShareDialog(
                                     // 一键清空：撤销该内容全部有效链接（二次确认）。
                                     if (onRevokeAll != null)
                                       TextButton(
-                                        onPressed: () async {
-                                          final confirmed =
-                                              await showFrameConfirmDialog(
-                                                context,
-                                                title:
-                                                    AppLocalizations.of(
-                                                      context,
-                                                    ).photosShareRevokeAllConfirmTitle,
-                                                body:
-                                                    AppLocalizations.of(
-                                                      context,
-                                                    ).photosShareRevokeAllConfirmBody,
-                                                confirmLabel:
-                                                    AppLocalizations.of(
-                                                      context,
-                                                    ).photosShareRevokeAll,
-                                                destructive: true,
-                                              );
-                                          if (!confirmed || !ctx.mounted) {
-                                            return;
-                                          }
-                                          try {
-                                            await onRevokeAll();
-                                          } on Exception catch (error) {
-                                            setDialogState(() {
-                                              revokeError =
-                                                  describeUserFacingError(
-                                                    error,
-                                                  ).displayMessage;
-                                            });
-                                            return;
-                                          }
-                                          setDialogState(() {
-                                            revokeError = null;
-                                            remainingShares.clear();
-                                          });
-                                        },
+                                        onPressed:
+                                            revokingAll
+                                                ? null
+                                                : () async {
+                                                  final confirmed =
+                                                      await showFrameConfirmDialog(
+                                                        context,
+                                                        title:
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            ).photosShareRevokeAllConfirmTitle,
+                                                        body:
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            ).photosShareRevokeAllConfirmBody,
+                                                        confirmLabel:
+                                                            AppLocalizations.of(
+                                                              context,
+                                                            ).photosShareRevokeAll,
+                                                        destructive: true,
+                                                      );
+                                                  if (!confirmed ||
+                                                      !ctx.mounted) {
+                                                    return;
+                                                  }
+                                                  setDialogState(
+                                                    () => revokingAll = true,
+                                                  );
+                                                  try {
+                                                    await onRevokeAll();
+                                                  } on Exception catch (error) {
+                                                    if (!ctx.mounted) return;
+                                                    setDialogState(() {
+                                                      revokingAll = false;
+                                                      revokeError =
+                                                          describeUserFacingError(
+                                                            error,
+                                                          ).displayMessage;
+                                                    });
+                                                    return;
+                                                  }
+                                                  if (!ctx.mounted) return;
+                                                  setDialogState(() {
+                                                    revokingAll = false;
+                                                    revokeError = null;
+                                                    remainingShares.clear();
+                                                  });
+                                                },
                                         child: Text(
                                           AppLocalizations.of(
                                             ctx,
@@ -254,29 +267,50 @@ Future<(String, String)?> showPhotoShareDialog(
                                             size: 18,
                                             color: SeverityColors.danger,
                                           ),
-                                          onPressed: () async {
-                                            try {
-                                              await onRevoke(share.id);
-                                            } on Exception catch (error) {
-                                              // 删除失败：在对话框内联提示并
-                                              // 保留该行，用户可重试或取消。
-                                              setDialogState(() {
-                                                revokeError =
-                                                    describeUserFacingError(
-                                                      error,
-                                                    ).displayMessage;
-                                              });
-                                              return;
-                                            }
-                                            // 删除成功：就地移除该行并清除
-                                            // 旧错误，保持对话框打开。
-                                            setDialogState(() {
-                                              revokeError = null;
-                                              remainingShares.removeWhere(
-                                                (item) => item.id == share.id,
-                                              );
-                                            });
-                                          },
+                                          onPressed:
+                                              revokingIds.contains(share.id)
+                                                  ? null
+                                                  : () async {
+                                                    setDialogState(
+                                                      () => revokingIds.add(
+                                                        share.id,
+                                                      ),
+                                                    );
+                                                    try {
+                                                      await onRevoke(share.id);
+                                                    } on Exception catch (
+                                                      error
+                                                    ) {
+                                                      // 删除失败：在对话框内联提示并
+                                                      // 保留该行，用户可重试或取消。
+                                                      if (!ctx.mounted) return;
+                                                      setDialogState(() {
+                                                        revokingIds.remove(
+                                                          share.id,
+                                                        );
+                                                        revokeError =
+                                                            describeUserFacingError(
+                                                              error,
+                                                            ).displayMessage;
+                                                      });
+                                                      return;
+                                                    }
+                                                    if (!ctx.mounted) return;
+                                                    // 删除成功：就地移除该行并清除
+                                                    // 旧错误，保持对话框打开。
+                                                    setDialogState(() {
+                                                      revokingIds.remove(
+                                                        share.id,
+                                                      );
+                                                      revokeError = null;
+                                                      remainingShares
+                                                          .removeWhere(
+                                                            (item) =>
+                                                                item.id ==
+                                                                share.id,
+                                                          );
+                                                    });
+                                                  },
                                         ),
                                       ],
                                     ),

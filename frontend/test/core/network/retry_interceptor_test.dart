@@ -244,7 +244,7 @@ void main() {
       expect(exception.requestOptions.extra['retryCount'], 1);
     });
 
-    test('retries 429 delivered as a normal response', () async {
+    test('does not retry 429 delivered as a normal response', () async {
       final retryDio = Dio(
         BaseOptions(
           baseUrl: 'https://example.com',
@@ -274,9 +274,10 @@ void main() {
 
       final response = await retryDio.get<dynamic>('/test');
 
-      // validateStatus < 500 时 429 不会触发 onError，必须由 onResponse 重试
-      expect(response.statusCode, 200);
-      expect(adapter.calls, 2);
+      // 限流窗口按分钟级重置，短退避重发既拿不到配额还会继续消耗计数，
+      // 因此 429 必须直接返回给调用方，不得自动重试。
+      expect(response.statusCode, 429);
+      expect(adapter.calls, 1);
     });
   });
 }

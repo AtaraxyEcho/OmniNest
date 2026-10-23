@@ -7,6 +7,7 @@ import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.event.SearchIndexRebuildEvent;
 import com.omninest.modules.search.service.FileSearchIndexService;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
@@ -38,6 +39,11 @@ public class SearchIndexRebuildService {
     public static final String TASK_TYPE = "SEARCH_INDEX_REBUILD";
 
     private static final int SCAN_BATCH_SIZE = 500;
+    private static final List<String> ACTIVE_TASK_STATUSES = List.of(
+            TaskStatus.QUEUED.getValue(),
+            TaskStatus.RUNNING.getValue(),
+            TaskStatus.RETRY_WAIT.getValue()
+    );
 
     private final FileNodeRepository fileNodeRepository;
     private final FileSearchIndexService fileSearchIndexService;
@@ -53,6 +59,11 @@ public class SearchIndexRebuildService {
      */
     @Transactional(rollbackFor = Exception.class)
     public UUID start(UUID actorUserId) {
+        // 全站重建是重 IO 任务，已有排队/执行中的重建直接复用，不重复清空索引。
+        List<UUID> activeTaskIds = taskRecordService.findActiveTaskIdsByType(TASK_TYPE, ACTIVE_TASK_STATUSES);
+        if (!activeTaskIds.isEmpty()) {
+            return activeTaskIds.getFirst();
+        }
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(
                 taskId,

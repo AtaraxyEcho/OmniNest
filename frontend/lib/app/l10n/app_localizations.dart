@@ -20476,6 +20476,12 @@ abstract class AppLocalizations {
   /// **'Failed to load PDF'**
   String get readerPdfLoadFailed;
 
+  /// No description provided for @readerPdfDataNotReady.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF data is not ready'**
+  String get readerPdfDataNotReady;
+
   /// No description provided for @readerPdfPageIndicator.
   ///
   /// In en, this message translates to:

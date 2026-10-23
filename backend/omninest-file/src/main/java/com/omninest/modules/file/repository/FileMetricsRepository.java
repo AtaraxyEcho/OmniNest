@@ -211,4 +211,50 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
             from usage_bytes
             """, nativeQuery = true)
     SharedSpaceUsageProjection aggregateSharedSpaceUsage();
+
+    /**
+     * 汇总共享空间某路径前缀下历史版本对象的字节数。
+     *
+     * <p>共享空间账本按"当前对象 + 非当前版本对象"计字节，删除或恢复子树时必须
+     * 使用同一口径，否则版本字节会永久留在账本上。回收站节点的账本已在软删除时
+     * 扣减，因此这里只统计未删除节点。</p>
+     *
+     * @param prefix 已转义的路径前缀（含结尾分隔符）
+     * @param deleted 统计已软删除还是活动节点
+     * @return 历史版本对象字节数
+     */
+    @Query(value = """
+            select coalesce(sum(f.size_bytes), 0)
+            from omni.file_versions v
+            join omni.file_nodes n on n.id = v.file_node_id
+            join omni.file_objects f on f.id = v.object_id
+            where n.space_type = 'SHARED'
+              and n.is_deleted = :deleted
+              and n.normalized_path like concat(:prefix, '%') escape '\\'
+              and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            """, nativeQuery = true)
+    long sumSharedVersionBytesUnderPath(
+            @Param("prefix") String prefix,
+            @Param("deleted") boolean deleted);
+
+    /**
+     * 汇总单个共享空间文件节点除当前对象外的历史版本字节数。
+     *
+     * @param fileNodeId 文件节点 ID
+     * @param deleted 统计已软删除还是活动节点
+     * @return 历史版本对象字节数
+     */
+    @Query(value = """
+            select coalesce(sum(f.size_bytes), 0)
+            from omni.file_versions v
+            join omni.file_nodes n on n.id = v.file_node_id
+            join omni.file_objects f on f.id = v.object_id
+            where n.id = :fileNodeId
+              and n.space_type = 'SHARED'
+              and n.is_deleted = :deleted
+              and (n.current_object_id is null or n.current_object_id <> v.object_id)
+            """, nativeQuery = true)
+    long sumSharedVersionBytesForNode(
+            @Param("fileNodeId") UUID fileNodeId,
+            @Param("deleted") boolean deleted);
 }

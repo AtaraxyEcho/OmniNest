@@ -4935,6 +4935,7 @@
   },
   "readerPdfTitle": "PDF 阅读",
   "readerPdfLoadFailed": "PDF 加载失败",
+  "readerPdfDataNotReady": "PDF 数据未就绪",
   "readerPdfPageIndicator": "第 {page} / {total} 页",
   "@readerPdfPageIndicator": {
     "placeholders": {

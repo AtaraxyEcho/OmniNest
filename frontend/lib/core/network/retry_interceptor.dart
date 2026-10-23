@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 
 /// 可重试的 HTTP 状态码集合。
-const _retryableStatusCodes = {408, 429, 500, 502, 503, 504};
+///
+/// 429 不在集合内：限流窗口按分钟级重置，1s/2s 后自动重发既拿不到配额，
+/// 还会继续消耗服务端限流计数。需要按 `Retry-After` 等待的场景由调用方处理。
+const _retryableStatusCodes = {408, 500, 502, 503, 504};
 
 /// 幂等 HTTP 方法集合，这些方法默认允许基于 HTTP 状态码重试。
 const _idempotentMethods = {'GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'};
@@ -17,7 +20,7 @@ const skipServerErrorRetryKey = 'omninest.skipServerErrorRetry';
 /// Dio 请求重试拦截器。
 ///
 /// 对于幂等方法（GET/HEAD/PUT/DELETE/OPTIONS），在连接异常或可重试
-/// HTTP 状态码（408/429/500/502/503/504）时重试。
+/// HTTP 状态码（408/500/502/503/504）时重试。
 /// 非幂等请求只有显式携带 `Idempotency-Key` 时才允许自动重试。
 ///
 /// 使用指数退避策略，初始延迟为 [baseDelay]。
@@ -157,6 +160,11 @@ class RetryInterceptor extends Interceptor {
   }
 
   bool _isRetrySafe(RequestOptions options) {
+    // FormData 发送一次后即 finalized，二次发送会抛 StateError（Error 而非
+    // Exception，会穿透 on Exception 导致未捕获崩溃）。
+    if (options.data is FormData) {
+      return false;
+    }
     if (_isIdempotent(options.method)) {
       return true;
     }

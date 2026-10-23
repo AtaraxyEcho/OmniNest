@@ -22,11 +22,14 @@ public class SearchController {
     private final FileSearchService fileSearchService;
     private final CurrentUserContext currentUserContext;
 
-    @Operation(summary = "全文搜索", description = "根据关键词对当前用户的文件进行全文搜索")
+    @Operation(summary = "全文搜索",
+            description = "根据关键词搜索当前用户的个人空间与可见的共享空间文件；spaceType 可按空间过滤")
     @GetMapping("/api/v1/search")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<List<SearchResultDto>> search(@RequestParam String q) {
+    ApiResponse<List<SearchResultDto>> search(
+            @RequestParam String q,
+            @RequestParam(required = false) String spaceType) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileSearchService.search(ownerUserId, q));
+        return ApiResponse.success(fileSearchService.search(ownerUserId, q, spaceType));
     }
 }

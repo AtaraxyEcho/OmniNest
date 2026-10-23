@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.modules.music.controller.MusicController;
 import com.omninest.modules.music.service.LrclibLyricsService;
@@ -80,6 +81,7 @@ class MusicCoverCacheHeaderContractTest {
                 .supply(any());
         MusicController controller = new MusicController(
                 currentUserContext,
+                mock(RateLimitService.class),
                 onlineDispatcher,
                 mock(MusicLibraryService.class),
                 mock(MusicPlaylistService.class),

@@ -452,7 +452,9 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     }
     final bytes = _bytes;
     if (bytes == null) {
-      return const AppErrorView(message: 'PDF 数据未就绪');
+      return AppErrorView(
+        message: AppLocalizations.of(context).readerPdfDataNotReady,
+      );
     }
     return PdfViewer.data(
       bytes,

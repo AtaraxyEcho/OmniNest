@@ -43,4 +43,15 @@ public class SearchableFileQueryService implements SearchableFileQuery {
                 ).stream()
                 .collect(Collectors.toMap(FileNode::getId, FileNode::getName));
     }
+
+    @Override
+    public Map<UUID, String> findCurrentSharedNames(Collection<UUID> candidateIds) {
+        return fileNodeRepository.findSearchableSharedNodes(
+                        candidateIds,
+                        FilePurgeState.NONE,
+                        SpaceType.SHARED,
+                        DERIVED_SOURCE_TYPE
+                ).stream()
+                .collect(Collectors.toMap(FileNode::getId, FileNode::getName));
+    }
 }

@@ -632,13 +632,25 @@ public class AuthService {
      * 同平台互斥：撤销同平台其他会话，并发布旧会话撤销结果。
      */
     private void enforceSamePlatformMutex(UUID userId, String clientPlatform, UUID newSessionId) {
-        UUID oldSid = activeSessionRegistry.find(userId, clientPlatform).orElse(null);
-        if (oldSid != null) {
-            sessionRevocationService.revokeSession(userId, oldSid, authenticationTokenPolicy.refreshTokenTtl());
-            activeSessionRepository.revokeByUserAndPlatformExcluding(
-                    userId, clientPlatform, newSessionId, "同平台新设备登录");
-            log.info("同平台互斥: userId={}, platform={}, 旧会话已撤销: {}", userId, clientPlatform, oldSid);
+        // 以数据库未撤销会话为准，而不是只信 Redis 注册表里的单条最新 sid：
+        // Redis 淘汰/重启后仍可能有同一平台的多条旧会话，只吊销其中一条会让其余
+        // access token 在 TTL 内继续可用。逐条写入吊销缓存，再批量落库。
+        List<AuthActiveSession> existingSessions = activeSessionRepository
+                .findByUserIdAndClientPlatformAndRevokedAtIsNull(userId, clientPlatform)
+                .stream()
+                .filter(session -> !newSessionId.equals(session.getId()))
+                .toList();
+        if (existingSessions.isEmpty()) {
+            return;
         }
+        for (AuthActiveSession session : existingSessions) {
+            sessionRevocationService.revokeSession(
+                    userId, session.getId(), authenticationTokenPolicy.refreshTokenTtl());
+        }
+        activeSessionRepository.revokeByUserAndPlatformExcluding(
+                userId, clientPlatform, newSessionId, "同平台新设备登录");
+        log.info("同平台互斥: userId={}, platform={}, 已撤销会话数={}",
+                userId, clientPlatform, existingSessions.size());
     }
 
     /**
@@ -688,7 +700,9 @@ public class AuthService {
     }
 
     private String normalizeUsername(String rawUsername) {
-        String username = rawUsername == null ? "" : rawUsername.trim();
+        // 用户名统一按小写存储与查询：数据库唯一索引建在 lower(username) 上，
+        // 登录限流键也按小写归一，三者必须同一口径。
+        String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase(Locale.ROOT);
         if (username.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名不能为空");
         }

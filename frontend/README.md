@@ -80,7 +80,7 @@ presentation
 
 ### 前置依赖
 
-- Flutter stable。当前项目验证基线为 Flutter 3.44.8、Dart 3.12.2。
+- Flutter stable。当前项目验证基线为 Flutter 3.47.6、Dart 3.13.5。
 - Chrome 用于 Web；Android Studio 和 Android SDK 用于 Android；Windows/macOS 对应桌面工具链用于桌面运行和构建。
 - 后端必须先启动并可被当前设备访问，默认 API 为 `http://localhost:8080/api/v1`，WebSocket 为 `ws://localhost:8080/ws`。
 

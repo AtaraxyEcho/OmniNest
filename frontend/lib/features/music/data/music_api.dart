@@ -456,14 +456,14 @@ class MusicApi {
 
   Future<MusicScanJob> createScanJob() async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/music/scan',
+      '/music/scan',
     );
     return MusicScanJob.fromJson(parseData(response.data));
   }
 
   Future<MusicScanJob> scanJobStatus(String jobId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/music/scan/$jobId/status',
+      '/music/scan/$jobId/status',
     );
     return MusicScanJob.fromJson(parseData(response.data));
   }

@@ -331,7 +331,7 @@ class PhotoApi {
   /// 触发照片扫描任务
   Future<Map<String, dynamic>> triggerScan() async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/photos/scan',
+      '/photos/scan',
     );
     return parseData(response.data);
   }
@@ -339,7 +339,7 @@ class PhotoApi {
   /// 查询扫描任务状态
   Future<Map<String, dynamic>> getScanStatus(String jobId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/admin/photos/scan/$jobId/status',
+      '/photos/scan/$jobId/status',
     );
     return parseData(response.data);
   }
@@ -348,7 +348,7 @@ class PhotoApi {
   /// 创建缩略图重建任务，返回任务 ID。
   Future<String> regenerateThumbnails() async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/photos/thumbnails/regenerate',
+      '/photos/thumbnails/regenerate',
     );
     final data = parseData(response.data);
     return data['taskId']?.toString() ?? '';
@@ -481,18 +481,17 @@ class PhotoApi {
     );
   }
 
-  /// 获取 RAW 格式照片的预览图。
-  Future<Uint8List> rawPreview(String photoId) async {
-    final response = await apiClient.dio.get<List<int>>(
+  /// 获取 RAW 格式照片的预览图地址。
+  ///
+  /// 后端返回的是 `ApiResponse<Map<String, String>>` 信封，不能按二进制读取；
+  /// 这里解析出签名地址，由图片组件或下载器加载。返回 null 表示该照片没有 RAW 预览。
+  Future<String?> rawPreviewUrl(String photoId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/photos/$photoId/raw-preview',
-      options: Options(
-        responseType: ResponseType.bytes,
-        // bytes 响应没有信封：非 2xx 时错误 JSON 会被当成图片字节返回。
-        validateStatus:
-            (status) => status != null && status >= 200 && status < 300,
-      ),
     );
-    return Uint8List.fromList(response.data ?? []);
+    final data = parseData(response.data);
+    final url = data['url'];
+    return url is String && url.isNotEmpty ? url : null;
   }
 
   /// 应用编辑操作

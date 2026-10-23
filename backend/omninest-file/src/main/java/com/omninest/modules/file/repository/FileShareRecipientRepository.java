@@ -86,4 +86,11 @@ public interface FileShareRecipientRepository extends JpaRepository<FileShareRec
     void deleteByShareLink_Id(UUID shareLinkId);
 
     void deleteByShareLink_IdIn(Collection<UUID> shareLinkIds);
+
+    /**
+     * 删除指定接收人的全部分享关系行（用户删除时清理）。
+     *
+     * @param recipientUserId 接收人用户 ID
+     */
+    void deleteByRecipientUserId(UUID recipientUserId);
 }

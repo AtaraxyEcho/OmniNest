@@ -57,37 +57,46 @@ public class TextExtractionConsumer {
                 return;
             }
             log.info("收到文本提取任务: fileNodeId={}, fileName={}", event.fileNodeId(), event.fileName());
+            // 流式写入需要提前知道空间归属；解析耗时段内文件被删除时，完成后统一清理已写文档。
+            FileDescriptor descriptor = fileLifecycleGuard
+                    .findOwnedProcessable(event.ownerUserId(), event.fileNodeId())
+                    .orElse(null);
+            if (descriptor == null) {
+                log.info("源文件已删除或正在永久删除，跳过文本提取: fileNodeId={}", event.fileNodeId());
+                taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
+            FileSearchIndexService.ChunkIndexSession indexSession = fileSearchIndexService.openChunkIndex(
+                    event.fileNodeId(),
+                    event.ownerUserId(),
+                    event.fileName(),
+                    descriptor.spaceType().getValue()
+            );
             TextExtractionService.ExtractionResult extraction =
-                    textExtractionService.extract(event.ownerUserId(), event.fileNodeId());
-            List<String> chunks = extraction.chunks();
-            if (!chunks.isEmpty()) {
-                // 索引里的空间归属必须在写入前重新取一次：提取耗时段内文件可能已被删除，
-                // 而 spaceType 只能来自节点本身，不能按调用方猜测。
-                FileDescriptor descriptor = fileLifecycleGuard
-                        .findOwnedProcessable(event.ownerUserId(), event.fileNodeId())
-                        .orElse(null);
-                if (descriptor == null) {
-                    log.info("源文件在文本提取期间进入永久删除流程，放弃索引写入: fileNodeId={}",
-                            event.fileNodeId());
-                    taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
-                    channel.basicAck(deliveryTag, false);
-                    return;
-                }
-                fileSearchIndexService.indexFileChunks(
-                        event.fileNodeId(),
-                        event.ownerUserId(),
-                        event.fileName(),
-                        chunks,
-                        descriptor.spaceType().getValue()
-                );
+                    textExtractionService.extract(event.ownerUserId(), event.fileNodeId(), indexSession::append);
+            FileDescriptor current = fileLifecycleGuard
+                    .findOwnedProcessable(event.ownerUserId(), event.fileNodeId())
+                    .orElse(null);
+            if (current == null) {
+                log.info("源文件在文本提取期间进入永久删除流程，放弃索引写入: fileNodeId={}",
+                        event.fileNodeId());
+                fileSearchIndexService.deleteFiles(
+                        List.of(event.fileNodeId()), event.ownerUserId());
+                taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
+            int chunkCount = indexSession.complete();
+            if (chunkCount > 0) {
                 log.info("文本提取完成: fileNodeId={}, 文本长度={}, chunkCount={}, truncated={}",
-                        event.fileNodeId(), extraction.textLength(), chunks.size(), extraction.truncated());
+                        event.fileNodeId(), extraction.textLength(), chunkCount, extraction.truncated());
             } else {
                 log.info("文件无可提取文本: fileNodeId={}", event.fileNodeId());
             }
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("textLength", extraction.textLength());
-            result.put("chunkCount", chunks.size());
+            result.put("chunkCount", chunkCount);
             if (extraction.truncated()) {
                 result.put("truncated", true);
                 result.put("chunkSize", extraction.chunkSize());
