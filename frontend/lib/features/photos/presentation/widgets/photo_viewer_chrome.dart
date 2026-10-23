@@ -431,7 +431,7 @@ class PhotoViewerArrowButton extends StatelessWidget {
 }
 
 /// 托管查看器舞台底色（样例 `.photo-viewer` 的 #050807 实底）。
-const Color photoViewerHostedStageColor = Color(0xFF050807);
+const Color photoViewerHostedStageColor = FramePalette.stage;
 
 /// 托管查看器横幅（样例 photo-viewer > header）：关闭圆钮 + 居中的
 /// 地名与「N of M · 时间」副题 + 幻灯片直达圆钮。
@@ -547,7 +547,7 @@ class PhotoViewerHostedActions extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x00050807), Color(0xA6050807)],
+          colors: [FramePalette.stageFadeStart, FramePalette.stageFadeEnd],
         ),
       ),
       child: SafeArea(

@@ -46,7 +46,7 @@ public record CreateShareLinkRequest(
      *
      * @param expiresAt 原始过期时间串，空串或空白返回 null
      * @return 解析后的即时，未提供时为 null
-     * @throws java.time.format.DateTimeParseException 两种格式均不匹配时
+     * @throws DateTimeParseException 两种格式均不匹配时
      */
     public static Instant parseExpiresAt(String expiresAt) {
         if (expiresAt == null || expiresAt.isBlank()) {

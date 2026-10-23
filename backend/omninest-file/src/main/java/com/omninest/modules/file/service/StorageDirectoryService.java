@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -108,7 +109,7 @@ public class StorageDirectoryService {
         Path locationRoot = pathResolver.resolveLocationRoot(location);
         Path directory = pathResolver.resolveDirectory(location, parent);
         int safePage = Math.max(0, page);
-        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
+        int safeSize = PageClamps.safeSize(size);
         try (Stream<Path> children = Files.list(directory)) {
             List<Path> directories = children
                     .filter(path -> Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))

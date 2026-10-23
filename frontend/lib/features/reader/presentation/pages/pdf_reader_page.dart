@@ -168,6 +168,9 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     });
     try {
       final restore = await _resolveRestoreTarget();
+      if (!mounted) {
+        return;
+      }
       // 走缓存句柄而不是整本字节：原生端解密到会话文件后按页映射，
       // 把 100MB 级扫描版 PDF 全量读进 Dart 堆会叠加 PDFium 的 native 拷贝，移动端极易 OOM。
       final handle = await ref.read(

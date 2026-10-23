@@ -17,7 +17,7 @@ class MediaLibraryAccessPanel extends ConsumerWidget {
             child: MovieNoticePanel(
               icon: Icons.error_outline_rounded,
               title: l10n.videoLibraryAccessLoadFailed,
-              message: movieErrorMessage(error),
+              message: movieErrorMessage(error, AppLocalizations.of(context)),
             ),
           ),
       data:
@@ -143,7 +143,10 @@ class _MediaLibraryAccessFormState
                   (error, _) => MovieNoticePanel(
                     icon: Icons.error_outline_rounded,
                     title: l10n.videoLibraryAccessUsersFailed,
-                    message: movieErrorMessage(error),
+                    message: movieErrorMessage(
+                      error,
+                      AppLocalizations.of(context),
+                    ),
                   ),
               data: (page) {
                 final userList =
@@ -259,7 +262,11 @@ class _MediaLibraryAccessFormState
       if (!mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);

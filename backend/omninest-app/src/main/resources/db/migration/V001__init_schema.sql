@@ -41,10 +41,14 @@ CREATE TABLE "omni"."auth_active_sessions" (
   "revoked_at" timestamptz(6),
   "revoke_reason" varchar(255),
   "current_refresh_jti" varchar(64),
+  "previous_refresh_jti" varchar(64),
+  "refresh_rotated_at" timestamptz(6),
   "created_at" timestamptz(6) NOT NULL DEFAULT now()
 )
 ;
 COMMENT ON COLUMN "omni"."auth_active_sessions"."current_refresh_jti" IS '当前有效刷新令牌 jti，用于轮换与重放检测；NULL 为升级前存量会话';
+COMMENT ON COLUMN "omni"."auth_active_sessions"."previous_refresh_jti" IS '上一枚刷新令牌 jti，仅在并发刷新宽限期内接受，用于多标签页并发';
+COMMENT ON COLUMN "omni"."auth_active_sessions"."refresh_rotated_at" IS '上次刷新令牌轮换时间，与上一枚 jti 共同构成短宽限期';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."id" IS '会话唯一标识，主键';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."user_id" IS '用户ID，关联auth_users';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."client_platform" IS '客户端平台：WEB / ANDROID / DESKTOP';
@@ -2762,6 +2766,13 @@ CREATE INDEX "idx_file_nodes_shared_space" ON "omni"."file_nodes" USING btree (
 CREATE INDEX "idx_file_nodes_space_type" ON "omni"."file_nodes" USING btree (
   "space_type" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE is_deleted = false;
+CREATE INDEX "idx_file_nodes_space_parent" ON "omni"."file_nodes" USING btree (
+  "space_type" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "parent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE is_deleted = false;
+CREATE INDEX "idx_file_nodes_current_object" ON "omni"."file_nodes" USING btree (
+  "current_object_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE current_object_id IS NOT NULL;
 CREATE INDEX "idx_file_nodes_uploaded_by" ON "omni"."file_nodes" USING btree (
   "uploaded_by" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE space_type::text = 'SHARED'::text AND is_deleted = false;
@@ -2871,6 +2882,10 @@ ALTER TABLE "omni"."file_upload_sessions" ADD CONSTRAINT "chk_file_upload_sessio
 ALTER TABLE "omni"."file_upload_sessions" ADD CONSTRAINT "file_upload_sessions_pkey" PRIMARY KEY ("id");
 
 ALTER TABLE "omni"."file_versions" ADD CONSTRAINT "uniq_file_versions_file_no" UNIQUE ("file_node_id", "version_no");
+
+CREATE INDEX "idx_file_versions_object" ON "omni"."file_versions" USING btree (
+  "object_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
 
 ALTER TABLE "omni"."file_versions" ADD CONSTRAINT "chk_file_versions_change_type" CHECK (change_type::text = ANY (ARRAY['UPLOAD'::character varying::text, 'EDIT'::character varying::text, 'RESTORE'::character varying::text, 'DERIVED'::character varying::text]));
 
@@ -3432,6 +3447,9 @@ CREATE INDEX "idx_reader_bookmarks_item" ON "omni"."reader_bookmarks" USING btre
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_reader_bookmarks_reader_item" ON "omni"."reader_bookmarks" USING btree (
+  "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
 CREATE UNIQUE INDEX "uk_reader_bookmarks_client_operation" ON "omni"."reader_bookmarks" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
@@ -3467,6 +3485,9 @@ ALTER TABLE "omni"."reader_catalog_nodes" ADD CONSTRAINT "reader_catalog_nodes_p
 
 CREATE INDEX "idx_reader_item_sources_item" ON "omni"."reader_item_sources" USING btree (
   "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_reader_item_sources_file" ON "omni"."reader_item_sources" USING btree (
+  "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
 
 ALTER TABLE "omni"."reader_item_sources" ADD CONSTRAINT "uq_reader_item_sources_item_file" UNIQUE ("reader_item_id", "file_node_id");
@@ -3510,6 +3531,9 @@ ALTER TABLE "omni"."reader_text_chapters" ADD CONSTRAINT "reader_text_chapters_p
 
 CREATE INDEX "idx_reader_notes_item" ON "omni"."reader_notes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_reader_notes_reader_item" ON "omni"."reader_notes" USING btree (
   "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
 CREATE UNIQUE INDEX "uk_reader_notes_client_operation" ON "omni"."reader_notes" USING btree (
@@ -3567,6 +3591,9 @@ ALTER TABLE "omni"."reader_progress" ADD CONSTRAINT "reader_progress_pkey" PRIMA
 
 CREATE INDEX "idx_reading_sessions_item" ON "omni"."reader_reading_sessions" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+CREATE INDEX "idx_reading_sessions_reader_item" ON "omni"."reader_reading_sessions" USING btree (
   "reader_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
 CREATE INDEX "idx_reading_sessions_user" ON "omni"."reader_reading_sessions" USING btree (

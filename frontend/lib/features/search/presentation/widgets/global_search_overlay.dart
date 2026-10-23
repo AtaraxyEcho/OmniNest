@@ -13,6 +13,7 @@ import 'package:omninest/features/portal/application/portal_dashboard_providers.
 import 'package:omninest/features/reader/domain/reader_dashboard.dart';
 import 'package:omninest/features/search/application/search_controller.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
+import 'package:omninest/features/search/presentation/theme/search_overlay_colors.dart';
 import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -28,7 +29,7 @@ Future<void> showGlobalSearchDialog(BuildContext context) async {
   try {
     await showWorkstationDialog<void>(
       context: context,
-      barrierColor: const Color(0x990D1117),
+      barrierColor: SearchOverlayColors.barrier,
       builder: (context) => const _CommandPaletteDialog(),
     );
   } finally {
@@ -429,12 +430,12 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                     p.panelShadow
                         ? [
                           BoxShadow(
-                            color: const Color(0x0F1A1D1B),
+                            color: SearchOverlayColors.hintTile,
                             blurRadius: 36,
                             offset: const Offset(0, 12),
                           ),
                           BoxShadow(
-                            color: const Color(0x0A1A1D1B),
+                            color: SearchOverlayColors.hintTileSoft,
                             blurRadius: 2,
                             offset: const Offset(0, 1),
                           ),

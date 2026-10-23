@@ -204,17 +204,23 @@ class _LightEnvironmentWash extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: <Color>[
-              Color(0x1A0B1813),
-              Color(0x290A1611),
-              Color(0xA308120E),
+              BackdropStageColors.lightImmersiveStart,
+              BackdropStageColors.lightImmersiveMid,
+              BackdropStageColors.lightImmersiveEnd,
             ],
             stops: <double>[0, 0.42, 1],
           ),
         ),
       ),
-      AppEnvironmentMode.ambient => const ColoredBox(color: Color(0xFFE9EEE7)),
-      AppEnvironmentMode.focus => const ColoredBox(color: Color(0xFFE9EEE7)),
-      AppEnvironmentMode.utility => const ColoredBox(color: Color(0xFFE9EEE7)),
+      AppEnvironmentMode.ambient => const ColoredBox(
+        color: BackdropStageColors.lightPaperWash,
+      ),
+      AppEnvironmentMode.focus => const ColoredBox(
+        color: BackdropStageColors.lightPaperWash,
+      ),
+      AppEnvironmentMode.utility => const ColoredBox(
+        color: BackdropStageColors.lightPaperWash,
+      ),
     };
   }
 }

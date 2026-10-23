@@ -14,6 +14,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo_timeline.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// 年·月分组页（原型 `photo-groups` 工具页 `.year-jump`）：按年份给出
@@ -214,7 +215,7 @@ class _MonthTile extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.center,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0x00000000), Color(0xB3000000)],
+                    colors: [Colors.transparent, FramePalette.groupsFadeEnd],
                   ),
                 ),
               ),

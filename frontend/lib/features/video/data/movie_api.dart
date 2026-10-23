@@ -281,7 +281,7 @@ class MovieApi {
       return;
     }
     final deviceId = await PlaybackDeviceIdentity.getOrCreate();
-    await apiClient.dio.put<Map<String, dynamic>>(
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/video/items/$videoItemId/progress',
       data: {
         'positionSeconds': positionSeconds,
@@ -291,6 +291,7 @@ class MovieApi {
         'deviceId': deviceId,
       },
     );
+    parseEnvelope(response.data);
   }
 
   /// 读取有界字幕文本。

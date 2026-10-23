@@ -95,6 +95,7 @@ public class AdminOperationsService {
     private final AdminActorGuard adminActorGuard;
     private final SystemMetricsCollector systemMetricsCollector;
     private final WorkerRuntimeRegistry workerRuntimeRegistry;
+    private final SystemInstanceConfigService systemInstanceConfigService;
 
     public AdminOperationsDto.ConfigManagementView configs() {
         return new AdminOperationsDto.ConfigManagementView(configCenterService.list());
@@ -278,13 +279,15 @@ public class AdminOperationsService {
     public AdminOperationsDto.MonitoringView monitoring() {
         Instant now = Instant.now();
         SystemSnapshot snapshot = systemSnapshot();
-        long runningTasks = taskRecordRepository.countByStatus(TaskStatus.RUNNING.getValue());
-        long queuedTasks = taskRecordRepository.countByStatus(TaskStatus.QUEUED.getValue());
+        Map<String, Long> taskCounts = taskRecordRepository.countGroupedByStatus();
+        long runningTasks = taskCounts.getOrDefault(TaskStatus.RUNNING.getValue(), 0L);
+        long queuedTasks = taskCounts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L);
         // DISCARDED 是管理员显式处置后的终态，不计入 failed/dlq 告警桶，避免已处置任务持续触发告警。
-        long failedTasks = taskRecordRepository.countByStatus(TaskStatus.FAILED.getValue());
-        long dlqTasks = taskRecordRepository.countByStatus(TaskStatus.DLQ.getValue());
+        long failedTasks = taskCounts.getOrDefault(TaskStatus.FAILED.getValue(), 0L);
+        long dlqTasks = taskCounts.getOrDefault(TaskStatus.DLQ.getValue(), 0L);
         long todayRequests = auditLogAdminRepository.countSince(
-                LocalDate.now().atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant()
+                LocalDate.now(systemInstanceConfigService.timeZone())
+                        .atStartOfDay(systemInstanceConfigService.timeZone()).toInstant()
         );
         // 队列深度只表示尚未执行的 QUEUED 任务，死信单独展示，避免把历史失败量误报为待处理积压。
         long queueDepth = queuedTasks;

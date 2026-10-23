@@ -69,7 +69,8 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
             + "base-uri 'self'; "
             + "frame-ancestors 'self'";
 
-    private String permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=()";
+    private String permissionsPolicy =
+            "camera=(self), geolocation=(self), microphone=(), payment=()";
 
     @Override
     public Duration accessTokenTtl() {

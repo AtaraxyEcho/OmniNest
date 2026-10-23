@@ -9,6 +9,7 @@ import static org.mockito.Mockito.isNull;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Roles;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.config.InitialSetupProperties;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -43,6 +44,7 @@ class InitialSetupServiceTest {
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final TwoFactorService twoFactorService = Mockito.mock(TwoFactorService.class);
     private final ConfigCenterService configCenterService = Mockito.mock(ConfigCenterService.class);
+    private final StorageQuotaService storageQuotaService = Mockito.mock(StorageQuotaService.class);
     private final InitialSetupService service = new InitialSetupService(
             properties,
             authUserRepository,
@@ -51,7 +53,8 @@ class InitialSetupServiceTest {
             passwordEncoder,
             new PasswordPolicy(),
             twoFactorService,
-            configCenterService
+            configCenterService,
+            storageQuotaService
     );
 
     @BeforeEach
@@ -60,6 +63,8 @@ class InitialSetupServiceTest {
         properties.setToken(SETUP_TOKEN);
         properties.setPersistentStateEnabled(true);
         properties.setTwoFactorRequired(false);
+        Mockito.when(storageQuotaService.getDefaultQuotaBytes())
+                .thenReturn(10L * 1024 * 1024 * 1024);
     }
 
     @Test

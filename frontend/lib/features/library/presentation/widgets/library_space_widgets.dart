@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/mobile_sliding_segment_row.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/features/library/presentation/theme/library_space_colors.dart';
 import 'package:omninest/features/library/presentation/widgets/library_space_tier.dart';
 import 'package:omninest/features/photos/application/photo_browse_scope.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -224,7 +225,10 @@ class LibraryFeatureBanner extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
-                      colors: [Color(0xC7050A09), Color(0x14050A09)],
+                      colors: [
+                        LibrarySpaceColors.bannerGradientStart,
+                        LibrarySpaceColors.bannerGradientEnd,
+                      ],
                     ),
                   ),
                 ),
@@ -233,7 +237,10 @@ class LibraryFeatureBanner extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Color(0x8C040807), Colors.transparent],
+                      colors: [
+                        LibrarySpaceColors.bannerBottomStart,
+                        Colors.transparent,
+                      ],
                       stops: [0, 0.6],
                     ),
                   ),
@@ -248,7 +255,7 @@ class LibraryFeatureBanner extends StatelessWidget {
                         eyebrow.toUpperCase(),
                         style: const TextStyle(
                           // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-                          color: Color(0xA1FFFFFF),
+                          color: LibrarySpaceColors.eyebrowOnImage,
                           fontSize: AppTypography.labelMicro,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
@@ -461,7 +468,7 @@ class _MoreTile extends StatelessWidget {
       semanticLabel: '+$count',
       onTap: onTap,
       child: ColoredBox(
-        color: const Color(0x80060B0A),
+        color: LibrarySpaceColors.panelScrim,
         child: Center(
           child: Text(
             '+$count',
@@ -579,7 +586,10 @@ class LibraryPosterCard extends StatelessWidget {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Color(0x66000000)],
+                            colors: [
+                              Colors.transparent,
+                              LibrarySpaceColors.thumbnailFadeEnd,
+                            ],
                             stops: [0.4, 1],
                           ),
                         ),
@@ -602,7 +612,7 @@ class LibraryPosterCard extends StatelessWidget {
                         minHeight: 3,
                         color: context.env.accentInk,
                         // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-                        backgroundColor: const Color(0x3DFFFFFF),
+                        backgroundColor: LibrarySpaceColors.controlFill,
                       ),
                     ),
                 ],

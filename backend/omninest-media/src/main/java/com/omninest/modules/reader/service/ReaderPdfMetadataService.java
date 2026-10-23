@@ -5,6 +5,7 @@ import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import javax.imageio.ImageIO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -40,7 +41,7 @@ public class ReaderPdfMetadataService {
                 PDFRenderer renderer = new PDFRenderer(document);
                 BufferedImage image = renderer.renderImageWithDPI(0, 72, ImageType.RGB);
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
-                javax.imageio.ImageIO.write(image, "png", output);
+                ImageIO.write(image, "png", output);
                 cover = output.toByteArray();
             }
             return new PdfMetadata(pageCount, cover);

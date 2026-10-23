@@ -4,6 +4,19 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
+/// 样例内容组件族使用的固定色：影像压色与媒体占位，两极性同值。
+const Color _mediaPlaceholder = Color(0xFF222626);
+const Color _mediaFadeEnd = Color(0x66000000);
+const Color _playButtonFill = Color(0xE6F9F9F4);
+const Color _playButtonInk = Color(0xFF101513);
+const Color _cardGradientStart = Color(0xC2101615);
+const Color _cardGradientEnd = Color(0x7D1B2421);
+const Color _onArtworkBadgeFill = Color(0x8C090D0C);
+// polarity-stable：压在封面影像上的发丝描边，对比由图片本身提供。
+const Color _onArtworkHairline = Color(0x29FFFFFF);
+// polarity-stable：压在封面影像上的徽标字与图标，对比由图片本身提供。
+const Color _onArtworkIcon = Color(0xCCFFFFFF);
+
 /// 样例内容组件族（Extension index.css 逐值移植）：海报轨/专辑卡/
 /// 编号行/照片马赛克/NOW PLAYING 卡。供托管模块页（音乐/照片/影视）
 /// 的 hosted 内容面统一使用；桌面与非托管路径不经过本族。
@@ -83,17 +96,17 @@ class SamplePosterCard extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder:
                                 (_, _, _) =>
-                                    const ColoredBox(color: Color(0xFF222626)),
+                                    const ColoredBox(color: _mediaPlaceholder),
                           )
                         else
-                          const ColoredBox(color: Color(0xFF222626)),
+                          const ColoredBox(color: _mediaPlaceholder),
                         // 样例 :after 渐变（40% 起黑 40%）。
                         const DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [Colors.transparent, Color(0x66000000)],
+                              colors: [Colors.transparent, _mediaFadeEnd],
                               stops: [0.4, 1],
                             ),
                           ),
@@ -164,13 +177,13 @@ class _SamplePlayCircle extends StatelessWidget {
             width: 35,
             height: 35,
             decoration: const BoxDecoration(
-              color: Color(0xE6F9F9F4),
+              color: _playButtonFill,
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.play_arrow_rounded,
               size: 20,
-              color: Color(0xFF101513),
+              color: _playButtonInk,
             ),
           ),
         ),
@@ -256,10 +269,10 @@ class SampleAlbumCard extends StatelessWidget {
                                   fit: BoxFit.cover,
                                   errorBuilder:
                                       (_, _, _) => const ColoredBox(
-                                        color: Color(0xFF222626),
+                                        color: _mediaPlaceholder,
                                       ),
                                 )
-                                : const ColoredBox(color: Color(0xFF222626)),
+                                : const ColoredBox(color: _mediaPlaceholder),
                       ),
                     ),
                   ),
@@ -523,12 +536,12 @@ class _SampleCoverBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = imageUrl;
     if (url == null || url.isEmpty) {
-      return const ColoredBox(color: Color(0xFF222626));
+      return const ColoredBox(color: _mediaPlaceholder);
     }
     return Image.network(
       url,
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF222626)),
+      errorBuilder: (_, _, _) => const ColoredBox(color: _mediaPlaceholder),
     );
   }
 }
@@ -576,7 +589,7 @@ class SampleNowPlayingCard extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xC2101615), Color(0x7D1B2421)],
+            colors: [_cardGradientStart, _cardGradientEnd],
           ),
           border: Border.all(color: context.env.line15),
         ),
@@ -594,9 +607,9 @@ class SampleNowPlayingCard extends StatelessWidget {
                           fit: BoxFit.cover,
                           errorBuilder:
                               (_, _, _) =>
-                                  const ColoredBox(color: Color(0xFF222626)),
+                                  const ColoredBox(color: _mediaPlaceholder),
                         )
-                        : const ColoredBox(color: Color(0xFF222626)),
+                        : const ColoredBox(color: _mediaPlaceholder),
               ),
             ),
             const SizedBox(width: 13),
@@ -689,10 +702,10 @@ class SamplePhotoMosaic extends StatelessWidget {
                 data.url!,
                 fit: BoxFit.cover,
                 errorBuilder:
-                    (_, _, _) => const ColoredBox(color: Color(0xFF222626)),
+                    (_, _, _) => const ColoredBox(color: _mediaPlaceholder),
               )
             else
-              const ColoredBox(color: Color(0xFF222626)),
+              const ColoredBox(color: _mediaPlaceholder),
             if (data?.overlay != null) Positioned.fill(child: data!.overlay!),
           ],
         ),
@@ -756,10 +769,10 @@ class SampleSeriesBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0x8C090D0C),
+        color: _onArtworkBadgeFill,
         borderRadius: BorderRadius.circular(7),
         // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-        border: Border.all(color: const Color(0x29FFFFFF)),
+        border: Border.all(color: _onArtworkHairline),
       ),
       child: Text(
         label.toUpperCase(),
@@ -768,7 +781,7 @@ class SampleSeriesBadge extends StatelessWidget {
           letterSpacing: 1,
           fontWeight: FontWeight.w700,
           // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-          color: Color(0xCCFFFFFF),
+          color: _onArtworkIcon,
         ),
       ),
     );

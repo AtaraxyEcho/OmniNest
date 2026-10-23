@@ -157,6 +157,35 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("注册命中强制两步验证时只返回注册引导挑战")
+        void registerReturnsEnrollChallengeWhenTwoFactorRequired() {
+            when(authUserRepository.existsByUsername("newuser")).thenReturn(false);
+            when(storageQuotaService.getDefaultQuotaBytes()).thenReturn(1024L);
+            AuthRole memberRole = role(Roles.MEMBER, "file:read");
+            when(authRoleRepository.findByCode(Roles.MEMBER)).thenReturn(Optional.of(memberRole));
+            when(authUserRepository.save(any(AuthUser.class))).thenAnswer(invocation -> {
+                AuthUser profile = invocation.getArgument(0);
+                profile.setId(UUID.randomUUID());
+                return profile;
+            });
+            when(twoFactorPolicyService.isRequired(any(AuthUser.class))).thenReturn(true);
+
+            var token = service.register(
+                    new RegisterRequest("newuser", "New User", "new@example.com", "secret123"),
+                    "web",
+                    "device",
+                    "Chrome",
+                    "192.168.1.10",
+                    "Mozilla/5.0");
+
+            assertThat(token.accessToken()).isNull();
+            assertThat(token.refreshToken()).isNull();
+            assertThat(token.twoFactorRequired()).isTrue();
+            assertThat(token.challengeType()).isEqualTo(AuthService.CHALLENGE_TYPE_ENROLL);
+            verify(activeSessionRepository, never()).save(any(AuthActiveSession.class));
+        }
+
+        @Test
         @DisplayName("用户名统一按小写存储与查重")
         void registerNormalizesUsernameToLowercase() {
             when(authUserRepository.existsByUsername("admin")).thenReturn(false);
@@ -706,6 +735,27 @@ class AuthServiceTest {
                     .hasMessageContaining("刷新凭证已失效");
             verify(activeSessionRepository).revokeBySessionId(session.getId(), "刷新令牌重放，会话已撤销");
             verify(sessionRevocationService).revokeSession(eq(user.getId()), eq(session.getId()), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("多标签页并发刷新落在宽限期内时不吊销会话")
+        void refreshAcceptsPreviousJtiWithinGrace() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setCurrentRefreshJti("jti-current");
+            session.setPreviousRefreshJti("jti-previous");
+            session.setRefreshRotatedAt(Instant.now());
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+            jtiByTokenUse.put("refresh", "jti-previous");
+
+            var token = service.refresh("refresh-token");
+
+            assertThat(token.refreshToken()).isNotBlank();
+            assertThat(session.getCurrentRefreshJti()).isEqualTo("jti-current");
+            verify(sessionRevocationService, never()).revokeSession(any(), any(), any());
         }
 
         @Test

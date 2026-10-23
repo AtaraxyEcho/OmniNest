@@ -38,6 +38,7 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final groupsAsync = ref.watch(photoLocationGroupsProvider);
     final groups = groupsAsync.asData?.value ?? const <PhotoGroup>[];
     final photos =
@@ -49,6 +50,11 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
         if (group.groupKey.isNotEmpty)
           _LocationEntry(
             name: group.groupKey,
+            // 服务端桶名是数据契约，不能本地化；展示名单独取词条。
+            displayName:
+                group.groupKey == _unknownLocationKey
+                    ? l10n.photosLocationsUnknown
+                    : group.groupKey,
             totalCount: group.photoCount,
             photos: _resolvePhotos(group, byCity[group.groupKey]),
           ),
@@ -56,8 +62,8 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
     if (locations.isEmpty) {
       return FrameEmptyView(
         icon: Icons.place_outlined,
-        message: AppLocalizations.of(context).photosFrameLocationsEmpty,
-        hint: AppLocalizations.of(context).photosFrameLocationsEmptyHint,
+        message: l10n.photosFrameLocationsEmpty,
+        hint: l10n.photosFrameLocationsEmptyHint,
       );
     }
 
@@ -79,7 +85,7 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
         setState(() => _selectedLocation = null);
       },
       child: _LocationDetail(
-        location: entry.name,
+        location: entry.displayName,
         photos: entry.photos,
         onBack: () => setState(() => _selectedLocation = null),
         onOpenPhoto: (photo) {
@@ -127,11 +133,16 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
 class _LocationEntry {
   const _LocationEntry({
     required this.name,
+    required this.displayName,
     required this.totalCount,
     required this.photos,
   });
 
+  /// 服务端分组键，用于匹配窗口内照片与选中态。
   final String name;
+
+  /// 卡片与详情页展示名，未知地点按当前语言本地化。
+  final String displayName;
   final int totalCount;
   final List<PhotoItem> photos;
 }
@@ -167,7 +178,7 @@ class _LocationGrid extends StatelessWidget {
           itemBuilder: (context, index) {
             final entry = locations[index];
             return _LocationCard(
-              name: entry.name,
+              name: entry.displayName,
               cover: entry.photos.firstOrNull,
               countLabel: l10n.photosTagsPhotoCount(entry.totalCount),
               onSelected: () => onSelected(entry.name),

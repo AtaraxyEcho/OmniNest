@@ -222,6 +222,34 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     @Query("SELECT DISTINCT t.artistId FROM MusicTrack t WHERE t.ownerUserId = :ownerUserId AND t.artistId IN :artistIds")
     List<UUID> findArtistIdsWithTracks(@Param("ownerUserId") UUID ownerUserId, @Param("artistIds") Collection<UUID> artistIds);
 
+    /**
+     * 批量查询排除待清除曲目后仍被引用的 albumId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT t.albumId FROM MusicTrack t
+            WHERE t.ownerUserId = :ownerUserId
+              AND t.albumId IN :albumIds
+              AND t.id NOT IN :excludedTrackIds
+            """)
+    List<UUID> findAlbumIdsWithRemainingTracks(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("albumIds") Collection<UUID> albumIds,
+            @Param("excludedTrackIds") Collection<UUID> excludedTrackIds);
+
+    /**
+     * 批量查询排除待清除曲目后仍被引用的 artistId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT t.artistId FROM MusicTrack t
+            WHERE t.ownerUserId = :ownerUserId
+              AND t.artistId IN :artistIds
+              AND t.id NOT IN :excludedTrackIds
+            """)
+    List<UUID> findArtistIdsWithRemainingTracks(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistIds") Collection<UUID> artistIds,
+            @Param("excludedTrackIds") Collection<UUID> excludedTrackIds);
+
     List<MusicTrack> findByOwnerUserIdAndCoverFileIdIn(UUID ownerUserId, Collection<UUID> coverFileIds);
 
     /**
@@ -231,18 +259,6 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
      * @return 曲目
      */
     List<MusicTrack> findByCoverFileIdIn(Collection<UUID> coverFileIds);
-
-    long countByOwnerUserIdAndAlbumIdAndIdNotIn(
-            UUID ownerUserId,
-            UUID albumId,
-            Collection<UUID> excludedTrackIds
-    );
-
-    long countByOwnerUserIdAndArtistIdAndIdNotIn(
-            UUID ownerUserId,
-            UUID artistId,
-            Collection<UUID> excludedTrackIds
-    );
 
     @Query("""
             select coalesce(sum(t.durationSeconds), 0)

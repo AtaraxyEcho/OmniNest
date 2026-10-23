@@ -19636,6 +19636,12 @@ abstract class AppLocalizations {
   /// **'Back to Locations'**
   String get photosLocationsBack;
 
+  /// No description provided for @photosLocationsUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown location'**
+  String get photosLocationsUnknown;
+
   /// No description provided for @photosDeleteShort.
   ///
   /// In en, this message translates to:

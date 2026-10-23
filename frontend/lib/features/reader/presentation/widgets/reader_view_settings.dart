@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
+import 'package:omninest/features/reader/presentation/theme/reader_space_colors.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_stylesheet.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
@@ -664,7 +666,10 @@ class ReaderToggleSwitch extends StatelessWidget {
       trackOn: settings.accentColor,
       trackOff: settings.onSurfaceColor.withValues(alpha: 0.16),
       knobOn: settings.surfaceColor,
-      knobOff: lightPanel ? const Color(0xFFFFFFFF) : const Color(0xFFF6F6F2),
+      knobOff:
+          lightPanel
+              ? MobileEnvPalette.light.switchKnobOff
+              : MobileEnvPalette.dark.switchKnobOff,
       knobShadow: lightPanel ? _lightPanelKnobShadow : null,
     );
   }
@@ -672,7 +677,11 @@ class ReaderToggleSwitch extends StatelessWidget {
 
 /// 样例浅态 `.env-switch::after` 的旋钮投影：`0 1px 3px rgba(26,29,27,.25)`。
 const List<BoxShadow> _lightPanelKnobShadow = [
-  BoxShadow(color: Color(0x401A1D1B), offset: Offset(0, 1), blurRadius: 3),
+  BoxShadow(
+    color: ReaderSpaceColors.knobShadow,
+    offset: Offset(0, 1),
+    blurRadius: 3,
+  ),
 ];
 
 /// 稿子 `.setting-section`：上下 14/16 内边距，段间一条 --line 发丝线，首段不画。

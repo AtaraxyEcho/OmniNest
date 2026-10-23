@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -72,7 +73,7 @@ public class MediaLibraryReviewService {
     public PageResponse<UnavailableMediaDto> unavailable(UUID operatorUserId, int page, int size) {
         accessService.requireManagePermission(operatorUserId);
         int safePage = Math.max(0, page);
-        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
+        int safeSize = PageClamps.safeSize(size);
         List<UUID> sourceIds = sourceRepository.findAllByOrderByNameAsc().stream()
                 .map(VideoLibrarySource::getId)
                 .toList();
@@ -108,7 +109,7 @@ public class MediaLibraryReviewService {
         UUID catalogOwnerId = run.getOwnerUserId();
         VideoLibrarySource source = requireSource(ownerUserId, run.getLibrarySourceId());
         int safePage = Math.max(0, page);
-        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
+        int safeSize = PageClamps.safeSize(size);
         String parent = parentNodeId == null || parentNodeId.isBlank() ? "ROOT" : parentNodeId;
         if ("ROOT".equals(parent)) {
             return rootNodes(catalogOwnerId, runId, source, safePage, safeSize);

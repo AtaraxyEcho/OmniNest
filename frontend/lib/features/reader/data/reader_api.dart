@@ -370,7 +370,7 @@ class ReaderApi {
     if (!apiClient.hasPermission(activityWritePermission)) {
       return;
     }
-    await apiClient.dio.put<Map<String, dynamic>>(
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/reader/items/$itemId/progress',
       data: {
         'charOffset': charOffset,
@@ -389,6 +389,7 @@ class ReaderApi {
           'clientUpdatedAt': clientUpdatedAt.toUtc().toIso8601String(),
       },
     );
+    parseEnvelope(response.data);
   }
 
   // ─── Bookmarks ───────────────────────────────────────────────
@@ -576,7 +577,7 @@ class ReaderApi {
     if (!apiClient.hasPermission(activityWritePermission)) {
       return;
     }
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/sessions',
       data: {
         'clientSessionId': clientSessionId,
@@ -585,6 +586,7 @@ class ReaderApi {
         'durationSeconds': durationSeconds,
       },
     );
+    parseEnvelope(response.data);
   }
 
   // ─── Comics ──────────────────────────────────────────────────

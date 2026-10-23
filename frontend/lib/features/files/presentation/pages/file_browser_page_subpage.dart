@@ -212,8 +212,14 @@ class _SubTable extends StatelessWidget {
                       ],
                     ),
                   ),
-                  for (final row in rows)
-                    _SubRowShell(columns: columns, row: row),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: rows.length,
+                      itemBuilder:
+                          (context, index) =>
+                              _SubRowShell(columns: columns, row: rows[index]),
+                    ),
+                  ),
                 ],
               ),
             ),

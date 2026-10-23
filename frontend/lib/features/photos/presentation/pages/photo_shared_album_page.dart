@@ -18,6 +18,7 @@ import 'package:omninest/core/widgets/infinite_scroll.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// 公开共享相册页面（无需登录）
@@ -685,7 +686,7 @@ class _SharedPhotoLightboxState extends State<_SharedPhotoLightbox> {
         autofocus: true,
         onKeyEvent: _handleKey,
         child: ColoredBox(
-          color: const Color(0xF2000000),
+          color: FramePalette.sharedAlbumScrim,
           child: SafeArea(
             child: Column(
               children: [

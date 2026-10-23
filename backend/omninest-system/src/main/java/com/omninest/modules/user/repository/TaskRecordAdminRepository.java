@@ -1,10 +1,12 @@
 package com.omninest.modules.user.repository;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.SafeOrderSpec;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -32,6 +34,23 @@ public class TaskRecordAdminRepository {
                 "select count(*) from omni.sys_tasks where status = :status",
                 Map.of("status", status)
         );
+    }
+
+    /**
+     * 一次按状态聚合任务数量，避免管理台拆成 7 次 count。
+     *
+     * @return 状态到数量的映射
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Long> countGroupedByStatus() {
+        List<Object[]> rows = entityManager.createNativeQuery(
+                "select status, count(*) from omni.sys_tasks group by status")
+                .getResultList();
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (Object[] row : rows) {
+            counts.put(row[0].toString(), numberValue(row[1]));
+        }
+        return counts;
     }
 
     /**
@@ -101,7 +120,7 @@ public class TaskRecordAdminRepository {
                 TASK_PROJECTION + filters + taskOrderClause(sortColumn, ascending)
         );
         bindPageFilters(contentQuery, status, taskType, searchPattern);
-        int boundedSize = com.omninest.common.api.PageClamps.safeSize(size, 100);
+        int boundedSize = PageClamps.safeSize(size, 100);
         contentQuery.setFirstResult(Math.max(0, page) * boundedSize);
         contentQuery.setMaxResults(boundedSize);
 

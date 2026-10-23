@@ -30,6 +30,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
@@ -154,7 +155,7 @@ public class PhotoAlbumService {
     public Page<PhotoItemDto> albumPhotosPage(UUID ownerUserId, UUID albumId, int page, int size) {
         requireAlbum(ownerUserId, albumId);
         int safePage = Math.max(0, page);
-        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
+        int safeSize = PageClamps.safeSize(size);
         // 总数与分页必须同一谓词：countByAlbumId 含回收站照片会让总数虚高、末页缺口。
         long total = albumItemRepository.countActivePhotosByAlbumId(albumId);
         List<UUID> photoIds = albumItemRepository.findActivePhotoIdsByAlbumId(
@@ -186,16 +187,24 @@ public class PhotoAlbumService {
                 .stream()
                 .map(PhotoItem::getId)
                 .collect(Collectors.toSet());
-        for (UUID photoId : photoIds.stream().filter(Objects::nonNull).distinct().toList()) {
-            if (!activePhotoIds.contains(photoId)
-                    || albumItemRepository.existsByAlbumIdAndPhotoId(albumId, photoId)) {
-                continue;
+        List<UUID> candidates = photoIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .filter(activePhotoIds::contains)
+                .toList();
+        Set<UUID> existing = new HashSet<>(albumItemRepository.findExistingPhotoIds(albumId, candidates));
+        List<PhotoAlbumItem> items = new ArrayList<>();
+        for (UUID photoId : candidates) {
+            if (existing.add(photoId)) {
+                PhotoAlbumItem item = new PhotoAlbumItem();
+                item.setOwnerUserId(ownerUserId);
+                item.setAlbumId(albumId);
+                item.setPhotoId(photoId);
+                items.add(item);
             }
-            PhotoAlbumItem item = new PhotoAlbumItem();
-            item.setOwnerUserId(ownerUserId);
-            item.setAlbumId(albumId);
-            item.setPhotoId(photoId);
-            albumItemRepository.save(item);
+        }
+        if (!items.isEmpty()) {
+            albumItemRepository.saveAll(items);
         }
         refreshPhotoCount(albumId);
         recordAlbumEvent(ownerUserId, album, SyncAction.UPDATED);

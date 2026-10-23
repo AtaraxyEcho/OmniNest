@@ -32,8 +32,10 @@ class ProfileServerPanel extends ConsumerWidget {
     if (!context.mounted) {
       return;
     }
+    // 清除会话会触发路由重定向并卸载当前页面，server 通知器必须提前取好。
+    final serverNotifier = ref.read(serverConfigProvider.notifier);
     await ref.read(authSessionProvider.notifier).clearSession();
-    await ref.read(serverConfigProvider.notifier).clear();
+    await serverNotifier.clear();
     if (!context.mounted) {
       return;
     }

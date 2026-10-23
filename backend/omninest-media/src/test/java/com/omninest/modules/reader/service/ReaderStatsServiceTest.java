@@ -21,15 +21,18 @@ import com.omninest.modules.reader.dto.ReaderDtos.ReaderStatsOverviewDto;
 import com.omninest.modules.reader.dto.ReaderDtos.RecordSessionRequest;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderProgressRepository;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -46,9 +49,15 @@ class ReaderStatsServiceTest {
     private final ReaderProgressRepository progressRepository = mock(ReaderProgressRepository.class);
     private final ReaderItemService itemService = mock(ReaderItemService.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final SystemInstanceConfigService systemInstanceConfigService = mock(SystemInstanceConfigService.class);
     private final ReaderStatsService readerStatsService = new ReaderStatsService(
             sessionRepository, itemRepository, progressRepository, itemService,
-            new TransactionTemplate(transactionManager));
+            new TransactionTemplate(transactionManager), systemInstanceConfigService);
+
+    @BeforeEach
+    void useSystemZone() {
+        when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
+    }
 
     @Test
     void recordSessionIgnoresConcurrentClientSessionDuplicate() {

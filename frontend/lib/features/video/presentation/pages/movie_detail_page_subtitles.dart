@@ -59,7 +59,7 @@ class _SubtitlesTab extends ConsumerWidget {
               ),
           error:
               (error, _) => Text(
-                movieErrorMessage(error),
+                movieErrorMessage(error, AppLocalizations.of(context)),
                 style: MovieDetailTheme.mono(AppTypography.bodySmall),
               ),
           data: (tracks) {

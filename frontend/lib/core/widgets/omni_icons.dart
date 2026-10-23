@@ -259,8 +259,7 @@ class OmniIcon extends StatelessWidget {
       child: CustomPaint(
         painter: _OmniIconPainter(
           icon: icon,
-          color:
-              color ?? IconTheme.of(context).color ?? const Color(0xFFFFFFFF),
+          color: color ?? IconTheme.of(context).color ?? Colors.white,
           strokeWidth: strokeWidth,
         ),
       ),

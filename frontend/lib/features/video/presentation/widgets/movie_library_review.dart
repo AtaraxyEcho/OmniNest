@@ -65,7 +65,7 @@ class MediaLibraryReviewWorkspaceState
           (error, _) => MovieNoticePanel(
             icon: Icons.error_outline_rounded,
             title: l10n.videoLoadTreeFailed,
-            message: movieErrorMessage(error),
+            message: movieErrorMessage(error, AppLocalizations.of(context)),
           ),
       data: (run) => _buildRun(context, l10n, run),
     );
@@ -129,7 +129,7 @@ class MediaLibraryReviewWorkspaceState
               (error, _) => MovieNoticePanel(
                 icon: Icons.error_outline_rounded,
                 title: l10n.videoLoadTreeFailed,
-                message: movieErrorMessage(error),
+                message: movieErrorMessage(error, AppLocalizations.of(context)),
               ),
           data: (page) => _buildTree(context, l10n, run, page),
         ),
@@ -254,7 +254,11 @@ class MediaLibraryReviewWorkspaceState
       ref.invalidate(mediaScanTreeProvider);
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {
@@ -274,7 +278,11 @@ class MediaLibraryReviewWorkspaceState
       }
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {
@@ -289,7 +297,11 @@ class MediaLibraryReviewWorkspaceState
       await ref.read(videoLibrarySourceActionsProvider).pause(run);
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {
@@ -304,7 +316,11 @@ class MediaLibraryReviewWorkspaceState
       await ref.read(videoLibrarySourceActionsProvider).cancel(run);
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {

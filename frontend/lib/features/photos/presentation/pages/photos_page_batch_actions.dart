@@ -138,7 +138,7 @@ class _BatchActionBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x59000000),
+              color: FramePalette.batchScrim,
               offset: Offset(0, 12),
               blurRadius: 28,
             ),

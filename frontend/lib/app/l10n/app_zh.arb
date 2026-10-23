@@ -4718,6 +4718,7 @@
     }
   },
   "photosLocationsBack": "返回地点列表",
+  "photosLocationsUnknown": "未知位置",
   "photosDeleteShort": "删除",
   "photosSaturation": "饱和度",
   "photosModuleDisplayName": "光影集",

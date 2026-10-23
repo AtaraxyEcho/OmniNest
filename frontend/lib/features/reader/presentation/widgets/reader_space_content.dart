@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/theme/reader_space_colors.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
 /// 样例 Reader 空间（App.tsx Reader → shelf 视图）的 1:1 内容组件。
@@ -602,17 +603,13 @@ class _RailCover extends StatelessWidget {
 
   final ReaderItem item;
 
-  static const List<(Color, Color)> _paperPalette = [
-    (Color(0xFFC9B97F), Color(0xFF2B2924)),
-    (Color(0xFF8F988D), Color(0xFF161C19)),
-    (Color(0xFFC4AEA2), Color(0xFF2B2924)),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final letter =
         item.title.isNotEmpty ? item.title.characters.first.toUpperCase() : '?';
-    final palette = _paperPalette[letter.hashCode.abs() % _paperPalette.length];
+    final palette =
+        ReaderSpaceColors.coverPaperPalette[letter.hashCode.abs() %
+            ReaderSpaceColors.coverPaperPalette.length];
     return DecoratedBox(
       decoration: const BoxDecoration(
         borderRadius: BorderRadius.horizontal(
@@ -620,7 +617,12 @@ class _RailCover extends StatelessWidget {
           right: Radius.circular(10),
         ),
         // polarity-stable：封面书脊高光落在纸色封面上，两极性同值
-        boxShadow: [BoxShadow(color: Color(0x29FFFFFF), offset: Offset(-4, 0))],
+        boxShadow: [
+          BoxShadow(
+            color: ReaderSpaceColors.coverSpineHighlight,
+            offset: Offset(-4, 0),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: const BorderRadius.horizontal(

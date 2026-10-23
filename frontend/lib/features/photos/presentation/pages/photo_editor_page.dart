@@ -96,10 +96,10 @@ class PhotoEditorPage extends ConsumerWidget {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .applyEditedImage(photoId, bytes);
-      ref.invalidate(photoDetailProvider(photoId));
       if (!context.mounted) {
         return;
       }
+      ref.invalidate(photoDetailProvider(photoId));
       showOmniFeedback(
         context,
         l10n.photosEditSaved,

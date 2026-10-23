@@ -213,7 +213,7 @@ class _VersionsTab extends ConsumerWidget {
           () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
       error:
           (error, _) => Text(
-            movieErrorMessage(error),
+            movieErrorMessage(error, AppLocalizations.of(context)),
             style: MovieDetailTheme.mono(AppTypography.bodySmall),
           ),
       data: (versions) {

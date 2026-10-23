@@ -111,83 +111,81 @@ class _SharedWithMeWorkspaceState
         ),
         const SizedBox(height: 16),
         Expanded(
-          child: SingleChildScrollView(
-            child: _SubTable(
-              columns: [
-                _SubColumn(l10n.filesColumnName, flex: 2),
-                _SubColumn(l10n.filesColumnUploader, flex: 1),
-                _SubColumn(l10n.filesColumnFormat, width: 88),
-                _SubColumn(l10n.filesColumnSharedAt, width: 116),
-                _SubColumn(l10n.filesColumnExpiresAt, width: 108),
-                _SubColumn(l10n.filesColumnSize, width: 96),
-                _SubColumn(l10n.filesFileActions, width: 96),
-              ],
-              rows: [
-                for (final item in items)
-                  _SubRow(
-                    onTap:
-                        item.file.isFolder
-                            ? () => showSharedFolderBrowser(
-                              context,
-                              shareId: item.shareId,
-                              folderName: item.file.name,
-                            )
-                            : () => _openFilePreview(context, item.file),
-                    cells: [
-                      _SubNameCell(
-                        name: item.file.name,
-                        detail: item.file.normalizedPath,
-                        isFolder: item.file.isFolder,
+          child: _SubTable(
+            columns: [
+              _SubColumn(l10n.filesColumnName, flex: 2),
+              _SubColumn(l10n.filesColumnUploader, flex: 1),
+              _SubColumn(l10n.filesColumnFormat, width: 88),
+              _SubColumn(l10n.filesColumnSharedAt, width: 116),
+              _SubColumn(l10n.filesColumnExpiresAt, width: 108),
+              _SubColumn(l10n.filesColumnSize, width: 96),
+              _SubColumn(l10n.filesFileActions, width: 96),
+            ],
+            rows: [
+              for (final item in items)
+                _SubRow(
+                  onTap:
+                      item.file.isFolder
+                          ? () => showSharedFolderBrowser(
+                            context,
+                            shareId: item.shareId,
+                            folderName: item.file.name,
+                          )
+                          : () => _openFilePreview(context, item.file),
+                  cells: [
+                    _SubNameCell(
+                      name: item.file.name,
+                      detail: item.file.normalizedPath,
+                      isFolder: item.file.isFolder,
+                    ),
+                    // 上传者展示可读名；上传者账户可能已注销，缺失时回退占位。
+                    _SubMono(
+                      (item.file.uploaderName ?? '').isNotEmpty
+                          ? item.file.uploaderName!
+                          : '—',
+                    ),
+                    _SubMono(_formatOf(item.file, l10n)),
+                    _SubMono(
+                      item.sharedAt == null
+                          ? '—'
+                          : DateFormat(
+                            'MM-dd HH:mm',
+                            locale,
+                          ).format(item.sharedAt!),
+                    ),
+                    _SubMono(
+                      item.expiresAt == null
+                          ? l10n.filesSharePermanent
+                          : DateFormat(
+                            'yyyy-MM-dd',
+                            locale,
+                          ).format(item.expiresAt!),
+                    ),
+                    _SubMono(
+                      item.file.isFolder
+                          ? l10n.filesFolder
+                          : formatFileSize(item.file.sizeBytes),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _SubAction(
+                        label:
+                            item.file.isFolder
+                                ? l10n.filesOpen
+                                : l10n.filesPreview,
+                        onTap:
+                            item.file.isFolder
+                                ? () => showSharedFolderBrowser(
+                                  context,
+                                  shareId: item.shareId,
+                                  folderName: item.file.name,
+                                )
+                                : () => _openFilePreview(context, item.file),
                       ),
-                      // 上传者展示可读名；上传者账户可能已注销，缺失时回退占位。
-                      _SubMono(
-                        (item.file.uploaderName ?? '').isNotEmpty
-                            ? item.file.uploaderName!
-                            : '—',
-                      ),
-                      _SubMono(_formatOf(item.file, l10n)),
-                      _SubMono(
-                        item.sharedAt == null
-                            ? '—'
-                            : DateFormat(
-                              'MM-dd HH:mm',
-                              locale,
-                            ).format(item.sharedAt!),
-                      ),
-                      _SubMono(
-                        item.expiresAt == null
-                            ? l10n.filesSharePermanent
-                            : DateFormat(
-                              'yyyy-MM-dd',
-                              locale,
-                            ).format(item.expiresAt!),
-                      ),
-                      _SubMono(
-                        item.file.isFolder
-                            ? l10n.filesFolder
-                            : formatFileSize(item.file.sizeBytes),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _SubAction(
-                          label:
-                              item.file.isFolder
-                                  ? l10n.filesOpen
-                                  : l10n.filesPreview,
-                          onTap:
-                              item.file.isFolder
-                                  ? () => showSharedFolderBrowser(
-                                    context,
-                                    shareId: item.shareId,
-                                    folderName: item.file.name,
-                                  )
-                                  : () => _openFilePreview(context, item.file),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
+                    ),
+                  ],
+                ),
+            ],
           ),
         ),
         WorkstationPaginationBar(
@@ -437,136 +435,131 @@ class _ShareWorkspaceState extends ConsumerState<_ShareWorkspace> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: SingleChildScrollView(
-            child: _SubTable(
-              columns: [
-                _SubColumn(l10n.filesColumnName, flex: 3),
-                _SubColumn(l10n.filesShareLink, width: 128),
-                _SubColumn(l10n.filesShareExtract, width: 96),
-                _SubColumn(l10n.filesShareAccess, width: 88),
-                _SubColumn(l10n.filesShareCreated, width: 108),
-                _SubColumn(l10n.filesShareExpires, width: 108),
-                _SubColumn(l10n.filesColumnStatus, width: 96),
-                _SubColumn(l10n.filesFileActions, width: 140),
-              ],
-              rows: [
-                for (final share in filtered)
-                  _SubRow(
-                    cells: [
-                      _SubNameCell(
-                        name: share.resourceName,
-                        detail:
-                            share.resourceType.toUpperCase() == 'FOLDER'
-                                ? l10n.filesFolder
-                                : share.resourceName,
-                        isFolder: share.resourceType.toUpperCase() == 'FOLDER',
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(child: _SubMono(share.shareCode)),
-                          // 历史分享未存令牌密文时 shareCode 为空，无地址可复制。
-                          if (_shareBaseUrl != null &&
-                              share.shareCode.isNotEmpty) ...[
-                            const SizedBox(width: 4),
-                            Tooltip(
-                              message: l10n.filesCopyLink,
-                              child: InkWell(
-                                onTap:
-                                    () => unawaited(
-                                      _copyShareLink(
-                                        '$_shareBaseUrl/#/s/${share.shareCode}',
-                                      ),
+          child: _SubTable(
+            columns: [
+              _SubColumn(l10n.filesColumnName, flex: 3),
+              _SubColumn(l10n.filesShareLink, width: 128),
+              _SubColumn(l10n.filesShareExtract, width: 96),
+              _SubColumn(l10n.filesShareAccess, width: 88),
+              _SubColumn(l10n.filesShareCreated, width: 108),
+              _SubColumn(l10n.filesShareExpires, width: 108),
+              _SubColumn(l10n.filesColumnStatus, width: 96),
+              _SubColumn(l10n.filesFileActions, width: 140),
+            ],
+            rows: [
+              for (final share in filtered)
+                _SubRow(
+                  cells: [
+                    _SubNameCell(
+                      name: share.resourceName,
+                      detail:
+                          share.resourceType.toUpperCase() == 'FOLDER'
+                              ? l10n.filesFolder
+                              : share.resourceName,
+                      isFolder: share.resourceType.toUpperCase() == 'FOLDER',
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(child: _SubMono(share.shareCode)),
+                        // 历史分享未存令牌密文时 shareCode 为空，无地址可复制。
+                        if (_shareBaseUrl != null &&
+                            share.shareCode.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Tooltip(
+                            message: l10n.filesCopyLink,
+                            child: InkWell(
+                              onTap:
+                                  () => unawaited(
+                                    _copyShareLink(
+                                      '$_shareBaseUrl/#/s/${share.shareCode}',
                                     ),
-                                child: Icon(
-                                  Icons.content_copy_rounded,
-                                  size: 12,
-                                  color: context.filesColors.onSurfaceVariant,
-                                ),
+                                  ),
+                              child: Icon(
+                                Icons.content_copy_rounded,
+                                size: 12,
+                                color: context.filesColors.onSurfaceVariant,
                               ),
                             ),
-                          ],
+                          ),
+                        ],
+                      ],
+                    ),
+                    _SubMono(share.generatedPassword ?? l10n.filesSharePublic),
+                    _SubMono(
+                      '${share.accessCount}'
+                      '/${share.maxAccessCount ?? '∞'}',
+                    ),
+                    _SubMono(
+                      share.createdAt == null
+                          ? '—'
+                          : DateFormat(
+                            'yyyy-MM-dd',
+                            locale,
+                          ).format(share.createdAt!),
+                    ),
+                    _SubMono(
+                      share.expiresAt == null
+                          ? l10n.filesSharePermanent
+                          : DateFormat(
+                            'yyyy-MM-dd',
+                            locale,
+                          ).format(share.expiresAt!),
+                    ),
+                    _ShareStateText(share: share, l10n: l10n, locale: locale),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _SubAction(
+                            // 文件分享没有更新端点，弹窗是只读的分享详情；
+                            // 叫"修改"会让用户以为能改有效期与权限。
+                            label: l10n.filesOpViewShare,
+                            onTap:
+                                enabled
+                                    ? () => ShareLinkSheet.show(
+                                      context,
+                                      existingShare: share,
+                                      file: FileNode(
+                                        id: share.resourceId,
+                                        parentId: null,
+                                        name: share.resourceName,
+                                        isFolder:
+                                            share.resourceType.toUpperCase() ==
+                                            'FOLDER',
+                                        nodeType: share.resourceType,
+                                        normalizedPath: share.resourceName,
+                                        sizeBytes: 0,
+                                        updatedAt: share.createdAt,
+                                      ),
+                                    )
+                                    : null,
+                          ),
+                          const SizedBox(width: 6),
+                          _SubAction(
+                            label: l10n.filesOpRevoke,
+                            destructive: true,
+                            onTap:
+                                enabled
+                                    ? () => _confirmAndRun(
+                                      context,
+                                      title: l10n.filesRevokeShareConfirm,
+                                      message: l10n.filesRevokeShareMessage(
+                                        share.resourceName,
+                                      ),
+                                      confirmLabel: l10n.filesRevokeShare,
+                                      action:
+                                          () => controller.revokeShare(share),
+                                    )
+                                    : null,
+                          ),
                         ],
                       ),
-                      _SubMono(
-                        share.generatedPassword ?? l10n.filesSharePublic,
-                      ),
-                      _SubMono(
-                        '${share.accessCount}'
-                        '/${share.maxAccessCount ?? '∞'}',
-                      ),
-                      _SubMono(
-                        share.createdAt == null
-                            ? '—'
-                            : DateFormat(
-                              'yyyy-MM-dd',
-                              locale,
-                            ).format(share.createdAt!),
-                      ),
-                      _SubMono(
-                        share.expiresAt == null
-                            ? l10n.filesSharePermanent
-                            : DateFormat(
-                              'yyyy-MM-dd',
-                              locale,
-                            ).format(share.expiresAt!),
-                      ),
-                      _ShareStateText(share: share, l10n: l10n, locale: locale),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _SubAction(
-                              // 文件分享没有更新端点，弹窗是只读的分享详情；
-                              // 叫"修改"会让用户以为能改有效期与权限。
-                              label: l10n.filesOpViewShare,
-                              onTap:
-                                  enabled
-                                      ? () => ShareLinkSheet.show(
-                                        context,
-                                        existingShare: share,
-                                        file: FileNode(
-                                          id: share.resourceId,
-                                          parentId: null,
-                                          name: share.resourceName,
-                                          isFolder:
-                                              share.resourceType
-                                                  .toUpperCase() ==
-                                              'FOLDER',
-                                          nodeType: share.resourceType,
-                                          normalizedPath: share.resourceName,
-                                          sizeBytes: 0,
-                                          updatedAt: share.createdAt,
-                                        ),
-                                      )
-                                      : null,
-                            ),
-                            const SizedBox(width: 6),
-                            _SubAction(
-                              label: l10n.filesOpRevoke,
-                              destructive: true,
-                              onTap:
-                                  enabled
-                                      ? () => _confirmAndRun(
-                                        context,
-                                        title: l10n.filesRevokeShareConfirm,
-                                        message: l10n.filesRevokeShareMessage(
-                                          share.resourceName,
-                                        ),
-                                        confirmLabel: l10n.filesRevokeShare,
-                                        action:
-                                            () => controller.revokeShare(share),
-                                      )
-                                      : null,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
+                    ),
+                  ],
+                ),
+            ],
           ),
         ),
         WorkstationPaginationBar(

@@ -36,7 +36,9 @@ import com.omninest.modules.photos.repository.PhotoListItemProjection;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -83,6 +85,7 @@ class PhotoLibraryServiceTest {
     private PhotoContentAnalysisService contentAnalysisService;
     private PhotoGeoService photoGeoService;
     private PhotoIndexTaskService photoIndexTaskService;
+    private SystemInstanceConfigService systemInstanceConfigService;
     private PhotoChangeSideEffects sideEffects;
 
     private PhotoLibraryService service;
@@ -102,6 +105,8 @@ class PhotoLibraryServiceTest {
         contentAnalysisService = mock(PhotoContentAnalysisService.class);
         photoGeoService = mock(PhotoGeoService.class);
         photoIndexTaskService = mock(PhotoIndexTaskService.class);
+        systemInstanceConfigService = mock(SystemInstanceConfigService.class);
+        when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
         // 副作用组件按真实装配注入：既有断言继续验证相册计数重算、同步事件与索引投递。
         sideEffects = new PhotoChangeSideEffects(
                 albumRepository,
@@ -123,7 +128,8 @@ class PhotoLibraryServiceTest {
                 readThroughCache,
                 contentAnalysisService,
                 photoGeoService,
-                photoIndexTaskService
+                photoIndexTaskService,
+                systemInstanceConfigService
         );
     }
 

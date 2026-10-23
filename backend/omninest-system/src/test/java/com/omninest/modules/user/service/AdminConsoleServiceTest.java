@@ -21,6 +21,7 @@ import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.port.ExternalStorageAdministration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
@@ -60,9 +61,10 @@ class AdminConsoleServiceTest {
         AuthRole superAdminRole = role(Roles.SUPER_ADMIN, Permissions.SYSTEM_USER_MANAGE);
         AuthRole adminRole = role(Roles.ADMIN, Permissions.SYSTEM_USER_READ, Permissions.SYSTEM_CONFIG_READ);
         AuthRole memberRole = role(Roles.MEMBER, Permissions.FILE_READ);
-        when(authUserRepository.count()).thenReturn(3L);
-        when(authUserRepository.countByStatus("ACTIVE")).thenReturn(2L);
-        when(authUserRepository.countByStatus("DISABLED")).thenReturn(1L);
+        when(authUserRepository.countUsersByStatus()).thenReturn(List.of(
+                new Object[]{"ACTIVE", 2L},
+                new Object[]{"DISABLED", 1L}
+        ));
         when(authUserRepository.countUsersByEnabledRole()).thenReturn(List.of(
                 new Object[]{Roles.SUPER_ADMIN, 1L},
                 new Object[]{Roles.ADMIN, 1L},
@@ -82,13 +84,15 @@ class AdminConsoleServiceTest {
                         null
                 )
         ));
-        when(taskRecordRepository.countByStatus("QUEUED")).thenReturn(3L);
-        when(taskRecordRepository.countByStatus("RUNNING")).thenReturn(1L);
-        when(taskRecordRepository.countByStatus("COMPLETED")).thenReturn(8L);
-        when(taskRecordRepository.countByStatus("FAILED")).thenReturn(1L);
-        when(taskRecordRepository.countByStatus("CANCELLED")).thenReturn(2L);
-        when(taskRecordRepository.countByStatus("DLQ")).thenReturn(1L);
-        when(taskRecordRepository.countByStatus("DISCARDED")).thenReturn(1L);
+        when(taskRecordRepository.countGroupedByStatus()).thenReturn(Map.of(
+                "QUEUED", 3L,
+                "RUNNING", 1L,
+                "COMPLETED", 8L,
+                "FAILED", 1L,
+                "CANCELLED", 2L,
+                "DLQ", 1L,
+                "DISCARDED", 1L
+        ));
         when(storageMetricsQuery.systemMetrics())
                 .thenReturn(new StorageMetricsSnapshot(12, 4, 10, 4096));
         when(externalStorageAdministration.countAccounts()).thenReturn(2L);

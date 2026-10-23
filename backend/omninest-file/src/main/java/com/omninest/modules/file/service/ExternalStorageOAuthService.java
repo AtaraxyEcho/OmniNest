@@ -1,6 +1,7 @@
 package com.omninest.modules.file.service;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
@@ -26,6 +27,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.Optional;
 import java.util.UUID;
 import tools.jackson.core.type.TypeReference;
@@ -56,6 +59,10 @@ public class ExternalStorageOAuthService {
     private final ExternalStorageCredentialService credentialService;
     private final CredentialCipher credentialCipher;
     private final ReadThroughCache readThroughCache;
+    private final DistributedLock distributedLock;
+
+    /** 同账户刷新在本实例内串行；跨实例由分布式锁协调。 */
+    private final ConcurrentMap<UUID, Object> refreshLocalLocks = new ConcurrentHashMap<>();
 
     /**
      * token 校验或刷新结果。
@@ -197,30 +204,86 @@ public class ExternalStorageOAuthService {
      * @return 规范化凭据与是否实际执行了刷新
      */
     public TokenRefreshResult ensureAccessToken(StorageExternalAccount account) {
+        Object localLock = refreshLocalLocks.computeIfAbsent(account.getId(), key -> new Object());
+        synchronized (localLock) {
+            return ensureAccessTokenLocked(account.getId());
+        }
+    }
+
+    private TokenRefreshResult ensureAccessTokenLocked(UUID accountId) {
+        StorageExternalAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
         Map<String, Object> credentials = parseCredentials(
                 credentialService.decryptToJson(account.getEncryptedCredentials())
         );
         if (credentials == null || credentials.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接尚未完成 OAuth 授权，请先在连接列表中发起授权");
         }
-        String access = textOrNull(credentials, "access_token");
-        Object expiry = credentials.get("expiry");
-        if (access != null && !access.isBlank() && !isExpired(expiry)) {
+        if (hasUsableAccessToken(credentials)) {
             return new TokenRefreshResult(credentials, false);
         }
-        String refresh = textOrNull(credentials, "refresh_token");
-        if (refresh == null || refresh.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "缺少 refresh_token，请重新授权");
+
+        String lockKey = "omninest:external-oauth:refresh:" + accountId;
+        String lockToken = distributedLock.newToken();
+        boolean lockAttempted = true;
+        boolean locked = false;
+        try {
+            locked = distributedLock.tryLock(lockKey, lockToken, Duration.ofSeconds(30));
+        } catch (RuntimeException exception) {
+            // Redis 不可用时退化为本实例串行，不能把外部存储导入整体打死。
+            lockAttempted = false;
+            log.warn("外部存储刷新锁不可用，退化为单实例串行: accountId={}, errorType={}",
+                    accountId, exception.getClass().getSimpleName());
         }
-        StorageConnectorOAuthApp app = requireApp(account.getProvider());
-        Map<String, Object> refreshed = refreshTokens(account.getProvider(), app, refresh);
-        Map<String, Object> canonical = canonicalizeTokens(refreshed);
-        if (!canonical.containsKey("refresh_token")) {
-            canonical.put("refresh_token", refresh);
+        if (lockAttempted && !locked) {
+            // 其他实例正在刷新：重新读取，若已拿到新令牌直接复用，否则让调用方重试。
+            StorageExternalAccount latest = accountRepository.findById(accountId).orElse(account);
+            Map<String, Object> latestCredentials = parseCredentials(
+                    credentialService.decryptToJson(latest.getEncryptedCredentials()));
+            if (latestCredentials != null && hasUsableAccessToken(latestCredentials)) {
+                return new TokenRefreshResult(latestCredentials, false);
+            }
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "外部存储凭据正在刷新，请稍后重试");
         }
-        account.setEncryptedCredentials(credentialService.encrypt(JsonSupport.toJson(canonical)));
-        accountRepository.save(account);
-        return new TokenRefreshResult(canonical, true);
+        try {
+            // 持锁后重新读取，避免另一个实例刚刷新完成又被本实例覆盖。
+            account = accountRepository.findById(accountId).orElse(account);
+            credentials = parseCredentials(
+                    credentialService.decryptToJson(account.getEncryptedCredentials()));
+            if (credentials == null || credentials.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接尚未完成 OAuth 授权，请先在连接列表中发起授权");
+            }
+            if (hasUsableAccessToken(credentials)) {
+                return new TokenRefreshResult(credentials, false);
+            }
+            String refresh = textOrNull(credentials, "refresh_token");
+            if (refresh == null || refresh.isBlank()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "缺少 refresh_token，请重新授权");
+            }
+            StorageConnectorOAuthApp app = requireApp(account.getProvider());
+            Map<String, Object> refreshed = refreshTokens(account.getProvider(), app, refresh);
+            Map<String, Object> canonical = canonicalizeTokens(refreshed);
+            if (!canonical.containsKey("refresh_token")) {
+                canonical.put("refresh_token", refresh);
+            }
+            account.setEncryptedCredentials(credentialService.encrypt(JsonSupport.toJson(canonical)));
+            accountRepository.save(account);
+            return new TokenRefreshResult(canonical, true);
+        } finally {
+            if (locked) {
+                try {
+                    distributedLock.unlock(lockKey, lockToken);
+                } catch (RuntimeException exception) {
+                    log.warn("外部存储刷新锁释放失败: accountId={}, errorType={}",
+                            accountId, exception.getClass().getSimpleName());
+                }
+            }
+        }
+    }
+
+    private boolean hasUsableAccessToken(Map<String, Object> credentials) {
+        String access = textOrNull(credentials, "access_token");
+        return access != null && !access.isBlank() && !isExpired(credentials.get("expiry"));
     }
 
     /**
@@ -338,14 +401,14 @@ public class ExternalStorageOAuthService {
                     + "?client_id=" + URLEncoder.encode(app.getClientId(), StandardCharsets.UTF_8)
                     + "&response_type=code"
                     + "&redirect_uri=" + encodedRedirect
-                    + "&scope=" + URLEncoder.encode("Files.ReadWrite.All offline_access", StandardCharsets.UTF_8)
+                    + "&scope=" + URLEncoder.encode("Files.Read.All offline_access", StandardCharsets.UTF_8)
                     + stateParam;
             case "GDRIVE", "GOOGLE_DRIVE" -> "https://accounts.google.com/o/oauth2/v2/auth"
                     + "?client_id=" + URLEncoder.encode(app.getClientId(), StandardCharsets.UTF_8)
                     + "&response_type=code"
                     + "&redirect_uri=" + encodedRedirect
                     + "&scope=" + URLEncoder.encode(
-                            "https://www.googleapis.com/auth/drive", StandardCharsets.UTF_8)
+                            "https://www.googleapis.com/auth/drive.readonly", StandardCharsets.UTF_8)
                     + "&access_type=offline"
                     + "&prompt=consent"
                     + stateParam;

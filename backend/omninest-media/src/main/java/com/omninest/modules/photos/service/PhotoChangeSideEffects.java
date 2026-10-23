@@ -9,6 +9,7 @@ import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -85,8 +86,10 @@ public class PhotoChangeSideEffects {
             return;
         }
         List<PhotoAlbum> albums = albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId);
+        Map<UUID, Long> counts = albumItemRepository.countActivePhotosByAlbumIds(albumIds).stream()
+                .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
         for (PhotoAlbum album : albums) {
-            album.setPhotoCount((int) albumItemRepository.countActivePhotosByAlbumId(album.getId()));
+            album.setPhotoCount(counts.getOrDefault(album.getId(), 0L).intValue());
         }
         if (!albums.isEmpty()) {
             albumRepository.saveAll(albums);

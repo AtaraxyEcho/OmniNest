@@ -686,10 +686,10 @@ class _LosslessBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
       // 徽标压在封面图上，见下方 polarity-stable 标注。
       decoration: BoxDecoration(
-        color: const Color(0x7A090D0C),
+        color: MusicChromeColors.onArtworkBadgeFill,
         borderRadius: BorderRadius.circular(7),
         // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-        border: Border.all(color: const Color(0x29FFFFFF)),
+        border: Border.all(color: MusicChromeColors.onArtworkHairline),
       ),
       child: const Text(
         'LOSSLESS',

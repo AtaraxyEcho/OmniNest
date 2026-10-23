@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,11 +44,13 @@ import com.omninest.modules.user.port.ExternalStorageAccountSummary;
 import com.omninest.modules.user.port.ExternalStorageAdministration;
 import jakarta.persistence.NoResultException;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -75,6 +78,7 @@ class AdminOperationsServiceTest {
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
     private final SystemMetricsCollector systemMetricsCollector = new SystemMetricsCollector();
     private final WorkerRuntimeRegistry workerRuntimeRegistry = availableWorkerRuntimeRegistry();
+    private final SystemInstanceConfigService systemInstanceConfigService = mock(SystemInstanceConfigService.class);
     private final AdminOperationsService service = new AdminOperationsService(
             authUserRepository,
             configCenterService,
@@ -92,9 +96,15 @@ class AdminOperationsServiceTest {
             sessionRevocationService,
             adminActorGuard,
             systemMetricsCollector,
-            workerRuntimeRegistry
+            workerRuntimeRegistry,
+            systemInstanceConfigService
     );
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
+
+    @BeforeEach
+    void useSystemZone() {
+        when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
+    }
 
     /**
      * 具备全部待授予权限的操作者：超级管理员不受子集与内置角色约束，用于覆盖通用写入路径。
@@ -317,10 +327,12 @@ class AdminOperationsServiceTest {
     @Test
     void monitoringReturnsOperationalSnapshot() {
         UUID logId = UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
-        when(taskRecordRepository.countByStatus("RUNNING")).thenReturn(2L);
-        when(taskRecordRepository.countByStatus("QUEUED")).thenReturn(5L);
-        when(taskRecordRepository.countByStatus("FAILED")).thenReturn(1L);
-        when(taskRecordRepository.countByStatus("DLQ")).thenReturn(1L);
+        when(taskRecordRepository.countGroupedByStatus()).thenReturn(Map.of(
+                "RUNNING", 2L,
+                "QUEUED", 5L,
+                "FAILED", 1L,
+                "DLQ", 1L
+        ));
         when(auditLogAdminRepository.countSince(any())).thenReturn(12L);
         var auditLog = new AuditLog();
         auditLog.setId(logId);

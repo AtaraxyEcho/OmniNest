@@ -227,8 +227,10 @@ public class TwoFactorService {
         List<AuthBackupCode> candidates = backupCodeRepository.findByUserIdAndUsedAtIsNull(userId);
         for (AuthBackupCode candidate : candidates) {
             if (payloadAuthenticator.verify(compact, candidate.getCodeHash())) {
-                candidate.setUsedAt(Instant.now());
-                backupCodeRepository.save(candidate);
+                // 原子条件更新：并发提交同一枚备份码时只有一个请求能成功。
+                if (backupCodeRepository.consume(candidate.getId(), Instant.now()) == 0) {
+                    continue;
+                }
                 log.info("两步验证备份码已使用: userId={}, remaining={}", userId, candidates.size() - 1);
                 return true;
             }

@@ -40,4 +40,12 @@ abstract final class BackdropStageColors {
   /// 设置面板渐变起止。
   static const Color panelStart = Color(0xFF0B1720);
   static const Color panelEnd = Color(0xFF162234);
+
+  /// 浅态沉浸洗色：顶 / 中 / 底。
+  static const Color lightImmersiveStart = Color(0x1A0B1813);
+  static const Color lightImmersiveMid = Color(0x290A1611);
+  static const Color lightImmersiveEnd = Color(0xA308120E);
+
+  /// 浅态非摄影环境的纸面洗色，与移动浅色画布同值。
+  static const Color lightPaperWash = Color(0xFFE9EEE7);
 }

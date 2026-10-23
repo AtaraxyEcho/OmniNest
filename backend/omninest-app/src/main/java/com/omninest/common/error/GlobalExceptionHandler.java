@@ -3,6 +3,7 @@ package com.omninest.common.error;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.json.JsonSupport;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import java.io.IOException;
@@ -141,30 +142,42 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
-    ResponseEntity<ApiResponse<Void>> handleAccessDenied(AuthorizationDeniedException exception) {
-        // 预期能力缺口（内容写/体验写）按 DEBUG，避免低权限会话刷屏；管理面或其它拒绝保持 WARN。
-        if (isExpectedCapabilityDenial(exception)) {
-            log.debug("权限不足(能力类): {}", exception.getMessage());
+    ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+            AuthorizationDeniedException exception,
+            HttpServletRequest request
+    ) {
+        // Spring Security 的异常消息恒为 "Access Denied"，不能靠消息里的权限码判断；
+        // 改为按请求面判定：管理面或读取接口的拒绝保持 WARN，个人写能力缺口降为 DEBUG。
+        if (isExpectedCapabilityDenial(request)) {
+            log.debug("权限不足(能力类): method={}, path={}", request.getMethod(), request.getRequestURI());
         } else {
-            log.warn("权限不足: {}", exception.getMessage());
+            log.warn("权限不足: method={}, path={}, message={}",
+                    request.getMethod(), request.getRequestURI(), exception.getMessage());
         }
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(ErrorCode.FORBIDDEN, "权限不足，无法执行此操作"));
     }
 
-    private boolean isExpectedCapabilityDenial(AuthorizationDeniedException exception) {
-        String message = String.valueOf(exception.getMessage());
-        String lower = message.toLowerCase(Locale.ROOT);
-        if (lower.contains("/admin/")) {
+    private boolean isExpectedCapabilityDenial(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        if (path == null || path.contains("/admin/")) {
             return false;
         }
-        return lower.contains("activity:")
-                || lower.contains("preference:")
-                || lower.contains("profile:")
-                || lower.contains("file:write")
-                || lower.contains("media:write")
-                || lower.contains("photo:write")
-                || lower.contains("backdrop:write");
+        // 读取接口的 403 是权限回归信号，必须保留 WARN。
+        if ("GET".equalsIgnoreCase(request.getMethod())
+                || "HEAD".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        return path.startsWith("/api/v1/me")
+                || path.startsWith("/api/v1/preferences")
+                || path.startsWith("/api/v1/files")
+                || path.startsWith("/api/v1/reader")
+                || path.startsWith("/api/v1/music")
+                || path.startsWith("/api/v1/video")
+                || path.startsWith("/api/v1/photos")
+                || path.startsWith("/api/v1/backdrops")
+                || path.startsWith("/api/v1/notifications")
+                || path.startsWith("/api/v1/weather");
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

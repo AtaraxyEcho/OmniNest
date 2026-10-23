@@ -2,12 +2,14 @@ package com.omninest.modules.file.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CredentialCipher;
@@ -41,17 +43,23 @@ class ExternalStorageOAuthServiceTest {
             mock(ExternalStorageCredentialService.class);
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
+    private final DistributedLock distributedLock = mock(DistributedLock.class);
 
     private final ExternalStorageOAuthService service = new ExternalStorageOAuthService(
-            oauthAppRepository, accountRepository, credentialService, credentialCipher, readThroughCache
+            oauthAppRepository, accountRepository, credentialService, credentialCipher,
+            readThroughCache, distributedLock
     );
 
     @BeforeEach
     void setUpCredentialDecrypt() {
         when(credentialService.decryptToJson(anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(accountRepository.save(org.mockito.ArgumentMatchers.any(StorageExternalAccount.class)))
+        when(accountRepository.save(any(StorageExternalAccount.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(distributedLock.newToken()).thenReturn("lock-token");
+        when(distributedLock.tryLock(anyString(), anyString(), any()))
+                .thenReturn(true);
+        when(distributedLock.unlock(anyString(), anyString())).thenReturn(true);
     }
 
     @Test
@@ -60,6 +68,7 @@ class ExternalStorageOAuthServiceTest {
                 "{\"access_token\":\"at\",\"refresh_token\":\"rt\","
                         + "\"expiry\":\"2099-01-01T00:00:00Z\"}");
 
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
         ExternalStorageOAuthService.TokenRefreshResult result = service.ensureAccessToken(account);
 
         assertThat(result.refreshed()).isFalse();
@@ -70,6 +79,7 @@ class ExternalStorageOAuthServiceTest {
     void ensureAccessToken_rejectsUnAuthorizedAccount() {
         StorageExternalAccount account = buildAccount("{}");
 
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
         assertThatThrownBy(() -> service.ensureAccessToken(account))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("尚未完成 OAuth 授权");
@@ -80,6 +90,7 @@ class ExternalStorageOAuthServiceTest {
         StorageExternalAccount account = buildAccount(
                 "{\"access_token\":\"at\",\"expiry\":\"2000-01-01T00:00:00Z\"}");
 
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
         assertThatThrownBy(() -> service.ensureAccessToken(account))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("缺少 refresh_token");
@@ -90,6 +101,7 @@ class ExternalStorageOAuthServiceTest {
         StorageExternalAccount account = buildAccount(
                 "{\"access_token\":\"at\",\"refresh_token\":\"rt\","
                         + "\"expiry\":\"2000-01-01T00:00:00Z\"}");
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
         when(oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue("GDRIVE"))
                 .thenReturn(Optional.empty());
 

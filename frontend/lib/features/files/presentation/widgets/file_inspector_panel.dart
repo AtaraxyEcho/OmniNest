@@ -11,6 +11,7 @@ import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/application/file_media_info_provider.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
 import 'package:omninest/features/files/presentation/widgets/files_toolbar_control.dart';
@@ -260,7 +261,7 @@ class _InspectorPreview extends ConsumerWidget {
     };
     final color = switch (fileCategoryOfNode(file)) {
       FileCategoryLabel.image => FilesWorkstationPalette.emerald,
-      FileCategoryLabel.video => const Color(0xFF0EA5E9),
+      FileCategoryLabel.video => FileEnvTypeColors.videoCategory,
       FileCategoryLabel.audio => FilesWorkstationPalette.cyan,
       FileCategoryLabel.document => FilesWorkstationPalette.rose,
       _ =>

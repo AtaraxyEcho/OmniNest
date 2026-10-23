@@ -154,13 +154,13 @@ public class WeatherService {
         final String effectiveDisplayName = resolveDisplayName(rawLocation, displayName, config);
 
         // 解析位置
-        ResolvedWeatherLocation resolved = resolveLocation(rawLocation, config);
+        ResolvedWeatherLocation resolved = resolveLocation(rawLocation, config, apiLang);
         if (resolved == null) {
             // 用户指定位置解析失败，尝试配置中心默认值
             String fallbackLocation = config.get("weather.location");
             if (fallbackLocation != null && !fallbackLocation.isBlank()
                     && !fallbackLocation.equals(rawLocation)) {
-                resolved = resolveLocation(fallbackLocation, config);
+                resolved = resolveLocation(fallbackLocation, config, apiLang);
             }
             if (resolved == null) {
                 return WeatherDto.empty();
@@ -235,7 +235,9 @@ public class WeatherService {
             future.whenComplete((value, throwable) -> inflightRequests.remove(requestKey, future));
         }
         try {
-            return future.get(6, TimeUnit.SECONDS);
+            // 等待线程与登记线程使用同一份展示名口径；缓存命中的分支已经补齐，
+            // singleflight 等待分支不能直接返回首次请求写入的 locationName。
+            return withLocationName(future.get(6, TimeUnit.SECONDS), effectiveDisplayName);
         } catch (Exception e) {
             log.warn("天气请求未在超时内完成: location={}", requestKey, e);
             if (owned.get()) {
@@ -247,12 +249,15 @@ public class WeatherService {
 
     // ==================== 位置解析 ====================
 
-    private ResolvedWeatherLocation resolveLocation(String location, Map<String, String> config) {
+    private ResolvedWeatherLocation resolveLocation(String location, Map<String, String> config, String lang) {
         if (isLatLon(location)) {
-            return new ResolvedWeatherLocation(location, location, "");
+            // GPS 只给了坐标：用 GeoAPI 反查真实城市名，失败也不阻断天气查询。
+            ResolvedWeatherLocation geo = lookupGeoLocation(location, config, lang);
+            return new ResolvedWeatherLocation(
+                    location, location, geo == null ? "" : geo.locationName());
         }
         // 城市名由用户偏好/配置直接提供，展示名优先用入参，不依赖 Geo 返回字段。
-        ResolvedWeatherLocation resolved = lookupGeoLocation(location, config);
+        ResolvedWeatherLocation resolved = lookupGeoLocation(location, config, lang);
         if (resolved == null) {
             return null;
         }
@@ -261,19 +266,19 @@ public class WeatherService {
     }
 
     /**
-     * 解析展示用地区名：用户入参城市 > 调用方传入展示名 > 配置默认城市。
+     * 解析展示用地区名：用户入参城市 > 调用方传入展示名 > 空串。
+     *
+     * <p>坐标查询不回退配置默认城市，真实城市名由 GeoAPI 反查结果提供。</p>
      */
     private String resolveDisplayName(
             String rawLocation, String displayName, Map<String, String> config) {
         if (rawLocation != null && !rawLocation.isBlank() && !isLatLon(rawLocation)) {
             return rawLocation.trim();
         }
+        // 坐标查询的展示名只能来自 GeoAPI 反查或调用方明确的展示名，
+        // 不能回退到配置中心的默认城市，否则人在北京会看到“上海/北京”之类的错位。
         if (displayName != null && !displayName.isBlank() && !isLatLon(displayName)) {
             return displayName.trim();
-        }
-        String configLocation = config.get("weather.location");
-        if (configLocation != null && !configLocation.isBlank() && !isLatLon(configLocation)) {
-            return configLocation.trim();
         }
         return "";
     }
@@ -308,13 +313,16 @@ public class WeatherService {
      * 城市不存在属于正常业务场景，返回 null（不抛异常）。
      * 缓存穿透防护：失败结果缓存 10min。
      */
-    private ResolvedWeatherLocation lookupGeoLocation(String cityName, Map<String, String> config) {
-        ResolvedWeatherLocation cached = weatherCacheStore.findLocation(cityName).orElse(null);
+    private ResolvedWeatherLocation lookupGeoLocation(String cityName, Map<String, String> config, String lang) {
+        // 坐标反查的城市名随语言变化，缓存键必须带语言；城市名查询的展示名
+        // 取用户入参，反查结果只用于 LocationID 与经纬度，可以跨语言共享。
+        String locationCacheKey = isLatLon(cityName) ? cityName + "|" + lang : cityName;
+        ResolvedWeatherLocation cached = weatherCacheStore.findLocation(locationCacheKey).orElse(null);
         if (cached != null) {
             return cached;
         }
 
-        if (weatherCacheStore.isLocationMissing(cityName)) {
+        if (weatherCacheStore.isLocationMissing(locationCacheKey)) {
             return null;
         }
 
@@ -322,17 +330,24 @@ public class WeatherService {
             String jwt = generateJwt(config);
             String baseUrl = config.get("weather.qweather.url");
             String encoded = URLEncoder.encode(cityName, StandardCharsets.UTF_8);
-            URI uri = apiUri(baseUrl, "/geo/v2/city/lookup?location=" + encoded);
+            URI uri = apiUri(baseUrl, "/geo/v2/city/lookup?location=" + encoded + "&lang=" + lang);
             JsonNode result = httpGet(uri, jwt);
-
-            if (result == null || !"200".equals(result.path("code").asString(null))) {
-                weatherCacheStore.markLocationMissing(cityName);
+            if (result == null) {
+                // 网络/HTTP 故障不代表城市不存在，不能进入负缓存。
+                log.warn("天气 GeoAPI 请求失败，跳过负缓存: locationLength={}", cityName.length());
                 return null;
             }
 
+            String code = result.path("code").asString(null);
             JsonNode locations = result.path("location");
-            if (!locations.isArray() || locations.isEmpty()) {
+            boolean notFound = "404".equals(code) || "204".equals(code)
+                    || (("200".equals(code)) && (!locations.isArray() || locations.isEmpty()));
+            if (notFound) {
                 weatherCacheStore.markLocationMissing(cityName);
+                return null;
+            }
+            if (!"200".equals(code) || locations == null || !locations.isArray()) {
+                log.warn("天气 GeoAPI 返回非成功业务码: code={}", code);
                 return null;
             }
 
@@ -341,16 +356,22 @@ public class WeatherService {
             String lat = first.path("lat").asString(null);
             String lon = first.path("lon").asString(null);
             if (id == null || lat == null || lon == null) {
+                log.warn("天气 GeoAPI 结果缺少定位字段: code={}", code);
                 return null;
             }
 
             String latLon = lon + "," + lat;
-            // Geo 仅用于 LocationID + 经纬度；展示名由调用方用用户提供的城市名覆盖。
-            ResolvedWeatherLocation location = new ResolvedWeatherLocation(id, latLon, "");
-            weatherCacheStore.saveLocation(cityName, location);
+            String name = first.path("name").asString(null);
+            ResolvedWeatherLocation location = new ResolvedWeatherLocation(
+                    id, latLon, name == null ? "" : name.trim());
+            weatherCacheStore.saveLocation(locationCacheKey, location);
             return location;
+        } catch (BusinessException e) {
+            // 未配置密钥等配置问题不是“城市不存在”，不得写 10 分钟负缓存。
+            log.warn("天气 GeoAPI 配置不可用: errorType={}", e.getClass().getSimpleName());
+            return null;
         } catch (Exception e) {
-            weatherCacheStore.markLocationMissing(cityName);
+            log.warn("天气 GeoAPI 调用异常，跳过负缓存: errorType={}", e.getClass().getSimpleName());
             return null;
         }
     }

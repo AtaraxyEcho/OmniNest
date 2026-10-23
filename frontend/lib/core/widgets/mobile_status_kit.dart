@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/theme/status_tint_colors.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
@@ -24,8 +25,8 @@ Color _statusForeground(MobileEnvPalette env, MobileStatusTone tone) {
 Color _statusBackground(MobileEnvPalette env, MobileStatusTone tone) {
   return switch (tone) {
     MobileStatusTone.calm => env.accentInk.withValues(alpha: 0.08),
-    MobileStatusTone.warning => const Color(0x1FD18A34),
-    MobileStatusTone.danger => const Color(0x1FDA5050),
+    MobileStatusTone.warning => StatusTintColors.warningFill,
+    MobileStatusTone.danger => StatusTintColors.dangerFill,
   };
 }
 
@@ -344,9 +345,9 @@ class MobileOfflineBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(0, 10, 0, 14),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0x1FD18A34),
+        color: StatusTintColors.warningFill,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0x47D18A34)),
+        border: Border.all(color: StatusTintColors.warningBorder),
       ),
       child: Row(
         children: [

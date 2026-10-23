@@ -338,7 +338,10 @@ Future<void> _showCollectionItems(
                                           if (dialogContext.mounted) {
                                             showMovieFeedback(
                                               dialogContext,
-                                              movieErrorMessage(error),
+                                              movieErrorMessage(
+                                                error,
+                                                AppLocalizations.of(context),
+                                              ),
                                               isError: true,
                                             );
                                           }
@@ -438,7 +441,11 @@ class _MoviePickerDialogState extends ConsumerState<_MoviePickerDialog> {
       if (!mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
       return;
     } finally {
       if (mounted) {

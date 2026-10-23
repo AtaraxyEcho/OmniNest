@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class MediaPublicContentController {
         headers.setContentType(resolveMediaType(content.mimeType()));
         headers.setContentLength(content.sizeBytes());
         headers.set(HttpHeaders.ACCEPT_RANGES, "bytes");
+        // 原片体积大且带短期令牌，继续禁止中间缓存。
         headers.setCacheControl(CacheControl.noStore());
         headers.setContentDisposition(ContentDisposition.inline()
                 .filename(content.fileName(), StandardCharsets.UTF_8)
@@ -89,6 +91,9 @@ public class MediaPublicContentController {
             @RequestParam String token,
             HttpServletResponse response
     ) throws IOException {
+        // 先校验令牌与轨道归属，再设置媒体响应头；否则 401/404 会因响应已固定为
+        // text/plain 而无法交给全局异常处理器写标准 JSON。
+        moviePlaybackService.requireSubtitleTrackByToken(token, videoItemId, subtitleId);
         response.setContentType("text/plain; charset=utf-8");
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         moviePlaybackService.writeSubtitleContentByToken(
@@ -119,7 +124,8 @@ public class MediaPublicContentController {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(resolveMediaType(content.mimeType()));
         headers.setContentLength(content.sizeBytes());
-        headers.setCacheControl(CacheControl.noStore());
+        // 海报/剧照按 fileNodeId 不可变；允许浏览器私有缓存一小时，避免每次进页面重下原图。
+        headers.setCacheControl(CacheControl.maxAge(Duration.ofHours(1)).cachePrivate());
         headers.setContentDisposition(ContentDisposition.inline()
                 .filename(content.fileName(), StandardCharsets.UTF_8)
                 .build());

@@ -301,7 +301,11 @@ class _VideoLibrarySourceDialogState
       if (mounted) Navigator.of(context).pop();
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -452,7 +456,10 @@ class _VideoStorageDirectoryDialogState
                     (error, _) => MovieNoticePanel(
                       icon: Icons.error_outline_rounded,
                       title: l10n.videoStorageLocationUnavailable,
-                      message: movieErrorMessage(error),
+                      message: movieErrorMessage(
+                        error,
+                        AppLocalizations.of(context),
+                      ),
                     ),
                 data:
                     (page) => ListView.builder(

@@ -457,8 +457,11 @@ class _PmNotificationsSectionState
                     for (final type in sorted)
                       _PmRow(
                         icon: Icons.campaign_outlined,
-                        label: type.label,
-                        subtitle: type.description ?? type.typeCode,
+                        label: notificationTypeLabel(type.typeCode, l10n),
+                        subtitle:
+                            notificationTypeDescription(type.typeCode, l10n) ??
+                            type.description ??
+                            type.typeCode,
                         trailing: _PmSwitch(
                           value: prefs.types[type.typeCode] ?? true,
                           onChanged:
@@ -535,8 +538,11 @@ Future<void> _confirmAndChangeServer(
   if (!confirmed || !context.mounted) {
     return;
   }
+  // 清除会话会触发路由重定向并卸载当前页面，server 通知器必须提前取好，
+  // 否则 await 之后再 read 会在已卸载的 WidgetRef 上抛 StateError。
+  final serverNotifier = ref.read(serverConfigProvider.notifier);
   await ref.read(authSessionProvider.notifier).clearSession();
-  await ref.read(serverConfigProvider.notifier).clear();
+  await serverNotifier.clear();
   if (!context.mounted) {
     return;
   }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/theme/status_tint_colors.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
@@ -59,7 +60,10 @@ class MobilePageSurface extends StatelessWidget {
 }
 
 /// polarity-stable：危险红底上的白字两极性同值（红底白字 4.35:1），不随极性翻转。
-const Color _dangerForeground = Color(0xFFFFFFFF);
+const Color _dangerForeground = Colors.white;
+
+/// 浅态开关旋钮投影：落在浅灰轨道上靠这层阴影分离。
+const Color _knobShadow = Color(0x401A1D1B);
 
 /// 移动端模块内的一级分段导航。
 class MobileSegmentedControl<T> extends StatelessWidget {
@@ -651,7 +655,7 @@ Future<bool> showMobileConfirmSheet(
                   decoration: BoxDecoration(
                     color:
                         destructive
-                            ? const Color(0x1FDA5050)
+                            ? StatusTintColors.dangerFill
                             : context.env.accentInk.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(17),
                   ),
@@ -705,7 +709,7 @@ Future<bool> showMobileConfirmSheet(
                         label: confirmLabel ?? l10n.okButtonLabel,
                         background:
                             destructive
-                                ? const Color(0xFFB95F5F)
+                                ? StatusTintColors.dangerInk
                                 : context.env.actionFill,
                         foreground:
                             destructive
@@ -856,7 +860,7 @@ class MobileEnvSwitch extends StatelessWidget {
           context.env.brightness == Brightness.light
               ? const [
                 BoxShadow(
-                  color: Color(0x401A1D1B),
+                  color: _knobShadow,
                   offset: Offset(0, 1),
                   blurRadius: 3,
                 ),

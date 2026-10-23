@@ -214,17 +214,18 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
                 OWNER_ID, List.of(file1Id, file2Id)))
                 .thenReturn(List.of(file1, file2));
-        when(favoriteRepository.existsByOwnerUserIdAndFileNode_Id(OWNER_ID, file1Id))
-                .thenReturn(true);
-        when(favoriteRepository.existsByOwnerUserIdAndFileNode_Id(OWNER_ID, file2Id))
-                .thenReturn(false);
+        when(favoriteRepository.findFavoritedNodeIds(OWNER_ID, List.of(file1Id, file2Id)))
+                .thenReturn(List.of(file1Id));
 
         var result = fileFavoriteService.batchAddFavorites(OWNER_ID, List.of(file1Id, file2Id));
 
-        verify(favoriteRepository, never()).save(argThat(fav ->
-                ((FileFavorite) fav).getFileNode().getId().equals(file1Id)));
-        verify(favoriteRepository).save(argThat(fav ->
-                ((FileFavorite) fav).getFileNode().getId().equals(file2Id)));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<FileFavorite>> captor =
+                ArgumentCaptor.forClass(Iterable.class);
+        verify(favoriteRepository).saveAll(captor.capture());
+        List<FileFavorite> saved = new ArrayList<>();
+        captor.getValue().forEach(saved::add);
+        assertThat(saved).extracting(fav -> fav.getFileNode().getId()).containsExactly(file2Id);
         assertThat(result).hasSize(2);
     }
 

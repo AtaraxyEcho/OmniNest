@@ -4,6 +4,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
+import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
 /// 托管 Films/Series 段的排序 chip 行（样例 `.chip-row` 胶囊）：
@@ -377,10 +378,10 @@ class MovieMobileCinemaHero extends StatelessWidget {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0x8C090D0C),
+                    color: MovieOverlayColors.badgeFill,
                     borderRadius: BorderRadius.circular(8),
                     // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-                    border: Border.all(color: const Color(0x29FFFFFF)),
+                    border: Border.all(color: MovieOverlayColors.hairline),
                   ),
                   child: Text(
                     badgeText!,
@@ -404,7 +405,7 @@ class MovieMobileCinemaHero extends StatelessWidget {
                       env: context.env,
                       size: 9,
                       // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-                      color: const Color(0xA1FFFFFF),
+                      color: MovieOverlayColors.eyebrowOnImage,
                     ),
                   ),
                   const SizedBox(height: 9),
@@ -512,12 +513,15 @@ class _HeroButton extends StatelessWidget {
           filled
               ? context.env.buttonInk
               // 次钮压在海报图上，深玻璃与白描边由图提供对比，两极性同值。
-              : const Color(0x8C121817),
+              : MovieOverlayColors.secondaryButtonFill,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: BorderSide(
           // polarity-stable：压在影像上，对比由图片本身提供，两极性同值
-          color: filled ? Colors.transparent : const Color(0x38FFFFFF),
+          color:
+              filled
+                  ? Colors.transparent
+                  : MovieOverlayColors.secondaryButtonBorder,
         ),
       ),
       child: InkWell(

@@ -10,6 +10,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface MediaTvSeasonRepository extends JpaRepository<MediaTvSeason, UUID> {
     List<MediaTvSeason> findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAsc(UUID ownerUserId, UUID seriesId);
 
+    List<MediaTvSeason> findByOwnerUserIdAndSeriesIdIn(
+            UUID ownerUserId, Collection<UUID> seriesIds);
+
     Optional<MediaTvSeason> findByOwnerUserIdAndSeriesIdAndSeasonNumber(UUID ownerUserId, UUID seriesId, Integer seasonNumber);
 
     List<MediaTvSeason> findAllByIdInAndOwnerUserId(Collection<UUID> ids, UUID ownerUserId);

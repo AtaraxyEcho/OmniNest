@@ -179,7 +179,7 @@ omninest:
     allow-credentials: true
     # script-src 无 unsafe-inline；style-src 保留给 Flutter Web 引擎运行时内联样式。
     content-security-policy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
-    permissions-policy: "camera=(), microphone=(), geolocation=(), payment=()"
+    permissions-policy: "camera=(self), geolocation=(self), microphone=(), payment=()"
   worker:
     runtime:
       instance-id: ${random.uuid}

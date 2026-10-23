@@ -429,6 +429,7 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
             password: password.isEmpty ? null : password,
             expiresAt: expiresAt,
           );
+      if (!context.mounted) return;
       final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
       if (context.mounted) {
         // 影集分享走 SPA hash 路由（/shared/photos/:token）；基址取

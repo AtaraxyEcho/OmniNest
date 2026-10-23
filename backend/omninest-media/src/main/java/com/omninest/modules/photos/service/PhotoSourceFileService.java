@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PhotoSourceFileService {
@@ -115,8 +117,8 @@ public class PhotoSourceFileService {
         }
         try {
             Files.deleteIfExists(file);
-        } catch (IOException ignored) {
-            // 临时文件由系统临时目录清理策略兜底。
+        } catch (IOException exception) {
+            log.debug("照片临时文件清理失败，交由系统临时目录策略兜底: file={}", file, exception);
         }
     }
 

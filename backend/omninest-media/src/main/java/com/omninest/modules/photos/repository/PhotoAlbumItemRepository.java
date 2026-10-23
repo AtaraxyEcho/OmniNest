@@ -103,6 +103,30 @@ public interface PhotoAlbumItemRepository extends JpaRepository<PhotoAlbumItem, 
             @Param("albumIds") Collection<UUID> albumIds);
 
     /**
+     * 一次查出相册中已存在的照片 ID，避免批量加图逐张 exists。
+     */
+    @Query("SELECT item.photoId FROM PhotoAlbumItem item "
+            + "WHERE item.albumId = :albumId AND item.photoId IN :photoIds")
+    List<UUID> findExistingPhotoIds(
+            @Param("albumId") UUID albumId,
+            @Param("photoIds") Collection<UUID> photoIds);
+
+    /**
+     * 一次按相册聚合活动照片数，避免清理路径逐相册 count。
+     */
+    @Query("""
+            SELECT item.albumId, COUNT(item.id)
+            FROM PhotoAlbumItem item
+            JOIN PhotoItem photo ON photo.id = item.photoId
+            JOIN FileNode file ON photo.fileNodeId = file.id
+            WHERE item.albumId IN :albumIds
+              AND file.deleted = false
+              AND photo.deletedAt IS NULL
+            GROUP BY item.albumId
+            """)
+    List<Object[]> countActivePhotosByAlbumIds(@Param("albumIds") Collection<UUID> albumIds);
+
+    /**
      * 统计相册中的照片数量
      */
     long countByAlbumId(UUID albumId);

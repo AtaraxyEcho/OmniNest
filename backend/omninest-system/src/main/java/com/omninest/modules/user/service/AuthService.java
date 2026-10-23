@@ -50,6 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    /** 同一会话的并发刷新宽限期：覆盖多标签页同时刷新，避免被误判为令牌重放。 */
+    private static final Duration REFRESH_REPLAY_GRACE = Duration.ofSeconds(10);
     private static final String TOKEN_TYPE = "Bearer";
     /** 两步验证挑战令牌类型：已启用待验证。 */
     public static final String TOKEN_USE_TWO_FACTOR = "2fa";
@@ -93,6 +95,12 @@ public class AuthService {
             String userAgent
     ) {
         AuthUser profile = registerInternal(request);
+        // 注册与登录必须共享同一套强制 2FA 策略：否则被纳入强制策略的角色
+        // 可以绕过登录入口，用注册接口直接拿到正式令牌。
+        if (twoFactorPolicyService.isRequired(profile)) {
+            log.info("注册命中强制两步验证，返回注册引导挑战: userId={}", profile.getId());
+            return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_ENROLL);
+        }
         UUID sessionId = createActiveSession(
                 profile,
                 clientPlatform,
@@ -467,12 +475,28 @@ public class AuthService {
         String presentedJti = jwt.getClaimAsString("jti");
         String currentJti = session.getCurrentRefreshJti();
         if (currentJti != null && !currentJti.equals(presentedJti)) {
+            if (withinRefreshGrace(session, presentedJti, now)) {
+                // 多标签页并发刷新：后到请求不吊销会话，也不再次轮换，
+                // 直接下发当前 jti 对应的刷新令牌，让两个标签页收敛到同一枚。
+                session.setLastActiveAt(now);
+                slideSessionExpiry(session, now);
+                activeSessionRepository.save(session);
+                activeSessionRegistry.register(
+                        userId,
+                        ClientPlatform.normalize(session.getClientPlatform()),
+                        sessionId,
+                        authenticationTokenPolicy.refreshTokenTtl()
+                );
+                return issueToken(toDto(profile), sessionId, session.getExpiresAt(), currentJti);
+            }
             sessionRevocationService.revokeSession(userId, sessionId, authenticationTokenPolicy.refreshTokenTtl());
             activeSessionRepository.revokeBySessionId(sessionId, "刷新令牌重放，会话已撤销");
             log.warn("检测到刷新令牌重放，撤销会话: userId={}, sessionId={}", userId, sessionId);
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "刷新凭证已失效，请重新登录");
         }
         String rotatedJti = UUID.randomUUID().toString();
+        session.setPreviousRefreshJti(currentJti);
+        session.setRefreshRotatedAt(now);
         session.setCurrentRefreshJti(rotatedJti);
         session.setLastActiveAt(now);
         slideSessionExpiry(session, now);
@@ -486,6 +510,17 @@ public class AuthService {
                 authenticationTokenPolicy.refreshTokenTtl()
         );
         return issueToken(toDto(profile), sessionId, session.getExpiresAt(), rotatedJti);
+    }
+
+    /**
+     * 判断旧刷新令牌是否落在轮换宽限期内。
+     */
+    private boolean withinRefreshGrace(AuthActiveSession session, String presentedJti, Instant now) {
+        return presentedJti != null
+                && session.getPreviousRefreshJti() != null
+                && session.getPreviousRefreshJti().equals(presentedJti)
+                && session.getRefreshRotatedAt() != null
+                && !now.isAfter(session.getRefreshRotatedAt().plus(REFRESH_REPLAY_GRACE));
     }
 
     /**

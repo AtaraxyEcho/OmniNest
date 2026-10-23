@@ -13,6 +13,7 @@ import com.omninest.modules.reader.dto.ReaderDtos.ReaderStatsOverviewDto;
 import com.omninest.modules.reader.dto.ReaderDtos.RecordSessionRequest;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderProgressRepository;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
 
 import java.math.BigDecimal;
@@ -50,6 +51,7 @@ public class ReaderStatsService {
     private final ReaderProgressRepository progressRepository;
     private final ReaderItemService itemService;
     private final TransactionTemplate transactionTemplate;
+    private final SystemInstanceConfigService systemInstanceConfigService;
 
     /**
      * 记录一次阅读会话。
@@ -126,7 +128,7 @@ public class ReaderStatsService {
     @Transactional(readOnly = true)
     public ReaderReadingStatsDto getStats(UUID ownerUserId) {
         // 使用服务器本地时区（自托管场景下即用户时区）
-        ZoneId zone = ZoneId.systemDefault();
+        ZoneId zone = systemInstanceConfigService.timeZone();
         // 今日起始时间
         Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
         // 本周起始时间（周一）
@@ -176,6 +178,15 @@ public class ReaderStatsService {
     }
 
     /**
+     * PostgreSQL 的 {@code AT TIME ZONE} 需要 IANA 名称；JVM 在 UTC 下可能返回
+     * 仅用于偏移的 {@code "Z"}，直接传入会报错，统一归一为 {@code "UTC"}。
+     */
+    private String zoneDatabaseId(ZoneId zone) {
+        String id = zone.getId();
+        return "Z".equals(id) ? "UTC" : id;
+    }
+
+    /**
      * 计算连续阅读天数（从最近一次有记录的那天往回数）。
      *
      * <p>锚点必须是最近记录日而不是"今天"：清晨打开统计页时今天还没有满 10 秒的会话，
@@ -183,10 +194,9 @@ public class ReaderStatsService {
      */
     private int calculateStreak(UUID ownerUserId) {
         Instant ninetyDaysAgo = Instant.now().minusSeconds(90L * 24 * 3600);
-        // 计算服务器本地时区的 UTC 偏移量（如 "+08:00"）
-        ZoneId zone = ZoneId.systemDefault();
-        String utcOffset = zone.getRules().getOffset(Instant.now()).getId();
-        List<LocalDate> readingDays = sessionRepository.distinctReadingDaysSince(ownerUserId, ninetyDaysAgo, utcOffset);
+        ZoneId zone = systemInstanceConfigService.timeZone();
+        List<LocalDate> readingDays = sessionRepository.distinctReadingDaysSince(
+                ownerUserId, ninetyDaysAgo, zoneDatabaseId(zone));
         if (readingDays.isEmpty()) {
             return 0;
         }
@@ -218,8 +228,7 @@ public class ReaderStatsService {
     @Transactional(readOnly = true)
     public ReaderStatsOverviewDto getStatsOverview(UUID ownerUserId, int days) {
         int safeDays = Math.max(7, Math.min(days, 30));
-        ZoneId zone = ZoneId.systemDefault();
-        String utcOffset = zone.getRules().getOffset(Instant.now()).getId();
+        ZoneId zone = systemInstanceConfigService.timeZone();
         LocalDate today = LocalDate.now(zone);
         Instant since = today.minusDays(safeDays - 1L).atStartOfDay(zone).toInstant();
 
@@ -229,7 +238,7 @@ public class ReaderStatsService {
             minutesByDay.put(today.minusDays(i), 0L);
         }
         for (ReaderReadingSessionRepository.DailyMinutesView row :
-                sessionRepository.sumDailyMinutesSince(ownerUserId, since, utcOffset)) {
+                sessionRepository.sumDailyMinutesSince(ownerUserId, since, zoneDatabaseId(zone))) {
             minutesByDay.computeIfPresent(row.getDay(), (key, value) -> value + row.getMinutes());
         }
         List<ReaderDailyMinutesDto> dailyMinutes = minutesByDay.entrySet().stream()

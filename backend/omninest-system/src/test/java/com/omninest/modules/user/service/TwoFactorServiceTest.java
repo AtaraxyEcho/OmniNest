@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -199,11 +200,10 @@ class TwoFactorServiceTest {
         stored.setUserId(userId);
         stored.setCodeHash(payloadAuthenticator.sign("ABCD2345"));
         when(backupCodeRepository.findByUserIdAndUsedAtIsNull(userId)).thenReturn(List.of(stored));
-        when(backupCodeRepository.save(any(AuthBackupCode.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(backupCodeRepository.consume(eq(stored.getId()), any(Instant.class))).thenReturn(1);
 
         assertThatCode(() -> service.verifyCode(userId, "abcd-2345")).doesNotThrowAnyException();
-        assertThat(stored.getUsedAt()).isNotNull();
+        verify(backupCodeRepository).consume(eq(stored.getId()), any(Instant.class));
 
         when(backupCodeRepository.findByUserIdAndUsedAtIsNull(userId)).thenReturn(List.of());
         assertThatThrownBy(() -> service.verifyCode(userId, "abcd-2345"))

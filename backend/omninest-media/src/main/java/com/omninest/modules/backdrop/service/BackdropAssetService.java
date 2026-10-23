@@ -35,10 +35,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -91,9 +95,9 @@ public class BackdropAssetService {
     static {
         boolean available = false;
         try {
-            available = javax.imageio.ImageIO.getImageWritersByFormatName("webp").hasNext();
-        } catch (Exception ignored) {
-            // WebP 编码器不可用
+            available = ImageIO.getImageWritersByFormatName("webp").hasNext();
+        } catch (Exception exception) {
+            log.debug("WebP 编码器探测失败，回退到 JPEG", exception);
         }
         WEBP_AVAILABLE = available;
     }
@@ -156,7 +160,7 @@ public class BackdropAssetService {
      * @param ownerUserId 归属用户 ID
      * @return 按更新时间倒序的素材 DTO 列表
      */
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public List<BackdropAssetDto> listAssets(UUID ownerUserId) {
         return backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId).stream()
                 .map(this::toDto)
@@ -416,16 +420,16 @@ public class BackdropAssetService {
         if (media.mediaType() == BackdropMediaType.VIDEO) {
             return null;
         }
-        try (javax.imageio.stream.ImageInputStream input =
-                     javax.imageio.ImageIO.createImageInputStream(stagingFile.toFile())) {
+        try (ImageInputStream input =
+                     ImageIO.createImageInputStream(stagingFile.toFile())) {
             if (input == null) {
                 return null;
             }
-            Iterator<javax.imageio.ImageReader> readers = javax.imageio.ImageIO.getImageReaders(input);
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) {
                 return null;
             }
-            javax.imageio.ImageReader reader = readers.next();
+            ImageReader reader = readers.next();
             try {
                 reader.setInput(input, true, true);
                 int width = reader.getWidth(0);

@@ -15,6 +15,9 @@ import 'package:omninest/features/notifications/application/notification_control
 import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/core/widgets/mobile_sheet_semantics.dart';
 
+/// 在线状态点的描边：与账户胶囊的深底同族，保证小圆点在头像边缘可辨。
+const Color _onlineDotBorder = Color(0xFF25302D);
+
 /// 顶栏账户头像：点击打开承载低频系统能力的账户面板。
 class MobileAccountAvatar extends ConsumerWidget {
   const MobileAccountAvatar({super.key});
@@ -69,10 +72,7 @@ class MobileAccountAvatar extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: online ? context.env.accent : context.env.white46,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF25302D),
-                      width: 2,
-                    ),
+                    border: Border.all(color: _onlineDotBorder, width: 2),
                   ),
                 ),
               ),

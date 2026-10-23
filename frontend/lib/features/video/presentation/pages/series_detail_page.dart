@@ -48,7 +48,7 @@ class SeriesDetailPage extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Text(
-                      movieErrorMessage(error),
+                      movieErrorMessage(error, AppLocalizations.of(context)),
                       textAlign: TextAlign.center,
                       style: MovieDetailTheme.body(
                         14,
@@ -168,7 +168,11 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
       setState(() => _editMode = false);
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     }
   }
@@ -205,7 +209,11 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
       if (!mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
     }
   }
 
@@ -217,6 +225,9 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
     setState(() => _resolvingPlay = true);
     try {
       final intent = await ref.read(seriesPlayIntentProvider(series.id).future);
+      if (!mounted) {
+        return;
+      }
       final String? targetId;
       if (intent.kind == SeriesPlayIntentKind.resume &&
           intent.videoItemId != null) {
@@ -247,7 +258,11 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
       context.push('/video/$targetId/play');
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {

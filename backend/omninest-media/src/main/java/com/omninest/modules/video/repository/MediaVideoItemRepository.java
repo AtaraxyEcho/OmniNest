@@ -350,43 +350,72 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
 
     long countByOwnerUserIdAndMovieId(UUID ownerUserId, UUID movieId);
 
-    long countByOwnerUserIdAndMovieIdAndIdNotIn(
-            UUID ownerUserId,
-            UUID movieId,
-            Collection<UUID> excludedVideoItemIds
-    );
-
-    long countByOwnerUserIdAndEpisodeIdAndIdNotIn(
-            UUID ownerUserId,
-            UUID episodeId,
-            Collection<UUID> excludedVideoItemIds
-    );
-
-    long countByOwnerUserIdAndSeriesIdAndIdNotIn(
-            UUID ownerUserId,
-            UUID seriesId,
-            Collection<UUID> excludedVideoItemIds
-    );
-
-    @Query("""
-            select count(item) from MediaVideoItem item
-            where item.ownerUserId = :ownerUserId
-              and item.seriesId = :seriesId
-              and item.seasonNumber = :seasonNumber
-              and item.id not in :excludedVideoItemIds
-            """)
-    long countSeasonItemsOutsideTarget(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("seriesId") UUID seriesId,
-            @Param("seasonNumber") Integer seasonNumber,
-            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds
-    );
-
     /**
      * 批量查询有视频条目的 movieId 集合（避免孤立清理 N+1）。
      */
-    @Query("SELECT DISTINCT i.movieId FROM MediaVideoItem i WHERE i.ownerUserId = :ownerUserId AND i.movieId IN :movieIds")
-    List<UUID> findMovieIdsWithItems(@Param("ownerUserId") UUID ownerUserId, @Param("movieIds") Collection<UUID> movieIds);
+    @Query("""
+            SELECT DISTINCT i.movieId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId AND i.movieId IN :movieIds
+            """)
+    List<UUID> findMovieIdsWithItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("movieIds") Collection<UUID> movieIds);
+
+    /**
+     * 批量查询排除待清除条目后仍被引用的 movieId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT i.movieId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.movieId IN :movieIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<UUID> findMovieIdsWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("movieIds") Collection<UUID> movieIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询排除待清除条目后仍被引用的 episodeId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT i.episodeId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.episodeId IN :episodeIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<UUID> findEpisodeIdsWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("episodeIds") Collection<UUID> episodeIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询排除待清除条目后仍被引用的 seriesId 集合。
+     */
+    @Query("""
+            SELECT DISTINCT i.seriesId FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.seriesId IN :seriesIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<UUID> findSeriesIdsWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesIds") Collection<UUID> seriesIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
+
+    /**
+     * 批量查询排除待清除条目后仍有条目的（剧集, 季）组合。
+     */
+    @Query("""
+            SELECT DISTINCT i.seriesId, i.seasonNumber FROM MediaVideoItem i
+            WHERE i.ownerUserId = :ownerUserId
+              AND i.seriesId IN :seriesIds
+              AND i.id NOT IN :excludedVideoItemIds
+            """)
+    List<Object[]> findSeasonKeysWithRemainingItems(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("seriesIds") Collection<UUID> seriesIds,
+            @Param("excludedVideoItemIds") Collection<UUID> excludedVideoItemIds);
 
     /**
      * 批量查询有视频条目的 episodeId 集合（避免孤立清理 N+1）。

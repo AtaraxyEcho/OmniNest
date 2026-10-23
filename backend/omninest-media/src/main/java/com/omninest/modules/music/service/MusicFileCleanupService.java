@@ -28,7 +28,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -127,22 +126,24 @@ public class MusicFileCleanupService implements
                 artistIds.add(track.getArtistId());
             }
         });
-        albumIds.stream()
-                .filter(albumId -> trackRepository.countByOwnerUserIdAndAlbumIdAndIdNotIn(
-                        ownerUserId, albumId, trackIds) == 0)
-                .map(albumRepository::findById)
-                .flatMap(Optional::stream)
-                .map(MusicAlbum::getCoverFileId)
-                .filter(Objects::nonNull)
-                .forEach(fileId -> writer.addFileNodeIds(List.of(fileId)));
-        artistIds.stream()
-                .filter(artistId -> trackRepository.countByOwnerUserIdAndArtistIdAndIdNotIn(
-                        ownerUserId, artistId, trackIds) == 0)
-                .map(artistRepository::findById)
-                .flatMap(Optional::stream)
-                .map(MusicArtist::getAvatarFileId)
-                .filter(Objects::nonNull)
-                .forEach(fileId -> writer.addFileNodeIds(List.of(fileId)));
+        if (!albumIds.isEmpty()) {
+            Set<UUID> albumsWithRemainingTracks = new HashSet<>(
+                    trackRepository.findAlbumIdsWithRemainingTracks(ownerUserId, albumIds, trackIds));
+            writer.addFileNodeIds(albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId).stream()
+                    .filter(album -> !albumsWithRemainingTracks.contains(album.getId()))
+                    .map(MusicAlbum::getCoverFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+        }
+        if (!artistIds.isEmpty()) {
+            Set<UUID> artistsWithRemainingTracks = new HashSet<>(
+                    trackRepository.findArtistIdsWithRemainingTracks(ownerUserId, artistIds, trackIds));
+            writer.addFileNodeIds(artistRepository.findAllByIdInAndOwnerUserId(artistIds, ownerUserId).stream()
+                    .filter(artist -> !artistsWithRemainingTracks.contains(artist.getId()))
+                    .map(MusicArtist::getAvatarFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+        }
     }
 
     /**

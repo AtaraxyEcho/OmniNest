@@ -854,6 +854,7 @@ public class PhotoLibraryController {
     @PostMapping("/api/v1/admin/photos/motion/reanalyze")
     ApiResponse<Map<String, String>> reanalyzeMotionPhotos() {
         UUID userId = currentUserContext.requireCurrentUserId();
+        requireTaskRateLimit("photo:motion:" + userId, 3);
         UUID taskId = motionRescanService.enqueueRescan(userId);
         return ApiResponse.success(Map.of("taskId", taskId.toString()));
     }
@@ -866,6 +867,7 @@ public class PhotoLibraryController {
     ApiResponse<PhotoAiTaskDto> reanalyzeLibrary() {
         requireAiEnabled();
         UUID userId = currentUserContext.requireCurrentUserId();
+        requireTaskRateLimit("photo:ai:" + userId, 3);
         return ApiResponse.success(photoAiTaskService.queueLibraryReanalysis(userId));
     }
 

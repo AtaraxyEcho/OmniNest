@@ -177,7 +177,11 @@ class _MovieMetadataEditPanelState
       if (!mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);

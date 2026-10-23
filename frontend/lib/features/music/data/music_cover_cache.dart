@@ -103,8 +103,7 @@ class DioCoverFileResponse implements FileServiceResponse {
   final DateTime _receivedTime;
 
   @override
-  Stream<List<int>> get content =>
-      _response.stream.map((chunk) => chunk.toList());
+  Stream<List<int>> get content => _response.stream;
 
   @override
   int? get contentLength {

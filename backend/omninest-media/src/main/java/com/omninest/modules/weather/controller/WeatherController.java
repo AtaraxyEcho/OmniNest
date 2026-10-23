@@ -82,18 +82,14 @@ public class WeatherController {
                 resolvedLocation = location.trim();
             }
         }
-        // 3. 用户偏好城市（用于展示名；也可能是 API 查询位置）
-        String displayName = null;
+        // 3. 用户偏好城市：仅在设备没有 GPS、前端也没有坐标时作为查询位置。
+        // GPS 坐标的展示名由 GeoAPI 反查，不能再拿偏好城市覆盖，否则会出现
+        // 人在北京、界面显示上海（或配置默认北京）的错位。
         String preferenceLocation = getPreferenceLocation(userId);
         if (resolvedLocation == null || resolvedLocation.isBlank()) {
             resolvedLocation = preferenceLocation;
-        } else if (preferenceLocation != null
-                && !preferenceLocation.isBlank()
-                && !isLatLon(preferenceLocation)) {
-            // GPS 已定位时仍用用户设置的城市名作为展示地区
-            displayName = preferenceLocation;
         }
-        WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation, displayName, lang);
+        WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation, null, lang);
         return ApiResponse.success(weather);
     }
 

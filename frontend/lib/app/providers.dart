@@ -53,6 +53,9 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
   // 封面专域缓存的下载客户端与 ApiClient 同生命周期，重建时刷新引用。
   MusicCoverCache.configure(apiClient.dio);
+  // 服务器切换会让 Provider 重建，旧客户端的连接池与拦截器必须随之关闭；
+  // 新客户端已在重建时重新注册，不会误关当前实例。
+  ref.onDispose(() => apiClient.dio.close(force: true));
   return apiClient;
 });
 

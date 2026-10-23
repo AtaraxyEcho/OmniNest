@@ -161,6 +161,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             return new PlaybackUrlResult(null, null, null, "歌曲ID为空");
         }
         try {
+            // 凭据查询与解密在循环外只做一次，避免最多 9 个音质档位重复查库。
+            String userCookie = cookie(ownerUserId);
             // 从请求音质开始向下探测
             int startIndex = startIndexForQuality(quality);
             for (int i = startIndex; i < QUALITY_LEVELS.size(); i++) {
@@ -168,7 +170,7 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 String path = "/song/url/v1?id=" + encode(songId)
                         + "&level=" + level
                         + "&timestamp=" + System.currentTimeMillis();
-                JsonNode json = requestJson(path, cookie(ownerUserId));
+                JsonNode json = requestJson(path, userCookie);
                 if (json == null) {
                     continue;
                 }
@@ -182,6 +184,14 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                     String format = songData.path("type").asString(null);
                     log.info("网易云播放URL获取成功: songId={}, quality={}, format={}", songId, level, format);
                     return new PlaybackUrlResult(url, level, format, null);
+                }
+                // 404/试听限制是歌曲级结论，继续降档只会串行再发多次请求。
+                int code = songData.path("code").asInt(0);
+                int fee = songData.path("fee").asInt(0);
+                if (code == 404 || fee == 4) {
+                    log.info("网易云歌曲无版权或仅试听，停止降档探测: songId={}, level={}, code={}, fee={}",
+                            songId, level, code, fee);
+                    break;
                 }
             }
             log.info("网易云播放URL获取失败: songId={}, 所有音质均不可用", songId);

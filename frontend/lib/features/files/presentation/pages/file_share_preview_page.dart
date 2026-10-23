@@ -110,6 +110,8 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
       await _loadChildren(null);
     }
 
+    if (!mounted) return;
+
     // 登录回跳后自动完成刚才被登录打断的转存；未登录时保留标记，等用户登录。
     final session = await ref.read(authSessionProvider.future);
     if (!mounted) {

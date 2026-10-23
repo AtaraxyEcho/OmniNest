@@ -10796,6 +10796,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosLocationsBack => 'Back to Locations';
 
   @override
+  String get photosLocationsUnknown => 'Unknown location';
+
+  @override
   String get photosDeleteShort => 'Delete';
 
   @override

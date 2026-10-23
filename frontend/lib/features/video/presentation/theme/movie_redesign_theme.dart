@@ -113,6 +113,17 @@ extension MovieRedesignX on BuildContext {
           : MovieRedesignPalette.light;
 }
 
+/// 压在海报影像上的固定色。
+///
+/// 对比由影像自身提供，两极性同值，因此不随主题翻转。
+abstract final class MovieOverlayColors {
+  static const Color badgeFill = Color(0x8C090D0C);
+  static const Color hairline = Color(0x29FFFFFF);
+  static const Color eyebrowOnImage = Color(0xA1FFFFFF);
+  static const Color secondaryButtonFill = Color(0x8C121817);
+  static const Color secondaryButtonBorder = Color(0x38FFFFFF);
+}
+
 /// 新版三字体排版：衬线展示、正文与等宽数据。
 @immutable
 class MovieRedesignText {

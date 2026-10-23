@@ -107,7 +107,7 @@ public class PhotoGeoBackfillRetryService {
             try {
                 batchSize = Integer.parseInt(String.valueOf(batchSizeValue));
             } catch (NumberFormatException ignored) {
-                // 载荷异常时回退默认批次大小。
+                log.debug("地理回填载荷批次大小不合法，回退默认值: value={}", batchSizeValue);
             }
         }
         return new PhotoGeoBackfillEvent(taskId, batchSize, string(payload.get("datasetVersion")));

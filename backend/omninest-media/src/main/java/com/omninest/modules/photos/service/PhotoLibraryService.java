@@ -10,6 +10,7 @@ import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.user.service.SystemInstanceConfigService;
 import com.omninest.modules.photos.domain.PhotoAlbumItem;
 import com.omninest.modules.photos.domain.PhotoFavorite;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -90,6 +91,7 @@ public class PhotoLibraryService {
     private final PhotoContentAnalysisService contentAnalysisService;
     private final PhotoGeoService photoGeoService;
     private final PhotoIndexTaskService photoIndexTaskService;
+    private final SystemInstanceConfigService systemInstanceConfigService;
 
     /**
      * 照片仪表盘，返回统计数据和近期/收藏照片（缓存 3 分钟）。
@@ -655,7 +657,7 @@ public class PhotoLibraryService {
     public Page<PhotoTimelineMonthDto> timelinePage(UUID ownerUserId, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = boundedPageSize(size);
-        String zoneId = ZoneId.systemDefault().getId();
+        String zoneId = systemInstanceConfigService.timeZone().getId();
         List<PhotoTimelinePreviewProjection> rows = photoItemRepository.findTimelinePreviewPage(
                 ownerUserId,
                 zoneId,
@@ -693,7 +695,7 @@ public class PhotoLibraryService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "照片月份参数不合法");
         }
         YearMonth period = YearMonth.of(year, month);
-        ZoneId zoneId = ZoneId.systemDefault();
+        ZoneId zoneId = systemInstanceConfigService.timeZone();
         Instant periodStart = period.atDay(1).atStartOfDay(zoneId).toInstant();
         Instant periodEnd = period.plusMonths(1).atDay(1).atStartOfDay(zoneId).toInstant();
         Pageable pageable = photoPageable(page, size, sort);
@@ -857,7 +859,7 @@ public class PhotoLibraryService {
     public Page<PhotoGroupDto> groupByPage(UUID ownerUserId, GroupBy groupBy, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = boundedPageSize(size);
-        String zoneId = ZoneId.systemDefault().getId();
+        String zoneId = systemInstanceConfigService.timeZone().getId();
         List<PhotoGroupPreviewProjection> rows = photoItemRepository.findGroupPreviewPage(
                 ownerUserId,
                 groupBy.name(),

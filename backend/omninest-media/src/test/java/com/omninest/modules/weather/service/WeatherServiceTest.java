@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -398,6 +399,60 @@ class WeatherServiceTest {
     class LocationIdInput {
 
         @Test
+        @DisplayName("GeoAPI 明确返回城市不存在才写负缓存")
+        void geoNotFoundMarksLocationMissing() {
+            Map<String, String> configs = new HashMap<>(baseConfigs());
+            configs.put("weather.location", "不存在市");
+            stubConfigs(configs);
+            when(weatherCacheStore.findJwt(anyString())).thenReturn(Optional.empty());
+            Map<String, String> responses = new HashMap<>();
+            responses.put("/geo/v2/city/lookup", "{\"code\":\"404\"}");
+            stubRestTemplateWithResponses(responses);
+
+            WeatherDto result = weatherService.getRealtimeWeather(null);
+
+            assertThat(result.text()).isEqualTo("未知");
+            verify(weatherCacheStore).markLocationMissing("不存在市");
+        }
+
+        @Test
+        @DisplayName("GeoAPI 网络异常不得把城市误标为不存在")
+        void geoTransportFailureDoesNotMarkLocationMissing() {
+            stubConfigs(baseConfigs());
+            stubJwtCache();
+            when(restTemplate.exchange(
+                    any(URI.class),
+                    any(HttpMethod.class),
+                    any(),
+                    (Class<Object>) any()
+            )).thenThrow(new RuntimeException("network down"));
+
+            WeatherDto result = weatherService.getRealtimeWeather("贵阳");
+
+            assertThat(result.text()).isEqualTo("未知");
+            verify(weatherCacheStore, never()).markLocationMissing(anyString());
+        }
+
+        @Test
+        @DisplayName("GPS 坐标使用 GeoAPI 反查的城市名作为展示地区")
+        void gpsCoordinatesUseReverseGeocodedName() {
+            stubConfigs(baseConfigs());
+            stubJwtCache();
+            Map<String, String> responses = new HashMap<>();
+            responses.put("/geo/v2/city/lookup", GEO_API_RESPONSE);
+            responses.put("/v7/weather/now", """
+                {"code":"200","now":{"temp":"22","feelsLike":"22","text":"多云","icon":"101"}}
+                """);
+            stubRestTemplateWithResponses(responses);
+
+            WeatherDto result = weatherService.getRealtimeWeather("116.41,39.92");
+
+            assertThat(result.locationName()).isEqualTo("贵阳");
+            // 反查名按语言隔离缓存，避免首个语言用户的名称串给其他语言。
+            verify(weatherCacheStore).saveLocation(eq("116.41,39.92|zh"), any());
+        }
+
+        @Test
         @DisplayName("LocationID 通过 GeoAPI 转换为经纬度后调用空气质量 API")
         void locationIdConvertedViaGeoApi() {
             Map<String, String> configs = new HashMap<>(baseConfigs());
@@ -551,7 +606,7 @@ class WeatherServiceTest {
             weatherService.getRealtimeWeather("116.41,39.92", null, lang);
 
             ArgumentCaptor<URI> captor = ArgumentCaptor.forClass(URI.class);
-            verify(restTemplate, times(4))
+            verify(restTemplate, times(5))
                     .exchange(captor.capture(), any(HttpMethod.class), any(), (Class<Object>) any());
             return captor.getAllValues().stream().map(URI::toString).toList();
         }
@@ -561,8 +616,9 @@ class WeatherServiceTest {
         void passesLangOnEveryTextBearingCall() {
             List<String> uris = requestedUris("en");
 
-            assertThat(uris).hasSize(4);
+            assertThat(uris).hasSize(5);
             assertThat(uris).allSatisfy(uri -> assertThat(uri).endsWith("lang=en"));
+            assertThat(uris).anyMatch(uri -> uri.contains("/geo/v2/city/lookup"));
             assertThat(uris).anyMatch(uri -> uri.contains("/v7/weather/now"));
             assertThat(uris).anyMatch(uri -> uri.contains("/v7/weather/7d"));
             assertThat(uris).anyMatch(uri -> uri.contains("/v7/weather/24h"));

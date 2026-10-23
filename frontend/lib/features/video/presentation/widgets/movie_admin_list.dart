@@ -614,7 +614,11 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
       if (!mounted || !context.mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
     } finally {
       if (mounted) {
         setState(() => _runningAction = null);
@@ -738,7 +742,11 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
       }
     } catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {

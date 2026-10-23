@@ -205,13 +205,27 @@ public class MoviePlaybackService {
      */
     public void writeSubtitleContentByToken(String token, UUID videoItemId, UUID subtitleId, OutputStream out)
             throws IOException {
+        MediaPlaybackTokenService.MediaGrant grant = requireSubtitleTrackByToken(token, videoItemId, subtitleId);
+        writeSubtitleContent(grant.requesterUserId(), subtitleId, out);
+    }
+
+    /**
+     * 只校验字幕访问令牌与轨道归属，不写响应；供控制器先完成校验再设置响应头。
+     *
+     * @param token 媒体播放令牌
+     * @param videoItemId 影片条目 ID
+     * @param subtitleId 字幕轨道 ID
+     * @return 已校验的媒体授权
+     */
+    public MediaPlaybackTokenService.MediaGrant requireSubtitleTrackByToken(
+            String token, UUID videoItemId, UUID subtitleId) {
         MediaPlaybackTokenService.MediaGrant grant = mediaPlaybackTokenService.requireGrant(token, videoItemId);
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
         if (!videoItemId.equals(track.getVideoItemId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体令牌不能访问其他影片的字幕");
         }
-        writeSubtitleContent(grant.requesterUserId(), subtitleId, out);
+        return grant;
     }
 
     /**

@@ -85,10 +85,15 @@ public class AdminConsoleService {
                 roleCounts.put(row[0].toString(), toLong(row[1]));
             }
         }
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (Object[] row : authUserRepository.countUsersByStatus()) {
+            counts.put(row[0].toString(), toLong(row[1]));
+        }
+        long total = counts.values().stream().mapToLong(Long::longValue).sum();
         return new AdminConsoleSummaryDto.UserStats(
-                authUserRepository.count(),
-                authUserRepository.countByStatus(UserStatus.ACTIVE.getValue()),
-                authUserRepository.countByStatus(UserStatus.DISABLED.getValue()),
+                total,
+                counts.getOrDefault(UserStatus.ACTIVE.getValue(), 0L),
+                counts.getOrDefault(UserStatus.DISABLED.getValue(), 0L),
                 roleCounts
         );
     }
@@ -130,14 +135,15 @@ public class AdminConsoleService {
     }
 
     private AdminConsoleSummaryDto.TaskStats taskStats() {
-        long queued = taskRecordRepository.countByStatus(TaskStatus.QUEUED.getValue());
-        long running = taskRecordRepository.countByStatus(TaskStatus.RUNNING.getValue());
-        long completed = taskRecordRepository.countByStatus(TaskStatus.COMPLETED.getValue());
-        long failed = taskRecordRepository.countByStatus(TaskStatus.FAILED.getValue());
+        Map<String, Long> counts = taskRecordRepository.countGroupedByStatus();
+        long queued = counts.getOrDefault(TaskStatus.QUEUED.getValue(), 0L);
+        long running = counts.getOrDefault(TaskStatus.RUNNING.getValue(), 0L);
+        long completed = counts.getOrDefault(TaskStatus.COMPLETED.getValue(), 0L);
+        long failed = counts.getOrDefault(TaskStatus.FAILED.getValue(), 0L);
         // DISCARDED 是管理员显式丢弃死信的处置结果，与主动取消同性质，归入 cancelled 桶且不计入 failed/dlq。
-        long cancelled = taskRecordRepository.countByStatus(TaskStatus.CANCELLED.getValue())
-                + taskRecordRepository.countByStatus(TaskStatus.DISCARDED.getValue());
-        long dlq = taskRecordRepository.countByStatus(TaskStatus.DLQ.getValue());
+        long cancelled = counts.getOrDefault(TaskStatus.CANCELLED.getValue(), 0L)
+                + counts.getOrDefault(TaskStatus.DISCARDED.getValue(), 0L);
+        long dlq = counts.getOrDefault(TaskStatus.DLQ.getValue(), 0L);
         return new AdminConsoleSummaryDto.TaskStats(
                 queued + running + completed + failed + cancelled + dlq,
                 queued,

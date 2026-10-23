@@ -323,10 +323,11 @@ class MusicApi {
     if (!apiClient.hasPermission(activityWritePermission)) {
       return;
     }
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/music/tracks/$trackId/play-history',
       data: {'playDuration': playDuration},
     );
+    parseEnvelope(response.data);
   }
 
   /// 记录可播放对象播放历史（自动写回）：无能力时静默 no-op。
@@ -343,7 +344,7 @@ class MusicApi {
     if (!apiClient.hasPermission(activityWritePermission)) {
       return;
     }
-    await apiClient.dio.post<Map<String, dynamic>>(
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/music/play-history',
       data: <String, dynamic>{
         'playableKey': playableKey,
@@ -355,6 +356,7 @@ class MusicApi {
         'durationSeconds': durationSeconds,
       },
     );
+    parseEnvelope(response.data);
   }
 
   Future<MusicTrack?> lastPlayed() async {

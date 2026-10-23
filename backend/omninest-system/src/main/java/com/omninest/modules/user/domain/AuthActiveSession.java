@@ -62,6 +62,18 @@ public class AuthActiveSession {
     @Column(name = "current_refresh_jti", length = 64)
     private String currentRefreshJti;
 
+    /**
+     * 上一枚刷新令牌 jti；仅在并发刷新宽限期内接受，避免多标签页互相判重放。
+     */
+    @Column(name = "previous_refresh_jti", length = 64)
+    private String previousRefreshJti;
+
+    /**
+     * 上次刷新令牌轮换时间。
+     */
+    @Column(name = "refresh_rotated_at")
+    private Instant refreshRotatedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

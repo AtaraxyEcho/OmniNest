@@ -10467,6 +10467,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosLocationsBack => '返回地点列表';
 
   @override
+  String get photosLocationsUnknown => '未知位置';
+
+  @override
   String get photosDeleteShort => '删除';
 
   @override

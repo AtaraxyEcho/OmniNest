@@ -4850,6 +4850,7 @@
     }
   },
   "photosLocationsBack": "Back to Locations",
+  "photosLocationsUnknown": "Unknown location",
   "photosDeleteShort": "Delete",
   "photosSaturation": "Saturation",
   "photosModuleDisplayName": "Lightbox",

@@ -8,20 +8,34 @@ import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
+import com.omninest.modules.file.dto.ConnectorOAuthAppDto;
 import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileListDto;
 import com.omninest.modules.file.dto.ExternalSpaceDto;
+import com.omninest.modules.file.dto.ExternalStorageConnectorDto;
+import com.omninest.modules.file.dto.ExternalStorageTestResultDto;
 import com.omninest.modules.file.dto.ImportTaskDto;
+import com.omninest.modules.file.dto.OAuthStartResponse;
+import com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest;
+import com.omninest.modules.file.service.ExternalStorageOAuthService;
 import com.omninest.modules.file.service.ExternalStorageService;
+import com.omninest.modules.user.config.InitialSetupProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,24 +53,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "外部存储", description = "远程来源浏览与导入到受管存储")
+@Slf4j
 public class ExternalStorageController {
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
-    private final com.omninest.modules.file.service.ExternalStorageOAuthService oauthService;
+    private final ExternalStorageOAuthService oauthService;
     private final RateLimitService rateLimitService;
     private final ClientIpResolver clientIpResolver;
+    private final InitialSetupProperties setupProperties;
 
     @Operation(summary = "列出连接器目录", description = "返回可接入的远程存储类型")
     @GetMapping("/api/v1/external-connectors")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<List<com.omninest.modules.file.dto.ExternalStorageConnectorDto>> listConnectors() {
+    ApiResponse<List<ExternalStorageConnectorDto>> listConnectors() {
         return ApiResponse.success(externalStorageService.listConnectors());
     }
 
     @Operation(summary = "开始 OAuth 授权", description = "返回第三方授权 URL")
     @PostMapping("/api/v1/external-connectors/{code}/oauth/start")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<com.omninest.modules.file.dto.OAuthStartResponse> oauthStart(
+    ApiResponse<OAuthStartResponse> oauthStart(
             @PathVariable String code,
             @RequestParam UUID accountId
     ) {
@@ -71,9 +87,9 @@ public class ExternalStorageController {
      * 路径变量必须改名绑定，否则回调永远取不到授权码。端点由浏览器匿名回跳命中，靠
      * {@code state} 关联本次授权会话并定位账户，因此不再要求 Bearer 令牌。</p>
      */
-    @Operation(summary = "OAuth 回调", description = "处理授权码并绑定 token，浏览器匿名回跳")
+    @Operation(summary = "OAuth 回调", description = "处理授权码并绑定 token，浏览器匿名回跳后返回前端")
     @GetMapping("/api/v1/external-connectors/{providerCode}/oauth/callback")
-    ApiResponse<Void> oauthCallback(
+    ResponseEntity<String> oauthCallback(
             @PathVariable("providerCode") String providerCode,
             @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "code", required = false) String authorizationCode,
@@ -91,16 +107,49 @@ public class ExternalStorageController {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "OAuth 回调请求过于频繁，请稍后再试");
         }
         if (error != null && !error.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "授权被第三方拒绝: " + error);
+            return oauthResultPage("error");
         }
         oauthService.handleCallback(providerCode, state, authorizationCode);
-        return ApiResponse.success();
+        return oauthResultPage("success");
+    }
+
+    /**
+     * 回调结果页：优先 302 回前端，未配置前端地址时给出无脚本的结果页。
+     *
+     * <p>回调发生在浏览器顶层标签页，返回 JSON 会把用户留在裸文本页；这里只允许
+     * http/https 的配置地址，避免把管理员配置变成开放重定向。</p>
+     */
+    private ResponseEntity<String> oauthResultPage(String status) {
+        String base = setupProperties.getWebBaseUrl();
+        if (base != null && !base.isBlank()) {
+            String normalized = base.trim().replaceAll("/+$", "");
+            try {
+                URI baseUri = URI.create(normalized);
+                if (("http".equalsIgnoreCase(baseUri.getScheme())
+                        || "https".equalsIgnoreCase(baseUri.getScheme()))
+                        && baseUri.getHost() != null) {
+                    String target = normalized + "/files?oauth="
+                            + URLEncoder.encode(status, StandardCharsets.UTF_8);
+                    return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(target)).build();
+                }
+            } catch (IllegalArgumentException exception) {
+                log.warn("OAuth 回跳地址配置不合法，使用本地结果页: errorType={}",
+                        exception.getClass().getSimpleName());
+            }
+        }
+        String message = "success".equals(status)
+                ? "授权成功，可以关闭此页面并返回 OmniNest。"
+                : "授权已取消或失败，请返回 OmniNest 重试。";
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .body("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+                        + "<title>OmniNest</title></head><body><p>" + message + "</p></body></html>");
     }
 
     @Operation(summary = "测试连接", description = "验证外部存储账户是否可连通")
     @PostMapping("/api/v1/external-storages/{accountId}/test")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<com.omninest.modules.file.dto.ExternalStorageTestResultDto> testConnection(
+    ApiResponse<ExternalStorageTestResultDto> testConnection(
             @PathVariable UUID accountId
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
@@ -171,15 +220,15 @@ public class ExternalStorageController {
     @Operation(summary = "列出 OAuth 应用", description = "列出实例级连接器 OAuth 应用配置")
     @GetMapping("/api/v1/admin/external-connectors/oauth-apps")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_READ + "')")
-    ApiResponse<List<com.omninest.modules.file.dto.ConnectorOAuthAppDto>> listOAuthApps() {
+    ApiResponse<List<ConnectorOAuthAppDto>> listOAuthApps() {
         return ApiResponse.success(oauthService.listApps());
     }
 
     @Operation(summary = "保存 OAuth 应用", description = "创建或更新连接器 OAuth 应用")
     @PostMapping("/api/v1/admin/external-connectors/oauth-apps")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
-    ApiResponse<com.omninest.modules.file.dto.ConnectorOAuthAppDto> saveOAuthApp(
-            @Valid @RequestBody com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest body
+    ApiResponse<ConnectorOAuthAppDto> saveOAuthApp(
+            @Valid @RequestBody SaveConnectorOAuthAppRequest body
     ) {
         return ApiResponse.success(oauthService.saveApp(body));
     }

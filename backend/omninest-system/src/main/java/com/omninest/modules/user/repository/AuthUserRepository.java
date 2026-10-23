@@ -121,6 +121,14 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     List<Object[]> countUsersByEnabledRole();
 
     /**
+     * 一次按账号状态聚合用户数量，避免管理台多次 count。
+     *
+     * @return 状态到数量的映射行
+     */
+    @Query("select user.status, count(user) from AuthUser user group by user.status")
+    List<Object[]> countUsersByStatus();
+
+    /**
      * 查询拥有指定权限且状态匹配的用户。
      *
      * @param permissionCode 权限编码

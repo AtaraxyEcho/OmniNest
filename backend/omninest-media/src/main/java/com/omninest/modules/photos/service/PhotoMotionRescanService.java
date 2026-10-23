@@ -185,7 +185,7 @@ public class PhotoMotionRescanService {
             try {
                 return UUID.fromString(text);
             } catch (IllegalArgumentException ignored) {
-                // 载荷格式异常按空处理
+                log.debug("动态照片回扫载荷中的 ID 格式不合法，按空处理: value={}", text);
             }
         }
         return null;

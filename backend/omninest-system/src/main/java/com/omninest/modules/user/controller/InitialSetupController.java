@@ -95,7 +95,13 @@ public class InitialSetupController {
                 "setup:ip:" + remoteAddress,
                 5,
                 Duration.ofMinutes(15)
-        ) || !rateLimitService.tryAcquire("setup:global", 30, Duration.ofMinutes(15))) {
+        )) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "安装请求过于频繁，请稍后再试");
+        }
+        // 全局限流必须在安装令牌校验通过之后：否则未持令牌的攻击者可用
+        // 大量 IP 耗尽全局桶，把合法管理员锁在安装向导外。
+        initialSetupService.validateSetupToken(setupToken);
+        if (!rateLimitService.tryAcquire("setup:global", 30, Duration.ofMinutes(15))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "安装请求过于频繁，请稍后再试");
         }
         return ApiResponse.success(

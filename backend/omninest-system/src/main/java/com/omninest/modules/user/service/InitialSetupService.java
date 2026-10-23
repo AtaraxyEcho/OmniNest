@@ -4,6 +4,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Roles;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.user.config.InitialSetupProperties;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -53,6 +54,7 @@ public class InitialSetupService {
     private final PasswordPolicy passwordPolicy;
     private final TwoFactorService twoFactorService;
     private final ConfigCenterService configCenterService;
+    private final StorageQuotaService storageQuotaService;
 
     /**
      * 查询首次安装向导状态。
@@ -136,6 +138,8 @@ public class InitialSetupService {
         user.setDisplayName(normalizeDisplayName(request.displayName(), username));
         user.setEmail(normalizeEmail(request.email()));
         user.setStatus(UserStatus.ACTIVE.getValue());
+        // 超管与普通用户共用同一份默认配额策略，不能回落到实体硬编码的 10GB。
+        user.setQuotaBytes(storageQuotaService.getDefaultQuotaBytes());
         user.getRoles().add(superAdminRole);
         AuthUser savedUser = authUserRepository.saveAndFlush(user);
         if (bindTwoFactor) {
@@ -200,6 +204,15 @@ public class InitialSetupService {
         SystemInstance systemInstance = new SystemInstance();
         systemInstance.setId(SystemInstance.SINGLETON_ID);
         return systemInstance;
+    }
+
+    /**
+     * 校验安装令牌但不产生任何状态变更，供控制器在扣减全局限流桶前使用。
+     *
+     * @param providedToken 客户端提交的安装令牌
+     */
+    public void validateSetupToken(String providedToken) {
+        requireValidSetupToken(providedToken);
     }
 
     private void requireValidSetupToken(String providedToken) {

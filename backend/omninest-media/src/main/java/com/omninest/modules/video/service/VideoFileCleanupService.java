@@ -380,11 +380,18 @@ public class VideoFileCleanupService implements
             List<MediaVideoItem> videos,
             List<UUID> videoIds
     ) {
-        Set<UUID> orphanMovieIds = videos.stream()
+        Set<UUID> movieIds = videos.stream()
                 .map(MediaVideoItem::getMovieId)
                 .filter(Objects::nonNull)
-                .filter(movieId -> videoItemRepository.countByOwnerUserIdAndMovieIdAndIdNotIn(
-                        context.ownerUserId(), movieId, videoIds) == 0)
+                .collect(Collectors.toSet());
+        if (movieIds.isEmpty()) {
+            return;
+        }
+        Set<UUID> moviesWithRemainingItems = new HashSet<>(
+                videoItemRepository.findMovieIdsWithRemainingItems(
+                        context.ownerUserId(), movieIds, videoIds));
+        Set<UUID> orphanMovieIds = movieIds.stream()
+                .filter(movieId -> !moviesWithRemainingItems.contains(movieId))
                 .collect(Collectors.toSet());
         List<MediaMovie> movies = movieRepository.findAllByIdInAndOwnerUserId(
                 orphanMovieIds,
@@ -401,48 +408,79 @@ public class VideoFileCleanupService implements
             List<MediaVideoItem> videos,
             List<UUID> videoIds
     ) {
-        Set<UUID> orphanEpisodeIds = videos.stream()
+        Set<UUID> episodeIds = videos.stream()
                 .map(MediaVideoItem::getEpisodeId)
                 .filter(Objects::nonNull)
-                .filter(episodeId -> videoItemRepository.countByOwnerUserIdAndEpisodeIdAndIdNotIn(
-                        context.ownerUserId(), episodeId, videoIds) == 0)
                 .collect(Collectors.toSet());
-        List<MediaTvEpisode> episodes = tvEpisodeRepository
-                .findAllByIdInAndOwnerUserId(orphanEpisodeIds, context.ownerUserId());
-        writer.addFileNodeIds(episodes.stream()
-                .map(MediaTvEpisode::getStillFileId)
-                .filter(Objects::nonNull)
-                .toList());
+        if (!episodeIds.isEmpty()) {
+            Set<UUID> episodesWithRemainingItems = new HashSet<>(
+                    videoItemRepository.findEpisodeIdsWithRemainingItems(
+                            context.ownerUserId(), episodeIds, videoIds));
+            Set<UUID> orphanEpisodeIds = episodeIds.stream()
+                    .filter(episodeId -> !episodesWithRemainingItems.contains(episodeId))
+                    .collect(Collectors.toSet());
+            List<MediaTvEpisode> episodes = tvEpisodeRepository
+                    .findAllByIdInAndOwnerUserId(orphanEpisodeIds, context.ownerUserId());
+            writer.addFileNodeIds(episodes.stream()
+                    .map(MediaTvEpisode::getStillFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+        }
 
-        Set<UUID> orphanSeriesIds = videos.stream()
+        Set<UUID> seriesIds = videos.stream()
                 .map(MediaVideoItem::getSeriesId)
                 .filter(Objects::nonNull)
-                .filter(seriesId -> videoItemRepository.countByOwnerUserIdAndSeriesIdAndIdNotIn(
-                        context.ownerUserId(), seriesId, videoIds) == 0)
                 .collect(Collectors.toSet());
-        List<MediaTvSeries> series = tvSeriesRepository
-                .findAllByIdInAndOwnerUserId(orphanSeriesIds, context.ownerUserId());
-        writer.addFileNodeIds(series.stream().map(MediaTvSeries::getPosterFileId).filter(Objects::nonNull).toList());
-        writer.addFileNodeIds(series.stream().map(MediaTvSeries::getBackdropFileId).filter(Objects::nonNull).toList());
-        addContentAssetFiles(writer, context.ownerUserId(), ResourceType.TV_SERIES, orphanSeriesIds);
+        if (!seriesIds.isEmpty()) {
+            Set<UUID> seriesWithRemainingItems = new HashSet<>(
+                    videoItemRepository.findSeriesIdsWithRemainingItems(
+                            context.ownerUserId(), seriesIds, videoIds));
+            Set<UUID> orphanSeriesIds = seriesIds.stream()
+                    .filter(seriesId -> !seriesWithRemainingItems.contains(seriesId))
+                    .collect(Collectors.toSet());
+            List<MediaTvSeries> series = tvSeriesRepository
+                    .findAllByIdInAndOwnerUserId(orphanSeriesIds, context.ownerUserId());
+            writer.addFileNodeIds(series.stream()
+                    .map(MediaTvSeries::getPosterFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+            writer.addFileNodeIds(series.stream()
+                    .map(MediaTvSeries::getBackdropFileId)
+                    .filter(Objects::nonNull)
+                    .toList());
+            addContentAssetFiles(writer, context.ownerUserId(), ResourceType.TV_SERIES, orphanSeriesIds);
+        }
 
         Set<SeasonKey> affectedSeasons = videos.stream()
                 .filter(video -> video.getSeriesId() != null && video.getSeasonNumber() != null)
                 .map(video -> new SeasonKey(video.getSeriesId(), video.getSeasonNumber()))
                 .collect(Collectors.toSet());
-        for (SeasonKey seasonKey : affectedSeasons) {
-            if (videoItemRepository.countSeasonItemsOutsideTarget(
-                    context.ownerUserId(), seasonKey.seriesId(), seasonKey.seasonNumber(), videoIds) > 0) {
-                continue;
-            }
-            tvSeasonRepository.findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAsc(
-                            context.ownerUserId(), seasonKey.seriesId())
-                    .stream()
-                    .filter(season -> seasonKey.seasonNumber().equals(season.getSeasonNumber()))
-                    .map(MediaTvSeason::getPosterFileId)
-                    .filter(Objects::nonNull)
-                    .forEach(fileId -> writer.addFileNodeIds(List.of(fileId)));
+        if (affectedSeasons.isEmpty()) {
+            return;
         }
+        Set<UUID> affectedSeriesIds = affectedSeasons.stream()
+                .map(SeasonKey::seriesId)
+                .collect(Collectors.toSet());
+        Set<SeasonKey> seasonsWithRemainingItems = videoItemRepository
+                .findSeasonKeysWithRemainingItems(context.ownerUserId(), affectedSeriesIds, videoIds)
+                .stream()
+                .filter(row -> row.length >= 2 && row[0] instanceof UUID && row[1] instanceof Number)
+                .map(row -> new SeasonKey((UUID) row[0], ((Number) row[1]).intValue()))
+                .collect(Collectors.toSet());
+        Set<SeasonKey> orphanSeasonKeys = affectedSeasons.stream()
+                .filter(key -> !seasonsWithRemainingItems.contains(key))
+                .collect(Collectors.toSet());
+        if (orphanSeasonKeys.isEmpty()) {
+            return;
+        }
+        writer.addFileNodeIds(tvSeasonRepository
+                .findByOwnerUserIdAndSeriesIdIn(context.ownerUserId(), affectedSeriesIds)
+                .stream()
+                .filter(season -> orphanSeasonKeys.contains(
+                        new SeasonKey(season.getSeriesId(), season.getSeasonNumber())))
+                .map(MediaTvSeason::getPosterFileId)
+                .filter(Objects::nonNull)
+                .toList());
     }
 
     private void addContentAssetFiles(

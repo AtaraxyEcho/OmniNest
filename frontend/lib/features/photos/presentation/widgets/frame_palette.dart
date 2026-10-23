@@ -23,6 +23,23 @@ abstract final class FramePalette {
   static const viewerPanel = Color(0xFF111110);
   static const white = Colors.white;
 
+  /// 全屏查看舞台底色与上下淡出端色。
+  static const stage = Color(0xFF050807);
+  static const stageFadeStart = Color(0x00050807);
+  static const stageFadeEnd = Color(0xA6050807);
+
+  /// 批量操作条的压色底。
+  static const batchScrim = Color(0x59000000);
+
+  /// 分享影集的近黑遮罩。
+  static const sharedAlbumScrim = Color(0xF2000000);
+
+  /// 分组卡片底部渐变终点。
+  static const groupsFadeEnd = Color(0xB3000000);
+
+  /// 图片加载失败时的中性占位底色。
+  static const placeholder = Color(0xFF222626);
+
   /// 设计稿标题字体 Instrument Serif；中文标题回退到内置 NotoSerifSC。
   static const serifFamily = 'InstrumentSerif';
   static const serifFallback = <String>['NotoSerifSC'];

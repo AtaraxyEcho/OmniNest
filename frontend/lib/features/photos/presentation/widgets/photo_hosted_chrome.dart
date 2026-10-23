@@ -6,6 +6,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// 照片模块子页的托管形态判定。
@@ -245,7 +246,7 @@ class PhotoHostedSquareTile extends StatelessWidget {
                       imageUrl: photo.coverUrl!,
                       cacheKey: photo.coverCacheKey,
                     )
-                    : const ColoredBox(color: Color(0xFF222626)),
+                    : const ColoredBox(color: FramePalette.placeholder),
           ),
           if (pickMode && picked)
             Positioned.fill(

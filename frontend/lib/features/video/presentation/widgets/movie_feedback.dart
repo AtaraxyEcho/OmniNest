@@ -6,20 +6,14 @@ import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 
-String movieErrorMessage(Object error, [AppLocalizations? l10n]) {
+String movieErrorMessage(Object error, AppLocalizations l10n) {
   final userFacingError = describeUserFacingError(error, l10n: l10n);
   final code = userFacingError.code;
-  final localizedMessage =
-      (l10n != null && code != null && code.isNotEmpty)
-          ? l10n.messageForErrorCode(code, fallback: userFacingError.message)
-          : null;
-  if (localizedMessage != null) {
-    return localizedMessage;
+  if (code != null && code.isNotEmpty) {
+    return l10n.messageForErrorCode(code, fallback: userFacingError.message);
   }
   final message = userFacingError.message.trim();
-  return message.isEmpty
-      ? (l10n?.videoOperationFailed ?? '操作失败，请稍后重试')
-      : message;
+  return message.isEmpty ? l10n.videoOperationFailed : message;
 }
 
 void showMovieFeedback(
@@ -74,13 +68,15 @@ class _MovieAsyncButtonState extends State<MovieAsyncButton> {
       _running = true;
       _errorMessage = null;
     });
+    // 本地化对象在异步边界前取好，失败分支不再跨越 await 触碰 context。
+    final l10n = AppLocalizations.of(context);
     try {
       await widget.onPressed();
       if (mounted && widget.successMessage != null) {
         showMovieFeedback(context, widget.successMessage!);
       }
     } catch (error) {
-      final message = movieErrorMessage(error);
+      final message = movieErrorMessage(error, l10n);
       if (mounted) {
         setState(() => _errorMessage = message);
         showMovieFeedback(context, message, isError: true);
@@ -224,13 +220,15 @@ class _MovieAsyncActionRowState extends State<MovieAsyncActionRow> {
       _running = true;
       _errorMessage = null;
     });
+    // 本地化对象在异步边界前取好，失败分支不再跨越 await 触碰 context。
+    final l10n = AppLocalizations.of(context);
     try {
       await widget.onPressed();
       if (mounted && widget.successMessage != null) {
         showMovieFeedback(context, widget.successMessage!);
       }
     } catch (error) {
-      final message = movieErrorMessage(error);
+      final message = movieErrorMessage(error, l10n);
       if (mounted) {
         setState(() => _errorMessage = message);
         showMovieFeedback(context, message, isError: true);

@@ -6,7 +6,10 @@ import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -106,20 +109,25 @@ public class FileFavoriteService {
     @Transactional(rollbackFor = Exception.class)
     public List<FileNodeDto> batchAddFavorites(UUID ownerUserId, List<UUID> fileIds) {
         List<FileNode> nodes = fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds);
-        int createdCount = 0;
+        if (nodes.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> existing = new HashSet<>(favoriteRepository.findFavoritedNodeIds(
+                ownerUserId, nodes.stream().map(FileNode::getId).toList()));
+        List<FileFavorite> created = new ArrayList<>();
         for (FileNode node : nodes) {
-            if (!favoriteRepository.existsByOwnerUserIdAndFileNode_Id(ownerUserId, node.getId())) {
+            if (existing.add(node.getId())) {
                 FileFavorite favorite = new FileFavorite();
                 favorite.setOwnerUserId(ownerUserId);
                 favorite.setFileNode(node);
-                favoriteRepository.save(favorite);
-                createdCount++;
+                created.add(favorite);
             }
         }
-        if (createdCount > 0) {
-            syncEventWriter.recordFileLibraryInvalidation(ownerUserId, createdCount);
+        if (!created.isEmpty()) {
+            favoriteRepository.saveAll(created);
+            syncEventWriter.recordFileLibraryInvalidation(ownerUserId, created.size());
         }
-        return nodes.stream().map(fileNodeSupport::toNodeDto).toList();
+        return fileNodeSupport.toNodeDtos(nodes);
     }
 
     /**

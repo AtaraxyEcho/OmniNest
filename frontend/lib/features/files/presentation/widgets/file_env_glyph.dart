@@ -34,6 +34,9 @@ abstract final class FileEnvTypeColors {
   static const Color amberOnPaper = Color(0xFF8C5D17);
   static const Color cyanOnPaper = Color(0xFF246E66);
   static const Color greenOnPaper = Color(0xFF3B6F2D);
+
+  /// 视频分类信息条的前景色（与六组类型舱解耦）。
+  static const Color videoCategory = Color(0xFF0EA5E9);
 }
 
 /// 移动壳层文件类型图形：40×40 r13 淡底亮前景的描边类型图标。

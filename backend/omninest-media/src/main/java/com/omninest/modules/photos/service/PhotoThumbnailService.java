@@ -46,8 +46,8 @@ public class PhotoThumbnailService {
         boolean available = false;
         try {
             available = ImageIO.getImageWritersByFormatName("webp").hasNext();
-        } catch (Exception ignored) {
-            // WebP 不可用
+        } catch (Exception exception) {
+            log.debug("WebP 编码器探测失败，回退到 JPEG", exception);
         }
         WEBP_AVAILABLE = available;
     }

@@ -1,5 +1,6 @@
 package com.omninest.modules.sync.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.sync.domain.SyncEvent;
@@ -97,7 +98,7 @@ public class SyncEventQueryService {
         if (after < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "同步游标不能小于零");
         }
-        if (limit < 1 || limit > com.omninest.common.api.PageClamps.MAX_SIZE) {
+        if (limit < 1 || limit > PageClamps.MAX_SIZE) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "同步事件分页大小必须在 1 到 200 之间");
         }
     }

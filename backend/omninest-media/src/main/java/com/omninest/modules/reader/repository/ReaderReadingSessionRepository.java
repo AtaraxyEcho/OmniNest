@@ -27,7 +27,7 @@ public interface ReaderReadingSessionRepository extends JpaRepository<ReaderRead
     long sumDurationSecondsSince(@Param("ownerUserId") UUID ownerUserId, @Param("since") Instant since);
 
     @Query(value = """
-            SELECT DISTINCT (started_at + CAST(:offset AS INTERVAL))::date
+            SELECT DISTINCT (started_at AT TIME ZONE :zoneId)::date
             FROM omni.reader_reading_sessions
             WHERE owner_user_id = :ownerUserId
               AND started_at >= :since
@@ -36,13 +36,13 @@ public interface ReaderReadingSessionRepository extends JpaRepository<ReaderRead
     List<LocalDate> distinctReadingDaysSince(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("since") Instant since,
-            @Param("offset") String utcOffset);
+            @Param("zoneId") String zoneId);
 
     /**
      * 按本地日聚合最近阅读分钟数。
      */
     @Query(value = """
-            SELECT (started_at + CAST(:offset AS INTERVAL))::date AS day,
+            SELECT (started_at AT TIME ZONE :zoneId)::date AS day,
                    COALESCE(SUM(duration_seconds), 0) / 60 AS minutes
             FROM omni.reader_reading_sessions
             WHERE owner_user_id = :ownerUserId
@@ -53,7 +53,7 @@ public interface ReaderReadingSessionRepository extends JpaRepository<ReaderRead
     List<DailyMinutesView> sumDailyMinutesSince(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("since") Instant since,
-            @Param("offset") String utcOffset);
+            @Param("zoneId") String zoneId);
 
     /**
      * 每日阅读分钟数聚合行。

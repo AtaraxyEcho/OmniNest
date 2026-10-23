@@ -38,6 +38,10 @@ abstract final class MusicChromeColors {
   /// 柔红（封面网格破坏性悬停）。
   static const Color redSoft = Color(0xFFFF8F91);
 
+  /// 压在封面影像上的徽标底与发丝描边。
+  static const Color onArtworkBadgeFill = Color(0x7A090D0C);
+  static const Color onArtworkHairline = Color(0x29FFFFFF);
+
   /// 柔红变体（曲目列表删除）。
   static const Color redSoftAlt = Color(0xFFF28C9A);
 

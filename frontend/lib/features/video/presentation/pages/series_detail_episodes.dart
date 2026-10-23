@@ -143,7 +143,7 @@ class _SeasonEpisodeList extends ConsumerWidget {
           (error, _) => Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              movieErrorMessage(error),
+              movieErrorMessage(error, AppLocalizations.of(context)),
               style: MovieDetailTheme.mono(AppTypography.bodySmall),
             ),
           ),

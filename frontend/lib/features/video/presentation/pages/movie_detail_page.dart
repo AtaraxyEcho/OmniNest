@@ -52,7 +52,7 @@ class MovieDetailPage extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Text(
-                      movieErrorMessage(error),
+                      movieErrorMessage(error, AppLocalizations.of(context)),
                       textAlign: TextAlign.center,
                       style: MovieDetailTheme.body(
                         14,
@@ -178,7 +178,11 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
       setState(() => _editMode = false);
     } on Exception catch (error) {
       if (mounted) {
-        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+        showMovieFeedback(
+          context,
+          movieErrorMessage(error, AppLocalizations.of(context)),
+          isError: true,
+        );
       }
     }
   }
@@ -208,7 +212,11 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
       if (!mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
     }
   }
 
@@ -254,7 +262,11 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
       if (!mounted) {
         return;
       }
-      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      showMovieFeedback(
+        context,
+        movieErrorMessage(error, AppLocalizations.of(context)),
+        isError: true,
+      );
     }
   }
 

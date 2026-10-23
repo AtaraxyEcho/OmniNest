@@ -1079,7 +1079,7 @@ public class ExternalImportExecutionService {
                 return mimeType;
             }
         } catch (IOException e) {
-            // 降级到扩展名推断
+            log.debug("系统探测 MIME 失败，降级到扩展名推断: file={}", file.getFileName(), e);
         }
         return FileUploadSessionService.guessMimeTypeByFileName(
                 file.getFileName().toString());
@@ -1110,8 +1110,8 @@ public class ExternalImportExecutionService {
     private void cleanupTempDir(Path tempDir) {
         try {
             fileTreeScanner.deleteTree(tempDir);
-        } catch (IOException ignored) {
-            // 清理失败不影响主流程
+        } catch (IOException exception) {
+            log.debug("导入临时目录清理失败，不影响主流程: dir={}", tempDir, exception);
         }
     }
 

@@ -31,6 +31,10 @@ import 'package:omninest/features/music/presentation/widgets/music_playback_cont
 
 part 'music_mobile_now_playing_pages.dart';
 
+/// 沉浸播放器背景的两团环境光晕：玫瑰与青。
+const Color _ambienceRose = Color(0x597E4880);
+const Color _ambienceTeal = Color(0x57396469);
+
 /// 样例播放页的第一页索引（封面页）。
 const int _musicCoverPage = 0;
 
@@ -512,7 +516,7 @@ class _MobileAuroraLayer extends StatelessWidget {
                       gradient: RadialGradient(
                         center: Alignment.center,
                         radius: 0.55,
-                        colors: [Color(0x597E4880), Colors.transparent],
+                        colors: [_ambienceRose, Colors.transparent],
                       ),
                     ),
                   ),
@@ -527,7 +531,7 @@ class _MobileAuroraLayer extends StatelessWidget {
                       gradient: RadialGradient(
                         center: Alignment.center,
                         radius: 0.5,
-                        colors: [Color(0x57396469), Colors.transparent],
+                        colors: [_ambienceTeal, Colors.transparent],
                       ),
                     ),
                   ),

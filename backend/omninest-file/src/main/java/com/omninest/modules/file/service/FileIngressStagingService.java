@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileIngressStagingService {
@@ -181,7 +183,7 @@ public class FileIngressStagingService {
         try {
             Files.deleteIfExists(tempFile);
         } catch (IOException exception) {
-            // 临时文件清理失败不阻断主流程
+            log.debug("临时文件清理失败，交由系统临时目录策略兜底: file={}", tempFile, exception);
         }
     }
 }

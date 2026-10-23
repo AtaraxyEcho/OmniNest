@@ -451,10 +451,10 @@ class _LibraryTile extends StatelessWidget {
                         color: context.env.accent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check_rounded,
                         size: 16,
-                        color: Color(0xFF172014),
+                        color: context.env.onAccent,
                       ),
                     ),
                   ),
