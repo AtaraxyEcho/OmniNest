@@ -169,6 +169,40 @@ class BaselineSchemaIntegrityFlywayMigrationTest {
                 """)).isZero();
     }
 
+    @Test
+    void activeFileNodePathsAreUniqueWhileRootDerivedNamesMayRepeat() throws SQLException {
+        String owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        try (Connection connection = POSTGRES.createConnection("");
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO omni.file_nodes
+                        (id, owner_user_id, node_type, name, normalized_path)
+                    VALUES
+                        (gen_random_uuid(), '%s', 'FILE', 'a.txt', '/a.txt')
+                    """.formatted(owner));
+
+            Assertions.assertThatThrownBy(() -> statement.executeUpdate("""
+                            INSERT INTO omni.file_nodes
+                                (id, owner_user_id, node_type, name, normalized_path)
+                            VALUES
+                                (gen_random_uuid(), '%s', 'FILE', 'a.txt', '/a.txt')
+                            """.formatted(owner)))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("uniq_file_nodes_active_path_personal");
+
+            // 根层派生资产可以同名，路径由 .metadata 下的照片标识区分。
+            statement.executeUpdate("""
+                    INSERT INTO omni.file_nodes
+                        (id, owner_user_id, node_type, name, normalized_path, source_type)
+                    VALUES
+                        (gen_random_uuid(), '%s', 'FILE', 'thumb.webp',
+                         '/.metadata/PHOTO_ITEM/11111111-1111-4111-8111-111111111111/POSTER/thumb.webp', 'DERIVED'),
+                        (gen_random_uuid(), '%s', 'FILE', 'thumb.webp',
+                         '/.metadata/PHOTO_ITEM/22222222-2222-4222-8222-222222222222/POSTER/thumb.webp', 'DERIVED')
+                    """.formatted(owner, owner));
+        }
+    }
+
     private int countObjects(String sql) throws SQLException {
         try (Connection connection = POSTGRES.createConnection("");
              Statement statement = connection.createStatement();
