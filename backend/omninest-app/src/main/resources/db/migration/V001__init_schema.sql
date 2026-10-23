@@ -2771,11 +2771,11 @@ CREATE INDEX "idx_file_nodes_uploaded_by" ON "omni"."file_nodes" USING btree (
 -- 共享空间的 owner_user_id 是上传者，不同成员在同一目录上传同名文件属正常场景，唯一键不能带 owner。
 CREATE UNIQUE INDEX "uniq_file_nodes_sibling_name_personal" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid) "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  (COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid)) "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "name" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE is_deleted = false AND space_type::text = 'PERSONAL'::text;
 CREATE UNIQUE INDEX "uniq_file_nodes_sibling_name_shared" ON "omni"."file_nodes" USING btree (
-  COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid) "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  (COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid)) "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "name" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE is_deleted = false AND space_type::text = 'SHARED'::text;
 
