@@ -1,9 +1,15 @@
 package com.omninest.modules.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.omninest.common.user.SystemInstanceInfo;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig.MessageFormat;
 import java.time.Instant;
+import java.time.ZoneId;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -15,7 +21,15 @@ class NotificationEmailRendererTest {
 
     private static final Instant CREATED_AT = Instant.parse("2026-10-20T02:00:00Z");
 
-    private final NotificationEmailRenderer renderer = new NotificationEmailRenderer();
+    private final SystemInstanceInfo instanceConfig = mock(SystemInstanceInfo.class);
+    private final NotificationEmailRenderer renderer = new NotificationEmailRenderer(instanceConfig);
+
+    @BeforeEach
+    void stubInstanceDefaults() {
+        when(instanceConfig.instanceName()).thenReturn("OmniNest");
+        when(instanceConfig.defaultLocale()).thenReturn("zh-CN");
+        when(instanceConfig.timeZone()).thenReturn(ZoneId.of("UTC"));
+    }
 
     @Test
     void plainFormatProducesNoHtmlPart() {
@@ -113,6 +127,36 @@ class NotificationEmailRendererTest {
                 .doesNotContain("src=\"http")
                 .doesNotContain("@import")
                 .doesNotContain("<style");
+    }
+
+    @Test
+    @DisplayName("落款、文档语言与时间戳都取自系统实例配置")
+    void instanceConfigurationDrivesSenderNameLocaleAndTimestamp() {
+        when(instanceConfig.instanceName()).thenReturn("家庭媒体中心");
+        when(instanceConfig.defaultLocale()).thenReturn("en-US");
+        when(instanceConfig.timeZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
+
+        var rendered = renderer.render(
+                "标题", "标题", "正文", "任务完成", CREATED_AT, "https://nest.example.test", MessageFormat.RICH);
+
+        assertThat(rendered.plainText())
+                .contains("由 家庭媒体中心 通知邮件通道发送")
+                .contains("创建时间：2026-10-20 10:00:00");
+        assertThat(rendered.html())
+                .contains("<html lang=\"en-US\">")
+                .contains("打开 家庭媒体中心");
+    }
+
+    @Test
+    @DisplayName("实例名里的覆写字符不得原样进入邮件")
+    void instanceNameIsSanitizedLikeUserData() {
+        when(instanceConfig.instanceName()).thenReturn("Omni\u202Enest");
+
+        var rendered = renderer.render(
+                "标题", "标题", "正文", "任务完成", CREATED_AT, "", MessageFormat.RICH);
+
+        assertThat(rendered.plainText()).doesNotContain("\u202E");
+        assertThat(rendered.html()).doesNotContain("\u202E");
     }
 
     private int countAnchors(String html) {

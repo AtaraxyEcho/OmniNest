@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -162,6 +163,31 @@ class ExternalStorageOAuthServiceTest {
     }
 
     @Test
+    @DisplayName("授权链接只申请只读 scope，且带 offline 能力")
+    void authorizationUrlsRequestReadOnlyScopes() {
+        when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
+                .thenReturn(
+                        Optional.of(buildAccount("ONEDRIVE", "{}")),
+                        Optional.of(buildAccount("GDRIVE", "{}")));
+        when(oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue("ONEDRIVE"))
+                .thenReturn(Optional.of(buildApp("ONEDRIVE")));
+        when(oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue("GDRIVE"))
+                .thenReturn(Optional.of(buildApp("GDRIVE")));
+
+        String oneDrive = service.start(OWNER_ID, "ONEDRIVE", ACCOUNT_ID).authorizationUrl();
+        String googleDrive = service.start(OWNER_ID, "GDRIVE", ACCOUNT_ID).authorizationUrl();
+
+        // 远程源定位是只读浏览与导入，读写 scope 会让一次凭据泄露波及用户云端全部文件。
+        assertThat(oneDrive)
+                .contains("scope=Files.Read.All+offline_access")
+                .doesNotContain("ReadWrite");
+        assertThat(googleDrive)
+                .contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.readonly")
+                .contains("access_type=offline")
+                .doesNotContain("auth%2Fdrive&");
+    }
+
+    @Test
     void handleCallbackRejectsUnknownState() {
         assertThatThrownBy(() -> service.handleCallback("GDRIVE", "never-issued", "authorization-code"))
                 .isInstanceOf(BusinessException.class)
@@ -182,15 +208,30 @@ class ExternalStorageOAuthServiceTest {
 
 
     private StorageExternalAccount buildAccount(String credentialsJson) {
+        return buildAccount("GDRIVE", credentialsJson);
+    }
+
+    private StorageExternalAccount buildAccount(String provider, String credentialsJson) {
         StorageExternalAccount account = new StorageExternalAccount();
         account.setId(ACCOUNT_ID);
         account.setOwnerUserId(OWNER_ID);
-        account.setProvider("GDRIVE");
+        account.setProvider(provider);
         account.setDisplayName("测试授权");
         account.setEncryptedCredentials(credentialsJson);
         account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
         account.setCreatedAt(Instant.now());
         account.setUpdatedAt(Instant.now());
         return account;
+    }
+
+    private StorageConnectorOAuthApp buildApp(String connectorCode) {
+        StorageConnectorOAuthApp app = new StorageConnectorOAuthApp();
+        app.setConnectorCode(connectorCode);
+        app.setClientId("client-id");
+        app.setClientSecretEncrypted("secret");
+        app.setRedirectUri("http://localhost/api/v1/external-connectors/"
+                + connectorCode + "/oauth/callback");
+        app.setEnabled(true);
+        return app;
     }
 }

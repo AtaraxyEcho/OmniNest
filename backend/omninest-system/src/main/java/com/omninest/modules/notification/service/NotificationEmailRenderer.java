@@ -1,9 +1,10 @@
 package com.omninest.modules.notification.service;
 
+import com.omninest.common.user.SystemInstanceInfo;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig.MessageFormat;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
 
@@ -14,15 +15,20 @@ import org.springframework.web.util.HtmlUtils;
  * 原始片段：只做转义、剥离控制字符与双向覆写字符（可把 {@code exe.} 显示成 {@code .exe}），
  * 并且不引用远程图片、字体或样式，避免邮件客户端反向请求暴露收件人。</p>
  *
+ * <p>落款名称、文档语言与时间戳时区都取自安装向导写入的系统实例配置，不能各写一份常量，
+ * 否则改了实例名与时区后邮件仍按出厂值发送。</p>
+ *
  * @author OmniNest
  */
 @Service
+@RequiredArgsConstructor
 public class NotificationEmailRenderer {
 
     private static final int MAX_BODY_LENGTH = 4000;
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
-    private static final String PRODUCT_NAME = "OmniNest";
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private final SystemInstanceInfo systemInstanceInfo;
 
     /**
      * 渲染结果。
@@ -59,15 +65,19 @@ public class NotificationEmailRenderer {
         String safeTitle = sanitize(title);
         String safeBody = truncate(sanitize(body == null ? "" : body));
         String safeType = sanitize(typeLabel);
-        String timestamp = TIMESTAMP_FORMAT.format(createdAt);
-        String plainText = plainText(safeBody, safeType, timestamp);
+        String productName = sanitize(systemInstanceInfo.instanceName());
+        String timestamp = TIMESTAMP_FORMAT
+                .withZone(systemInstanceInfo.timeZone())
+                .format(createdAt);
+        String plainText = plainText(safeBody, safeType, timestamp, productName);
         if (format != MessageFormat.RICH) {
             return new Rendered(safeSubject, plainText, null);
         }
         return new Rendered(
                 safeSubject,
                 plainText,
-                html(safeTitle, safeBody, safeType, timestamp, webBaseUrl));
+                html(safeTitle, safeBody, safeType, timestamp, webBaseUrl,
+                        productName, sanitize(systemInstanceInfo.defaultLocale())));
     }
 
     /**
@@ -102,7 +112,7 @@ public class NotificationEmailRenderer {
         return value.substring(0, MAX_BODY_LENGTH) + "…（内容已截断）";
     }
 
-    private String plainText(String body, String typeLabel, String timestamp) {
+    private String plainText(String body, String typeLabel, String timestamp, String productName) {
         StringBuilder text = new StringBuilder();
         if (!body.isBlank()) {
             text.append(body).append(System.lineSeparator()).append(System.lineSeparator());
@@ -110,17 +120,20 @@ public class NotificationEmailRenderer {
         text.append("通知类型：").append(typeLabel).append(System.lineSeparator())
                 .append("创建时间：").append(timestamp).append(System.lineSeparator())
                 .append(System.lineSeparator())
-                .append("由 ").append(PRODUCT_NAME).append(" 通知邮件通道发送。");
+                .append("由 ").append(productName).append(" 通知邮件通道发送。");
         return text.toString();
     }
 
-    private String html(String title, String body, String typeLabel, String timestamp, String webBaseUrl) {
+    private String html(String title, String body, String typeLabel, String timestamp, String webBaseUrl,
+                        String productName, String localeTag) {
         String safeBaseUrl = webBaseUrl == null ? "" : webBaseUrl.trim();
         boolean hasLink = safeBaseUrl.startsWith("http://") || safeBaseUrl.startsWith("https://");
-        String link = hasLink ? linkBlock(HtmlUtils.htmlEscape(safeBaseUrl)) : "";
+        String link = hasLink
+                ? linkBlock(HtmlUtils.htmlEscape(safeBaseUrl), HtmlUtils.htmlEscape(productName))
+                : "";
         return """
                 <!doctype html>
-                <html lang="zh-CN">
+                <html lang="%8$s">
                 <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -161,12 +174,13 @@ public class NotificationEmailRenderer {
                 </html>
                 """.formatted(
                 HtmlUtils.htmlEscape(title),
-                HtmlUtils.htmlEscape(PRODUCT_NAME),
+                HtmlUtils.htmlEscape(productName),
                 HtmlUtils.htmlEscape(typeLabel),
                 HtmlUtils.htmlEscape(title),
                 bodyBlock(body),
                 HtmlUtils.htmlEscape(timestamp),
-                link);
+                link,
+                HtmlUtils.htmlEscape(localeTag));
     }
 
     private String bodyBlock(String body) {
@@ -177,17 +191,17 @@ public class NotificationEmailRenderer {
         return "<div style=\"margin:0;white-space:normal;word-break:break-word;\">" + broken + "</div>";
     }
 
-    private String linkBlock(String escapedBaseUrl) {
+    private String linkBlock(String escapedBaseUrl, String escapedProductName) {
         return """
                         <tr><td style="padding:0 20px 20px 20px;">
                           <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                             <tr><td style="background-color:#1d4ed8;">
                               <a href="%s/#/notifications"
                                  style="display:inline-block;padding:10px 18px;color:#ffffff;
-                                        text-decoration:none;font-size:13px;">打开 OmniNest</a>
+                                        text-decoration:none;font-size:13px;">打开 %s</a>
                             </td></tr>
                           </table>
                         </td></tr>
-                """.formatted(escapedBaseUrl);
+                """.formatted(escapedBaseUrl, escapedProductName);
     }
 }

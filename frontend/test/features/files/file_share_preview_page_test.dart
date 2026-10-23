@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -182,6 +184,47 @@ void main() {
     expect(find.text('tail-31'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  /// 子项还没回来就退出页面：登录回跳分支的 `ref.read` 不能落在已卸载的 WidgetRef 上。
+  testWidgets('加载子项期间退出页面后不再触碰 ref', (tester) async {
+    final repository = _HangingChildrenShareRepository();
+    await tester.pumpWidget(_host(PublicShareService(repository)));
+    // initState 的 postFrame 发起预览；预览完成后进入挂起的子项加载。
+    await tester.pump();
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    repository.childrenCompleter.complete(
+      const ShareChildrenSuccess(items: [], total: 0),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// 根目录子项永不返回，用于把页面停在 `await` 边界上。
+class _HangingChildrenShareRepository extends _OkShareRepository {
+  final Completer<ShareChildrenResult> childrenCompleter =
+      Completer<ShareChildrenResult>();
+
+  @override
+  Future<SharePreviewResult> preview(String token, {String? password}) async {
+    return const SharePreviewSuccess(
+      fileName: 'trip',
+      sizeBytes: 0,
+      resourceType: 'FOLDER',
+      hasPassword: false,
+    );
+  }
+
+  @override
+  Future<ShareChildrenResult> listChildren(
+    String token, {
+    String? parentId,
+    int page = 0,
+    int size = 50,
+  }) => childrenCompleter.future;
 }
 
 Widget _host(

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.preferences.UserPreferenceQuery;
+import com.omninest.common.user.SystemInstanceInfo;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig;
 import com.omninest.modules.notification.config.NotificationEmailRuntimeConfig.MessageFormat;
@@ -23,6 +24,7 @@ import com.omninest.modules.notification.repository.NotificationTypeRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,17 +53,28 @@ class NotificationEmailServiceTest {
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
 
+    /** 渲染器按真实实现装配，因此实例名/语言/时区必须给出确定值。 */
+    private final SystemInstanceInfo instanceConfig = stubInstanceConfig();
+
     private final NotificationEmailService service = new NotificationEmailService(
             notificationRepository,
             notificationTypeRepository,
             runtimeConfig,
             emailSender,
-            new NotificationEmailRenderer(),
+            new NotificationEmailRenderer(instanceConfig),
             userPreferenceQuery,
             userAccountQuery,
             taskRecordService,
             taskDispatchService
     );
+
+    private static SystemInstanceInfo stubInstanceConfig() {
+        SystemInstanceInfo config = mock(SystemInstanceInfo.class);
+        when(config.instanceName()).thenReturn("OmniNest");
+        when(config.defaultLocale()).thenReturn("zh-CN");
+        when(config.timeZone()).thenReturn(ZoneId.of("UTC"));
+        return config;
+    }
 
     @Test
     void shouldDeliverRequiresConfiguredChannelAndExplicitPreference() {

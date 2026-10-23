@@ -1,5 +1,6 @@
 package com.omninest.modules.user.service;
 
+import com.omninest.common.user.SystemInstanceInfo;
 import com.omninest.modules.user.domain.SystemInstance;
 import com.omninest.modules.user.repository.SystemInstanceRepository;
 import java.time.DateTimeException;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class SystemInstanceConfigService {
+public class SystemInstanceConfigService implements SystemInstanceInfo {
 
     private static final String FALLBACK_LOCALE = "zh-CN";
     private static final String FALLBACK_INSTANCE_NAME = "OmniNest";
@@ -30,6 +31,7 @@ public class SystemInstanceConfigService {
      *
      * @return 实例时区
      */
+    @Override
     @Transactional(readOnly = true)
     public ZoneId timeZone() {
         SystemInstance instance = instance();
@@ -48,6 +50,7 @@ public class SystemInstanceConfigService {
      *
      * @return 默认语言
      */
+    @Override
     @Transactional(readOnly = true)
     public String defaultLocale() {
         SystemInstance instance = instance();
@@ -63,6 +66,7 @@ public class SystemInstanceConfigService {
      *
      * @return 实例名称
      */
+    @Override
     @Transactional(readOnly = true)
     public String instanceName() {
         SystemInstance instance = instance();
