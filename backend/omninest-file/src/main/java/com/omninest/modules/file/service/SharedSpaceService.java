@@ -525,9 +525,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     private SubtreeStats calculateSubtreeStats(FileNode node) {
         String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
         if (NodeType.FILE.getValue().equals(node.getNodeType())) {
-            long versionBytes = node.getSpaceType() == SpaceType.SHARED
-                    ? fileMetricsRepository.sumSharedVersionBytesForNode(node.getId(), false)
-                    : 0L;
+            long versionBytes = fileMetricsRepository.sumVersionBytesForNode(
+                    node.getId(), node.getSpaceType().getValue(), false);
             return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
         }
         List<Object[]> rows = node.getSpaceType() == SpaceType.SHARED
@@ -541,10 +540,12 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
             totalBytes = toLong(row[0]);
             fileCount = toLong(row[1]);
         }
-        if (node.getSpaceType() == SpaceType.SHARED) {
-            // 账本与夜间重算都把历史版本对象计入字节，删除/移动同口径释放。
-            totalBytes += fileMetricsRepository.sumSharedVersionBytesUnderPath(prefix, false);
-        }
+        // 账本与夜间重算都把历史版本对象计入字节，删除/移动同口径释放。
+        totalBytes += node.getSpaceType() == SpaceType.SHARED
+                ? fileMetricsRepository.sumVersionBytesUnderPathInSpace(
+                        node.getSpaceType().getValue(), prefix, false)
+                : fileMetricsRepository.sumVersionBytesUnderPathByOwner(
+                        node.getOwnerUserId(), prefix, false);
         return new SubtreeStats(totalBytes, fileCount);
     }
 
@@ -561,7 +562,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
     public SubtreeStats calculateRestoreSubtreeStats(FileNode node) {
         String prefix = LikePatterns.escapeSpecials(node.getNormalizedPath() + "/");
         if (NodeType.FILE.getValue().equals(node.getNodeType())) {
-            long versionBytes = fileMetricsRepository.sumSharedVersionBytesForNode(node.getId(), true);
+            long versionBytes = fileMetricsRepository.sumVersionBytesForNode(
+                    node.getId(), SpaceType.SHARED.getValue(), true);
             return new SubtreeStats(node.getSizeBytes() + versionBytes, 1L);
         }
         List<Object[]> rows = fileNodeRepository.sumDeletedFilesUnderPathInSpace(SpaceType.SHARED, prefix);
@@ -572,7 +574,8 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
             totalBytes = toLong(row[0]);
             fileCount = toLong(row[1]);
         }
-        totalBytes += fileMetricsRepository.sumSharedVersionBytesUnderPath(prefix, true);
+        totalBytes += fileMetricsRepository.sumVersionBytesUnderPathInSpace(
+                SpaceType.SHARED.getValue(), prefix, true);
         return new SubtreeStats(totalBytes, fileCount);
     }
 
