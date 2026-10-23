@@ -119,7 +119,7 @@ public class VideoTranscodeService {
      * 调用方负责删除返回的临时文件。
      */
     public Path extractSubtitleToWebVtt(UUID ownerUserId, UUID fileNodeId, UUID videoItemId, int streamIndex) {
-        String internalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId);
+        String internalUrl = resolveInput(ownerUserId, fileNodeId);
         if (ffmpegRuntime.isDisabled()) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
                     "ffmpeg 不可用，无法提取内嵌字幕");
@@ -225,7 +225,7 @@ public class VideoTranscodeService {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
                     "ffmpeg 不可用，无法执行" + logLabel);
         }
-        String internalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId);
+        String internalUrl = resolveInput(ownerUserId, fileNodeId);
         if (!ffmpegRuntime.isDocker()) {
             return executeLocalTranscode(internalUrl, videoItemId, ext, ffmpegArgs, logLabel);
         }
@@ -307,6 +307,12 @@ public class VideoTranscodeService {
             throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
                     logLabel + "执行失败: " + exception.getMessage());
         }
+    }
+
+    private String resolveInput(UUID ownerUserId, UUID fileNodeId) {
+        return ffmpegRuntime.isDocker()
+                ? sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId)
+                : sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
     }
 
     private void runLocalFfmpeg(List<String> command, Duration timeout, String logLabel)

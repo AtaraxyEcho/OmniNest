@@ -2766,17 +2766,16 @@ CREATE INDEX "idx_file_nodes_uploaded_by" ON "omni"."file_nodes" USING btree (
   "uploaded_by" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE space_type::text = 'SHARED'::text AND is_deleted = false;
 
--- 同级同名唯一性只约束活动节点：软删除节点允许与新节点同名，否则二次软删除会撞唯一键。
--- 根目录 parent_id 为 NULL，PostgreSQL 认为 NULL 互不相等，必须用 COALESCE 收敛成同一哨兵值。
--- 共享空间的 owner_user_id 是上传者，不同成员在同一目录上传同名文件属正常场景，唯一键不能带 owner。
-CREATE UNIQUE INDEX "uniq_file_nodes_sibling_name_personal" ON "omni"."file_nodes" USING btree (
+-- 活动节点用规范化路径保证唯一：路径已包含父级与名称，等价于"同目录同名唯一"，
+-- 同时避免 parent_id IS NULL 时 PostgreSQL 把根节点视为互不相等；派生资产可以
+-- 在根层拥有相同名称但不同 .metadata 路径，不能用 (parent_id, name) 约束。
+-- 共享空间的路径本身已不含所有者，因此不同成员在同一目录上传同名文件仍会冲突。
+CREATE UNIQUE INDEX "uniq_file_nodes_active_path_personal" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  (COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid)) "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  "name" "pg_catalog"."text_ops" ASC NULLS LAST
+  "normalized_path" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE is_deleted = false AND space_type::text = 'PERSONAL'::text;
-CREATE UNIQUE INDEX "uniq_file_nodes_sibling_name_shared" ON "omni"."file_nodes" USING btree (
-  (COALESCE("parent_id", '00000000-0000-0000-0000-000000000000'::uuid)) "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  "name" "pg_catalog"."text_ops" ASC NULLS LAST
+CREATE UNIQUE INDEX "uniq_file_nodes_active_path_shared" ON "omni"."file_nodes" USING btree (
+  "normalized_path" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE is_deleted = false AND space_type::text = 'SHARED'::text;
 
 ALTER TABLE "omni"."file_nodes" ADD CONSTRAINT "chk_file_nodes_source" CHECK (source_type::text = ANY (ARRAY['LOCAL'::character varying::text, 'LOCAL_FILESYSTEM'::character varying::text, 'EXTERNAL'::character varying::text, 'DERIVED'::character varying::text, 'RCLONE'::character varying::text, 'SHARE'::character varying::text]));

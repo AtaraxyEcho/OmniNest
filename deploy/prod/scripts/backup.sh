@@ -4,6 +4,17 @@
 # 建议 crontab 每日运行；产物为 omninest-<时间戳>/ 目录。
 set -eu
 
+# 解析备份目录的宿主机路径：Git Bash 下 pwd 返回 /d/...，Docker Desktop 无法解析；
+# 优先使用 pwd -W 的 Windows 盘符路径，Linux 环境自动回退到 pwd。
+host_pwd() {
+    cd "$1"
+    if pwd -W >/dev/null 2>&1; then
+        pwd -W
+    else
+        pwd
+    fi
+}
+
 BACKUP_ROOT="${1:-./backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${BACKUP_ROOT}/omninest-${STAMP}"
@@ -13,7 +24,8 @@ COMPOSE_FILE="docker-compose.yml"
 # .env 是 Compose 的属性文件而非 shell 脚本（值可能含括号/空格，模板的
 # MusicBrainz User-Agent 即如此），整体 source 会语法错误，只提取所需键。
 read_env_value() {
-    sed -n "s/^$1=//p" .env | tail -n 1 | tr -d ''
+    sed -n "s/^$1=//p" .env | tail -n 1 | tr -d '
+'
 }
 if [ -f .env ]; then
     POSTGRES_DB="$(read_env_value POSTGRES_DB)"
@@ -43,7 +55,7 @@ backup_volume() {
     require_volume "${volume}"
     docker run --rm \
         -v "${PROJECT_NAME}_${volume}:/data" \
-        -v "$(cd "${BACKUP_DIR}" && pwd):/backup" alpine \
+        -v "$(host_pwd "${BACKUP_DIR}"):/backup" alpine \
         sh -c "umask 077 && tar czf /backup/${archive} -C /data ."
     chmod 600 "${BACKUP_DIR}/${archive}" 2>/dev/null || true
 }

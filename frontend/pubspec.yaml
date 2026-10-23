@@ -98,27 +98,23 @@ flutter:
   shaders:
     - assets/shaders/portal_weather.frag
   fonts:
+    # Noto Sans SC 使用单张可变字体：wght 轴覆盖 100-900，替代 4 张静态字面
+    # （约 42MB → 约 17.8MB）。Flutter 3.41+ 会把 FontWeight 映射到变量轴，
+    # 不要为每个字重重复声明同一文件。
     - family: NotoSansSC
       fonts:
-        - asset: assets/fonts/NotoSansSC-400.ttf
-          weight: 400
-        - asset: assets/fonts/NotoSansSC-500.ttf
-          weight: 500
-        - asset: assets/fonts/NotoSansSC-600.ttf
-          weight: 600
-        - asset: assets/fonts/NotoSansSC-700.ttf
-          weight: 700
+        - asset: assets/fonts/NotoSansSC-VF.ttf
     # 衬线档只有 Regular 一张静态字面（该 OTF 无 fvar，不能按权重插值）。
     # 稿子的标题与面板名写 600，这里不补 SemiBold：单张 CJK 字面 11.6MB，
-    # 无衬线已带 4 张约 10.5MB/张，为一个字重翻倍不成立。因此衬线档的层级
-    # 一律靠字号、字距与行高表达，w600 声明保留（补齐字面即生效，不必改代码）。
+    # 为一个字重翻倍不成立。因此衬线档的层级一律靠字号、字距与行高表达，
+    # w600 声明保留（补齐字面即生效，不必改代码）。
     - family: NotoSerifSC
       fonts:
         - asset: assets/fonts/NotoSerifSC-Regular.otf
     - family: InstrumentSerif
       fonts:
         - asset: assets/fonts/InstrumentSerif-Regular.ttf
-    # Inter 与 JetBrains Mono 均为 SIL OFL 1.1 许可，许可文本见 assets/fonts/OFL-*.txt
+    # Noto Sans SC、Inter 与 JetBrains Mono 均为 SIL OFL 1.1 许可，许可文本见 assets/fonts/OFL-*.txt
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf

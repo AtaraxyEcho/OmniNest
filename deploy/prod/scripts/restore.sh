@@ -4,6 +4,17 @@
 # 前置：先 docker compose down 停止全部服务，恢复后 up -d。
 set -eu
 
+# 解析备份目录的宿主机路径：Git Bash 下 pwd 返回 /d/...，Docker Desktop 无法解析；
+# 优先使用 pwd -W 的 Windows 盘符路径，Linux 环境自动回退到 pwd。
+host_pwd() {
+    cd "$1"
+    if pwd -W >/dev/null 2>&1; then
+        pwd -W
+    else
+        pwd
+    fi
+}
+
 BACKUP_DIR="${1:?用法: restore.sh <备份目录>}"
 COMPOSE_FILE="docker-compose.yml"
 
@@ -25,7 +36,8 @@ fi
 # .env 是 Compose 的属性文件而非 shell 脚本（值可能含括号/空格），整体
 # source 会语法错误，只提取所需键。
 read_env_value() {
-    sed -n "s/^$1=//p" .env | tail -n 1 | tr -d ''
+    sed -n "s/^$1=//p" .env | tail -n 1 | tr -d '
+'
 }
 if [ -f .env ]; then
     POSTGRES_DB="$(read_env_value POSTGRES_DB)"
@@ -67,7 +79,7 @@ restore_volume() {
     docker volume create "${PROJECT_NAME}_${volume}" >/dev/null
     docker run --rm \
         -v "${PROJECT_NAME}_${volume}:/data" \
-        -v "$(cd "${BACKUP_DIR}" && pwd):/backup" alpine \
+        -v "$(host_pwd "${BACKUP_DIR}"):/backup" alpine \
         sh -c "rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true; tar xzf /backup/${archive} -C /data"
 }
 

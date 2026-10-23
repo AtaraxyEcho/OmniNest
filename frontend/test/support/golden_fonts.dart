@@ -12,12 +12,8 @@ Future<void> loadGoldenFonts() async {
         ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
         ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
         ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
-  final notoSans =
-      FontLoader('NotoSansSC')
-        ..addFont(rootBundle.load('assets/fonts/NotoSansSC-400.ttf'))
-        ..addFont(rootBundle.load('assets/fonts/NotoSansSC-500.ttf'))
-        ..addFont(rootBundle.load('assets/fonts/NotoSansSC-600.ttf'))
-        ..addFont(rootBundle.load('assets/fonts/NotoSansSC-700.ttf'));
+  final notoSans = FontLoader('NotoSansSC')
+    ..addFont(rootBundle.load('assets/fonts/NotoSansSC-VF.ttf'));
   final icons = FontLoader('MaterialIcons')..addFont(_loadMaterialIcons());
   // 衬线数字与等宽档位是样例签名排版；漏装会让这些文字在基线图里
   // 变成实心矩形，整张图的可读性判断随之失效。只登记没有中文覆盖的字族：

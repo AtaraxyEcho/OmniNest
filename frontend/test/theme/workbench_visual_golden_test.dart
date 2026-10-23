@@ -21,12 +21,8 @@ void main() {
           ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
           ..addFont(rootBundle.load('assets/fonts/Inter-SemiBold.ttf'))
           ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
-    final notoSansLoader =
-        FontLoader('NotoSansSC')
-          ..addFont(rootBundle.load('assets/fonts/NotoSansSC-400.ttf'))
-          ..addFont(rootBundle.load('assets/fonts/NotoSansSC-500.ttf'))
-          ..addFont(rootBundle.load('assets/fonts/NotoSansSC-600.ttf'))
-          ..addFont(rootBundle.load('assets/fonts/NotoSansSC-700.ttf'));
+    final notoSansLoader = FontLoader('NotoSansSC')
+      ..addFont(rootBundle.load('assets/fonts/NotoSansSC-VF.ttf'));
     final iconLoader = FontLoader('MaterialIcons')
       ..addFont(_loadMaterialIcons());
     await Future.wait(<Future<void>>[

@@ -234,7 +234,7 @@ public class VideoStreamService {
     ) {
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, videoItemId);
 
-        String internalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, item.getFileNodeId());
+        String internalUrl = resolveInput(ownerUserId, item.getFileNodeId());
         log.info("流式转码开始: videoItemId={}, audioCodec={}, container={}, startSeconds={}",
                 videoItemId, item.getAudioCodec(), item.getContainerFormat(), startSeconds);
 
@@ -314,8 +314,8 @@ public class VideoStreamService {
     ) {
         MediaVideoItem sourceItem = mediaContentAccessService.requireReadableVideo(ownerUserId, sourceVideoItemId);
 
-        String videoInternalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, sourceItem.getFileNodeId());
-        String audioInternalUrl = sourceInputResolver.resolveDockerInput(ownerUserId, audioFileNodeId);
+        String videoInternalUrl = resolveInput(ownerUserId, sourceItem.getFileNodeId());
+        String audioInternalUrl = resolveInput(ownerUserId, audioFileNodeId);
 
         log.info("缓存音频 mux 开始: sourceVideoItemId={}, startSeconds={}", sourceVideoItemId, startSeconds);
 
@@ -455,6 +455,12 @@ public class VideoStreamService {
         command.add("-y");
         command.addAll(args);
         return new StreamCommand(command, null);
+    }
+
+    private String resolveInput(UUID ownerUserId, UUID fileNodeId) {
+        return ffmpegRuntime.isDocker()
+                ? sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId)
+                : sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
     }
 
     private String combinedProtocolWhitelist(List<String> inputs) {
