@@ -131,6 +131,9 @@ class _RecordingFolderRepository implements FileRepository {
   final created = <({String? parentId, String name})>[];
 
   @override
+  Future<List<ExternalStorageAccount>> listExternalStorages() async => const [];
+
+  @override
   Future<FileNode> createFolder({
     String? parentId,
     required String name,
@@ -157,6 +160,7 @@ Future<_SectionsController> _pump(
   FileBrowserState sectionState, {
   FileBrowserState? startState,
   FileRepository? repository,
+  String? oauthStatus,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(390, 844);
@@ -173,7 +177,10 @@ Future<_SectionsController> _pump(
               hosted: true,
               child: Scaffold(
                 backgroundColor: const Color(0xFF0B1110),
-                body: FileBrowserPage(initialSection: sectionState.section),
+                body: FileBrowserPage(
+                  initialSection: sectionState.section,
+                  initialOAuthStatus: oauthStatus,
+                ),
               ),
             ),
       ),
@@ -610,6 +617,37 @@ void main() {
       findsNothing,
       reason: 'FolderView 档的页头是分段器，不给 .feature-hero',
     );
+  });
+
+  testWidgets('外部存储 OAuth 成功回跳：提示结果并加载外部存储分区', (tester) async {
+    await _pump(
+      tester,
+      const FileBrowserState(
+        files: <FileNode>[],
+        recycleBin: <FileNode>[],
+        section: FileManagerSection.externalStorage,
+      ),
+      repository: _RecordingFolderRepository(),
+      oauthStatus: 'success',
+    );
+
+    expect(find.text('外部存储授权完成。'), findsOneWidget);
+    expect(find.byType(FileBrowserPage), findsOneWidget);
+  });
+
+  testWidgets('外部存储 OAuth 失败回跳：提示失败文案', (tester) async {
+    await _pump(
+      tester,
+      const FileBrowserState(
+        files: <FileNode>[],
+        recycleBin: <FileNode>[],
+        section: FileManagerSection.externalStorage,
+      ),
+      repository: _RecordingFolderRepository(),
+      oauthStatus: 'error',
+    );
+
+    expect(find.text('外部存储授权失败，请重试。'), findsOneWidget);
   });
 }
 

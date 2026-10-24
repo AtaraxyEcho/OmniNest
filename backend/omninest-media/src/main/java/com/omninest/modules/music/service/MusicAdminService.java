@@ -19,6 +19,7 @@ import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicArtist;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -72,8 +73,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MusicAdminService {
-    private static final int SCAN_PREFETCH_PARALLELISM = 4;
-    private static final int SCAN_PREFETCH_BATCH_SIZE = 16;
+    /** 音乐扫描预取 I/O 并发；默认 4。 */
+    @Value("${omninest.concurrency.music-prefetch:4}")
+    int scanPrefetchConcurrency = 4;
+    /** 每批预取的音频数量；默认 16。 */
+    @Value("${omninest.concurrency.music-prefetch-batch:16}")
+    int scanPrefetchBatchSize = 16;
 
     private static final List<String> ACTIVE_TASK_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
@@ -206,12 +211,12 @@ public class MusicAdminService {
             Map<UUID, Set<UUID>> affectedAlbumsByOwner = new LinkedHashMap<>();
             int visited = 0;
             List<FileDescriptor> audioNodes = nodes.stream().filter(this::isAudioFile).toList();
-            Semaphore ioPermits = new Semaphore(SCAN_PREFETCH_PARALLELISM);
+            Semaphore ioPermits = new Semaphore(Math.max(1, scanPrefetchConcurrency));
             try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
-                for (int start = 0; start < audioNodes.size(); start += SCAN_PREFETCH_BATCH_SIZE) {
+                for (int start = 0; start < audioNodes.size(); start += Math.max(1, scanPrefetchBatchSize)) {
                     List<FileDescriptor> chunk = audioNodes.subList(
                             start,
-                            Math.min(start + SCAN_PREFETCH_BATCH_SIZE, audioNodes.size())
+                            Math.min(start + Math.max(1, scanPrefetchBatchSize), audioNodes.size())
                     );
                     List<Future<PrefetchedAudio>> futures = chunk.stream()
                             .map(file -> ioExecutor.submit(() -> prefetchAudio(file, lyricFilesByBasePath, ioPermits)))

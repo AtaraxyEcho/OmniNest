@@ -41,9 +41,9 @@ class ComposeNetworkTopologyTest {
 
     private static final String EGRESS = "egress";
     private static final Path REPO_ROOT = findRepoRoot();
-    private static final String PROBE_VOLUME = "omninest-probe-tmp:/tmp/omninest-probe";
+    private static final String PROBE_VOLUME = "omninest-probe-cache:/tmp/omninest-probe";
     private static final String TRANSCODE_VOLUME =
-            "omninest-transcode-tmp:/tmp/omninest-processing/transcode";
+            "omninest-transcode-cache:/tmp/omninest-processing/transcode";
 
     /** 每张 compose 允许出现的全部服务，以及它们在 egress 上的成员；不在 egress 的服务即留在 default。 */
     private static final Map<String, ExpectedTopology> FILES = Map.of(

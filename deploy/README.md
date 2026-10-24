@@ -50,6 +50,10 @@ docker exec omninest-postgres psql -U omninest -d omninest -c 'DROP SCHEMA omni 
 Lucene 索引本就是可重建数据，不随库清理。生产环境在未发布阶段同样按基线重建；一旦进入
 已发布且环境执行过迁移的阶段，基线不可改写，必须改用递增迁移（见根目录 `AGENTS.md`）。
 
+若必须保留已有开发数据，可先备份，再执行 `deploy/db/upgrade-baseline-20261024.sql`
+补齐本次基线新增的列、时间戳类型与默认值，最后用 Flyway `repair` 对齐校验和。
+**repair 不能单独使用**：它只改历史表校验和，不补结构；只在结构已经补齐后执行。
+
 重建只清数据库，MinIO 卷里的对象字节仍在：新库没有任何 `file_objects` 行，桶内**全部**对象
 都会被原件桶孤儿审计判成无主字节。重设基线之后不得开启
 `omninest.storage.user-file-orphan-scan.delete-enabled`，否则等价于清空用户文件。
@@ -187,7 +191,7 @@ profile 是所有 Compose 子命令共同的筛选条件——`up -d` 没带上�
 独立 ffmpeg 容器已移除：探测、转码与抽帧都在 backend 容器本地执行，
 媒体内容内嵌的远程引用由强制 demuxer 与 `protocol_whitelist` 收口，
 不再依赖一张 internal 网兜底。探测与转码临时目录分别挂到
-`omninest-probe-tmp` / `omninest-transcode-tmp` 命名卷，避免数 GB 视频写满 OverlayFS。
+`omninest-probe-cache` / `omninest-transcode-cache` 命名卷，避免数 GB 视频写满 OverlayFS。
 
 `internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、宿主连不上），
 所以 `egress` 故意不设 `internal`；只挂 internal 网的服务一旦加上 `ports:` 会静默失效，

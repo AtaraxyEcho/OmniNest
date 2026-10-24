@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -107,6 +108,9 @@ public class ExternalImportExecutionService {
     private static final long PART_SIZE_BYTES = 32L * 1024 * 1024;
     /** 并行上传分片数。 */
     private static final int MULTIPART_CONCURRENCY = 4;
+    /** S3 分片上传并发；默认 4。 */
+    @Value("${omninest.concurrency.import-multipart:4}")
+    int multipartConcurrency = MULTIPART_CONCURRENCY;
 
     /**
      * 执行外部存储导入任务。
@@ -382,7 +386,7 @@ public class ExternalImportExecutionService {
 
         AtomicLong partBytesRead = new AtomicLong(0);
         AtomicReference<Throwable> error = new AtomicReference<>();
-        int concurrency = Math.min(MULTIPART_CONCURRENCY, parts.size());
+        int concurrency = Math.min(Math.max(1, multipartConcurrency), parts.size());
         Semaphore permits = new Semaphore(concurrency);
         List<ObjectStorageCompletedPart> completedParts =
                 Collections.synchronizedList(new ArrayList<>(parts.size()));

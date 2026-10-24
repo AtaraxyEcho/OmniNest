@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -42,7 +43,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class ContentAssetService {
-    private static final int SCREENSHOT_DOWNLOAD_PARALLELISM = 4;
+    /** 剧照并发下载上限；默认 4，避免一次刮削占满对象存储带宽。 */
+    @Value("${omninest.concurrency.screenshot-download:4}")
+    int screenshotDownloadConcurrency = 4;
     private final ContentAssetRepository contentAssetRepository;
     private final FileQueryService fileQueryService;
     private final DerivedAssetStorageService derivedAssetStorageService;
@@ -73,7 +76,7 @@ public class ContentAssetService {
         // 远程下载与派生入库先于任何事务完成：不能一边占着数据库连接一边等外部图片。
         record DownloadedScreenshot(String url, int sortOrder, UUID fileNodeId) {
         }
-        Semaphore downloadPermits = new Semaphore(SCREENSHOT_DOWNLOAD_PARALLELISM);
+        Semaphore downloadPermits = new Semaphore(Math.max(1, screenshotDownloadConcurrency));
         List<Callable<DownloadedScreenshot>> tasks = new ArrayList<>();
         int nextSortOrder = sortOrder;
         for (String url : screenshotUrls) {

@@ -11,15 +11,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.modules.file.service.DerivedAssetRequest;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.video.domain.ContentAsset;
+import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
 import com.omninest.modules.video.repository.ContentAssetRepository;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.mockito.ArgumentCaptor;
 
 class ContentAssetServiceTest {
@@ -60,8 +63,10 @@ class ContentAssetServiceTest {
                 any(), any(), any(), any()
         )).thenReturn(Optional.empty());
         when(derivedAssetStorageService.storeRemote(any()))
-                .thenReturn(posterFileId)
-                .thenReturn(backdropFileId);
+                .thenAnswer(invocation -> {
+                    var request = invocation.getArgument(0, DerivedAssetRequest.class);
+                    return "POSTER".equals(request.assetType()) ? posterFileId : backdropFileId;
+                });
 
         var result = contentAssetService.syncPrimaryMovieAssets(movieId, OWNER_ID, candidate);
 
@@ -73,10 +78,10 @@ class ContentAssetServiceTest {
         verify(derivedAssetStorageService, Mockito.times(2)).storeRemote(any());
         assertThat(captor.getAllValues())
                 .extracting(ContentAsset::getAssetType)
-                .containsExactly("POSTER", "BACKDROP");
+                .containsExactlyInAnyOrder("POSTER", "BACKDROP");
         assertThat(captor.getAllValues())
                 .extracting(ContentAsset::getFileNodeId)
-                .containsExactly(posterFileId, backdropFileId);
+                .containsExactlyInAnyOrder(posterFileId, backdropFileId);
         assertThat(captor.getAllValues())
                 .allSatisfy(asset -> {
                     assertThat(asset.getOwnerUserId()).isEqualTo(OWNER_ID);
@@ -86,6 +91,42 @@ class ContentAssetServiceTest {
                     assertThat(asset.getProvider()).isEqualTo("TMDB");
                     assertThat(asset.getMetadata()).containsEntry("externalId", "123");
                 });
+    }
+
+    @Test
+    void screenshotDownloadsRespectConfiguredConcurrency() {
+        contentAssetService.screenshotDownloadConcurrency = 2;
+        when(contentAssetRepository.findByOwnerUserIdAndResourceTypeAndResourceIdAndAssetType(
+                OWNER_ID, "VIDEO_ITEM", VIDEO_ID, "SCREENSHOT"))
+                .thenReturn(List.of());
+        java.util.concurrent.atomic.AtomicInteger active = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger maxActive = new java.util.concurrent.atomic.AtomicInteger();
+        when(derivedAssetStorageService.storeRemote(any())).thenAnswer(invocation -> {
+            int current = active.incrementAndGet();
+            maxActive.accumulateAndGet(current, Math::max);
+            try {
+                Thread.sleep(30);
+            } finally {
+                active.decrementAndGet();
+            }
+            return UUID.randomUUID();
+        });
+        when(transactionManager.getTransaction(any()))
+                .thenReturn(mock(TransactionStatus.class));
+        var item = new MediaVideoItem();
+        item.setId(VIDEO_ID);
+        item.setOwnerUserId(OWNER_ID);
+
+        contentAssetService.syncVideoScreenshots(
+                item,
+                List.of("https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/3.jpg",
+                        "https://cdn/4.jpg", "https://cdn/5.jpg", "https://cdn/6.jpg"),
+                "TMDB",
+                "123"
+        );
+
+        assertThat(maxActive.get()).isLessThanOrEqualTo(2);
+        verify(contentAssetRepository, Mockito.times(6)).save(any(ContentAsset.class));
     }
 
     @Test

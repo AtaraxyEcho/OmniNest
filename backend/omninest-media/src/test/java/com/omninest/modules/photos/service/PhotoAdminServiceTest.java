@@ -14,6 +14,8 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePostProcessingTaskService;
 import com.omninest.modules.file.service.FileQueryService;
@@ -25,9 +27,11 @@ import com.omninest.modules.photos.repository.PhotoScanJobRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.task.domain.TaskStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -106,6 +110,31 @@ class PhotoAdminServiceTest {
     }
 
     @Test
+    void scanRespectsConfiguredConcurrency() {
+        service.scanConcurrency = 1;
+        PhotoScanJob job = queuedJob();
+        when(scanJobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(fileMetadataQueryService.listOwnedImages(OWNER_ID)).thenReturn(List.of(
+                descriptor("p1.jpg"), descriptor("p2.jpg"), descriptor("p3.jpg")));
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger maxActive = new AtomicInteger();
+        when(transactionManager.getTransaction(any())).thenAnswer(invocation -> {
+            int current = active.incrementAndGet();
+            maxActive.accumulateAndGet(current, Math::max);
+            try {
+                Thread.sleep(30);
+            } finally {
+                active.decrementAndGet();
+            }
+            return mock(TransactionStatus.class);
+        });
+
+        service.executeScanJob(JOB_ID, OWNER_ID);
+
+        assertThat(maxActive.get()).isLessThanOrEqualTo(1);
+    }
+
+    @Test
     void executeScanJobInvalidatesSyncEventInsideTransaction() {
         PhotoScanJob job = queuedJob();
         when(scanJobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
@@ -152,6 +181,27 @@ class PhotoAdminServiceTest {
                 eq(QueueNames.TASK_EXCHANGE),
                 eq(QueueNames.PHOTO_SCAN_ROUTING_KEY),
                 any());
+    }
+
+    private FileDescriptor descriptor(String name) {
+        return new FileDescriptor(
+                UUID.randomUUID(),
+                OWNER_ID,
+                null,
+                "FILE",
+                name,
+                "/" + name,
+                "image/jpeg",
+                1024L,
+                null,
+                null,
+                false,
+                false,
+                SpaceType.PERSONAL,
+                OWNER_ID,
+                Instant.now(),
+                Instant.now()
+        );
     }
 
     private PhotoScanJob queuedJob() {

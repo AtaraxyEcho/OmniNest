@@ -39,6 +39,14 @@ x-backend-environment: &backend-environment
   OMNINEST_CLAMAV_ENABLED: ${OMNINEST_CLAMAV_ENABLED:-false}
   OMNINEST_CLAMAV_HOST: clamav
   OMNINEST_CLAMAV_PORT: "3310"
+  # 媒体/文件并发闸门；未设置时使用应用内默认值。
+  OMNINEST_PHOTOS_SCAN_CONCURRENCY: ${OMNINEST_PHOTOS_SCAN_CONCURRENCY:-3}
+  OMNINEST_MUSIC_SCAN_PREFETCH_CONCURRENCY: ${OMNINEST_MUSIC_SCAN_PREFETCH_CONCURRENCY:-4}
+  OMNINEST_MUSIC_SCAN_PREFETCH_BATCH_SIZE: ${OMNINEST_MUSIC_SCAN_PREFETCH_BATCH_SIZE:-16}
+  OMNINEST_VIDEO_SCREENSHOT_CONCURRENCY: ${OMNINEST_VIDEO_SCREENSHOT_CONCURRENCY:-4}
+  OMNINEST_VIDEO_PROBE_CONCURRENCY: ${OMNINEST_VIDEO_PROBE_CONCURRENCY:-2}
+  OMNINEST_VIDEO_SUBTITLE_CONCURRENCY: ${OMNINEST_VIDEO_SUBTITLE_CONCURRENCY:-2}
+  OMNINEST_FILE_IMPORT_MULTIPART_CONCURRENCY: ${OMNINEST_FILE_IMPORT_MULTIPART_CONCURRENCY:-4}
   # 批量打包单次总字节上限；默认 5GB，按出口带宽与对象存储规模调整。
   FILE_BATCHDOWNLOAD_MAXTOTALBYTES: ${FILES_BATCH_DOWNLOAD_MAX_TOTAL_BYTES:-5368709120}
   OMNINEST_RCLONE_ENDPOINT: http://rclone:5572
@@ -95,8 +103,9 @@ x-backend-service: &backend-service
     - omninest-rclone-imports:/mnt/imports
     - ${OMNINEST_LOCAL_MEDIA_ROOT:-../.omninest/local-media}:/mnt/local-media:ro
     # 探测与转码临时文件落到命名卷，避免数 GB 视频写满容器 OverlayFS。
-    - omninest-probe-tmp:/tmp/omninest-probe
-    - omninest-transcode-tmp:/tmp/omninest-processing/transcode
+    # 卷名与旧 ffmpeg 容器的 root-owned 卷区分：新卷由镜像目录初始化，属主是 omninest。
+    - omninest-probe-cache:/tmp/omninest-probe
+    - omninest-transcode-cache:/tmp/omninest-processing/transcode
   # 后端是 rclone RC 的唯一调用方（见 x-backend-environment 的 OMNINEST_RCLONE_ENDPOINT），
   # 因此只有它同时挂在出网执行体所在的 egress 上；数据面服务与 nginx 都不进 egress。
   networks:
@@ -438,8 +447,8 @@ volumes:
   omninest-geonames:
   omninest-certbot-config:
   omninest-certbot-challenges:
-  omninest-probe-tmp:
-  omninest-transcode-tmp:
+  omninest-probe-cache:
+  omninest-transcode-cache:
 
 networks:
   default:

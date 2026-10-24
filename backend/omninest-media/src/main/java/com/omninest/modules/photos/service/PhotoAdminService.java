@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -76,7 +77,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhotoAdminService {
-    private static final int SCAN_PARALLELISM = 3;
+    /** 照片扫描并发；默认 3，保持 Worker 8 个数据库连接中至少一半给心跳与其他消费者。 */
+    @Value("${omninest.concurrency.photo-scan:3}")
+    int scanConcurrency = 3;
 
     private static final List<String> ACTIVE_TASK_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
@@ -186,7 +189,7 @@ public class PhotoAdminService {
 
             // 每文件独立事务，最多 3 路并发：Worker 连接池 8，保留心跳与其他消费者所需连接。
             AtomicInteger importedCounter = new AtomicInteger();
-            Semaphore scanPermits = new Semaphore(SCAN_PARALLELISM);
+            Semaphore scanPermits = new Semaphore(Math.max(1, scanConcurrency));
             try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
                 List<Future<?>> futures = nodes.stream()
                         .<Future<?>>map(file -> executor.submit(() -> {

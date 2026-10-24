@@ -30,7 +30,8 @@ class PhotoSearchIndexServiceTest {
     @DisplayName("索引卷被其他写者持有时抛出锁冲突，交由消费侧重试进 DLQ")
     void propagatesWriteLockConflictInsteadOfSwallowingIt() throws Exception {
         IndexWriterConfig config = new IndexWriterConfig(new SmartChineseAnalyzer());
-        try (IndexWriter holder = new IndexWriter(FSDirectory.open(indexDir), config);
+        try (FSDirectory directory = FSDirectory.open(indexDir);
+             IndexWriter holder = new IndexWriter(directory, config);
              PhotoSearchIndexService service = new PhotoSearchIndexService(indexDir.toString())) {
             holder.commit();
 

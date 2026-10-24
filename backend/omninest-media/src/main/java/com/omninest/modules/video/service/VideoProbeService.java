@@ -34,6 +34,7 @@ import tools.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -56,9 +57,11 @@ public class VideoProbeService {
     private static final Duration COMMAND_CHECK_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(60);
     /** 同一时刻允许并行的 ffprobe 进程上限。 */
-    private static final int MAX_CONCURRENT_PROBES = 2;
+    @Value("${omninest.concurrency.video-probe:2}")
+    private int probeConcurrency = 2;
     /** 同一时刻允许并行提取的字幕 ffmpeg 进程上限。 */
-    private static final int MAX_CONCURRENT_SUBTITLE_EXTRACTS = 2;
+    @Value("${omninest.concurrency.video-subtitle:2}")
+    private int subtitleExtractConcurrency = 2;
 
     private final FileProbeSourceService fileProbeSourceService;
     private final MediaVideoItemRepository videoItemRepository;
@@ -80,13 +83,8 @@ public class VideoProbeService {
      * 并发探测多个视频会同时拉起多路容器进程打满宿主机。取不到槽位即跳过该轨道，
      * 由下一次探测重试，而不是让既有提取一起阻塞。</p>
      */
-    private final Semaphore subtitleExtractSlots = new Semaphore(MAX_CONCURRENT_SUBTITLE_EXTRACTS);
-
-    /**
-     * ffprobe 子进程槽位：媒体异步执行器改为虚拟线程后，不能让它同时拉起过多探测进程。
-     * 取不到槽位时放弃本次探测，由后续任务重试。
-     */
-    private final Semaphore probeSlots = new Semaphore(MAX_CONCURRENT_PROBES);
+    private volatile Semaphore subtitleExtractSlotPool;
+    private volatile Semaphore probeSlotPool;
 
     private volatile boolean probeAvailable = true;
 
@@ -173,9 +171,9 @@ public class VideoProbeService {
         }
         UUID ownerUserId = item.getOwnerUserId();
         UUID fileNodeId = item.getFileNodeId();
-        if (!probeSlots.tryAcquire()) {
+        if (!probeSlots().tryAcquire()) {
             log.warn("ffprobe 并发已达上限，跳过本次探测: itemId={}, limit={}",
-                    item.getId(), MAX_CONCURRENT_PROBES);
+                    item.getId(), probeConcurrency);
             return;
         }
         try {
@@ -232,7 +230,7 @@ public class VideoProbeService {
         } catch (Exception e) {
             log.warn("视频探测处理异常: itemId={}", item.getId(), e);
         } finally {
-            probeSlots.release();
+            probeSlots().release();
         }
     }
 
@@ -302,9 +300,9 @@ public class VideoProbeService {
         if (pending.isEmpty()) {
             return;
         }
-        if (!subtitleExtractSlots.tryAcquire()) {
+        if (!subtitleExtractSlots().tryAcquire()) {
             log.warn("字幕提取并发已达上限，跳过本次提取待下次探测重试: videoItemId={}, limit={}",
-                    videoItemId, MAX_CONCURRENT_SUBTITLE_EXTRACTS);
+                    videoItemId, subtitleExtractConcurrency);
             return;
         }
         try {
@@ -331,7 +329,7 @@ public class VideoProbeService {
                 }
             }
         } finally {
-            subtitleExtractSlots.release();
+            subtitleExtractSlots().release();
         }
     }
 
@@ -372,6 +370,34 @@ public class VideoProbeService {
             log.warn("字幕存储失败: videoItemId={}, streamIndex={}, message={}",
                     videoItemId, streamIndex, e.getMessage());
         }
+    }
+
+    private Semaphore probeSlots() {
+        Semaphore slots = probeSlotPool;
+        if (slots == null) {
+            synchronized (this) {
+                slots = probeSlotPool;
+                if (slots == null) {
+                    slots = new Semaphore(Math.max(1, probeConcurrency));
+                    probeSlotPool = slots;
+                }
+            }
+        }
+        return slots;
+    }
+
+    private Semaphore subtitleExtractSlots() {
+        Semaphore slots = subtitleExtractSlotPool;
+        if (slots == null) {
+            synchronized (this) {
+                slots = subtitleExtractSlotPool;
+                if (slots == null) {
+                    slots = new Semaphore(Math.max(1, subtitleExtractConcurrency));
+                    subtitleExtractSlotPool = slots;
+                }
+            }
+        }
+        return slots;
     }
 
     private void deleteQuietly(Path file) {
