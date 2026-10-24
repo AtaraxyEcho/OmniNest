@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.media.domain.AssetType;
 import com.omninest.modules.media.domain.ResourceType;
@@ -277,6 +278,24 @@ class MovieLibraryServiceTest {
             assertThat(item.rating()).isEqualTo(8.8);
             assertThat(item.availabilityStatus()).isEqualTo("AVAILABLE");
         });
+    }
+
+    @Test
+    void legacyMovieListUsesServerSidePageCap() {
+        when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
+        when(videoItemRepository.findReadableOriginalsByMediaType(
+                eq(OWNER_ID),
+                eq(false),
+                eq(SpaceType.SHARED),
+                eq(Set.of()),
+                eq("MOVIE"),
+                isNull(),
+                argThat(pageable -> pageable.getOffset() == 0
+                        && pageable.getPageSize() == PageClamps.MAX_SIZE
+                        && pageable.getSort().getOrderFor("updatedAt") != null)
+        )).thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(movieLibraryService.movies(OWNER_ID)).isEmpty();
     }
 
     @Test
