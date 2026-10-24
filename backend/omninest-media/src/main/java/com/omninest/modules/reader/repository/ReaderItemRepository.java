@@ -66,16 +66,16 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
     void lockContentHash(@Param("ownerUserId") UUID ownerUserId, @Param("contentHash") String contentHash);
 
     /**
-     * 查询用户可见的所有阅读条目（个人空间 + 共享空间）。
+     * 统计用户可见条目数（个人空间 + 可选共享空间）。
      */
     @Query("""
-            SELECT DISTINCT ri FROM ReaderItem ri
+            SELECT COUNT(ri) FROM ReaderItem ri
             JOIN FileNode f ON ri.fileNodeId = f.id
             WHERE f.deleted = false
-              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
-            ORDER BY ri.updatedAt DESC
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
             """)
-    List<ReaderItem> findItemsVisibleToUser(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
+    long countVisibleItems(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
 
     /**
      * 分页查询用户可见的阅读条目。
@@ -96,7 +96,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             SELECT ri FROM ReaderItem ri
             JOIN FileNode f ON ri.fileNodeId = f.id
             WHERE f.deleted = false
-              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
               AND (:itemType IS NULL OR :itemType = '' OR UPPER(ri.itemType) = UPPER(:itemType))
               AND (:contentKind IS NULL OR :contentKind = '' OR UPPER(ri.contentKind) = UPPER(:contentKind))
               AND (:query IS NULL OR :query = ''
@@ -111,7 +112,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             SELECT COUNT(ri) FROM ReaderItem ri
             JOIN FileNode f ON ri.fileNodeId = f.id
             WHERE f.deleted = false
-              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
               AND (:itemType IS NULL OR :itemType = '' OR UPPER(ri.itemType) = UPPER(:itemType))
               AND (:contentKind IS NULL OR :contentKind = '' OR UPPER(ri.contentKind) = UPPER(:contentKind))
               AND (:query IS NULL OR :query = ''
@@ -138,7 +140,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             JOIN FileNode f ON ri.fileNodeId = f.id
             WHERE ri.fileNodeId = :fileNodeId
               AND f.deleted = false
-              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
             ORDER BY ri.updatedAt DESC
             """)
     List<ReaderItem> findAccessibleByFileNodeId(
@@ -190,7 +193,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             JOIN FileNode f ON ri.fileNodeId = f.id
             WHERE f.deleted = false
               AND ri.contentHash IS NOT NULL
-              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
             """)
     List<String> findVisibleContentHashes(
             @Param("userId") UUID userId,
@@ -203,7 +207,8 @@ public interface ReaderItemRepository extends JpaRepository<ReaderItem, UUID> {
             SELECT ri.fileNodeId FROM ReaderItem ri
             JOIN FileNode f ON ri.fileNodeId = f.id
             WHERE f.deleted = false
-              AND (ri.ownerUserId = :userId OR f.spaceType = :sharedType)
+              AND (ri.ownerUserId = :userId
+                   OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType))
               AND ri.fileNodeId IN :fileNodeIds
             """)
     List<UUID> findVisibleMainFileNodeIds(

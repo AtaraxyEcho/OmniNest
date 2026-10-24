@@ -91,6 +91,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue fileIndexUserPurgeQueue() {
+        return durableQueue(QueueNames.FILE_INDEX_USER_PURGE_QUEUE);
+    }
+
+    @Bean
     Queue searchIndexRebuildQueue() {
         return durableQueue(QueueNames.SEARCH_INDEX_REBUILD_QUEUE);
     }
@@ -247,6 +252,13 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(fileIndexSyncQueue)
                 .to(taskExchange)
                 .with(QueueNames.FILE_INDEX_SYNC_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding fileIndexUserPurgeBinding(Queue fileIndexUserPurgeQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(fileIndexUserPurgeQueue)
+                .to(taskExchange)
+                .with(QueueNames.FILE_INDEX_USER_PURGE_ROUTING_KEY);
     }
 
     @Bean

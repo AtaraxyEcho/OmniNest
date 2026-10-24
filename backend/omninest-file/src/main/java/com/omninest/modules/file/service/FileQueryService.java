@@ -6,23 +6,17 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
-import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePurgeState;
-import com.omninest.modules.file.domain.FilePermission;
-import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
-import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.BatchItemResult;
+import com.omninest.modules.file.dto.CreateFolderRequest;
 import com.omninest.modules.file.dto.FileContentStream;
-import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileMediaInfoDto;
 import com.omninest.modules.file.dto.FileNodeDto;
-import com.omninest.modules.file.port.MediaCoverDirectory;
-import com.omninest.modules.user.port.UserNameDirectory;
 import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
@@ -31,33 +25,28 @@ import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 文件节点查询与个人空间写操作服务。
+ *
+ * <p>只读列表、下载/内容读取与 DTO 装配已拆到协作服务，本类保留写操作与对外委托。</p>
  *
  * @author OmniNest
  */
@@ -66,127 +55,95 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class FileQueryService {
     private static final int LIFECYCLE_BATCH_SIZE = 500;
     private final FileNodeRepository fileNodeRepository;
-    private final FileContentAccessService fileContentAccessService;
-    private final FilePermissionService filePermissionService;
     private final FileLifecycleGuard fileLifecycleGuard;
     private final ApplicationEventPublisher eventPublisher;
     private final FileIndexSyncService fileIndexSyncService;
     private final UserSyncEventRecorder syncEventRecorder;
-    private final UserNameDirectory userNameDirectory;
-    private final MediaProbeService mediaProbeService;
-    private final MediaProbeSourceStager mediaProbeSourceStager;
-    private final MediaCoverDirectory mediaCoverDirectory;
     private final SharedSpaceService sharedSpaceService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final TransactionTemplate transactionTemplate;
-    private final FileDownloadService fileDownloadService;
     private final FilePathRewriter filePathRewriter;
+    private final FileNodeLookupSupport lookup;
+    private final FileNodeDtoAssembler assembler;
+    private final FileListQueryService listQueryService;
+    private final FileDownloadContentService downloadContentService;
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId) {
-        return listFiles(ownerUserId, parentId, null);
+        return listQueryService.listFiles(ownerUserId, parentId);
     }
 
     @Transactional(readOnly = true)
     public List<FileNodeDto> listFiles(UUID ownerUserId, UUID parentId, String category) {
-        String normalizedCategory = normalizeCategory(category);
-        List<FileNode> nodes = listNodesForView(ownerUserId, parentId, normalizedCategory);
-        List<FileNode> sorted = nodes.stream()
-                .filter(node -> matchesCategory(node, normalizedCategory))
-                .sorted(Comparator.comparing(FileNode::getNodeType).reversed()
-                        .thenComparing(FileNode::getName, String.CASE_INSENSITIVE_ORDER))
-                .toList();
-        Map<UUID, String> uploaderNames = resolveUploaderNames(sorted);
-        Map<UUID, UUID> coverMap = resolveAliveCovers(sorted);
-        return sorted.stream()
-                .map(node -> toDto(node, uploaderNames, coverMap.get(node.getId())))
-                .toList();
+        return listQueryService.listFiles(ownerUserId, parentId, category);
     }
 
-    /**
-     * 分页列出个人空间文件节点。
-     *
-     * @param ownerUserId 当前用户 ID
-     * @param parentId 父目录 ID
-     * @param category 文件分类
-     * @param page 页码
-     * @param size 每页数量
-     * @return 文件节点分页结果
-     */
     @Transactional(readOnly = true)
     public Page<FileNodeDto> listFilesPage(
-            UUID ownerUserId,
-            UUID parentId,
-            String category,
-            int page,
-            int size) {
-        String normalizedCategory = normalizeCategory(category);
-        Pageable pageable = filePageable(page, size);
-        Page<FileNode> nodes;
-        if (normalizedCategory == null) {
-            nodes = parentId == null
-                    ? fileNodeRepository.findVisiblePersonalRoot(ownerUserId, SpaceType.PERSONAL, pageable)
-                    : fileNodeRepository.findVisiblePersonalChildren(ownerUserId, parentId, pageable);
-        } else if (parentId == null) {
-            nodes = fileNodeRepository.findVisiblePersonalCategoryPage(
-                    ownerUserId, SpaceType.PERSONAL, normalizedCategory, pageable);
-        } else {
-            nodes = fileNodeRepository.findVisibleSubtreeCategoryPage(
-                    ownerUserId,
-                    resolveSubtreePrefix(ownerUserId, parentId),
-                    normalizedCategory,
-                    pageable);
-        }
-        Map<UUID, String> uploaderNames = resolveUploaderNames(nodes.getContent());
-        Map<UUID, UUID> covers = resolveAliveCovers(nodes.getContent());
-        return nodes.map(node -> toDto(node, uploaderNames, covers.get(node.getId())));
+            UUID ownerUserId, UUID parentId, String category, int page, int size) {
+        return listQueryService.listFilesPage(ownerUserId, parentId, category, page, size);
     }
 
-    /**
-     * 节点子树前缀的 LIKE 字面量。
-     *
-     * <p>这两个调用点（软删与还原后代）都是"读出来再写回去"：目录名里的 {@code _} 或 {@code %}
-     * 若按通配符解释，兄弟目录的节点会被一起软删或还原。</p>
-     */
-    private String subtreePrefix(FileNode node) {
-        return subtreePrefix(node.getNormalizedPath());
+    @Transactional(readOnly = true)
+    public Page<FileNodeDto> listRecycleBinPage(
+            UUID ownerUserId, SpaceType spaceType, int page, int size) {
+        return listQueryService.listRecycleBinPage(ownerUserId, spaceType, page, size);
     }
 
-    /**
-     * 取子树内待恢复的软删除节点。
-     *
-     * <p>共享空间按空间取（不限所有者），个人空间按所有者取：前者若仍按单个所有者过滤，
-     * 别人上传的子文件不会随父目录恢复，而共享配额按整棵子树补记，账实不符。</p>
-     */
-    private List<FileNode> deletedSubtreeNodes(FileNode node) {
-        if (node.getSpaceType() == SpaceType.SHARED) {
-            return fileNodeRepository.findDeletedBySpaceTypeAndNormalizedPathStartingWith(
-                    SpaceType.SHARED, subtreePrefix(node));
-        }
-        return fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
-                node.getOwnerUserId(), node.getSpaceType(), subtreePrefix(node));
+    @Transactional(readOnly = true)
+    public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
+        return downloadContentService.createDownloadUrl(ownerUserId, fileId);
     }
 
-    /**
-     * 路径前缀的 LIKE 字面量。
-     *
-     * <p>这几个调用点都是"按子树读出来再写回去"：批量软删、批量还原、改名时的子树路径重写，
-     * 以及共享标记。目录名里的下划线或百分号若按通配符解释，兄弟目录的节点会被一起改写。</p>
-     */
-    private String subtreePrefix(String path) {
-        return LikePatterns.escapeSpecials(path + "/");
+    @Transactional(readOnly = true)
+    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
+        return downloadContentService.createDownloadUrls(ownerUserId, fileIds);
     }
 
-    private String resolveSubtreePrefix(UUID ownerUserId, UUID parentId) {
-        FileNode parent = resolveParent(ownerUserId, parentId);
-        // 前缀来自目录名，进 LIKE 前必须按字面量转义（配套查询声明 escape '\'）。
-        return LikePatterns.escapeSpecials(parent.getNormalizedPath() + "/");
+    @Transactional(readOnly = true)
+    public FileDownloadUrlDto createReadableDownloadUrl(UUID userId, UUID fileId) {
+        return downloadContentService.createReadableDownloadUrl(userId, fileId);
     }
+
+    @Transactional(readOnly = true)
+    public FileProcessInput createOwnedProcessInput(UUID ownerUserId, UUID fileId) {
+        return downloadContentService.createOwnedProcessInput(ownerUserId, fileId);
+    }
+
+    public FileProcessInput createOwnedContainerProcessInput(UUID ownerUserId, UUID fileId) {
+        return downloadContentService.createOwnedContainerProcessInput(ownerUserId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public FileContentStream openOwnedFileContent(UUID ownerUserId, UUID fileId) {
+        return downloadContentService.openOwnedFileContent(ownerUserId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public FileContentStream openReadableFileContent(UUID userId, UUID fileId) {
+        return downloadContentService.openReadableFileContent(userId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public void validateOwnedImage(UUID ownerUserId, UUID fileId) {
+        downloadContentService.validateOwnedImage(ownerUserId, fileId);
+    }
+
+    @Transactional(readOnly = true)
+    public FileDownloadUrlDto createDownloadUrlForShared(UUID userId, UUID fileId) {
+        return downloadContentService.createDownloadUrlForShared(userId, fileId);
+    }
+
+    public FileMediaInfoDto mediaInfo(UUID ownerUserId, UUID fileId) {
+        return downloadContentService.mediaInfo(ownerUserId, fileId);
+    }
+
+
 
     @Transactional(rollbackFor = Exception.class)
     public FileNodeDto createFolder(UUID ownerUserId, CreateFolderRequest request) {
         String folderName = normalizeNodeName(request.name(), "文件夹名称不合法");
-        FileNode parent = resolveParent(ownerUserId, request.parentId());
+        FileNode parent = lookup.resolveParent(ownerUserId, request.parentId());
         if (sameNameExists(ownerUserId, SpaceType.PERSONAL, request.parentId(), folderName)) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件夹");
         }
@@ -200,17 +157,17 @@ public class FileQueryService {
         folder.setSpaceType(SpaceType.PERSONAL);
         FileNode saved = fileNodeRepository.save(folder);
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.CREATED);
-        return toDto(saved);
+        return assembler.toDto(saved);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public FileNodeDto renameNode(UUID ownerUserId, UUID fileId, RenameFileNodeRequest request) {
         String newName = normalizeNodeName(request.name(), "文件名称不合法");
-        FileNode node = findActiveNode(ownerUserId, fileId);
+        FileNode node = lookup.findActiveNode(ownerUserId, fileId);
         requireManagedNode(node);
         requirePersonalNode(node);
         if (node.getName().equals(newName)) {
-            return toDto(node);
+            return assembler.toDto(node);
         }
         if (sameNameExists(ownerUserId, node.getSpaceType(), node.getParentId(), newName)) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
@@ -226,20 +183,20 @@ public class FileQueryService {
         // 否则共享文件重命名后会在索引里被写成个人空间。索引写入由 Worker 单进程执行。
         fileIndexSyncService.scheduleAfterCommit(ownerUserId, List.of(saved.getId()));
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
-        return toDto(saved);
+        return assembler.toDto(saved);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public FileNodeDto moveNode(UUID ownerUserId, UUID fileId, MoveFileNodeRequest request) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
+        FileNode node = lookup.findActiveNode(ownerUserId, fileId);
         requireManagedNode(node);
         requirePersonalNode(node);
         UUID targetParentId = request.parentId();
         if (Objects.equals(node.getParentId(), targetParentId)) {
-            return toDto(node);
+            return assembler.toDto(node);
         }
 
-        FileNode targetParent = resolveParent(ownerUserId, targetParentId);
+        FileNode targetParent = lookup.resolveParent(ownerUserId, targetParentId);
         // 校验空间类型一致：不能通过普通 move 跨空间移动
         validateSameSpace(node, targetParent);
         if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
@@ -256,12 +213,12 @@ public class FileQueryService {
         filePathRewriter.rewriteDescendantPaths(ownerUserId, node.getSpaceType(), oldPath, newPath);
         FileNode saved = fileNodeRepository.save(node);
         recordFileEvent(ownerUserId, saved.getId(), SyncAction.UPDATED);
-        return toDto(saved);
+        return assembler.toDto(saved);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void deleteNode(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
+        FileNode node = lookup.findActiveNode(ownerUserId, fileId);
         if (node.getSpaceType() == SpaceType.SHARED) {
             // 共享空间删除必须走 CAN_DELETE_OWN/CAN_DELETE_ANY 校验并扣减共享空间账本，
             // 个人删除路径既不知道权限矩阵也不维护 shared_space_usage。
@@ -279,7 +236,7 @@ public class FileQueryService {
             List<UUID> descendantIds = fileNodeRepository.findActiveIdsByPathPrefix(
                             ownerUserId,
                             node.getSpaceType(),
-                            subtreePrefix(node),
+                            lookup.subtreePrefix(node),
                             PageRequest.of(0, LIFECYCLE_BATCH_SIZE)
                     )
                     .getContent();
@@ -295,21 +252,6 @@ public class FileQueryService {
             ));
         }
         recordFileEvent(ownerUserId, node.getId(), SyncAction.DELETED);
-    }
-
-    @Transactional(readOnly = true)
-    public Page<FileNodeDto> listRecycleBinPage(UUID ownerUserId, SpaceType spaceType, int page, int size) {
-        Pageable pageable = FilePageRequests.of(
-                page,
-                size,
-                Sort.by(Sort.Order.desc("deletedAt"), Sort.Order.desc("id")));
-        // 个人空间按 ownerUserId 查询，共享空间按 deletedBy 查询（上传者 ≠ 删除者）
-        Page<FileNode> nodes = spaceType == SpaceType.SHARED
-                ? fileNodeRepository.findSharedRecyclePage(ownerUserId, spaceType, pageable)
-                : fileNodeRepository.findPersonalRecyclePage(ownerUserId, spaceType, pageable);
-        Map<UUID, String> uploaderNames = resolveUploaderNames(nodes.getContent());
-        Map<UUID, UUID> covers = resolveAliveCovers(nodes.getContent());
-        return nodes.map(node -> toDto(node, uploaderNames, covers.get(node.getId())));
     }
 
     /**
@@ -328,7 +270,7 @@ public class FileQueryService {
         FileNode node = requireTrashOperatorNode(operatorId, fileId);
         requireManagedNode(node);
         if (!node.isDeleted()) {
-            return toDto(node);
+            return assembler.toDto(node);
         }
         // 子树、父目录、同名检查与事件都按节点所有者（共享空间为上传者）执行；
         // 共享空间删除者可能不是上传者，不能把操作者当成所有者使用。
@@ -378,7 +320,7 @@ public class FileQueryService {
         });
         recordFileEvent(nodeOwnerUserId, saved.getId(), SyncAction.RESTORED);
 
-        return toDto(saved);
+        return assembler.toDto(saved);
     }
 
     /**
@@ -461,7 +403,7 @@ public class FileQueryService {
             allDeletedIds.add(node.getId());
             List<FileNode> descendants = fileNodeRepository
                     .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                            ownerUserId, node.getSpaceType(), subtreePrefix(node));
+                            ownerUserId, node.getSpaceType(), lookup.subtreePrefix(node));
             descendants.forEach(d -> markDeleted(d, ownerUserId, deletedAt));
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(allDeletedIds::add);
@@ -599,7 +541,7 @@ public class FileQueryService {
      */
     @Transactional(rollbackFor = Exception.class)
     public List<BatchItemResult> batchMoveNodes(UUID ownerUserId, List<UUID> fileIds, UUID targetParentId) {
-        FileNode targetParent = resolveParent(ownerUserId, targetParentId);
+        FileNode targetParent = lookup.resolveParent(ownerUserId, targetParentId);
         List<BatchItemResult> results = new ArrayList<>();
         Map<UUID, FileNode> nodesById = fileNodeRepository
                 .findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds).stream()
@@ -640,226 +582,31 @@ public class FileQueryService {
         }
         return results;
     }
-    @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
-        return fileDownloadService.createDownloadUrl(ownerUserId, fileId);
-    }
-
     /**
-     * 批量为当前用户可下载的文件创建短期下载地址。
+     * 取子树内待恢复的软删除节点。
      *
-     * @param ownerUserId 所有者用户 ID
-     * @param fileIds 文件节点 ID 集合
-     * @return 文件节点 ID 到下载地址的映射
+     * <p>共享空间按空间取（不限所有者），个人空间按所有者取：前者若仍按单个所有者过滤，
+     * 别人上传的子文件不会随父目录恢复，而共享配额按整棵子树补记，账实不符。</p>
      */
-    @Transactional(readOnly = true)
-    public Map<UUID, FileDownloadUrlDto> createDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
-        return fileDownloadService.createDownloadUrls(ownerUserId, fileIds);
-    }
-
-    /**
-     * 为当前用户拥有或被授予查看权限的文件创建短期下载地址。
-     *
-     * @param userId 当前用户 ID
-     * @param fileId 文件节点 ID
-     * @return 下载地址
-     */
-    @Transactional(readOnly = true)
-    public FileDownloadUrlDto createReadableDownloadUrl(UUID userId, UUID fileId) {
-        FileNode node = findReadableFileNode(userId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹不能直接下载");
-        }
-        return fileContentAccessService.createDownloadUrl(node);
-    }
-
-    /**
-     * 创建受信任媒体进程可读取的输入。
-     *
-     * @param ownerUserId 当前用户 ID
-     * @param fileId 文件节点 ID
-     * @return 媒体进程输入
-     */
-    @Transactional(readOnly = true)
-    public FileProcessInput createOwnedProcessInput(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件节点没有可读取内容");
-        }
-        return fileContentAccessService.createProcessInput(node);
-    }
-
-    /**
-     * 创建当前用户拥有的、容器网络视角可读取的进程输入。
-     * 供转码/探测等容器化进程使用；归属校验与 {@link #createOwnedProcessInput} 一致。
-     *
-     * @param ownerUserId 当前用户 ID
-     * @param fileId 文件节点 ID
-     * @return 进程输入
-     */
-    public FileProcessInput createOwnedContainerProcessInput(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件节点没有可读取内容");
-        }
-        return fileContentAccessService.createContainerProcessInput(node);
-    }
-
-    /**
-     * 打开当前用户拥有的文件内容流。
-     *
-     * <p>调用方必须关闭返回句柄。该接口用于进程内模块协作，避免业务模块直接访问文件 Repository。
-     *
-     * @param ownerUserId 当前用户 ID
-     * @param fileId 文件节点 ID
-     * @return 文件内容流句柄
-     */
-    @Transactional(readOnly = true)
-    public FileContentStream openOwnedFileContent(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件节点没有可读取内容");
-        }
-        return fileContentAccessService.open(node);
-    }
-
-    /**
-     * 打开当前用户拥有或被授予查看权限的文件内容流。
-     *
-     * <p>调用方必须关闭返回句柄。共享文件仅在用户具备查看权限时允许读取。
-     *
-     * @param userId 当前用户 ID
-     * @param fileId 文件节点 ID
-     * @return 文件内容流句柄
-     */
-    @Transactional(readOnly = true)
-    public FileContentStream openReadableFileContent(UUID userId, UUID fileId) {
-        FileNode node = findReadableFileNode(userId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件节点没有可读取内容");
-        }
-        return fileContentAccessService.open(node);
-    }
-
-    private FileNode findReadableFileNode(UUID userId, UUID fileId) {
-        FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-        if (node.getOwnerUserId().equals(userId)) {
-            return node;
-        }
+    private List<FileNode> deletedSubtreeNodes(FileNode node) {
         if (node.getSpaceType() == SpaceType.SHARED) {
-            // 共享空间成员凭角色权限读取，不依赖 personal share 的 shared 标记。
-            sharedSpaceService.validateBrowsePermission(userId);
-            return node;
+            return fileNodeRepository.findDeletedBySpaceTypeAndNormalizedPathStartingWith(
+                    SpaceType.SHARED, lookup.subtreePrefix(node));
         }
-        FilePermission permission = filePermissionService.resolvePermission(fileId, userId);
-        if (!node.isShared() || !permission.allowView()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
-        }
-        return node;
+        return fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                node.getOwnerUserId(), node.getSpaceType(), lookup.subtreePrefix(node));
     }
 
-    /**
-     * 校验文件属于指定用户且内容类型为图片。
-     *
-     * @param ownerUserId 所属用户标识
-     * @param fileId 文件节点标识
-     */
-    @Transactional(readOnly = true)
-    public void validateOwnedImage(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
-        String mimeType = node.getMimeType();
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())
-                || mimeType == null
-                || !mimeType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件必须是有效图片");
+    private void requireManagedNode(FileNode node) {
+        if (SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库文件不能通过文件管理器修改");
         }
     }
 
-    /**
-     * 生成共享文件的下载 URL。
-     * 如果是拥有者直接返回，否则检查共享权限。
-     */
-    @Transactional(readOnly = true)
-    public FileDownloadUrlDto createDownloadUrlForShared(UUID userId, UUID fileId) {
-        return fileDownloadService.createDownloadUrlForShared(userId, fileId);
-    }
-
-    /**
-     * 探测文件媒体元数据（时长/分辨率）：仅 FILE 且 video/* 或 image/*，
-     * 结果按内容对象缓存；探测失败返回空对象而非报错。
-     *
-     * <p>探测输入先取成本地稀疏文件再交给 ffprobe，不吃预签名地址——输入形态决定的安全性质
-     * 见 {@link MediaProbeSourceStager}。暂存失败不写缓存，避免一次读取抖动把空结果钉两小时。
-     *
-     * <p>容器索引可能落在默认尾窗之外（非 faststart 的 MP4 把 {@code moov} 放文件末尾），
-     * 这种对象的探测只会得到空结果，此时用放大尾窗再试一次；两次窗口用不同缓存键，
-     * 否则第二次会直接读回第一次缓存的空结果。
-     *
-     * <p>本方法不加事务：暂存最坏是 2 MiB + 32 MiB 的网络读与磁盘写，事务包着它会长时间占住
-     * 连接池名额，而节点查询与对象元数据查询各自只需要一条标量读。
-     */
-    public FileMediaInfoDto mediaInfo(UUID ownerUserId, UUID fileId) {
-        FileNode node = findActiveNode(ownerUserId, fileId);
-        if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹没有媒体元数据");
+    private void requirePersonalNode(FileNode node) {
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件请使用共享空间接口操作");
         }
-        String mime = node.getMimeType() == null ? "" : node.getMimeType();
-        if (!mime.startsWith("video/") && !mime.startsWith("image/")) {
-            return new FileMediaInfoDto(null, null, null);
-        }
-        if (node.getCurrentObjectId() == null) {
-            return new FileMediaInfoDto(null, null, null);
-        }
-        return probeMediaInfo(node);
-    }
-
-    private FileMediaInfoDto probeMediaInfo(FileNode node) {
-        FileMediaInfoDto empty = new FileMediaInfoDto(null, null, null);
-        Optional<MediaProbeSourceStager.StagedSource> staged = mediaProbeSourceStager.stage(node);
-        if (staged.isEmpty()) {
-            return empty;
-        }
-        FileMediaInfoDto first;
-        boolean escalate;
-        try (MediaProbeSourceStager.StagedSource source = staged.get()) {
-            first = mediaProbeService.probe(
-                    probeCacheKey(node, MediaProbeSourceStager.DEFAULT_TAIL_BYTES), source.path());
-            escalate = first.isEmpty() && source.widerTailCouldHelp();
-        }
-        if (!escalate) {
-            return first;
-        }
-        Optional<MediaProbeSourceStager.StagedSource> wide = mediaProbeSourceStager
-                .stage(node, MediaProbeSourceStager.ESCALATED_TAIL_BYTES);
-        if (wide.isEmpty()) {
-            return first;
-        }
-        try (MediaProbeSourceStager.StagedSource source = wide.get()) {
-            return mediaProbeService.probe(
-                    probeCacheKey(node, MediaProbeSourceStager.ESCALATED_TAIL_BYTES), source.path());
-        }
-    }
-
-    private static String probeCacheKey(FileNode node, long tailBytes) {
-        return node.getCurrentObjectId() + ":tail=" + tailBytes;
-    }
-
-    private FileNode findActiveNode(UUID ownerUserId, UUID fileId) {
-        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-    }
-
-    private FileNode resolveParent(UUID ownerUserId, UUID parentId) {
-        if (parentId == null) {
-            return null;
-        }
-        FileNode parent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(parentId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
-        if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
-            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
-        }
-        return parent;
     }
 
     /**
@@ -994,177 +741,6 @@ public class FileQueryService {
         node.setDeleted(false);
         node.setDeletedAt(null);
         node.setDeletedBy(null);
-    }
-
-    private String normalizeCategory(String category) {
-        if (category == null || category.isBlank() || "all".equalsIgnoreCase(category)) {
-            return null;
-        }
-        String normalizedCategory = category.trim().toLowerCase(Locale.ROOT);
-        Set<String> allowedCategories = Set.of(
-                "image",
-                "video",
-                "audio",
-                "document",
-                "novel",
-                "comic",
-                "archive",
-                "other"
-        );
-        if (!allowedCategories.contains(normalizedCategory)) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "文件分类不支持");
-        }
-        return normalizedCategory;
-    }
-
-    private Pageable filePageable(int page, int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 200);
-        Sort sort = Sort.by(
-                Sort.Order.desc("nodeType"),
-                Sort.Order.asc("name").ignoreCase());
-        return PageRequest.of(safePage, safeSize, sort);
-    }
-
-    private List<FileNode> listNodesForView(UUID ownerUserId, UUID parentId, String category) {
-        if (category == null) {
-            List<FileNode> nodes = parentId == null
-                    ? fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndDeletedFalse(
-                            ownerUserId, SpaceType.PERSONAL)
-                    : fileNodeRepository.findByOwnerUserIdAndParentIdAndDeletedFalse(ownerUserId, parentId);
-            return visibleNodes(nodes);
-        }
-        if (parentId == null) {
-            return visibleNodes(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndDeletedFalse(
-                    ownerUserId, SpaceType.PERSONAL));
-        }
-        FileNode parent = resolveParent(ownerUserId, parentId);
-        return visibleNodes(fileNodeRepository
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        ownerUserId,
-                        SpaceType.PERSONAL,
-                        subtreePrefix(parent)
-                ));
-    }
-
-    private List<FileNode> visibleNodes(List<FileNode> nodes) {
-        return nodes.stream()
-                .filter(node -> !"DERIVED".equals(node.getSourceType()))
-                .filter(node -> !SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType()))
-                .toList();
-    }
-
-    private void requireManagedNode(FileNode node) {
-        if (SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库文件不能通过文件管理器修改");
-        }
-    }
-
-    private void requirePersonalNode(FileNode node) {
-        if (node.getSpaceType() == SpaceType.SHARED) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件请使用共享空间接口操作");
-        }
-    }
-
-    private boolean matchesCategory(FileNode node, String category) {
-        if (category == null) {
-            return true;
-        }
-        return category.equals(FileTypeCategories.resolve(
-                node.getName(), node.getMimeType(), node.getNodeType()));
-    }
-
-    private FileNodeDto toDto(FileNode node) {
-        Map<UUID, UUID> covers = resolveAliveCovers(List.of(node));
-        return toDto(node, resolveUploaderNames(List.of(node)), covers.get(node.getId()));
-    }
-
-    /**
-     * 上传者显示名：共享空间取实际上传者，其余取所有者；
-     * 未知用户不填充，由前端按缺省呈现。
-     */
-    private FileNodeDto toDto(
-            FileNode node,
-            Map<UUID, String> uploaderNames,
-            UUID coverFileId
-    ) {
-        UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
-        return new FileNodeDto(
-                node.getId(),
-                node.getParentId(),
-                node.getNodeType(),
-                node.getName(),
-                node.getNormalizedPath(),
-                node.getMimeType(),
-                node.getSizeBytes(),
-                node.isShared(),
-                node.getSharedAt(),
-                node.getUpdatedAt(),
-                node.getSpaceType() != null ? node.getSpaceType().getValue() : "PERSONAL",
-                node.getUploadedBy(),
-                uploaderNames.get(uploaderId),
-                coverFileId
-        );
-    }
-
-    /**
-     * 批量解析本组节点的存活媒体封面（媒体类 FILE 节点才发起反查）。
-     */
-    private Map<UUID, UUID> resolveAliveCovers(List<FileNode> nodes) {
-        Map<UUID, Set<UUID>> mediaIdsByOwner = new HashMap<>();
-        for (FileNode node : nodes) {
-            if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
-                continue;
-            }
-            String category = FileTypeCategories.resolve(
-                    node.getName(), node.getMimeType(), node.getNodeType());
-            boolean mediaCategory = FileTypeCategories.VIDEO.equals(category)
-                    || FileTypeCategories.AUDIO.equals(category)
-                    || FileTypeCategories.NOVEL.equals(category)
-                    || FileTypeCategories.COMIC.equals(category);
-            if (!mediaCategory) {
-                continue;
-            }
-            mediaIdsByOwner
-                    .computeIfAbsent(node.getOwnerUserId(), key -> new HashSet<>())
-                    .add(node.getId());
-        }
-        if (mediaIdsByOwner.isEmpty()) {
-            return Map.of();
-        }
-        Map<UUID, UUID> covers = new HashMap<>();
-        mediaIdsByOwner.forEach((ownerUserId, mediaFileIds) ->
-                covers.putAll(mediaCoverDirectory.resolveCoverFileIds(ownerUserId, mediaFileIds)));
-        if (covers.isEmpty()) {
-            return Map.of();
-        }
-        Set<UUID> aliveIds = new HashSet<>();
-        for (FileNode coverNode : fileNodeRepository.findAllById(covers.values())) {
-            if (!coverNode.isDeleted() && NodeType.FILE.getValue().equals(coverNode.getNodeType())) {
-                aliveIds.add(coverNode.getId());
-            }
-        }
-        Map<UUID, UUID> alive = new HashMap<>();
-        for (Map.Entry<UUID, UUID> entry : covers.entrySet()) {
-            if (aliveIds.contains(entry.getValue())) {
-                alive.put(entry.getKey(), entry.getValue());
-            }
-        }
-        return alive;
-    }
-
-    /**
-     * 批量解析一批节点的上传者显示名，供列表接口一次查询填充。
-     */
-    private Map<UUID, String> resolveUploaderNames(List<FileNode> nodes) {
-        Set<UUID> uploaderIds = new HashSet<>();
-        for (FileNode node : nodes) {
-            UUID uploaderId = node.getUploadedBy() != null ? node.getUploadedBy() : node.getOwnerUserId();
-            if (uploaderId != null) {
-                uploaderIds.add(uploaderId);
-            }
-        }
-        return userNameDirectory.resolveDisplayNames(uploaderIds);
     }
 
     private void recordFileEvent(UUID ownerUserId, UUID fileId, SyncAction action) {

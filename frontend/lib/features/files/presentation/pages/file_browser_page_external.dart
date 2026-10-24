@@ -557,64 +557,28 @@ Future<void> _startOAuthAuthorize(
     if (!context.mounted) {
       return;
     }
-    await showFilesDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.filesAuthorizeAccount),
-            content: SelectableText('${l10n.filesAuthorizeHint}\n\n$url'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(l10n.filesCancel),
-              ),
-              if (kIsWeb)
-                FilledButton(
-                  // Web 由用户手势直接开新标签走授权；浏览器拦截弹窗时退回复制，
-                  // 不能让授权停在「只能手抄一段 URL」。
-                  onPressed: () async {
-                    if (openDownloadUrl(url)) {
-                      if (dialogContext.mounted) {
-                        Navigator.of(dialogContext).pop();
-                      }
-                      return;
-                    }
-                    final copied = await copyTextToClipboard(url);
-                    if (!dialogContext.mounted) {
-                      return;
-                    }
-                    showOmniFeedback(
-                      dialogContext,
-                      copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
-                      severity:
-                          copied
-                              ? OmniFeedbackSeverity.success
-                              : OmniFeedbackSeverity.error,
-                    );
-                  },
-                  child: Text(l10n.filesOpen),
-                ),
-              FilledButton(
-                onPressed: () async {
-                  final copied = await copyTextToClipboard(url);
-                  if (!copied) {
-                    if (dialogContext.mounted) {
-                      showOmniFeedback(
-                        dialogContext,
-                        l10n.clipboardCopyFailed,
-                        severity: OmniFeedbackSeverity.error,
-                      );
-                    }
-                    return;
-                  }
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-                },
-                child: Text(l10n.filesCopyLink),
-              ),
-            ],
-          ),
+    // 授权在浏览器里完成，弹窗必须保留到用户确认后再刷新；提前 pop 只会
+    // 在授权尚未落库时查一次旧状态，页面长期停在“未授权”。
+    await showExternalOAuthAuthorizeDialog(
+      context,
+      l10n: l10n,
+      url: url,
+      onOpen:
+          (dialogContext) => _openAuthorizationUrl(dialogContext, l10n, url),
+      onCopy: (dialogContext) async {
+        final copied = await copyTextToClipboard(url);
+        if (!dialogContext.mounted) {
+          return;
+        }
+        showOmniFeedback(
+          dialogContext,
+          copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+          severity:
+              copied
+                  ? OmniFeedbackSeverity.success
+                  : OmniFeedbackSeverity.error,
+        );
+      },
     );
     if (context.mounted) {
       await controller.showExternalStorage();
@@ -628,6 +592,87 @@ Future<void> _startOAuthAuthorize(
       );
     }
   }
+}
+
+/// 外部存储 OAuth 授权弹窗。
+///
+/// 打开/复制后不自动关闭：用户还要在浏览器完成授权，只有“我已完成授权”
+/// 才结束弹窗并触发刷新。抽成公开函数便于 Widget 测试锁定关闭时机。
+Future<void> showExternalOAuthAuthorizeDialog(
+  BuildContext context, {
+  required AppLocalizations l10n,
+  required String url,
+  required Future<void> Function(BuildContext dialogContext) onOpen,
+  required Future<void> Function(BuildContext dialogContext) onCopy,
+}) {
+  return showFilesDialog<void>(
+    context: context,
+    builder:
+        (dialogContext) => AlertDialog(
+          title: Text(l10n.filesAuthorizeAccount),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.filesAuthorizeHint),
+              const SizedBox(height: 12),
+              SelectableText(url),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.filesCancel),
+            ),
+            TextButton(
+              onPressed: () => onCopy(dialogContext),
+              child: Text(l10n.filesCopyLink),
+            ),
+            FilledButton.tonal(
+              onPressed: () => onOpen(dialogContext),
+              child: Text(l10n.filesOpen),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.filesOAuthCompleted),
+            ),
+          ],
+        ),
+  );
+}
+
+/// 打开授权地址：Web 用新标签，原生端拉起系统浏览器；失败时退回复制链接。
+Future<void> _openAuthorizationUrl(
+  BuildContext context,
+  AppLocalizations l10n,
+  String url,
+) async {
+  var opened = false;
+  if (kIsWeb) {
+    opened = openDownloadUrl(url);
+  } else {
+    try {
+      opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } on Exception {
+      opened = false;
+    }
+  }
+  if (opened || !context.mounted) {
+    return;
+  }
+  final copied = await copyTextToClipboard(url);
+  if (!context.mounted) {
+    return;
+  }
+  showOmniFeedback(
+    context,
+    copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+    severity:
+        copied ? OmniFeedbackSeverity.success : OmniFeedbackSeverity.error,
+  );
 }
 
 /// 外部存储 OAuth 回调后的统一反馈：刷新账户列表并提示结果。

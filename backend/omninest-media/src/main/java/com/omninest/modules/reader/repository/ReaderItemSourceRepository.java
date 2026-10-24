@@ -50,7 +50,8 @@ public interface ReaderItemSourceRepository extends JpaRepository<ReaderItemSour
             join ReaderItem item on source.readerItemId = item.id
             join FileNode f on item.fileNodeId = f.id
             where f.deleted = false
-              and (item.ownerUserId = :ownerUserId or f.spaceType = :sharedType)
+              and (item.ownerUserId = :ownerUserId
+                   or (:sharedType is not null and f.spaceType = :sharedType))
               and source.fileNodeId in :fileNodeIds
             """)
     List<UUID> findImportedFileNodeIds(
@@ -69,7 +70,8 @@ public interface ReaderItemSourceRepository extends JpaRepository<ReaderItemSour
             join FileNode f on item.fileNodeId = f.id
             where f.deleted = false
               and source.contentHash is not null
-              and (item.ownerUserId = :ownerUserId or f.spaceType = :sharedType)
+              and (item.ownerUserId = :ownerUserId
+                   or (:sharedType is not null and f.spaceType = :sharedType))
             """)
     List<String> findVisibleSourceContentHashes(
             @Param("ownerUserId") UUID ownerUserId,

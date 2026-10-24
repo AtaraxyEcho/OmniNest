@@ -51,6 +51,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.time.Duration;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
@@ -208,15 +209,20 @@ public class PhotoLibraryController {
         return ApiResponse.success(geoDatasetService.createBackfillTask(operatorId, batchSize));
     }
 
-    @Operation(summary = "保存外部编辑结果", description = "接收编辑器产出的整图字节并存为新编辑版本")
+    @Operation(summary = "保存外部编辑结果", description = "接收编辑器产出的整图流并存为新编辑版本")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
     @PostMapping(value = "/api/v1/photos/{photoId}/edited-image", consumes = "image/jpeg")
     ApiResponse<PhotoEditVersionDto> applyEditedImage(
             @PathVariable UUID photoId,
-            @RequestBody byte[] image
-    ) {
+            HttpServletRequest request
+    ) throws IOException {
         UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(editService.applyEditedImage(userId, photoId, image));
+        return ApiResponse.success(editService.applyEditedImage(
+                userId,
+                photoId,
+                request.getContentLengthLong(),
+                request.getInputStream()
+        ));
     }
 
     @Operation(summary = "按标签查询照片", description = "返回携带指定标签的照片列表")

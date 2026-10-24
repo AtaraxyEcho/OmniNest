@@ -283,7 +283,7 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
             WHERE f.deleted = false
             AND (
                 t.ownerUserId = :userId
-                OR f.spaceType = :sharedType
+                OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType)
             )
             """)
     Page<MusicTrack> findTracksVisibleToUser(
@@ -303,10 +303,25 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
      * @return 可见曲目；空集合返回空列表
      */
     default List<MusicTrack> findTracksVisibleToUserByIds(UUID userId, Collection<UUID> trackIds) {
+        return findTracksVisibleToUserByIds(userId, SpaceType.SHARED, trackIds);
+    }
+
+    /**
+     * 按 ID 集合查询用户可见曲目，并显式指定共享空间是否计入。
+     *
+     * <p>共享空间关闭或角色缺少浏览权限时传 {@code null}，只返回个人曲目。</p>
+     *
+     * @param userId 当前用户 ID
+     * @param sharedType 共享空间类型；{@code null} 表示不计入共享空间
+     * @param trackIds 曲目 ID 集合
+     * @return 可见曲目；空集合返回空列表
+     */
+    default List<MusicTrack> findTracksVisibleToUserByIds(
+            UUID userId, SpaceType sharedType, Collection<UUID> trackIds) {
         if (trackIds == null || trackIds.isEmpty()) {
             return List.of();
         }
-        return findVisibleTracksByIds(userId, SpaceType.SHARED, trackIds);
+        return findVisibleTracksByIds(userId, sharedType, trackIds);
     }
 
     @Query("""
@@ -316,7 +331,7 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
             AND t.id IN :trackIds
             AND (
                 t.ownerUserId = :userId
-                OR f.spaceType = :sharedType
+                OR (:sharedType IS NOT NULL AND f.spaceType = :sharedType)
             )
             """)
     List<MusicTrack> findVisibleTracksByIds(

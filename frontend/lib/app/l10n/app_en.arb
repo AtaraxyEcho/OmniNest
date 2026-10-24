@@ -812,7 +812,8 @@
   "filesImportSizeGuardHint": "Very large files may be rejected; put 4K originals in the local media library instead.",
   "filesTestConnection": "Test connection",
   "filesAuthorizeAccount": "Authorize",
-  "filesAuthorizeHint": "Open this link in a browser to finish authorization, then refresh the connection:",
+  "filesAuthorizeHint": "Open this link in a browser to finish authorization. The dialog stays open until you confirm here.",
+  "filesOAuthCompleted": "I've completed authorization",
   "@filesImportMessage": {
     "placeholders": {
       "name": {}

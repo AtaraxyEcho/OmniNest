@@ -4,6 +4,7 @@ import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
+import com.omninest.modules.photos.repository.GeocodeBackfillRow;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
@@ -148,7 +149,7 @@ public class PhotoGeoBackfillService {
             Instant cursorCreatedAt,
             UUID cursorId,
             Map<String, Object> state) {
-        List<PhotoItemRepository.GeocodeBackfillRow> rows =
+        List<GeocodeBackfillRow> rows =
                 photoItemRepository.findGeocodeBackfillBatch(cursorCreatedAt, cursorId, batchSize);
         if (rows.isEmpty()) {
             return new BackfillBatchOutcome(0, 0, 0, 0, 0, cursorCreatedAt, cursorId);
@@ -159,7 +160,7 @@ public class PhotoGeoBackfillService {
         long failed = 0;
         Instant lastCreatedAt = cursorCreatedAt;
         UUID lastId = cursorId;
-        for (PhotoItemRepository.GeocodeBackfillRow row : rows) {
+        for (GeocodeBackfillRow row : rows) {
             lastCreatedAt = row.getCreatedAt();
             lastId = row.getId();
             try {

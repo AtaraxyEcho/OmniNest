@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,12 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-        prefix = "omninest.runtime",
-        name = "role",
-        havingValue = "api",
-        matchIfMissing = true
-)
 public class SyncOutboxStateService {
 
     private final SyncEventRepository syncEventRepository;

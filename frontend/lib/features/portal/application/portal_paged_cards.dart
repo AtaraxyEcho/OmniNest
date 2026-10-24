@@ -231,29 +231,20 @@ final portalPlaybackQueueProvider = AsyncNotifierProvider<
   PortalPagedListState<MusicPlayableItem>
 >(PortalPlaybackQueueController.new);
 
-/// Portal 书架浏览卡：书库列表接口一次性返回全部条目，此处按页分窗
-/// 增量呈现；refresh 清缓存后重取，跨端导入的新书即时可见。
+/// Portal 书架浏览卡：直接消费服务端分页接口，跨端导入的新书即时可见。
 class PortalReaderShelfController
     extends PortalPagedListController<ReaderItem> {
-  List<ReaderItem>? _fullList;
-
   @override
   String itemKey(ReaderItem item) => item.id;
 
   @override
-  Future<void> refresh() async {
-    _fullList = null;
-    await super.refresh();
-  }
-
-  @override
   Future<PortalPagedPage<ReaderItem>> fetchPage(int page, int size) async {
-    final full = _fullList ??= await ref.read(readerApiProvider).items();
-    final start = (page * size).clamp(0, full.length);
-    final end = (start + size).clamp(0, full.length);
+    final result = await ref
+        .read(readerApiProvider)
+        .itemsPage(page: page, size: size);
     return PortalPagedPage(
-      items: full.sublist(start, end),
-      totalElements: full.length,
+      items: result.items,
+      totalElements: result.totalElements,
     );
   }
 }

@@ -29,6 +29,7 @@ import com.omninest.modules.quota.service.StorageQuotaService;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -165,12 +166,48 @@ class PhotoEditServiceTest {
             return editedFileId;
         });
 
-        PhotoEditVersionDto result = service.applyEditedImage(ownerUserId, photoId, jpeg);
+        PhotoEditVersionDto result = applyEditedImage(ownerUserId, photoId, jpeg);
 
         assertThat(result.versionNumber()).isEqualTo(1);
         verify(storageQuotaService).checkQuota(ownerUserId, jpeg.length);
         verify(storageQuotaService).incrementUsage(ownerUserId, jpeg.length);
         assertThat(storedPath.get()).doesNotExist();
+    }
+
+    @Test
+    void applyEditedImageRejectsDeclaredOversizeBeforeReadingBody() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        PhotoEditService limited = serviceWithMaxBytes(8);
+
+        assertThatThrownBy(() -> limited.applyEditedImage(
+                ownerUserId, photoId, 9, new ByteArrayInputStream(new byte[9])))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.PARAM_ERROR));
+        verify(storageService, never()).store(
+                any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
+    }
+
+    @Test
+    void applyEditedImageStopsStreamingAtLimitWhenLengthUnknown() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        when(photoItemRepository.findById(photoId)).thenReturn(Optional.of(photo));
+        PhotoEditService limited = serviceWithMaxBytes(8);
+
+        assertThatThrownBy(() -> limited.applyEditedImage(
+                ownerUserId, photoId, -1, new ByteArrayInputStream(new byte[64])))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.PARAM_ERROR));
+        verify(storageService, never()).store(
+                any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
     }
 
     @Test
@@ -185,7 +222,7 @@ class PhotoEditServiceTest {
 
         byte[] payload = "这不是图片，只是自称 JPEG 的文本".getBytes(StandardCharsets.UTF_8);
 
-        assertThatThrownBy(() -> service.applyEditedImage(ownerUserId, photoId, payload))
+        assertThatThrownBy(() -> applyEditedImage(ownerUserId, photoId, payload))
                 .isInstanceOf(BusinessException.class);
         verify(storageService, never()).store(
                 any(), anyString(), any(), anyString(), anyString(), anyString(), any(Path.class));
@@ -212,7 +249,7 @@ class PhotoEditServiceTest {
                 eq("image/jpeg"), any(Path.class)
         )).thenReturn(UUID.randomUUID());
 
-        service.applyEditedImage(ownerUserId, photoId, jpegBytes());
+        applyEditedImage(ownerUserId, photoId, jpegBytes());
 
         // 节点行消失后必须按写入时口径退还字节，否则实时用量永久虚高。
         verify(storageQuotaService).decrementUsage(ownerUserId, 4096L);
@@ -238,7 +275,7 @@ class PhotoEditServiceTest {
                 eq("image/jpeg"), any(Path.class)
         )).thenReturn(UUID.randomUUID());
 
-        service.applyEditedImage(ownerUserId, photoId, jpegBytes());
+        applyEditedImage(ownerUserId, photoId, jpegBytes());
 
         // 节点未消失时不得退款，避免与每日配额对账双重扣减。
         verify(storageQuotaService, never()).decrementUsage(any(), anyLong());
@@ -306,6 +343,29 @@ class PhotoEditServiceTest {
             executor.shutdownNow();
             Files.deleteIfExists(sourceFile);
         }
+    }
+
+    private PhotoEditService serviceWithMaxBytes(long maxBytes) {
+        PhotoMediaLimitsProperties limits = new PhotoMediaLimitsProperties();
+        limits.setMaxStandardFileBytes(maxBytes);
+        return new PhotoEditService(
+                editVersionRepository,
+                photoItemRepository,
+                storageService,
+                syncEventService,
+                sourceFileService,
+                new PhotoInputGuard(limits),
+                storageQuotaService,
+                fileMetadataQueryService,
+                transactionTemplate,
+                5,
+                2
+        );
+    }
+
+    private PhotoEditVersionDto applyEditedImage(UUID ownerUserId, UUID photoId, byte[] bytes) {
+        return service.applyEditedImage(
+                ownerUserId, photoId, bytes.length, new ByteArrayInputStream(bytes));
     }
 
     private List<PhotoEditVersion> versionsWithEvictedFile(

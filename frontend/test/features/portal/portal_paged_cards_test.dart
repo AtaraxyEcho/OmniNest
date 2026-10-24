@@ -94,12 +94,27 @@ class _PagedReaderApi implements ReaderApi {
   _PagedReaderApi(this.full);
 
   final List<ReaderItem> full;
-  int itemCalls = 0;
+  int pageCalls = 0;
 
   @override
-  Future<List<ReaderItem>> items({String? itemType, String? query}) async {
-    itemCalls += 1;
-    return full;
+  Future<ReaderItemPage> itemsPage({
+    String? itemType,
+    String? contentKind,
+    String? query,
+    bool bookshelfOnly = false,
+    int page = 0,
+    int size = 50,
+  }) async {
+    pageCalls += 1;
+    final start = (page * size).clamp(0, full.length);
+    final end = (start + size).clamp(0, full.length);
+    return ReaderItemPage(
+      items: full.sublist(start, end),
+      page: page,
+      size: size,
+      totalElements: full.length,
+      totalPages: (full.length / size).ceil(),
+    );
   }
 
   @override
@@ -253,7 +268,7 @@ void main() {
     expect(find.byType(MobileSkeletonBlock), findsNWidgets(3));
   });
 
-  test('书架浏览客户端分窗且 refresh 重取列表', () async {
+  test('书架浏览消费服务端分页且 refresh 重取列表', () async {
     final full = List<ReaderItem>.generate(
       24,
       (i) => ReaderItem(
@@ -278,7 +293,7 @@ void main() {
     var state = await container.read(portalReaderShelfProvider.future);
     expect(state.items, hasLength(10));
     expect(state.hasMore, isTrue);
-    expect(api.itemCalls, 1);
+    expect(api.pageCalls, 1);
 
     await container.read(portalReaderShelfProvider.notifier).loadMore();
     state = await container.read(portalReaderShelfProvider.future);
@@ -288,7 +303,7 @@ void main() {
     state = await container.read(portalReaderShelfProvider.future);
     expect(state.items, hasLength(24));
     expect(state.hasMore, isFalse);
-    expect(api.itemCalls, 1);
+    expect(api.pageCalls, 3);
 
     // refresh 清缓存重取：跨端新导入的书立即可见。
     full.insert(
@@ -305,7 +320,7 @@ void main() {
     expect(state.items.first.id, 'book-new');
     // 已加载 24 条 → 对齐刷新按 30 取整，返回现有全部 25 条，不回跳。
     expect(state.items, hasLength(25));
-    expect(api.itemCalls, 2);
+    expect(api.pageCalls, 4);
   });
 
   test('影视预览合并继续观看与最近添加：续播在前、去重', () async {

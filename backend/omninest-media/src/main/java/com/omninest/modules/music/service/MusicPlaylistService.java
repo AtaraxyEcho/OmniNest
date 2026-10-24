@@ -1,6 +1,8 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.PlaylistType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
@@ -50,6 +52,7 @@ public class MusicPlaylistService {
     private final MusicCoverService musicCoverService;
     private final MusicCoverRetentionService coverRetentionService;
     private final MediaSyncEventService syncEventService;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     @Transactional(readOnly = true)
     public List<MusicPlaylistDto> playlists(UUID ownerUserId) {
@@ -148,7 +151,8 @@ public class MusicPlaylistService {
             return List.of();
         }
         Map<UUID, MusicTrack> tracksById =
-                trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds).stream()
+                trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds).stream()
                         .collect(Collectors.toMap(
                                 MusicTrack::getId,
                                 Function.identity()
@@ -167,7 +171,8 @@ public class MusicPlaylistService {
         log.info("添加曲目到播放列表: playlistId={}, count={}", playlistId, request.trackIds().size());
         requireCustomPlaylist(ownerUserId, playlistId);
         List<UUID> trackIds = request.trackIds();
-        Set<UUID> existingTrackIds = trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds)
+        Set<UUID> existingTrackIds = trackRepository.findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), trackIds)
                 .stream()
                 .map(MusicTrack::getId)
                 .collect(Collectors.toSet());
@@ -243,7 +248,8 @@ public class MusicPlaylistService {
             return Map.of();
         }
         Map<UUID, MusicTrack> tracks = trackRepository
-                .findTracksVisibleToUserByIds(ownerUserId, new ArrayList<>(firstTrackIds.values()))
+                .findTracksVisibleToUserByIds(
+                        ownerUserId, sharedVisibility(ownerUserId), new ArrayList<>(firstTrackIds.values()))
                 .stream()
                 .collect(Collectors.toMap(MusicTrack::getId, Function.identity()));
         Map<UUID, String> covers = new LinkedHashMap<>();
@@ -261,11 +267,22 @@ public class MusicPlaylistService {
                 .findTopByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(ownerUserId, playlistId)
                 // 歌单封面同样要认共享曲目：按所有者取不到就会退回默认封面。
                 .flatMap(item -> trackRepository
-                        .findTracksVisibleToUserByIds(ownerUserId, List.of(item.getTrackId()))
+                        .findTracksVisibleToUserByIds(
+                                ownerUserId, sharedVisibility(ownerUserId), List.of(item.getTrackId()))
                         .stream()
                         .findFirst())
                 .map(track -> musicLibraryService.toTrackSummaryDto(track, false).coverUrl())
                 .orElse(null);
+    }
+
+    /**
+     * 歌单内曲目查询的共享空间范围。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 可浏览共享空间时返回 SHARED，否则返回 null
+     */
+    private SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
     }
 
     private MusicPlaylistDto toDto(MusicPlaylist playlist, long itemCount, String fallbackCoverUrl) {

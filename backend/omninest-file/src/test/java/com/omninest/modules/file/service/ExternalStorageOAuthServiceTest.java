@@ -14,6 +14,9 @@ import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.CredentialCipher;
+import com.omninest.common.sync.SyncEventCommand;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
 import com.omninest.modules.file.domain.StorageConnectorOAuthApp;
 import com.omninest.modules.file.domain.StorageExternalAccount;
@@ -21,11 +24,13 @@ import com.omninest.modules.file.repository.StorageConnectorOAuthAppRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * ExternalStorageOAuthService 单元测试。
@@ -47,11 +52,15 @@ class ExternalStorageOAuthServiceTest {
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final DistributedLock distributedLock = mock(DistributedLock.class);
+    private final ExternalStorageOAuthTokenClient tokenClient =
+            mock(ExternalStorageOAuthTokenClient.class);
+    private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
 
     private final ExternalStorageOAuthService service = new ExternalStorageOAuthService(
             oauthAppRepository, accountRepository, credentialService, credentialCipher,
             readThroughCache, distributedLock,
-            mock(AdminActorVerifier.class), mock(AdminAuditRecorder.class)
+            mock(AdminActorVerifier.class), mock(AdminAuditRecorder.class),
+            syncEventRecorder, tokenClient
     );
 
     @BeforeEach
@@ -188,6 +197,37 @@ class ExternalStorageOAuthServiceTest {
                 .contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.readonly")
                 .contains("access_type=offline")
                 .doesNotContain("auth%2Fdrive&");
+    }
+
+    @Test
+    void handleCallbackStoresTokensAndEmitsFilesSyncEvent() {
+        StorageConnectorOAuthApp app = buildApp("GDRIVE");
+        StorageExternalAccount account = buildAccount("{}");
+        when(readThroughCache.take("omninest:oauth:state:issued-state"))
+                .thenReturn("{\"userId\":\"" + OWNER_ID + "\",\"accountId\":\"" + ACCOUNT_ID
+                        + "\",\"code\":\"GDRIVE\"}");
+        when(oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue("GDRIVE"))
+                .thenReturn(Optional.of(app));
+        when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
+                .thenReturn(Optional.of(account));
+        when(tokenClient.exchangeCode("GDRIVE", app, "authorization-code"))
+                .thenReturn(Map.of(
+                        "access_token", "at",
+                        "refresh_token", "rt",
+                        "expires_in", 3600
+                ));
+        when(credentialService.encrypt(anyString())).thenReturn("encrypted");
+
+        service.handleCallback("GDRIVE", "issued-state", "authorization-code");
+
+        assertThat(account.getEncryptedCredentials()).isEqualTo("encrypted");
+        assertThat(account.getStatus()).isEqualTo(ExternalStorageStatus.ACTIVE.getValue());
+        ArgumentCaptor<SyncEventCommand> event = ArgumentCaptor.forClass(SyncEventCommand.class);
+        verify(syncEventRecorder).record(event.capture());
+        assertThat(event.getValue().recipientUserId()).isEqualTo(OWNER_ID);
+        assertThat(event.getValue().scope()).isEqualTo(SyncScope.FILES);
+        assertThat(event.getValue().resourceType()).isEqualTo("EXTERNAL_STORAGE");
+        assertThat(event.getValue().resourceId()).isEqualTo(ACCOUNT_ID.toString());
     }
 
     @Test

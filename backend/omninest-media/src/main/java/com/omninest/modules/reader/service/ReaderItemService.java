@@ -1,6 +1,7 @@
 package com.omninest.modules.reader.service;
 import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.api.PageClamps;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.common.enums.ErrorCode;
@@ -118,6 +119,7 @@ public class ReaderItemService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final MediaSyncEventService syncEventService;
     private final PhotoInputGuard photoInputGuard;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     /**
      * 列出阅读条目，支持按类型、内容类型和关键词过滤。
@@ -137,7 +139,7 @@ public class ReaderItemService {
                 : LikePatterns.escapeSpecials(query.trim());
         Page<ReaderItem> itemPage = itemRepository.findVisibleItemsPage(
                 ownerUserId,
-                SpaceType.SHARED,
+                sharedVisibility(ownerUserId),
                 itemType == null ? "" : itemType.trim(),
                 contentKind == null ? "" : contentKind.trim(),
                 normalizedQuery,
@@ -173,94 +175,6 @@ public class ReaderItemService {
                 .map(item -> toDto(item, shelfIds.contains(item.getId()), spaceTypeMap, progressMap))
                 .toList();
         return new PageImpl<>(dtos, itemPage.getPageable(), itemPage.getTotalElements());
-    }
-
-    public List<ReaderItemDto> listItems(UUID ownerUserId, String itemType, String contentKind, String query) {
-        return listItems(ownerUserId, itemType, contentKind, query, false);
-    }
-
-    /**
-     * 列出阅读条目，支持按类型、内容类型、关键词过滤，并可只保留已加入书架的条目。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param itemType 条目类型过滤（EPUB / TXT / CBZ），可为 null
-     * @param contentKind 内容类型过滤（TEXT / COMIC），可为 null
-     * @param query 标题或作者关键词，可为 null
-     * @param bookshelfOnly 为 true 时只返回已加入书架的条目
-     * @return 条目 DTO 列表
-     */
-    public List<ReaderItemDto> listItems(
-            UUID ownerUserId, String itemType, String contentKind, String query, boolean bookshelfOnly) {
-        // 查询用户可见的所有条目（个人空间 + 共享空间）
-        List<ReaderItem> items = itemRepository.findItemsVisibleToUser(ownerUserId, SpaceType.SHARED);
-
-        // 按类型过滤
-        if (itemType != null && !itemType.isBlank()) {
-            items = items.stream()
-                    .filter(item -> itemType.equalsIgnoreCase(item.getItemType()))
-                    .toList();
-        }
-
-        // 按内容类型过滤
-        if (contentKind != null && !contentKind.isBlank()) {
-            items = items.stream()
-                    .filter(item -> contentKind.equalsIgnoreCase(item.getContentKind()))
-                    .toList();
-        }
-
-        // 按关键词过滤：书名与作者都要匹配。书库搜索下沉服务端分页后，这里少一个字段
-        // 就等于把原先客户端在已加载窗口里做的匹配能力缩小。
-        if (query != null && !query.isBlank()) {
-            String lowerQuery = query.toLowerCase();
-            items = items.stream()
-                    .filter(item -> containsIgnoreCase(item.getTitle(), lowerQuery)
-                            || containsIgnoreCase(item.getAuthorName(), lowerQuery))
-                    .toList();
-        }
-
-        // 批量查询书架状态（1 次查询替代 N 次）
-        List<UUID> itemIds = items.stream().map(ReaderItem::getId).toList();
-        Set<UUID> bookshelfItemIds = bookshelfItemIds(ownerUserId, itemIds);
-        // 书架过滤必须发生在分页之前：留在分页之后会让一页里可能一个书架条目都没有，
-        // 前端只能不断续拉凑列表，总数也会算进未加架条目。
-        if (bookshelfOnly) {
-            items = items.stream()
-                    .filter(item -> bookshelfItemIds.contains(item.getId()))
-                    .toList();
-            itemIds = items.stream().map(ReaderItem::getId).toList();
-        }
-
-        // 批量查询文件节点空间类型（1 次查询替代 N 次）
-        List<UUID> fileNodeIds = items.stream()
-                .map(ReaderItem::getFileNodeId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        Map<UUID, String> spaceTypeMap = fileMetadataQueryService.findAllByIds(fileNodeIds)
-                .stream()
-                .collect(Collectors.toMap(
-                        FileDescriptor::id,
-                        file -> file.spaceType().getValue()
-                ));
-
-        // 批量查询阅读进度（1 次查询替代 N 次）
-        Map<UUID, ReaderProgress> progressMap = items.isEmpty()
-                ? Map.of()
-                : progressRepository.findByOwnerUserIdAndReaderItemIdIn(ownerUserId, itemIds)
-                        .stream()
-                        .collect(Collectors.toMap(
-                                ReaderProgress::getReaderItemId,
-                                p -> p
-                        ));
-
-        return items.stream()
-                .map(item -> toDto(
-                        item,
-                        bookshelfItemIds.contains(item.getId()),
-                        spaceTypeMap,
-                        progressMap
-                ))
-                .toList();
     }
 
     /**
@@ -671,13 +585,6 @@ public class ReaderItemService {
     }
 
     /**
-     * 关键词命中判定：值为空按不命中处理，入参已是小写。
-     */
-    private boolean containsIgnoreCase(String value, String lowerQuery) {
-        return value != null && value.toLowerCase().contains(lowerQuery);
-    }
-
-    /**
      * 从 genres JSONB 中取出标签列表，形状不符时按空列表处理而不是抛出。
      */
     private List<String> extractGenres(ReaderItem item) {
@@ -1071,6 +978,19 @@ public class ReaderItemService {
             return "";
         }
         return fileName.substring(fileName.lastIndexOf('.'));
+    }
+
+    /**
+     * 阅读列表与统计的共享空间可见范围。
+     *
+     * <p>共享空间总开关关闭或角色缺少 CAN_BROWSE 时返回 {@code null}，仓储按“只查个人空间”
+     * 处理。列表、仪表盘与统计必须共用这一判据，否则会出现列表可见、点开 403 的割裂。</p>
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 可浏览时返回 SHARED，否则返回 null
+     */
+    SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
     }
 
     private void recordItemEvent(UUID ownerUserId, ReaderItem item, SyncAction action) {

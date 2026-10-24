@@ -28,7 +28,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,7 +39,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +56,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class FileShareService {
+
+    /** 取消级联共享时每批清理权限的节点数。 */
+    private static final int SUBTREE_PERMISSION_CLEAR_BATCH = 500;
+
     private final FileNodeRepository fileNodeRepository;
     private final ShareLinkRepository shareLinkRepository;
     private final FileShareRecipientRepository shareRecipientRepository;
@@ -133,7 +138,10 @@ public class FileShareService {
     }
 
     /**
-     * 分页查询共享空间中可见的共享文件。
+     * 分页查询其他用户显式共享且当前用户可查看的文件。
+     *
+     * <p>查询不限定空间类型：旧的节点级 shared 标志在个人空间与共享空间都可能存在，
+     * 可见性统一由 FileNodePermission 判定。</p>
      *
      * @param userId 用户 ID
      * @param page   页码（从 0 开始）
@@ -425,27 +433,43 @@ public class FileShareService {
         if (!NodeType.FOLDER.getValue().equals(folder.getNodeType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅支持文件夹级联共享");
         }
-        List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        ownerUserId,
-                        folder.getSpaceType(),
-                        LikePatterns.escapeSpecials(folder.getNormalizedPath() + "/"));
         Instant now = Instant.now();
-        for (FileNode node : descendants) {
-            node.setShared(shared);
-            node.setSharedAt(shared ? now : null);
-        }
+        String prefix = LikePatterns.escapeSpecials(folder.getNormalizedPath() + "/");
+        int descendantCount = fileNodeRepository.updateSharedByPathPrefix(
+                ownerUserId,
+                folder.getSpaceType(),
+                prefix,
+                shared,
+                shared ? now : null,
+                now
+        );
         folder.setShared(shared);
         folder.setSharedAt(shared ? now : null);
-        fileNodeRepository.saveAll(descendants);
         fileNodeRepository.save(folder);
         if (!shared) {
-            List<UUID> allIds = new ArrayList<>(descendants.stream().map(FileNode::getId).toList());
-            allIds.add(folderId);
-            filePermissionService.clearPermissionsBatch(allIds);
+            clearPermissionsUnderPath(ownerUserId, folder.getSpaceType(), prefix);
+            filePermissionService.clearPermissions(folderId);
         }
-        syncEventWriter.recordFileLibraryInvalidation(ownerUserId, descendants.size() + 1);
-        log.info("文件夹级联共享: folderId={}, shared={}, 影响{}个节点", folderId, shared, descendants.size());
+        syncEventWriter.recordFileLibraryInvalidation(ownerUserId, descendantCount + 1);
+        log.info("文件夹级联共享: folderId={}, shared={}, 影响{}个节点", folderId, shared, descendantCount + 1);
+    }
+
+    /**
+     * 分批清理路径前缀下的细粒度权限，避免把整棵子树的 ID 一次载入内存。
+     */
+    private void clearPermissionsUnderPath(UUID ownerUserId, SpaceType spaceType, String prefix) {
+        Slice<UUID> slice = fileNodeRepository.findActiveIdsByPathPrefix(
+                ownerUserId, spaceType, prefix, PageRequest.of(0, SUBTREE_PERMISSION_CLEAR_BATCH));
+        while (true) {
+            if (!slice.isEmpty()) {
+                filePermissionService.clearPermissionsBatch(slice.getContent());
+            }
+            if (!slice.hasNext()) {
+                return;
+            }
+            slice = fileNodeRepository.findActiveIdsByPathPrefix(
+                    ownerUserId, spaceType, prefix, slice.nextPageable());
+        }
     }
 
     /**

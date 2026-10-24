@@ -7,11 +7,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
@@ -57,6 +59,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Page;
@@ -88,6 +91,8 @@ class ReaderItemServiceTest {
             "30000000-0000-0000-0000-000000000004"
     );
 
+    @Mock
+    private SharedSpaceAccessQuery sharedSpaceAccessQuery;
     @Mock
     private ReaderItemRepository itemRepository;
     @Mock
@@ -136,6 +141,11 @@ class ReaderItemServiceTest {
 
     @InjectMocks
     private ReaderItemService itemService;
+
+    @BeforeEach
+    void allowSharedSpaceVisibility() {
+        lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
+    }
 
     @Test
     @DisplayName("元数据编辑写入并读回出版日期、评分、标签、连载状态与 ISBN")
@@ -256,20 +266,22 @@ class ReaderItemServiceTest {
     }
 
     @Test
-    void listItemsIncludesSharedSpaceItems() {
+    void listItemsPageIncludesSharedSpaceItems() {
         // 用户个人条目 + 共享空间条目均可见
         ReaderItem personalItem = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "My Book", "TXT");
         ReaderItem sharedItem = newItem(SHARED_ITEM_ID, OTHER_USER_ID, SHARED_FILE_NODE_ID, "Shared Book", "TXT");
-
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
-                .thenReturn(List.of(personalItem, sharedItem));
-        // listItems 使用批量查询书架状态
+        Pageable pageable = PageRequest.of(0, 20);
+        when(itemRepository.findVisibleItemsPage(
+                eq(OWNER_ID), eq(SpaceType.SHARED), eq(""), eq(""), eq(""), eq(false), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(personalItem, sharedItem), pageable, 2));
         ReaderBookshelf shelfEntry = new ReaderBookshelf();
         shelfEntry.setReaderItemId(ITEM_ID);
         when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(OWNER_ID, List.of(ITEM_ID, SHARED_ITEM_ID)))
                 .thenReturn(List.of(shelfEntry));
 
-        List<ReaderItemDto> result = itemService.listItems(OWNER_ID, null, null, null);
+        List<ReaderItemDto> result = itemService
+                .listItemsPage(OWNER_ID, null, null, null, false, 0, 20)
+                .getContent();
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).title()).isEqualTo("My Book");
@@ -278,6 +290,19 @@ class ReaderItemServiceTest {
         assertThat(result.get(1).title()).isEqualTo("Shared Book");
         assertThat(result.get(1).addedToBookshelf()).isFalse();
         assertThat(result.get(1).fileNodeId()).isEqualTo(SHARED_FILE_NODE_ID);
+    }
+
+    @Test
+    void listItemsPageExcludesSharedSpaceWhenBrowseDenied() {
+        when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(false);
+        when(itemRepository.findVisibleItemsPage(
+                eq(OWNER_ID), isNull(), eq(""), eq(""), eq(""), eq(false), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        itemService.listItemsPage(OWNER_ID, null, null, null, false, 0, 20);
+
+        verify(itemRepository).findVisibleItemsPage(
+                eq(OWNER_ID), isNull(), eq(""), eq(""), eq(""), eq(false), any(Pageable.class));
     }
 
     @Test
@@ -696,37 +721,4 @@ class ReaderItemServiceTest {
         assertThat(only.getTotalElements()).isEqualTo(1);
     }
 
-    @Test
-    void listItemsFiltersByContentKindAndMatchesAuthorInQuery() {
-        ReaderItem book = newItem(ITEM_ID, OWNER_ID, FILE_NODE_ID, "三体", "TXT");
-        book.setAuthorName("刘慈欣");
-        ReaderItem comic = newItem(
-                SHARED_ITEM_ID,
-                OWNER_ID,
-                SHARED_FILE_NODE_ID,
-                "One Piece",
-                "CBZ");
-        comic.setAuthorName("尾田荣一郎");
-        comic.setContentKind("COMIC");
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
-                .thenReturn(List.of(book, comic));
-        when(bookshelfRepository.findByOwnerUserIdAndReaderItemIdIn(any(), any()))
-                .thenReturn(List.of());
-
-        // 分段下沉服务端：书库切到漫画时只回 COMIC。
-        assertThat(itemService.listItems(OWNER_ID, null, "COMIC", null))
-                .extracting(ReaderItemDto::title)
-                .containsExactly("One Piece");
-        assertThat(itemService.listItems(OWNER_ID, null, "TEXT", null))
-                .extracting(ReaderItemDto::title)
-                .containsExactly("三体");
-        // 关键词必须同时命中书名与作者：前端把搜索下沉服务端后，只匹配书名会缩小原有能力。
-        assertThat(itemService.listItems(OWNER_ID, null, null, "刘慈欣"))
-                .extracting(ReaderItemDto::title)
-                .containsExactly("三体");
-        assertThat(itemService.listItems(OWNER_ID, null, null, "尾田"))
-                .extracting(ReaderItemDto::title)
-                .containsExactly("One Piece");
-        assertThat(itemService.listItems(OWNER_ID, null, null, "不存在")).isEmpty();
-    }
 }

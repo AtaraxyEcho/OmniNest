@@ -241,6 +241,14 @@ class AuditQueryContractIT {
                 owner, SpaceType.SHARED, "TXT", "", "", false, PageRequest.of(0, 10));
         assertThat(typed.getTotalElements()).isEqualTo(3);
         assertThat(typed.getContent()).extracting(ReaderItem::getItemType).containsOnly("TXT");
+
+        // 共享空间关闭或角色无浏览权时传 null：只返回个人条目，countQuery 必须同谓词。
+        Page<ReaderItem> personalOnly = readerItemRepository.findVisibleItemsPage(
+                owner, null, "", "", "", false, PageRequest.of(0, 10));
+        assertThat(personalOnly.getTotalElements()).isEqualTo(4);
+        assertThat(personalOnly.getContent()).extracting(ReaderItem::getTitle)
+                .doesNotContain("Shared Book");
+        assertThat(readerItemRepository.countVisibleItems(owner, null)).isEqualTo(4);
     }
 
     @Test

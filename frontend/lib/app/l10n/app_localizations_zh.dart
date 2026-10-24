@@ -2012,7 +2012,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesAuthorizeAccount => '去授权';
 
   @override
-  String get filesAuthorizeHint => '在浏览器中打开以下链接完成授权，完成后回到本页刷新连接：';
+  String get filesAuthorizeHint => '在浏览器中打开以下链接完成授权，完成后回到本页点击“我已完成授权”。';
+
+  @override
+  String get filesOAuthCompleted => '我已完成授权';
 
   @override
   String get filesImport => '导入';

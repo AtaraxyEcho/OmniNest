@@ -4,24 +4,21 @@ import com.omninest.modules.task.config.TaskOutboxProperties;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * API 角色中的任务 Outbox 调度器。
+ * 任务 Outbox 调度器。
+ *
+ * <p>所有运行角色都会轮询：worker 与 scheduler 自身也会写入 task_dispatches，
+ * 只由 api 派发会让这些角色在 api 重启或缩容时整条任务链停摆。认领基于
+ * {@code FOR UPDATE SKIP LOCKED} 与实例租约，多实例并发安全。</p>
  *
  * @author OmniNest
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-        prefix = "omninest.runtime",
-        name = "role",
-        havingValue = "api",
-        matchIfMissing = true
-)
 public class TaskOutboxDispatcher {
     private final TaskDispatchService dispatchService;
     private final RabbitTaskDispatchPublisher publisher;

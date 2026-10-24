@@ -9,6 +9,7 @@ import com.omninest.modules.search.dto.SearchResultDto;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -71,6 +72,8 @@ public class FileSearchIndexService implements Closeable {
     private static final UUID SHARED_INDEX_KEY = new UUID(0L, 0L);
     private static final int SNIPPET_MAX_CHARS = 200;
     private static final Duration USER_INDEX_IDLE_TTL = Duration.ofMinutes(30);
+    /** 用户删除后的跨进程墓碑后缀：存在时禁止再为该用户创建索引。 */
+    private static final String PURGE_MARKER_SUFFIX = ".purge";
 
     private final Path basePath;
     private final SmartChineseAnalyzer analyzer = new SmartChineseAnalyzer();
@@ -118,6 +121,9 @@ public class FileSearchIndexService implements Closeable {
      * 使用 computeIfAbsent 保证线程安全，避免并发创建导致资源泄漏。
      */
     private UserIndexState getUserIndexState(UUID userId) throws IOException {
+        if (isUserPurged(userId)) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "用户搜索索引已清理");
+        }
         try {
             return userIndexes.get(userId, id -> {
                 try {
@@ -176,6 +182,9 @@ public class FileSearchIndexService implements Closeable {
      * @param spaceType   空间类型（PERSONAL / SHARED）
      */
     public void indexFile(UUID fileNodeId, UUID ownerUserId, String title, String content, String spaceType) {
+        if (isUserPurged(ownerUserId)) {
+            return;
+        }
         boolean hasContent = content != null && !content.isBlank();
         UUID indexKey = resolveIndexKey(ownerUserId, spaceType);
         try {
@@ -295,7 +304,9 @@ public class FileSearchIndexService implements Closeable {
         if (fileNodeIds == null || fileNodeIds.isEmpty()) {
             return;
         }
-        deleteFilesFromIndex(fileNodeIds, ownerUserId);
+        if (!isUserPurged(ownerUserId)) {
+            deleteFilesFromIndex(fileNodeIds, ownerUserId);
+        }
         deleteFilesFromIndex(fileNodeIds, SHARED_INDEX_KEY);
     }
 
@@ -329,7 +340,7 @@ public class FileSearchIndexService implements Closeable {
      * @param docs 待索引文档集合
      */
     public void indexFiles(UUID ownerUserId, Collection<IndexDocumentInput> docs) {
-        if (docs == null || docs.isEmpty()) {
+        if (docs == null || docs.isEmpty() || isUserPurged(ownerUserId)) {
             return;
         }
         Map<UUID, List<IndexDocumentInput>> docsByIndex = new LinkedHashMap<>();
@@ -392,6 +403,14 @@ public class FileSearchIndexService implements Closeable {
      * @param spaceType 空间类型
      */
     public void indexFileChunks(
+            UUID ownerUserId, UUID fileNodeId, String title, List<String> chunks, String spaceType) {
+        if (isUserPurged(ownerUserId)) {
+            return;
+        }
+        indexFileChunksInternal(ownerUserId, fileNodeId, title, chunks, spaceType);
+    }
+
+    private void indexFileChunksInternal(
             UUID fileNodeId,
             UUID ownerUserId,
             String title,
@@ -478,7 +497,7 @@ public class FileSearchIndexService implements Closeable {
          * @param chunk 正文块
          */
         public void append(String chunk) {
-            if (chunk == null || chunk.isBlank()) {
+            if (chunk == null || chunk.isBlank() || isUserPurged(ownerUserId)) {
                 return;
             }
             try {
@@ -514,6 +533,9 @@ public class FileSearchIndexService implements Closeable {
          * @return 写入的块数
          */
         public int complete() {
+            if (isUserPurged(ownerUserId)) {
+                return totalChunks;
+            }
             if (!reset) {
                 // 无可提取正文时仍保留标题元数据文档，沿用一次性索引的语义。
                 indexFile(fileNodeId, ownerUserId, title, null, spaceType);
@@ -572,7 +594,7 @@ public class FileSearchIndexService implements Closeable {
      * @return 搜索结果列表
      */
     public List<SearchResultDto> search(UUID ownerUserId, String queryStr, int maxResults, String spaceType) {
-        if (queryStr == null || queryStr.isBlank() || maxResults <= 0) {
+        if (queryStr == null || queryStr.isBlank() || maxResults <= 0 || isUserPurged(ownerUserId)) {
             return new ArrayList<>();
         }
         boolean includePersonal = spaceType == null || SPACE_PERSONAL.equals(spaceType);
@@ -683,23 +705,83 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
-     * 删除指定用户的索引目录与缓存，用于用户物理删除后的空间回收。
+     * 仅关闭并移除本进程缓存的用户索引，不触碰磁盘目录。
      *
-     * <p>先关闭缓存的 writer 再删目录：Windows 上仍被打开的 writer 会让目录删除失败。</p>
+     * <p>用户删除时请求进程先释放自己的 writer，目录物理删除由 Worker 执行；
+     * 两个进程都持有 writer 时，Windows 上后删的一方会因写锁失败。</p>
      *
      * @param ownerUserId 用户 ID
      */
-    public void deleteUserIndex(UUID ownerUserId) {
+    public void evictUserIndex(UUID ownerUserId) {
+        userIndexes.invalidate(ownerUserId);
+        userIndexes.cleanUp();
+    }
+
+    /**
+     * 为用户索引立跨进程墓碑：存在墓碑时任何进程都不得再创建该用户索引。
+     *
+     * <p>墓碑在索引根目录下、与用户目录同级，API 与 Worker 共挂同一卷，
+     * 因此不依赖进程内状态或删除时序。用户 ID 不会被复用，墓碑保留到
+     * 管理员全量重建（{@link #clearAllIndexes()}）时统一清除。</p>
+     *
+     * @param ownerUserId 用户 ID
+     */
+    public void markUserPurged(UUID ownerUserId) {
+        if (ownerUserId == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(basePath);
+            Files.createFile(purgeMarkerPath(ownerUserId));
+        } catch (FileAlreadyExistsException ignored) {
+            // 幂等：Worker 重试或 API 与 Worker 先后写入同一墓碑。
+        } catch (IOException exception) {
+            log.warn("写入用户索引清理标记失败: indexKeyHash={}, errorType={}",
+                    Integer.toHexString(ownerUserId.toString().hashCode()),
+                    exception.getClass().getSimpleName());
+        }
+        evictUserIndex(ownerUserId);
+    }
+
+    /**
+     * 用户索引是否已被墓碑封禁。
+     *
+     * @param ownerUserId 用户 ID
+     * @return 已写入清理墓碑时返回 true
+     */
+    public boolean isUserPurged(UUID ownerUserId) {
+        return ownerUserId != null && Files.exists(purgeMarkerPath(ownerUserId));
+    }
+
+    private Path purgeMarkerPath(UUID ownerUserId) {
+        return basePath.resolve(ownerUserId + PURGE_MARKER_SUFFIX);
+    }
+
+    /**
+     * 删除指定用户的索引目录与缓存，用于用户物理删除后的空间回收。
+     *
+     * <p>先立墓碑再关闭缓存 writer 并删目录：墓碑阻止其它进程在删盘期间
+     * 重新创建该用户索引；删除成功后墓碑保留，直到管理员全量重建。</p>
+     *
+     * @param ownerUserId 用户 ID
+     * @return 目录已删除或原本不存在时返回 true；删除失败返回 false
+     */
+    public boolean deleteUserIndex(UUID ownerUserId) {
+        // 先立墓碑再删盘：其它进程的索引写入会因墓碑拒绝创建目录，
+        // 不再依赖“删盘瞬间恰好没有新 writer”的时序。
+        markUserPurged(ownerUserId);
         userIndexes.invalidate(ownerUserId);
         userIndexes.cleanUp();
         try {
             deleteDirectory(getUserIndexPath(ownerUserId));
             log.info("已删除用户搜索索引目录: indexKeyHash={}",
                     Integer.toHexString(ownerUserId.toString().hashCode()));
+            return true;
         } catch (IOException e) {
             log.warn("删除用户搜索索引目录失败: indexKeyHash={}, errorType={}",
                     Integer.toHexString(ownerUserId.toString().hashCode()),
                     e.getClass().getSimpleName());
+            return false;
         }
     }
 
@@ -711,6 +793,9 @@ public class FileSearchIndexService implements Closeable {
      * @return 被清除的文档数量
      */
     public int clearIndex(UUID ownerUserId) {
+        if (isUserPurged(ownerUserId)) {
+            return 0;
+        }
         try {
             int docCount = withUserIndexState(ownerUserId, state -> {
                 int count = state.writer.getDocStats().numDocs;
@@ -767,6 +852,8 @@ public class FileSearchIndexService implements Closeable {
                                         Integer.toHexString(userDir.toString().hashCode()),
                                         e.getClass().getSimpleName());
                             }
+                        } else if (userDir.getFileName().toString().endsWith(PURGE_MARKER_SUFFIX)) {
+                            Files.deleteIfExists(userDir);
                         }
                     }
                 }

@@ -3910,8 +3910,14 @@ abstract class AppLocalizations {
   /// No description provided for @filesAuthorizeHint.
   ///
   /// In en, this message translates to:
-  /// **'Open this link in a browser to finish authorization, then refresh the connection:'**
+  /// **'Open this link in a browser to finish authorization. The dialog stays open until you confirm here.'**
   String get filesAuthorizeHint;
+
+  /// No description provided for @filesOAuthCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve completed authorization'**
+  String get filesOAuthCompleted;
 
   /// No description provided for @filesImport.
   ///

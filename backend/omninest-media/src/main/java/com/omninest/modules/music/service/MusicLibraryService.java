@@ -1,5 +1,6 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.api.PageClamps;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
@@ -82,10 +83,24 @@ public class MusicLibraryService {
     private final ReadThroughCache readThroughCache;
     private final MediaSyncEventService syncEventService;
     private final MusicLibraryProperties musicLibraryProperties;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     private Duration playHistoryRetention() {
         int days = musicLibraryProperties.getHistoryRetentionDays();
         return Duration.ofDays(Math.max(1, days));
+    }
+
+    /**
+     * 曲库查询的共享空间范围。
+     *
+     * <p>共享空间总开关关闭或角色缺少 CAN_BROWSE 时返回 {@code null}，仓储只查个人曲目，
+     * 避免列表还能看到共享音乐、点开却被文件守卫拒绝。</p>
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 可浏览时返回 SHARED，否则返回 null
+     */
+    private SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
     }
 
     @Transactional(readOnly = true)
@@ -119,7 +134,7 @@ public class MusicLibraryService {
     public Page<MusicTrackDto> tracks(UUID ownerUserId, int page, int size, String sort) {
         Page<MusicTrack> result = trackRepository.findTracksVisibleToUser(
                 ownerUserId,
-                SpaceType.SHARED,
+                sharedVisibility(ownerUserId),
                 PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
                         resolveSort(sort, TRACK_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "title"))));
         return new PageImpl<>(
@@ -253,7 +268,8 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(
+                ownerUserId, sharedVisibility(ownerUserId), trackIds));
     }
 
     @Transactional(readOnly = true)
@@ -271,7 +287,8 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findTracksVisibleToUserByIds(
+                ownerUserId, sharedVisibility(ownerUserId), trackIds));
     }
 
     /**
@@ -298,7 +315,7 @@ public class MusicLibraryService {
                 .filter(trackId -> trackId != null)
                 .toList();
         Map<UUID, MusicTrack> localTracks = trackRepository
-                .findTracksVisibleToUserByIds(ownerUserId, localTrackIds)
+                .findTracksVisibleToUserByIds(ownerUserId, sharedVisibility(ownerUserId), localTrackIds)
                 .stream()
                 .collect(Collectors.toMap(MusicTrack::getId, track -> track));
         Set<UUID> favoriteTrackIds = favoriteTrackIds(ownerUserId, localTrackIds);
@@ -461,7 +478,7 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return Map.of();
         }
-        return trackRepository.findTracksVisibleToUserByIds(ownerUserId, trackIds)
+        return trackRepository.findTracksVisibleToUserByIds(ownerUserId, sharedVisibility(ownerUserId), trackIds)
                 .stream()
                 .collect(Collectors.toMap(MusicTrack::getId, track -> track));
     }
@@ -483,7 +500,8 @@ public class MusicLibraryService {
         return playHistoryRepository
                 .findFirstByOwnerUserIdAndTrackIdIsNotNullOrderByPlayedAtDesc(ownerUserId)
                 .flatMap(history -> trackRepository
-                        .findTracksVisibleToUserByIds(ownerUserId, List.of(history.getTrackId()))
+                        .findTracksVisibleToUserByIds(
+                                ownerUserId, sharedVisibility(ownerUserId), List.of(history.getTrackId()))
                         .stream()
                         .findFirst())
                 .map(track -> toTrackDto(

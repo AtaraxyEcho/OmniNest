@@ -7,11 +7,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.domain.ReaderReadingSession;
@@ -27,15 +30,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -50,13 +51,17 @@ class ReaderStatsServiceTest {
     private final ReaderItemService itemService = mock(ReaderItemService.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final SystemInstanceConfigService systemInstanceConfigService = mock(SystemInstanceConfigService.class);
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery = mock(SharedSpaceAccessQuery.class);
+    private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final ReaderStatsService readerStatsService = new ReaderStatsService(
             sessionRepository, itemRepository, progressRepository, itemService,
-            new TransactionTemplate(transactionManager), systemInstanceConfigService);
+            new TransactionTemplate(transactionManager), systemInstanceConfigService,
+            sharedSpaceAccessQuery, fileMetadataQueryService);
 
     @BeforeEach
     void useSystemZone() {
         when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
+        lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
     }
 
     @Test
@@ -116,28 +121,20 @@ class ReaderStatsServiceTest {
         when(sessionRepository.sumDailyMinutesSince(eq(OWNER_ID), any(Instant.class), any()))
                 .thenReturn(List.of(dailyView(today, 25L), dailyView(today.minusDays(1), 40L)));
         ReaderItem inProgressItem = visibleItem(ITEM_ID, "测试书籍");
-        ReaderItem completedItem = visibleItem(UUID.randomUUID(), "读完的书");
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
-                .thenReturn(List.of(inProgressItem, completedItem));
-        ReaderProgress inProgress = new ReaderProgress();
-        inProgress.setOwnerUserId(OWNER_ID);
-        inProgress.setReaderItemId(ITEM_ID);
-        inProgress.setProgressPercent(new BigDecimal("0.5"));
-        inProgress.setUpdatedAt(Instant.now());
-        ReaderProgress completed = new ReaderProgress();
-        completed.setOwnerUserId(OWNER_ID);
-        completed.setReaderItemId(completedItem.getId());
-        completed.setProgressPercent(BigDecimal.ONE);
-        completed.setUpdatedAt(Instant.now());
-        when(progressRepository.findByOwnerUserIdAndReaderItemIdIn(eq(OWNER_ID), any())).thenReturn(
-                List.of(inProgress, completed));
+        ReaderProgress inProgress = progress(ITEM_ID, new BigDecimal("0.5"));
+        when(progressRepository.countVisibleCompleted(OWNER_ID, SpaceType.SHARED)).thenReturn(1L);
+        when(progressRepository.countVisibleInProgress(OWNER_ID, SpaceType.SHARED)).thenReturn(1L);
+        when(itemRepository.countVisibleItems(OWNER_ID, SpaceType.SHARED)).thenReturn(2L);
+        when(progressRepository.findVisibleInProgress(eq(OWNER_ID), eq(SpaceType.SHARED), any(Pageable.class)))
+                .thenReturn(List.of(inProgress));
+        when(itemRepository.findAllById(List.of(ITEM_ID))).thenReturn(List.of(inProgressItem));
 
         ReaderItemDto dto = new ReaderItemDto(
                 ITEM_ID, null, "EPUB", "TEXT", "测试书籍", null, null, null, null,
                 null, null, null, null, null, null, Instant.now(), Instant.now(), false, null,
                 "PERSONAL", 0, "READY", null, null
         );
-        when(itemService.toDto(eq(inProgressItem), eq(false), isNull(), anyMap())).thenReturn(dto);
+        when(itemService.toDto(eq(inProgressItem), eq(false), anyMap(), anyMap())).thenReturn(dto);
 
         ReaderStatsOverviewDto overview = readerStatsService.getStatsOverview(OWNER_ID, 14);
 
@@ -152,22 +149,15 @@ class ReaderStatsServiceTest {
     }
 
     /**
-     * 总藏书数、已完成数与在读列表必须取同一个母集：进度行按用户存，条目可见性按文件节点判，
-     * 两边不统一时读过的共享书会让"已完成 + 在读"超过总数，进回收站的书还留在在读列表里。
+     * 总藏书数、已完成数与在读列表必须取同一可见性判据：共享空间关闭后
+     * 所有聚合都只统计个人条目，避免“已完成 + 在读”超过总数。
      */
     @Test
-    @SuppressWarnings("unchecked")
-    void getStatsOverviewScopesProgressToVisibleItems() {
-        UUID sharedItemId = UUID.randomUUID();
-        ReaderItem sharedItem = visibleItem(sharedItemId, "共享书");
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED)).thenReturn(List.of(sharedItem));
-        ReaderProgress completed = new ReaderProgress();
-        completed.setOwnerUserId(OWNER_ID);
-        completed.setReaderItemId(sharedItemId);
-        completed.setProgressPercent(BigDecimal.ONE);
-        completed.setUpdatedAt(Instant.now());
-        when(progressRepository.findByOwnerUserIdAndReaderItemIdIn(eq(OWNER_ID), any()))
-                .thenReturn(List.of(completed));
+    void getStatsOverviewExcludesSharedSpaceWhenBrowseDenied() {
+        when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(false);
+        when(progressRepository.countVisibleCompleted(OWNER_ID, null)).thenReturn(1L);
+        when(progressRepository.countVisibleInProgress(OWNER_ID, null)).thenReturn(0L);
+        when(itemRepository.countVisibleItems(OWNER_ID, null)).thenReturn(1L);
 
         ReaderStatsOverviewDto overview = readerStatsService.getStatsOverview(OWNER_ID, 7);
 
@@ -175,14 +165,11 @@ class ReaderStatsServiceTest {
         assertThat(overview.completedCount()).isEqualTo(1L);
         assertThat(overview.inProgressCount()).isZero();
         assertThat(overview.inProgressItems()).isEmpty();
-        ArgumentCaptor<Collection<UUID>> scopedIds = ArgumentCaptor.forClass(Collection.class);
-        verify(progressRepository).findByOwnerUserIdAndReaderItemIdIn(eq(OWNER_ID), scopedIds.capture());
-        assertThat(scopedIds.getValue()).containsExactly(sharedItemId);
+        verify(progressRepository).findVisibleInProgress(eq(OWNER_ID), isNull(), any(Pageable.class));
     }
 
     @Test
     void getStatsOverviewClampsDaysToConfiguredBounds() {
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED)).thenReturn(List.of());
         when(sessionRepository.sumDailyMinutesSince(eq(OWNER_ID), any(Instant.class), any()))
                 .thenReturn(List.of());
 
@@ -197,14 +184,7 @@ class ReaderStatsServiceTest {
         LocalDate today = LocalDate.now();
         when(sessionRepository.distinctReadingDaysSince(eq(OWNER_ID), any(Instant.class), any()))
                 .thenReturn(List.of(today.minusDays(1), today.minusDays(2), today.minusDays(3)));
-        ReaderItem firstFinished = visibleItem(UUID.randomUUID(), "读完的一");
-        ReaderItem secondFinished = visibleItem(UUID.randomUUID(), "读完的二");
-        when(itemRepository.findItemsVisibleToUser(OWNER_ID, SpaceType.SHARED))
-                .thenReturn(List.of(firstFinished, secondFinished));
-        when(progressRepository.findByOwnerUserIdAndReaderItemIdIn(eq(OWNER_ID), any()))
-                .thenReturn(List.of(
-                        completedProgress(firstFinished.getId()),
-                        completedProgress(secondFinished.getId())));
+        when(progressRepository.countVisibleCompleted(OWNER_ID, SpaceType.SHARED)).thenReturn(2L);
 
         ReaderReadingStatsDto stats = readerStatsService.getStats(OWNER_ID);
 
@@ -230,11 +210,11 @@ class ReaderStatsServiceTest {
         return item;
     }
 
-    private ReaderProgress completedProgress(UUID readerItemId) {
+    private ReaderProgress progress(UUID readerItemId, BigDecimal percent) {
         ReaderProgress progress = new ReaderProgress();
         progress.setOwnerUserId(OWNER_ID);
         progress.setReaderItemId(readerItemId);
-        progress.setProgressPercent(BigDecimal.ONE);
+        progress.setProgressPercent(percent);
         progress.setUpdatedAt(Instant.now());
         return progress;
     }

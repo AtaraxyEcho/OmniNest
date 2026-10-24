@@ -71,7 +71,7 @@ class OutboundExecutorRegistryTest {
                     "ExternalStorageEndpointGuard 校验用户填写的 S3/WebDAV 端点"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/ExternalImportExecutionService.java",
                     "沿用 ExternalStorageEndpointGuard 校验过的账户端点；下载产物经 File 入库链路"),
-            Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/ExternalStorageOAuthService.java",
+            Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/ExternalStorageOAuthTokenClient.java",
                     "提供方端点为常量；redirect_uri 只作表单字段不外连"),
             Map.entry("omninest-file/src/main/java/com/omninest/modules/file/service/MediaProbeService.java",
                     "ffprobe 子进程；输入是 MediaProbeSourceStager 取出的本地稀疏文件，不吃预签名地址，"

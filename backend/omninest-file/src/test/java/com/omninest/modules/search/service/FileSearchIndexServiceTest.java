@@ -359,6 +359,23 @@ class FileSearchIndexServiceTest {
     }
 
     @Test
+    @DisplayName("删除用户索引后墓碑阻止重建，直到管理员全量重建")
+    void purgedUserCannotRecreateIndexUntilFullRebuild() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        service.indexFile(fileId, USER_A, "待删除索引", "正文", "PERSONAL");
+
+        assertThat(service.deleteUserIndex(USER_A)).isTrue();
+        assertThat(service.isUserPurged(USER_A)).isTrue();
+
+        service.indexFile(UUID.randomUUID(), USER_A, "删除后重建", "正文", "PERSONAL");
+        assertThat(Files.exists(tempDir.resolve(USER_A.toString()))).isFalse();
+        assertThat(service.search(USER_A, "删除后重建", 10)).isEmpty();
+
+        service.clearAllIndexes();
+        assertThat(service.isUserPurged(USER_A)).isFalse();
+    }
+
+    @Test
     @DisplayName("用户索引缓存超过容量后关闭旧资源并可从磁盘重新打开")
     void indexCache_exceedsCapacity_evictsAndReopensIndex() throws Exception {
         service.close();

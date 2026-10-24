@@ -5,7 +5,6 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.FilePurgeState;
-import com.omninest.modules.file.domain.SharedSpacePermission.Action;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -55,7 +54,8 @@ public class FileLifecycleGuard {
      */
     private void requireReadableByNonOwner(UUID userId, FileNode node) {
         if (node.getSpaceType() == SpaceType.SHARED) {
-            sharedSpaceService.validatePermission(userId, Action.CAN_BROWSE);
+            // 共享空间总开关关闭后，历史成员仍可能持有 CAN_BROWSE，必须与列表同一判据
+            sharedSpaceService.validateBrowsePermission(userId);
             return;
         }
         FilePermission permission = filePermissionService.resolvePermission(node.getId(), userId);

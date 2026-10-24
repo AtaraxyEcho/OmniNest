@@ -1,5 +1,7 @@
 package com.omninest.modules.file.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.omninest.common.audit.AdminAuditRecorder;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.concurrency.DistributedLock;
@@ -7,6 +9,10 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.json.JsonSupport;
 import com.omninest.common.security.CredentialCipher;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncEventCommand;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.StorageConnectorOAuthApp;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
@@ -16,12 +22,7 @@ import com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest;
 import com.omninest.modules.file.repository.StorageConnectorOAuthAppRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.quota.port.AdminActorVerifier;
-import java.io.IOException;
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,8 +30,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.Optional;
 import java.util.UUID;
 import tools.jackson.core.type.TypeReference;
@@ -51,10 +50,6 @@ public class ExternalStorageOAuthService {
 
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
     private static final String STATE_KEY_PREFIX = "omninest:oauth:state:";
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
 
     private final StorageConnectorOAuthAppRepository oauthAppRepository;
     private final StorageExternalAccountRepository accountRepository;
@@ -64,9 +59,19 @@ public class ExternalStorageOAuthService {
     private final DistributedLock distributedLock;
     private final AdminActorVerifier adminActorVerifier;
     private final AdminAuditRecorder adminAuditRecorder;
+    private final UserSyncEventRecorder syncEventRecorder;
+    private final ExternalStorageOAuthTokenClient tokenClient;
 
-    /** 同账户刷新在本实例内串行；跨实例由分布式锁协调。 */
-    private final ConcurrentMap<UUID, Object> refreshLocalLocks = new ConcurrentHashMap<>();
+    /**
+     * 同账户刷新在本实例内串行；跨实例由分布式锁协调。
+     *
+     * <p>按账户缓存的锁对象必须有界：外部存储账号被删除后不会再访问，
+     * 裸 ConcurrentMap 会随账号数量长期增长。</p>
+     */
+    private final Cache<UUID, Object> refreshLocalLocks = Caffeine.newBuilder()
+            .maximumSize(256)
+            .expireAfterAccess(Duration.ofMinutes(30))
+            .build();
 
     /**
      * token 校验或刷新结果。
@@ -191,13 +196,23 @@ public class ExternalStorageOAuthService {
         StorageExternalAccount account = accountRepository.findByIdAndOwnerUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
 
-        Map<String, Object> tokens = exchangeCode(connectorCode, app, code.trim());
+        Map<String, Object> tokens = tokenClient.exchangeCode(connectorCode, app, code.trim());
         Map<String, Object> canonical = canonicalizeTokens(tokens);
         account.setEncryptedCredentials(credentialService.encrypt(JsonSupport.toJson(canonical)));
         account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
         account.setLastErrorCode(null);
         account.setLastCheckedAt(Instant.now());
         accountRepository.save(account);
+        // 授权在浏览器完成后才落库，必须推送同步事件让已打开的文件页实时刷新账户状态。
+        syncEventRecorder.record(new SyncEventCommand(
+                userId,
+                SyncScope.FILES,
+                "EXTERNAL_STORAGE",
+                accountId.toString(),
+                SyncAction.UPDATED,
+                null,
+                Map.of()
+        ));
         log.info("OAuth 授权成功: accountId={}, connector={}", accountId, connectorCode);
     }
 
@@ -218,7 +233,7 @@ public class ExternalStorageOAuthService {
      * @return 规范化凭据与是否实际执行了刷新
      */
     public TokenRefreshResult ensureAccessToken(StorageExternalAccount account) {
-        Object localLock = refreshLocalLocks.computeIfAbsent(account.getId(), key -> new Object());
+        Object localLock = refreshLocalLocks.get(account.getId(), key -> new Object());
         synchronized (localLock) {
             return ensureAccessTokenLocked(account.getId());
         }
@@ -275,7 +290,7 @@ public class ExternalStorageOAuthService {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "缺少 refresh_token，请重新授权");
             }
             StorageConnectorOAuthApp app = requireApp(account.getProvider());
-            Map<String, Object> refreshed = refreshTokens(account.getProvider(), app, refresh);
+            Map<String, Object> refreshed = tokenClient.refreshTokens(account.getProvider(), app, refresh);
             Map<String, Object> canonical = canonicalizeTokens(refreshed);
             if (!canonical.containsKey("refresh_token")) {
                 canonical.put("refresh_token", refresh);
@@ -432,62 +447,6 @@ public class ExternalStorageOAuthService {
                     + "&redirect_uri=" + encodedRedirect
                     + "&token_access_type=offline"
                     + stateParam;
-            default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接器暂不支持 OAuth");
-        };
-    }
-
-    private Map<String, Object> exchangeCode(String code, StorageConnectorOAuthApp app, String authorizationCode) {
-        return postToken(code, app, Map.of(
-                "grant_type", "authorization_code",
-                "code", authorizationCode,
-                "redirect_uri", app.getRedirectUri(),
-                "client_id", app.getClientId(),
-                "client_secret", credentialCipher.decrypt(app.getClientSecretEncrypted())
-        ));
-    }
-
-    private Map<String, Object> refreshTokens(String provider, StorageConnectorOAuthApp app, String refreshToken) {
-        return postToken(provider, app, Map.of(
-                "grant_type", "refresh_token",
-                "refresh_token", refreshToken,
-                "client_id", app.getClientId(),
-                "client_secret", credentialCipher.decrypt(app.getClientSecretEncrypted())
-        ));
-    }
-
-    private Map<String, Object> postToken(String provider, StorageConnectorOAuthApp app, Map<String, String> form) {
-        String endpoint = tokenEndpoint(provider);
-        String body = form.entrySet().stream()
-                .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)
-                        + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
-                .reduce((a, b) -> a + "&" + b)
-                .orElse("");
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
-                    .timeout(Duration.ofSeconds(20))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                    .build();
-            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400) {
-                log.warn("OAuth token 交换失败: provider={}, status={}", provider, response.statusCode());
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 授权失败，请重试或检查应用配置");
-            }
-            return JsonSupport.fromJson(response.body(), new TypeReference<Map<String, Object>>() {});
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "OAuth 请求被中断");
-        } catch (IOException exception) {
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "无法访问 OAuth 服务");
-        }
-    }
-
-    private String tokenEndpoint(String provider) {
-        String code = provider.trim().toUpperCase(Locale.ROOT);
-        return switch (code) {
-            case "ONEDRIVE" -> "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-            case "GDRIVE", "GOOGLE_DRIVE" -> "https://oauth2.googleapis.com/token";
-            case "DROPBOX" -> "https://api.dropboxapi.com/oauth2/token";
             default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接器暂不支持 OAuth");
         };
     }

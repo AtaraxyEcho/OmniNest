@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncScope;
@@ -94,6 +95,8 @@ class ReaderImportServiceTest {
     private MediaSyncEventService syncEventService;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     @InjectMocks
     private ReaderImportService importService;
@@ -107,6 +110,7 @@ class ReaderImportServiceTest {
     void runTransactionCallback() {
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 ((TransactionCallback<Object>) invocation.getArgument(0)).doInTransaction(null));
+        lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
     }
 
     @Test
@@ -343,6 +347,18 @@ class ReaderImportServiceTest {
         assertThat(result.getId()).isEqualTo(SAVED_ITEM_ID);
         verify(itemRepository).save(any(ReaderItem.class));
         verify(itemRepository, never()).findByContentHash(any());
+    }
+
+    @Test
+    void importSharedFileIsRejectedWhenBrowseDenied() {
+        when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(false);
+        when(fileMetadataQueryService.findById(FILE_NODE_ID))
+                .thenReturn(Optional.of(sharedFileNode("shared.epub", OTHER_USER_ID)));
+
+        assertThatThrownBy(() -> importService.importFile(OWNER_ID, FILE_NODE_ID, false))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verify(itemRepository, never()).save(any());
     }
 
     @Test

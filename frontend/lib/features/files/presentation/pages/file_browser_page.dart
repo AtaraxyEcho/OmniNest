@@ -77,6 +77,7 @@ import 'package:omninest/features/files/presentation/theme/files_workstation_the
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 part 'files_operation_l10n.dart';
 part 'file_browser_page_navigation.dart';

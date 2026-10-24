@@ -19,6 +19,8 @@ public final class QueueNames {
     public static final String FILE_RESTORE_INDEX_ROUTING_KEY = "file.restore.index";
     public static final String FILE_INDEX_SYNC_QUEUE = "omni.task.file-index-sync";
     public static final String FILE_INDEX_SYNC_ROUTING_KEY = "file.index.sync";
+    public static final String FILE_INDEX_USER_PURGE_QUEUE = "omni.task.file-index-user-purge";
+    public static final String FILE_INDEX_USER_PURGE_ROUTING_KEY = "file.index.user-purge";
     public static final String SEARCH_INDEX_REBUILD_QUEUE = "omni.task.search-index-rebuild";
     public static final String SEARCH_INDEX_REBUILD_ROUTING_KEY = "search.index.rebuild";
     public static final String MEDIA_AUTO_IMPORT_QUEUE = "omni.task.media-auto-import";
@@ -81,6 +83,7 @@ public final class QueueNames {
             FILE_INDEX_QUEUE,
             FILE_RESTORE_INDEX_QUEUE,
             FILE_INDEX_SYNC_QUEUE,
+            FILE_INDEX_USER_PURGE_QUEUE,
             SEARCH_INDEX_REBUILD_QUEUE,
             MEDIA_AUTO_IMPORT_QUEUE,
             TEXT_EXTRACTION_QUEUE,

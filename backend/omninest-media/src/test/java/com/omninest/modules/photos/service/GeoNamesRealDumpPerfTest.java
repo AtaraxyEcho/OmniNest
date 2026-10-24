@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -40,7 +42,7 @@ class GeoNamesRealDumpPerfTest {
 
     @BeforeAll
     void loadRealDump() throws IOException {
-        org.junit.jupiter.api.Assumptions.assumeTrue(dumpDir() != null,
+        Assumptions.assumeTrue(dumpDir() != null,
                 "未找到真实 dump 目录 data/geonames，跳过性能验证");
         Path dumpDir = dumpDir();
 
@@ -128,7 +130,7 @@ class GeoNamesRealDumpPerfTest {
     @Test
     void alternateNamesStreamsChineseCandidates() throws IOException {
         Path dumpDir = dumpDir();
-        org.junit.jupiter.api.Assumptions.assumeTrue(
+        Assumptions.assumeTrue(
                 dumpDir != null && Files.isRegularFile(dumpDir.resolve("alternateNamesV2.txt")),
                 "缺少 alternateNamesV2.txt，跳过流式扫描验证");
 

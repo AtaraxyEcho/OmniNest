@@ -16,10 +16,13 @@ import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -54,18 +57,18 @@ class FileShareServiceTest {
     @DisplayName("级联共享只匹配子孙路径，不误伤同名前缀兄弟节点")
     void toggleSharedRecursive_matchesOnlyDescendants() {
         FileNode folder = node(FOLDER_ID, "docs", "/docs", NodeType.FOLDER.getValue());
-        FileNode child = node(CHILD_ID, "a.txt", "/docs/a.txt", NodeType.FILE.getValue());
         when(fileNodeSupport.findOwnedNode(OWNER_ID, FOLDER_ID)).thenReturn(folder);
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                eq(OWNER_ID), eq(SpaceType.PERSONAL), any())).thenReturn(List.of(child));
 
         service.toggleSharedRecursive(OWNER_ID, FOLDER_ID, true);
 
         // 前缀必须带尾斜杠：/docs 不能连带命中 /docs_2026 与 /docs.pdf
-        verify(fileNodeRepository)
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        OWNER_ID, SpaceType.PERSONAL, "/docs/");
-        assertThat(child.isShared()).isTrue();
+        verify(fileNodeRepository).updateSharedByPathPrefix(
+                eq(OWNER_ID),
+                eq(SpaceType.PERSONAL),
+                eq("/docs/"),
+                eq(true),
+                any(Instant.class),
+                any(Instant.class));
         assertThat(folder.isShared()).isTrue();
     }
 
@@ -73,14 +76,15 @@ class FileShareServiceTest {
     @DisplayName("取消级联共享时只清理子树内的自定义权限")
     void toggleSharedRecursive_unshareClearsOnlySubtreePermissions() {
         FileNode folder = node(FOLDER_ID, "docs", "/docs", NodeType.FOLDER.getValue());
-        FileNode child = node(CHILD_ID, "a.txt", "/docs/a.txt", NodeType.FILE.getValue());
         when(fileNodeSupport.findOwnedNode(OWNER_ID, FOLDER_ID)).thenReturn(folder);
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("/docs/"))).thenReturn(List.of(child));
+        when(fileNodeRepository.findActiveIdsByPathPrefix(
+                eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("/docs/"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(CHILD_ID)));
 
         service.toggleSharedRecursive(OWNER_ID, FOLDER_ID, false);
 
-        verify(filePermissionService).clearPermissionsBatch(List.of(CHILD_ID, FOLDER_ID));
+        verify(filePermissionService).clearPermissionsBatch(List.of(CHILD_ID));
+        verify(filePermissionService).clearPermissions(FOLDER_ID);
     }
 
     private FileNode node(UUID id, String name, String path, String nodeType) {

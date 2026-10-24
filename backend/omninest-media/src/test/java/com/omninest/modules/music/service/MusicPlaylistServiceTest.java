@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.domain.MusicPlaylist;
 import com.omninest.modules.music.domain.MusicPlaylistItem;
@@ -25,6 +28,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class MusicPlaylistServiceTest {
@@ -41,6 +45,7 @@ class MusicPlaylistServiceTest {
     private final MusicCoverService musicCoverService = mock(MusicCoverService.class);
     private final MusicCoverRetentionService coverRetentionService = mock(MusicCoverRetentionService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery = mock(SharedSpaceAccessQuery.class);
     private final MusicPlaylistService playlistService =
             new MusicPlaylistService(
                     playlistRepository,
@@ -49,8 +54,14 @@ class MusicPlaylistServiceTest {
                     musicLibraryService,
                     musicCoverService,
                     coverRetentionService,
-                    syncEventService
+                    syncEventService,
+                    sharedSpaceAccessQuery
             );
+
+    @BeforeEach
+    void allowSharedSpaceVisibility() {
+        lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
+    }
 
     @Test
     void createPlaylistPersistsValidatedCustomCover() {
@@ -146,7 +157,8 @@ class MusicPlaylistServiceTest {
         when(playlistRepository.findByIdAndOwnerUserId(PLAYLIST_ID, OWNER_ID)).thenReturn(Optional.of(playlist));
         when(playlistItemRepository.findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(OWNER_ID, PLAYLIST_ID))
                 .thenReturn(List.of(first, second));
-        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, List.of(FIRST_TRACK_ID, SECOND_TRACK_ID)))
+        when(trackRepository.findTracksVisibleToUserByIds(
+                OWNER_ID, SpaceType.SHARED, List.of(FIRST_TRACK_ID, SECOND_TRACK_ID)))
                 .thenReturn(List.of(secondTrack, firstTrack));
         // 服务改为批量转 DTO（收藏标记一并回填），桩按传入顺序回显，保留顺序断言的意义。
         when(musicLibraryService.toTrackSummaryDtos(eq(OWNER_ID), anyList()))
@@ -181,6 +193,7 @@ class MusicPlaylistServiceTest {
         )).thenReturn(List.of(first));
         when(trackRepository.findTracksVisibleToUserByIds(
                 eq(OWNER_ID),
+                eq(SpaceType.SHARED),
                 anyList()
         )).thenReturn(List.of(firstTrack));
         when(musicLibraryService.toTrackSummaryDto(firstTrack, false))
@@ -209,7 +222,7 @@ class MusicPlaylistServiceTest {
                 OWNER_ID,
                 PLAYLIST_ID
         )).thenReturn(Optional.of(remaining));
-        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, List.of(SECOND_TRACK_ID)))
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, SpaceType.SHARED, List.of(SECOND_TRACK_ID)))
                 .thenReturn(List.of(secondTrack));
         when(musicLibraryService.toTrackSummaryDto(secondTrack, false))
                 .thenReturn(dto(SECOND_TRACK_ID, "Second", "https://example.com/second.jpg"));

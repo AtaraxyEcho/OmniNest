@@ -105,6 +105,10 @@ photo:
     max-single-file-bytes: 536870912
     max-source-bytes: 21474836480
     min-free-bytes: 536870912
+  batch-retention:
+    enabled: ${PHOTO_BATCH_RETENTION_ENABLED:true}
+    max-age: ${PHOTO_BATCH_RETENTION_MAX_AGE:7d}
+    batch-size: ${PHOTO_BATCH_RETENTION_BATCH_SIZE:200}
   media-limits:
     max-standard-file-bytes: 134217728
     max-raw-file-bytes: 536870912

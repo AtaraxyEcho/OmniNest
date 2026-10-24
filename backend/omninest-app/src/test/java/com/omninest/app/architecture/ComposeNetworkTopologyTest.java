@@ -116,6 +116,25 @@ class ComposeNetworkTopologyTest {
     }
 
     @Test
+    @DisplayName("生产后端三角色独立且照片批量保留期可配")
+    void backendRolesAndBatchRetentionAreConfigured() throws IOException {
+        Map<String, Object> root = load(REPO_ROOT.resolve("deploy/prod/docker-compose.yml"));
+        Map<String, Object> services = services(root);
+        for (String role : List.of("api", "worker", "scheduler")) {
+            Map<String, Object> environment = environment(services.get("backend-" + role));
+            assertEquals(role, environment.get("OMNINEST_ROLE"),
+                    "backend-" + role + " 必须显式声明独立运行角色");
+            for (String key : List.of(
+                    "PHOTO_BATCH_RETENTION_ENABLED",
+                    "PHOTO_BATCH_RETENTION_MAX_AGE",
+                    "PHOTO_BATCH_RETENTION_BATCH_SIZE")) {
+                assertTrue(environment.containsKey(key),
+                        "backend-" + role + " 未继承照片批量保留期配置: " + key);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("egress 可出公网且不存在 internal 数据面网络")
     void egressNetworkStaysNonInternal() throws IOException {
         for (String file : FILES.keySet()) {
@@ -135,6 +154,13 @@ class ComposeNetworkTopologyTest {
         Object services = root.get("services");
         assertTrue(services instanceof Map, "compose 缺少 services 段");
         return (Map<String, Object>) services;
+    }
+
+    private static Map<String, Object> environment(Object service) {
+        assertTrue(service instanceof Map<?, ?>, "缺少后端服务定义");
+        Object environment = ((Map<?, ?>) service).get("environment");
+        assertTrue(environment instanceof Map, "后端服务缺少 environment 段");
+        return (Map<String, Object>) environment;
     }
 
     private static List<String> stringList(Object value) {

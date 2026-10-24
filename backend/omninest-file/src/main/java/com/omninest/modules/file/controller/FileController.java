@@ -639,8 +639,9 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileUploadQueueService.listUploadQueue(ownerUserId);
-        return ApiResponse.success(PageClamps.pagedResponse(items, page, size));
+        var items = fileUploadQueueService.listUploadQueue(ownerUserId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                items.getContent(), items.getNumber(), items.getSize(), items.getTotalElements()));
     }
 
     @Operation(summary = "创建上传会话", description = "创建分片上传会话，支持大文件断点续传")
@@ -765,9 +766,15 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    // ─── 共享管理 ───
+    // ─── 共享管理（旧版节点级共享，已由外链/定向分享与共享空间替代） ───
 
-    @Operation(summary = "切换共享状态", description = "切换文件的共享开关状态")
+    /**
+     * @deprecated 前端已改用外链/定向分享与共享空间；保留接口仅为兼容旧客户端。
+     */
+    @Deprecated
+    @Operation(summary = "切换共享状态（已废弃）",
+            description = "旧版节点级共享开关，请改用分享链接、定向分享或共享空间",
+            deprecated = true)
     @PutMapping("/api/v1/files/{fileId}/shared")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> toggleShared(@PathVariable UUID fileId) {
@@ -776,7 +783,13 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "递归切换共享状态", description = "递归切换文件夹及其子项的共享状态")
+    /**
+     * @deprecated 旧版节点级共享已由分享链接、定向分享与共享空间替代。
+     */
+    @Deprecated
+    @Operation(summary = "递归切换共享状态（已废弃）",
+            description = "旧版节点级共享开关，请改用分享链接、定向分享或共享空间",
+            deprecated = true)
     @PutMapping("/api/v1/files/{fileId}/shared/recursive")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> toggleSharedRecursive(
@@ -788,7 +801,13 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "列出共享文件", description = "列出当前用户可见的共享文件，支持分页")
+    /**
+     * @deprecated 旧版节点级共享列表，请改用收到的分享或共享空间浏览接口。
+     */
+    @Deprecated
+    @Operation(summary = "列出共享文件（已废弃）",
+            description = "旧版节点级共享列表，请改用收到的分享或共享空间浏览接口",
+            deprecated = true)
     @GetMapping("/api/v1/files/shared")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<PageResponse<SharedFileDto>> listSharedFiles(
@@ -804,9 +823,15 @@ public class FileController {
                 files.getTotalElements()));
     }
 
-    // ─── 权限管理 ───
+    // ─── 权限管理（旧版节点级权限，已由分享与共享空间权限矩阵替代） ───
 
-    @Operation(summary = "设置全局权限", description = "设置文件的默认全局访问权限")
+    /**
+     * @deprecated 旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限。
+     */
+    @Deprecated
+    @Operation(summary = "设置全局权限（已废弃）",
+            description = "旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限",
+            deprecated = true)
     @PutMapping("/api/v1/files/{fileId}/permissions/default")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> setGlobalPermission(
@@ -818,7 +843,13 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "设置用户权限", description = "为指定用户设置文件的访问权限")
+    /**
+     * @deprecated 旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限。
+     */
+    @Deprecated
+    @Operation(summary = "设置用户权限（已废弃）",
+            description = "旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限",
+            deprecated = true)
     @PutMapping("/api/v1/files/{fileId}/permissions/users/{granteeUserId}")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> setUserPermission(
@@ -831,7 +862,13 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "移除用户权限", description = "移除指定用户对文件的访问权限")
+    /**
+     * @deprecated 旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限。
+     */
+    @Deprecated
+    @Operation(summary = "移除用户权限（已废弃）",
+            description = "旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限",
+            deprecated = true)
     @DeleteMapping("/api/v1/files/{fileId}/permissions/users/{granteeUserId}")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> removeUserPermission(
@@ -843,7 +880,13 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "列出权限配置", description = "列出指定文件的所有权限配置")
+    /**
+     * @deprecated 旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限。
+     */
+    @Deprecated
+    @Operation(summary = "列出权限配置（已废弃）",
+            description = "旧版节点级权限配置，请改用分享链接、定向分享或共享空间权限",
+            deprecated = true)
     @GetMapping("/api/v1/files/{fileId}/permissions")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<FilePermissionDto>> listPermissions(@PathVariable UUID fileId) {

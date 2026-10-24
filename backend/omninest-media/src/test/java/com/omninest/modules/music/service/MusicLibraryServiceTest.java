@@ -3,6 +3,7 @@ package com.omninest.modules.music.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -12,6 +13,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
@@ -39,6 +41,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -67,6 +70,7 @@ class MusicLibraryServiceTest {
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final MusicLibraryProperties musicLibraryProperties = new MusicLibraryProperties();
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery = mock(SharedSpaceAccessQuery.class);
     private final MusicLibraryService libraryService = new MusicLibraryService(
             trackRepository,
             albumRepository,
@@ -78,8 +82,26 @@ class MusicLibraryServiceTest {
             fileLifecycleGuard,
             readThroughCache,
             syncEventService,
-            musicLibraryProperties
+            musicLibraryProperties,
+            sharedSpaceAccessQuery
     );
+
+    @BeforeEach
+    void allowSharedSpaceVisibility() {
+        lenient().when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(true);
+    }
+
+    @Test
+    void tracksExcludeSharedSpaceWhenBrowseDenied() {
+        when(sharedSpaceAccessQuery.canBrowse(OWNER_ID)).thenReturn(false);
+        var pageable = PageRequest.of(0, 50, Sort.by(Sort.Direction.ASC, "title"));
+        when(trackRepository.findTracksVisibleToUser(OWNER_ID, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        libraryService.tracks(OWNER_ID, 0, 50, null);
+
+        verify(trackRepository).findTracksVisibleToUser(OWNER_ID, null, pageable);
+    }
 
     @Test
     void trackSummaryDtoOmitsLyricsForListProjection() {
@@ -326,7 +348,7 @@ class MusicLibraryServiceTest {
         when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                 eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
-        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(List.of(TRACK_ID))))
+        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(SpaceType.SHARED), eq(List.of(TRACK_ID))))
                 .thenReturn(List.of(track));
 
         var result = libraryService.playHistory(OWNER_ID, 0, 50);
@@ -347,7 +369,7 @@ class MusicLibraryServiceTest {
         when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                 eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
-        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(List.of(TRACK_ID))))
+        when(trackRepository.findTracksVisibleToUserByIds(eq(OWNER_ID), eq(SpaceType.SHARED), eq(List.of(TRACK_ID))))
                 .thenReturn(List.of());
 
         var result = libraryService.playHistory(OWNER_ID, 0, 50);
@@ -374,7 +396,8 @@ class MusicLibraryServiceTest {
 
         assertThat(result.getContent().getFirst().coverUrl())
                 .isEqualTo("https://p1.music.126.net/cover.jpg");
-        verify(trackRepository, never()).findTracksVisibleToUserByIds(eq(OWNER_ID), ArgumentMatchers.anyList());
+        verify(trackRepository, never()).findTracksVisibleToUserByIds(
+                eq(OWNER_ID), eq(SpaceType.SHARED), ArgumentMatchers.anyList());
     }
 
     @Test
@@ -497,7 +520,8 @@ class MusicLibraryServiceTest {
                         ArgumentMatchers.any(Instant.class)
                 ))
                 .thenReturn(List.of(history));
-        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, List.of())).thenReturn(List.of());
+        when(trackRepository.findTracksVisibleToUserByIds(OWNER_ID, SpaceType.SHARED, List.of()))
+                .thenReturn(List.of());
 
         var recent = libraryService.recentItems(OWNER_ID);
 

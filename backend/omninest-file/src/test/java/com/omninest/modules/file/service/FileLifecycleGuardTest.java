@@ -3,7 +3,6 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,7 +12,6 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
-import com.omninest.modules.file.domain.SharedSpacePermission.Action;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -66,7 +64,7 @@ class FileLifecycleGuardTest {
 
         assertThat(descriptor.id()).isEqualTo(NODE_ID);
         verify(filePermissionService, never()).resolvePermission(any(), any());
-        verify(sharedSpaceService, never()).validatePermission(any(), any());
+        verify(sharedSpaceService, never()).validateBrowsePermission(any());
     }
 
     /** 共享空间成员按角色矩阵即可读取：这是"能列出却打不开"缺陷的回归锁。 */
@@ -75,16 +73,16 @@ class FileLifecycleGuardTest {
         givenNode(node(SpaceType.SHARED, false));
 
         assertThat(guard.requireReadable(MEMBER_ID, NODE_ID).spaceType()).isEqualTo(SpaceType.SHARED);
-        verify(sharedSpaceService).validatePermission(MEMBER_ID, Action.CAN_BROWSE);
+        verify(sharedSpaceService).validateBrowsePermission(MEMBER_ID);
         verify(filePermissionService, never()).resolvePermission(any(), any());
     }
 
-    /** 无浏览权限的成员被拒：共享空间不是"所有登录用户可读"。 */
+    /** 无浏览权限或共享空间总开关关闭时被拒：共享空间不是"所有登录用户可读"。 */
     @Test
     void sharedSpaceMemberWithoutBrowsePermissionIsRejected() {
         givenNode(node(SpaceType.SHARED, false));
-        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权限执行此操作"))
-                .when(sharedSpaceService).validatePermission(eq(STRANGER_ID), eq(Action.CAN_BROWSE));
+        doThrow(new BusinessException(ErrorCode.FORBIDDEN, "共享空间已禁用"))
+                .when(sharedSpaceService).validateBrowsePermission(STRANGER_ID);
 
         assertThatThrownBy(() -> guard.requireReadable(STRANGER_ID, NODE_ID))
                 .isInstanceOf(BusinessException.class)
@@ -98,7 +96,7 @@ class FileLifecycleGuardTest {
                 .thenReturn(FilePermission.readOnly());
 
         assertThat(guard.requireReadable(MEMBER_ID, NODE_ID).id()).isEqualTo(NODE_ID);
-        verify(sharedSpaceService, never()).validatePermission(any(), any());
+        verify(sharedSpaceService, never()).validateBrowsePermission(any());
     }
 
     @Test

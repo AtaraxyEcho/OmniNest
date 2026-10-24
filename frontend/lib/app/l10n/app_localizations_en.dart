@@ -2081,7 +2081,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesAuthorizeHint =>
-      'Open this link in a browser to finish authorization, then refresh the connection:';
+      'Open this link in a browser to finish authorization. The dialog stays open until you confirm here.';
+
+  @override
+  String get filesOAuthCompleted => 'I\'ve completed authorization';
 
   @override
   String get filesImport => 'Import';

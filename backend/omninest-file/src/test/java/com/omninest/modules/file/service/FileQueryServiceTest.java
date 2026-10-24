@@ -94,24 +94,48 @@ class FileQueryServiceTest {
             filePermissionService,
             sharedSpaceService
     );
-    private final FileQueryService fileQueryService = new FileQueryService(
+    private final FileNodeLookupSupport lookup = new FileNodeLookupSupport(fileNodeRepository);
+    private final FileNodeDtoAssembler assembler = new FileNodeDtoAssembler(
             fileNodeRepository,
-            fileContentAccessService,
-            filePermissionService,
-            fileLifecycleGuard,
-            eventPublisher,
-            fileIndexSyncService,
-            syncEventRecorder,
             userIds -> Map.of(),
-            new MediaProbeService(),
-            new MediaProbeSourceStager(fileContentAccessService),
-            (owner, ids) -> Map.of(),
-            sharedSpaceService,
-            sharedSpaceQuotaService,
-            transactionTemplate,
-            fileDownloadService,
-            new FilePathRewriter(fileNodeRepository)
+            (owner, ids) -> Map.of()
     );
+    private final FileListQueryService listQueryService = new FileListQueryService(
+            fileNodeRepository, lookup, assembler);
+    private final FileQueryService fileQueryService = newQueryService(
+            newDownloadService(fileContentAccessService, new MediaProbeService()));
+
+    private FileDownloadContentService newDownloadService(
+            FileContentAccessService access, MediaProbeService probeService) {
+        return new FileDownloadContentService(
+                lookup,
+                fileNodeRepository,
+                access,
+                filePermissionService,
+                sharedSpaceService,
+                fileDownloadService,
+                probeService,
+                new MediaProbeSourceStager(access)
+        );
+    }
+
+    private FileQueryService newQueryService(FileDownloadContentService downloadService) {
+        return new FileQueryService(
+                fileNodeRepository,
+                fileLifecycleGuard,
+                eventPublisher,
+                fileIndexSyncService,
+                syncEventRecorder,
+                sharedSpaceService,
+                sharedSpaceQuotaService,
+                transactionTemplate,
+                new FilePathRewriter(fileNodeRepository),
+                lookup,
+                assembler,
+                listQueryService,
+                downloadService
+        );
+    }
 
     private static TransactionTemplate transactionTemplate() {
         TransactionTemplate template = Mockito.mock(TransactionTemplate.class);
@@ -1129,24 +1153,7 @@ class FileQueryServiceTest {
     void mediaInfoEscalatesTailWindowWhenIndexFallsOutside() {
         FileContentAccessService access = Mockito.mock(FileContentAccessService.class);
         MediaProbeService probeService = Mockito.mock(MediaProbeService.class);
-        FileQueryService service = new FileQueryService(
-                fileNodeRepository,
-                access,
-                filePermissionService,
-                fileLifecycleGuard,
-                eventPublisher,
-                fileIndexSyncService,
-                syncEventRecorder,
-                userIds -> Map.of(),
-                probeService,
-                new MediaProbeSourceStager(access),
-                (owner, ids) -> Map.of(),
-                sharedSpaceService,
-                sharedSpaceQuotaService,
-                transactionTemplate,
-                fileDownloadService,
-                new FilePathRewriter(fileNodeRepository)
-        );
+        FileQueryService service = newQueryService(newDownloadService(access, probeService));
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000001");
         UUID objectId = UUID.fromString("80000000-0000-0000-0000-000000000002");
@@ -1189,24 +1196,7 @@ class FileQueryServiceTest {
     void mediaInfoDoesNotEscalateWhenDefaultWindowSuffices() {
         FileContentAccessService access = Mockito.mock(FileContentAccessService.class);
         MediaProbeService probeService = Mockito.mock(MediaProbeService.class);
-        FileQueryService service = new FileQueryService(
-                fileNodeRepository,
-                access,
-                filePermissionService,
-                fileLifecycleGuard,
-                eventPublisher,
-                fileIndexSyncService,
-                syncEventRecorder,
-                userIds -> Map.of(),
-                probeService,
-                new MediaProbeSourceStager(access),
-                (owner, ids) -> Map.of(),
-                sharedSpaceService,
-                sharedSpaceQuotaService,
-                transactionTemplate,
-                fileDownloadService,
-                new FilePathRewriter(fileNodeRepository)
-        );
+        FileQueryService service = newQueryService(newDownloadService(access, probeService));
 
         UUID fileId = UUID.fromString("80000000-0000-0000-0000-000000000003");
         UUID objectId = UUID.fromString("80000000-0000-0000-0000-000000000004");

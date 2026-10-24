@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.concurrency.DistributedLock;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.photos.repository.GeocodeBackfillRow;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.math.BigDecimal;
@@ -71,8 +72,8 @@ class PhotoGeoBackfillServiceTest {
                 new TransactionTemplate(transactionManager));
     }
 
-    private static PhotoItemRepository.GeocodeBackfillRow row(UUID id) {
-        return new PhotoItemRepository.GeocodeBackfillRow() {
+    private static GeocodeBackfillRow row(UUID id) {
+        return new GeocodeBackfillRow() {
             @Override
             public UUID getId() {
                 return id;

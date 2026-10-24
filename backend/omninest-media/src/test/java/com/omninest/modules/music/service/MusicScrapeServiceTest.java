@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.task.domain.TaskStatus;
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -76,7 +77,8 @@ class MusicScrapeServiceTest {
             fileLifecycleGuard,
             readThroughCache,
             syncEventService,
-            musicLibraryProperties
+            musicLibraryProperties,
+            mock(SharedSpaceAccessQuery.class)
     );
     private final MusicScanJobRepository scanJobRepository = mock(MusicScanJobRepository.class);
     private final MusicCatalogService catalogService = mock(MusicCatalogService.class);

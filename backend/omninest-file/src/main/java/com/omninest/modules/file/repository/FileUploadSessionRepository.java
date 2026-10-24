@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -47,6 +48,8 @@ public interface FileUploadSessionRepository extends JpaRepository<FileUploadSes
             @Param("ownerUserId") UUID ownerUserId);
 
     List<FileUploadSession> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
+
+    Page<FileUploadSession> findByOwnerUserId(UUID ownerUserId, Pageable pageable);
 
     List<FileUploadSession> findByStatusAndUpdatedAtBefore(String status, Instant updatedAt);
 

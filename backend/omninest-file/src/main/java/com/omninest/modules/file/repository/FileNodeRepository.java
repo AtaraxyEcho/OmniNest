@@ -301,6 +301,34 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 按所有者、空间与路径前缀批量更新共享标志。
+     *
+     * <p>文件夹级联共享不再把整棵子树载入 JVM；路径前缀由调用方转义，
+     * 并同步推进 version 与 updated_at，保持与逐行保存一致的乐观锁语义。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀（含结尾分隔符）
+     * @param shared 目标共享状态
+     * @param sharedAt 共享时间；取消共享时为 null
+     * @param updatedAt 更新时间
+     * @return 更新行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update FileNode node set node.shared = :shared, node.sharedAt = :sharedAt, "
+            + "node.updatedAt = :updatedAt, node.version = node.version + 1 "
+            + "where node.ownerUserId = :ownerUserId and node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
+    int updateSharedByPathPrefix(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix,
+            @Param("shared") boolean shared,
+            @Param("sharedAt") Instant sharedAt,
+            @Param("updatedAt") Instant updatedAt
+    );
+
+    /**
      * 批量软删除文件节点。
      *
      * @param ownerUserId 所属用户 ID

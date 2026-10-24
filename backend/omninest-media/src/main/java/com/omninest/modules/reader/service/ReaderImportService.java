@@ -1,5 +1,6 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
@@ -81,6 +82,7 @@ public class ReaderImportService {
     private final ReaderCoverExtractionService coverExtractionService;
     private final MediaSyncEventService syncEventService;
     private final TransactionTemplate transactionTemplate;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     /**
      * EPUB 自动归类时每文本条目平均正文字符阈值，低于该值判定为漫画。
@@ -139,7 +141,7 @@ public class ReaderImportService {
      * @return 已存在的条目，无则 {@code null}
      */
     private ReaderItem findExistingItem(UUID ownerUserId, UUID fileNodeId, SpaceType spaceType) {
-        return itemRepository.findAccessibleByFileNodeId(ownerUserId, fileNodeId, SpaceType.SHARED)
+        return itemRepository.findAccessibleByFileNodeId(ownerUserId, fileNodeId, sharedVisibility(ownerUserId))
                 .stream()
                 .filter(candidate -> isSameSpaceScope(ownerUserId, candidate, spaceType))
                 .findFirst()
@@ -386,7 +388,10 @@ public class ReaderImportService {
     public List<ReaderDtos.ImportCandidateDto> importCandidates(UUID ownerUserId) {
         // 目录行由 SQL 过滤掉，候选集只剩文件节点。
         List<FileDescriptor> personalFiles = fileMetadataQueryService.listOwnedActiveFiles(ownerUserId);
-        List<FileDescriptor> sharedFiles = fileMetadataQueryService.listActiveFilesBySpace(SpaceType.SHARED);
+        SpaceType sharedType = sharedVisibility(ownerUserId);
+        List<FileDescriptor> sharedFiles = sharedType == null
+                ? List.of()
+                : fileMetadataQueryService.listActiveFilesBySpace(sharedType);
 
         List<FileDescriptor> allFiles = new ArrayList<>(personalFiles);
         Set<UUID> seenFileNodeIds = new HashSet<>();
@@ -405,9 +410,9 @@ public class ReaderImportService {
 
         Set<UUID> importedFileNodeIds = importedFileNodeIds(ownerUserId, allFileNodeIds);
         Set<String> importedContentHashes = new HashSet<>(
-                itemRepository.findVisibleContentHashes(ownerUserId, SpaceType.SHARED));
+                itemRepository.findVisibleContentHashes(ownerUserId, sharedType));
         importedContentHashes.addAll(
-                sourceRepository.findVisibleSourceContentHashes(ownerUserId, SpaceType.SHARED));
+                sourceRepository.findVisibleSourceContentHashes(ownerUserId, sharedType));
         Map<UUID, String> contentHashes = fileMetadataQueryService
                 .findContentSha256ByFileNodeIds(allFileNodeIds);
 
@@ -494,6 +499,9 @@ public class ReaderImportService {
         if (fileNode.spaceType() == SpaceType.PERSONAL && !fileNode.ownerUserId().equals(ownerUserId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权导入此文件");
         }
+        if (fileNode.spaceType() == SpaceType.SHARED && sharedVisibility(ownerUserId) == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权导入此文件");
+        }
         return fileNode;
     }
 
@@ -570,10 +578,11 @@ public class ReaderImportService {
         if (candidateFileNodeIds.isEmpty()) {
             return Set.of();
         }
+        SpaceType sharedType = sharedVisibility(ownerUserId);
         Set<UUID> imported = new HashSet<>(itemRepository.findVisibleMainFileNodeIds(
-                ownerUserId, candidateFileNodeIds, SpaceType.SHARED));
+                ownerUserId, candidateFileNodeIds, sharedType));
         imported.addAll(sourceRepository.findImportedFileNodeIds(
-                ownerUserId, candidateFileNodeIds, SpaceType.SHARED));
+                ownerUserId, candidateFileNodeIds, sharedType));
         return imported;
     }
 
@@ -602,6 +611,16 @@ public class ReaderImportService {
             return candidate;
         }
         return null;
+    }
+
+    /**
+     * 导入候选与去重查询的共享空间范围。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @return 可浏览共享空间时返回 SHARED，否则返回 null（只按个人空间查询）
+     */
+    private SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
     }
 
     /**
@@ -640,6 +659,10 @@ public class ReaderImportService {
         }
 
         boolean sharedSpace = fileNode.spaceType() == SpaceType.SHARED;
+        if (sharedSpace && sharedVisibility(ownerUserId) == null) {
+            // 无共享浏览权的用户即使直接提交共享文件 ID，也不能把分卷并入共享作品
+            return null;
+        }
         itemRepository.lockComicSeries(
                 sharedSpace ? "SHARED" : "PERSONAL:" + ownerUserId,
                 baseName);

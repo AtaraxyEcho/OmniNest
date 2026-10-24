@@ -1,19 +1,17 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
-import com.omninest.modules.reader.domain.ReaderBookshelf;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderDashboardDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderOverviewDto;
-import com.omninest.modules.reader.repository.ReaderBookshelfRepository;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderProgressRepository;
-import java.math.BigDecimal;
-import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -22,6 +20,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +35,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ReaderDashboardService {
 
+    /** 仪表盘卡片条数上限。 */
+    private static final int DASHBOARD_CARD_LIMIT = 12;
+
     private final ReaderItemService itemService;
     private final ReaderItemRepository itemRepository;
     private final ReaderProgressRepository progressRepository;
-    private final ReaderBookshelfRepository bookshelfRepository;
     private final FileMetadataQueryService fileMetadataQueryService;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
 
     /**
      * 获取阅读仪表盘数据。
@@ -49,87 +51,83 @@ public class ReaderDashboardService {
      * @return 仪表盘 DTO
      */
     public ReaderDashboardDto getDashboard(UUID ownerUserId) {
-        // 查询用户可见的所有条目（个人空间 + 共享空间）
-        List<ReaderItem> allItems = itemRepository.findItemsVisibleToUser(ownerUserId, SpaceType.SHARED);
-        int totalItems = allItems.size();
+        SpaceType sharedType = sharedVisibility(ownerUserId);
+        long totalItems = itemRepository.countVisibleItems(ownerUserId, sharedType);
+        long inProgressCount = progressRepository.countVisibleInProgress(ownerUserId, sharedType);
 
-        List<UUID> allItemIds = allItems.stream().map(ReaderItem::getId).toList();
-
-        // 批量查询所有进度记录（1 次查询替代 N 次）
-        Map<UUID, ReaderProgress> progressMap = progressRepository
-                .findByOwnerUserIdAndReaderItemIdIn(ownerUserId, allItemIds)
-                .stream()
-                .collect(Collectors.toMap(ReaderProgress::getReaderItemId, p -> p));
-
-        // 批量查询所有书架记录（1 次查询替代 N 次）
-        Set<UUID> bookshelfItemIds = bookshelfRepository
-                .findByOwnerUserIdAndReaderItemIdIn(ownerUserId, allItemIds)
-                .stream()
-                .map(ReaderBookshelf::getReaderItemId)
-                .collect(Collectors.toSet());
-
-        // 批量查询文件节点空间类型（1 次查询替代 N 次）
-        List<UUID> fileNodeIds = allItems.stream()
-                .map(ReaderItem::getFileNodeId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        Map<UUID, String> spaceTypeMap = fileMetadataQueryService.findAllByIds(fileNodeIds)
-                .stream()
+        // 继续阅读只取前 12 条；概览计数使用独立 COUNT，不能停在 12。
+        List<ReaderProgress> inProgressRows = progressRepository.findVisibleInProgress(
+                ownerUserId, sharedType, PageRequest.of(0, DASHBOARD_CARD_LIMIT));
+        List<ReaderItem> continueItems = loadOrderedItems(inProgressRows);
+        Map<UUID, ReaderProgress> progressMap = inProgressRows.stream()
                 .collect(Collectors.toMap(
-                        FileDescriptor::id,
-                        file -> file.spaceType().getValue()
+                        ReaderProgress::getReaderItemId,
+                        progress -> progress,
+                        (first, second) -> first,
+                        LinkedHashMap::new
                 ));
 
-        // 继续阅读：进度 > 0 且 < 100%，按最近阅读时间降序。
-        // 排序键取进度记录的 updatedAt：上报进度只写 reader_progress，不会推进
-        // reader_items.updated_at，按条目时间排序等于按导入时间排序。
-        List<ReaderItem> continueReadingItems = allItems.stream()
-                .filter(item -> {
-                    ReaderProgress progress = progressMap.get(item.getId());
-                    if (progress == null) {
-                        return false;
-                    }
-                    BigDecimal percent = progress.getProgressPercent();
-                    return percent.compareTo(BigDecimal.ZERO) > 0 && percent.compareTo(BigDecimal.ONE) < 0;
-                })
-                .sorted(Comparator.comparing(
-                        (ReaderItem item) -> {
-                            ReaderProgress progress = progressMap.get(item.getId());
-                            return progress != null && progress.getUpdatedAt() != null
-                                    ? progress.getUpdatedAt()
-                                    : item.getUpdatedAt();
-                        },
-                        Comparator.nullsLast(Comparator.reverseOrder())
-                ))
-                .toList();
-        // 概览计数用截断前的全集：卡片只展示前 12 本，但"在读书籍"人数不能停在 12。
-        List<ReaderItemDto> continueReading = continueReadingItems.stream()
-                .limit(12)
-                .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
-                .toList();
+        List<ReaderItemDto> continueReading = toDtos(ownerUserId, continueItems, progressMap);
+        List<ReaderItemDto> recentItems = itemService.listItemsPage(
+                ownerUserId, null, null, null, false, 0, DASHBOARD_CARD_LIMIT).getContent();
 
-        // 最近条目：按 updatedAt 降序取前 12
-        List<ReaderItemDto> recentItems = allItems.stream()
-                .limit(12)
-                .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
-                .toList();
-
-        ReaderOverviewDto overview = new ReaderOverviewDto(totalItems, continueReadingItems.size());
+        ReaderOverviewDto overview = new ReaderOverviewDto((int) totalItems, (int) inProgressCount);
         return new ReaderDashboardDto(overview, continueReading, recentItems);
     }
 
     /**
-     * 实体转 DTO（使用预加载的书架集合、空间类型与进度映射，避免逐条查询）。
+     * 按进度行顺序回表取条目，已删除或不可见的条目直接丢弃。
      */
-    private ReaderItemDto toDto(
+    private List<ReaderItem> loadOrderedItems(List<ReaderProgress> progressRows) {
+        if (progressRows.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, ReaderItem> itemsById = itemRepository
+                .findAllById(progressRows.stream().map(ReaderProgress::getReaderItemId).toList())
+                .stream()
+                .collect(Collectors.toMap(ReaderItem::getId, item -> item));
+        return progressRows.stream()
+                .map(progress -> itemsById.get(progress.getReaderItemId()))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /**
+     * 批量补齐书架、空间类型与进度后转 DTO，避免逐条查询。
+     */
+    private List<ReaderItemDto> toDtos(
             UUID ownerUserId,
-            ReaderItem item,
-            Set<UUID> bookshelfItemIds,
-            Map<UUID, String> spaceTypeMap,
+            List<ReaderItem> items,
             Map<UUID, ReaderProgress> progressMap
     ) {
-        boolean onBookshelf = bookshelfItemIds.contains(item.getId());
-        return itemService.toDto(item, onBookshelf, spaceTypeMap, progressMap);
+        if (items.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> itemIds = items.stream().map(ReaderItem::getId).toList();
+        Set<UUID> bookshelfItemIds = itemService.bookshelfItemIds(ownerUserId, itemIds);
+        List<UUID> fileNodeIds = items.stream()
+                .map(ReaderItem::getFileNodeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, String> spaceTypeMap = fileNodeIds.isEmpty()
+                ? Map.of()
+                : fileMetadataQueryService.findAllByIds(fileNodeIds).stream()
+                        .collect(Collectors.toMap(
+                                FileDescriptor::id,
+                                file -> file.spaceType().getValue()
+                        ));
+        return items.stream()
+                .map(item -> itemService.toDto(
+                        item,
+                        bookshelfItemIds.contains(item.getId()),
+                        spaceTypeMap,
+                        progressMap
+                ))
+                .toList();
+    }
+
+    private SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
     }
 }

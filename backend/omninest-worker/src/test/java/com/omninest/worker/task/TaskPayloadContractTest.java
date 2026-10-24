@@ -76,6 +76,7 @@ class TaskPayloadContractTest {
     private static final Set<String> ROUTING_KEYS_WITHOUT_TASK_RECORD = Set.of(
             QueueNames.FILE_RESTORE_INDEX_ROUTING_KEY,
             QueueNames.FILE_INDEX_SYNC_ROUTING_KEY,
+            QueueNames.FILE_INDEX_USER_PURGE_ROUTING_KEY,
             QueueNames.DEAD_LETTER_ROUTING_KEY
     );
 

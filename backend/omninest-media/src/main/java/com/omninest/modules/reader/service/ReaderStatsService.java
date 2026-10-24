@@ -1,8 +1,11 @@
 package com.omninest.modules.reader.service;
 
+import com.omninest.common.access.SharedSpaceAccessQuery;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileDescriptor;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.domain.ReaderReadingSession;
@@ -16,13 +19,11 @@ import com.omninest.modules.reader.repository.ReaderProgressRepository;
 import com.omninest.modules.user.service.SystemInstanceConfigService;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
 
-import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +54,8 @@ public class ReaderStatsService {
     private final ReaderItemService itemService;
     private final TransactionTemplate transactionTemplate;
     private final SystemInstanceConfigService systemInstanceConfigService;
+    private final SharedSpaceAccessQuery sharedSpaceAccessQuery;
+    private final FileMetadataQueryService fileMetadataQueryService;
 
     /**
      * 记录一次阅读会话。
@@ -148,33 +152,8 @@ public class ReaderStatsService {
                 (int) (totalSecondsThisWeek / 60),
                 currentStreak,
                 // "已读数"指读到完成的条目，不是藏书总数
-                (int) visibleProgress(ownerUserId).stream()
-                        .filter(progress -> progress.getProgressPercent() != null
-                                && progress.getProgressPercent().compareTo(BigDecimal.ONE) >= 0)
-                        .count()
+                (int) progressRepository.countVisibleCompleted(ownerUserId, sharedVisibility(ownerUserId))
         );
-    }
-
-    /**
-     * 统计母集：当前用户可见（个人 + 共享空间）且源文件未进回收站的条目，按 ID 索引。
-     *
-     * <p>进度行按用户存、条目可见性按文件节点判，两边不取同一个母集时：读过的共享书会让
-     * "已完成 + 在读" 超过只按个人条目统计的总藏书数，进回收站的书还留在在读列表里。
-     */
-    private Map<UUID, ReaderItem> visibleItemsById(UUID ownerUserId) {
-        return itemRepository.findItemsVisibleToUser(ownerUserId, SpaceType.SHARED).stream()
-                .collect(Collectors.toMap(ReaderItem::getId, item -> item, (first, second) -> first));
-    }
-
-    /**
-     * 只保留可见条目上的进度行。
-     */
-    private List<ReaderProgress> visibleProgress(UUID ownerUserId) {
-        List<UUID> visibleItemIds = List.copyOf(visibleItemsById(ownerUserId).keySet());
-        if (visibleItemIds.isEmpty()) {
-            return List.of();
-        }
-        return progressRepository.findByOwnerUserIdAndReaderItemIdIn(ownerUserId, visibleItemIds);
     }
 
     /**
@@ -245,45 +224,56 @@ public class ReaderStatsService {
                 .map(entry -> new ReaderDailyMinutesDto(entry.getKey(), entry.getValue().intValue()))
                 .toList();
 
-        Map<UUID, ReaderItem> visibleItems = visibleItemsById(ownerUserId);
-        List<ReaderProgress> visibleProgressRows = visibleItems.isEmpty()
-                ? List.of()
-                : progressRepository.findByOwnerUserIdAndReaderItemIdIn(
-                        ownerUserId, List.copyOf(visibleItems.keySet()));
-        long completedCount = visibleProgressRows.stream()
-                .filter(progress -> progress.getProgressPercent() != null
-                        && progress.getProgressPercent().compareTo(BigDecimal.ONE) >= 0)
-                .count();
-        List<ReaderProgress> inProgress = visibleProgressRows.stream()
-                .filter(progress -> progress.getProgressPercent() != null
-                        && progress.getProgressPercent().compareTo(BigDecimal.ZERO) > 0
-                        && progress.getProgressPercent().compareTo(BigDecimal.ONE) < 0)
-                .sorted(Comparator.comparing(
-                        ReaderProgress::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .toList();
+        SpaceType sharedType = sharedVisibility(ownerUserId);
+        long completedCount = progressRepository.countVisibleCompleted(ownerUserId, sharedType);
+        long inProgressCount = progressRepository.countVisibleInProgress(ownerUserId, sharedType);
+        long totalItems = itemRepository.countVisibleItems(ownerUserId, sharedType);
+
+        // 在读列表只取前 12 条；三个计数各自走 COUNT，不能把全部条目加载进 JVM。
+        List<ReaderProgress> inProgress = progressRepository.findVisibleInProgress(
+                ownerUserId, sharedType, PageRequest.of(0, 12));
         Map<UUID, ReaderProgress> progressMap = inProgress.stream()
                 .collect(Collectors.toMap(ReaderProgress::getReaderItemId, p -> p, (first, second) -> first));
+        Map<UUID, ReaderItem> itemsById = itemRepository.findAllById(
+                        inProgress.stream().map(ReaderProgress::getReaderItemId).toList())
+                .stream()
+                .collect(Collectors.toMap(ReaderItem::getId, item -> item));
         List<ReaderItem> inProgressItemList = inProgress.stream()
-                .map(progress -> visibleItems.get(progress.getReaderItemId()))
+                .map(progress -> itemsById.get(progress.getReaderItemId()))
                 .filter(Objects::nonNull)
-                .limit(12)
                 .toList();
         // 书架标记必须查库回填：写死 false 会让统计页"在读"列表上的加书架按钮
         // 全部显示成未加入，点一次就把已收藏的书重复加入书架。
         Set<UUID> bookshelfItemIds = itemService.bookshelfItemIds(
                 ownerUserId, inProgressItemList.stream().map(ReaderItem::getId).toList());
+        List<UUID> fileNodeIds = inProgressItemList.stream()
+                .map(ReaderItem::getFileNodeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, String> spaceTypeMap = fileNodeIds.isEmpty()
+                ? Map.of()
+                : fileMetadataQueryService.findAllByIds(fileNodeIds).stream()
+                        .collect(Collectors.toMap(
+                                FileDescriptor::id,
+                                file -> file.spaceType().getValue()
+                        ));
         List<ReaderItemDto> inProgressItems = inProgressItemList.stream()
                 .map(item -> itemService.toDto(
-                        item, bookshelfItemIds.contains(item.getId()), null, progressMap))
+                        item, bookshelfItemIds.contains(item.getId()), spaceTypeMap, progressMap))
                 .toList();
 
         return new ReaderStatsOverviewDto(
                 dailyMinutes,
                 completedCount,
-                inProgress.size(),
-                // 三个口径共用同一个母集，否则读过的共享书会让"已完成 + 在读"超过总藏书数
-                visibleItems.size(),
+                inProgressCount,
+                // 三个口径共用同一个可见性判据，否则读过的共享书会让"已完成 + 在读"超过总藏书数
+                totalItems,
                 inProgressItems
         );
+    }
+
+    private SpaceType sharedVisibility(UUID ownerUserId) {
+        return sharedSpaceAccessQuery.canBrowse(ownerUserId) ? SpaceType.SHARED : null;
     }
 }

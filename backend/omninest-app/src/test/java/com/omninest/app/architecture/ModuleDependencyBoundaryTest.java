@@ -30,15 +30,12 @@ class ModuleDependencyBoundaryTest {
     /** 800 行软上限：超过后必须规划拆分，禁止在未登记的情况下继续增长。 */
     private static final long MAX_SOFT_PRODUCTION_SOURCE_LINES = 800;
     /** 0.1.0 发布前登记的存量超长源码；禁止新增，拆分完成后移除。 */
-    private static final Set<String> ALLOWED_OVERSIZED_SOURCES = Set.of(
-            "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java"
-    );
+    private static final Set<String> ALLOWED_OVERSIZED_SOURCES = Set.of();
     /** 已登记的 800-1200 行存量；禁止新增，拆分完成后移除。 */
     private static final Set<String> ALLOWED_SOFT_OVERSIZED_SOURCES = Set.of(
             "omninest-file/src/main/java/com/omninest/modules/file/controller/FileController.java",
             "omninest-file/src/main/java/com/omninest/modules/file/repository/FileNodeRepository.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/ExternalImportExecutionService.java",
-            "omninest-file/src/main/java/com/omninest/modules/file/service/FileQueryService.java",
             "omninest-file/src/main/java/com/omninest/modules/file/service/FileUploadSessionService.java",
             "omninest-file/src/main/java/com/omninest/modules/search/service/FileSearchIndexService.java",
             "omninest-media/src/main/java/com/omninest/modules/backdrop/service/BackdropAssetService.java",
@@ -48,7 +45,6 @@ class ModuleDependencyBoundaryTest {
             "omninest-media/src/main/java/com/omninest/modules/music/service/MusicMetadataExtractor.java",
             "omninest-media/src/main/java/com/omninest/modules/music/service/platform/NeteaseMusicProxy.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/controller/PhotoLibraryController.java",
-            "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java",
             "omninest-media/src/main/java/com/omninest/modules/photos/service/PhotoLibraryService.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ComicEpubParser.java",
             "omninest-media/src/main/java/com/omninest/modules/reader/service/ReaderComicManifestService.java",

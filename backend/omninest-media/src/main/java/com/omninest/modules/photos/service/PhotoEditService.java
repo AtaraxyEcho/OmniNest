@@ -26,6 +26,8 @@ import java.awt.image.DataBufferInt;
 import java.awt.image.Kernel;
 import java.awt.image.LookupOp;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
@@ -55,6 +57,9 @@ public class PhotoEditService {
 
     /** 编辑解码上限：超过时在解码阶段等间隔抽样，避免在受限堆内展开 100MP 画布。 */
     private static final long MAX_EDIT_DECODE_PIXELS = 24_000_000L;
+
+    /** 流式落盘缓冲区大小。 */
+    private static final int COPY_BUFFER_BYTES = 64 * 1024;
 
     private final PhotoEditVersionRepository editVersionRepository;
     private final PhotoItemRepository photoItemRepository;
@@ -177,38 +182,48 @@ public class PhotoEditService {
      * 保存外部编辑器（如 Flutter 端 pro_image_editor）产出的整图结果为新版本。
      *
      * <p>与 {@link #applyEdit} 的参数式编辑不同，本方法直接接收编辑完成的
-     * 图像字节，不再在服务端做二次变换。</p>
+     * 图像流，不再在服务端做二次变换。请求体必须流式落盘：最高 128MiB 的图片
+     * 先在 JVM 堆内分配 {@code byte[]} 时，512MB 堆下少量并发即可触发 OOM。</p>
      *
      * @param ownerUserId 所有者用户 ID
      * @param photoId 照片 ID
-     * @param image 编辑后的图像字节（JPEG）
+     * @param declaredBytes Content-Length；未知时为负数
+     * @param imageStream 编辑后的图像流（JPEG）
      * @return 新增的编辑版本
      */
     public PhotoEditVersionDto applyEditedImage(
             UUID ownerUserId,
             UUID photoId,
-            byte[] image
+            long declaredBytes,
+            InputStream imageStream
     ) {
         PhotoItem photo = photoItemRepository.findById(photoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "照片不存在"));
         if (!photo.getOwnerUserId().equals(ownerUserId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权编辑此照片");
         }
-        if (image == null || image.length == 0) {
+        if (declaredBytes == 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑结果为空");
+        }
+        if (declaredBytes > 0) {
+            // 声明长度先挡一刀，避免明显超限的请求占用编辑槽位与磁盘带宽。
+            inputGuard.validateFileSize(declaredBytes, false);
+        }
+        if (!editSlots.tryAcquire()) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "图像编辑任务过多，请稍后重试");
         }
 
         int nextVersion = nextVersionNumber(photoId);
         String fileName = photoId + "_v" + nextVersion + ".jpg";
-        inputGuard.validateFileSize(image.length, false);
-
         UUID fileId;
         Path staged = null;
+        long storedBytes;
         try {
             // 外部编辑器回传的字节未经任何内容校验：落对象存储前先按与 applyEdit 相同的
             // 魔数与像素上限复核，否则客户端可以自称 image/jpeg 写入任意内容。
             staged = Files.createTempFile("omninest-photo-edit-input-", ".jpg");
-            Files.write(staged, image);
+            storedBytes = copyBounded(imageStream, staged, inputGuard.maxFileBytes(false));
+            inputGuard.validateFileSize(storedBytes, false);
             PhotoInputGuard.ImageDimensions dimensions = inputGuard.inspectForDecode(staged, fileName);
             inputGuard.validateDimensions(dimensions.width(), dimensions.height());
             fileId = derivedAssetStorageService.store(
@@ -224,8 +239,9 @@ public class PhotoEditService {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片编辑文件处理失败");
         } finally {
             deleteQuietly(staged);
+            editSlots.release();
         }
-        chargeEditVersionQuota(ownerUserId, image.length);
+        chargeEditVersionQuota(ownerUserId, storedBytes);
 
         PhotoEditVersion version = new PhotoEditVersion();
         version.setOwnerUserId(ownerUserId);
@@ -444,6 +460,34 @@ public class PhotoEditService {
             graphics.dispose();
         }
         return rgb;
+    }
+
+    /**
+     * 带字节上限地把请求体写入临时文件，超限立即失败，不在堆内缓冲整张图。
+     */
+    private long copyBounded(InputStream input, Path target, long maxBytes) throws IOException {
+        if (input == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑结果为空");
+        }
+        byte[] buffer = new byte[COPY_BUFFER_BYTES];
+        long totalBytes = 0;
+        try (OutputStream output = Files.newOutputStream(target)) {
+            int readBytes;
+            while ((readBytes = input.read(buffer)) >= 0) {
+                if (readBytes == 0) {
+                    continue;
+                }
+                totalBytes += readBytes;
+                if (totalBytes > maxBytes) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "照片文件大小超出限制");
+                }
+                output.write(buffer, 0, readBytes);
+            }
+        }
+        if (totalBytes == 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "编辑结果为空");
+        }
+        return totalBytes;
     }
 
     private void deleteQuietly(Path file) {

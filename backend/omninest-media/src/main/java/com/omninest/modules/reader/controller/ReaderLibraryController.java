@@ -41,6 +41,7 @@ import com.omninest.modules.reader.service.ReaderTextParseSubmissionService;
 import com.omninest.modules.reader.service.ReaderTxtChapterTextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -69,6 +70,9 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RestController
 @RequiredArgsConstructor
 public class ReaderLibraryController {
+
+    /** 旧版全量列表接口的返回上限，避免无界加载。 */
+    private static final int LEGACY_LIST_LIMIT = 500;
 
     private final CurrentUserContext currentUserContext;
     private final ReaderDashboardService readerDashboardService;
@@ -101,16 +105,31 @@ public class ReaderLibraryController {
 
     /**
      * 列出阅读条目，支持按类型和关键词过滤。
+     *
+     * @deprecated 请改用 {@code GET /api/v1/reader/items/page}；本接口最多返回 500 条。
      */
-    @Operation(summary = "获取阅读条目列表", description = "返回当前用户的阅读条目列表，可按类型和关键词过滤")
+    @Deprecated
+    @Operation(summary = "获取阅读条目列表（已废弃）", description = "请改用分页接口 /api/v1/reader/items/page；本接口最多返回 500 条")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/reader/items")
     ApiResponse<List<ReaderItemDto>> listItems(
             @RequestParam(required = false) String itemType,
             @RequestParam(required = false) String contentKind,
-            @RequestParam(required = false) String query
+            @RequestParam(required = false) String query,
+            HttpServletResponse response
     ) {
-        return ApiResponse.success(readerItemService.listItems(currentUserContext.requireCurrentUserId(), itemType, contentKind, query));
+        response.setHeader("Deprecation", "true");
+        response.setHeader("Sunset", "Sat, 31 Oct 2026 00:00:00 GMT");
+        response.setHeader("Link", "</api/v1/reader/items/page>; rel=\"successor-version\"");
+        var page = readerItemService.listItemsPage(
+                currentUserContext.requireCurrentUserId(),
+                itemType,
+                contentKind,
+                query,
+                false,
+                0,
+                LEGACY_LIST_LIMIT);
+        return ApiResponse.success(page.getContent());
     }
 
     @Operation(summary = "分页获取阅读条目列表", description = "按类型、内容类型、关键词与书架状态过滤后分页返回阅读条目，供书架/书库滚动加载")
