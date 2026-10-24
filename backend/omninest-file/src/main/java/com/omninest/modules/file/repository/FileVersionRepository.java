@@ -35,39 +35,38 @@ public interface FileVersionRepository extends JpaRepository<FileVersion, UUID> 
     boolean existsByObjectIdAndFileNodeIdNot(UUID objectId, UUID fileNodeId);
 
     /**
-     * 批量查询仍由永久删除任务外历史版本引用的对象。
+     * 批量查询仍由未进入任何永久删除任务的历史版本引用的对象。
+     *
+     * <p>与节点引用同口径：已挂到其他 purge 任务的版本行也会被物理清理，
+     * 不能在规划阶段被当作外部引用。</p>
      *
      * @param objectIds 待检查对象 ID
-     * @param taskId 永久删除任务 ID
-     * @return 仍存在任务外版本引用的对象 ID
+     * @return 仍存在未删除任务外版本引用的对象 ID
      */
     @Query("""
             select distinct version.objectId
             from FileVersion version
             where version.objectId in :objectIds
-              and version.fileNodeId not in (
-                  select node.id from FileNode node where node.purgeTaskId = :taskId
+              and version.fileNodeId in (
+                  select node.id from FileNode node where node.purgeTaskId is null
               )
             """)
-    List<UUID> findObjectIdsReferencedOutsidePurgeTask(
-            @Param("objectIds") Collection<UUID> objectIds,
-            @Param("taskId") UUID taskId
+    List<UUID> findObjectIdsReferencedByUnpurgedNodes(
+            @Param("objectIds") Collection<UUID> objectIds
     );
 
     /**
-     * 统计仍由永久删除任务外版本引用的对象。
+     * 批量查询仍被任意历史版本引用的对象，用于最终清理 file_objects 行。
      *
-     * @param objectId 对象 ID
-     * @param taskId 永久删除任务 ID
-     * @return 引用数量
+     * @param objectIds 待检查对象 ID
+     * @return 仍存在版本引用的对象 ID
      */
-    @Query("select count(version) from FileVersion version where version.objectId = :objectId "
-            + "and version.fileNodeId not in "
-            + "(select node.id from FileNode node where node.purgeTaskId = :taskId)")
-    long countObjectReferencesOutsidePurgeTask(
-            @Param("objectId") UUID objectId,
-            @Param("taskId") UUID taskId
-    );
+    @Query("""
+            select distinct version.objectId
+            from FileVersion version
+            where version.objectId in :objectIds
+            """)
+    List<UUID> findObjectIdsInUse(@Param("objectIds") Collection<UUID> objectIds);
 
     long countByObjectId(UUID objectId);
 

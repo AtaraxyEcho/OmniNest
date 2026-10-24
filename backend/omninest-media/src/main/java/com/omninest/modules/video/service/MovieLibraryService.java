@@ -149,6 +149,13 @@ public class MovieLibraryService {
         return new MovieDashboardDto(stats, recentlyAdded, continueWatching, List.of());
     }
 
+    /**
+     * 旧版无分页影视列表。
+     *
+     * <p>保留该接口兼容既有客户端，但查询必须带服务端上限：全量加载在大型影库下
+     * 会把全部条目与签名资源 URL 一次性拉进内存。新客户端应使用
+     * {@link #libraryPage}。</p>
+     */
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> movies(UUID ownerUserId) {
         var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
@@ -158,8 +165,10 @@ public class MovieLibraryService {
                 videoItemRepository.findReadableOriginalsByMediaType(
                         ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds,
-                        MediaType.MOVIE.getValue()
-                )
+                        MediaType.MOVIE.getValue(),
+                        null,
+                        legacyLibraryPage()
+                ).getContent()
         );
     }
 
@@ -277,9 +286,22 @@ public class MovieLibraryService {
                 videoItemRepository.findReadableOriginalsByMediaType(
                         ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                         readableLibraryIds,
-                        MediaType.EPISODE.getValue()
-                ));
+                        MediaType.EPISODE.getValue(),
+                        null,
+                        legacyLibraryPage()
+                ).getContent());
         return videoItemDtoConverter.toVideoDtos(ownerUserId, items);
+    }
+
+    /**
+     * 旧版接口的固定上限查询：按更新时间倒序，最多返回 {@link PageClamps#MAX_SIZE} 条。
+     */
+    private PageRequest legacyLibraryPage() {
+        return PageRequest.of(
+                0,
+                PageClamps.MAX_SIZE,
+                Sort.by(Sort.Direction.DESC, "updatedAt").and(Sort.by(Sort.Direction.DESC, "id"))
+        );
     }
 
     private String normalizeLibraryMediaType(String mediaType) {

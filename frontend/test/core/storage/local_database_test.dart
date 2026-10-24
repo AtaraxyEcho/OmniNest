@@ -156,6 +156,19 @@ void main() {
                 updatedAt: now,
               ),
             );
+        await db
+            .into(db.cachedMediaProgress)
+            .insert(
+              CachedMediaProgressCompanion.insert(
+                userId: Value(userId),
+                mediaId: 'shared:track-1',
+                mediaType: 'music',
+                progressPercent: 0.5,
+                positionSeconds: 30,
+                durationSeconds: 60,
+                updatedAt: now,
+              ),
+            );
       }
       await db
           .into(db.cachedReaderBookmarks)
@@ -190,8 +203,13 @@ void main() {
 
       await db.clearUserData('user-1');
 
-      // cachedMediaProgress 没有归属列，仍按整表清。
-      expect(await db.select(db.cachedMediaProgress).get(), isEmpty);
+      // 媒体进度同样按归属清理：只删 user-1 与设备级空归属，user-2 的离线进度保留。
+      expect(
+        (await db.select(db.cachedMediaProgress).get()).map(
+          (row) => row.userId,
+        ),
+        ['user-2'],
+      );
       // 带归属列的表只清当前账号与设备级空归属残留（上面未带 userId 插入的行）。
       expect(
         (await db.select(db.syncOperations).get()).map((row) => row.userId),

@@ -509,6 +509,16 @@ class $CachedMediaProgressTable extends CachedMediaProgress
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $CachedMediaProgressTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _mediaIdMeta = const VerificationMeta(
     'mediaId',
   );
@@ -577,6 +587,7 @@ class $CachedMediaProgressTable extends CachedMediaProgress
   );
   @override
   List<GeneratedColumn> get $columns => [
+    userId,
     mediaId,
     mediaType,
     progressPercent,
@@ -596,6 +607,12 @@ class $CachedMediaProgressTable extends CachedMediaProgress
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
     if (data.containsKey('media_id')) {
       context.handle(
         _mediaIdMeta,
@@ -657,7 +674,7 @@ class $CachedMediaProgressTable extends CachedMediaProgress
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {mediaId};
+  Set<GeneratedColumn> get $primaryKey => {userId, mediaId};
   @override
   CachedMediaProgressData map(
     Map<String, dynamic> data, {
@@ -665,6 +682,11 @@ class $CachedMediaProgressTable extends CachedMediaProgress
   }) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return CachedMediaProgressData(
+      userId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}user_id'],
+          )!,
       mediaId:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -706,6 +728,7 @@ class $CachedMediaProgressTable extends CachedMediaProgress
 
 class CachedMediaProgressData extends DataClass
     implements Insertable<CachedMediaProgressData> {
+  final String userId;
   final String mediaId;
   final String mediaType;
   final double progressPercent;
@@ -713,6 +736,7 @@ class CachedMediaProgressData extends DataClass
   final int durationSeconds;
   final DateTime updatedAt;
   const CachedMediaProgressData({
+    required this.userId,
     required this.mediaId,
     required this.mediaType,
     required this.progressPercent,
@@ -723,6 +747,7 @@ class CachedMediaProgressData extends DataClass
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
     map['media_id'] = Variable<String>(mediaId);
     map['media_type'] = Variable<String>(mediaType);
     map['progress_percent'] = Variable<double>(progressPercent);
@@ -734,6 +759,7 @@ class CachedMediaProgressData extends DataClass
 
   CachedMediaProgressCompanion toCompanion(bool nullToAbsent) {
     return CachedMediaProgressCompanion(
+      userId: Value(userId),
       mediaId: Value(mediaId),
       mediaType: Value(mediaType),
       progressPercent: Value(progressPercent),
@@ -749,6 +775,7 @@ class CachedMediaProgressData extends DataClass
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedMediaProgressData(
+      userId: serializer.fromJson<String>(json['userId']),
       mediaId: serializer.fromJson<String>(json['mediaId']),
       mediaType: serializer.fromJson<String>(json['mediaType']),
       progressPercent: serializer.fromJson<double>(json['progressPercent']),
@@ -761,6 +788,7 @@ class CachedMediaProgressData extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
       'mediaId': serializer.toJson<String>(mediaId),
       'mediaType': serializer.toJson<String>(mediaType),
       'progressPercent': serializer.toJson<double>(progressPercent),
@@ -771,6 +799,7 @@ class CachedMediaProgressData extends DataClass
   }
 
   CachedMediaProgressData copyWith({
+    String? userId,
     String? mediaId,
     String? mediaType,
     double? progressPercent,
@@ -778,6 +807,7 @@ class CachedMediaProgressData extends DataClass
     int? durationSeconds,
     DateTime? updatedAt,
   }) => CachedMediaProgressData(
+    userId: userId ?? this.userId,
     mediaId: mediaId ?? this.mediaId,
     mediaType: mediaType ?? this.mediaType,
     progressPercent: progressPercent ?? this.progressPercent,
@@ -787,6 +817,7 @@ class CachedMediaProgressData extends DataClass
   );
   CachedMediaProgressData copyWithCompanion(CachedMediaProgressCompanion data) {
     return CachedMediaProgressData(
+      userId: data.userId.present ? data.userId.value : this.userId,
       mediaId: data.mediaId.present ? data.mediaId.value : this.mediaId,
       mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
       progressPercent:
@@ -808,6 +839,7 @@ class CachedMediaProgressData extends DataClass
   @override
   String toString() {
     return (StringBuffer('CachedMediaProgressData(')
+          ..write('userId: $userId, ')
           ..write('mediaId: $mediaId, ')
           ..write('mediaType: $mediaType, ')
           ..write('progressPercent: $progressPercent, ')
@@ -820,6 +852,7 @@ class CachedMediaProgressData extends DataClass
 
   @override
   int get hashCode => Object.hash(
+    userId,
     mediaId,
     mediaType,
     progressPercent,
@@ -831,6 +864,7 @@ class CachedMediaProgressData extends DataClass
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CachedMediaProgressData &&
+          other.userId == this.userId &&
           other.mediaId == this.mediaId &&
           other.mediaType == this.mediaType &&
           other.progressPercent == this.progressPercent &&
@@ -841,6 +875,7 @@ class CachedMediaProgressData extends DataClass
 
 class CachedMediaProgressCompanion
     extends UpdateCompanion<CachedMediaProgressData> {
+  final Value<String> userId;
   final Value<String> mediaId;
   final Value<String> mediaType;
   final Value<double> progressPercent;
@@ -849,6 +884,7 @@ class CachedMediaProgressCompanion
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
   const CachedMediaProgressCompanion({
+    this.userId = const Value.absent(),
     this.mediaId = const Value.absent(),
     this.mediaType = const Value.absent(),
     this.progressPercent = const Value.absent(),
@@ -858,6 +894,7 @@ class CachedMediaProgressCompanion
     this.rowid = const Value.absent(),
   });
   CachedMediaProgressCompanion.insert({
+    this.userId = const Value.absent(),
     required String mediaId,
     required String mediaType,
     required double progressPercent,
@@ -872,6 +909,7 @@ class CachedMediaProgressCompanion
        durationSeconds = Value(durationSeconds),
        updatedAt = Value(updatedAt);
   static Insertable<CachedMediaProgressData> custom({
+    Expression<String>? userId,
     Expression<String>? mediaId,
     Expression<String>? mediaType,
     Expression<double>? progressPercent,
@@ -881,6 +919,7 @@ class CachedMediaProgressCompanion
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
       if (mediaId != null) 'media_id': mediaId,
       if (mediaType != null) 'media_type': mediaType,
       if (progressPercent != null) 'progress_percent': progressPercent,
@@ -892,6 +931,7 @@ class CachedMediaProgressCompanion
   }
 
   CachedMediaProgressCompanion copyWith({
+    Value<String>? userId,
     Value<String>? mediaId,
     Value<String>? mediaType,
     Value<double>? progressPercent,
@@ -901,6 +941,7 @@ class CachedMediaProgressCompanion
     Value<int>? rowid,
   }) {
     return CachedMediaProgressCompanion(
+      userId: userId ?? this.userId,
       mediaId: mediaId ?? this.mediaId,
       mediaType: mediaType ?? this.mediaType,
       progressPercent: progressPercent ?? this.progressPercent,
@@ -914,6 +955,9 @@ class CachedMediaProgressCompanion
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (mediaId.present) {
       map['media_id'] = Variable<String>(mediaId.value);
     }
@@ -941,6 +985,7 @@ class CachedMediaProgressCompanion
   @override
   String toString() {
     return (StringBuffer('CachedMediaProgressCompanion(')
+          ..write('userId: $userId, ')
           ..write('mediaId: $mediaId, ')
           ..write('mediaType: $mediaType, ')
           ..write('progressPercent: $progressPercent, ')
@@ -9026,6 +9071,7 @@ typedef $$SyncOperationsTableProcessedTableManager =
     >;
 typedef $$CachedMediaProgressTableCreateCompanionBuilder =
     CachedMediaProgressCompanion Function({
+      Value<String> userId,
       required String mediaId,
       required String mediaType,
       required double progressPercent,
@@ -9036,6 +9082,7 @@ typedef $$CachedMediaProgressTableCreateCompanionBuilder =
     });
 typedef $$CachedMediaProgressTableUpdateCompanionBuilder =
     CachedMediaProgressCompanion Function({
+      Value<String> userId,
       Value<String> mediaId,
       Value<String> mediaType,
       Value<double> progressPercent,
@@ -9054,6 +9101,11 @@ class $$CachedMediaProgressTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get mediaId => $composableBuilder(
     column: $table.mediaId,
     builder: (column) => ColumnFilters(column),
@@ -9094,6 +9146,11 @@ class $$CachedMediaProgressTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get mediaId => $composableBuilder(
     column: $table.mediaId,
     builder: (column) => ColumnOrderings(column),
@@ -9134,6 +9191,9 @@ class $$CachedMediaProgressTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
   GeneratedColumn<String> get mediaId =>
       $composableBuilder(column: $table.mediaId, builder: (column) => column);
 
@@ -9205,6 +9265,7 @@ class $$CachedMediaProgressTableTableManager
               ),
           updateCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 Value<String> mediaId = const Value.absent(),
                 Value<String> mediaType = const Value.absent(),
                 Value<double> progressPercent = const Value.absent(),
@@ -9213,6 +9274,7 @@ class $$CachedMediaProgressTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedMediaProgressCompanion(
+                userId: userId,
                 mediaId: mediaId,
                 mediaType: mediaType,
                 progressPercent: progressPercent,
@@ -9223,6 +9285,7 @@ class $$CachedMediaProgressTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String> userId = const Value.absent(),
                 required String mediaId,
                 required String mediaType,
                 required double progressPercent,
@@ -9231,6 +9294,7 @@ class $$CachedMediaProgressTableTableManager
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
               }) => CachedMediaProgressCompanion.insert(
+                userId: userId,
                 mediaId: mediaId,
                 mediaType: mediaType,
                 progressPercent: progressPercent,

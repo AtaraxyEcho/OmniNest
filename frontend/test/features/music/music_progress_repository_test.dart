@@ -42,6 +42,54 @@ void main() {
     await database.close();
   });
 
+  test(
+    'local progress is isolated per account and logout keeps other accounts',
+    () async {
+      final repositoryA = MusicProgressRepository(
+        database: database,
+        syncQueue: SyncQueue(database, userId: 'user-a'),
+        api: api,
+        userId: 'user-a',
+      );
+      final repositoryB = MusicProgressRepository(
+        database: database,
+        syncQueue: SyncQueue(database, userId: 'user-b'),
+        api: api,
+        userId: 'user-b',
+      );
+
+      await repositoryA.saveLocal(
+        playableKey: 'shared:track-1',
+        position: const Duration(seconds: 15),
+        duration: const Duration(seconds: 180),
+        completed: false,
+      );
+      await repositoryB.saveLocal(
+        playableKey: 'shared:track-1',
+        position: const Duration(seconds: 90),
+        duration: const Duration(seconds: 180),
+        completed: false,
+      );
+
+      expect(
+        (await repositoryA.loadLocal('shared:track-1'))?.positionSeconds,
+        15,
+      );
+      expect(
+        (await repositoryB.loadLocal('shared:track-1'))?.positionSeconds,
+        90,
+      );
+
+      await database.clearUserData('user-a');
+
+      expect(await repositoryA.loadLocal('shared:track-1'), isNull);
+      expect(
+        (await repositoryB.loadLocal('shared:track-1'))?.positionSeconds,
+        90,
+      );
+    },
+  );
+
   test('saveLocal caches progress and coalesces pending sync', () async {
     await repository.saveLocal(
       playableKey: 'local:track-1',

@@ -133,10 +133,14 @@ final syncQueueProvider = Provider<SyncQueue>((ref) {
 
 final globalMusicProgressRepositoryProvider = Provider<MusicProgressRepository>(
   (ref) {
+    final userId = ref.watch(
+      authSessionProvider.select((session) => session.value?.user?.id),
+    );
     return MusicProgressRepository(
       database: ref.watch(localDatabaseProvider),
       syncQueue: ref.watch(syncQueueProvider),
       api: ref.watch(globalMusicApiProvider),
+      userId: userId,
     );
   },
 );

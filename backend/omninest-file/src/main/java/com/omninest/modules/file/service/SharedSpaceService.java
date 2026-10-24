@@ -256,10 +256,14 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
             throw new BusinessException(ErrorCode.CONFLICT, "文件已在共享空间中");
         }
         List<FileNode> subtree = collectPersonalSubtreeNodes(node);
-        requireMovableSources(subtree);
+        // 回收站节点也要随父目录迁移，但不参与只读/派生来源的移动限制。
+        requireMovableSources(subtree.stream().filter(candidate -> !candidate.isDeleted()).toList());
         // 移入共享空间根目录，检查共享空间根目录下的同名冲突
         checkSharedSpaceNameConflict(node.getName(), null);
-        List<UUID> subtreeIds = subtree.stream().map(FileNode::getId).toList();
+        List<UUID> subtreeIds = subtree.stream()
+                .filter(candidate -> !candidate.isDeleted())
+                .map(FileNode::getId)
+                .toList();
         revokeShareLinksForNodes(subtreeIds);
         revokeFilePermissionsForNodes(subtreeIds);
         SubtreeStats stats = calculateSubtreeStats(node);
@@ -297,6 +301,18 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         boolean isUploader = Objects.equals(node.getUploadedBy(), targetUserId);
         Action action = isUploader ? Action.CAN_MOVE_FROM : Action.CAN_DELETE_ANY;
         validatePermission(targetUserId, action);
+        // 子孙节点在改空间后会退出 SHARED 查询条件，必须在变更前收集完整子树。
+        String oldPath = node.getNormalizedPath();
+        String descendantPrefix = oldPath + "/";
+        List<FileNode> descendants = fileNodeRepository.findSubtreeInSpaceIncludingDeleted(
+                SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix));
+        // 目录内可能混有其他成员上传的文件与回收站子项。非管理级操作者不能借父目录
+        // 上传者身份把他人内容整体迁入个人空间，否则等于绕过 CAN_DELETE_ANY 夺取所有权。
+        if (!canAccess(targetUserId, Action.CAN_DELETE_ANY)
+                && descendants.stream()
+                        .anyMatch(descendant -> !Objects.equals(descendant.getUploadedBy(), targetUserId))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件夹内包含其他成员上传的文件，无法整体迁回个人空间");
+        }
         SubtreeStats stats = calculateSubtreeStats(node);
         // 检查个人配额是否足够
         storageQuotaService.checkQuota(targetUserId, stats.totalBytes());
@@ -305,12 +321,10 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 targetUserId, SpaceType.PERSONAL, node.getName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "个人空间根目录已存在同名节点");
         }
-        // 子孙节点在改空间后会退出 SHARED 查询条件，必须在变更前收集索引同步范围。
-        String oldPath = node.getNormalizedPath();
-        String descendantPrefix = oldPath + "/";
-        List<UUID> subtreeIds = new ArrayList<>(
-                fileNodeRepository.findActiveIdsUnderPathInSpace(
-                        SpaceType.SHARED, LikePatterns.escapeSpecials(descendantPrefix)));
+        List<UUID> subtreeIds = new ArrayList<>(descendants.stream()
+                .filter(descendant -> !descendant.isDeleted())
+                .map(FileNode::getId)
+                .toList());
         subtreeIds.add(node.getId());
         node.setSpaceType(SpaceType.PERSONAL);
         node.setOwnerUserId(targetUserId);
@@ -321,9 +335,6 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         node.setNormalizedPath("/" + node.getName());
         fileNodeRepository.save(node);
         if (NodeType.FOLDER.getValue().equals(node.getNodeType())) {
-            List<FileNode> descendants = fileNodeRepository.findAllById(subtreeIds).stream()
-                    .filter(candidate -> !candidate.getId().equals(node.getId()))
-                    .toList();
             moveDescendants(descendants, node, oldPath, SpaceType.PERSONAL, targetUserId, null);
         }
         sharedSpaceQuotaService.decreaseUsage(stats.totalBytes(), stats.fileCount());
@@ -683,11 +694,12 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         if (!NodeType.FOLDER.getValue().equals(root.getNodeType())) {
             return nodes;
         }
-        List<FileNode> descendants = fileNodeRepository
-                .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                        root.getOwnerUserId(),
-                        SpaceType.PERSONAL,
-                        LikePatterns.escapeSpecials(root.getNormalizedPath() + "/"));
+        // 回收站子项必须一起迁移：父目录换空间后，旧空间的软删除子项会因
+        // 父级查找失败而永久无法恢复。
+        List<FileNode> descendants = fileNodeRepository.findPersonalSubtreeIncludingDeleted(
+                root.getOwnerUserId(),
+                SpaceType.PERSONAL,
+                LikePatterns.escapeSpecials(root.getNormalizedPath() + "/"));
         nodes.addAll(descendants);
         return nodes;
     }

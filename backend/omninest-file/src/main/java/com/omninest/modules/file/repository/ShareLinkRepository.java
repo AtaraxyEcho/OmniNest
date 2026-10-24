@@ -44,6 +44,11 @@ public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
 
     List<ShareLink> findByOwnerUserIdAndResourceIdIn(UUID ownerUserId, Collection<UUID> resourceIds);
 
+    /**
+     * 查询一批资源上的全部分享链接（含已停用），用于物理删除后的彻底清理。
+     */
+    List<ShareLink> findByResourceIdIn(Collection<UUID> resourceIds);
+
     Optional<ShareLink> findByTokenHash(String tokenHash);
 
     List<ShareLink> findByResourceIdAndDisabledAtIsNull(UUID resourceId);

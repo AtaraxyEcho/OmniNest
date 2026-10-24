@@ -37,6 +37,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 连接器 OAuth 授权与应用配置服务。
@@ -61,6 +62,7 @@ public class ExternalStorageOAuthService {
     private final AdminAuditRecorder adminAuditRecorder;
     private final UserSyncEventRecorder syncEventRecorder;
     private final ExternalStorageOAuthTokenClient tokenClient;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 同账户刷新在本实例内串行；跨实例由分布式锁协调。
@@ -164,11 +166,13 @@ public class ExternalStorageOAuthService {
      * 另一连接器可以拿别人的 state 完成自己的回调。state 使用一次性读取，
      * 读取即删除，重复回调直接失败。</p>
      *
+     * <p>第三方令牌交换最长可达 30 秒，绝不能包在数据库事务里：否则少数慢回调
+     * 就会占满 HikariCP 连接并拖垮整个后端。外部请求完成后才用短事务落库。</p>
+     *
      * @param providerCode 回调路径中的连接器编码
      * @param state OAuth state
      * @param code 授权码
      */
-    @Transactional(rollbackFor = Exception.class)
     public void handleCallback(String providerCode, String state, String code) {
         if (state == null || state.isBlank() || code == null || code.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 回调参数不完整");
@@ -193,26 +197,32 @@ public class ExternalStorageOAuthService {
         UUID accountId = UUID.fromString(statePayload.accountId());
         String connectorCode = statePayload.code();
         StorageConnectorOAuthApp app = requireApp(connectorCode);
-        StorageExternalAccount account = accountRepository.findByIdAndOwnerUserId(accountId, userId)
+        accountRepository.findByIdAndOwnerUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
 
         Map<String, Object> tokens = tokenClient.exchangeCode(connectorCode, app, code.trim());
-        Map<String, Object> canonical = canonicalizeTokens(tokens);
-        account.setEncryptedCredentials(credentialService.encrypt(JsonSupport.toJson(canonical)));
-        account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
-        account.setLastErrorCode(null);
-        account.setLastCheckedAt(Instant.now());
-        accountRepository.save(account);
-        // 授权在浏览器完成后才落库，必须推送同步事件让已打开的文件页实时刷新账户状态。
-        syncEventRecorder.record(new SyncEventCommand(
-                userId,
-                SyncScope.FILES,
-                "EXTERNAL_STORAGE",
-                accountId.toString(),
-                SyncAction.UPDATED,
-                null,
-                Map.of()
-        ));
+        String encryptedCredentials = credentialService.encrypt(
+                JsonSupport.toJson(canonicalizeTokens(tokens)));
+        transactionTemplate.executeWithoutResult(status -> {
+            StorageExternalAccount account = accountRepository
+                    .findByIdAndOwnerUserId(accountId, userId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
+            account.setEncryptedCredentials(encryptedCredentials);
+            account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
+            account.setLastErrorCode(null);
+            account.setLastCheckedAt(Instant.now());
+            accountRepository.save(account);
+            // 授权在浏览器完成后才落库，必须推送同步事件让已打开的文件页实时刷新账户状态。
+            syncEventRecorder.record(new SyncEventCommand(
+                    userId,
+                    SyncScope.FILES,
+                    "EXTERNAL_STORAGE",
+                    accountId.toString(),
+                    SyncAction.UPDATED,
+                    null,
+                    Map.of()
+            ));
+        });
         log.info("OAuth 授权成功: accountId={}, connector={}", accountId, connectorCode);
     }
 

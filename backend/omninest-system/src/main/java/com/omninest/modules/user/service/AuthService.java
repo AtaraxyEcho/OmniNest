@@ -694,16 +694,18 @@ public class AuthService {
 
     /**
      * 判断是否为新设备登录。
-     * 检查是否存在相同 deviceId 的未撤销会话，如果存在则为同一设备，否则为新设备。
+     *
+     * <p>平台标识必须与落库口径一致地归一化，否则大小写变化会让查询永远不命中；
+     * 历史判定覆盖已撤销会话，否则同平台互斥或正常退出后每次登录都会误报新设备。</p>
      */
     private boolean isNewDevice(UUID userId, String clientPlatform, String deviceId) {
         if (deviceId == null || deviceId.isBlank()) {
             return false;
         }
-        List<AuthActiveSession> existingSessions = activeSessionRepository
-                .findByUserIdAndClientPlatformAndRevokedAtIsNull(userId, clientPlatform);
-        return existingSessions.stream()
-                .noneMatch(session -> deviceId.equals(session.getDeviceId()));
+        String platform = ClientPlatform.normalize(clientPlatform);
+        String normalizedDeviceId = LoginAuditService.clamped(deviceId, LoginAuditService.DEVICE_ID_MAX);
+        return !activeSessionRepository.existsByUserIdAndClientPlatformAndDeviceId(
+                userId, platform, normalizedDeviceId);
     }
 
     private void notifyNewDevice(
@@ -713,14 +715,15 @@ public class AuthService {
             String ipAddress
     ) {
         try {
+            String platform = ClientPlatform.normalize(clientPlatform);
             String deviceInfo = deviceName != null && !deviceName.isBlank()
-                    ? deviceName : clientPlatform;
+                    ? deviceName : platform;
             notificationService.create(
                     profile.getId(),
                     "NEW_DEVICE_LOGIN",
                     "新设备登录",
                     "检测到新设备登录: " + deviceInfo + " (" + ipAddress + ")",
-                    Map.of("platform", clientPlatform, "ip", ipAddress)
+                    Map.of("platform", platform, "ip", ipAddress)
             );
         } catch (RuntimeException exception) {
             log.warn("发送新设备登录通知失败: userId={}", profile.getId(), exception);

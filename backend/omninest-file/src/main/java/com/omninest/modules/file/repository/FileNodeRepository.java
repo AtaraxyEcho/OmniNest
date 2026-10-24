@@ -143,6 +143,40 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 读取个人空间某目录下的全部后代，含回收站节点。
+     *
+     * <p>跨空间移动必须把软删除后代一起迁走：只改活跃节点的空间归属会让回收站子项
+     * 留在旧空间，恢复时按旧空间查父目录必然找不到。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀
+     * @return 全部后代节点
+     */
+    @Query("select node from FileNode node where node.ownerUserId = :ownerUserId "
+            + "and node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\'")
+    List<FileNode> findPersonalSubtreeIncludingDeleted(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
+     * 读取指定空间某目录下的全部后代，含回收站节点与不同上传者的子项。
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀
+     * @return 全部后代节点
+     */
+    @Query("select node from FileNode node where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\'")
+    List<FileNode> findSubtreeInSpaceIncludingDeleted(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
      * 按空间收集子树内的已软删除节点，不限制所有者。
      *
      * <p>共享空间同一目录树里的节点 {@code owner_user_id} 是各自上传者。恢复父目录若仍按
@@ -612,22 +646,36 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     long countByCurrentObjectId(UUID objectId);
 
     /**
-     * 批量查询仍由永久删除任务外节点引用的对象。
+     * 批量查询仍由未进入任何永久删除任务的节点引用的对象。
+     *
+     * <p>已挂到其他 purge 任务上的节点同样注定被物理删除，不能在规划阶段当作
+     * 外部引用；否则两个任务共享同一对象时会互相视为仍然存活，双双跳过删除。</p>
      *
      * @param objectIds 待检查对象 ID
-     * @param taskId 永久删除任务 ID
-     * @return 仍存在任务外节点引用的对象 ID
+     * @return 仍存在未删除任务外节点引用的对象 ID
      */
     @Query("""
             select distinct node.currentObjectId
             from FileNode node
             where node.currentObjectId in :objectIds
-              and (node.purgeTaskId is null or node.purgeTaskId <> :taskId)
+              and node.purgeTaskId is null
             """)
-    List<UUID> findCurrentObjectIdsReferencedOutsidePurgeTask(
-            @Param("objectIds") Collection<UUID> objectIds,
-            @Param("taskId") UUID taskId
+    List<UUID> findCurrentObjectIdsReferencedByUnpurgedNodes(
+            @Param("objectIds") Collection<UUID> objectIds
     );
+
+    /**
+     * 批量查询仍被任意节点引用的对象，用于最终清理 file_objects 行。
+     *
+     * @param objectIds 待检查对象 ID
+     * @return 仍存在节点引用的对象 ID
+     */
+    @Query("""
+            select distinct node.currentObjectId
+            from FileNode node
+            where node.currentObjectId in :objectIds
+            """)
+    List<UUID> findCurrentObjectIdsInUse(@Param("objectIds") Collection<UUID> objectIds);
 
     List<FileNode> findByPurgeTaskId(UUID purgeTaskId);
 

@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.inOrder;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.security.Permissions;
@@ -75,17 +78,19 @@ class CurrentUserServiceTest {
     });
     private final MalwareScanGateway malwareScanGateway = mock(MalwareScanGateway.class);
     private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
+    private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final CurrentUserService service = new CurrentUserService(
             authUserRepository, activeSessionRepository, currentUserContext, passwordEncoder,
             new PasswordPolicy(), objectStorageClient, objectStorageBuckets, notificationService, sessionRevocationService,
             userSessionRevocationService, readThroughCache, malwareScanGateway, syncEventRecorder,
-            transactionManager);
+            rateLimitService, transactionManager);
 
     @BeforeEach
     void setUpTransactionTemplate() {
         service.initTransactionTemplate();
         when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
     }
 
     @Test
@@ -157,6 +162,18 @@ class CurrentUserServiceTest {
         assertThatThrownBy(service::currentUser)
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("当前用户不存在");
+    }
+
+    @Test
+    void changePassword_rateLimited_doesNotCheckPassword() {
+        UUID userId = UUID.randomUUID();
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.changePassword(userId, "oldPass", "newPass123"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.RATE_LIMITED);
+        verify(authUserRepository, never()).findById(any());
     }
 
     @Test

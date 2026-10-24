@@ -173,10 +173,7 @@ public class FilePurgeStateService {
 
         List<FileVersion> versions = fileVersionRepository.findByFileNodeIdIn(nodeIds);
         Map<UUID, FileObject> objects = loadObjects(nodes, versions);
-        Set<UUID> externallyReferencedObjectIds = findExternallyReferencedObjectIds(
-                event.taskId(),
-                objects.keySet()
-        );
+        Set<UUID> externallyReferencedObjectIds = findExternallyReferencedObjectIds(objects.keySet());
         Map<EntryKey, FilePurgeEntry> entries = new LinkedHashMap<>();
         if (!objects.isEmpty()) {
             purgeEntryRepository.findByTaskIdAndObjectIdIn(event.taskId(), objects.keySet())
@@ -318,6 +315,7 @@ public class FilePurgeStateService {
     public void finalizePurge(FilePurgeRequestedEvent event) {
         long releasedBytes = 0L;
         long deletedNodeCount = 0L;
+        Set<UUID> candidateObjectIds = new HashSet<>();
         while (true) {
             Page<FileNode> page = fileNodeRepository.findByPurgeTaskIdOrderById(
                     event.taskId(),
@@ -329,9 +327,14 @@ public class FilePurgeStateService {
             FinalizationResult result = finalizeNodeBatch(event, page.getContent());
             releasedBytes += result.releasedBytes();
             deletedNodeCount += result.nodeCount();
+            candidateObjectIds.addAll(result.objectIds());
             entityManager.flush();
             entityManager.clear();
         }
+        // file_objects 行必须等整任务所有批次处理完再删：首批删行会让后续批次
+        // 取不到版本对象大小，把已用配额永久留在高位；同时这里按全表引用复核，
+        // 并发任务的节点或版本尚未删除时不能提前删行。
+        int deletedObjectCount = deleteUnreferencedObjects(candidateObjectIds);
         if (releasedBytes > 0L) {
             storageQuotaService.decrementUsage(event.ownerUserId(), releasedBytes);
         }
@@ -339,10 +342,32 @@ public class FilePurgeStateService {
         taskRecordService.markCompleted(event.taskId(), Map.of(
                 "fileNodeCount", deletedNodeCount,
                 "objectCount", purgeEntryRepository.countByTaskId(event.taskId()),
+                "deletedObjectRowCount", deletedObjectCount,
                 "releasedBytes", releasedBytes
         ));
         log.info("文件永久删除完成: taskId={}, ownerUserId={}, nodeCount={}, releasedBytes={}",
                 event.taskId(), event.ownerUserId(), deletedNodeCount, releasedBytes);
+    }
+
+    private int deleteUnreferencedObjects(Collection<UUID> objectIds) {
+        if (objectIds.isEmpty()) {
+            return 0;
+        }
+        List<UUID> ids = List.copyOf(objectIds);
+        int deleted = 0;
+        for (int start = 0; start < ids.size(); start += PLANNING_BATCH_SIZE) {
+            List<UUID> batch = ids.subList(start, Math.min(start + PLANNING_BATCH_SIZE, ids.size()));
+            Set<UUID> referenced = new HashSet<>(fileNodeRepository.findCurrentObjectIdsInUse(batch));
+            referenced.addAll(fileVersionRepository.findObjectIdsInUse(batch));
+            List<FileObject> orphans = fileObjectRepository.findAllById(batch).stream()
+                    .filter(object -> !referenced.contains(object.getId()))
+                    .toList();
+            if (!orphans.isEmpty()) {
+                fileObjectRepository.deleteAllInBatch(orphans);
+                deleted += orphans.size();
+            }
+        }
+        return deleted;
     }
 
     private FinalizationResult finalizeNodeBatch(FilePurgeRequestedEvent event, List<FileNode> nodes) {
@@ -374,15 +399,7 @@ public class FilePurgeStateService {
         fileSearchIndexService.deleteFiles(nodeIds, event.ownerUserId());
         fileNodeRepository.deleteAllInBatch(nodes);
         fileNodeRepository.flush();
-        Set<UUID> externallyReferencedObjectIds = findExternallyReferencedObjectIds(
-                event.taskId(),
-                objectIds
-        );
-        List<FileObject> orphanObjects = batchObjects.stream()
-                .filter(object -> !externallyReferencedObjectIds.contains(object.getId()))
-                .toList();
-        fileObjectRepository.deleteAllInBatch(orphanObjects);
-        return new FinalizationResult(nodes.size(), releasedBytes);
+        return new FinalizationResult(nodes.size(), releasedBytes, Set.copyOf(objectIds));
     }
 
     /**
@@ -521,15 +538,15 @@ public class FilePurgeStateService {
         return objects;
     }
 
-    private Set<UUID> findExternallyReferencedObjectIds(UUID taskId, Collection<UUID> objectIds) {
+    private Set<UUID> findExternallyReferencedObjectIds(Collection<UUID> objectIds) {
         if (objectIds.isEmpty()) {
             return Set.of();
         }
         Set<UUID> referencedObjectIds = new HashSet<>(
-                fileNodeRepository.findCurrentObjectIdsReferencedOutsidePurgeTask(objectIds, taskId)
+                fileNodeRepository.findCurrentObjectIdsReferencedByUnpurgedNodes(objectIds)
         );
         referencedObjectIds.addAll(
-                fileVersionRepository.findObjectIdsReferencedOutsidePurgeTask(objectIds, taskId)
+                fileVersionRepository.findObjectIdsReferencedByUnpurgedNodes(objectIds)
         );
         return referencedObjectIds;
     }
@@ -622,6 +639,6 @@ public class FilePurgeStateService {
     private record EntryKey(String bucketName, String objectKey, String minioVersionId) {
     }
 
-    private record FinalizationResult(long nodeCount, long releasedBytes) {
+    private record FinalizationResult(long nodeCount, long releasedBytes, Set<UUID> objectIds) {
     }
 }

@@ -9,7 +9,6 @@ import com.omninest.modules.file.port.MediaCoverDirectory;
 import com.omninest.modules.user.port.UserNameDirectory;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
-import com.omninest.modules.file.domain.SharedSpacePermission;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -50,7 +49,7 @@ public class FileNodeSupport {
     /**
      * 查找用户可见的文件（个人空间或共享空间）。
      * 用于收藏、最近访问等需要访问共享空间文件的场景；
-     * 共享空间回退分支要求具备 CAN_BROWSE 能力，未授权用户按不存在处理。
+     * 共享空间回退分支要求空间启用且具备 CAN_BROWSE 能力，未授权用户按不存在处理。
      *
      * @param userId 用户 ID
      * @param fileId 文件节点 ID
@@ -62,10 +61,9 @@ public class FileNodeSupport {
                     FileNode shared = fileNodeRepository
                             .findByIdAndSpaceTypeAndDeletedFalse(fileId, SpaceType.SHARED)
                             .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
-                    try {
-                        sharedSpaceService.validatePermission(userId, SharedSpacePermission.Action.CAN_BROWSE);
-                    } catch (BusinessException exception) {
-                        // 无浏览权限按不存在处理，避免 403/404 差异成为共享文件存在性探测 oracle
+                    // 与批量收藏共用同一可见性判定：空间开关与角色权限缺一不可，
+                    // 且不可用异常表达，避免 403/404 差异成为共享文件存在性探测 oracle。
+                    if (!sharedSpaceService.canBrowse(userId)) {
                         throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
                     }
                     return shared;

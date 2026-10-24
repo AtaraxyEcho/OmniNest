@@ -80,40 +80,44 @@ class MusicDeckAddToPlaylistSheet extends ConsumerWidget {
             ),
             Divider(color: context.musicColors.outline),
             Expanded(
-              child: ListView(
+              // 歌单数量随用户数据增长，必须惰性构建，避免弹窗一次性实例化全部条目。
+              child: ListView.builder(
                 padding: const EdgeInsets.only(bottom: 12),
-                children: [
-                  for (final playlist in playlists)
-                    ListTile(
-                      leading: SizedBox.square(
-                        dimension: 40,
-                        child: MusicDeckArtwork(
-                          title: playlist.name,
-                          imageUrl: playlist.listCoverUrl,
-                          borderRadius: 5,
-                        ),
+                itemCount: playlists.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == playlists.length) {
+                    return ListTile(
+                      leading: Icon(
+                        Icons.add_rounded,
+                        color: context.musicColors.onSurfaceVariant,
                       ),
-                      title: Text(
-                        playlist.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      title: Text(l10n.musicCreatePlaylist),
+                      onTap: () => _createAndAdd(context, ref),
+                    );
+                  }
+                  final playlist = playlists[index];
+                  return ListTile(
+                    leading: SizedBox.square(
+                      dimension: 40,
+                      child: MusicDeckArtwork(
+                        title: playlist.name,
+                        imageUrl: playlist.listCoverUrl,
+                        borderRadius: 5,
                       ),
-                      subtitle: Text(
-                        l10n.musicDeckTrackCount(playlist.trackCount),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () => _addToExisting(context, ref, playlist),
                     ),
-                  ListTile(
-                    leading: Icon(
-                      Icons.add_rounded,
-                      color: context.musicColors.onSurfaceVariant,
+                    title: Text(
+                      playlist.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    title: Text(l10n.musicCreatePlaylist),
-                    onTap: () => _createAndAdd(context, ref),
-                  ),
-                ],
+                    subtitle: Text(
+                      l10n.musicDeckTrackCount(playlist.trackCount),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => _addToExisting(context, ref, playlist),
+                  );
+                },
               ),
             ),
           ],

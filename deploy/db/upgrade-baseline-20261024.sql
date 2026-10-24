@@ -69,6 +69,10 @@ ALTER TABLE omni.reader_item_sources ALTER COLUMN id SET DEFAULT gen_random_uuid
 ALTER TABLE omni.reader_page_assets ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE omni.reader_pages ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE omni.sync_events ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE omni.storage_import_tasks ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE omni.storage_remote_metadata_cache ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE omni.sync_event_checkpoints ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE omni.user_preferences ALTER COLUMN created_at SET DEFAULT now();
 
 DELETE FROM omni.notification_types WHERE type_code = 'SHARE_ACCESS';
 

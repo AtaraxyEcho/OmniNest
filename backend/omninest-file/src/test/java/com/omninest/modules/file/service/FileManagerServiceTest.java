@@ -24,7 +24,6 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.user.UserAccountQuery;
-import com.omninest.modules.file.domain.FileAccessRecord;
 import com.omninest.modules.file.domain.FileFavorite;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
@@ -145,7 +144,7 @@ class FileManagerServiceTest {
                     Mockito.mock(SharedSpaceService.class));
     private final FileSyncEventWriter syncEventWriter = new FileSyncEventWriter(syncEventRecorder);
     private final FileFavoriteService fileFavoriteService = new FileFavoriteService(
-            favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter);
+            favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter, sharedSpaceService);
     private final FileVersionService fileVersionService = new FileVersionService(
             fileNodeRepository, fileObjectRepository, fileVersionRepository, uploadSessionRepository,
             fileContentChangePublisher, fileNodeSupport, syncEventWriter);
@@ -178,10 +177,10 @@ class FileManagerServiceTest {
     void listRecentFilesUsesAccessTimeDescending() {
         FileNode older = node("older.txt", "text/plain", 128);
         FileNode newer = node("newer.txt", "text/plain", 256);
-        FileAccessRecord olderRecord = accessRecord(older, "2026-05-19T08:00:00Z");
-        FileAccessRecord newerRecord = accessRecord(newer, "2026-05-20T08:00:00Z");
-        when(accessRecordRepository.findTop50ByOwnerUserIdOrderByLastAccessedAtDesc(OWNER_ID))
-                .thenReturn(List.of(newerRecord, olderRecord));
+        // 空间过滤在 SQL 侧完成，仓储只返回个人空间存活节点
+        when(accessRecordRepository.findRecentNodes(
+                eq(OWNER_ID), eq(SpaceType.PERSONAL), any(Pageable.class)))
+                .thenReturn(List.of(newer, older));
 
         var result = fileManagerService.listRecentFiles(OWNER_ID);
 
@@ -213,8 +212,7 @@ class FileManagerServiceTest {
         file1.setId(file1Id);
         FileNode file2 = node("new.pdf", "application/pdf", 2048);
         file2.setId(file2Id);
-        when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(
-                OWNER_ID, List.of(file1Id, file2Id)))
+        when(fileNodeRepository.findAllById(List.of(file1Id, file2Id)))
                 .thenReturn(List.of(file1, file2));
         when(favoriteRepository.findFavoritedNodeIds(OWNER_ID, List.of(file1Id, file2Id)))
                 .thenReturn(List.of(file1Id));
@@ -229,6 +227,40 @@ class FileManagerServiceTest {
         captor.getValue().forEach(saved::add);
         assertThat(saved).extracting(fav -> fav.getFileNode().getId()).containsExactly(file2Id);
         assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void batchAddFavoritesIncludesSharedNodesVisibleToUser() {
+        UUID sharedId = UUID.fromString("30000000-0000-0000-0000-000000000016");
+        FileNode shared = node("shared.pdf", "application/pdf", 4096);
+        shared.setId(sharedId);
+        shared.setOwnerUserId(UUID.fromString("99999999-9999-9999-9999-999999999999"));
+        shared.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findAllById(List.of(sharedId))).thenReturn(List.of(shared));
+        when(sharedSpaceService.canBrowse(OWNER_ID)).thenReturn(true);
+        when(favoriteRepository.findFavoritedNodeIds(OWNER_ID, List.of(sharedId)))
+                .thenReturn(List.of());
+
+        var result = fileFavoriteService.batchAddFavorites(OWNER_ID, List.of(sharedId));
+
+        assertThat(result).hasSize(1);
+        verify(favoriteRepository).saveAll(any());
+    }
+
+    @Test
+    void batchAddFavoritesSkipsSharedNodesWithoutBrowsePermission() {
+        UUID sharedId = UUID.fromString("30000000-0000-0000-0000-000000000017");
+        FileNode shared = node("shared.pdf", "application/pdf", 4096);
+        shared.setId(sharedId);
+        shared.setOwnerUserId(UUID.fromString("99999999-9999-9999-9999-999999999999"));
+        shared.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findAllById(List.of(sharedId))).thenReturn(List.of(shared));
+        when(sharedSpaceService.canBrowse(OWNER_ID)).thenReturn(false);
+
+        var result = fileFavoriteService.batchAddFavorites(OWNER_ID, List.of(sharedId));
+
+        assertThat(result).isEmpty();
+        verify(favoriteRepository, never()).saveAll(any());
     }
 
     @Test
@@ -1491,14 +1523,6 @@ class FileManagerServiceTest {
         link.setAccessCount(accessCount);
         link.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
         return link;
-    }
-
-    private FileAccessRecord accessRecord(FileNode node, String lastAccessedAt) {
-        FileAccessRecord record = new FileAccessRecord();
-        record.setOwnerUserId(OWNER_ID);
-        record.setFileNode(node);
-        record.setLastAccessedAt(Instant.parse(lastAccessedAt));
-        return record;
     }
 
     private FileFavorite favorite(FileNode node) {

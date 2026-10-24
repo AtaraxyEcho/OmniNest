@@ -3,6 +3,7 @@ package com.omninest.modules.user.service;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.security.MalwareScanGateway.ScanResult;
@@ -64,6 +65,7 @@ public class CurrentUserService implements UserProfileCacheEvictor {
     private final ReadThroughCache readThroughCache;
     private final MalwareScanGateway malwareScanGateway;
     private final UserSyncEventRecorder syncEventRecorder;
+    private final RateLimitService rateLimitService;
     private final PlatformTransactionManager transactionManager;
     private TransactionTemplate transactionTemplate;
 
@@ -75,7 +77,12 @@ public class CurrentUserService implements UserProfileCacheEvictor {
     private static final long MAX_AVATAR_SIZE = 5L * 1024 * 1024;
     private static final String PROFILE_CACHE_PREFIX = "omninest:user:profile:";
 
-    @Transactional(rollbackFor = Exception.class)
+    /**
+     * 读取当前用户资料。
+     *
+     * <p>不能包读写事务：命中 Redis 时事务在缓存判断之前就已开启，每次 /me 都会
+     * 白白借走一个 Hikari 连接。回源查询由仓储自身的只读事务承担。</p>
+     */
     public AuthUserDto currentUser() {
         UUID userId = currentUserId();
         String cacheKey = PROFILE_CACHE_PREFIX + userId;
@@ -128,6 +135,11 @@ public class CurrentUserService implements UserProfileCacheEvictor {
      */
     @Transactional(rollbackFor = Exception.class)
     public void changePassword(UUID userId, String oldPassword, String newPassword) {
+        // 改密会校验原密码，必须和登录一样有限流：否则拿到已登录会话即可高频爆破原密码。
+        if (!rateLimitService.tryAcquire(
+                "user:" + userId + ":password-change", 5, Duration.ofMinutes(15))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "密码修改尝试过于频繁，请稍后再试");
+        }
         AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
         if (!UserStatus.ACTIVE.getValue().equals(user.getStatus())) {

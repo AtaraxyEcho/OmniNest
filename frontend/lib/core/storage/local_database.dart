@@ -48,7 +48,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 27;
+  int get schemaVersion => 28;
 
   Future<bool> _tableExists(Migrator migrator, String tableName) async {
     final rows =
@@ -428,6 +428,30 @@ class LocalDatabase extends _$LocalDatabase {
             'DROP TABLE IF EXISTS cached_reader_book_details',
           );
         }
+        // Schema v28：媒体进度把账号归属纳入主键。共享曲目在同设备不同账号下复用
+        // 同一个 mediaId，不隔离会串读播放位置，退登清表还会删掉其他账号的离线进度。
+        // SQLite 不能原地改主键，按重命名-建新表-回填搬迁；旧行没有归属可判，
+        // 原样搬入并保持空归属，由后续写入自然覆盖。
+        if (from < 28) {
+          if (await _tableExists(migrator, 'cached_media_progress')) {
+            await migrator.database.customStatement(
+              'ALTER TABLE cached_media_progress '
+              'RENAME TO cached_media_progress_v27',
+            );
+            await migrator.createTable(cachedMediaProgress);
+            await migrator.database.customStatement(
+              'INSERT INTO cached_media_progress '
+              '(user_id, media_id, media_type, progress_percent, '
+              ' position_seconds, duration_seconds, updated_at) '
+              "SELECT '', media_id, media_type, progress_percent, "
+              'position_seconds, duration_seconds, updated_at '
+              'FROM cached_media_progress_v27',
+            );
+            await migrator.database.customStatement(
+              'DROP TABLE cached_media_progress_v27',
+            );
+          }
+        }
       },
     );
   }
@@ -438,13 +462,14 @@ class LocalDatabase extends _$LocalDatabase {
   /// 尚未同步的进度、批注与队列必须原样留下，退出谁就清谁。整表清空等于让 A 的
   /// 退出把 B 的离线写入一并删掉。
   ///
-  /// [cachedMediaProgress] 没有归属列（按 mediaId 存的服务端只读快照），只能整表清。
+  /// [cachedMediaProgress] 记录了本机离线播放进度，同样按归属清理，不能整表清。
   Future<void> clearUserData(String userId) {
     return transaction(() async {
       final owned = [userId, ''];
       await (delete(syncOperations)
         ..where((table) => table.userId.isIn(owned))).go();
-      await delete(cachedMediaProgress).go();
+      await (delete(cachedMediaProgress)
+        ..where((table) => table.userId.isIn(owned))).go();
       await (delete(cachedReaderProgress)
         ..where((table) => table.userId.isIn(owned))).go();
       await (delete(cachedReaderBookmarks)

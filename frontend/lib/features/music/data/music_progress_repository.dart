@@ -13,9 +13,11 @@ class MusicProgressRepository {
     required LocalDatabase database,
     required SyncQueue syncQueue,
     required MusicApi api,
+    String? userId,
   }) : _database = database,
        _syncQueue = syncQueue,
-       _api = api;
+       _api = api,
+       _userId = userId ?? '';
 
   static const String operationPrefix = 'music.playback_progress:';
   static const String mediaType = 'music';
@@ -23,6 +25,7 @@ class MusicProgressRepository {
   final LocalDatabase _database;
   final SyncQueue _syncQueue;
   final MusicApi _api;
+  final String _userId;
 
   /// 读取本地进度；没有待同步修改时会与服务端刷新一次。
   Future<MusicPlaybackProgress?> loadForRestore(String playableKey) async {
@@ -66,6 +69,7 @@ class MusicProgressRepository {
     final row =
         await (_database.select(_database.cachedMediaProgress)..where(
           (table) =>
+              table.userId.equals(_userId) &
               table.mediaId.equals(playableKey) &
               table.mediaType.equals(mediaType),
         )).getSingleOrNull();
@@ -130,6 +134,7 @@ class MusicProgressRepository {
         .into(_database.cachedMediaProgress)
         .insertOnConflictUpdate(
           CachedMediaProgressCompanion.insert(
+            userId: Value(_userId),
             mediaId: progress.playableKey,
             mediaType: mediaType,
             progressPercent: progress.progressPercent,

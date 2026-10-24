@@ -10,7 +10,6 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.quota.service.StorageQuotaService;
-import com.omninest.modules.file.domain.FileAccessRecord;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.NodeType;
@@ -40,6 +39,7 @@ import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -95,12 +95,10 @@ public class FileManagerService {
      */
     @Transactional(readOnly = true)
     public List<FileNodeDto> listRecentFiles(UUID ownerUserId) {
-        List<FileNode> nodes = accessRecordRepository
-                .findTop50ByOwnerUserIdOrderByLastAccessedAtDesc(ownerUserId)
-                .stream()
-                .map(FileAccessRecord::getFileNode)
-                .filter(node -> node != null && !node.isDeleted() && node.getSpaceType() != SpaceType.SHARED)
-                .toList();
+        List<FileNode> nodes = accessRecordRepository.findRecentNodes(
+                ownerUserId,
+                SpaceType.PERSONAL,
+                PageRequest.of(0, 50));
         return fileNodeSupport.toNodeDtos(nodes);
     }
 
@@ -112,17 +110,8 @@ public class FileManagerService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void recordAccess(UUID ownerUserId, UUID fileId) {
-        FileNode node = fileNodeSupport.findVisibleNode(ownerUserId, fileId);
-        FileAccessRecord record = accessRecordRepository.findByOwnerUserIdAndFileNode_Id(ownerUserId, fileId)
-                .orElseGet(() -> {
-                    FileAccessRecord created = new FileAccessRecord();
-                    created.setOwnerUserId(ownerUserId);
-                    created.setFileNode(node);
-                    return created;
-                });
-        record.setLastAccessedAt(Instant.now());
-        record.setAccessCount(record.getAccessCount() + 1);
-        accessRecordRepository.save(record);
+        fileNodeSupport.findVisibleNode(ownerUserId, fileId);
+        accessRecordRepository.upsertAccess(ownerUserId, fileId, Instant.now());
     }
 
     /**

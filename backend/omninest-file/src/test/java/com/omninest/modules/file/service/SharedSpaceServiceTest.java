@@ -197,7 +197,7 @@ class SharedSpaceServiceTest {
                     .thenReturn(Optional.of(folder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("movies"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+            when(fileNodeRepository.findPersonalSubtreeIncludingDeleted(
                     USER_A, SpaceType.PERSONAL, "/movies/"))
                     .thenReturn(List.of(child));
             service.moveToSharedSpace(FOLDER_ID, USER_A);
@@ -206,6 +206,31 @@ class SharedSpaceServiceTest {
             assertThat(child.getSpaceType()).isEqualTo(SpaceType.SHARED);
             assertThat(child.getUploadedBy()).isEqualTo(USER_A);
             assertThat(child.getParentId()).isEqualTo(FOLDER_ID);
+        }
+
+        @Test
+        @DisplayName("目录内回收站子项随父目录一起迁入共享空间")
+        void moveToSharedSpace_movesSoftDeletedDescendants() {
+            stubPermission(USER_A, true, false, false, false, false, true, false, false);
+            FileNode folder = personalFolder(FOLDER_ID, USER_A, "movies");
+            FileNode deletedChild = personalFile(CHILD_FILE_ID, USER_A, "old.mkv", 512L);
+            deletedChild.setParentId(FOLDER_ID);
+            deletedChild.setNormalizedPath("/movies/old.mkv");
+            deletedChild.setDeleted(true);
+
+            when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FOLDER_ID, USER_A))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    eq(SpaceType.SHARED), any(), eq("movies"))).thenReturn(false);
+            when(fileNodeRepository.findPersonalSubtreeIncludingDeleted(
+                    USER_A, SpaceType.PERSONAL, "/movies/"))
+                    .thenReturn(List.of(deletedChild));
+
+            service.moveToSharedSpace(FOLDER_ID, USER_A);
+
+            assertThat(deletedChild.getSpaceType()).isEqualTo(SpaceType.SHARED);
+            assertThat(deletedChild.getUploadedBy()).isEqualTo(USER_A);
+            assertThat(deletedChild.getNormalizedPath()).isEqualTo("/movies/old.mkv");
         }
 
         @Test
@@ -222,7 +247,7 @@ class SharedSpaceServiceTest {
                     .thenReturn(Optional.of(folder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("movies"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+            when(fileNodeRepository.findPersonalSubtreeIncludingDeleted(
                     USER_A, SpaceType.PERSONAL, "/archive/movies/"))
                     .thenReturn(List.of(child));
             service.moveToSharedSpace(FOLDER_ID, USER_A);
@@ -357,6 +382,77 @@ class SharedSpaceServiceTest {
                     .extracting(ex -> ((BusinessException) ex).errorCode())
                     .isEqualTo(ErrorCode.CONFLICT);
             assertThat(file.getSpaceType()).isEqualTo(SpaceType.SHARED);
+        }
+
+        @Test
+        @DisplayName("上传者不能把目录内其他成员上传的文件整体迁入个人空间")
+        void moveToPersonalSpace_rejectsOtherUploadersWithoutDeleteAny() {
+            stubPermission(USER_A, true, false, false, false, false, false, true, false);
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "Project");
+            FileNode otherUpload = sharedFile(CHILD_FILE_ID, USER_B, "b.txt", 128L);
+            otherUpload.setParentId(FOLDER_ID);
+            otherUpload.setNormalizedPath("/Project/b.txt");
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeRepository.findSubtreeInSpaceIncludingDeleted(
+                    SpaceType.SHARED, "/Project/"))
+                    .thenReturn(List.of(otherUpload));
+
+            assertThatThrownBy(() -> service.moveToPersonalSpace(FOLDER_ID, USER_A))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.FORBIDDEN);
+
+            assertThat(folder.getSpaceType()).isEqualTo(SpaceType.SHARED);
+            verify(fileNodeRepository, never()).save(folder);
+            verify(storageQuotaService, never()).incrementUsage(any(), Mockito.anyLong());
+            verify(sharedSpaceQuotaService, never()).decreaseUsage(Mockito.anyLong(), Mockito.anyLong());
+        }
+
+        @Test
+        @DisplayName("具有 CAN_DELETE_ANY 的管理员可以整体迁回混合上传者的目录")
+        void moveToPersonalSpace_adminCanMoveMixedUploaders() {
+            stubPermission(USER_B, true, false, false, false, true, false, false, false);
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "Project");
+            FileNode child = sharedFile(CHILD_FILE_ID, USER_A, "b.txt", 128L);
+            child.setParentId(FOLDER_ID);
+            child.setNormalizedPath("/Project/b.txt");
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeRepository.findSubtreeInSpaceIncludingDeleted(
+                    SpaceType.SHARED, "/Project/"))
+                    .thenReturn(List.of(child));
+
+            service.moveToPersonalSpace(FOLDER_ID, USER_B);
+
+            assertThat(child.getSpaceType()).isEqualTo(SpaceType.PERSONAL);
+            assertThat(child.getOwnerUserId()).isEqualTo(USER_B);
+            assertThat(child.getUploadedBy()).isNull();
+            assertThat(child.getNormalizedPath()).isEqualTo("/Project/b.txt");
+        }
+
+        @Test
+        @DisplayName("目录内回收站子项随父目录迁回个人空间，且不进入索引同步范围")
+        void moveToPersonalSpace_movesSoftDeletedDescendant() {
+            stubPermission(USER_A, true, false, false, false, false, false, true, false);
+            FileNode folder = sharedFolder(FOLDER_ID, USER_A, "Project");
+            FileNode deletedChild = sharedFile(CHILD_FILE_ID, USER_A, "old.txt", 128L);
+            deletedChild.setParentId(FOLDER_ID);
+            deletedChild.setNormalizedPath("/Project/old.txt");
+            deletedChild.setDeleted(true);
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(FOLDER_ID, SpaceType.SHARED))
+                    .thenReturn(Optional.of(folder));
+            when(fileNodeRepository.findSubtreeInSpaceIncludingDeleted(
+                    SpaceType.SHARED, "/Project/"))
+                    .thenReturn(List.of(deletedChild));
+
+            service.moveToPersonalSpace(FOLDER_ID, USER_A);
+
+            assertThat(deletedChild.isDeleted()).isTrue();
+            assertThat(deletedChild.getSpaceType()).isEqualTo(SpaceType.PERSONAL);
+            assertThat(deletedChild.getOwnerUserId()).isEqualTo(USER_A);
+            assertThat(deletedChild.getNormalizedPath()).isEqualTo("/Project/old.txt");
+            verify(fileIndexSyncService).scheduleAfterCommit(USER_A, List.of(FOLDER_ID));
         }
 
         @Test

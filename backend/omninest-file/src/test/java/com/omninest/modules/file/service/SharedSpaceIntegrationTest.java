@@ -277,7 +277,7 @@ class SharedSpaceIntegrationTest {
                     .thenReturn(Optional.of(folder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("documents"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+            when(fileNodeRepository.findPersonalSubtreeIncludingDeleted(
                     USER_A, SpaceType.PERSONAL, "/documents/"))
                     .thenReturn(List.of(child));
             service.moveToSharedSpace(DOC_FOLDER_ID, USER_A);
@@ -474,7 +474,7 @@ class SharedSpaceIntegrationTest {
                     .thenReturn(Optional.of(docFolder));
             when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                     eq(SpaceType.SHARED), any(), eq("documents"))).thenReturn(false);
-            when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+            when(fileNodeRepository.findPersonalSubtreeIncludingDeleted(
                     USER_A, SpaceType.PERSONAL, "/documents/"))
                     .thenReturn(List.of(report, imgFolder, photo1, photo2));
             service.moveToSharedSpace(DOC_FOLDER_ID, USER_A);

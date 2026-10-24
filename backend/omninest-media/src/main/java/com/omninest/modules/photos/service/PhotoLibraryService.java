@@ -149,15 +149,6 @@ public class PhotoLibraryService {
     }
 
     /**
-     * 查询用户所有照片列表
-     */
-    @Transactional(readOnly = true)
-    public List<PhotoItemDto> listPhotos(UUID ownerUserId) {
-        List<PhotoItem> photos = photoItemRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId);
-        return mapPhotoItemDtos(ownerUserId, photos, favoriteIdsFor(ownerUserId, photoIds(photos)));
-    }
-
-    /**
      * 分页查询用户照片列表。
      *
      * @param ownerUserId 用户标识

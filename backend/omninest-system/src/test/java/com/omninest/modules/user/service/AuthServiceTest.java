@@ -429,10 +429,36 @@ class AuthServiceTest {
             when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
                     user.getId(), "android"))
                     .thenReturn(List.of(knownSession));
+            when(activeSessionRepository.existsByUserIdAndClientPlatformAndDeviceId(
+                    user.getId(), "android", "known-device")).thenReturn(true);
 
             service.login(
                     new LoginRequest("admin", "pass"),
                     "android",
+                    "known-device",
+                    "Pixel",
+                    "10.0.0.1",
+                    "okhttp"
+            );
+
+            verifyNoInteractions(notificationService);
+        }
+
+        @Test
+        @DisplayName("已撤销的历史会话仍算已知设备，大小写不同的平台标识也能命中")
+        void loginDoesNotNotifyKnownDeviceFromRevokedSession() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+            // 历史会话已撤销，不会出现在未撤销列表中；只要设备曾经登录过就不该再告警
+            when(activeSessionRepository.findByUserIdAndClientPlatformAndRevokedAtIsNull(
+                    user.getId(), "android")).thenReturn(List.of());
+            when(activeSessionRepository.existsByUserIdAndClientPlatformAndDeviceId(
+                    user.getId(), "android", "known-device")).thenReturn(true);
+
+            service.login(
+                    new LoginRequest("admin", "pass"),
+                    "ANDROID",
                     "known-device",
                     "Pixel",
                     "10.0.0.1",

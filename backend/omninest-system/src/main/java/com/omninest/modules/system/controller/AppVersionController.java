@@ -5,6 +5,7 @@ import com.omninest.modules.system.dto.AppVersionDto;
 import com.omninest.modules.system.service.AppVersionPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +36,7 @@ public class AppVersionController {
      */
     @Operation(summary = "查询最新客户端版本", description = "返回管理员配置的最新版本号、发布说明与下载页地址")
     @GetMapping("/version")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<AppVersionDto> version() {
         return ApiResponse.success(
                 new AppVersionDto(

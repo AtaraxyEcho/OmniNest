@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.modules.file.domain.FileFavorite;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -34,6 +35,7 @@ public class FileFavoriteService {
     private final FileNodeRepository fileNodeRepository;
     private final FileNodeSupport fileNodeSupport;
     private final FileSyncEventWriter syncEventWriter;
+    private final SharedSpaceService sharedSpaceService;
 
     /**
      * 分页查询当前用户收藏的文件。
@@ -108,7 +110,17 @@ public class FileFavoriteService {
      */
     @Transactional(rollbackFor = Exception.class)
     public List<FileNodeDto> batchAddFavorites(UUID ownerUserId, List<UUID> fileIds) {
-        List<FileNode> nodes = fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds);
+        // 与单文件收藏同口径：自己的节点直接可见，他人节点只有共享空间且具备浏览权限时可见。
+        List<FileNode> candidates = fileNodeRepository.findAllById(fileIds).stream()
+                .filter(node -> !node.isDeleted())
+                .toList();
+        boolean sharedSpaceVisible = candidates.stream()
+                .anyMatch(node -> !Objects.equals(node.getOwnerUserId(), ownerUserId))
+                && sharedSpaceService.canBrowse(ownerUserId);
+        List<FileNode> nodes = candidates.stream()
+                .filter(node -> Objects.equals(node.getOwnerUserId(), ownerUserId)
+                        || (sharedSpaceVisible && node.getSpaceType() == SpaceType.SHARED))
+                .toList();
         if (nodes.isEmpty()) {
             return List.of();
         }

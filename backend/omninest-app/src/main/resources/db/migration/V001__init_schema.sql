@@ -2386,7 +2386,7 @@ CREATE UNIQUE INDEX "uk_storage_connector_oauth_apps_code" ON "omni"."storage_co
 );
 
 CREATE TABLE "omni"."storage_import_tasks" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "owner_user_id" uuid NOT NULL,
   "external_account_id" uuid NOT NULL,
   "source_path" varchar(1024) NOT NULL,
@@ -2418,7 +2418,7 @@ COMMENT ON COLUMN "omni"."storage_import_tasks"."completed_files" IS '已完成�
 COMMENT ON COLUMN "omni"."storage_import_tasks"."current_file_name" IS '当前扫描、传输或入库的文件相对路径';
 
 CREATE TABLE "omni"."storage_remote_metadata_cache" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "external_account_id" uuid NOT NULL,
   "remote_path" varchar(1024) NOT NULL,
   "metadata_json" jsonb NOT NULL,
@@ -2428,7 +2428,7 @@ CREATE TABLE "omni"."storage_remote_metadata_cache" (
 ;
 
 CREATE TABLE "omni"."sync_event_checkpoints" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "checkpoint_key" varchar(64) NOT NULL,
   "sequence_no" int8 NOT NULL DEFAULT 0,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
@@ -2542,7 +2542,7 @@ CREATE TABLE "omni"."user_preferences" (
   "preferences" jsonb NOT NULL DEFAULT '{}'::jsonb,
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0,
-  "created_at" timestamptz(6) NOT NULL
+  "created_at" timestamptz(6) NOT NULL DEFAULT now()
 )
 ;
 COMMENT ON COLUMN "omni"."user_preferences"."id" IS '主键 ID。';

@@ -39,6 +39,20 @@ public interface ActiveSessionRepository extends JpaRepository<AuthActiveSession
             UUID userId, String clientPlatform);
 
     /**
+     * 判断该用户在此平台是否曾使用过该设备。
+     *
+     * <p>不能只看未撤销会话：同平台互斥与正常退出都会把旧会话置为已撤销，
+     * 只看存活会话会把常用设备反复判成新设备并重复告警。</p>
+     *
+     * @param userId 用户标识
+     * @param clientPlatform 归一化后的平台标识
+     * @param deviceId 有界设备标识
+     * @return 存在历史会话时返回 true
+     */
+    boolean existsByUserIdAndClientPlatformAndDeviceId(
+            UUID userId, String clientPlatform, String deviceId);
+
+    /**
      * 按创建时间从新到旧查询会话。
      *
      * @param pageable 分页参数

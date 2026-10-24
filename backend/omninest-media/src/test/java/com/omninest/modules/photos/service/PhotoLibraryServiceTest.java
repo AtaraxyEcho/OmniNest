@@ -236,40 +236,6 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
-    void listPhotos_returnsUserPhotos() {
-        // 验证 listPhotos 返回指定用户的照片列表
-        PhotoItem photo1 = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "风景照片");
-        PhotoItem photo2 = photoItem(PHOTO_ID_2, FILE_NODE_ID_2, COVER_FILE_ID_2, "人物照片");
-
-        when(photoItemRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
-                .thenReturn(List.of(photo1, photo2));
-        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(
-                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
-                .thenReturn(List.of());
-        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(
-                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
-                .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any()))
-                .thenReturn(Map.of(
-                        COVER_FILE_ID_1,
-                        downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"),
-                        COVER_FILE_ID_2,
-                        downloadUrl(COVER_FILE_ID_2, "photo2.jpg", "http://minio/photo2")));
-
-        List<PhotoItemDto> result = service.listPhotos(OWNER_ID);
-
-        // 验证返回两张照片
-        assertThat(result).hasSize(2);
-        assertThat(result).extracting(PhotoItemDto::title).containsExactly("风景照片", "人物照片");
-
-        // 验证非收藏状态
-        assertThat(result).allSatisfy(dto -> assertThat(dto.favorite()).isFalse());
-
-        // 验证缩略图 URL 已解析
-        assertThat(result).allSatisfy(dto -> assertThat(dto.coverUrl()).isNotBlank());
-    }
-
-    @Test
     void photoDetail_returnsSourceUrlWithoutExpandingListPayload() {
         PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "详情照片");
         when(photoItemRepository.findByOwnerUserIdAndId(OWNER_ID, PHOTO_ID_1))
