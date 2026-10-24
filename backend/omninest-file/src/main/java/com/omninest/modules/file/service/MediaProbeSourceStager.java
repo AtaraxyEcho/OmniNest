@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.dto.FileContentRange;
 import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileProcessInput;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -10,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +49,8 @@ public class MediaProbeSourceStager {
     /** 放大尾窗：默认窗探测为空且对象确实超出已覆盖字节时，只再多试这一档。 */
     public static final long ESCALATED_TAIL_BYTES = 32L * 1024 * 1024;
     private static final int COPY_BUFFER_BYTES = 64 * 1024;
+    /** 首尾窗口都失败时的整文件兜底上限；超过该大小不再整份落盘，避免填满临时卷。 */
+    private static final long MAX_FULL_STAGE_BYTES = 4L * 1024 * 1024 * 1024;
     private static final Path PROCESSING_ROOT = Path.of(
             System.getProperty("java.io.tmpdir"), "omninest-probe");
 
@@ -93,6 +97,10 @@ public class MediaProbeSourceStager {
                 Optional<FileContentRange> range = fileContentAccessService.openRange(node, tailOffset, tailBytes);
                 if (range.isEmpty()) {
                     deleteQuietly(tempFile);
+                    Optional<StagedSource> local = localFileSource(node);
+                    if (local.isPresent()) {
+                        return local;
+                    }
                     log.warn("媒体探测暂存跳过，内容提供者不支持区间读: fileId={}", node.getId());
                     return Optional.empty();
                 }
@@ -106,6 +114,61 @@ public class MediaProbeSourceStager {
                 deleteQuietly(tempFile);
             }
             log.warn("媒体探测暂存失败: fileId={}, message={}", node.getId(), e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 整文件兜底暂存：仅当首尾窗口与放大尾窗都读不到索引时使用。
+     *
+     * <p>超大对象不整份落盘；超过 {@link #MAX_FULL_STAGE_BYTES} 时返回空，
+     * 由调用方保留元数据为空而不是把临时卷写满。</p>
+     *
+     * @param node 已完成权限校验的文件节点
+     * @return 完整本地文件；超限或读取失败时为空
+     */
+    public Optional<StagedSource> stageFull(FileNode node) {
+        Path tempFile = null;
+        try (FileContentStream content = fileContentAccessService.open(node)) {
+            long totalBytes = content.sizeBytes();
+            if (totalBytes <= 0 || totalBytes > MAX_FULL_STAGE_BYTES) {
+                log.warn("整文件探测暂存跳过，大小超限或未知: fileId={}, sizeBytes={}",
+                        node.getId(), totalBytes);
+                return Optional.empty();
+            }
+            Files.createDirectories(PROCESSING_ROOT);
+            tempFile = Files.createTempFile(PROCESSING_ROOT, "probe-full-", ".bin");
+            Files.copy(content.inputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+            return Optional.of(new StagedSource(tempFile, true, totalBytes, totalBytes));
+        } catch (IOException | RuntimeException exception) {
+            deleteQuietly(tempFile);
+            log.warn("整文件探测暂存失败: fileId={}, errorType={}",
+                    node.getId(), exception.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 本地只读来源不需要复制：直接把 File 模块暴露的本机路径交给 ffprobe。
+     *
+     * <p>LOCAL_FILESYSTEM 提供者不支持区间读，但它本来就与后端共享只读挂载，
+     * 完整文件已是本地路径，走复制反而多付一次磁盘峰值。</p>
+     */
+    private Optional<StagedSource> localFileSource(FileNode node) {
+        try {
+            FileProcessInput input = fileContentAccessService.createProcessInput(node);
+            if (!"LOCAL_FILESYSTEM".equals(input.providerType())) {
+                return Optional.empty();
+            }
+            Path path = Path.of(input.input());
+            if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
+                return Optional.empty();
+            }
+            long size = Files.size(path);
+            return Optional.of(new StagedSource(path, false, size, size));
+        } catch (RuntimeException | IOException exception) {
+            log.warn("本地媒体探测输入解析失败: fileId={}, errorType={}",
+                    node.getId(), exception.getClass().getSimpleName());
             return Optional.empty();
         }
     }
@@ -170,7 +233,7 @@ public class MediaProbeSourceStager {
         private final long totalBytes;
         private final long coveredBytes;
 
-        private StagedSource(Path path, boolean tempFile, long totalBytes, long coveredBytes) {
+        public StagedSource(Path path, boolean tempFile, long totalBytes, long coveredBytes) {
             this.path = path;
             this.tempFile = tempFile;
             this.totalBytes = totalBytes;

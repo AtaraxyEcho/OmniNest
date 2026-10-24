@@ -144,7 +144,7 @@ API/Worker 各 768M（堆 ≤320M，**不要设置 MaxMetaspaceSize**）、Sched
 `mem_limit` 约 896m、堆 ≤384m；仍不要设置过小的 `MaxMetaspaceSize`。
 
 Photos 图像分析侧车使用 CPU 推理，无需 GPU；仅在 `COMPOSE_PROFILES=photo-ai`
-时启动。RapidOCR 模型随镜像内置，视觉档的 `mobileclip2_s0_vision_int8.onnx` 与
+时启动。RapidOCR 模型随镜像内置，视觉档的 `mobileclip2_s0_vision_fp32.onnx` 与
 `policy_text_embeds.npz` 不会自动下载，必须按 `vision-sidecar/DEPLOYMENT.md` 预先放入
 `omninest-ai-models` 卷。侧车就绪后还要在配置中心把 `photo.ai.enabled` 置为 `true`：
 基线内置值为 `false`，图像分析在管理员显式开启前不会对任何照片执行。
@@ -177,28 +177,26 @@ profile 是所有 Compose 子命令共同的筛选条件——`up -d` 没带上�
 
 ### 出网执行体的网络分区
 
-三张网的成员表（prod 与 dev 同形状）：
+两张网的成员表（prod 与 dev 同形状）：
 
 | 网络 | 成员 | internal | 为什么 |
 | :-- | :-- | :-- | :-- |
 | `egress` | `rclone`，prod 还含 backend 三种运行角色 | 否 | 它必须出公网（外部存储读写），但不能碰数据面 |
-| `media` | `ffmpeg` 独占，`minio` 双挂 | **是** | 容器模式的探测/转码/截帧把预签名地址交给 `docker exec omninest-ffmpeg`，而媒体内容内嵌的远程引用是 ffmpeg 自己去取的，提交前的地址校验覆盖不到那批地址 |
 | `default` | 其余全部服务 | 否 | 数据面与宿主回环发布 |
 
-三条实测性质决定了这个形状：
+独立 ffmpeg 容器已移除：探测、转码与抽帧都在 backend 容器本地执行，
+媒体内容内嵌的远程引用由强制 demuxer 与 `protocol_whitelist` 收口，
+不再依赖一张 internal 网兜底。探测与转码临时目录分别挂到
+`omninest-probe-tmp` / `omninest-transcode-tmp` 命名卷，避免数 GB 视频写满 OverlayFS。
 
-- 跨 user-defined 网络既不互通也不解析。dev 实测：`ffmpeg` 在 `media` 上取 minio 预签名地址成功，
-  而播放列表里内嵌的另一个网络上的分片地址报 `Failed to resolve hostname`，对照靶收到的请求为 0；
-  公网同样不可达。
-- `internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、宿主连不上）。
-  所以 `egress` 故意不设 `internal`；`media` 只给**不发布端口**的 `ffmpeg` 独占，
-  要发布 9001 的 `minio` 必须同时留在非 internal 的 `default` 上（实测宿主回环 9000=403、9001=200 不变）。
-- 只挂 internal 网的服务一旦加上 `ports:` 会静默失效，`ComposeNetworkTopologyTest` 对这条有专门断言。
+`internal: true` 与发布端口互斥（internal 网络上的容器发布端口不生效，`Ports` 为空、宿主连不上），
+所以 `egress` 故意不设 `internal`；只挂 internal 网的服务一旦加上 `ports:` 会静默失效，
+`ComposeNetworkTopologyTest` 对这条有专门断言。
 
 网络分区不依赖 `OMNINEST_DOCKER_SUBNET` 的取值，但改动子网时必须同步
-`OMNINEST_DOCKER_DYNAMIC_IP_RANGE` 与 nginx 固定地址；`egress` 与 `media` 各自的
-`OMNINEST_EGRESS_SUBNET` / `OMNINEST_MEDIA_SUBNET` 不得与宿主局域网重叠。
-成员表由 `ComposeNetworkTopologyTest` 逐字钉住，新增服务时该测试会要求同时决定它进哪张网。
+`OMNINEST_DOCKER_DYNAMIC_IP_RANGE` 与 nginx 固定地址；`OMNINEST_EGRESS_SUBNET`
+不得与宿主局域网重叠。成员表由 `ComposeNetworkTopologyTest` 逐字钉住，
+新增服务时该测试会要求同时决定它进哪张网。
 
 应用后核对容器实际所在网络，不依赖 compose 文件推断：
 

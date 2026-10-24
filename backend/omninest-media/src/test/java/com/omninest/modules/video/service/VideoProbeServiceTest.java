@@ -1,9 +1,7 @@
 package com.omninest.modules.video.service;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -12,24 +10,24 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
-import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.file.service.FileProbeSourceService;
+import com.omninest.modules.file.service.MediaProbeSourceStager;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.event.VideoSubtitleExtractEvent;
 import com.omninest.modules.video.repository.MediaSubtitleTrackRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -46,7 +44,10 @@ class VideoProbeServiceTest {
     private static final UUID ITEM_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID FILE_NODE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
-    private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    @TempDir
+    Path tempDir;
+
+    private final FileProbeSourceService fileProbeSourceService = mock(FileProbeSourceService.class);
     private final MediaVideoItemRepository videoItemRepository = mock(MediaVideoItemRepository.class);
     private final MediaSubtitleTrackRepository subtitleTrackRepository = mock(MediaSubtitleTrackRepository.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
@@ -58,7 +59,7 @@ class VideoProbeServiceTest {
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final ApplicationEventPublisher applicationEventPublisher = mock(ApplicationEventPublisher.class);
     private final VideoProbeService service = new VideoProbeService(
-            fileQueryService,
+            fileProbeSourceService,
             videoItemRepository,
             subtitleTrackRepository,
             taskRecordService,
@@ -97,22 +98,6 @@ class VideoProbeServiceTest {
     }
 
     @Test
-    void shouldStopCopyingAtConfiguredByteLimit() throws Exception {
-        byte[] source = new byte[32];
-        Arrays.fill(source, (byte) 7);
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-
-        long copied = VideoProbeService.copyAtMost(
-                new ByteArrayInputStream(source),
-                output,
-                12
-        );
-
-        assertEquals(12, copied);
-        assertArrayEquals(Arrays.copyOf(source, 12), output.toByteArray());
-    }
-
-    @Test
     void reprobeWithSameStreamsKeepsSubtitleRowIdsWithoutExtraRows() throws Exception {
         enableLocalProbe();
         stubProbeOutput(SINGLE_SUBTITLE_PROBE_JSON, SINGLE_SUBTITLE_PROBE_JSON);
@@ -148,28 +133,91 @@ class VideoProbeServiceTest {
         verify(subtitleTrackRepository).deleteAllByIdIn(eq(OWNER_ID), argThat(ids -> ids.size() == 1));
     }
 
+
+    @Test
+    void probeRetriesWithWiderTailWhenFirstWindowFindsNoMetadata() throws Exception {
+        enableLocalProbe();
+        // ffprobe 已被桩住，路径只需存在语义；不落真实文件，避免 Windows 临时目录清理竞态。
+        Path shallow = Path.of("probe-shallow.bin");
+        Path wide = Path.of("probe-wide.bin");
+        when(fileProbeSourceService.stageOwned(OWNER_ID, FILE_NODE_ID))
+                .thenReturn(Optional.of(new MediaProbeSourceStager.StagedSource(
+                        shallow, false, 100, 16)));
+        when(fileProbeSourceService.stageOwned(
+                OWNER_ID, FILE_NODE_ID, MediaProbeSourceStager.ESCALATED_TAIL_BYTES))
+                .thenReturn(Optional.of(new MediaProbeSourceStager.StagedSource(
+                        wide, false, 100, 100)));
+        when(processExecutor.execute(
+                argThat(command -> command != null && command.contains("-show_streams")),
+                any()
+        )).thenReturn(
+                new VideoProcessExecutor.Result(1, "", false, false),
+                new VideoProcessExecutor.Result(0, SINGLE_SUBTITLE_PROBE_JSON, false, false)
+        );
+        MediaVideoItem item = videoItem();
+
+        service.probe(item);
+
+        verify(fileProbeSourceService).stageOwned(
+                OWNER_ID, FILE_NODE_ID, MediaProbeSourceStager.ESCALATED_TAIL_BYTES);
+        assertEquals("matroska", item.getContainerFormat());
+    }
+
+    @Test
+    void probeFallsBackToFullFileWhenBothWindowsFail() throws Exception {
+        enableLocalProbe();
+        // 同上：路径不落真实文件，ffprobe 结果由桩提供。
+        Path shallow = Path.of("probe-shallow-full.bin");
+        Path wide = Path.of("probe-wide-full.bin");
+        Path full = Path.of("probe-full.bin");
+        when(fileProbeSourceService.stageOwned(OWNER_ID, FILE_NODE_ID))
+                .thenReturn(Optional.of(new MediaProbeSourceStager.StagedSource(
+                        shallow, false, 100, 16)));
+        when(fileProbeSourceService.stageOwned(
+                OWNER_ID, FILE_NODE_ID, MediaProbeSourceStager.ESCALATED_TAIL_BYTES))
+                .thenReturn(Optional.of(new MediaProbeSourceStager.StagedSource(
+                        wide, false, 100, 32)));
+        when(fileProbeSourceService.stageOwnedFull(OWNER_ID, FILE_NODE_ID))
+                .thenReturn(Optional.of(new MediaProbeSourceStager.StagedSource(
+                        full, false, 100, 100)));
+        when(processExecutor.execute(
+                argThat(command -> command != null && command.contains("-show_streams")),
+                any()
+        )).thenReturn(
+                new VideoProcessExecutor.Result(1, "", false, false),
+                new VideoProcessExecutor.Result(1, "", false, false),
+                new VideoProcessExecutor.Result(0, SINGLE_SUBTITLE_PROBE_JSON, false, false)
+        );
+        MediaVideoItem item = videoItem();
+
+        service.probe(item);
+
+        verify(fileProbeSourceService).stageOwnedFull(OWNER_ID, FILE_NODE_ID);
+        assertEquals("matroska", item.getContainerFormat());
+    }
+
     @Test
     void probeByVideoItemIdDelegatesSubtitleExtractionToAsyncPath() throws Exception {
         MediaVideoItem item = videoItem();
         when(videoItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
         // 探测片段读取失败时 probe 内部降级返回，不影响提取事件发布断言。
-        when(fileQueryService.openOwnedFileContent(OWNER_ID, FILE_NODE_ID))
-                .thenThrow(new IllegalStateException("内容不可读"));
+        when(fileProbeSourceService.stageOwned(OWNER_ID, FILE_NODE_ID))
+                .thenReturn(Optional.empty());
 
         service.probeByVideoItemId(OWNER_ID, ITEM_ID);
 
-        // 修复前在请求线程内同步逐轨提取（每轨一路 ffmpeg 容器，上限 180 分钟）。
-        verify(videoTranscodeService, never()).extractSubtitleToWebVtt(any(), any(), any(), anyInt());
+        // 修复前在请求线程内同步逐轨提取（每轨一路 ffmpeg 进程，上限 180 分钟）。
+        verify(videoTranscodeService, never()).extractSubtitlesToWebVtt(any(), any(), any(), any());
         ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         assertEquals(VideoSubtitleExtractEvent.class, eventCaptor.getValue().getClass());
 
         // 异步监听器本体仍完成提取：直接调用方法体验证，绕过 @Async 代理。
         trackStore.add(embeddedTrack(3, 1));
-        when(videoTranscodeService.extractSubtitleToWebVtt(OWNER_ID, FILE_NODE_ID, ITEM_ID, 3))
-                .thenThrow(new IllegalStateException("容器不可用"));
+        when(videoTranscodeService.extractSubtitlesToWebVtt(OWNER_ID, FILE_NODE_ID, ITEM_ID, List.of(3)))
+                .thenThrow(new IllegalStateException("ffmpeg 不可用"));
         service.onSubtitleExtractRequest(new VideoSubtitleExtractEvent(item));
-        verify(videoTranscodeService).extractSubtitleToWebVtt(OWNER_ID, FILE_NODE_ID, ITEM_ID, 3);
+        verify(videoTranscodeService).extractSubtitlesToWebVtt(OWNER_ID, FILE_NODE_ID, ITEM_ID, List.of(3));
     }
 
     private void enableLocalProbe() throws Exception {
@@ -188,15 +236,12 @@ class VideoProbeServiceTest {
         );
     }
 
-    private void stubContentReadable() {
-        when(fileQueryService.openOwnedFileContent(OWNER_ID, FILE_NODE_ID)).thenReturn(
-                new FileContentStream(
-                        new ByteArrayInputStream("video-bytes".getBytes()),
-                        "movie.mkv",
-                        11,
-                        "video/x-matroska"
-                )
-        );
+    private void stubContentReadable() throws Exception {
+        Path staged = tempDir.resolve("probe-source.bin");
+        Files.write(staged, "video-bytes".getBytes());
+        when(fileProbeSourceService.stageOwned(OWNER_ID, FILE_NODE_ID))
+                .thenReturn(Optional.of(new MediaProbeSourceStager.StagedSource(
+                        staged, false, Files.size(staged), Files.size(staged))));
     }
 
     private MediaVideoItem videoItem() {

@@ -53,7 +53,7 @@ public class ResourceShareLinkService {
         String tokenHash = sha256(rawToken);
         requireAuthenticationRateLimit(tokenHash, clientAddress);
         ShareLink link = requireValidLink(tokenHash, expectedResourceType);
-        verifyPassword(link, password);
+        verifyPassword(link, password, clientAddress);
         ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
                 tokenHash,
                 sessionResourceType(expectedResourceType, link),
@@ -73,7 +73,7 @@ public class ResourceShareLinkService {
         String tokenHash = sha256(rawToken);
         requireAuthenticationRateLimit(tokenHash, clientAddress);
         ShareLink link = requireValidLink(tokenHash, expectedResourceType);
-        verifyPassword(link, password);
+        verifyPassword(link, password, clientAddress);
         consume(link);
         ShareAccessSessionService.IssuedSession session = shareAccessSessionService.issue(
                 tokenHash,
@@ -353,7 +353,7 @@ public class ResourceShareLinkService {
     @Transactional(rollbackFor = Exception.class)
     public ResourceShareLinkDto authorize(String rawToken, String password, String expectedResourceType) {
         ShareLink link = requireValidLink(sha256(rawToken), expectedResourceType);
-        verifyPassword(link, password);
+        verifyPassword(link, password, null);
         consume(link);
         ShareLink consumed = shareLinkRepository.findById(link.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
@@ -373,20 +373,22 @@ public class ResourceShareLinkService {
         return link;
     }
 
-    private void verifyPassword(ShareLink link, String password) {
+    private void verifyPassword(ShareLink link, String password, String clientAddress) {
         if (link.getPasswordHash() == null) {
             return;
         }
-        String attemptKey = "share-pwd-attempt:" + link.getTokenHash();
+        // 未提交口令只是"页面首次探测"，不属于错误尝试；必须先返回密码要求，
+        // 否则访客刷新几次就会耗尽该链接的全局错误额度。
+        if (password == null || password.isBlank()) {
+            throw new BusinessException(ErrorCode.SHARE_PASSWORD_REQUIRED, "需要访问密码");
+        }
+        String attemptKey = "share-pwd-attempt:" + link.getTokenHash() + ":"
+                + sha256(clientAddress == null || clientAddress.isBlank() ? "unknown" : clientAddress);
         if (!rateLimitService.tryAcquire(attemptKey, 5, Duration.ofMinutes(15))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
         }
-        if (password == null || !passwordEncoder.matches(password, link.getPasswordHash())) {
-            throw new BusinessException(
-                    password == null || password.isBlank()
-                            ? ErrorCode.SHARE_PASSWORD_REQUIRED
-                            : ErrorCode.PASSWORD_INVALID,
-                    password == null || password.isBlank() ? "需要访问密码" : "密码错误");
+        if (!passwordEncoder.matches(password, link.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
         }
     }
 

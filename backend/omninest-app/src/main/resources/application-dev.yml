@@ -86,10 +86,9 @@ omninest:
     # 公开默认 JWT secret 在所有 profile 拒绝启动；dev 开箱即用依赖此显式豁免，
     # 仅限本机回环调试，绑定局域网地址前必须改用独立密钥。
     allow-insecure-local-secret: true
-    # 外部存储凭据 AES-GCM 密钥：不提供弱回退默认值。需要外部存储凭据
-    # 功能时在 backend/.env 显式配置（32 字节 Base64）；未配置时相关操作
-    # 报"外部凭据加密密钥未配置"，不影响其余开发功能。
-    credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}
+    # 外部存储凭据、分享口令与 TOTP 密钥共用的 AES-GCM KEK。生产必须显式配置；
+    # dev 提供固定的公开测试密钥，保证本地创建分享、绑定 2FA 开箱可用。
+    credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:b21uaW5lc3QtZGV2LWNyZWRlbnRpYWwta2V5LTAwMDE=}
     refresh-cookie-secure: ${OMNINEST_SECURITY_REFRESH_COOKIE_SECURE:false}
     refresh-cookie-same-site: ${OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE:STRICT}
     registration-enabled: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:false}

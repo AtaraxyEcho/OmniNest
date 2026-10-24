@@ -34,6 +34,13 @@ public class FileUploadSession {
     @Column(name = "target_parent_id")
     private UUID targetParentId;
 
+    /**
+     * 本次上传要覆盖的历史文件节点；创建会话时按此节点确定空间与配额。
+     * 完成阶段只读本字段，客户端不得再改目标。
+     */
+    @Column(name = "as_version_of_file_id")
+    private UUID asVersionOfFileId;
+
     @Column(name = "file_name", nullable = false, length = 255)
     private String fileName;
 

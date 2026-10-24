@@ -104,12 +104,16 @@ class FileStorageMetricsServiceTest {
         var result = service.userStorageStats(USER_ID);
 
         assertThat(result.quotaBytes()).isEqualTo(1024L * 1024L);
-        assertThat(result.usedBytes()).isEqualTo(3072L);
+        assertThat(result.usedBytes()).isEqualTo(4096L);
         assertThat(result.quotaStatus()).isEqualTo("NORMAL");
         assertThat(result.totalFiles()).isEqualTo(2);
         assertThat(result.totalFolders()).isEqualTo(1);
         assertThat(result.typeDistribution())
                 .extracting("category")
-                .containsExactlyInAnyOrder("视频", "文档");
+                .containsExactlyInAnyOrder("视频", "文档", "历史版本与回收站");
+        assertThat(result.typeDistribution())
+                .filteredOn(stat -> "历史版本与回收站".equals(stat.category()))
+                .singleElement()
+                .satisfies(stat -> assertThat(stat.sizeBytes()).isEqualTo(1024L));
     }
 }

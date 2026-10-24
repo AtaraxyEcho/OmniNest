@@ -39,6 +39,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 分享访问服务。
@@ -63,57 +65,6 @@ public class FileShareAccessService {
     private final StorageQuotaService storageQuotaService;
     private final UserSyncEventRecorder syncEventRecorder;
     private final FileIndexSyncService fileIndexSyncService;
-
-    /**
-     * 通过分享 token 与密码访问文件并消费一次访问次数。
-     *
-     * @param rawToken 分享明文 token
-     * @param password 分享密码，可空
-     * @return 分享文件访问结果
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public FileShareAccessDto shareAccess(String rawToken, String password) {
-        String tokenHash = FileShareService.sha256(rawToken);
-        requireShareRateLimit(tokenHash, null);
-        ShareLink link = findShareLinkCached(tokenHash);
-        if (link.getDisabledAt() != null) {
-            throw new BusinessException(ErrorCode.CONFLICT, "分享链接已撤销");
-        }
-        if (link.getExpiresAt() != null && Instant.now().isAfter(link.getExpiresAt())) {
-            throw new BusinessException(ErrorCode.CONFLICT, "分享链接已过期");
-        }
-        if (link.getPasswordHash() != null) {
-            if (password == null || !passwordEncoder.matches(password, link.getPasswordHash())) {
-                throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
-            }
-        }
-        link = consumeShareAccess(link, tokenHash);
-
-        FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
-                        link.getResourceId(),
-                        link.getOwnerUserId()
-                )
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在或已被删除"));
-        log.info(
-                "分享链接被访问: shareId={}, accessCount={}, fileName={}",
-                link.getId(),
-                link.getAccessCount(),
-                node.getName()
-        );
-        FileDownloadUrlDto downloadUrl = fileQueryService.createDownloadUrl(link.getOwnerUserId(), node.getId());
-
-        // 发送分享被访问通知
-        try {
-            notificationService.create(link.getOwnerUserId(), "SHARE_ACCESSED",
-                    "分享被访问", "有人访问了您分享的文件: " + node.getName(),
-                    Map.of("shareId", link.getId().toString(), "fileName", node.getName()));
-        } catch (Exception e) {
-            log.warn("发送分享访问通知失败: shareId={}", link.getId(), e);
-        }
-
-        return new FileShareAccessDto(node.getName(), node.getMimeType(), node.getSizeBytes(),
-                downloadUrl.downloadUrl(), link.getResourceType());
-    }
 
     /**
      * 预览分享链接内容（公开端点，无需登录）。
@@ -216,7 +167,44 @@ public class FileShareAccessService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ShareAccessSessionDto issueShareSession(String rawToken, String password, String clientAddress) {
-        return resourceShareLinkService.issueConsumedSession(rawToken, password, null, clientAddress);
+        ShareAccessSessionDto session = resourceShareLinkService.issueConsumedSession(
+                rawToken, password, null, clientAddress);
+        notifyShareAccessedAfterCommit(FileShareService.sha256(rawToken));
+        return session;
+    }
+
+    private void notifyShareAccessedAfterCommit(String tokenHash) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notifyShareAccessed(tokenHash);
+                }
+            });
+            return;
+        }
+        notifyShareAccessed(tokenHash);
+    }
+
+    private void notifyShareAccessed(String tokenHash) {
+        try {
+            ShareLink link = findShareLinkCached(tokenHash);
+            FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
+                            link.getResourceId(), link.getOwnerUserId())
+                    .orElse(null);
+            if (node == null) {
+                return;
+            }
+            notificationService.notifyOrLog(
+                    link.getOwnerUserId(),
+                    "SHARE_ACCESSED",
+                    "分享被访问",
+                    "有人访问了您分享的文件: " + node.getName(),
+                    Map.of("shareId", link.getId().toString(), "fileName", node.getName())
+            );
+        } catch (RuntimeException exception) {
+            log.warn("发送分享访问通知失败: errorType={}", exception.getClass().getSimpleName());
+        }
     }
 
     /**

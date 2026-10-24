@@ -5,17 +5,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * FFmpeg 运行位置探测：优先使用后端容器内自带的 ffmpeg，其次回退到
- * {@code docker exec omninest-ffmpeg}。
+ * FFmpeg 运行探测：后端镜像内置 ffmpeg，所有转码、探测与实时流都在本机执行。
  *
- * <p>生产后端镜像已安装 ffmpeg，但没有 docker CLI 与 docker.sock；转码、字幕提取
- * 与实时流若硬编码 docker exec 会 100% 失败。探测延迟到首次使用，避免应用启动时
- * 阻塞在子进程超时上。</p>
+ * <p>探测延迟到首次使用，避免应用启动时阻塞在子进程超时上。生产编排不再维护
+ * 独立的 ffmpeg 容器与 docker socket：后者需要给后端挂 docker CLI，反而扩大权限面。</p>
  *
  * @author OmniNest
  */
@@ -23,13 +20,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class VideoFfmpegRuntime {
 
-    public static final String DOCKER_CONTAINER = "omninest-ffmpeg";
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(15);
 
     /**
      * ffmpeg 运行方式。
      */
-    public enum Mode { LOCAL, DOCKER, DISABLED }
+    public enum Mode { LOCAL, DISABLED }
 
     private final VideoProcessExecutor processExecutor;
     private volatile Mode mode;
@@ -56,10 +52,6 @@ public class VideoFfmpegRuntime {
         }
     }
 
-    public boolean isDocker() {
-        return mode() == Mode.DOCKER;
-    }
-
     public boolean isDisabled() {
         return mode() == Mode.DISABLED;
     }
@@ -69,12 +61,8 @@ public class VideoFfmpegRuntime {
             log.info("ffmpeg 可用（本地），视频转码与实时流已启用");
             return Mode.LOCAL;
         }
-        if (canRun(List.of("docker", "exec", DOCKER_CONTAINER, "ffmpeg", "-version"))) {
-            log.info("ffmpeg 可用（Docker 容器 {}），视频转码与实时流已启用", DOCKER_CONTAINER);
-            return Mode.DOCKER;
-        }
         log.warn("ffmpeg 不可用，视频转码、字幕提取与实时音频流将不可用。"
-                + "请在后端镜像安装 ffmpeg 或启动 ffmpeg 容器并授予 docker CLI");
+                + "请在后端镜像安装 ffmpeg。");
         return Mode.DISABLED;
     }
 
@@ -130,51 +118,5 @@ public class VideoFfmpegRuntime {
         return lower.startsWith("http://") || lower.startsWith("https://")
                 ? "http,https,tcp,tls"
                 : "file,crypto,data";
-    }
-
-    /**
-     * 为实时流构建带容器内 PID 记录的 docker exec 命令。
-     *
-     * <p>包装 shell 记录 {@code $$} 后 exec ffmpeg：destroy 客户端进程不会杀掉容器内
-     * 的 ffmpeg，收尾时可按 PID 文件精确终止，避免拖动进度条累积孤儿进程。</p>
-     *
-     * @param marker 本次流的唯一标记
-     * @param ffmpegArgs ffmpeg 参数（含程序名之后的全部参数）
-     * @return 完整命令
-     */
-    public List<String> dockerStreamCommand(String marker, List<String> ffmpegArgs) {
-        String pidFile = pidFile(marker);
-        String script = "echo $$ > " + pidFile + "; exec ffmpeg \"$@\"";
-        List<String> command = new ArrayList<>();
-        command.add("docker");
-        command.add("exec");
-        command.add(DOCKER_CONTAINER);
-        command.add("sh");
-        command.add("-c");
-        command.add(script);
-        command.add("ffmpeg");
-        command.addAll(ffmpegArgs);
-        return command;
-    }
-
-    /**
-     * 终止容器内由 {@link #dockerStreamCommand} 启动的 ffmpeg。
-     *
-     * @param marker 流标记
-     * @return 终止命令执行器；调用方负责执行
-     */
-    public List<String> dockerKillCommand(String marker) {
-        String pidFile = pidFile(marker);
-        String script = "pid=$(cat " + pidFile + " 2>/dev/null); "
-                + "if [ -n \"$pid\" ]; then kill -9 \"$pid\" 2>/dev/null; fi; rm -f " + pidFile;
-        return List.of("docker", "exec", DOCKER_CONTAINER, "sh", "-c", script);
-    }
-
-    public String newMarker() {
-        return UUID.randomUUID().toString();
-    }
-
-    private String pidFile(String marker) {
-        return "/tmp/omninest-stream-" + marker + ".pid";
     }
 }

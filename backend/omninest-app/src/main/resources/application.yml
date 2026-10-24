@@ -191,6 +191,8 @@ omninest:
     file-index-concurrency: 1
     text-extraction-concurrency: 2
     media-concurrency: 1
+    # 与 vision-sidecar 的两路推理并发对齐；Worker 连接池 8，留足心跳与其他消费者。
+    photo-ai-concurrency: ${OMNINEST_WORKER_PHOTO_AI_CONCURRENCY:2}
   messaging:
     rabbit:
       maximum-message-bytes: 1048576

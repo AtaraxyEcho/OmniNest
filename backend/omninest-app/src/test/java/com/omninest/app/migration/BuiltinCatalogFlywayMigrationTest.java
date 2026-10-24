@@ -151,14 +151,13 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteNotificationTypeDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.notification_types")).isEqualTo(13);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.notification_types")).isEqualTo(12);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
                     VALUES
                         ('TASK_COMPLETED'),
                         ('TASK_FAILED'),
-                        ('SHARE_ACCESS'),
                         ('SYSTEM_MESSAGE'),
                         ('MEDIA_SCRAPED'),
                         ('SHARE_ACCESSED'),

@@ -497,6 +497,20 @@ class SharedSpaceServiceTest {
         }
 
         @Test
+        @DisplayName("父节点是文件：抛出 FILE_PATH_INVALID")
+        void createFolder_parentIsFile_throws() {
+            UUID parentId = UUID.randomUUID();
+            stubPermission(USER_A, true, false, false, false, false, false, false, true);
+            when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(parentId, SpaceType.SHARED))
+                    .thenReturn(Optional.of(sharedFile(parentId, USER_A, "movie.mkv", 1024)));
+
+            assertThatThrownBy(() -> service.createFolder(parentId, "sub", USER_A))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(ex -> ((BusinessException) ex).errorCode())
+                    .isEqualTo(ErrorCode.FILE_PATH_INVALID);
+        }
+
+        @Test
         @DisplayName("同名冲突：抛出 CONFLICT")
         void createFolder_nameConflict_throws() {
             stubPermission(USER_A, true, false, false, false, false, false, false, true);

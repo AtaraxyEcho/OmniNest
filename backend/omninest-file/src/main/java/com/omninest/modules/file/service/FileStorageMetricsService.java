@@ -13,6 +13,7 @@ import com.omninest.modules.quota.port.StorageMetricsQuery;
 import com.omninest.modules.quota.port.StorageMetricsSnapshot;
 import com.omninest.modules.quota.port.StorageQuotaPolicy;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -121,7 +122,15 @@ public class FileStorageMetricsService implements StorageMetricsQuery {
                         entry.getValue()[1]
                 ))
                 .toList();
-        long usedBytes = typeStats.values().stream().mapToLong(value -> value[1]).sum();
+        long activeBytes = typeStats.values().stream().mapToLong(value -> value[1]).sum();
+        // 文件页的已用量必须与配额账本一致：账本还包含回收站、历史版本与背景/编辑派生
+        // 原片，而按 MIME 聚合只覆盖活跃的个人文件。差额单列一类，避免进度条失真。
+        long usedBytes = user == null ? activeBytes : user.usedBytes();
+        if (usedBytes > activeBytes) {
+            List<FileTypeStatsDto> withHistory = new ArrayList<>(distribution);
+            withHistory.add(new FileTypeStatsDto("历史版本与回收站", 0L, usedBytes - activeBytes));
+            distribution = List.copyOf(withHistory);
+        }
         boolean superAdmin = user != null && user.superAdmin();
         long quotaBytes = superAdmin ? -1L : (user == null ? 0L : user.quotaBytes());
         String quotaStatus = storageQuotaPolicy.resolveStatus(

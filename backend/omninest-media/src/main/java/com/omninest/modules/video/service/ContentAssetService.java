@@ -14,6 +14,7 @@ import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
 import com.omninest.modules.video.repository.ContentAssetRepository;
 import java.time.Instant;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +22,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class ContentAssetService {
+    private static final int SCREENSHOT_DOWNLOAD_PARALLELISM = 4;
     private final ContentAssetRepository contentAssetRepository;
     private final FileQueryService fileQueryService;
     private final DerivedAssetStorageService derivedAssetStorageService;
@@ -61,15 +69,72 @@ public class ContentAssetService {
         metadata.put("provider", provider);
         metadata.put("externalId", externalId);
         metadata.put("scrapedAt", Instant.now().toString());
-        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
-        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        int added = 0;
+
+        // 远程下载与派生入库先于任何事务完成：不能一边占着数据库连接一边等外部图片。
+        record DownloadedScreenshot(String url, int sortOrder, UUID fileNodeId) {
+        }
+        Semaphore downloadPermits = new Semaphore(SCREENSHOT_DOWNLOAD_PARALLELISM);
+        List<Callable<DownloadedScreenshot>> tasks = new ArrayList<>();
+        int nextSortOrder = sortOrder;
         for (String url : screenshotUrls) {
             String normalizedUrl = url == null ? "" : url.trim();
             if (normalizedUrl.isBlank() || existingUrls.contains(normalizedUrl)) {
                 continue;
             }
-            final int currentSortOrder = sortOrder++;
+            int currentSortOrder = nextSortOrder++;
+            tasks.add(() -> {
+                downloadPermits.acquireUninterruptibly();
+                try {
+                    UUID fileNodeId = storeRemoteAsset(
+                            item.getOwnerUserId(),
+                            item.getId(),
+                            AssetType.SCREENSHOT.getValue(),
+                            normalizedUrl,
+                            provider
+                    );
+                    return fileNodeId == null
+                            ? null
+                            : new DownloadedScreenshot(normalizedUrl, currentSortOrder, fileNodeId);
+                } finally {
+                    downloadPermits.release();
+                }
+            });
+        }
+        if (tasks.isEmpty()) {
+            return;
+        }
+
+        List<DownloadedScreenshot> downloaded = new ArrayList<>(tasks.size());
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<DownloadedScreenshot>> futures;
+            try {
+                futures = executor.invokeAll(tasks);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            for (Future<DownloadedScreenshot> future : futures) {
+                try {
+                    DownloadedScreenshot screenshot = future.get();
+                    if (screenshot != null) {
+                        downloaded.add(screenshot);
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (ExecutionException exception) {
+                    log.warn("单张剧照预取失败，跳过: itemId={}, errorType={}",
+                            item.getId(), exception.getCause() == null
+                                    ? exception.getClass().getSimpleName()
+                                    : exception.getCause().getClass().getSimpleName());
+                }
+            }
+        }
+
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        int added = 0;
+        for (DownloadedScreenshot screenshot : downloaded) {
             try {
                 txTemplate.executeWithoutResult(status -> {
                     ContentAsset asset = new ContentAsset();
@@ -77,23 +142,22 @@ public class ContentAssetService {
                     asset.setResourceType(ResourceType.VIDEO_ITEM.getValue());
                     asset.setResourceId(item.getId());
                     asset.setAssetType(AssetType.SCREENSHOT.getValue());
-                    asset.setExternalUrl(normalizedUrl);
+                    asset.setExternalUrl(screenshot.url());
                     asset.setProvider(provider);
-                    asset.setSortOrder(currentSortOrder);
+                    asset.setSortOrder(screenshot.sortOrder());
                     asset.setPrimary(false);
                     asset.setMetadata(metadata);
-                    UUID fileNodeId = storeRemoteAsset(item.getOwnerUserId(), item.getId(), AssetType.SCREENSHOT.getValue(), normalizedUrl, provider);
-                    asset.setFileNodeId(fileNodeId);
+                    asset.setFileNodeId(screenshot.fileNodeId());
                     contentAssetRepository.save(asset);
                 });
                 added++;
-            } catch (RuntimeException ex) {
-                log.warn("单张剧照同步失败，跳过: itemId={}, errorType={}",
-                        item.getId(), ex.getClass().getSimpleName(), ex);
+            } catch (RuntimeException exception) {
+                log.warn("单张剧照落库失败，跳过: itemId={}, errorType={}",
+                        item.getId(), exception.getClass().getSimpleName());
             }
         }
         if (added > 0) {
-            log.info("剧照同步完成: itemId={}, added={}, total={}", item.getId(), added, sortOrder);
+            log.info("剧照同步完成: itemId={}, added={}, total={}", item.getId(), added, nextSortOrder);
         }
     }
 
@@ -116,15 +180,18 @@ public class ContentAssetService {
         if (ownerUserId == null || seriesId == null || candidate == null) {
             return new SeriesAssetResult(null, null);
         }
-        UUID posterFileId = upsertPrimaryAssetWithType(
-                ownerUserId, seriesId, ResourceType.TV_SERIES.getValue(),
-                AssetType.POSTER.getValue(), candidate.posterUrl(),
-                candidate.provider(), candidateMetadata(candidate), 0);
-        UUID backdropFileId = upsertPrimaryAssetWithType(
-                ownerUserId, seriesId, ResourceType.TV_SERIES.getValue(),
-                AssetType.BACKDROP.getValue(), candidate.backdropUrl(),
-                candidate.provider(), candidateMetadata(candidate), 1);
-        return new SeriesAssetResult(posterFileId, backdropFileId);
+        Map<String, Object> metadata = candidateMetadata(candidate);
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<UUID> poster = executor.submit(() -> upsertPrimaryAssetWithType(
+                    ownerUserId, seriesId, ResourceType.TV_SERIES.getValue(),
+                    AssetType.POSTER.getValue(), candidate.posterUrl(),
+                    candidate.provider(), metadata, 0));
+            Future<UUID> backdrop = executor.submit(() -> upsertPrimaryAssetWithType(
+                    ownerUserId, seriesId, ResourceType.TV_SERIES.getValue(),
+                    AssetType.BACKDROP.getValue(), candidate.backdropUrl(),
+                    candidate.provider(), metadata, 1));
+            return new SeriesAssetResult(getQuietly(poster), getQuietly(backdrop));
+        }
     }
 
     /**
@@ -134,15 +201,33 @@ public class ContentAssetService {
         if (ownerUserId == null || movieId == null || candidate == null) {
             return new MovieAssetResult(null, null);
         }
-        UUID posterFileId = upsertPrimaryAssetWithType(
-                ownerUserId, movieId, ResourceType.MOVIE.getValue(),
-                AssetType.POSTER.getValue(), candidate.posterUrl(),
-                candidate.provider(), candidateMetadata(candidate), 0);
-        UUID backdropFileId = upsertPrimaryAssetWithType(
-                ownerUserId, movieId, ResourceType.MOVIE.getValue(),
-                AssetType.BACKDROP.getValue(), candidate.backdropUrl(),
-                candidate.provider(), candidateMetadata(candidate), 1);
-        return new MovieAssetResult(posterFileId, backdropFileId);
+        Map<String, Object> metadata = candidateMetadata(candidate);
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<UUID> poster = executor.submit(() -> upsertPrimaryAssetWithType(
+                    ownerUserId, movieId, ResourceType.MOVIE.getValue(),
+                    AssetType.POSTER.getValue(), candidate.posterUrl(),
+                    candidate.provider(), metadata, 0));
+            Future<UUID> backdrop = executor.submit(() -> upsertPrimaryAssetWithType(
+                    ownerUserId, movieId, ResourceType.MOVIE.getValue(),
+                    AssetType.BACKDROP.getValue(), candidate.backdropUrl(),
+                    candidate.provider(), metadata, 1));
+            return new MovieAssetResult(getQuietly(poster), getQuietly(backdrop));
+        }
+    }
+
+    private UUID getQuietly(Future<UUID> future) {
+        try {
+            return future.get();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException exception) {
+            log.warn("并行同步主资产异常: errorType={}",
+                    exception.getCause() == null
+                            ? exception.getClass().getSimpleName()
+                            : exception.getCause().getClass().getSimpleName());
+            return null;
+        }
     }
 
     /**

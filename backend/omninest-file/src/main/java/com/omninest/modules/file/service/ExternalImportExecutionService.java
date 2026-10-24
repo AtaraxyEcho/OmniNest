@@ -41,15 +41,18 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
@@ -379,68 +382,78 @@ public class ExternalImportExecutionService {
 
         AtomicLong partBytesRead = new AtomicLong(0);
         AtomicReference<Throwable> error = new AtomicReference<>();
-        CountDownLatch latch = new CountDownLatch(parts.size());
+        int concurrency = Math.min(MULTIPART_CONCURRENCY, parts.size());
+        Semaphore permits = new Semaphore(concurrency);
+        List<ObjectStorageCompletedPart> completedParts =
+                Collections.synchronizedList(new ArrayList<>(parts.size()));
 
-        ExecutorService executor = Executors.newFixedThreadPool(
-                Math.min(MULTIPART_CONCURRENCY, parts.size()),
-                Thread.ofVirtual().factory()
-        );
-
-        try {
-            List<ObjectStorageCompletedPart> completedParts = new ArrayList<>();
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> futures = new ArrayList<>(parts.size());
             for (PartRange part : parts) {
-                executor.submit(() -> {
+                futures.add(executor.submit(() -> {
                     if (error.get() != null || isCancelled(taskId)) {
-                        latch.countDown();
                         return;
                     }
-                    try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
-                        raf.seek(part.offset());
-                        InputStream partStream = ExternalImportStreams.bounded(
-                                raf, part.length(), bytesRead -> {
-                            long total = baseTransferred + partBytesRead.get() + bytesRead;
-                            updateTransferredBytes(taskId, total);
-                        });
-                        ObjectStorageCompletedPart completed =
-                                objectStorageClient.uploadPart(
-                                        key,
-                                        uploadId,
-                                        part.partNumber(),
-                                        partStream,
-                                        part.length()
-                                );
-                        synchronized (completedParts) {
-                            completedParts.add(completed);
+                    boolean acquired = false;
+                    try {
+                        permits.acquire();
+                        acquired = true;
+                        if (error.get() != null || isCancelled(taskId)) {
+                            return;
                         }
-                        partBytesRead.addAndGet(part.length());
-                    } catch (Throwable t) {
-                        error.compareAndSet(null, t);
+                        try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
+                            raf.seek(part.offset());
+                            InputStream partStream = ExternalImportStreams.bounded(
+                                    raf, part.length(), bytesRead -> {
+                                long total = baseTransferred + partBytesRead.get() + bytesRead;
+                                updateTransferredBytes(taskId, total);
+                            });
+                            ObjectStorageCompletedPart completed =
+                                    objectStorageClient.uploadPart(
+                                            key,
+                                            uploadId,
+                                            part.partNumber(),
+                                            partStream,
+                                            part.length()
+                                    );
+                            completedParts.add(completed);
+                            partBytesRead.addAndGet(part.length());
+                        }
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        error.compareAndSet(null, exception);
+                    } catch (Throwable throwable) {
+                        error.compareAndSet(null, throwable);
                     } finally {
-                        latch.countDown();
+                        if (acquired) {
+                            permits.release();
+                        }
                     }
-                });
+                }));
             }
-
-            latch.await();
-
-            if (error.get() != null) {
-                objectStorageClient.abortMultipartUpload(key, uploadId);
-                throw new IllegalStateException("分片上传失败", error.get());
+            for (Future<?> future : futures) {
+                future.get();
             }
-            if (isCancelled(taskId)) {
-                objectStorageClient.abortMultipartUpload(key, uploadId);
-                return;
-            }
-
-            completedParts.sort(Comparator.comparingInt(ObjectStorageCompletedPart::partNumber));
-            objectStorageClient.completeMultipartUpload(key, uploadId, completedParts);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException exception) {
             objectStorageClient.abortMultipartUpload(key, uploadId);
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("分片上传被中断", e);
-        } finally {
-            executor.shutdown();
+            throw new IllegalStateException("分片上传被中断", exception);
+        } catch (ExecutionException exception) {
+            objectStorageClient.abortMultipartUpload(key, uploadId);
+            throw new IllegalStateException("分片上传失败", exception.getCause());
         }
+
+        if (error.get() != null) {
+            objectStorageClient.abortMultipartUpload(key, uploadId);
+            throw new IllegalStateException("分片上传失败", error.get());
+        }
+        if (isCancelled(taskId)) {
+            objectStorageClient.abortMultipartUpload(key, uploadId);
+            return;
+        }
+
+        completedParts.sort(Comparator.comparingInt(ObjectStorageCompletedPart::partNumber));
+        objectStorageClient.completeMultipartUpload(key, uploadId, completedParts);
     }
 
     /** 计算文件分片信息。 */

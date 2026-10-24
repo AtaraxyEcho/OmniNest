@@ -36,7 +36,10 @@ public class PhotoAiConsumer {
      * @param channel RabbitMQ 通道
      * @throws IOException ACK 或 NACK 失败时抛出
      */
-    @RabbitListener(queues = QueueNames.PHOTO_AI_QUEUE)
+    @RabbitListener(
+            queues = QueueNames.PHOTO_AI_QUEUE,
+            concurrency = "${omninest.worker.photo-ai-concurrency:2}"
+    )
     public void handle(PhotoAiEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         try {

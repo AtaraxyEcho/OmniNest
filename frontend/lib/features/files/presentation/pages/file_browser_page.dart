@@ -306,9 +306,16 @@ _FileNavDestination? _destinationForSection(FileManagerSection section) {
 }
 
 class FileBrowserPage extends ConsumerStatefulWidget {
-  const FileBrowserPage({super.key, this.initialSection});
+  const FileBrowserPage({
+    super.key,
+    this.initialSection,
+    this.initialOAuthStatus,
+  });
 
   final FileManagerSection? initialSection;
+
+  /// 外部存储 OAuth 回调状态（success/error）；只消费一次。
+  final String? initialOAuthStatus;
 
   @override
   ConsumerState<FileBrowserPage> createState() => _FileBrowserPageState();
@@ -318,6 +325,16 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   /// 已处理过的深链分区：同一分区不再重复进入，否则用户从子页返回模块首页后
   /// 会被 build 再次弹回子页（「退不出去」）。widget.initialSection 变化时复位。
   FileManagerSection? _handledInitialSection;
+
+  @override
+  void initState() {
+    super.initState();
+    scheduleFileOAuthStatusFeedback(
+      context: context,
+      ref: ref,
+      status: widget.initialOAuthStatus,
+    );
+  }
 
   /// 深链进来的那一帧：state 还没换成目标分区，先按子页渲染，
   /// 否则顶栏与底部 tab 会在家页面闪一帧再收起。回首页时清除。

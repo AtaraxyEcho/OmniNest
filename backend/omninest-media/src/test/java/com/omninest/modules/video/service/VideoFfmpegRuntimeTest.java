@@ -36,15 +36,4 @@ class VideoFfmpegRuntimeTest {
         assertThat(command).containsSubsequence("-i", "http://minio:9000/video.mp4", "-c:v", "copy");
     }
 
-    @Test
-    @DisplayName("docker 命令带 PID 文件包装，便于终止容器内孤儿进程")
-    void dockerStreamCommandWrapsWithPidFile() {
-        String marker = runtime.newMarker();
-        List<String> command = runtime.dockerStreamCommand(marker, List.of("-y", "-i", "http://x"));
-        String script = command.get(command.indexOf("-c") + 1);
-
-        assertThat(command).startsWith("docker", "exec", VideoFfmpegRuntime.DOCKER_CONTAINER);
-        assertThat(script).contains("/tmp/omninest-stream-" + marker + ".pid");
-        assertThat(runtime.dockerKillCommand(marker)).hasSize(6);
-    }
 }

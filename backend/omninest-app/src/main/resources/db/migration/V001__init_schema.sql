@@ -708,6 +708,7 @@ CREATE TABLE "omni"."file_upload_sessions" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "owner_user_id" uuid NOT NULL,
   "target_parent_id" uuid,
+  "as_version_of_file_id" uuid,
   "file_name" varchar(255) NOT NULL,
   "total_size_bytes" int8 NOT NULL,
   "part_size_bytes" int4 NOT NULL DEFAULT 0,
@@ -734,6 +735,7 @@ CREATE TABLE "omni"."file_upload_sessions" (
 COMMENT ON COLUMN "omni"."file_upload_sessions"."id" IS '会话唯一标识，主键';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."owner_user_id" IS '所属用户ID，关联auth_users';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."target_parent_id" IS '目标父级文件夹ID，关联file_nodes';
+COMMENT ON COLUMN "omni"."file_upload_sessions"."as_version_of_file_id" IS '创建会话时确定的版本目标文件节点ID；完成阶段只读此列';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."file_name" IS '上传文件名';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."total_size_bytes" IS '上传总大小字节数';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."part_size_bytes" IS '分片大小字节数';
@@ -1996,14 +1998,14 @@ CREATE TABLE "omni"."reader_bookshelf" (
 COMMENT ON TABLE "omni"."reader_bookshelf" IS '书架表，记录用户加入书架的书籍';
 
 CREATE TABLE "omni"."reader_catalog_nodes" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "reader_item_id" uuid NOT NULL,
   "parent_id" uuid,
   "node_type" varchar(20) NOT NULL,
   "title" varchar(500) NOT NULL,
   "sort_index" int4 NOT NULL DEFAULT 0,
   "page_count" int4 DEFAULT 0,
-  "created_at" timestamp(6) NOT NULL DEFAULT now(),
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "source_id" uuid,
   "catalog_key" varchar(500),
   "page_start_index" int4,
@@ -2012,14 +2014,14 @@ CREATE TABLE "omni"."reader_catalog_nodes" (
 ;
 
 CREATE TABLE "omni"."reader_item_sources" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "reader_item_id" uuid NOT NULL,
   "file_node_id" uuid NOT NULL,
   "content_hash" varchar(64) NOT NULL,
   "file_format" varchar(20) NOT NULL,
   "source_name" varchar(500),
   "page_count" int4 DEFAULT 0,
-  "created_at" timestamp(6) NOT NULL DEFAULT now(),
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "source_sort_key" varchar(200),
   "status" varchar(20) NOT NULL DEFAULT 'READY'::character varying,
   "error_code" varchar(50),
@@ -2058,7 +2060,7 @@ CREATE TABLE "omni"."reader_items" (
   "import_status" varchar(20) NOT NULL DEFAULT 'READY'::character varying,
   "parse_error_code" varchar(50),
   "parse_error_message" text,
-  "parsed_at" timestamp(6)
+  "parsed_at" timestamptz(6)
 )
 ;
 COMMENT ON COLUMN "omni"."reader_items"."file_node_id" IS '原始文件节点ID，关联 file_nodes（MinIO 存储）';
@@ -2109,7 +2111,7 @@ COMMENT ON COLUMN "omni"."reader_notes"."client_operation_id" IS '客户端离�
 COMMENT ON TABLE "omni"."reader_notes" IS '自由笔记表，可独立存在也可关联到全书某个位置';
 
 CREATE TABLE "omni"."reader_page_assets" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "page_id" uuid NOT NULL,
   "reader_item_id" uuid NOT NULL,
   "source_id" uuid NOT NULL,
@@ -2118,7 +2120,7 @@ CREATE TABLE "omni"."reader_page_assets" (
   "mime_type" varchar(50) NOT NULL,
   "byte_size" int8 NOT NULL,
   "checksum" varchar(64),
-  "created_at" timestamp(6) NOT NULL DEFAULT now()
+  "created_at" timestamptz(6) NOT NULL DEFAULT now()
 )
 ;
 COMMENT ON COLUMN "omni"."reader_page_assets"."id" IS '页级派生资源唯一标识';
@@ -2135,7 +2137,7 @@ COMMENT ON COLUMN "omni"."reader_page_assets"."created_at" IS '创建时间';
 COMMENT ON TABLE "omni"."reader_page_assets" IS '漫画页面派生资源表，保存页级图片对象索引';
 
 CREATE TABLE "omni"."reader_pages" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "reader_item_id" uuid NOT NULL,
   "source_id" uuid NOT NULL,
   "catalog_node_id" uuid,
@@ -2144,7 +2146,7 @@ CREATE TABLE "omni"."reader_pages" (
   "width" int4,
   "height" int4,
   "fingerprint" varchar(64),
-  "created_at" timestamp(6) NOT NULL DEFAULT now(),
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "entry_index" int4,
   "mime_type" varchar(50),
   "byte_size" int8,
@@ -2436,7 +2438,7 @@ CREATE TABLE "omni"."sync_event_checkpoints" (
 ;
 
 CREATE TABLE "omni"."sync_events" (
-  "id" uuid NOT NULL,
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "sequence_no" int8 NOT NULL GENERATED ALWAYS AS IDENTITY (
 INCREMENT 1
 MINVALUE  1

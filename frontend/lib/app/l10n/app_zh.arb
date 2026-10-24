@@ -432,6 +432,8 @@
   "filesExternalEmptyTitle": "还没有挂载存储",
   "filesExternalEmptyMessage": "添加 OneDrive、WebDAV 等来源后，可在这里浏览并导入文件。",
   "filesExternalCredentialsMissing": "未配置凭据",
+  "filesExternalOAuthSuccess": "外部存储授权完成。",
+  "filesExternalOAuthFailed": "外部存储授权失败，请重试。",
   "filesExternalBrowseFailedTitle": "读取挂载目录失败",
   "filesExternalBrowseEmptyMessage": "这个目录里没有可浏览的文件。",
   "filesImportEmptyTitle": "还没有导入任务",

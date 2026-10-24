@@ -115,7 +115,7 @@ public class FileIngressScanRetryService {
         rejectSession(event.ingressItemId());
         notificationPublisher.notifyOrLog(
                 event.ownerUserId(),
-                "FILE_SECURITY",
+                "SECURITY_SCAN_FAILED",
                 title,
                 message,
                 Map.of("ingressItemId", event.ingressItemId().toString())

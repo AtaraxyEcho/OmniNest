@@ -192,8 +192,6 @@ INSERT INTO omni.notification_types (
         '异步任务执行成功', 'check_circle_rounded', '#34D399', 1, true),
     ('6bc8f367-bd04-44b9-b42d-e1fa3a8bf991', 'TASK_FAILED', '任务失败',
         '异步任务执行失败', 'error_rounded', '#F87171', 2, true),
-    ('e22d8ccc-4436-485c-836b-81b261f10a7e', 'SHARE_ACCESS', '分享访问',
-        '有人访问了你的分享链接', 'share_rounded', '#60A5FA', 3, true),
     ('04a66418-1bd8-4339-8c88-80ef76a2847e', 'SYSTEM_MESSAGE', '系统消息',
         '系统级通知', 'info_rounded', '#C3C0FF', 4, true),
     ('a1b2c3d4-5678-9abc-def0-111111111111', 'MEDIA_SCRAPED', '元数据刮削',

@@ -188,6 +188,7 @@ public class FileUploadSessionService {
         session.setId(sessionId);
         session.setOwnerUserId(ownerUserId);
         session.setTargetParentId(parent == null ? null : parent.getId());
+        session.setAsVersionOfFileId(asVersionOfFileId);
         session.setFileName(fileName);
         session.setTotalSizeBytes(request.sizeBytes());
         session.setPartSizeBytes(partSizeBytes);
@@ -227,6 +228,7 @@ public class FileUploadSessionService {
         session.setId(sessionId);
         session.setOwnerUserId(ownerUserId);
         session.setTargetParentId(parent == null ? null : parent.getId());
+        session.setAsVersionOfFileId(request.asVersionOfFileId());
         session.setFileName(fileName);
         session.setTotalSizeBytes(request.sizeBytes());
         session.setPartSizeBytes(Math.toIntExact(Math.min(request.sizeBytes(), Integer.MAX_VALUE)));
@@ -308,8 +310,8 @@ public class FileUploadSessionService {
         ensureAllPartsCompleted(session, parts);
 
         resolveParent(ownerUserId, session.getTargetParentId(), session.getSpaceType());
-        UUID asVersionOfFileIdForCheck = request == null ? null : request.asVersionOfFileId();
-        if (asVersionOfFileIdForCheck == null
+        UUID asVersionOfFileId = resolveCompletionVersionTarget(ownerUserId, session, request);
+        if (asVersionOfFileId == null
                 && sameNameExists(ownerUserId, session.getSpaceType(), session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
@@ -319,7 +321,34 @@ public class FileUploadSessionService {
         fileUploadSessionRepository.save(session);
         objectStorageClient.completeMultipartUpload(key, session.getUploadId(), toCompletedParts(parts));
 
-        return dispatchSecurityScan(ownerUserId, session, request == null ? null : request.asVersionOfFileId());
+        return dispatchSecurityScan(ownerUserId, session, asVersionOfFileId);
+    }
+
+    /**
+     * 版本目标只认创建会话时持久化的值。
+     *
+     * <p>创建阶段已按该目标确定空间、共享权限与配额；完成阶段再从请求读一次，
+     * 客户端就能在两次调用之间把个人会话改成共享版本上传（或反过来）绕过校验。</p>
+     */
+    private UUID resolveCompletionVersionTarget(
+            UUID ownerUserId,
+            FileUploadSession session,
+            CompleteFileUploadRequest request
+    ) {
+        UUID stored = session.getAsVersionOfFileId();
+        UUID requested = request == null ? null : request.asVersionOfFileId();
+        if (requested != null && !requested.equals(stored)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "版本目标与上传会话不一致");
+        }
+        if (stored == null) {
+            return null;
+        }
+        FileNode target = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(stored, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "版本目标文件不存在"));
+        if (target.getSpaceType() != session.getSpaceType()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "版本目标空间已变化，请重新开始上传");
+        }
+        return stored;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -452,7 +481,7 @@ public class FileUploadSessionService {
         }
 
         resolveParent(ownerUserId, session.getTargetParentId(), session.getSpaceType());
-        UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
+        UUID asVersionOfFileId = resolveCompletionVersionTarget(ownerUserId, session, request);
         if (asVersionOfFileId == null
                 && sameNameExists(ownerUserId, session.getSpaceType(), session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");

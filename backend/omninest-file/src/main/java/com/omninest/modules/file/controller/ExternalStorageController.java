@@ -128,7 +128,7 @@ public class ExternalStorageController {
                 if (("http".equalsIgnoreCase(baseUri.getScheme())
                         || "https".equalsIgnoreCase(baseUri.getScheme()))
                         && baseUri.getHost() != null) {
-                    String target = normalized + "/files?oauth="
+                    String target = normalized + "/#/files?oauth="
                             + URLEncoder.encode(status, StandardCharsets.UTF_8);
                     return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(target)).build();
                 }

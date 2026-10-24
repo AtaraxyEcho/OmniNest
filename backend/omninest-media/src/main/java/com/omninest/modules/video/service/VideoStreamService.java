@@ -8,7 +8,6 @@ import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -22,8 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * Web 端流式音频转码服务。
- * 优先在后端容器本地启动 ffmpeg；缺少本地 ffmpeg 时回退到 docker exec。
+ * Web 端流式音频转码服务，在后端容器本地启动 ffmpeg。
  *
  * @author OmniNest
  */
@@ -45,7 +43,6 @@ public class VideoStreamService {
     private final MediaContentAccessService mediaContentAccessService;
     private final VideoStreamProperties streamProperties;
     private final VideoFfmpegRuntime ffmpegRuntime;
-    private final VideoProcessExecutor processExecutor;
 
     /**
      * 同一时刻允许的实时 ffmpeg 流数。
@@ -58,9 +55,6 @@ public class VideoStreamService {
 
     /** 同一观看者同一影片只保留最新一路 ffmpeg；拖动进度条重开流时先杀掉旧进程。 */
     private final Map<String, Process> activeStreams = new ConcurrentHashMap<>();
-
-    /** docker 模式下的容器内进程标记，用于 destroy 客户端后终止容器内 ffmpeg。 */
-    private final Map<Process, String> containerStreamMarkers = new ConcurrentHashMap<>();
 
     /**
      * 占用一路实时转码槽位，取不到时返回可重试的业务错误。
@@ -90,15 +84,13 @@ public class VideoStreamService {
             VideoSourceInputResolver sourceInputResolver,
             MediaContentAccessService mediaContentAccessService,
             VideoStreamProperties streamProperties,
-            VideoFfmpegRuntime ffmpegRuntime,
-            VideoProcessExecutor processExecutor
+            VideoFfmpegRuntime ffmpegRuntime
     ) {
         this.videoItemRepository = videoItemRepository;
         this.sourceInputResolver = sourceInputResolver;
         this.mediaContentAccessService = mediaContentAccessService;
         this.streamProperties = streamProperties;
         this.ffmpegRuntime = ffmpegRuntime;
-        this.processExecutor = processExecutor;
         this.streamSlots = new Semaphore(Math.max(1, streamProperties.getMaxConcurrentStreams()), true);
     }
 
@@ -249,7 +241,6 @@ public class VideoStreamService {
             ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
             pb.redirectErrorStream(false);
             process = pb.start();
-            registerContainerMarker(process, streamCommand.marker());
             registerActiveStream(streamKey, process);
             log.info("ffmpeg 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
@@ -334,7 +325,6 @@ public class VideoStreamService {
             ProcessBuilder pb = new ProcessBuilder(streamCommand.command());
             pb.redirectErrorStream(false);
             process = pb.start();
-            registerContainerMarker(process, streamCommand.marker());
             registerActiveStream(streamKey, process);
             log.info("ffmpeg mux 进程已启动: pid={}", process.pid());
             final Process ffmpegProcess = process;
@@ -439,33 +429,27 @@ public class VideoStreamService {
     }
 
     /**
-     * 按运行位置构建完整命令：两种模式都限制协议，docker 模式另加带 PID 文件的 shell 包装。
+     * 构建完整命令：本机 ffmpeg 前插入协议白名单。
      */
     StreamCommand buildStreamCommand(List<String> ffmpegArgs, List<String> inputs) {
         if (ffmpegRuntime.isDisabled()) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "ffmpeg 不可用，无法实时转码");
         }
         List<String> args = new ArrayList<>();
-        // 协议白名单必须出现在第一个 -i 之前。本地后端容器与 ffmpeg 容器都持有本地挂载，
-        // 且本机进程还有出网能力，不能让媒体内容里的 file:/concat: 引用成为读取或跳板。
+        // 协议白名单必须出现在第一个 -i 之前。本机进程持有本地挂载且还有出网能力，
+        // 不能让媒体内容里的 file:/concat: 引用成为读取或跳板。
         args.add("-protocol_whitelist");
         args.add(combinedProtocolWhitelist(inputs));
         args.addAll(ffmpegArgs);
-        if (ffmpegRuntime.isDocker()) {
-            String marker = ffmpegRuntime.newMarker();
-            return new StreamCommand(ffmpegRuntime.dockerStreamCommand(marker, args), marker);
-        }
         List<String> command = new ArrayList<>();
         command.add("ffmpeg");
         command.add("-y");
         command.addAll(args);
-        return new StreamCommand(command, null);
+        return new StreamCommand(command);
     }
 
     private String resolveInput(UUID ownerUserId, UUID fileNodeId) {
-        return ffmpegRuntime.isDocker()
-                ? sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId)
-                : sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
+        return sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
     }
 
     private String combinedProtocolWhitelist(List<String> inputs) {
@@ -485,23 +469,12 @@ public class VideoStreamService {
         return lower.startsWith("http://") || lower.startsWith("https://");
     }
 
-    private void registerContainerMarker(Process process, String marker) {
-        if (process != null && marker != null) {
-            containerStreamMarkers.put(process, marker);
-        }
-    }
-
-    record StreamCommand(List<String> command, String marker) {
+    record StreamCommand(List<String> command) {
     }
 
     private void terminateProcess(Process process) {
         if (process == null) {
             return;
-        }
-        // docker exec 客户端被销毁后容器内 ffmpeg 仍可能存活；先按 PID 文件终止容器内进程。
-        String marker = containerStreamMarkers.remove(process);
-        if (marker != null) {
-            terminateContainerProcess(marker);
         }
         process.destroyForcibly();
         try {
@@ -523,23 +496,6 @@ public class VideoStreamService {
             process.getOutputStream().close();
         } catch (IOException e) {
             log.debug("关闭已销毁进程流失败: {}", e.getMessage());
-        }
-    }
-
-    private void terminateContainerProcess(String marker) {
-        try {
-            VideoProcessExecutor.Result result = processExecutor.execute(
-                    ffmpegRuntime.dockerKillCommand(marker),
-                    Duration.ofSeconds(10)
-            );
-            if (!result.succeeded()) {
-                log.debug("终止容器内 ffmpeg 未确认: timedOut={}, exitCode={}",
-                        result.timedOut(), result.exitCode());
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-        } catch (IOException exception) {
-            log.debug("终止容器内 ffmpeg 失败: errorType={}", exception.getClass().getSimpleName());
         }
     }
 

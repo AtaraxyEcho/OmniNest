@@ -388,6 +388,56 @@ class FileQueryServiceTest {
     }
 
     @Test
+    void renameNodeRejectsSharedSpaceNode() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-00000000000b");
+        FileNode shared = node(OWNER_ID, null, "FILE", "shared.txt", "/shared.txt");
+        shared.setId(fileId);
+        shared.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, OWNER_ID))
+                .thenReturn(Optional.of(shared));
+
+        assertThatThrownBy(() -> fileQueryService.renameNode(
+                OWNER_ID, fileId, new RenameFileNodeRequest("renamed.txt")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verify(fileNodeRepository, never()).save(ArgumentMatchers.any(FileNode.class));
+    }
+
+    @Test
+    void moveNodeRejectsSharedSpaceNode() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-00000000000c");
+        FileNode shared = node(OWNER_ID, null, "FILE", "shared.txt", "/shared.txt");
+        shared.setId(fileId);
+        shared.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileId, OWNER_ID))
+                .thenReturn(Optional.of(shared));
+
+        assertThatThrownBy(() -> fileQueryService.moveNode(
+                OWNER_ID, fileId, new MoveFileNodeRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verify(fileNodeRepository, never()).save(ArgumentMatchers.any(FileNode.class));
+    }
+
+    @Test
+    void batchMoveNodesRejectsSharedSpaceNodesPerItem() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-00000000000d");
+        FileNode shared = node(OWNER_ID, null, "FILE", "shared.txt", "/shared.txt");
+        shared.setId(fileId);
+        shared.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(OWNER_ID, List.of(fileId)))
+                .thenReturn(List.of(shared));
+
+        List<BatchItemResult> results = fileQueryService.batchMoveNodes(OWNER_ID, List.of(fileId), null);
+
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.status()).isEqualTo("FAILED");
+            assertThat(result.errorCode()).isEqualTo(ErrorCode.FORBIDDEN.name());
+        });
+        verify(fileNodeRepository, never()).save(ArgumentMatchers.any(FileNode.class));
+    }
+
+    @Test
     void renameFolderUpdatesNodeAndDescendantPaths() {
         UUID folderId = UUID.fromString("40000000-0000-0000-0000-000000000002");
         FileNode folder = node(OWNER_ID, null, "FOLDER", "Docs", "/Docs");

@@ -2,8 +2,6 @@ package com.omninest.modules.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -20,7 +18,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 /**
  * VideoStreamService 单元测试。
@@ -37,15 +34,13 @@ class VideoStreamServiceTest {
     private final VideoSourceInputResolver sourceInputResolver = mock(VideoSourceInputResolver.class);
     private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
     private final VideoFfmpegRuntime ffmpegRuntime = mock(VideoFfmpegRuntime.class);
-    private final VideoProcessExecutor processExecutor = mock(VideoProcessExecutor.class);
 
     private final VideoStreamService service = new VideoStreamService(
             videoItemRepository,
             sourceInputResolver,
             mediaContentAccessService,
             new VideoStreamProperties(),
-            ffmpegRuntime,
-            processExecutor
+            ffmpegRuntime
     );
 
     @Test
@@ -197,22 +192,16 @@ class VideoStreamServiceTest {
     }
 
     @Test
-    void streamCommandAppliesProtocolWhitelistInDockerMode() {
+    void streamCommandAppliesProtocolWhitelistBeforeInput() {
         when(ffmpegRuntime.isDisabled()).thenReturn(false);
-        when(ffmpegRuntime.isDocker()).thenReturn(true);
-        when(ffmpegRuntime.newMarker()).thenReturn("marker");
-        when(ffmpegRuntime.dockerStreamCommand(anyString(), anyList()))
-                .thenReturn(List.of("docker", "exec", "omninest-ffmpeg", "ffmpeg"));
 
-        service.buildStreamCommand(
+        List<String> command = service.buildStreamCommand(
                 List.of("-i", "http://minio/movie.mp4"),
                 List.of("http://minio/movie.mp4")
-        );
+        ).command();
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<String>> argsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(ffmpegRuntime).dockerStreamCommand(anyString(), argsCaptor.capture());
-        assertThat(argsCaptor.getValue()).containsSubsequence(
-                "-protocol_whitelist", "http,https,tcp,tls", "-i", "http://minio/movie.mp4");
+        assertThat(command).containsSubsequence(
+                "ffmpeg", "-y", "-protocol_whitelist", "http,https,tcp,tls",
+                "-i", "http://minio/movie.mp4");
     }
 }

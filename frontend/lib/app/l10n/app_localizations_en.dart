@@ -1274,6 +1274,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesExternalCredentialsMissing => 'Credentials missing';
 
   @override
+  String get filesExternalOAuthSuccess => 'Storage authorization completed.';
+
+  @override
+  String get filesExternalOAuthFailed =>
+      'Storage authorization failed. Please try again.';
+
+  @override
   String get filesExternalBrowseFailedTitle =>
       'Cannot read the mount directory';
 

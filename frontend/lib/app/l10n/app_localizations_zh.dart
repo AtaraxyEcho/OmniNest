@@ -1214,6 +1214,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesExternalCredentialsMissing => '未配置凭据';
 
   @override
+  String get filesExternalOAuthSuccess => '外部存储授权完成。';
+
+  @override
+  String get filesExternalOAuthFailed => '外部存储授权失败，请重试。';
+
+  @override
   String get filesExternalBrowseFailedTitle => '读取挂载目录失败';
 
   @override

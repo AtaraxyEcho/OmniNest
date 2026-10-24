@@ -117,14 +117,16 @@ public class FileIngressPromotionService {
         } catch (BusinessException exception) {
             if (exception.errorCode() == ErrorCode.FILE_SECURITY_REJECTED) {
                 settleTerminalFailure(item, true, exception.errorCode().name(), exception.getMessage(),
-                        "文件未通过安全扫描", "文件「" + item.getTargetName() + "」检测到安全威胁，已拒绝入库");
+                        "文件未通过安全扫描", "文件「" + item.getTargetName() + "」检测到安全威胁，已拒绝入库",
+                        "SECURITY_THREAT");
                 throw new FileIngressRejectedException(exception.getMessage(), exception);
             }
             throw exception;
         }
         if (inspection.status() == MalwareScanGateway.Status.INFECTED) {
             settleTerminalFailure(item, true, ErrorCode.FILE_SECURITY_REJECTED.name(), inspection.message(),
-                    "文件未通过安全扫描", "文件「" + item.getTargetName() + "」检测到安全威胁，已拒绝入库");
+                    "文件未通过安全扫描", "文件「" + item.getTargetName() + "」检测到安全威胁，已拒绝入库",
+                    "SECURITY_THREAT");
             throw new FileIngressRejectedException(inspection.message());
         }
         return inspection;
@@ -142,7 +144,8 @@ public class FileIngressPromotionService {
             return;
         }
         settleTerminalFailure(item, false, ErrorCode.FILE_UPLOAD_FAILED.name(), "服务端计算的文件摘要与客户端声明不一致",
-                "文件完整性校验失败", "文件「" + item.getTargetName() + "」服务端摘要与声明不一致，已拒绝入库");
+                "文件完整性校验失败", "文件「" + item.getTargetName() + "」服务端摘要与声明不一致，已拒绝入库",
+                "SECURITY_SCAN_FAILED");
         throw new FileIngressRejectedException("服务端计算的文件摘要与客户端声明不一致");
     }
 
@@ -155,7 +158,8 @@ public class FileIngressPromotionService {
             return;
         }
         settleTerminalFailure(item, false, ErrorCode.FILE_UPLOAD_FAILED.name(), "实际大小超过申报大小",
-                "文件大小校验失败", "文件「" + item.getTargetName() + "」实际大小超过申报大小，已拒绝入库");
+                "文件大小校验失败", "文件「" + item.getTargetName() + "」实际大小超过申报大小，已拒绝入库",
+                "SECURITY_SCAN_FAILED");
         throw new FileIngressRejectedException("实际大小超过申报大小");
     }
 
@@ -191,7 +195,8 @@ public class FileIngressPromotionService {
             // 容量在晋升阶段才失败时，事务已回滚；上传会话必须落到明确终态，
             // 否则会停在 SCANNING 并触发 Worker 的无效重试。
             settleTerminalFailure(item, true, ErrorCode.FILE_QUOTA_EXCEEDED.name(), "存储配额不足",
-                    "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成");
+                    "文件上传失败", "文件「" + item.getTargetName() + "」存储配额不足，上传未完成",
+                    "QUOTA_WARNING");
             throw new FileIngressRejectedException("存储配额不足", exception);
         }
     }
@@ -218,7 +223,7 @@ public class FileIngressPromotionService {
         FileObject savedObject = fileObjectRepository.save(toFileObject(item, sha256));
         boolean versionUpload = event.asVersionOfFileId() != null;
         FileNode promotedNode = versionUpload
-                ? promoteAsVersion(item, event.asVersionOfFileId(), savedObject)
+                ? promoteAsVersion(item, event.asVersionOfFileId(), savedObject, session)
                 : promoteAsNewNode(item, savedObject);
         UUID mediaAutoImportTaskId = null;
         if (session != null) {
@@ -231,10 +236,15 @@ public class FileIngressPromotionService {
         return new PromotionOutcome(promotedNode.getId(), mediaAutoImportTaskId);
     }
 
-    private FileNode promoteAsVersion(FileIngressItem item, UUID asVersionOfFileId, FileObject savedObject) {
+    private FileNode promoteAsVersion(
+            FileIngressItem item, UUID asVersionOfFileId, FileObject savedObject, FileUploadSession session) {
         FileNode target = fileNodeRepository
                 .findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, item.getOwnerUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "版本目标文件不存在"));
+        // 会话创建后目标可能被移到另一空间：晋升前再核对一次，避免按旧空间结算配额。
+        if (session != null && target.getSpaceType() != session.getSpaceType()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "版本目标空间已变化，请重新开始上传");
+        }
         fileVersionService.saveNewVersion(
                 item.getOwnerUserId(),
                 asVersionOfFileId,
@@ -249,7 +259,8 @@ public class FileIngressPromotionService {
         FileNode parent = resolveParent(item.getOwnerUserId(), item.getTargetParentId(), spaceType);
         if (sameNameExists(item.getOwnerUserId(), spaceType, item.getTargetParentId(), item.getTargetName())) {
             settleTerminalFailure(item, false, ErrorCode.CONFLICT.name(), "晋升时目标目录已存在同名文件",
-                    "文件入库冲突", "文件「" + item.getTargetName() + "」所在目录已存在同名文件，上传未完成");
+                    "文件入库冲突", "文件「" + item.getTargetName() + "」所在目录已存在同名文件，上传未完成",
+                    "TASK_FAILED");
             throw new FileIngressRejectedException("晋升时目标目录已存在同名文件");
         }
         return fileNodeRepository.save(toFileNode(item, savedObject, parent, spaceType));
@@ -281,13 +292,14 @@ public class FileIngressPromotionService {
             String errorCode,
             String summary,
             String notifyTitle,
-            String notifyMessage
+            String notifyMessage,
+            String notificationType
     ) {
         ingressLifecycleService.markFailed(item.getId(), rejected, errorCode, summary);
         rejectSession(item);
         notificationPublisher.notifyOrLog(
                 item.getOwnerUserId(),
-                "FILE_SECURITY",
+                notificationType,
                 notifyTitle,
                 notifyMessage,
                 Map.of("ingressItemId", item.getId().toString())

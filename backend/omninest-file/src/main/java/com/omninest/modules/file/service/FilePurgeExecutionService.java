@@ -4,13 +4,13 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.domain.FilePurgeEntry;
 import com.omninest.modules.file.event.FilePurgeRequestedEvent;
-import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,9 @@ public class FilePurgeExecutionService {
 
     private final FilePurgeStateService stateService;
     private final ObjectStorageClient objectStorageClient;
-    private final ExecutorService deleteExecutor = Executors.newFixedThreadPool(DELETE_PARALLELISM);
+
+    /** 批内删除并发上限；多个任务同时执行时也不会超过该值。 */
+    private final Semaphore deletePermits = new Semaphore(DELETE_PARALLELISM);
 
     /**
      * 执行一次可幂等重试的永久删除任务。
@@ -60,26 +62,35 @@ public class FilePurgeExecutionService {
      */
     private void deleteEntriesInParallel(FilePurgeRequestedEvent event, List<FilePurgeEntry> entries) {
         if (entries.size() == 1) {
-            deleteEntry(entries.get(0));
+            deleteEntry(entries.getFirst());
             stateService.updateDeletingProgress(event.taskId());
             return;
         }
-        List<Future<?>> futures = new ArrayList<>();
-        for (FilePurgeEntry entry : entries) {
-            futures.add(deleteExecutor.submit(() -> deleteEntry(entry)));
-        }
         RuntimeException firstFailure = null;
-        for (Future<?> future : futures) {
-            try {
-                future.get();
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                if (firstFailure == null) {
-                    firstFailure = new IllegalStateException("永久删除任务等待并发结果时被中断", exception);
-                }
-            } catch (ExecutionException exception) {
-                if (firstFailure == null) {
-                    firstFailure = executionFailure(exception);
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> futures = new ArrayList<>();
+            for (FilePurgeEntry entry : entries) {
+                futures.add(executor.submit(() -> {
+                    deletePermits.acquireUninterruptibly();
+                    try {
+                        deleteEntry(entry);
+                    } finally {
+                        deletePermits.release();
+                    }
+                }));
+            }
+            for (Future<?> future : futures) {
+                try {
+                    future.get();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    if (firstFailure == null) {
+                        firstFailure = new IllegalStateException("永久删除任务等待并发结果时被中断", exception);
+                    }
+                } catch (ExecutionException exception) {
+                    if (firstFailure == null) {
+                        firstFailure = executionFailure(exception);
+                    }
                 }
             }
         }
@@ -115,13 +126,5 @@ public class FilePurgeExecutionService {
             stateService.markEntryFailed(entry.getId(), exception.getClass().getSimpleName());
             throw exception;
         }
-    }
-
-    /**
-     * 关闭永久删除线程池，避免应用停止时遗留工作线程。
-     */
-    @PreDestroy
-    public void shutdown() {
-        deleteExecutor.shutdownNow();
     }
 }

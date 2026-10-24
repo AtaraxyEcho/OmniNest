@@ -358,6 +358,99 @@ class FileUploadSessionServiceTest {
         ));
 
         assertThat(response.uploadId()).isEqualTo("upload-123");
+        ArgumentCaptor<FileUploadSession> sessionCaptor = ArgumentCaptor.forClass(FileUploadSession.class);
+        verify(uploadSessionRepository).save(sessionCaptor.capture());
+        assertThat(sessionCaptor.getValue().getAsVersionOfFileId()).isEqualTo(asVersionOfFileId);
+    }
+
+    @Test
+    void completeSessionUsesPersistedVersionTarget() {
+        UUID targetId = UUID.randomUUID();
+        FileUploadSession session = session();
+        session.setAsVersionOfFileId(targetId);
+        FileNode target = new FileNode();
+        target.setId(targetId);
+        target.setOwnerUserId(OWNER_ID);
+        target.setSpaceType(SpaceType.PERSONAL);
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetId, OWNER_ID))
+                .thenReturn(Optional.of(target));
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ingressScanTaskService.enqueueScanTask(any(), any(), any(), any())).thenReturn(SCAN_TASK_ID);
+
+        service.completeSession(OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null));
+
+        verify(ingressScanTaskService).enqueueScanTask(
+                eq(OWNER_ID), any(), eq(targetId), any());
+        verify(fileNodeRepository, Mockito.never())
+                .existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                        OWNER_ID, SpaceType.PERSONAL, "demo.pdf");
+    }
+
+    @Test
+    void completeSessionRejectsVersionTargetChangedAfterCreate() {
+        UUID persistedTargetId = UUID.randomUUID();
+        UUID requestTargetId = UUID.randomUUID();
+        FileUploadSession session = session();
+        session.setAsVersionOfFileId(persistedTargetId);
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+
+        assertThatThrownBy(() -> service.completeSession(
+                OWNER_ID,
+                "upload-123",
+                new CompleteFileUploadRequest(null, List.of(), requestTargetId)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.PARAM_ERROR));
+        verify(objectStorageClient, Mockito.never()).completeMultipartUpload(any(), any(), any());
+    }
+
+    @Test
+    void completeSessionRejectsVersionTargetWhenSessionIsNewUpload() {
+        UUID requestTargetId = UUID.randomUUID();
+        FileUploadSession session = session();
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+
+        assertThatThrownBy(() -> service.completeSession(
+                OWNER_ID,
+                "upload-123",
+                new CompleteFileUploadRequest(null, List.of(), requestTargetId)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.PARAM_ERROR));
+        verify(objectStorageClient, Mockito.never()).completeMultipartUpload(any(), any(), any());
+    }
+
+    @Test
+    void completeSessionRejectsVersionTargetThatMovedToAnotherSpace() {
+        UUID targetId = UUID.randomUUID();
+        FileUploadSession session = session();
+        session.setAsVersionOfFileId(targetId);
+        FileNode target = new FileNode();
+        target.setId(targetId);
+        target.setOwnerUserId(OWNER_ID);
+        target.setSpaceType(SpaceType.SHARED);
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetId, OWNER_ID))
+                .thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.completeSession(
+                OWNER_ID,
+                "upload-123",
+                new CompleteFileUploadRequest(null, List.of(), null)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.CONFLICT));
+        verify(objectStorageClient, Mockito.never()).completeMultipartUpload(any(), any(), any());
     }
 
     @Test

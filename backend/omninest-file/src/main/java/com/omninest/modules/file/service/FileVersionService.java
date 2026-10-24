@@ -192,6 +192,9 @@ public class FileVersionService {
         history.setChangeType("RESTORE");
         history.setCreatedBy(ownerUserId);
         fileVersionRepository.save(history);
+        // 被恢复的版本行提升为 current 后必须移除：保留会让同一对象同时存在于
+        // current_object_id 与 file_versions，来回恢复一次就多一条重复版本。
+        fileVersionRepository.delete(version);
 
         FileObject restoredObject = fileObjectRepository.findById(version.getObjectId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "版本对象不存在"));

@@ -720,6 +720,9 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
         }
         FileNode parent = fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(parentFolderId, SpaceType.SHARED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "父级文件夹不存在"));
+        if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
+            throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "父级节点不是文件夹");
+        }
         return parent.getNormalizedPath() + "/" + name;
     }
 

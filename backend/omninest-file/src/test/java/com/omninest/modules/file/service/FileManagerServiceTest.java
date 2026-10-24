@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -128,6 +129,7 @@ class FileManagerServiceTest {
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
     private final StorageQuotaService storageQuotaService = Mockito.mock(StorageQuotaService.class);
     private final SharedSpaceQuotaService sharedSpaceQuotaService = Mockito.mock(SharedSpaceQuotaService.class);
+    private final SharedSpaceService sharedSpaceService = Mockito.mock(SharedSpaceService.class);
     private final ResourceShareLinkService resourceShareLinkService =
             Mockito.mock(ResourceShareLinkService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class, invocation -> {
@@ -167,7 +169,7 @@ class FileManagerServiceTest {
             fileNodeSupport,
             storageQuotaService,
             sharedSpaceQuotaService,
-            mock(SharedSpaceService.class),
+            sharedSpaceService,
             syncEventRecorder,
             mock(FileIndexSyncService.class)
     );
@@ -513,6 +515,107 @@ class FileManagerServiceTest {
         verify(syncEventRecorder).record(argThat(
                 command -> command.action() == SyncAction.CREATED
                         && "FILE_NODE".equals(command.resourceType())));
+    }
+
+    @Test
+    void restoreVersionRemovesPromotedVersionRowToAvoidDuplicates() {
+        UUID versionId = UUID.fromString("70000000-0000-0000-0000-000000000001");
+        UUID currentObjectId = UUID.fromString("70000000-0000-0000-0000-000000000002");
+        UUID restoredObjectId = UUID.fromString("70000000-0000-0000-0000-000000000003");
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(currentObjectId);
+        FileVersion version = new FileVersion();
+        version.setId(versionId);
+        version.setFileNodeId(FILE_ID);
+        version.setObjectId(restoredObjectId);
+        version.setVersionNo(1);
+        version.setChangeType("EDIT");
+        FileObject restored = new FileObject();
+        restored.setId(restoredObjectId);
+        restored.setSizeBytes(200);
+        restored.setMimeType("application/pdf");
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID)).thenReturn(Optional.of(node));
+        when(fileVersionRepository.findById(versionId)).thenReturn(Optional.of(version));
+        when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(2);
+        when(fileObjectRepository.findById(restoredObjectId)).thenReturn(Optional.of(restored));
+        when(fileVersionRepository.save(any(FileVersion.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        fileVersionService.restoreVersion(OWNER_ID, FILE_ID, versionId);
+
+        assertThat(node.getCurrentObjectId()).isEqualTo(restoredObjectId);
+        verify(fileVersionRepository).delete(version);
+        ArgumentCaptor<FileVersion> historyCaptor = ArgumentCaptor.forClass(FileVersion.class);
+        verify(fileVersionRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getObjectId()).isEqualTo(currentObjectId);
+        assertThat(historyCaptor.getValue().getChangeType()).isEqualTo("RESTORE");
+    }
+
+    @Test
+    void copyNodeRejectsSharedSourceIntoPersonalRoot() {
+        FileNode source = node("shared.pdf", "application/pdf", 2048);
+        source.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(source));
+
+        assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, FILE_ID, null))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verify(fileNodeRepository, Mockito.never()).save(any(FileNode.class));
+    }
+
+    @Test
+    void copyNodeRequiresSharedWritePermissionForSharedTarget() {
+        UUID targetFolderId = UUID.fromString("60000000-0000-0000-0000-000000000002");
+        FileNode source = node("shared.pdf", "application/pdf", 2048);
+        source.setSpaceType(SpaceType.SHARED);
+        FileNode targetFolder = node("Shared", null, 0, "FOLDER");
+        targetFolder.setId(targetFolderId);
+        targetFolder.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(source));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetFolderId, OWNER_ID))
+                .thenReturn(Optional.of(targetFolder));
+        Mockito.doThrow(new BusinessException(ErrorCode.FORBIDDEN, "无权限执行此操作"))
+                .when(sharedSpaceService).requireSharedWrite(OWNER_ID);
+
+        assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, FILE_ID, targetFolderId))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verify(fileNodeRepository, Mockito.never()).save(any(FileNode.class));
+    }
+
+    @Test
+    void copyNodeChargesSharedQuotaWhenSharedWriteAllowed() {
+        UUID targetFolderId = UUID.fromString("60000000-0000-0000-0000-000000000003");
+        FileNode source = node("shared.pdf", "application/pdf", 2048);
+        source.setSpaceType(SpaceType.SHARED);
+        FileNode targetFolder = node("Shared", null, 0, "FOLDER");
+        targetFolder.setId(targetFolderId);
+        targetFolder.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(source));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetFolderId, OWNER_ID))
+                .thenReturn(Optional.of(targetFolder));
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                SpaceType.SHARED, targetFolderId, "shared.pdf")).thenReturn(false);
+        when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> {
+            FileNode saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
+
+        var result = fileManagerService.copyNode(OWNER_ID, FILE_ID, targetFolderId);
+
+        assertThat(result.spaceType()).isEqualTo(SpaceType.SHARED.getValue());
+        verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
+        verify(sharedSpaceQuotaService).checkQuota(2048L);
+        verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
+        verify(storageQuotaService, Mockito.never()).incrementUsage(any(), anyLong());
     }
 
     @Test

@@ -70,7 +70,7 @@ class ExternalStorageControllerTest {
                 CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
-        assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/files?oauth=success");
+        assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=success");
         verify(oauthService).handleCallback(CALLBACK_PROVIDER, "state-value", "authorization-code");
     }
 
@@ -82,7 +82,7 @@ class ExternalStorageControllerTest {
         ResponseEntity<String> response = controller.oauthCallback(
                 CALLBACK_PROVIDER, "state-value", "authorization-code", "access_denied", request);
 
-        assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/files?oauth=error");
+        assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=error");
         verify(oauthService, never()).handleCallback(anyString(), anyString(), anyString());
     }
 

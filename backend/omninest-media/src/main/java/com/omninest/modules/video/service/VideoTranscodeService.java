@@ -19,15 +19,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * FFmpeg 转码服务：优先在后端容器本地执行，缺少本地 ffmpeg 时回退到
- * {@code docker exec omninest-ffmpeg}。
+ * FFmpeg 转码与字幕提取服务，全部在后端容器本地执行。
  *
  * @author OmniNest
  */
 @Slf4j
 @Service
 public class VideoTranscodeService {
-    private static final String DOCKER_TRANSCODE_DIR = "/tmp/transcode";
+    private static final Duration TRANSCODE_TIMEOUT = Duration.ofMinutes(180);
+
     private final ProcessingTempProperties processingTempProperties;
     private final VideoSourceInputResolver sourceInputResolver;
     private final VideoProcessExecutor processExecutor;
@@ -55,16 +55,12 @@ public class VideoTranscodeService {
         this.fileQueryService = fileQueryService;
     }
 
-    private static final Duration TRANSCODE_TIMEOUT = Duration.ofMinutes(180);
-    private static final Duration COPY_TIMEOUT = Duration.ofMinutes(30);
-    private static final Duration CLEANUP_TIMEOUT = Duration.ofMinutes(5);
-
     /**
-     * 在 Docker 容器内执行 H265 转码，返回转码后文件的本地临时路径。
+     * 在本地执行 H265 转码，返回转码后文件的本地临时路径。
      * 调用方负责删除返回的临时文件。
      */
     public Path transcodeToH265(UUID ownerUserId, UUID fileNodeId, UUID videoItemId) {
-        return executeTranscode(ownerUserId, fileNodeId, videoItemId, "-h265", ".mp4",
+        return executeTranscode(ownerUserId, fileNodeId, videoItemId, ".mp4",
                 List.of("-c:v", "libx265", "-crf", "28", "-preset", "medium",
                         "-tag:v", "hvc1", "-movflags", "faststart", "-c:a", "copy"),
                 "H265 转码");
@@ -76,7 +72,7 @@ public class VideoTranscodeService {
      * 调用方负责删除返回的临时文件。
      */
     public Path transcodeAudioToAac(UUID ownerUserId, UUID fileNodeId, UUID videoItemId) {
-        return executeTranscode(ownerUserId, fileNodeId, videoItemId, "-aac", ".mp4",
+        return executeTranscode(ownerUserId, fileNodeId, videoItemId, ".mp4",
                 List.of("-map", "0:v", "-map", "0:a",
                         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
                         "-movflags", "faststart"),
@@ -90,7 +86,7 @@ public class VideoTranscodeService {
      */
     public Path extractAudioToAac(UUID ownerUserId, UUID fileNodeId, UUID videoItemId) {
         // -map 0:a:0 显式选择第一条音频流，避免多音轨时的歧义
-        return executeTranscode(ownerUserId, fileNodeId, videoItemId, "-aac-only", ".aac",
+        return executeTranscode(ownerUserId, fileNodeId, videoItemId, ".aac",
                 List.of("-vn", "-map", "0:a:0", "-c:a", "aac", "-b:a", "192k"),
                 "音频提取");
     }
@@ -116,87 +112,87 @@ public class VideoTranscodeService {
         ffmpegArgs.addAll(List.of("-c:a", "aac", "-b:a", "192k", "-ac", "2"));
         // faststart：moov atom 移到文件头部，支持 HTTP range request 即时 seek
         ffmpegArgs.addAll(List.of("-movflags", "faststart"));
-        return executeTranscode(ownerUserId, fileNodeId, videoItemId, "-web", ".mp4",
+        return executeTranscode(ownerUserId, fileNodeId, videoItemId, ".mp4",
                 ffmpegArgs, "Web 优化转码");
     }
 
     /**
-     * 提取内嵌字幕流为 WebVTT 格式。
-     * ffmpeg 从 MinIO 读取源视频，提取指定字幕流并转换为 WebVTT。
-     * 调用方负责删除返回的临时文件。
+     * 单条内嵌字幕提取。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileNodeId 源视频文件节点 ID
+     * @param videoItemId 视频条目 ID
+     * @param streamIndex 字幕流索引
+     * @return WebVTT 临时文件，调用方负责删除
      */
     public Path extractSubtitleToWebVtt(UUID ownerUserId, UUID fileNodeId, UUID videoItemId, int streamIndex) {
+        return extractSubtitlesToWebVtt(ownerUserId, fileNodeId, videoItemId, List.of(streamIndex))
+                .stream()
+                .findFirst()
+                .map(ExtractedSubtitle::file)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.MEDIA_TRANSCODE_FAILED,
+                        "字幕提取失败: streamIndex=" + streamIndex
+                ));
+    }
+
+    /**
+     * 一次暂存、批量提取多条内嵌字幕。
+     *
+     * <p>多轨视频若逐轨调用单条接口，每条轨道都会把整部影片从对象存储复制到本地；
+     * 这里只暂存一次，所有轨道提取完成后统一清理。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileNodeId 源视频文件节点 ID
+     * @param videoItemId 视频条目 ID
+     * @param streamIndexes 字幕流索引列表
+     * @return 成功提取的轨道与临时文件；失败轨道已跳过
+     */
+    public List<ExtractedSubtitle> extractSubtitlesToWebVtt(
+            UUID ownerUserId,
+            UUID fileNodeId,
+            UUID videoItemId,
+            List<Integer> streamIndexes
+    ) {
+        if (streamIndexes == null || streamIndexes.isEmpty()) {
+            return List.of();
+        }
+        requireFfmpeg("提取内嵌字幕");
         String internalUrl = resolveInput(ownerUserId, fileNodeId);
-        if (ffmpegRuntime.isDisabled()) {
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    "ffmpeg 不可用，无法提取内嵌字幕");
-        }
-        if (!ffmpegRuntime.isDocker()) {
-            // 本地 ffmpeg 必须吃受控本地文件：预签名 URL 交给本地进程后，
-            // 恶意媒体内嵌的远程引用（HLS 分片、concat）会绕开出站地址校验。
-            Path staged = null;
-            try {
-                staged = stageLocalInput(ownerUserId, fileNodeId, internalUrl);
-                String localInput = staged != null ? staged.toAbsolutePath().toString() : internalUrl;
-                return extractSubtitleLocally(localInput, videoItemId, streamIndex);
-            } catch (IOException exception) {
-                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
-                        "字幕提取源暂存失败: " + exception.getMessage());
-            } finally {
-                deleteQuietly(staged);
-            }
-        }
-
-        String containerDir = DOCKER_TRANSCODE_DIR + "/" + videoItemId + "-sub-" + streamIndex;
-        String containerOutput = containerDir + "/subtitle.vtt";
-
+        Path staged = null;
         try {
-            exec("mkdir", "-p", containerDir);
-
-            log.info("开始字幕提取: videoItemId={}, streamIndex={}", videoItemId, streamIndex);
-            List<String> cmd = new ArrayList<>(List.of(
-                    "ffmpeg", "-y",
-                    "-i", internalUrl,
-                    "-map", "0:" + streamIndex,
-                    "-c:s", "webvtt",
-                    containerOutput
-            ));
-            log.debug("ffmpeg 字幕提取命令已准备: videoItemId={}, argumentCount={}", videoItemId, cmd.size());
-            exec(cmd.toArray(new String[0]));
-            log.info("字幕提取 ffmpeg 完成: videoItemId={}, streamIndex={}", videoItemId, streamIndex);
-
-            Path tempOutput = Files.createTempFile(
-                    processingTempProperties.ensureSubdirectory("transcode"),
-                    "subtitle-" + videoItemId + "-" + streamIndex,
-                    ".vtt");
-            VideoProcessExecutor.Result copyResult = copyFromContainer(containerOutput, tempOutput);
-            if (copyResult.timedOut()) {
-                Files.deleteIfExists(tempOutput);
-                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, "字幕提取结果复制超时");
+            staged = stageLocalInput(ownerUserId, fileNodeId, internalUrl);
+            String localInput = staged != null ? staged.toAbsolutePath().toString() : internalUrl;
+            List<ExtractedSubtitle> extracted = new ArrayList<>(streamIndexes.size());
+            for (int streamIndex : streamIndexes) {
+                try {
+                    extracted.add(new ExtractedSubtitle(
+                            streamIndex,
+                            extractSubtitleLocally(localInput, videoItemId, streamIndex)
+                    ));
+                } catch (RuntimeException exception) {
+                    log.warn("字幕提取失败: videoItemId={}, streamIndex={}, errorType={}",
+                            videoItemId, streamIndex, exception.getClass().getSimpleName());
+                }
             }
-            if (!copyResult.succeeded()) {
-                Files.deleteIfExists(tempOutput);
-                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, "字幕提取结果复制失败");
-            }
-
-            log.info("字幕提取完成: videoItemId={}, streamIndex={}, size={}",
-                    videoItemId, streamIndex, Files.size(tempOutput));
-            return tempOutput;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, "字幕提取执行被中断");
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, "字幕提取执行失败: " + e.getMessage());
+            return extracted;
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
+                    "字幕提取源暂存失败: " + exception.getMessage());
         } finally {
-            cleanupContainerDirectory(containerDir);
+            deleteQuietly(staged);
         }
     }
 
     /**
-     * 本地 ffmpeg 字幕提取：直接写临时文件，不需要 docker cp/清理容器目录。
+     * 提取结果。
+     *
+     * @param streamIndex 字幕流索引
+     * @param file WebVTT 临时文件
      */
+    public record ExtractedSubtitle(int streamIndex, Path file) {
+    }
+
     private Path extractSubtitleLocally(String input, UUID videoItemId, int streamIndex) {
         Path tempOutput = null;
         try {
@@ -229,80 +225,28 @@ public class VideoTranscodeService {
     }
 
     /**
-     * 通用转码执行流程：ffmpeg 直接从 MinIO URL 读取源文件 → 转码 → 复制到宿主机 → 清理。
+     * 通用转码执行流程：源落到本地受控文件 → 转码 → 返回临时文件。
      *
-     * @param suffix       容器目录后缀，区分不同转码类型
      * @param ext          输出文件扩展名
      * @param ffmpegArgs   ffmpeg 参数（不含 -y -i input output）
      * @param logLabel     日志标签
      */
     private Path executeTranscode(
             UUID ownerUserId, UUID fileNodeId, UUID videoItemId,
-            String suffix, String ext, List<String> ffmpegArgs, String logLabel
+            String ext, List<String> ffmpegArgs, String logLabel
     ) {
-        if (ffmpegRuntime.isDisabled()) {
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    "ffmpeg 不可用，无法执行" + logLabel);
-        }
+        requireFfmpeg(logLabel);
         String internalUrl = resolveInput(ownerUserId, fileNodeId);
-        if (!ffmpegRuntime.isDocker()) {
-            Path staged = null;
-            try {
-                staged = stageLocalInput(ownerUserId, fileNodeId, internalUrl);
-                String localInput = staged != null ? staged.toAbsolutePath().toString() : internalUrl;
-                return executeLocalTranscode(localInput, videoItemId, ext, ffmpegArgs, logLabel);
-            } catch (IOException exception) {
-                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
-                        logLabel + "源暂存失败: " + exception.getMessage());
-            } finally {
-                deleteQuietly(staged);
-            }
-        }
-
-        String containerDir = DOCKER_TRANSCODE_DIR + "/" + videoItemId + suffix;
-        String containerOutput = containerDir + "/output" + ext;
-
+        Path staged = null;
         try {
-            exec("mkdir", "-p", containerDir);
-
-            log.info("开始{}: videoItemId={}, fileNodeId={}", logLabel, videoItemId, fileNodeId);
-            List<String> cmd = new ArrayList<>();
-            cmd.add("ffmpeg");
-            cmd.add("-y");
-            cmd.add("-i");
-            cmd.add(internalUrl);
-            cmd.addAll(ffmpegArgs);
-            cmd.add(containerOutput);
-            log.debug("ffmpeg 转码命令已准备: videoItemId={}, argumentCount={}", videoItemId, cmd.size());
-            exec(cmd.toArray(new String[0]));
-            log.info("{} ffmpeg 完成: videoItemId={}", logLabel, videoItemId);
-
-            log.info("{} 复制到宿主机: videoItemId={}", logLabel, videoItemId);
-            Path tempOutput = Files.createTempFile(
-                    processingTempProperties.ensureSubdirectory("transcode"),
-                    "transcode-" + videoItemId,
-                    ext);
-            VideoProcessExecutor.Result copyResult = copyFromContainer(containerOutput, tempOutput);
-            if (copyResult.timedOut()) {
-                Files.deleteIfExists(tempOutput);
-                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, logLabel + "结果复制超时");
-            }
-            if (!copyResult.succeeded()) {
-                Files.deleteIfExists(tempOutput);
-                throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, logLabel + "结果复制失败");
-            }
-
-            log.info("{}完成: videoItemId={}, size={}", logLabel, videoItemId, Files.size(tempOutput));
-            return tempOutput;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, logLabel + "执行被中断");
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED, logLabel + "执行失败: " + e.getMessage());
+            staged = stageLocalInput(ownerUserId, fileNodeId, internalUrl);
+            String localInput = staged != null ? staged.toAbsolutePath().toString() : internalUrl;
+            return executeLocalTranscode(localInput, videoItemId, ext, ffmpegArgs, logLabel);
+        } catch (IOException exception) {
+            throw new BusinessException(ErrorCode.MEDIA_TRANSCODE_FAILED,
+                    logLabel + "源暂存失败: " + exception.getMessage());
         } finally {
-            cleanupContainerDirectory(containerDir);
+            deleteQuietly(staged);
         }
     }
 
@@ -339,9 +283,7 @@ public class VideoTranscodeService {
     }
 
     private String resolveInput(UUID ownerUserId, UUID fileNodeId) {
-        return ffmpegRuntime.isDocker()
-                ? sourceInputResolver.resolveDockerInput(ownerUserId, fileNodeId)
-                : sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
+        return sourceInputResolver.resolveLocalInput(ownerUserId, fileNodeId);
     }
 
     /**
@@ -373,6 +315,13 @@ public class VideoTranscodeService {
         return lower.startsWith("http://") || lower.startsWith("https://");
     }
 
+    private void requireFfmpeg(String operation) {
+        if (ffmpegRuntime.isDisabled()) {
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "ffmpeg 不可用，无法执行" + operation);
+        }
+    }
+
     private void runLocalFfmpeg(List<String> command, Duration timeout, String logLabel)
             throws IOException, InterruptedException {
         VideoProcessExecutor.Result result = processExecutor.execute(command, timeout);
@@ -396,64 +345,5 @@ public class VideoTranscodeService {
         } catch (IOException exception) {
             log.debug("删除转码临时文件失败: errorType={}", exception.getClass().getSimpleName());
         }
-    }
-
-    private void exec(String... command) throws IOException, InterruptedException {
-        List<String> dockerCommand = new ArrayList<>(command.length + 3);
-        dockerCommand.add("docker");
-        dockerCommand.add("exec");
-        dockerCommand.add(VideoFfmpegRuntime.DOCKER_CONTAINER);
-        dockerCommand.addAll(List.of(command));
-
-        VideoProcessExecutor.Result result = processExecutor.execute(dockerCommand, resolveTimeout(command));
-        if (result.timedOut()) {
-            throw new IOException("Docker 命令超时: operation=" + resolveOperation(command));
-        }
-        if (!result.succeeded()) {
-            log.warn("Docker 命令失败: operation={}, exitCode={}, outputTruncated={}, outputLength={}",
-                    resolveOperation(command), result.exitCode(), result.outputTruncated(), result.output().length());
-            throw new IOException("Docker 命令失败: operation=" + resolveOperation(command)
-                    + ", exitCode=" + result.exitCode());
-        }
-    }
-
-    private VideoProcessExecutor.Result copyFromContainer(String containerOutput, Path tempOutput)
-            throws IOException, InterruptedException {
-        return processExecutor.execute(List.of(
-                "docker", "cp",
-                VideoFfmpegRuntime.DOCKER_CONTAINER + ":" + containerOutput,
-                tempOutput.toAbsolutePath().toString()
-        ), COPY_TIMEOUT);
-    }
-
-    private void cleanupContainerDirectory(String containerDir) {
-        try {
-            VideoProcessExecutor.Result result = processExecutor.execute(List.of(
-                    "docker", "exec", VideoFfmpegRuntime.DOCKER_CONTAINER,
-                    "rm", "-rf", containerDir
-            ), CLEANUP_TIMEOUT);
-            if (!result.succeeded()) {
-                log.debug("Docker 转码目录清理未完成: timedOut={}, exitCode={}",
-                        result.timedOut(), result.exitCode());
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (IOException e) {
-            log.debug("Docker 转码目录清理失败: {}", e.getMessage());
-        }
-    }
-
-    private Duration resolveTimeout(String[] command) {
-        if (command.length > 0 && "ffmpeg".equals(command[0])) {
-            return TRANSCODE_TIMEOUT;
-        }
-        return CLEANUP_TIMEOUT;
-    }
-
-    private String resolveOperation(String[] command) {
-        if (command.length == 0) {
-            return "unknown";
-        }
-        return command[0];
     }
 }

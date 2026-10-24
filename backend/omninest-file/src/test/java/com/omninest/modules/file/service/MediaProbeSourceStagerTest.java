@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.dto.FileContentRange;
+import com.omninest.modules.file.dto.FileProcessInput;
 import com.omninest.modules.file.dto.FileContentStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -96,10 +97,37 @@ class MediaProbeSourceStagerTest {
         stubHead(node, pattern(HEAD_BYTES), total);
         when(fileContentAccessService.openRange(eq(node), anyLong(), anyLong()))
                 .thenReturn(Optional.empty());
+        when(fileContentAccessService.createProcessInput(node))
+                .thenReturn(new FileProcessInput(node.getId(), "MINIO", "http://minio/object"));
         Set<Path> before = probeFiles();
 
         assertThat(stager.stage(node)).isEmpty();
         assertNoProbeFileCreated(before);
+    }
+
+    @Test
+    @DisplayName("本地只读来源直接返回本机路径且不复制")
+    void returnsLocalPathForLocalFilesystemProvider() throws IOException {
+        Path local = Files.createTempFile("probe-local-", ".mkv");
+        Files.write(local, new byte[]{1, 2, 3});
+        try {
+            FileNode node = node();
+            stubHead(node, pattern(HEAD_BYTES), HEAD_BYTES + 1);
+            when(fileContentAccessService.openRange(eq(node), anyLong(), anyLong()))
+                    .thenReturn(Optional.empty());
+            when(fileContentAccessService.createProcessInput(node))
+                    .thenReturn(new FileProcessInput(node.getId(), "LOCAL_FILESYSTEM", local.toString()));
+            Set<Path> before = probeFiles();
+
+            MediaProbeSourceStager.StagedSource source = stager.stage(node).orElseThrow();
+            try (source) {
+                assertThat(source.path()).isEqualTo(local);
+                assertThat(source.widerTailCouldHelp()).isFalse();
+            }
+            assertNoProbeFileCreated(before);
+        } finally {
+            Files.deleteIfExists(local);
+        }
     }
 
     @Test

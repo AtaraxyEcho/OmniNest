@@ -141,6 +141,15 @@ public class FileManagerService {
         FileNode targetParent = fileNodeSupport.resolveCopyTargetParent(userId, targetParentId);
         UUID resolvedParentId = targetParent != null ? targetParent.getId() : null;
 
+        // 共享空间节点的所有者仍是上传者本人：复制必须重新校验共享空间开关与
+        // CAN_UPLOAD 权限矩阵，且不能把共享节点复制到个人根目录。
+        if (source.getSpaceType() == SpaceType.SHARED) {
+            if (targetParent == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件不能复制到个人空间根目录");
+            }
+            sharedSpaceService.requireSharedWrite(userId);
+        }
+
         // 校验源文件和目标在同一空间
         if (targetParent != null && source.getSpaceType() != targetParent.getSpaceType()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "不能在不同空间之间复制文件");
@@ -241,15 +250,26 @@ public class FileManagerService {
      * @return 目标目录内唯一的名称
      */
     private String resolveAvailableName(UUID userId, SpaceType spaceType, UUID parentId, String preferredName) {
-        if (!fileNodeSupport.sameNameExists(userId, spaceType, parentId, preferredName)) {
+        if (!copyTargetNameExists(userId, spaceType, parentId, preferredName)) {
             return preferredName;
         }
         int suffix = 1;
         String candidate = appendCopySuffix(preferredName, suffix);
-        while (fileNodeSupport.sameNameExists(userId, spaceType, parentId, candidate)) {
+        while (copyTargetNameExists(userId, spaceType, parentId, candidate)) {
             candidate = appendCopySuffix(preferredName, ++suffix);
         }
         return candidate;
+    }
+
+    /**
+     * 共享空间的同级节点可能属于不同上传者，同名冲突必须按空间而不是按所有者查询。
+     */
+    private boolean copyTargetNameExists(UUID userId, SpaceType spaceType, UUID parentId, String name) {
+        if (spaceType == SpaceType.SHARED) {
+            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                    spaceType, parentId, name);
+        }
+        return fileNodeSupport.sameNameExists(userId, spaceType, parentId, name);
     }
 
     /**

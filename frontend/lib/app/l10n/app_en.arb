@@ -432,6 +432,8 @@
   "filesExternalEmptyTitle": "No storage mounted",
   "filesExternalEmptyMessage": "Add a OneDrive, WebDAV or other source to browse and import files here.",
   "filesExternalCredentialsMissing": "Credentials missing",
+  "filesExternalOAuthSuccess": "Storage authorization completed.",
+  "filesExternalOAuthFailed": "Storage authorization failed. Please try again.",
   "filesExternalBrowseFailedTitle": "Cannot read the mount directory",
   "filesExternalBrowseEmptyMessage": "This directory has nothing to browse.",
   "filesImportEmptyTitle": "No import tasks",

@@ -168,6 +168,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   initialSection: fileManagerSectionFromRouteName(
                     state.uri.queryParameters['section'],
                   ),
+                  initialOAuthStatus: state.uri.queryParameters['oauth'],
                 ),
               ),
             ],

@@ -13,7 +13,6 @@ import com.omninest.modules.file.domain.FilePurgeEntry;
 import com.omninest.modules.file.event.FilePurgeRequestedEvent;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -32,11 +31,6 @@ class FilePurgeExecutionServiceTest {
             stateService,
             objectStorageClient
     );
-
-    @AfterEach
-    void tearDown() {
-        executionService.shutdown();
-    }
 
     @Test
     void executePropagatesParallelDeleteFailureWithoutReselectingFailedEntries() {

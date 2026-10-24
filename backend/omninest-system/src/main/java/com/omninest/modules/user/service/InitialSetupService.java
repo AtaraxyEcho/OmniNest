@@ -156,8 +156,10 @@ public class InitialSetupService {
                 normalizeTimezone(request.defaultTimezone())
         );
         systemInstanceRepository.save(systemInstance);
-        seedTwoFactorRuntimePolicy(properties.isTwoFactorRequired());
-        log.info("首次安装已创建超级管理员: username={}, twoFactor={}", username, properties.isTwoFactorRequired());
+        // 管理员主动绑定 2FA 时保留 V002 的管理员强制策略；只有明确未绑定且环境
+        // 也未要求时才清空 required-roles。
+        seedTwoFactorRuntimePolicy(bindTwoFactor);
+        log.info("首次安装已创建超级管理员: username={}, twoFactor={}", username, bindTwoFactor);
         return backupCodes;
     }
 

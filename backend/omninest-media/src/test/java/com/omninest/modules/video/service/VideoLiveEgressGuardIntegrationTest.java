@@ -68,8 +68,7 @@ class VideoLiveEgressGuardIntegrationTest {
                 mock(VideoSourceInputResolver.class),
                 mock(MediaContentAccessService.class),
                 new VideoStreamProperties(),
-                new VideoFfmpegRuntime(new VideoProcessExecutor()),
-                new VideoProcessExecutor()
+                new VideoFfmpegRuntime(new VideoProcessExecutor())
         );
         VideoStreamService.StreamCommand command = service.buildStreamCommand(
                 service.buildTranscodeArgs("mov", playlistUrl, 0L),

@@ -246,6 +246,9 @@ class FileShareAccessServiceTest {
 
         assertThat(result).isSameAs(issued);
         Mockito.verify(resourceShareLinkService).issueConsumedSession(TOKEN, "pw", null, "1.2.3.4");
+        // 会话式入口是实际在用的分享访问路径，必须由它触发访问通知。
+        Mockito.verify(notificationService).notifyOrLog(
+                eq(OWNER), eq("SHARE_ACCESSED"), anyString(), anyString(), any());
     }
 
     private ShareLink share(String resourceType) {
@@ -264,6 +267,7 @@ class FileShareAccessServiceTest {
         node.setOwnerUserId(OWNER);
         node.setNormalizedPath(normalizedPath);
         node.setNodeType(nodeType.getValue());
+        node.setName(normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1));
         return node;
     }
 

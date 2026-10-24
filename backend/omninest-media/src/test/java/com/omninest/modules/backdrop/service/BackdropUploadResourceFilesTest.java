@@ -107,7 +107,7 @@ class BackdropUploadResourceFilesTest {
         backdropScanTaskService = mock(BackdropScanTaskService.class);
         rateLimitService = mock(RateLimitService.class);
         videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
-        when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
+        when(videoThumbnailExtractor.extractFirstFrame(any(), any()))
                 .thenReturn(Optional.empty());
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);

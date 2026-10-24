@@ -541,7 +541,7 @@ public class BackdropAssetService {
         Path thumbnailFile = null;
         try {
             Optional<Path> extracted = videoThumbnailExtractor.extractFirstFrame(
-                    ownerUserId, publishedNodeId, stagingFile, VIDEO_THUMBNAIL_TIMEOUT);
+                    stagingFile, VIDEO_THUMBNAIL_TIMEOUT);
             if (extracted.isEmpty()) {
                 return null;
             }

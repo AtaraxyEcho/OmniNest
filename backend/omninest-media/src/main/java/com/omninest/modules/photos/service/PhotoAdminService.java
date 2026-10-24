@@ -48,6 +48,12 @@ import java.util.Map;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,6 +76,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhotoAdminService {
+    private static final int SCAN_PARALLELISM = 3;
 
     private static final List<String> ACTIVE_TASK_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
@@ -177,17 +184,38 @@ public class PhotoAdminService {
             // 克隆出影子 PhotoItem，回收站清理时因底层 FileNode 不属于本人而永久失败。
             List<FileDescriptor> nodes = fileMetadataQueryService.listOwnedImages(ownerUserId);
 
-            for (FileDescriptor file : nodes) {
-                try {
-                    // 逐文件独立事务：单文件失败不阻塞整库扫描。
-                    transactionTemplate.executeWithoutResult(status ->
-                            importPhotoFile(ownerUserId, file)
-                    );
-                    imported++;
-                } catch (Exception fileEx) {
-                    log.warn("单个文件导入失败，跳过: fileNodeId={}, error={}", file.id(), fileEx.getMessage());
+            // 每文件独立事务，最多 3 路并发：Worker 连接池 8，保留心跳与其他消费者所需连接。
+            AtomicInteger importedCounter = new AtomicInteger();
+            Semaphore scanPermits = new Semaphore(SCAN_PARALLELISM);
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<?>> futures = nodes.stream()
+                        .<Future<?>>map(file -> executor.submit(() -> {
+                            scanPermits.acquireUninterruptibly();
+                            try {
+                                transactionTemplate.executeWithoutResult(status ->
+                                        importPhotoFile(ownerUserId, file)
+                                );
+                                importedCounter.incrementAndGet();
+                            } catch (Exception fileEx) {
+                                log.warn("单个文件导入失败，跳过: fileNodeId={}, error={}",
+                                        file.id(), fileEx.getMessage());
+                            } finally {
+                                scanPermits.release();
+                            }
+                        }))
+                        .toList();
+                for (Future<?> future : futures) {
+                    try {
+                        future.get();
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("照片扫描等待并发结果时被中断", exception);
+                    } catch (ExecutionException exception) {
+                        throw new IllegalStateException("照片扫描并发执行失败", exception.getCause());
+                    }
                 }
             }
+            imported = importedCounter.get();
 
             final int importedCount = imported;
             // 同步事件记录器要求外层事务（MANDATORY 传播），而 executeScanJob

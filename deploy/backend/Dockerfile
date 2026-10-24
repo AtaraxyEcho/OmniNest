@@ -10,8 +10,10 @@ RUN groupadd --system omninest && \
     useradd --system --gid omninest --home-dir /app --shell /usr/sbin/nologin omninest && \
     mkdir -p /app/logs /var/lib/omninest/lucene /var/lib/omninest/lucene-photo \
         /var/lib/omninest/geonames \
+        /tmp/omninest-probe /tmp/omninest-processing/transcode \
         /mnt/local /mnt/imports /mnt/local-media && \
-    chown -R omninest:omninest /app /var/lib/omninest /mnt
+    chown -R omninest:omninest /app /var/lib/omninest /tmp/omninest-probe \
+        /tmp/omninest-processing /mnt
 
 WORKDIR /app
 COPY --chown=omninest:omninest omninest-app/target/omninest-app-*.jar app.jar

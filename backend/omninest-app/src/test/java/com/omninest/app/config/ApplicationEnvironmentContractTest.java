@@ -217,10 +217,11 @@ class ApplicationEnvironmentContractTest {
                 .isEqualTo("${OMNINEST_MINIO_SECRET_KEY:}");
         assertThat(prod.getProperty("omninest.rclone.password"))
                 .isEqualTo("${OMNINEST_RCLONE_RC_PASS:}");
-        // 凭据加密密钥：dev 与 prod 均不提供回退默认值，需要外部存储凭据
-        // 功能时显式注入；prod 运行时由 ProductionSecretsValidator 拒绝空值。
+        // 凭据加密密钥：dev 提供固定的公开测试密钥，保证分享/2FA 开箱可用；
+        // prod 不提供回退默认值，由 ProductionSecretsValidator 拒绝空值。
         assertThat(dev.getProperty("omninest.security.credential-encryption-key"))
-                .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}");
+                .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:"
+                        + "b21uaW5lc3QtZGV2LWNyZWRlbnRpYWwta2V5LTAwMDE=}");
         assertThat(prod.getProperty("omninest.security.credential-encryption-key"))
                 .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}");
     }

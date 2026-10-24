@@ -123,7 +123,7 @@ public class BackdropScanRetryService {
         markAssetFailed(event.assetId(), title);
         notificationPublisher.notifyOrLog(
                 event.ownerUserId(),
-                "BACKDROP_SECURITY",
+                "SECURITY_SCAN_FAILED",
                 title,
                 message,
                 Map.of("assetId", event.assetId().toString())

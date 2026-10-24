@@ -208,6 +208,7 @@ public class FileQueryService {
         String newName = normalizeNodeName(request.name(), "文件名称不合法");
         FileNode node = findActiveNode(ownerUserId, fileId);
         requireManagedNode(node);
+        requirePersonalNode(node);
         if (node.getName().equals(newName)) {
             return toDto(node);
         }
@@ -232,6 +233,7 @@ public class FileQueryService {
     public FileNodeDto moveNode(UUID ownerUserId, UUID fileId, MoveFileNodeRequest request) {
         FileNode node = findActiveNode(ownerUserId, fileId);
         requireManagedNode(node);
+        requirePersonalNode(node);
         UUID targetParentId = request.parentId();
         if (Objects.equals(node.getParentId(), targetParentId)) {
             return toDto(node);
@@ -611,6 +613,7 @@ public class FileQueryService {
             }
             try {
                 requireManagedNode(node);
+                requirePersonalNode(node);
                 if (!Objects.equals(node.getParentId(), targetParentId)) {
                     validateSameSpace(node, targetParent);
                     if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
@@ -1054,6 +1057,12 @@ public class FileQueryService {
     private void requireManagedNode(FileNode node) {
         if (SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库文件不能通过文件管理器修改");
+        }
+    }
+
+    private void requirePersonalNode(FileNode node) {
+        if (node.getSpaceType() == SpaceType.SHARED) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件请使用共享空间接口操作");
         }
     }
 

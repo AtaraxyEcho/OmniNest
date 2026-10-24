@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -76,6 +77,59 @@ class ResourceShareLinkServiceTest {
         assertThat(captor.getValue().getTokenHash()).hasSize(64).isNotEqualTo(result.token());
         assertThat(captor.getValue().getTokenCipher()).isEqualTo("v1:cipher");
         assertThat(captor.getValue().getPasswordHash()).isEqualTo("encoded");
+    }
+
+    @Test
+    void blankPasswordProbeDoesNotConsumePasswordAttemptQuota() {
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        when(shareLinkRepository.findByTokenHash(anyString()))
+                .thenReturn(Optional.of(passwordShare()));
+
+        assertThatThrownBy(() -> service.issueConsumedSession("raw-token", null, null, "1.2.3.4"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.SHARE_PASSWORD_REQUIRED));
+        verify(rateLimitService, never()).tryAcquire(
+                argThat(key -> key != null && key.startsWith("share-pwd-attempt:")),
+                org.mockito.ArgumentMatchers.anyInt(),
+                any(Duration.class));
+        verify(shareLinkRepository, never()).consumeAccess(any(), any());
+    }
+
+    @Test
+    void wrongPasswordAttemptKeyIsScopedToClientAddress() {
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
+        when(shareLinkRepository.findByTokenHash(anyString()))
+                .thenReturn(Optional.of(passwordShare()));
+        when(passwordEncoder.matches("wrong", "encoded")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.issueConsumedSession("raw-token", "wrong", null, "1.2.3.4"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.PASSWORD_INVALID));
+
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(rateLimitService, org.mockito.Mockito.times(3)).tryAcquire(
+                keyCaptor.capture(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                any(Duration.class));
+        String clientHash = FileShareService.sha256("1.2.3.4");
+        assertThat(keyCaptor.getAllValues())
+                .anyMatch(key -> key.startsWith("share-pwd-attempt:")
+                        && key.contains(clientHash));
+        verify(shareLinkRepository, never()).consumeAccess(any(), any());
+    }
+
+    private ShareLink passwordShare() {
+        ShareLink share = new ShareLink();
+        share.setId(SHARE_ID);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("PHOTO_ALBUM");
+        share.setResourceId(RESOURCE_ID);
+        share.setPasswordHash("encoded");
+        return share;
     }
 
     /**

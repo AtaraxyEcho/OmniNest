@@ -629,3 +629,36 @@ Future<void> _startOAuthAuthorize(
     }
   }
 }
+
+/// 外部存储 OAuth 回调后的统一反馈：刷新账户列表并提示结果。
+///
+/// 放在独立函数里是为了让主页面文件保持在 1200 行硬线以内；回调来自后端
+/// `/#/files?oauth=...`，只消费一次，页面重建不会重复弹提示。
+void scheduleFileOAuthStatusFeedback({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String? status,
+}) {
+  if (status == null) {
+    return;
+  }
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!context.mounted) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(
+      ref.read(fileBrowserControllerProvider.notifier).showExternalStorage(),
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          status == 'success'
+              ? l10n.filesExternalOAuthSuccess
+              : l10n.filesExternalOAuthFailed,
+        ),
+      ),
+    );
+  });
+}

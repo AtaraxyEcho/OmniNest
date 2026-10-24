@@ -3,9 +3,9 @@ package com.omninest.modules.video.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
-import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
-import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.file.service.FileProbeSourceService;
+import com.omninest.modules.file.service.MediaProbeSourceStager;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -16,17 +16,17 @@ import com.omninest.modules.video.repository.MediaSubtitleTrackRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.common.json.JsonSupport;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
@@ -53,17 +53,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class VideoProbeService {
-    private static final long RANGE_BYTES = 5 * 1024 * 1024;
     private static final Duration COMMAND_CHECK_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(60);
-    private static final Duration COPY_TIMEOUT = Duration.ofSeconds(120);
-    private static final Duration CLEANUP_TIMEOUT = Duration.ofSeconds(10);
-    private static final String DOCKER_CONTAINER = "omninest-ffmpeg";
-    private static final String DOCKER_PROBE_DIR = "/tmp/probe";
+    /** 同一时刻允许并行的 ffprobe 进程上限。 */
+    private static final int MAX_CONCURRENT_PROBES = 2;
     /** 同一时刻允许并行提取的字幕 ffmpeg 进程上限。 */
     private static final int MAX_CONCURRENT_SUBTITLE_EXTRACTS = 2;
 
-    private final FileQueryService fileQueryService;
+    private final FileProbeSourceService fileProbeSourceService;
     private final MediaVideoItemRepository videoItemRepository;
     private final MediaSubtitleTrackRepository subtitleTrackRepository;
     private final TaskRecordService taskRecordService;
@@ -86,31 +83,22 @@ public class VideoProbeService {
     private final Semaphore subtitleExtractSlots = new Semaphore(MAX_CONCURRENT_SUBTITLE_EXTRACTS);
 
     /**
-     * ffprobe 可用方式。
-     *
-     * @author OmniNest
+     * ffprobe 子进程槽位：媒体异步执行器改为虚拟线程后，不能让它同时拉起过多探测进程。
+     * 取不到槽位时放弃本次探测，由后续任务重试。
      */
-    private enum ProbeMode { LOCAL, DOCKER, DISABLED }
+    private final Semaphore probeSlots = new Semaphore(MAX_CONCURRENT_PROBES);
 
-    private volatile ProbeMode probeMode = ProbeMode.DISABLED;
+    private volatile boolean probeAvailable = true;
 
     @PostConstruct
     void checkFfprobe() {
-        // 优先尝试本地 ffprobe
         if (tryCommand("ffprobe", "-version")) {
-            probeMode = ProbeMode.LOCAL;
+            probeAvailable = true;
             log.info("ffprobe 可用（本地），视频探测功能已启用");
             return;
         }
-        // 回退到 Docker 容器
-        if (tryCommand("docker", "exec", DOCKER_CONTAINER, "ffprobe", "-version")) {
-            probeMode = ProbeMode.DOCKER;
-            log.info("ffprobe 可用（Docker 容器 {}），视频探测功能已启用", DOCKER_CONTAINER);
-            return;
-        }
-        probeMode = ProbeMode.DISABLED;
-        log.warn("ffprobe 不可用，视频探测功能已禁用。"
-                + "请安装 ffmpeg 或启动 Docker 容器: docker compose up -d ffmpeg");
+        probeAvailable = false;
+        log.warn("ffprobe 不可用，视频探测功能已禁用。请在后端镜像安装 ffmpeg。");
     }
 
     private boolean tryCommand(String... command) {
@@ -131,7 +119,7 @@ public class VideoProbeService {
     @Async("mediaAsyncExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onScrapeComplete(VideoProbeEvent event) {
-        if (probeMode == ProbeMode.DISABLED) {
+        if (!probeAvailable) {
             return;
         }
         try {
@@ -180,26 +168,61 @@ public class VideoProbeService {
     }
 
     public void probe(MediaVideoItem item) {
+        if (!probeAvailable) {
+            return;
+        }
         UUID ownerUserId = item.getOwnerUserId();
         UUID fileNodeId = item.getFileNodeId();
-
-        Path tempFile = null;
+        if (!probeSlots.tryAcquire()) {
+            log.warn("ffprobe 并发已达上限，跳过本次探测: itemId={}, limit={}",
+                    item.getId(), MAX_CONCURRENT_PROBES);
+            return;
+        }
         try {
-            // 内容读取与 ffprobe 均为 I/O 或 CPU 密集段，置于事务之外，避免独占数据库连接。
-            tempFile = downloadPartial(ownerUserId, fileNodeId);
-            if (tempFile == null) {
+            // 首尾窗口暂存与 ffprobe 均为 I/O 或 CPU 密集段，置于事务之外，避免独占数据库连接。
+            JsonNode probeResult;
+            boolean widerTailCouldHelp;
+            Optional<MediaProbeSourceStager.StagedSource> staged =
+                    fileProbeSourceService.stageOwned(ownerUserId, fileNodeId);
+            if (staged.isEmpty()) {
+                log.warn("视频探测输入暂存失败: itemId={}, fileNodeId={}", item.getId(), fileNodeId);
                 return;
             }
-            JsonNode probeResult = probeMode == ProbeMode.DOCKER
-                    ? runFfprobeDocker(tempFile)
-                    : runFfprobeLocal(tempFile);
+            try (MediaProbeSourceStager.StagedSource source = staged.get()) {
+                probeResult = runFfprobe(source.path());
+                widerTailCouldHelp = source.widerTailCouldHelp();
+            }
+            if (probeResult == null && widerTailCouldHelp) {
+                // 默认尾窗装不下索引时只放长一次尾窗；两次都读不到才算该内容没有元数据。
+                Optional<MediaProbeSourceStager.StagedSource> wide = fileProbeSourceService.stageOwned(
+                        ownerUserId,
+                        fileNodeId,
+                        MediaProbeSourceStager.ESCALATED_TAIL_BYTES
+                );
+                if (wide.isPresent()) {
+                    try (MediaProbeSourceStager.StagedSource source = wide.get()) {
+                        probeResult = runFfprobe(source.path());
+                    }
+                }
+            }
+            if (probeResult == null) {
+                // 两次窗口都读不到索引时做最后一次整文件兜底（有大小上限）。
+                Optional<MediaProbeSourceStager.StagedSource> full =
+                        fileProbeSourceService.stageOwnedFull(ownerUserId, fileNodeId);
+                if (full.isPresent()) {
+                    try (MediaProbeSourceStager.StagedSource source = full.get()) {
+                        probeResult = runFfprobe(source.path());
+                    }
+                }
+            }
             if (probeResult == null) {
                 return;
             }
             // 仅结果落库置于独立事务内。
+            JsonNode result = probeResult;
             TransactionTemplate writeTx = new TransactionTemplate(transactionManager);
             writeTx.executeWithoutResult(status -> {
-                applyProbeResult(item, probeResult);
+                applyProbeResult(item, result);
                 videoItemRepository.save(item);
                 triggerAudioExtractIfNeeded(item);
             });
@@ -209,13 +232,7 @@ public class VideoProbeService {
         } catch (Exception e) {
             log.warn("视频探测处理异常: itemId={}", item.getId(), e);
         } finally {
-            if (tempFile != null) {
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (IOException ignored) {
-                    log.debug("忽略: {}", ignored.getMessage());
-                }
-            }
+            probeSlots.release();
         }
     }
 
@@ -279,37 +296,52 @@ public class VideoProbeService {
         UUID videoItemId = item.getId();
         List<MediaSubtitleTrack> tracks = subtitleTrackRepository
                 .findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(ownerUserId, videoItemId);
-        for (MediaSubtitleTrack track : tracks) {
-            if (track.getStreamIndex() == null || track.getFileNodeId() != null) {
-                continue;
+        List<MediaSubtitleTrack> pending = tracks.stream()
+                .filter(track -> track.getStreamIndex() != null && track.getFileNodeId() == null)
+                .toList();
+        if (pending.isEmpty()) {
+            return;
+        }
+        if (!subtitleExtractSlots.tryAcquire()) {
+            log.warn("字幕提取并发已达上限，跳过本次提取待下次探测重试: videoItemId={}, limit={}",
+                    videoItemId, MAX_CONCURRENT_SUBTITLE_EXTRACTS);
+            return;
+        }
+        try {
+            // 一次暂存覆盖所有轨道，避免 N 条字幕把整部影片重复下载 N 次。
+            Map<Integer, Path> extractedByIndex = new HashMap<>();
+            for (VideoTranscodeService.ExtractedSubtitle extracted : videoTranscodeService
+                    .extractSubtitlesToWebVtt(
+                            ownerUserId,
+                            item.getFileNodeId(),
+                            videoItemId,
+                            pending.stream().map(MediaSubtitleTrack::getStreamIndex).toList()
+                    )) {
+                extractedByIndex.put(extracted.streamIndex(), extracted.file());
             }
-            if (!subtitleExtractSlots.tryAcquire()) {
-                log.warn("字幕提取并发已达上限，跳过本轨道待下次探测重试: videoItemId={}, streamIndex={}, limit={}",
-                        videoItemId, track.getStreamIndex(), MAX_CONCURRENT_SUBTITLE_EXTRACTS);
-                continue;
+            for (MediaSubtitleTrack track : pending) {
+                Path vttFile = extractedByIndex.get(track.getStreamIndex());
+                if (vttFile == null) {
+                    continue;
+                }
+                try {
+                    storeExtractedSubtitle(item, track, vttFile);
+                } finally {
+                    deleteQuietly(vttFile);
+                }
             }
-            try {
-                extractSingleSubtitle(item, track);
-            } catch (Exception e) {
-                log.warn("字幕提取失败: videoItemId={}, streamIndex={}, message={}",
-                        videoItemId, track.getStreamIndex(), e.getMessage());
-            } finally {
-                subtitleExtractSlots.release();
-            }
+        } finally {
+            subtitleExtractSlots.release();
         }
     }
 
     /**
-     * 提取单条内嵌字幕并更新字幕轨道引用。
+     * 把已提取的字幕落库并更新字幕轨道引用。
      */
-    private void extractSingleSubtitle(MediaVideoItem item, MediaSubtitleTrack track) {
+    private void storeExtractedSubtitle(MediaVideoItem item, MediaSubtitleTrack track, Path vttFile) {
         UUID ownerUserId = item.getOwnerUserId();
         UUID videoItemId = item.getId();
         int streamIndex = track.getStreamIndex();
-
-        // Phase 1：ffmpeg 提取 WebVTT（事务外 I/O）
-        Path vttFile = videoTranscodeService.extractSubtitleToWebVtt(
-                ownerUserId, item.getFileNodeId(), videoItemId, streamIndex);
         try {
             long sizeBytes = Files.size(vttFile);
             UUID subtitleFileId = derivedAssetStorageService.store(
@@ -339,69 +371,18 @@ public class VideoProbeService {
         } catch (Exception e) {
             log.warn("字幕存储失败: videoItemId={}, streamIndex={}, message={}",
                     videoItemId, streamIndex, e.getMessage());
-        } finally {
-            try {
-                Files.deleteIfExists(vttFile);
-            } catch (IOException ignored) {
-                log.debug("忽略: {}", ignored.getMessage());
-            }
         }
     }
 
-    private Path downloadPartial(UUID ownerUserId, UUID fileNodeId) {
-        Path tempFile = null;
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId)) {
-                tempFile = Files.createTempFile("probe-", ".tmp");
-                try (OutputStream output = Files.newOutputStream(tempFile)) {
-                    copyAtMost(content.inputStream(), output, RANGE_BYTES);
-                }
-            return tempFile;
-        } catch (Exception e) {
-            log.warn("读取视频探测片段异常: fileNodeId={}", fileNodeId, e);
-            deleteTempFile(tempFile);
-            return null;
-        }
-    }
-
-    /**
-     * 将输入流复制到输出流，但不超过指定字节数。
-     *
-     * @param input    输入流
-     * @param output   输出流
-     * @param maxBytes 最大复制字节数
-     * @return 实际复制字节数
-     * @throws IOException 流读取或写入失败
-     */
-    static long copyAtMost(InputStream input, OutputStream output, long maxBytes) throws IOException {
-        if (maxBytes <= 0) {
-            throw new IllegalArgumentException("最大复制字节数必须大于零");
-        }
-        byte[] buffer = new byte[8192];
-        long copied = 0;
-        while (copied < maxBytes) {
-            int requested = (int) Math.min(buffer.length, maxBytes - copied);
-            int read = input.read(buffer, 0, requested);
-            if (read == -1) {
-                break;
-            }
-            output.write(buffer, 0, read);
-            copied += read;
-        }
-        return copied;
-    }
-
-    private void deleteTempFile(Path tempFile) {
-        if (tempFile == null) {
-            return;
-        }
+    private void deleteQuietly(Path file) {
         try {
-            Files.deleteIfExists(tempFile);
-        } catch (IOException cleanupException) {
-            log.debug("视频探测临时文件清理失败: {}", cleanupException.getMessage());
+            Files.deleteIfExists(file);
+        } catch (IOException ignored) {
+            log.debug("忽略: {}", ignored.getMessage());
         }
     }
 
-    private JsonNode runFfprobeLocal(Path file) {
+    private JsonNode runFfprobe(Path file) {
         try {
             VideoProcessExecutor.Result result = processExecutor.execute(List.of(
                     "ffprobe",
@@ -428,70 +409,6 @@ public class VideoProbeService {
         } catch (IOException e) {
             log.warn("ffprobe 执行失败", e);
             return null;
-        }
-    }
-
-    private JsonNode runFfprobeDocker(Path hostFile) {
-        String containerFile = DOCKER_PROBE_DIR + "/" + hostFile.getFileName().toString();
-        try {
-            VideoProcessExecutor.Result copyResult = processExecutor.execute(List.of(
-                    "docker", "cp",
-                    hostFile.toAbsolutePath().toString(),
-                    DOCKER_CONTAINER + ":" + containerFile
-            ), COPY_TIMEOUT);
-            if (copyResult.timedOut()) {
-                log.warn("docker cp 超时");
-                return null;
-            }
-            if (!copyResult.succeeded()) {
-                log.warn("docker cp 失败: exitCode={}", copyResult.exitCode());
-                return null;
-            }
-
-            VideoProcessExecutor.Result probeResult = processExecutor.execute(List.of(
-                    "docker", "exec", DOCKER_CONTAINER,
-                    "ffprobe",
-                    "-v", "quiet",
-                    "-protocol_whitelist", "file,crypto,data",
-                    "-print_format", "json",
-                    "-show_format",
-                    "-show_streams",
-                    containerFile
-            ), PROBE_TIMEOUT);
-            if (probeResult.timedOut()) {
-                log.warn("Docker ffprobe 超时");
-                return null;
-            }
-            if (!probeResult.succeeded()) {
-                log.warn("Docker ffprobe 退出码异常: exitCode={}", probeResult.exitCode());
-                return null;
-            }
-            return JsonSupport.readTree(probeResult.output());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("Docker ffprobe 执行被中断");
-            return null;
-        } catch (IOException e) {
-            log.warn("Docker ffprobe 执行失败", e);
-            return null;
-        } finally {
-            cleanupDockerProbeFile(containerFile);
-        }
-    }
-
-    private void cleanupDockerProbeFile(String containerFile) {
-        try {
-            VideoProcessExecutor.Result result = processExecutor.execute(List.of(
-                    "docker", "exec", DOCKER_CONTAINER, "rm", "-f", containerFile
-            ), CLEANUP_TIMEOUT);
-            if (!result.succeeded()) {
-                log.debug("Docker 探测临时文件清理未完成: timedOut={}, exitCode={}",
-                        result.timedOut(), result.exitCode());
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (IOException e) {
-            log.debug("Docker 探测临时文件清理失败: {}", e.getMessage());
         }
     }
 

@@ -2444,6 +2444,18 @@ abstract class AppLocalizations {
   /// **'Credentials missing'**
   String get filesExternalCredentialsMissing;
 
+  /// No description provided for @filesExternalOAuthSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage authorization completed.'**
+  String get filesExternalOAuthSuccess;
+
+  /// No description provided for @filesExternalOAuthFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage authorization failed. Please try again.'**
+  String get filesExternalOAuthFailed;
+
   /// No description provided for @filesExternalBrowseFailedTitle.
   ///
   /// In en, this message translates to:

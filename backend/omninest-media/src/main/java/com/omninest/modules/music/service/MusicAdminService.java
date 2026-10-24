@@ -52,6 +52,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +72,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MusicAdminService {
+    private static final int SCAN_PREFETCH_PARALLELISM = 4;
+    private static final int SCAN_PREFETCH_BATCH_SIZE = 16;
 
     private static final List<String> ACTIVE_TASK_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
@@ -198,28 +205,41 @@ public class MusicAdminService {
             Map<UUID, Set<UUID>> affectedArtistsByOwner = new LinkedHashMap<>();
             Map<UUID, Set<UUID>> affectedAlbumsByOwner = new LinkedHashMap<>();
             int visited = 0;
-
-            for (FileDescriptor file : nodes) {
-                visited++;
-                if (isAudioFile(file)) {
-                    FileDescriptor sidecarLyrics = lyricFilesByBasePath.get(
-                            basePathKey(file.normalizedPath())
+            List<FileDescriptor> audioNodes = nodes.stream().filter(this::isAudioFile).toList();
+            Semaphore ioPermits = new Semaphore(SCAN_PREFETCH_PARALLELISM);
+            try (ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+                for (int start = 0; start < audioNodes.size(); start += SCAN_PREFETCH_BATCH_SIZE) {
+                    List<FileDescriptor> chunk = audioNodes.subList(
+                            start,
+                            Math.min(start + SCAN_PREFETCH_BATCH_SIZE, audioNodes.size())
                     );
-                    try {
-                        // 逐文件独立事务：单个文件下载/解析/落库失败不阻塞整库扫描。
-                        transactionTemplate.executeWithoutResult(status ->
-                                importAudioFileCached(ownerUserId, file, sidecarLyrics,
-                                        artistCache, albumCache, affectedArtistsByOwner, affectedAlbumsByOwner)
-                        );
-                        imported++;
-                    } catch (Exception perFileError) {
-                        log.warn("音乐扫描单文件失败，跳过继续: jobId={}, errorType={}",
-                                jobId, perFileError.getClass().getSimpleName());
+                    List<Future<PrefetchedAudio>> futures = chunk.stream()
+                            .map(file -> ioExecutor.submit(() -> prefetchAudio(file, lyricFilesByBasePath, ioPermits)))
+                            .toList();
+                    // 单线程顺序入库：artist/album 缓存与同名唯一键都不能并发写。
+                    for (Future<PrefetchedAudio> future : futures) {
+                        visited++;
+                        try {
+                            PrefetchedAudio prefetched = future.get();
+                            transactionTemplate.executeWithoutResult(status ->
+                                    importPrefetchedAudioCached(ownerUserId, prefetched,
+                                            artistCache, albumCache,
+                                            affectedArtistsByOwner, affectedAlbumsByOwner)
+                            );
+                            imported++;
+                        } catch (InterruptedException exception) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("音乐扫描等待预取结果时被中断", exception);
+                        } catch (ExecutionException | RuntimeException perFileError) {
+                            log.warn("音乐扫描单文件失败，跳过继续: jobId={}, errorType={}",
+                                    jobId, perFileError.getClass().getSimpleName());
+                        }
+                        if (!audioNodes.isEmpty()
+                                && (visited == audioNodes.size() || visited % 20 == 0)) {
+                            int progress = 10 + (int) Math.floor((visited * 80.0) / audioNodes.size());
+                            taskRecordService.updateExecution(jobId, "SCANNING", progress);
+                        }
                     }
-                }
-                if (!nodes.isEmpty() && (visited == nodes.size() || visited % 20 == 0)) {
-                    int progress = 10 + (int) Math.floor((visited * 80.0) / nodes.size());
-                    taskRecordService.updateExecution(jobId, "SCANNING", progress);
                 }
             }
 
@@ -464,11 +484,37 @@ public class MusicAdminService {
      * 带缓存的音频文件导入。使用 artist/album 缓存减少 DB 查询，
      * 收集受影响的 ID 用于后续批量刷新统计。
      */
-    private void importAudioFileCached(
-            UUID ownerUserId, FileDescriptor file, FileDescriptor sidecarLyrics,
+    private PrefetchedAudio prefetchAudio(
+            FileDescriptor file,
+            Map<String, FileDescriptor> lyricFilesByBasePath,
+            Semaphore ioPermits
+    ) throws IOException {
+        FileDescriptor sidecarLyrics = lyricFilesByBasePath.get(basePathKey(file.normalizedPath()));
+        ioPermits.acquireUninterruptibly();
+        try {
+            MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
+            String lyricsRaw = firstText(metadata.lyricsRaw(), readTextObject(sidecarLyrics));
+            return new PrefetchedAudio(file, metadata, lyricsRaw);
+        } finally {
+            ioPermits.release();
+        }
+    }
+
+    private record PrefetchedAudio(
+            FileDescriptor file,
+            MusicMetadataExtractor.Metadata metadata,
+            String lyricsRaw
+    ) {
+    }
+
+    private void importPrefetchedAudioCached(
+            UUID ownerUserId, PrefetchedAudio prefetched,
             Map<String, MusicArtist> artistCache, Map<String, MusicAlbum> albumCache,
             Map<UUID, Set<UUID>> affectedArtistsByOwner, Map<UUID, Set<UUID>> affectedAlbumsByOwner
     ) {
+        FileDescriptor file = prefetched.file();
+        MusicMetadataExtractor.Metadata metadata = prefetched.metadata();
+        String lyricsRaw = prefetched.lyricsRaw();
         // 曲目行归属固定为文件所有者：共享空间文件被成员扫描时也由上传者持有，
         // 否则"谁先扫谁拥有"会让非所有者获得元数据写权限，且与唯一约束冲突。
         UUID catalogOwnerId = file.ownerUserId() != null ? file.ownerUserId() : ownerUserId;
@@ -498,8 +544,6 @@ public class MusicAdminService {
         }
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
-        MusicMetadataExtractor.Metadata metadata = extractMetadata(file);
-        String lyricsRaw = firstText(metadata.lyricsRaw(), readTextObject(sidecarLyrics));
 
         MusicFileNameGuess fileNameGuess = parseFileName(file.name());
         String title = firstText(metadata.title(), firstText(fileNameGuess.title(), titleFromFileName(file.name())));
