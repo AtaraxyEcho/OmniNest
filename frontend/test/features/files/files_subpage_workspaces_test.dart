@@ -184,6 +184,9 @@ void main() {
     // sharedAt 为空显示占位，expiresAt 有值按本地格式渲染。
     expect(find.text('—'), findsAtLeastNWidgets(1));
     expect(find.text('2026-12-31'), findsOneWidget);
+    // 定向分享单文件必须同时提供预览与直接下载入口，不能只能点开预览。
+    expect(find.text('预览'), findsOneWidget);
+    expect(find.text('下载'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

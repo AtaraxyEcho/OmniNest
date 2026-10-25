@@ -172,10 +172,23 @@ class _HistoryList extends ConsumerStatefulWidget {
 class _HistoryListState extends ConsumerState<_HistoryList> {
   final ScrollController _scrollController = ScrollController();
 
+  /// 上次触发补齐时的已加载条数：同一批数据只能触发一次，避免 build 空转。
+  int? _lastFillLoadedCount;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+    _scheduleMaybeFill();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HistoryList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state.loadedCount != widget.state.loadedCount ||
+        oldWidget.state.hasMore != widget.state.hasMore) {
+      _scheduleMaybeFill();
+    }
   }
 
   @override
@@ -199,7 +212,18 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
   }
 
   /// 内容不足一屏时主动补齐下一页，保证触底加载可达。
-  void _maybeFillViewport() {
+  ///
+  /// 只在首次挂载或 loadedCount 变化时调度一次；服务端返回空页时控制器会
+  /// 把 hasMore 收敛为 false，避免 build → postFrame → loadMore 的空转循环。
+  void _scheduleMaybeFill() {
+    final state = widget.state;
+    if (!state.hasMore || state.loadingMore) {
+      return;
+    }
+    if (_lastFillLoadedCount == state.loadedCount) {
+      return;
+    }
+    _lastFillLoadedCount = state.loadedCount;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) {
         return;
@@ -216,9 +240,6 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
     final state = widget.state;
     final l10n = AppLocalizations.of(context);
     final hosted = MobileShellScope.isHosted(context);
-    if (state.hasMore && !state.loadingMore) {
-      _maybeFillViewport();
-    }
 
     final rows = <Widget>[
       for (final group in state.groups) ...[

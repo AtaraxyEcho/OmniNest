@@ -416,6 +416,22 @@ class WeatherServiceTest {
         }
 
         @Test
+        @DisplayName("坐标反查 404 的负缓存键与读取键一致（含语言后缀）")
+        void geoNotFoundForCoordinatesMarksSameLocalizedKey() {
+            stubConfigs(baseConfigs());
+            stubJwtCache();
+            Map<String, String> responses = new HashMap<>();
+            responses.put("/geo/v2/city/lookup", "{\"code\":\"404\"}");
+            stubRestTemplateWithResponses(responses);
+
+            WeatherDto result = weatherService.getRealtimeWeather("116.41,39.92");
+
+            assertThat(result.text()).isEqualTo("未知");
+            // 读取侧使用 cityName + "|" + lang；写入漏掉语言后缀会让负缓存永远不命中。
+            verify(weatherCacheStore).markLocationMissing("116.41,39.92|zh");
+        }
+
+        @Test
         @DisplayName("GeoAPI 网络异常不得把城市误标为不存在")
         void geoTransportFailureDoesNotMarkLocationMissing() {
             stubConfigs(baseConfigs());

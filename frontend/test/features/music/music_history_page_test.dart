@@ -101,6 +101,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('空页立即终止续载，避免 build 反复补齐', () async {
+    final api = _HistoryApiStub()..emptyTail = true;
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    final initial = await container.read(musicHistoryControllerProvider.future);
+
+    expect(initial.hasMore, isTrue);
+    await container.read(musicHistoryControllerProvider.notifier).loadMore();
+    await container.read(musicHistoryControllerProvider.notifier).loadMore();
+
+    final state = container.read(musicHistoryControllerProvider).asData!.value;
+    expect(state.hasMore, isFalse);
+    expect(state.loadedCount, 2);
+    expect(api.requestedPages, [0, 1]);
+  });
+
   test('loadMore 跨页去重后停止', () async {
     final api = _HistoryApiStub();
     final container = ProviderContainer.test(
@@ -182,6 +200,7 @@ class _MemoryStore implements MusicPlaybackQueueStore {
 class _HistoryApiStub implements MusicApi {
   final requestedPages = <int>[];
   bool failNextRefresh = false;
+  bool emptyTail = false;
   // 固定为「今天中午 / 昨天 / 前天」，避免贴近午夜时 now-2h 落入昨日导致分组与预期不符。
   late final DateTime todayNoon = () {
     final n = DateTime.now();
@@ -242,12 +261,13 @@ class _HistoryApiStub implements MusicApi {
       throw Exception('network down');
     }
     requestedPages.add(page);
-    final items = _page(page);
+    final items =
+        emptyTail && page > 0 ? const <MusicPlayHistoryEntry>[] : _page(page);
     return MusicPagedResult<MusicPlayHistoryEntry>(
       items: items,
       page: page,
       size: size,
-      totalElements: 3,
+      totalElements: emptyTail ? 100 : 3,
     );
   }
 

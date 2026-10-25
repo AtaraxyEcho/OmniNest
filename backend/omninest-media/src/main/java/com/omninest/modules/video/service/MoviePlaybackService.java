@@ -229,6 +229,18 @@ public class MoviePlaybackService {
     }
 
     /**
+     * 校验字幕存在与影片可读性，不写响应；供控制器先校验再设置响应头。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param subtitleId 字幕轨道 ID
+     */
+    public void requireSubtitleContentAccess(UUID ownerUserId, UUID subtitleId) {
+        MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
+        mediaContentAccessService.requireReadableVideo(ownerUserId, track.getVideoItemId());
+    }
+
+    /**
      * 流式写出字幕文件内容。
      * 外挂字幕：从 File 模块受控内容流拷贝（SRT/ASS/VTT）。
      * 内嵌字幕：从 File 读取探测时提取的 WebVTT；若未提取则实时提取。

@@ -427,6 +427,9 @@ services:
     environment:
       AI_VISION_PROFILE: ${AI_VISION_PROFILE:-lightweight}
       AI_ORT_INTRA_THREADS: ${AI_CPU_THREADS:-1}
+      # 与 Worker 的 photo-ai-concurrency 默认档位对齐；解码时按长边缩放，避免双份全尺寸数组。
+      AI_MAX_CONCURRENT_INFERENCES: ${AI_MAX_CONCURRENT_INFERENCES:-2}
+      AI_DECODE_MAX_SIDE: ${AI_DECODE_MAX_SIDE:-2048}
       OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:?OMNINEST_AI_SIDECAR_SECRET 必须显式配置}
       OMP_NUM_THREADS: ${AI_CPU_THREADS:-1}
       TZ: Asia/Shanghai

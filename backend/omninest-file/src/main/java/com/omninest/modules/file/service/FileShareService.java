@@ -28,8 +28,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -286,6 +288,7 @@ public class FileShareService {
 
         FileNode node = fileNodeSupport.findActiveNode(ownerUserId, request.resourceId());
         fileNodeSupport.requireShareable(node);
+        List<UUID> recipients = normalizeRecipients(ownerUserId, request.recipientUserIds());
         String rawToken = UUID.randomUUID().toString().replace("-", "");
         ShareLink share = new ShareLink();
         share.setOwnerUserId(ownerUserId);
@@ -308,7 +311,6 @@ public class FileShareService {
         ShareLink saved = shareLinkRepository.save(share);
         log.info("创建分享链接: shareId={}, ownerUserId={}, resourceType={}, resourceId={}",
                 saved.getId(), ownerUserId, resourceType, node.getId());
-        List<UUID> recipients = request.recipientUserIds() == null ? List.of() : request.recipientUserIds();
         if (!recipients.isEmpty()) {
             List<FileShareRecipient> recipientEntities = recipients.stream()
                     .map(recipientUserId -> {
@@ -323,6 +325,32 @@ public class FileShareService {
         syncEventWriter.recordShareEvent(ownerUserId, saved.getId());
         recipients.forEach(recipientUserId -> syncEventWriter.recordShareEvent(recipientUserId, saved.getId()));
         return toShareDto(saved, rawToken, generatedPassword);
+    }
+
+    /**
+     * 校验并归一化定向分享接收人：去重、拒绝自分享、拒绝不存在或停用的账户。
+     *
+     * @param ownerUserId 分享所有者
+     * @param rawRecipients 请求中的接收人列表
+     * @return 去重后的接收人
+     */
+    private List<UUID> normalizeRecipients(UUID ownerUserId, List<UUID> rawRecipients) {
+        if (rawRecipients == null || rawRecipients.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> recipients = new ArrayList<>(new LinkedHashSet<>(rawRecipients));
+        if (recipients.contains(ownerUserId)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不能分享给自己");
+        }
+        for (UUID recipientUserId : recipients) {
+            if (recipientUserId == null
+                    || userAccountQuery.findDetailsById(recipientUserId)
+                            .filter(details -> "ACTIVE".equals(details.status()))
+                            .isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "分享接收人不存在或已停用");
+            }
+        }
+        return List.copyOf(recipients);
     }
 
     /**

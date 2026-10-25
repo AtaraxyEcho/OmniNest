@@ -778,6 +778,35 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 将业务参与者贡献的共享空间节点关联到永久删除任务。
+     *
+     * <p>共享任务可能混有多个上传者的派生节点；按单个所有者过滤会漏掉其他成员的
+     * 贡献，物理删除后留下悬挂节点。个人空间贡献仍走所有者限定的更新。</p>
+     *
+     * @param ids 文件节点 ID
+     * @param taskId 任务 ID
+     * @param deletedBy 记录到 deleted_by 的操作者
+     * @param state 生命周期状态
+     * @param requestedAt 请求时间
+     * @return 更新数量
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update FileNode node set node.deleted = true, "
+            + "node.deletedAt = coalesce(node.deletedAt, :requestedAt), "
+            + "node.deletedBy = coalesce(node.deletedBy, :deletedBy), "
+            + "node.purgeTaskId = :taskId, node.purgeState = :state, "
+            + "node.purgeRequestedAt = coalesce(node.purgeRequestedAt, :requestedAt) "
+            + "where node.spaceType = 'SHARED' "
+            + "and node.id in :ids and (node.purgeTaskId is null or node.purgeTaskId = :taskId)")
+    int assignSharedIdsToPurge(
+            @Param("ids") Collection<UUID> ids,
+            @Param("taskId") UUID taskId,
+            @Param("deletedBy") UUID deletedBy,
+            @Param("state") FilePurgeState state,
+            @Param("requestedAt") Instant requestedAt
+    );
+
+    /**
      * 批量更新任务节点生命周期状态。
      *
      * @param taskId 任务 ID

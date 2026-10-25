@@ -34,6 +34,9 @@ MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
 MAX_IMAGE_HEIGHT = int(os.environ.get("AI_MAX_IMAGE_HEIGHT", "30000"))
 MAX_IMAGE_PIXELS = int(os.environ.get("AI_MAX_IMAGE_PIXELS", "100000000"))
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+# OCR 检测长边本身就是 2048；超过该尺寸再保留原图只会放大解码峰值。
+# 先按长边缩放再转 BGR，避免 1 亿像素同时持有 RGB 与 OpenCV 两份全尺寸数组。
+DECODE_MAX_SIDE = max(256, int(os.environ.get("AI_DECODE_MAX_SIDE", "2048")))
 
 MAX_CONCURRENT_INFERENCES = max(1, int(os.environ.get("AI_MAX_CONCURRENT_INFERENCES", "1")))
 ORT_INTRA_THREADS = max(1, int(os.environ.get("AI_ORT_INTRA_THREADS", "2")))
@@ -215,6 +218,8 @@ class ModelLifecycleManager:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        # RapidOCR 单例内部状态不是线程安全的；即使把并发档位调高，也不能并发调用。
+        self._ocr_inference_lock = threading.Lock()
         self._ocr: Optional[RapidOCR] = None
         self._lw_session: Optional[ort.InferenceSession] = None
         self._lw_labels: List[Tuple[str, str]] = []
@@ -244,6 +249,11 @@ class ModelLifecycleManager:
                         intra_op_num_threads=ORT_INTRA_THREADS,
                     )
         return self._ocr
+
+    def run_ocr(self, bgr: np.ndarray):
+        """串行执行 RapidOCR 推理，避免多线程共享单例内部状态。"""
+        with self._ocr_inference_lock:
+            return self.get_ocr()(bgr)
 
     def acquire_lightweight_vision(
         self,
@@ -417,6 +427,14 @@ def _decode_single_pass_bgr(raw_bytes: bytes) -> np.ndarray:
                 or width * height > MAX_IMAGE_PIXELS
             ):
                 raise HTTPException(status_code=413, detail="Image dimensions exceed limit")
+            # JPEG 可先按目标尺寸解码；其余格式由 thumbnail 在解码后缩小。
+            # 两者都不放大，小图保持原尺寸，避免无谓插值。
+            decoded.draft("RGB", (DECODE_MAX_SIDE, DECODE_MAX_SIDE))
+            if decoded.width > DECODE_MAX_SIDE or decoded.height > DECODE_MAX_SIDE:
+                decoded.thumbnail(
+                    (DECODE_MAX_SIDE, DECODE_MAX_SIDE),
+                    Image.Resampling.LANCZOS,
+                )
             rgb = decoded.convert("RGB")
             return cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)
     except HTTPException:
@@ -433,8 +451,7 @@ def _run_gated_ocr(bgr: np.ndarray) -> Tuple[Optional[str], int, float]:
     短边 < 8px 丢弃；8~12px 要求 score >= 0.78；>= 12px 要求 score >= 0.65。
     """
     height, width = bgr.shape[:2]
-    ocr = model_manager.get_ocr()
-    ocr_result, _ = ocr(bgr)
+    ocr_result, _ = model_manager.run_ocr(bgr)
     if not ocr_result:
         return None, 0, 0.0
 
@@ -683,6 +700,8 @@ async def analyze_content(
     hint: str = Query(default="AUTO", description="AUTO | TEXT_GRAPHIC | NATURAL_PHOTO"),
     skip_ocr: bool = Query(default=False, alias="skipOcr", description="OCR 版本未变时跳过重复识别"),
 ):
-    contents = await _read_image_bytes(image)
+    # 请求体读取也必须在推理并发槽内：否则排队请求会各自把最多 64MB 原图
+    # 读进内存，绕过槽位限制形成内存峰值。
     async with inference_slots:
+        contents = await _read_image_bytes(image)
         return await to_thread(_analyze_content_sync, contents, hint.upper(), skip_ocr)

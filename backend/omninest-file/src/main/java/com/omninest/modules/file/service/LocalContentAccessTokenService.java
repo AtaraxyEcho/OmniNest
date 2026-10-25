@@ -1,36 +1,48 @@
 package com.omninest.modules.file.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
  * 本地内容短期访问令牌服务。
  *
+ * <p>令牌采用 HMAC-SHA256 自包含签名，不保存服务端状态：多 API 实例、重启与水平
+ * 扩展后都能继续校验，避免进程内缓存导致跨节点 403。有效期与 MinIO 预签名一致取
+ * 2 小时，覆盖长视频播放中的后续 Range 请求。</p>
+ *
  * @author OmniNest
  */
 @Service
 public class LocalContentAccessTokenService {
-    /**
-     * 本地内容令牌有效期。与 MinIO 预签名一致取 2 小时；令牌为进程内
-     * Caffeine 缓存，后端重启后旧令牌失效由前端重签闭环兜底。
-     */
-    private static final Duration TOKEN_TTL = Duration.ofMinutes(15);
-    private static final int TOKEN_BYTES = 32;
-    private static final long MAXIMUM_TOKENS = 20000;
+    private static final Duration TOKEN_TTL = Duration.ofHours(2);
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final String TOKEN_VERSION = "v1";
+    private static final int NONCE_BYTES = 16;
+    private static final Base64.Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    private static final Base64.Decoder BASE64_DECODER = Base64.getUrlDecoder();
 
+    private final SecretKeySpec signingKey;
     private final SecureRandom secureRandom = new SecureRandom();
-    private final Cache<String, AccessGrant> grants = Caffeine.newBuilder()
-            .maximumSize(MAXIMUM_TOKENS)
-            .expireAfterWrite(TOKEN_TTL)
-            .build();
+
+    @Autowired
+    public LocalContentAccessTokenService(@Value("${omninest.security.jwt-secret}") String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("本地内容令牌签名密钥不能为空");
+        }
+        this.signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
+    }
 
     /**
      * 为单个文件签发短期访问令牌。
@@ -40,11 +52,17 @@ public class LocalContentAccessTokenService {
      * @return 访问授权
      */
     public IssuedAccess issue(UUID ownerUserId, UUID fileId) {
-        byte[] random = new byte[TOKEN_BYTES];
+        byte[] random = new byte[NONCE_BYTES];
         secureRandom.nextBytes(random);
-        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
         Instant expiresAt = Instant.now().plus(TOKEN_TTL);
-        grants.put(token, new AccessGrant(ownerUserId, fileId, expiresAt));
+        String payload = String.join("|",
+                TOKEN_VERSION,
+                ownerUserId.toString(),
+                fileId.toString(),
+                Long.toString(expiresAt.getEpochSecond()),
+                BASE64_ENCODER.encodeToString(random));
+        String payloadPart = BASE64_ENCODER.encodeToString(payload.getBytes(StandardCharsets.UTF_8));
+        String token = payloadPart + "." + BASE64_ENCODER.encodeToString(sign(payloadPart));
         return new IssuedAccess(token, expiresAt);
     }
 
@@ -58,14 +76,47 @@ public class LocalContentAccessTokenService {
         if (token == null || token.isBlank()) {
             throw invalidToken();
         }
-        AccessGrant grant = grants.getIfPresent(token);
-        if (grant == null || grant.expiresAt().isBefore(Instant.now())) {
-            if (grant != null) {
-                grants.invalidate(token);
-            }
+        int separator = token.indexOf('.');
+        if (separator <= 0 || separator == token.length() - 1) {
             throw invalidToken();
         }
-        return grant;
+        String payloadPart = token.substring(0, separator);
+        byte[] providedSignature;
+        String payload;
+        try {
+            providedSignature = BASE64_DECODER.decode(token.substring(separator + 1));
+            payload = new String(BASE64_DECODER.decode(payloadPart), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            throw invalidToken();
+        }
+        if (!MessageDigest.isEqual(providedSignature, sign(payloadPart))) {
+            throw invalidToken();
+        }
+        String[] fields = payload.split("\\|", -1);
+        if (fields.length != 5 || !TOKEN_VERSION.equals(fields[0])) {
+            throw invalidToken();
+        }
+        try {
+            UUID ownerUserId = UUID.fromString(fields[1]);
+            UUID fileId = UUID.fromString(fields[2]);
+            Instant expiresAt = Instant.ofEpochSecond(Long.parseLong(fields[3]));
+            if (fields[4].isBlank() || !expiresAt.isAfter(Instant.now())) {
+                throw invalidToken();
+            }
+            return new AccessGrant(ownerUserId, fileId, expiresAt);
+        } catch (IllegalArgumentException exception) {
+            throw invalidToken();
+        }
+    }
+
+    private byte[] sign(String payloadPart) {
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(signingKey);
+            return mac.doFinal(payloadPart.getBytes(StandardCharsets.US_ASCII));
+        } catch (Exception exception) {
+            throw new IllegalStateException("本地内容令牌签名失败", exception);
+        }
     }
 
     private BusinessException invalidToken() {

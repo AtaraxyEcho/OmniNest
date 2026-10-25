@@ -23,9 +23,11 @@ import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.UserSyncEventRecorder;
+import com.omninest.common.user.UserAccountDetails;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.file.domain.FileFavorite;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.FileShareRecipient;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.ShareLink;
@@ -57,6 +59,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
@@ -293,6 +296,68 @@ class FileManagerServiceTest {
         assertThat(result.generatedPassword()).hasSize(10);
         assertThat(result.generatedPassword()).matches("[a-zA-Z0-9]+");
         verify(passwordEncoder).encode(result.generatedPassword());
+    }
+
+    @Test
+    void createShareDeduplicatesRecipientsAndRejectsSelfShare() {
+        FileNode file = node("doc.pdf", "application/pdf", 1024);
+        UUID recipient = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(file));
+        when(shareLinkRepository.save(any(ShareLink.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userAccountQuery.findDetailsById(recipient))
+                .thenReturn(Optional.of(activeAccount(recipient)));
+
+        CreateShareLinkRequest duplicated = new CreateShareLinkRequest(
+                FILE_ID, "FILE", null, false, null, null, List.of(recipient, recipient));
+        fileShareService.createShare(OWNER_ID, duplicated);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<FileShareRecipient>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(shareRecipientRepository).saveAll(captor.capture());
+        List<FileShareRecipient> saved = new ArrayList<>();
+        captor.getValue().forEach(saved::add);
+        assertThat(saved).hasSize(1);
+        assertThat(saved.getFirst().getRecipientUserId()).isEqualTo(recipient);
+
+        CreateShareLinkRequest self = new CreateShareLinkRequest(
+                FILE_ID, "FILE", null, false, null, null, List.of(OWNER_ID));
+        assertThatThrownBy(() -> fileShareService.createShare(OWNER_ID, self))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR);
+    }
+
+    @Test
+    void createShareRejectsMissingOrDisabledRecipient() {
+        FileNode file = node("doc.pdf", "application/pdf", 1024);
+        UUID missing = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        UUID disabled = UUID.fromString("40000000-0000-0000-0000-000000000003");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(file));
+        when(userAccountQuery.findDetailsById(missing)).thenReturn(Optional.empty());
+        when(userAccountQuery.findDetailsById(disabled))
+                .thenReturn(Optional.of(disabledAccount(disabled)));
+
+        for (UUID recipient : List.of(missing, disabled)) {
+            CreateShareLinkRequest request = new CreateShareLinkRequest(
+                    FILE_ID, "FILE", null, false, null, null, List.of(recipient));
+            assertThatThrownBy(() -> fileShareService.createShare(OWNER_ID, request))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(exception -> ((BusinessException) exception).errorCode())
+                    .isEqualTo(ErrorCode.PARAM_ERROR);
+        }
+    }
+
+    private UserAccountDetails activeAccount(UUID userId) {
+        return new UserAccountDetails(userId, "recipient", "Recipient", null, null,
+                "ACTIVE", null, Set.of(), Set.of(), 0L, 0L);
+    }
+
+    private UserAccountDetails disabledAccount(UUID userId) {
+        return new UserAccountDetails(userId, "disabled", "Disabled", null, null,
+                "DISABLED", null, Set.of(), Set.of(), 0L, 0L);
     }
 
     @Test

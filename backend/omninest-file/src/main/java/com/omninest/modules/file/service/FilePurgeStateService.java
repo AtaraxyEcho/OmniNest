@@ -162,12 +162,21 @@ public class FilePurgeStateService {
         };
         participants.forEach(participant -> participant.contribute(context, writer));
         if (!contributedNodeIds.isEmpty()) {
+            Instant requestedAt = Instant.now();
             fileNodeRepository.assignIdsToPurge(
                     event.ownerUserId(),
                     contributedNodeIds,
                     event.taskId(),
                     FilePurgeState.RUNNING,
-                    Instant.now()
+                    requestedAt
+            );
+            // 共享任务的贡献节点可能属于其他上传者；按所有者过滤会漏挂这些节点。
+            fileNodeRepository.assignSharedIdsToPurge(
+                    contributedNodeIds,
+                    event.taskId(),
+                    event.ownerUserId(),
+                    FilePurgeState.RUNNING,
+                    requestedAt
             );
         }
 

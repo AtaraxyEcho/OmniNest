@@ -83,6 +83,56 @@ public interface FileShareRecipientRepository extends JpaRepository<FileShareRec
      */
     boolean existsByShareLink_IdAndRecipientUserId(UUID shareLinkId, UUID recipientUserId);
 
+    /**
+     * 查询接收人对指定资源的直接分享关系，用于单文件下载/预览授权。
+     *
+     * @param recipientUserId 接收人用户 ID
+     * @param resourceId 分享资源 ID
+     * @return 接收记录
+     */
+    @EntityGraph(attributePaths = "shareLink")
+    List<FileShareRecipient> findByRecipientUserIdAndShareLink_ResourceId(
+            UUID recipientUserId, UUID resourceId);
+
+    /**
+     * 批量查询接收人仍有效的单文件分享关系。
+     *
+     * @param recipientUserId 接收人用户 ID
+     * @param resourceIds 资源 ID 集合
+     * @return 每行二元组：资源 ID、分享所有者 ID
+     */
+    @Query("""
+            SELECT s.resourceId, s.ownerUserId FROM FileShareRecipient r
+            JOIN r.shareLink s
+            WHERE r.recipientUserId = :recipientUserId
+              AND s.resourceType = 'FILE'
+              AND s.resourceId IN :resourceIds
+              AND s.disabledAt IS NULL
+              AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)
+            """)
+    List<Object[]> findActiveFileSharePairs(
+            @Param("recipientUserId") UUID recipientUserId,
+            @Param("resourceIds") Collection<UUID> resourceIds);
+
+    /**
+     * 查询接收人仍有效的文件夹分享根路径，供祖先目录授权判定。
+     *
+     * @param recipientUserId 接收人用户 ID
+     * @return 每行二元组：分享链路、根目录规范化路径
+     */
+    @Query("""
+            SELECT s, root.normalizedPath FROM FileShareRecipient r
+            JOIN r.shareLink s, FileNode root
+            WHERE r.recipientUserId = :recipientUserId
+              AND s.resourceType = 'FOLDER'
+              AND s.disabledAt IS NULL
+              AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)
+              AND root.id = s.resourceId
+              AND root.deleted = false
+              AND root.ownerUserId = s.ownerUserId
+            """)
+    List<Object[]> findActiveFolderShareRoots(@Param("recipientUserId") UUID recipientUserId);
+
     void deleteByShareLink_Id(UUID shareLinkId);
 
     void deleteByShareLink_IdIn(Collection<UUID> shareLinkIds);

@@ -27,6 +27,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 管理端用户物理删除服务。
@@ -107,7 +109,7 @@ public class AdminUserDeletionService {
         user.getRoles().clear();
         authUserRepository.delete(user);
         userProfileCacheEvictor.evictProfileCache(userId);
-        removeAvatarQuietly(userId, avatarFileId);
+        removeAvatarAfterCommit(userId, avatarFileId);
         auditLogService.recordWithPayload(
                 actorUserId,
                 DELETE_AUDIT_ACTION,
@@ -115,6 +117,26 @@ public class AdminUserDeletionService {
                 userId,
                 Map.of("username", user.getUsername())
         );
+    }
+
+    /**
+     * 头像对象删除必须等数据库事务提交后再执行：事务回滚时用户的 avatar_file_id
+     * 仍然有效，提前删对象会造成不可逆的数据丢失。
+     */
+    private void removeAvatarAfterCommit(UUID userId, UUID avatarFileId) {
+        if (avatarFileId == null) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            removeAvatarQuietly(userId, avatarFileId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                removeAvatarQuietly(userId, avatarFileId);
+            }
+        });
     }
 
     private void removeAvatarQuietly(UUID userId, UUID avatarFileId) {

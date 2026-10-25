@@ -2,6 +2,7 @@ package com.omninest.modules.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -33,6 +34,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class AdminUserDeletionServiceTest {
     private final AuthUserRepository authUserRepository = Mockito.mock(AuthUserRepository.class);
@@ -215,5 +218,28 @@ class AdminUserDeletionServiceTest {
                 eq(actorUserId), eq("ADMIN_USER_DELETE"), eq("auth_users"), eq(targetUserId),
                 payloadCaptor.capture());
         assertThat(payloadCaptor.getValue()).containsEntry("username", "member-it");
+    }
+
+    @Test
+    void deleteUserRemovesAvatarOnlyAfterCommit() {
+        givenActor();
+        AuthUser user = targetUser(Roles.MEMBER);
+        user.setAvatarFileId(UUID.randomUUID());
+        when(authUserRepository.findWithRolesById(targetUserId)).thenReturn(Optional.of(user));
+        when(adminUserContentGuardRepository.countOwnedContent(targetUserId)).thenReturn(Map.of());
+        when(objectStorageBuckets.derivedAssets()).thenReturn("derived-assets");
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteUser(targetUserId);
+
+            // 事务回滚时 avatar_file_id 仍然有效，提交前绝不能删对象。
+            verify(objectStorageClient, Mockito.never()).removeObject(any());
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            verify(objectStorageClient).removeObject(any());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }

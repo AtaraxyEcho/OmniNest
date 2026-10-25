@@ -119,7 +119,7 @@ class _SharedWithMeWorkspaceState
               _SubColumn(l10n.filesColumnSharedAt, width: 116),
               _SubColumn(l10n.filesColumnExpiresAt, width: 108),
               _SubColumn(l10n.filesColumnSize, width: 96),
-              _SubColumn(l10n.filesFileActions, width: 96),
+              _SubColumn(l10n.filesFileActions, width: 156),
             ],
             rows: [
               for (final item in items)
@@ -168,20 +168,45 @@ class _SharedWithMeWorkspaceState
                     ),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: _SubAction(
-                        label:
-                            item.file.isFolder
-                                ? l10n.filesOpen
-                                : l10n.filesPreview,
-                        onTap:
-                            item.file.isFolder
-                                ? () => showSharedFolderBrowser(
-                                  context,
-                                  shareId: item.shareId,
-                                  folderName: item.file.name,
-                                )
-                                : () => _openFilePreview(context, item.file),
-                      ),
+                      child:
+                          item.file.isFolder
+                              ? _SubAction(
+                                label: l10n.filesOpen,
+                                onTap:
+                                    () => showSharedFolderBrowser(
+                                      context,
+                                      shareId: item.shareId,
+                                      folderName: item.file.name,
+                                    ),
+                              )
+                              : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _SubAction(
+                                    label: l10n.filesPreview,
+                                    onTap:
+                                        () => _openFilePreview(
+                                          context,
+                                          item.file,
+                                        ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _SubAction(
+                                    label: l10n.filesDownload,
+                                    onTap:
+                                        () => unawaited(
+                                          _downloadFile(
+                                            context,
+                                            ref.read(
+                                              fileBrowserControllerProvider
+                                                  .notifier,
+                                            ),
+                                            item.file,
+                                          ),
+                                        ),
+                                  ),
+                                ],
+                              ),
                     ),
                   ],
                 ),

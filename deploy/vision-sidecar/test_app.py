@@ -80,6 +80,12 @@ class ImageBoundaryTest(unittest.TestCase):
                 app._decode_single_pass_bgr(data)
         self.assertEqual(413, context.exception.status_code)
 
+    def test_decode_downscales_long_side_before_bgr_conversion(self):
+        data = self.png_bytes(1200, 600)
+        with patch.object(app, "DECODE_MAX_SIDE", 600):
+            bgr = app._decode_single_pass_bgr(data)
+        self.assertEqual((300, 600, 3), bgr.shape)
+
 
 class _FakeOcr:
     def __init__(self, result):

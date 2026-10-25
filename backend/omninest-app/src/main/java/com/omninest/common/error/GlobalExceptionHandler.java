@@ -293,8 +293,17 @@ public class GlobalExceptionHandler {
         }
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(JsonSupport.toJson(
-                ApiResponse.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试")));
+        byte[] body = JsonSupport.toJson(
+                ApiResponse.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试"))
+                .getBytes(StandardCharsets.UTF_8);
+        try {
+            // 流式接口可能已经调用 getOutputStream；此时再取 getWriter 会抛
+            // IllegalStateException 并吞掉原始异常。统一走输出流写出字节。
+            response.getOutputStream().write(body);
+        } catch (IllegalStateException exception) {
+            // 已有 writer 的极端场景回退到字符流，保证错误体仍可交付。
+            response.getWriter().write(new String(body, StandardCharsets.UTF_8));
+        }
     }
 
     /**

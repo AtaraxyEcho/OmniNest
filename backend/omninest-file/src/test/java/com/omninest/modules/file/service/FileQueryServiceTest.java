@@ -22,7 +22,6 @@ import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.domain.FileObject;
-import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.CreateFolderRequest;
@@ -70,8 +69,6 @@ class FileQueryServiceTest {
     private final ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
     private final FileIndexSyncService fileIndexSyncService =
             Mockito.mock(FileIndexSyncService.class);
-    private final FilePermissionService filePermissionService =
-            Mockito.mock(FilePermissionService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
     private final UserSyncEventRecorder syncEventRecorder = Mockito.mock(UserSyncEventRecorder.class);
     private final SharedSpaceService sharedSpaceService = Mockito.mock(SharedSpaceService.class);
@@ -86,13 +83,15 @@ class FileQueryServiceTest {
             List.of(minioFileContentProvider),
             fileNodeRepository,
             fileObjectRepository,
-            new LocalContentAccessTokenService()
+            new LocalContentAccessTokenService("test-local-content-secret")
     );
+    private final FileShareRecipientAccessService shareRecipientAccessService =
+            Mockito.mock(FileShareRecipientAccessService.class);
     private final FileDownloadService fileDownloadService = new FileDownloadService(
             fileNodeRepository,
             fileContentAccessService,
-            filePermissionService,
-            sharedSpaceService
+            sharedSpaceService,
+            shareRecipientAccessService
     );
     private final FileNodeLookupSupport lookup = new FileNodeLookupSupport(fileNodeRepository);
     private final FileNodeDtoAssembler assembler = new FileNodeDtoAssembler(
@@ -111,8 +110,8 @@ class FileQueryServiceTest {
                 lookup,
                 fileNodeRepository,
                 access,
-                filePermissionService,
                 sharedSpaceService,
+                shareRecipientAccessService,
                 fileDownloadService,
                 probeService,
                 new MediaProbeSourceStager(access)
@@ -856,7 +855,6 @@ class FileQueryServiceTest {
         UUID objectId = UUID.fromString("50000000-0000-0000-0000-000000000003");
         FileNode file = node(OTHER_OWNER_ID, null, "FILE", "shared.jpg", "/shared.jpg");
         file.setId(fileId);
-        file.setShared(true);
         file.setCurrentObjectId(objectId);
         FileObject object = new FileObject();
         object.setId(objectId);
@@ -866,7 +864,7 @@ class FileQueryServiceTest {
         object.setSizeBytes(3);
         ByteArrayInputStream input = new ByteArrayInputStream(new byte[]{1, 2, 3});
         when(fileNodeRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.of(file));
-        when(filePermissionService.resolvePermission(fileId, OWNER_ID)).thenReturn(FilePermission.readOnly());
+        when(shareRecipientAccessService.canAccessRecipientNode(OWNER_ID, file)).thenReturn(true);
         when(fileObjectRepository.findById(objectId)).thenReturn(Optional.of(object));
         when(objectStorageClient.getObject(ArgumentMatchers.any())).thenReturn(input);
 
@@ -881,9 +879,8 @@ class FileQueryServiceTest {
         UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000010");
         FileNode file = node(OTHER_OWNER_ID, null, "FILE", "private.jpg", "/private.jpg");
         file.setId(fileId);
-        file.setShared(true);
         when(fileNodeRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.of(file));
-        when(filePermissionService.resolvePermission(fileId, OWNER_ID)).thenReturn(FilePermission.denyAll());
+        when(shareRecipientAccessService.canAccessRecipientNode(OWNER_ID, file)).thenReturn(false);
 
         assertThatThrownBy(() -> fileQueryService.openReadableFileContent(OWNER_ID, fileId))
                 .isInstanceOf(BusinessException.class)

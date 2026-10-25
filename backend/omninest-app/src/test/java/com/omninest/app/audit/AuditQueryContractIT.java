@@ -14,6 +14,7 @@ import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.util.LikePatterns;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.FileShareRecipient;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.event.FileNodesDeletedEvent;
@@ -27,6 +28,7 @@ import com.omninest.modules.file.service.ExternalStorageOAuthTokenClient;
 import com.omninest.modules.file.service.FileManagerService;
 import com.omninest.modules.file.service.FileNodeRelationCleanupService;
 import com.omninest.modules.file.service.FilePurgeStateService;
+import com.omninest.modules.file.service.FileShareRecipientAccessService;
 import com.omninest.modules.photos.repository.PhotoAlbumFirstCoverProjection;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoGroupPreviewProjection;
@@ -70,6 +72,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -159,6 +162,9 @@ class AuditQueryContractIT {
 
     @Autowired
     private FilePurgeStateService filePurgeStateService;
+
+    @Autowired
+    private FileShareRecipientAccessService shareRecipientAccessService;
 
     @Autowired
     private ReadThroughCache readThroughCache;
@@ -675,6 +681,53 @@ class AuditQueryContractIT {
         assertThat(stored.get("encrypted_credentials")).isNotEqualTo("{}");
     }
 
+    @Test
+    @Transactional
+    @DisplayName("共享贡献节点按空间挂到任务，不要求属于同一上传者")
+    void sharedContributionAssignmentIgnoresOwner() {
+        UUID firstNode = insertFileNode(UUID.randomUUID(),
+                "/contribution/first-" + UUID.randomUUID() + ".jpg", false, "SHARED", false);
+        UUID secondNode = insertFileNode(UUID.randomUUID(),
+                "/contribution/second-" + UUID.randomUUID() + ".jpg", false, "SHARED", false);
+        UUID taskId = UUID.randomUUID();
+        UUID operator = UUID.randomUUID();
+
+        int updated = fileNodeRepository.assignSharedIdsToPurge(
+                List.of(firstNode, secondNode), taskId, operator,
+                FilePurgeState.RUNNING, Instant.now());
+
+        assertThat(updated).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM omni.file_nodes "
+                + "WHERE purge_task_id = ? AND is_deleted = true", taskId)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("定向分享接收关系在真库上覆盖单文件、文件夹后代，排除过期与兄弟前缀")
+    void recipientAccessQueriesCoverFileAndFolderShares() {
+        UUID owner = UUID.randomUUID();
+        UUID recipient = UUID.randomUUID();
+        UUID directFile = insertFileNode(owner, "/recipient/direct.txt", false, "PERSONAL", false);
+        String folderPath = "/recipient/folder-" + UUID.randomUUID();
+        UUID folderNode = insertFileNode(owner, folderPath, false, "PERSONAL", false);
+        UUID childNode = insertFileNode(owner, folderPath + "/child.txt", false, "PERSONAL", false);
+        UUID siblingNode = insertFileNode(owner, folderPath + "X/sibling.txt", false, "PERSONAL", false);
+        UUID expiredNode = insertFileNode(owner, "/recipient/expired.txt", false, "PERSONAL", false);
+
+        Instant now = Instant.now();
+        insertRecipient(insertShare(owner, directFile, "FILE", null, null), recipient, now);
+        insertRecipient(insertShare(owner, folderNode, "FOLDER", null, null), recipient, now);
+        insertRecipient(insertShare(owner, expiredNode, "FILE", null, now.minusSeconds(60)), recipient, now);
+
+        assertThat(shareRecipientAccessService.canAccessRecipientNode(
+                recipient, requireNode(directFile))).isTrue();
+        assertThat(shareRecipientAccessService.canAccessRecipientNode(
+                recipient, requireNode(childNode))).isTrue();
+        assertThat(shareRecipientAccessService.canAccessRecipientNode(
+                recipient, requireNode(siblingNode))).isFalse();
+        assertThat(shareRecipientAccessService.canAccessRecipientNode(
+                recipient, requireNode(expiredNode))).isFalse();
+    }
+
     // ==================== 种子数据 ====================
 
     private UUID insertFileNode(
@@ -695,16 +748,31 @@ class AuditQueryContractIT {
     }
 
     private UUID insertShare(UUID ownerUserId, UUID resourceId, Instant disabledAt, Instant expiresAt) {
+        return insertShare(ownerUserId, resourceId, "FILE", disabledAt, expiresAt);
+    }
+
+    private UUID insertShare(
+            UUID ownerUserId,
+            UUID resourceId,
+            String resourceType,
+            Instant disabledAt,
+            Instant expiresAt
+    ) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
                 INSERT INTO omni.share_links
                     (id, owner_user_id, resource_type, resource_id, token_hash, access_count,
                      include_location, original_quality, disabled_at, expires_at, created_at, updated_at, version)
-                VALUES (?, ?, 'FILE', ?, ?, 0, true, true, ?, ?, now(), now(), 0)
-                """, id, ownerUserId, resourceId, sha256(UUID.randomUUID().toString()),
+                VALUES (?, ?, ?, ?, ?, 0, true, true, ?, ?, now(), now(), 0)
+                """, id, ownerUserId, resourceType, resourceId, sha256(UUID.randomUUID().toString()),
                 disabledAt == null ? null : Timestamp.from(disabledAt),
                 expiresAt == null ? null : Timestamp.from(expiresAt));
         return id;
+    }
+
+    private FileNode requireNode(UUID nodeId) {
+        return fileNodeRepository.findByIdAndDeletedFalse(nodeId)
+                .orElseThrow(() -> new IllegalStateException("测试节点不存在: " + nodeId));
     }
 
     private void insertRecipient(UUID shareId, UUID recipientUserId, Instant createdAt) {

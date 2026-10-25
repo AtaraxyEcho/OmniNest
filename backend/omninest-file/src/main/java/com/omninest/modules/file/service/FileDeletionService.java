@@ -19,6 +19,7 @@ import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -234,10 +235,10 @@ public class FileDeletionService {
             Long expectedVersion
     ) {
         FileNode root = resolvePurgeRoot(operatorId, fileNodeId);
-        // 共享空间删除者不是上传者时，后续子树、任务与事件必须沿用节点所有者，
-        // 否则 Worker 会因任务归属与节点 owner_user_id 不一致而拒绝执行。
+        // 内容归属沿用节点上传者：子树、配额与业务事件都按它结算。
+        // 任务记录归属必须写成发起操作者，否则非上传者删除后轮询自己的任务会 404。
         UUID ownerUserId = root.getOwnerUserId();
-        TaskRecord activeTask = findActiveTask(ownerUserId, fileNodeId).orElse(null);
+        TaskRecord activeTask = findActiveTask(operatorId, fileNodeId).orElse(null);
         if (activeTask != null) {
             return activeTask.getId();
         }
@@ -264,7 +265,7 @@ public class FileDeletionService {
         markPurgeQueued(root, taskId, requestedAt);
         fileNodeRepository.save(root);
         assignSubtreeToPurge(ownerUserId, root, taskId, requestedAt);
-        int cancelledTaskCount = cancelRelatedTasksInBatches(ownerUserId, taskId);
+        int cancelledTaskCount = cancelRelatedTasksInBatches(List.of(ownerUserId), taskId);
         if (cancelledTaskCount > 0) {
             log.info("永久删除任务已冻结关联任务: fileNodeId={}, cancelledTaskCount={}",
                     fileNodeId, cancelledTaskCount);
@@ -278,7 +279,7 @@ public class FileDeletionService {
         );
         taskRecordService.createQueuedTask(
                 taskId,
-                ownerUserId,
+                operatorId,
                 TASK_TYPE,
                 QueueNames.FILE_PURGE_ROUTING_KEY,
                 "PLANNING",
@@ -292,8 +293,8 @@ public class FileDeletionService {
                 QueueNames.FILE_PURGE_ROUTING_KEY,
                 new FilePurgeRequestedEvent(taskId, ownerUserId, fileNodeId)
         );
-        log.info("文件永久删除任务已创建: taskId={}, ownerUserId={}, fileNodeId={}",
-                taskId, ownerUserId, fileNodeId);
+        log.info("文件永久删除任务已创建: taskId={}, operatorId={}, contentOwnerId={}, fileNodeId={}",
+                taskId, operatorId, ownerUserId, fileNodeId);
         return taskId;
     }
 
@@ -308,20 +309,19 @@ public class FileDeletionService {
         List<FileNode> roots = fileNodeIds.stream()
                 .map(fileNodeId -> resolvePurgeRoot(operatorId, fileNodeId))
                 .toList();
-        Set<UUID> nodeOwners = roots.stream()
+        Set<UUID> rootOwners = roots.stream()
                 .map(FileNode::getOwnerUserId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (nodeOwners.size() != 1) {
-            throw new BusinessException(
-                    ErrorCode.PARAM_ERROR,
-                    "批量永久删除只能包含同一所有者的文件"
-            );
-        }
-        // 后续子树归属、任务记录与事件都必须使用节点所有者：共享节点的 owner_user_id 是上传者。
-        UUID ownerUserId = nodeOwners.iterator().next();
+        // 共享回收站允许一次勾选多个成员上传的文件。事件与配额按内容所有者结算；
+        // 若混有个人节点，则其所有者必然是操作者，事件归属取操作者。
+        UUID eventOwnerUserId = roots.stream()
+                .filter(root -> root.getSpaceType() != SpaceType.SHARED)
+                .map(FileNode::getOwnerUserId)
+                .findFirst()
+                .orElseGet(() -> roots.getFirst().getOwnerUserId());
 
         for (UUID fileNodeId : fileNodeIds) {
-            if (findActiveTask(ownerUserId, fileNodeId).isPresent()) {
+            if (findActiveTask(operatorId, fileNodeId).isPresent()) {
                 throw new BusinessException(
                         ErrorCode.FILE_LIFECYCLE_CONFLICT,
                         "批量永久删除包含已进入永久删除流程的文件"
@@ -338,7 +338,7 @@ public class FileDeletionService {
             );
         }
 
-        FilePurgeImpactDto impact = calculateImpact(ownerUserId, roots, origins);
+        FilePurgeImpactDto impact = calculateImpact(eventOwnerUserId, roots, origins);
         if (!cascade && impact.inUse()) {
             throw new BusinessException(
                     ErrorCode.RESOURCE_IN_USE,
@@ -349,7 +349,7 @@ public class FileDeletionService {
 
         for (FileNode root : roots) {
             if (!root.isDeleted()) {
-                fileQueryService.deleteNode(ownerUserId, root.getId());
+                fileQueryService.deleteNode(root.getOwnerUserId(), root.getId());
             }
         }
 
@@ -357,8 +357,8 @@ public class FileDeletionService {
         Instant requestedAt = Instant.now();
         roots.forEach(root -> markPurgeQueued(root, taskId, requestedAt));
         fileNodeRepository.saveAll(roots);
-        roots.forEach(root -> assignSubtreeToPurge(ownerUserId, root, taskId, requestedAt));
-        int cancelledTaskCount = cancelRelatedTasksInBatches(ownerUserId, taskId);
+        roots.forEach(root -> assignSubtreeToPurge(root.getOwnerUserId(), root, taskId, requestedAt));
+        int cancelledTaskCount = cancelRelatedTasksInBatches(rootOwners, taskId);
         if (cancelledTaskCount > 0) {
             log.info("批量永久删除任务已冻结关联任务: taskId={}, cancelledTaskCount={}",
                     taskId, cancelledTaskCount);
@@ -367,13 +367,13 @@ public class FileDeletionService {
         UUID representativeRootId = roots.getFirst().getId();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("taskId", taskId.toString());
-        payload.put("ownerUserId", ownerUserId.toString());
+        payload.put("ownerUserId", eventOwnerUserId.toString());
         payload.put("rootFileNodeId", representativeRootId.toString());
         payload.put("rootFileNodeIds", roots.stream().map(FileNode::getId).map(UUID::toString).toList());
         payload.put("cascade", cascade);
         taskRecordService.createQueuedTask(
                 taskId,
-                ownerUserId,
+                operatorId,
                 TASK_TYPE,
                 QueueNames.FILE_PURGE_ROUTING_KEY,
                 "PLANNING",
@@ -385,10 +385,12 @@ public class FileDeletionService {
                 taskId,
                 QueueNames.TASK_EXCHANGE,
                 QueueNames.FILE_PURGE_ROUTING_KEY,
-                new FilePurgeRequestedEvent(taskId, ownerUserId, representativeRootId)
+                new FilePurgeRequestedEvent(taskId, eventOwnerUserId, representativeRootId)
         );
-        log.info("批量文件永久删除任务已创建: taskId={}, ownerUserId={}, rootCount={}, fileNodeCount={}",
-                taskId, ownerUserId, roots.size(), fileNodeRepository.countByPurgeTaskId(taskId));
+        log.info("批量文件永久删除任务已创建: taskId={}, operatorId={}, contentOwnerId={}, "
+                        + "rootCount={}, fileNodeCount={}",
+                taskId, operatorId, eventOwnerUserId, roots.size(),
+                fileNodeRepository.countByPurgeTaskId(taskId));
         return taskId;
     }
 
@@ -502,11 +504,12 @@ public class FileDeletionService {
         return roots.stream()
                 .filter(candidate -> roots.stream().noneMatch(other ->
                         !candidate.getId().equals(other.getId())
+                                && candidate.getSpaceType() == other.getSpaceType()
                                 && candidate.getNormalizedPath().startsWith(other.getNormalizedPath() + "/")))
                 .toList();
     }
 
-    private int cancelRelatedTasksInBatches(UUID ownerUserId, UUID taskId) {
+    private int cancelRelatedTasksInBatches(Collection<UUID> ownerUserIds, UUID taskId) {
         int cancelledCount = 0;
         int pageNumber = 0;
         Page<UUID> page;
@@ -516,13 +519,15 @@ public class FileDeletionService {
                     PageRequest.of(pageNumber, LIFECYCLE_BATCH_SIZE)
             );
             if (!page.isEmpty()) {
-                cancelledCount += taskRecordService.cancelActiveResourceTasks(
-                        ownerUserId,
-                        RESOURCE_TYPE,
-                        page.getContent(),
-                        ACTIVE_STATUSES,
-                        TASK_TYPE
-                );
+                for (UUID ownerUserId : ownerUserIds) {
+                    cancelledCount += taskRecordService.cancelActiveResourceTasks(
+                            ownerUserId,
+                            RESOURCE_TYPE,
+                            page.getContent(),
+                            ACTIVE_STATUSES,
+                            TASK_TYPE
+                    );
+                }
             }
             pageNumber++;
         } while (page.hasNext());

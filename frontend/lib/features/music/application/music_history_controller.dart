@@ -119,10 +119,13 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
           )
           .toList(growable: false);
       final merged = _mergeGroups(latest.groups, fresh);
+      // 服务端返回空页或整页都与已加载数据重复时，继续按 totalElements 判定 hasMore
+      // 会让界面无限补页；把总数收敛到已加载数，明确结束续载。
+      final exhausted = result.items.isEmpty || fresh.isEmpty;
       state = AsyncData(
         latest.copyWith(
           groups: merged,
-          totalElements: result.totalElements,
+          totalElements: exhausted ? latest.loadedCount : result.totalElements,
           loadedCount: latest.loadedCount + fresh.length,
           nextPage: result.page + 1,
           loadingMore: false,

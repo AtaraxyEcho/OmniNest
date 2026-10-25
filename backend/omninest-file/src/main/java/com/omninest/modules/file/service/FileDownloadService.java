@@ -3,7 +3,6 @@ package com.omninest.modules.file.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
-import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -11,6 +10,7 @@ import com.omninest.modules.file.repository.FileNodeRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,8 +31,8 @@ public class FileDownloadService {
 
     private final FileNodeRepository fileNodeRepository;
     private final FileContentAccessService fileContentAccessService;
-    private final FilePermissionService filePermissionService;
     private final SharedSpaceService sharedSpaceService;
+    private final FileShareRecipientAccessService shareRecipientAccessService;
 
     /**
      * 为可下载节点创建短期下载地址。
@@ -66,15 +66,22 @@ public class FileDownloadService {
                 .anyMatch(node -> node.getSpaceType() == SpaceType.SHARED
                         && !userId.equals(node.getOwnerUserId()))
                 && sharedSpaceService.canDownload(userId);
+        boolean needsRecipientCheck = candidates.stream().anyMatch(node ->
+                !userId.equals(node.getOwnerUserId())
+                        && !(node.getSpaceType() == SpaceType.SHARED && sharedDownloadAllowed));
+        Set<UUID> recipientAccessible = needsRecipientCheck
+                ? shareRecipientAccessService.filterRecipientAccessible(userId, candidates)
+                : Set.of();
         List<FileNode> nodes = candidates.stream()
                 .filter(node -> userId.equals(node.getOwnerUserId())
-                        || (node.getSpaceType() == SpaceType.SHARED && sharedDownloadAllowed))
+                        || (node.getSpaceType() == SpaceType.SHARED && sharedDownloadAllowed)
+                        || recipientAccessible.contains(node.getId()))
                 .toList();
         return fileContentAccessService.createDownloadUrls(nodes);
     }
 
     /**
-     * 生成共享文件的下载 URL：所有者直接放行，否则校验共享空间或分享权限。
+     * 生成共享文件的下载 URL：所有者直接放行，否则校验共享空间或定向分享接收关系。
      *
      * @param userId 当前用户
      * @param fileId 文件节点 ID
@@ -88,15 +95,17 @@ public class FileDownloadService {
             return createDownloadUrl(userId, fileId);
         }
         if (node.getSpaceType() == SpaceType.SHARED) {
-            sharedSpaceService.validateDownloadPermission(userId);
+            // 空间权限足够时不再多查分享接收关系；定向分享是空间外成员的显式补充授权。
+            if (!sharedSpaceService.canDownload(userId)
+                    && !shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
+            }
             requireFileNode(node);
             return fileContentAccessService.createDownloadUrl(node);
         }
-        if (!node.isShared()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "文件未共享");
-        }
-        FilePermission permission = filePermissionService.resolvePermission(fileId, userId);
-        if (!permission.allowDownload()) {
+        // 定向分享只落 share_links + file_share_recipients；节点 shared 标志与
+        // file_node_permissions 是早期模型，不能再作为当前分享的授权依据。
+        if (!shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
         }
         requireFileNode(node);
@@ -108,10 +117,15 @@ public class FileDownloadService {
                 .orElseGet(() -> fileNodeRepository.findByIdAndDeletedFalse(fileId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在")));
         if (!node.getOwnerUserId().equals(userId)) {
-            if (node.getSpaceType() != SpaceType.SHARED) {
+            if (node.getSpaceType() == SpaceType.SHARED) {
+                if (!sharedSpaceService.canDownload(userId)
+                        && !shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
+                    throw new BusinessException(ErrorCode.FORBIDDEN, "无下载权限");
+                }
+            } else if (!shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
+                // 非所有者、非共享空间且没有定向分享关系时按不存在处理，避免存在性探测。
                 throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
             }
-            sharedSpaceService.validateDownloadPermission(userId);
         }
         requireFileNode(node);
         return node;

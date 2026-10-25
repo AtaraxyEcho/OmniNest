@@ -230,6 +230,22 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("已取过输出流的文本响应仍能写出 500 错误体，不再二次 getWriter")
+    void handleUnexpected_writesJsonThroughOutputStreamWhenStreamAlreadyObtained() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setContentType("text/plain;charset=UTF-8");
+        // 模拟流式接口先取 OutputStream：Servlet 规范下再调用 getWriter 会直接抛错。
+        response.getOutputStream();
+        Exception exception = new IllegalStateException("stream failed");
+
+        handler.handleUnexpected(exception, response);
+
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Assertions.assertThat(response.getContentAsString())
+                .contains(ErrorCode.INTERNAL_ERROR.getCode().toString());
+    }
+
+    @Test
     @DisplayName("JSON 可写出时未知异常仍返回统一 500 错误体")
     void handleUnexpected_writesJsonWhenContentTypeIsWritable() throws IOException {
         MockHttpServletResponse response = new MockHttpServletResponse();

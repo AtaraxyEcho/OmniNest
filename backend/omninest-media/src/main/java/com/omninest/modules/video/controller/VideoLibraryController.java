@@ -460,9 +460,12 @@ public class VideoLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/subtitles/{subtitleId}/content")
     void subtitleContent(@PathVariable UUID subtitleId, HttpServletResponse response) throws IOException {
+        // 先校验字幕与影片权限，再固定 text/plain 响应头；否则 404/403 会进入
+        // 全局异常处理器时已被流式 Content-Type 占位，无法写出标准 JSON 错误体。
+        UUID userId = currentUserContext.requireCurrentUserId();
+        moviePlaybackService.requireSubtitleContentAccess(userId, subtitleId);
         response.setContentType("text/plain; charset=utf-8");
-        moviePlaybackService.writeSubtitleContent(
-                currentUserContext.requireCurrentUserId(), subtitleId, response.getOutputStream());
+        moviePlaybackService.writeSubtitleContent(userId, subtitleId, response.getOutputStream());
     }
 
     @Operation(summary = "获取刮削候选", description = "从 TMDB 获取指定文件的元数据候选")

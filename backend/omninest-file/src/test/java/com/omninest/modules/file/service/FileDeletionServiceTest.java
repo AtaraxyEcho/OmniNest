@@ -224,6 +224,59 @@ class FileDeletionServiceTest {
     }
 
     @Test
+    void deletePermanentlyBatchAllowsMixedSharedUploaders() {
+        FileNode firstRoot = sharedDeletedRoot(FILE_NODE_ID, "/first.jpg", UPLOADER_ID);
+        FileNode secondRoot = sharedDeletedRoot(SECOND_FILE_NODE_ID, "/second.jpg", OTHER_MEMBER_ID);
+        when(distributedLock.tryLock(
+                eq("lock:file-lifecycle:" + SECOND_FILE_NODE_ID),
+                eq("lock-token"),
+                any(Duration.class)
+        )).thenReturn(true);
+        when(distributedLock.unlock(
+                "lock:file-lifecycle:" + SECOND_FILE_NODE_ID,
+                "lock-token"
+        )).thenReturn(true);
+        when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileNodeRepository.findOwnedForUpdate(SECOND_FILE_NODE_ID, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileQueryService.requireTrashOperatorNode(OWNER_ID, FILE_NODE_ID)).thenReturn(firstRoot);
+        when(fileQueryService.requireTrashOperatorNode(OWNER_ID, SECOND_FILE_NODE_ID)).thenReturn(secondRoot);
+        when(fileNodeRepository.findOwnedForUpdate(FILE_NODE_ID, UPLOADER_ID)).thenReturn(Optional.of(firstRoot));
+        when(fileNodeRepository.findOwnedForUpdate(SECOND_FILE_NODE_ID, OTHER_MEMBER_ID))
+                .thenReturn(Optional.of(secondRoot));
+
+        UUID taskId = fileDeletionService.deletePermanentlyBatch(
+                OWNER_ID,
+                List.of(FILE_NODE_ID, SECOND_FILE_NODE_ID),
+                true,
+                List.of()
+        );
+
+        assertThat(taskId).isNotNull();
+        verify(taskRecordService).createQueuedTask(
+                eq(taskId),
+                eq(OWNER_ID),
+                eq("FILE_PURGE"),
+                eq(QueueNames.FILE_PURGE_ROUTING_KEY),
+                eq("PLANNING"),
+                eq("FILE_NODE"),
+                eq(FILE_NODE_ID),
+                anyMap()
+        );
+        verify(fileNodeRepository).assignDeletedDescendantsToPurgeInSpace(
+                eq(SpaceType.SHARED), eq("/first.jpg/"), eq(taskId),
+                eq(FilePurgeState.QUEUED), any());
+        verify(fileNodeRepository).assignDeletedDescendantsToPurgeInSpace(
+                eq(SpaceType.SHARED), eq("/second.jpg/"), eq(taskId),
+                eq(FilePurgeState.QUEUED), any());
+        ArgumentCaptor<FilePurgeRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(FilePurgeRequestedEvent.class);
+        verify(taskDispatchService).enqueue(
+                eq(taskId), eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.FILE_PURGE_ROUTING_KEY), eventCaptor.capture());
+        assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(UPLOADER_ID);
+    }
+
+    @Test
     void deletePermanentlyEscapesWildcardCharactersInThePurgeSubtreePrefix() {
         // 前缀是真实目录名，消费方是"把后代挂到本次 taskId"的批量更新：
         // /100%_done/ 不转义就会同时匹配兄弟目录，那些文件被同一任务认领后物理清除。
@@ -264,9 +317,10 @@ class FileDeletionServiceTest {
         UUID taskId = fileDeletionService.deletePermanently(OWNER_ID, FILE_NODE_ID);
 
         assertThat(taskId).isNotNull();
+        // 任务记录归操作者，前端按自己的任务 ID 轮询；内容所有者仍写在事件与配额口径里。
         verify(taskRecordService).createQueuedTask(
                 eq(taskId),
-                eq(UPLOADER_ID),
+                eq(OWNER_ID),
                 eq("FILE_PURGE"),
                 eq(QueueNames.FILE_PURGE_ROUTING_KEY),
                 eq("PLANNING"),
@@ -321,9 +375,13 @@ class FileDeletionServiceTest {
     }
 
     private FileNode sharedDeletedRoot() {
-        FileNode node = deletedRoot(FILE_NODE_ID, "/movie.mkv");
-        node.setOwnerUserId(UPLOADER_ID);
-        node.setUploadedBy(UPLOADER_ID);
+        return sharedDeletedRoot(FILE_NODE_ID, "/movie.mkv", UPLOADER_ID);
+    }
+
+    private FileNode sharedDeletedRoot(UUID fileNodeId, String normalizedPath, UUID uploaderId) {
+        FileNode node = deletedRoot(fileNodeId, normalizedPath);
+        node.setOwnerUserId(uploaderId);
+        node.setUploadedBy(uploaderId);
         node.setSpaceType(SpaceType.SHARED);
         node.setDeletedBy(OWNER_ID);
         return node;

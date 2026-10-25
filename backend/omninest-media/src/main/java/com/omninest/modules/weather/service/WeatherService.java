@@ -203,10 +203,23 @@ public class WeatherService {
                             weatherExecutor
                     );
 
-                    JsonNode weatherNow = getOrNull(weatherNowFuture);
-                    JsonNode airNow = getOrNull(airNowFuture);
-                    JsonNode weather7d = getOrNull(weather7dFuture);
-                    JsonNode weather24h = getOrNull(weather24hFuture);
+                    // 四个外部请求必须并行等待：逐个 get(5s) 的最坏耗时是 20s，
+                    // 超过调用方 6s 上限后仍会有子任务在后台滞留。
+                    CompletableFuture<?>[] subtasks = {
+                            weatherNowFuture, airNowFuture, weather7dFuture, weather24hFuture
+                    };
+                    try {
+                        CompletableFuture.allOf(subtasks).get(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        cancelSubtasks(subtasks);
+                    } catch (Exception timeoutOrFailure) {
+                        cancelSubtasks(subtasks);
+                    }
+                    JsonNode weatherNow = weatherNowFuture.getNow(null);
+                    JsonNode airNow = airNowFuture.getNow(null);
+                    JsonNode weather7d = weather7dFuture.getNow(null);
+                    JsonNode weather24h = weather24hFuture.getNow(null);
 
                     if (weatherNow == null) {
                         return WeatherDto.empty();
@@ -343,7 +356,8 @@ public class WeatherService {
             boolean notFound = "404".equals(code) || "204".equals(code)
                     || (("200".equals(code)) && (!locations.isArray() || locations.isEmpty()));
             if (notFound) {
-                weatherCacheStore.markLocationMissing(cityName);
+                // 读缓存用 locationCacheKey（坐标查询带语言后缀），写负缓存也必须同一口径。
+                weatherCacheStore.markLocationMissing(locationCacheKey);
                 return null;
             }
             if (!"200".equals(code) || locations == null || !locations.isArray()) {
@@ -444,6 +458,12 @@ public class WeatherService {
      * @return 解析后的 JSON 树；非 2xx 或非 JSON 响应返回 null
      * @throws RuntimeException 网络异常等不可恢复错误
      */
+    private static void cancelSubtasks(CompletableFuture<?>[] subtasks) {
+        for (CompletableFuture<?> subtask : subtasks) {
+            subtask.cancel(true);
+        }
+    }
+
     private JsonNode httpGet(URI uri, String jwt) {
         var headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + jwt);
@@ -737,17 +757,6 @@ public class WeatherService {
     }
 
     // ==================== 工具方法 ====================
-
-    private JsonNode getOrNull(CompletableFuture<JsonNode> future) {
-        try {
-            return future.get(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     private int getIntSafe(JsonNode obj, String key) {
         String val = obj.path(key).asString(null);

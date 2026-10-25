@@ -19,6 +19,7 @@ services:
       OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED: "true"
       # 单实例没有独立 scheduler，必须同时内嵌调度器
       OMNINEST_RUNTIME_EMBEDDED_SCHEDULER_ENABLED: "true"
-      # 单实例需同时承担后台任务，堆与 mem_limit 略高于纯 API
-      JAVA_OPTS: ${JAVA_OPTS_API_SINGLE:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
-    mem_limit: ${BACKEND_API_MEM_LIMIT_SINGLE:-896m}
+      # 单实例同时运行 API、Scheduler 与内嵌 Worker（Tika/Lucene/PDF/漫画/缩略图），
+      # 堆必须高于纯 API 的 512m；容器上限同步抬高，给 Metaspace 与原生内存留余量。
+      JAVA_OPTS: ${JAVA_OPTS_API_SINGLE:--Xms256m -Xmx768m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
+    mem_limit: ${BACKEND_API_MEM_LIMIT_SINGLE:-1280m}

@@ -2,13 +2,17 @@ package com.omninest.modules.video.service;
 import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
@@ -94,6 +98,17 @@ class MoviePlaybackServiceTest {
 
         String content = out.toString(StandardCharsets.UTF_8);
         assertThat(content).contains("WEBVTT").contains("字幕");
+    }
+
+    @Test
+    void requireSubtitleContentAccessRejectsMissingTrackBeforeResponseHeaders() {
+        when(subtitleTrackRepository.findById(SUBTITLE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> playbackService.requireSubtitleContentAccess(OWNER_ID, SUBTITLE_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.MEDIA_NOT_FOUND);
+        verifyNoInteractions(mediaContentAccessService);
     }
 
     @Test

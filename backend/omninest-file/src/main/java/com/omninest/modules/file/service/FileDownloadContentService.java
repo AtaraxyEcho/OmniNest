@@ -3,7 +3,6 @@ package com.omninest.modules.file.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.FileNode;
-import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -32,8 +31,8 @@ class FileDownloadContentService {
     private final FileNodeLookupSupport lookup;
     private final FileNodeRepository fileNodeRepository;
     private final FileContentAccessService fileContentAccessService;
-    private final FilePermissionService filePermissionService;
     private final SharedSpaceService sharedSpaceService;
+    private final FileShareRecipientAccessService shareRecipientAccessService;
     private final FileDownloadService fileDownloadService;
     private final MediaProbeService mediaProbeService;
     private final MediaProbeSourceStager mediaProbeSourceStager;
@@ -130,11 +129,13 @@ class FileDownloadContentService {
             return node;
         }
         if (node.getSpaceType() == SpaceType.SHARED) {
-            sharedSpaceService.validateBrowsePermission(userId);
+            if (!sharedSpaceService.canBrowse(userId)
+                    && !shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
+            }
             return node;
         }
-        FilePermission permission = filePermissionService.resolvePermission(fileId, userId);
-        if (!node.isShared() || !permission.allowView()) {
+        if (!shareRecipientAccessService.canAccessRecipientNode(userId, node)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看文件");
         }
         return node;
