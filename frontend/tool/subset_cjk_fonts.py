@@ -1,4 +1,7 @@
-"""按 GB2312 与界面文案子集化 CJK 字体，缩小 Web 首屏与安装包体积。
+"""按 GB2312 与界面文案子集化 UI 无衬线字体，缩小 Web 首屏体积。
+
+衬线字体不参与子集化：阅读器正文可能包含 GB2312 之外的生僻字，
+缺字会直接显示为豆腐块。界面缺字由 NotoSerifSC 兜底。
 
 用法（在 frontend 目录执行）：
     python tool/subset_cjk_fonts.py
@@ -18,9 +21,10 @@ FRONTEND = Path(__file__).resolve().parent.parent
 FONT_DIR = FRONTEND / "assets" / "fonts"
 ARB = FRONTEND / "lib" / "app" / "l10n" / "app_zh.arb"
 
+# 衬线字体保留全量：阅读器正文需要覆盖书名、古籍与生僻人名；
+# 无衬线字体只承担界面文案，按 GB2312 子集化换取首屏体积。
 FONTS = [
     "NotoSansSC-VF.ttf",
-    "NotoSerifSC-Regular.otf",
 ]
 
 EXTRA_CHARS = set(

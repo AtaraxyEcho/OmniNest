@@ -20,9 +20,11 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListPartsRequest;
 import software.amazon.awssdk.services.s3.model.MetadataDirective;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.NoSuchUploadException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
@@ -210,6 +212,28 @@ public class MinioObjectStorageClient implements ObjectStorageClient {
     private boolean isRetryableS3Error(S3Exception e) {
         int status = e.statusCode();
         return status >= 500 || status == 429;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean multipartUploadExists(ObjectStorageKey key, String uploadId) {
+        try {
+            s3Client.listParts(ListPartsRequest.builder()
+                    .bucket(key.bucket())
+                    .key(key.objectKey())
+                    .uploadId(uploadId)
+                    .build());
+            return true;
+        } catch (NoSuchUploadException exception) {
+            return false;
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 404) {
+                return false;
+            }
+            throw exception;
+        }
     }
 
     /**

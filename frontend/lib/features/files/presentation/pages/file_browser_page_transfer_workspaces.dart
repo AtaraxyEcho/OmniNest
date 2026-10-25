@@ -85,7 +85,7 @@ class _UploadQueueWorkspace extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         Expanded(
-          child: _SubTable(
+          child: _SubTable.builder(
             columns: [
               _SubColumn(l10n.filesColumnName, flex: 3),
               _SubColumn(l10n.filesUploadOrigin, width: 72),
@@ -96,9 +96,12 @@ class _UploadQueueWorkspace extends ConsumerWidget {
               _SubColumn(l10n.filesColumnExpiresAt, width: 108),
               _SubColumn(l10n.filesFileActions, width: 140),
             ],
-            rows: [
-              for (final task in state.localUploadTasks)
-                _SubRow(
+            rowCount: state.localUploadTasks.length + state.uploadQueue.length,
+            rowBuilder: (context, index) {
+              final localTasks = state.localUploadTasks;
+              if (index < localTasks.length) {
+                final task = localTasks[index];
+                return _SubRow(
                   cells: [
                     _SubNameCell(
                       name: task.fileName,
@@ -180,77 +183,77 @@ class _UploadQueueWorkspace extends ConsumerWidget {
                       ],
                     ),
                   ],
-                ),
-              for (final item in state.uploadQueue)
-                _SubRow(
-                  cells: [
-                    _SubNameCell(
-                      name: item.fileName,
-                      detail:
-                          item.expiresAt == null
-                              ? '—'
-                              : DateFormat(
-                                'yyyy-MM-dd HH:mm',
-                                Localizations.localeOf(context).toString(),
-                              ).format(item.expiresAt!),
-                      isFolder: false,
+                );
+              }
+              final item = state.uploadQueue[index - localTasks.length];
+              return _SubRow(
+                cells: [
+                  _SubNameCell(
+                    name: item.fileName,
+                    detail:
+                        item.expiresAt == null
+                            ? '—'
+                            : DateFormat(
+                              'yyyy-MM-dd HH:mm',
+                              Localizations.localeOf(context).toString(),
+                            ).format(item.expiresAt!),
+                    isFolder: false,
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _StatusBadge(l10n.filesUploadOriginServer),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: _SubMono(formatFileSize(item.sizeBytes)),
+                  ),
+                  _UploadProgressCell(
+                    value: item.progress,
+                    primary: '${(item.progress * 100).toInt()}%',
+                    detail:
+                        '${item.uploadedParts}/${item.totalParts} '
+                        '${l10n.filesUploadPartsUnit}',
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _StatusBadge(
+                      _uploadStatusLabel(l10n, item.status),
+                      tone: _uploadStatusTone(item.status),
                     ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _StatusBadge(l10n.filesUploadOriginServer),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10),
-                      child: _SubMono(formatFileSize(item.sizeBytes)),
-                    ),
-                    _UploadProgressCell(
-                      value: item.progress,
-                      primary: '${(item.progress * 100).toInt()}%',
-                      detail:
-                          '${item.uploadedParts}/${item.totalParts} '
-                          '${l10n.filesUploadPartsUnit}',
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _StatusBadge(
-                        _uploadStatusLabel(l10n, item.status),
-                        tone: _uploadStatusTone(item.status),
-                      ),
-                    ),
-                    _SubMono(
-                      item.updatedAt == null
-                          ? '—'
-                          : DateFormat(
-                            'MM-dd HH:mm',
-                            locale,
-                          ).format(item.updatedAt!),
-                    ),
-                    _SubMono(
-                      item.expiresAt == null
-                          ? '—'
-                          : DateFormat(
-                            'yyyy-MM-dd',
-                            locale,
-                          ).format(item.expiresAt!),
-                    ),
-                    _SubAction(
-                      label: l10n.filesCancel,
-                      destructive: true,
-                      onTap:
-                          enabled &&
-                                  !FileBrowserState.isTerminalUploadStatus(
-                                    item.status,
-                                  )
-                              ? () => _runFileAction(
-                                context,
-                                () =>
-                                    controller.deleteServerUploadSession(item),
-                              )
-                              : null,
-                    ),
-                  ],
-                ),
-            ],
+                  ),
+                  _SubMono(
+                    item.updatedAt == null
+                        ? '—'
+                        : DateFormat(
+                          'MM-dd HH:mm',
+                          locale,
+                        ).format(item.updatedAt!),
+                  ),
+                  _SubMono(
+                    item.expiresAt == null
+                        ? '—'
+                        : DateFormat(
+                          'yyyy-MM-dd',
+                          locale,
+                        ).format(item.expiresAt!),
+                  ),
+                  _SubAction(
+                    label: l10n.filesCancel,
+                    destructive: true,
+                    onTap:
+                        enabled &&
+                                !FileBrowserState.isTerminalUploadStatus(
+                                  item.status,
+                                )
+                            ? () => _runFileAction(
+                              context,
+                              () => controller.deleteServerUploadSession(item),
+                            )
+                            : null,
+                  ),
+                ],
+              );
+            },
           ),
         ),
         WorkstationPaginationBar(
@@ -812,7 +815,7 @@ class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: _SubTable(
+          child: _SubTable.builder(
             columns: [
               _SubColumn(l10n.filesTaskSource, flex: 3),
               _SubColumn(l10n.filesColumnType, width: 84),
@@ -824,88 +827,86 @@ class _ImportTasksWorkspaceState extends ConsumerState<_ImportTasksWorkspace> {
               _SubColumn(l10n.filesColumnCreatedAt, width: 108),
               _SubColumn(l10n.filesFileActions, width: 132),
             ],
-            rows: [
-              for (final task in filtered)
-                _SubRow(
-                  cells: [
-                    // 失败任务把错误摘要提到次行：仅靠徽章无法解释失败原因。
-                    _SubNameCell(
-                      name: task.fileName ?? task.sourcePath,
-                      detail:
-                          (task.errorSummary ?? '').isNotEmpty
-                              ? task.errorSummary!
-                              : task.sourcePath,
-                      isFolder: task.isDirectory,
-                    ),
-                    _SubMono(task.isDirectory ? 'DIRECTORY' : 'FILE'),
-                    _SubMono(formatFileSize(task.totalBytes)),
-                    _SubProgressCell(
-                      value: task.progress,
-                      label:
-                          '${(task.progress * 100).toStringAsFixed(1)}%'
-                          '${task.totalFiles > 0 ? ' (${task.completedFiles}/${task.totalFiles})' : ''}',
-                    ),
-                    _SubMono(
-                      task.totalFiles > 0
-                          ? '${task.completedFiles}/${task.totalFiles}'
-                          : '—',
-                    ),
-                    _SubMono(formatFileSize(task.speedBytes)),
-                    _importBadge(task.status, l10n),
-                    _SubMono(
-                      task.createdAt == null
-                          ? '—'
-                          : DateFormat(
-                            'MM-dd HH:mm',
-                            locale,
-                          ).format(task.createdAt!),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (task.canCancel)
-                            _SubAction(
-                              label: l10n.filesTaskCancel,
-                              destructive: true,
-                              onTap:
-                                  enabled
-                                      ? () => _confirmAndRun(
-                                        context,
-                                        title: l10n.filesImportCancelConfirm,
-                                        message: l10n.filesImportCancelMessage,
-                                        confirmLabel: l10n.filesTaskCancel,
-                                        action:
-                                            () => controller.cancelImportTask(
-                                              task,
-                                            ),
-                                      )
-                                      : null,
-                            ),
-                          const SizedBox(width: 6),
+            rowCount: filtered.length,
+            rowBuilder: (context, index) {
+              final task = filtered[index];
+              return _SubRow(
+                cells: [
+                  // 失败任务把错误摘要提到次行：仅靠徽章无法解释失败原因。
+                  _SubNameCell(
+                    name: task.fileName ?? task.sourcePath,
+                    detail:
+                        (task.errorSummary ?? '').isNotEmpty
+                            ? task.errorSummary!
+                            : task.sourcePath,
+                    isFolder: task.isDirectory,
+                  ),
+                  _SubMono(task.isDirectory ? 'DIRECTORY' : 'FILE'),
+                  _SubMono(formatFileSize(task.totalBytes)),
+                  _SubProgressCell(
+                    value: task.progress,
+                    label:
+                        '${(task.progress * 100).toStringAsFixed(1)}%'
+                        '${task.totalFiles > 0 ? ' (${task.completedFiles}/${task.totalFiles})' : ''}',
+                  ),
+                  _SubMono(
+                    task.totalFiles > 0
+                        ? '${task.completedFiles}/${task.totalFiles}'
+                        : '—',
+                  ),
+                  _SubMono(formatFileSize(task.speedBytes)),
+                  _importBadge(task.status, l10n),
+                  _SubMono(
+                    task.createdAt == null
+                        ? '—'
+                        : DateFormat(
+                          'MM-dd HH:mm',
+                          locale,
+                        ).format(task.createdAt!),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (task.canCancel)
                           _SubAction(
-                            label: l10n.filesDeleteTask,
+                            label: l10n.filesTaskCancel,
+                            destructive: true,
                             onTap:
                                 enabled
                                     ? () => _confirmAndRun(
                                       context,
-                                      title: l10n.filesDeleteUploadTask,
-                                      message:
-                                          l10n.filesDeleteUploadTaskMessage,
-                                      confirmLabel: l10n.filesDeleteTask,
+                                      title: l10n.filesImportCancelConfirm,
+                                      message: l10n.filesImportCancelMessage,
+                                      confirmLabel: l10n.filesTaskCancel,
                                       action:
                                           () =>
-                                              controller.deleteImportTask(task),
+                                              controller.cancelImportTask(task),
                                     )
                                     : null,
                           ),
-                        ],
-                      ),
+                        const SizedBox(width: 6),
+                        _SubAction(
+                          label: l10n.filesDeleteTask,
+                          onTap:
+                              enabled
+                                  ? () => _confirmAndRun(
+                                    context,
+                                    title: l10n.filesDeleteUploadTask,
+                                    message: l10n.filesDeleteUploadTaskMessage,
+                                    confirmLabel: l10n.filesDeleteTask,
+                                    action:
+                                        () => controller.deleteImportTask(task),
+                                  )
+                                  : null,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
         WorkstationPaginationBar(

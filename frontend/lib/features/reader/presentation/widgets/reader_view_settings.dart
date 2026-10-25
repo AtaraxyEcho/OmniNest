@@ -102,6 +102,9 @@ class ReaderViewSettings {
   /// 绘制与测量都只能经由这里取行高：两侧各乘一份，同一块就会折出不同行数。
   TextStyle bodyStyleWith({double lineHeightScale = 1}) => TextStyle(
     fontFamily: resolvedFontFamily,
+    // 无衬线正文可能遇到 GB2312 之外的生僻字：回落到保留全量的衬线字体，
+    // 而不是依赖平台字体（Web 端没有稳定的系统中文字体）。
+    fontFamilyFallback: AppTypography.fontFamilyFallback,
     fontSize: fontSize,
     height: lineHeight * lineHeightScale,
     letterSpacing: fontSize * bodyLetterSpacingScale,

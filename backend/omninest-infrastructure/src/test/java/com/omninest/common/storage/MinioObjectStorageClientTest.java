@@ -13,6 +13,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.ListPartsRequest;
+import software.amazon.awssdk.services.s3.model.ListPartsResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchUploadException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
@@ -68,5 +72,33 @@ class MinioObjectStorageClientTest {
         Assertions.assertThat(requestCaptor.getValue().prefix()).isEqualTo("derived/");
         Assertions.assertThat(requestCaptor.getValue().continuationToken()).isEqualTo("current-page");
         Assertions.assertThat(requestCaptor.getValue().maxKeys()).isEqualTo(200);
+    }
+
+    @Test
+    void multipartUploadExistsReturnsTrueWhenUploadIsListable() {
+        ObjectStorageKey key = new ObjectStorageKey("file-quarantine", "uploads/demo.bin");
+        Mockito.when(s3Client.listParts(ArgumentMatchers.any(ListPartsRequest.class)))
+                .thenReturn(ListPartsResponse.builder().build());
+
+        Assertions.assertThat(storageClient.multipartUploadExists(key, "upload-1")).isTrue();
+    }
+
+    @Test
+    void multipartUploadExistsTreatsMissingUploadAsAbsent() {
+        ObjectStorageKey key = new ObjectStorageKey("file-quarantine", "uploads/demo.bin");
+        Mockito.when(s3Client.listParts(ArgumentMatchers.any(ListPartsRequest.class)))
+                .thenThrow(NoSuchUploadException.builder().message("missing").statusCode(404).build());
+
+        Assertions.assertThat(storageClient.multipartUploadExists(key, "upload-1")).isFalse();
+    }
+
+    @Test
+    void multipartUploadExistsPropagatesStorageFailure() {
+        ObjectStorageKey key = new ObjectStorageKey("file-quarantine", "uploads/demo.bin");
+        Mockito.when(s3Client.listParts(ArgumentMatchers.any(ListPartsRequest.class)))
+                .thenThrow(S3Exception.builder().message("boom").statusCode(503).build());
+
+        Assertions.assertThatThrownBy(() -> storageClient.multipartUploadExists(key, "upload-1"))
+                .isInstanceOf(S3Exception.class);
     }
 }

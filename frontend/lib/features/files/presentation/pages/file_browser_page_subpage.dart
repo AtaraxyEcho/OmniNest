@@ -142,10 +142,21 @@ class _SubChip {
 /// 不足时按自然最小宽横向滚动。富余宽度按 flex 权重分摊到各弹性列，
 /// 不由单列独吞；宽屏封顶 [_maxTableWidth]，超宽视口下表格收束留白。
 class _SubTable extends StatelessWidget {
-  const _SubTable({required this.columns, required this.rows});
+  const _SubTable({required this.columns, required List<_SubRow> this.rows})
+    : rowCount = rows.length,
+      rowBuilder = null;
+
+  /// 数据驱动构造：仅按可见索引构建行，避免上千条记录一次性预构造行 Widget。
+  const _SubTable.builder({
+    required this.columns,
+    required int this.rowCount,
+    required _SubRow Function(BuildContext, int) this.rowBuilder,
+  }) : rows = null;
 
   final List<_SubColumn> columns;
-  final List<_SubRow> rows;
+  final List<_SubRow>? rows;
+  final int? rowCount;
+  final _SubRow Function(BuildContext, int)? rowBuilder;
 
   /// 宽屏封顶：视口超过此宽时表格收束、右侧自然留白，
   /// 对齐 Portal 内容区 1560 的工位上限度量。
@@ -168,6 +179,8 @@ class _SubTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.filesColors;
+    final eagerRows = rows;
+    final builder = rowBuilder;
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewport = constraints.maxWidth;
@@ -214,10 +227,12 @@ class _SubTable extends StatelessWidget {
                   ),
                   Expanded(
                     child: ListView.builder(
-                      itemCount: rows.length,
-                      itemBuilder:
-                          (context, index) =>
-                              _SubRowShell(columns: columns, row: rows[index]),
+                      itemCount: eagerRows?.length ?? rowCount ?? 0,
+                      itemBuilder: (context, index) {
+                        final row =
+                            eagerRows?[index] ?? builder!(context, index);
+                        return _SubRowShell(columns: columns, row: row);
+                      },
                     ),
                   ),
                 ],

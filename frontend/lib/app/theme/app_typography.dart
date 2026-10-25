@@ -10,7 +10,13 @@ abstract final class AppTypography {
   static const String fontFamily = 'Inter';
 
   /// 全局字形回落链，承接西文字体缺失的中文与 CJK 标点。
-  static const List<String> fontFamilyFallback = <String>['NotoSansSC'];
+  ///
+  /// NotoSansSC 是 GB2312 子集；生僻人名/术语再回落到保留全量的
+  /// NotoSerifSC，避免界面出现豆腐块。
+  static const List<String> fontFamilyFallback = <String>[
+    'NotoSansSC',
+    'NotoSerifSC',
+  ];
 
   /// 等宽场景（代码、链接、路径）统一使用的字体。
   static const String monoFamily = 'JetBrainsMono';
@@ -18,6 +24,7 @@ abstract final class AppTypography {
   /// 等宽字体回落链：代码中的中文回落中文字体，其余回落平台等宽字体。
   static const List<String> monoFamilyFallback = <String>[
     'NotoSansSC',
+    'NotoSerifSC',
     'monospace',
   ];
 

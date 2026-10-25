@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +20,7 @@ import com.omninest.common.config.ConfigRefreshEvent;
 import com.omninest.modules.photos.config.GeonamesImportProperties;
 import com.omninest.modules.photos.domain.GeoDataset;
 import com.omninest.modules.photos.repository.GeoCityRepository;
+import com.omninest.modules.photos.repository.GeoCityUpsertRow;
 import com.omninest.modules.photos.repository.GeoDatasetRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.IOException;
@@ -101,6 +102,8 @@ class GeonamesImportServiceTest {
         when(cityRepository.countByDatasetId(dataset.getId())).thenReturn(2L);
         when(cityRepository.findGeonameIdsByDatasetId(dataset.getId()))
                 .thenReturn(List.of(1809858L, 1816663L));
+        when(cityRepository.upsertCities(any(), anyList())).thenAnswer(invocation ->
+                ((List<?>) invocation.getArgument(1)).size());
 
         PhotosRuntimeConfigService configService = Mockito.mock(PhotosRuntimeConfigService.class);
         when(configService.geoImportBatchSize()).thenReturn(2);
@@ -141,12 +144,25 @@ class GeonamesImportServiceTest {
     void fullRunUpsertsCitiesFillsZhPublishesAndBroadcasts() {
         service.executeImportTask(UUID.randomUUID());
 
-        verify(cityRepository, Mockito.times(1)).upsertCity(
-                eq(dataset.getId()), eq(1809858L), eq("Guangzhou"), isNull(), eq("CN"),
-                eq("China"), isNull(), eq("Guangdong"), isNull(), any(), any(), eq(15200000L), eq("PPTA"));
-        verify(cityRepository, Mockito.times(1)).upsertCity(
-                eq(dataset.getId()), eq(1816663L), eq("Hangzhou"), isNull(), eq("CN"),
-                eq("China"), isNull(), eq("Zhejiang"), isNull(), any(), any(), eq(11900000L), eq("PPTA"));
+        ArgumentCaptor<List<GeoCityUpsertRow>> rowsCaptor = ArgumentCaptor.captor();
+        verify(cityRepository).upsertCities(eq(dataset.getId()), rowsCaptor.capture());
+        List<GeoCityUpsertRow> rows = rowsCaptor.getValue();
+        assertEquals(2, rows.size());
+        GeoCityUpsertRow guangzhou = rows.stream()
+                .filter(row -> row.geonameId() == 1809858L)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("Guangzhou", guangzhou.name());
+        assertEquals("CN", guangzhou.countryCode());
+        assertEquals("China", guangzhou.countryNameEn());
+        assertEquals("Guangdong", guangzhou.provinceNameEn());
+        assertEquals(15200000L, guangzhou.population());
+        assertEquals("PPTA", guangzhou.featureCode());
+        assertEquals("Hangzhou", rows.stream()
+                .filter(row -> row.geonameId() == 1816663L)
+                .findFirst()
+                .orElseThrow()
+                .name());
 
         verify(cityRepository).updateCityNameZh(dataset.getId(), 1809858L, "广州市");
         verify(cityRepository).updateProvinceNameZh(dataset.getId(), "Guangdong", "广东省");
@@ -198,8 +214,7 @@ class GeonamesImportServiceTest {
 
         service.executeImportTask(UUID.randomUUID());
 
-        verify(cityRepository, never()).upsertCity(any(), anyLong(), anyString(), any(), anyString(),
-                any(), any(), any(), any(), any(), any(), anyLong(), any());
+        verify(cityRepository, never()).upsertCities(any(), anyList());
         verify(cityRepository).updateCityNameZh(dataset.getId(), 1809858L, "广州市");
         assertEquals(GeoDataset.STATUS_PUBLISHED, dataset.getStatus());
     }

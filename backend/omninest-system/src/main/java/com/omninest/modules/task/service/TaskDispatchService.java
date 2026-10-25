@@ -6,6 +6,7 @@ import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -88,6 +89,36 @@ public class TaskDispatchService {
         dispatch.setPayload(JsonSupport.toJson(payload));
         dispatch.setNextAttemptAt(nextAttemptAt);
         repository.save(dispatch);
+    }
+
+    /**
+     * 在当前业务事务内批量创建待发布记录。
+     *
+     * <p>同一批共用交换机与路由键，{@code saveAll} 由 Hibernate 按配置的
+     * {@code jdbc.batch_size} 合并插入；全站重建等一次投递数百条的场景
+     * 不再逐条提交事务。</p>
+     *
+     * @param exchangeName 交换机名称
+     * @param routingKey 路由键
+     * @param items 批量记录
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void enqueueAll(String exchangeName, String routingKey, List<TaskDispatchItem> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        Instant nextAttemptAt = Instant.now();
+        List<TaskDispatch> dispatches = new ArrayList<>(items.size());
+        for (TaskDispatchItem item : items) {
+            TaskDispatch dispatch = new TaskDispatch();
+            dispatch.setTaskId(item.taskId());
+            dispatch.setExchangeName(exchangeName);
+            dispatch.setRoutingKey(routingKey);
+            dispatch.setPayload(JsonSupport.toJson(item.payload()));
+            dispatch.setNextAttemptAt(nextAttemptAt);
+            dispatches.add(dispatch);
+        }
+        repository.saveAll(dispatches);
     }
 
     /**

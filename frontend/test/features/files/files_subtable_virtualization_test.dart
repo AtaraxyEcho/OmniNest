@@ -94,6 +94,99 @@ void main() {
     expect(find.text('名称'), findsOneWidget, reason: '表头必须吸顶，不随数据行滚出屏幕');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('上传队列表按可见窗口构建行，任务再多也不预构造全部行', (tester) async {
+    tester.view.physicalSize = const Size(1440, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer(
+      overrides: [
+        fileBrowserControllerProvider.overrideWith(
+          () => _PagedTableController(_stateWithUploadTasks(120)),
+        ),
+        realtimeCoordinatorProvider.overrideWith((ref) => null),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final router = GoRouter(
+      initialLocation: '/files',
+      routes: [
+        GoRoute(
+          path: '/files',
+          builder:
+              (context, state) => FileBrowserPage(
+                initialSection: FileManagerSection.uploadQueue,
+              ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          theme: OmniNestTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('local-0.bin'), findsOneWidget);
+    expect(
+      tester
+          .widgetList(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is Text && (widget.data ?? '').startsWith('local-'),
+            ),
+          )
+          .length,
+      lessThan(40),
+      reason: '传输行必须按需构建，而不是 120 行一次性上树',
+    );
+
+    final tablePosition =
+        Scrollable.of(tester.element(find.text('local-0.bin'))).position;
+    for (
+      var attempt = 0;
+      attempt < 10 && tablePosition.pixels < tablePosition.maxScrollExtent;
+      attempt++
+    ) {
+      tablePosition.jumpTo(tablePosition.maxScrollExtent);
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('local-119.bin'), findsOneWidget);
+    expect(find.text('local-0.bin'), findsNothing, reason: '滚出视口的首行应当被回收');
+    expect(tester.takeException(), isNull);
+  });
+}
+
+FileBrowserState _stateWithUploadTasks(int count) {
+  return FileBrowserState(
+    section: FileManagerSection.uploadQueue,
+    files: const <FileNode>[],
+    recycleBin: const <FileNode>[],
+    localUploadTasks: [
+      for (var index = 0; index < count; index++)
+        FileUploadClientTask(
+          id: 'local-$index',
+          fileName: 'local-$index.bin',
+          sizeBytes: 1024,
+          uploadedBytes: 512,
+          status: 'RUNNING',
+        ),
+    ],
+  );
 }
 
 FileBrowserState _stateWithRows(int count) {

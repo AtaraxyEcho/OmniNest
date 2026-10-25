@@ -34,6 +34,25 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  group('正文生僻字回落', () {
+    test('无衬线正文回落到全量衬线字体', () {
+      final settings = ReaderViewSettings(fontFamily: 'sans');
+
+      expect(settings.resolvedFontFamily, isNull);
+      expect(settings.bodyStyle.fontFamilyFallback, <String>[
+        'NotoSansSC',
+        'NotoSerifSC',
+      ]);
+    });
+
+    test('衬线正文使用保留全量的衬线字体', () {
+      final settings = ReaderViewSettings(fontFamily: 'serif');
+
+      expect(settings.bodyStyle.fontFamily, 'NotoSerifSC');
+      expect(settings.bodyStyle.fontFamilyFallback, contains('NotoSerifSC'));
+    });
+  });
+
   group('ReaderViewSettings volumeKeyPaging', () {
     test('默认开启', () {
       expect(ReaderViewSettings().volumeKeyPaging, isTrue);

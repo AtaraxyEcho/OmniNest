@@ -112,7 +112,6 @@ public class FileUploadSessionService {
         );
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public FileUploadSessionDto createSession(UUID ownerUserId, CreateFileUploadSessionRequest request) {
         // 确定目标空间类型
         SpaceType spaceType = SpaceType.PERSONAL;
@@ -140,6 +139,9 @@ public class FileUploadSessionService {
             // 共享空间上传必须具备 CAN_UPLOAD 角色能力并受共享空间容量约束
             sharedSpaceService.requireSharedWrite(ownerUserId);
             sharedSpaceQuotaService.checkQuota(request.sizeBytes());
+        } else {
+            // 配额预检先于 multipart 初始化，避免配额不足时仍在隔离桶创建上传。
+            storageQuotaService.checkQuota(ownerUserId, request.sizeBytes());
         }
 
         FileNode parent = resolveParent(ownerUserId, request.parentId(), spaceType);
@@ -156,27 +158,21 @@ public class FileUploadSessionService {
         String mimeType = normalizeMimeType(request.mimeType(), fileName);
         UUID sessionId = UUID.randomUUID();
         Instant expiresAt = Instant.now().plus(uploadSettings.sessionTtl());
-        UUID quotaReservationId = spaceType == SpaceType.PERSONAL
-                ? storageQuotaService.reserve(
-                        ownerUserId,
-                        "UPLOAD",
-                        sessionId,
-                        request.sizeBytes(),
-                        expiresAt
-                )
-                : null;
+        SpaceType targetSpaceType = spaceType;
+        // 签名限流依赖 Redis，先于任何数据库事务与对象存储调用执行。
+        checkBandwidthLimit(ownerUserId);
         if (request.partSizeBytes() == null && request.sizeBytes() <= DIRECT_UPLOAD_MAX_BYTES) {
-            return createDirectSession(
+            return transactionTemplate.execute(status -> createDirectSession(
                     ownerUserId,
                     request,
                     parent,
                     fileName,
                     mimeType,
-                    spaceType,
+                    targetSpaceType,
                     sessionId,
                     expiresAt,
-                    quotaReservationId
-            );
+                    reservePersonalQuota(ownerUserId, targetSpaceType, sessionId, request.sizeBytes(), expiresAt)
+            ));
         }
 
         int partSizeBytes = resolvePartSizeBytes(request.sizeBytes(), request.partSizeBytes());
@@ -184,32 +180,60 @@ public class FileUploadSessionService {
         String bucket = objectStorageBuckets.quarantine();
         String objectKey = "uploads/" + ownerUserId + "/" + sessionId + "/" + fileName;
         ObjectStorageKey storageKey = new ObjectStorageKey(bucket, objectKey);
+        // multipart 初始化是对象存储网络调用，不能占用数据库连接与事务。
         String uploadId = objectStorageClient.initiateMultipartUpload(storageKey, mimeType);
+        try {
+            return transactionTemplate.execute(status -> {
+                UUID quotaReservationId = reservePersonalQuota(
+                        ownerUserId, targetSpaceType, sessionId, request.sizeBytes(), expiresAt);
+                FileUploadSession session = new FileUploadSession();
+                session.setId(sessionId);
+                session.setOwnerUserId(ownerUserId);
+                session.setTargetParentId(parent == null ? null : parent.getId());
+                session.setAsVersionOfFileId(asVersionOfFileId);
+                session.setFileName(fileName);
+                session.setTotalSizeBytes(request.sizeBytes());
+                session.setPartSizeBytes(partSizeBytes);
+                session.setTotalParts(totalParts);
+                session.setUploadedParts(0);
+                session.setMimeType(mimeType);
+                session.setSha256(normalizeSha256(request.sha256()));
+                session.setStatus(UploadStatus.CREATED.getValue());
+                session.setUploadId(uploadId);
+                session.setTargetBucket(bucket);
+                session.setTargetObjectKey(objectKey);
+                session.setExpiresAt(expiresAt);
+                session.setQuotaReservationId(quotaReservationId);
+                session.setSpaceType(targetSpaceType);
+                FileUploadSession saved = fileUploadSessionRepository.save(session);
+                List<FileUploadPart> parts = fileUploadPartRepository.saveAll(buildParts(saved));
+                // 预签名消耗签名配额：一次会话只发首批，后续分片由按需接口限额拉取。
+                return toSessionDto(saved, parts, true);
+            });
+        } catch (RuntimeException exception) {
+            abortInitiatedUpload(storageKey, uploadId);
+            throw exception;
+        }
+    }
 
-        FileUploadSession session = new FileUploadSession();
-        session.setId(sessionId);
-        session.setOwnerUserId(ownerUserId);
-        session.setTargetParentId(parent == null ? null : parent.getId());
-        session.setAsVersionOfFileId(asVersionOfFileId);
-        session.setFileName(fileName);
-        session.setTotalSizeBytes(request.sizeBytes());
-        session.setPartSizeBytes(partSizeBytes);
-        session.setTotalParts(totalParts);
-        session.setUploadedParts(0);
-        session.setMimeType(mimeType);
-        session.setSha256(normalizeSha256(request.sha256()));
-        session.setStatus(UploadStatus.CREATED.getValue());
-        session.setUploadId(uploadId);
-        session.setTargetBucket(bucket);
-        session.setTargetObjectKey(objectKey);
-        session.setExpiresAt(expiresAt);
-        session.setQuotaReservationId(quotaReservationId);
-        session.setSpaceType(spaceType);
-        FileUploadSession saved = fileUploadSessionRepository.save(session);
-        List<FileUploadPart> parts = fileUploadPartRepository.saveAll(buildParts(saved));
-        // 预签名消耗签名配额：一次会话只发首批，后续分片由按需接口限额拉取。
-        checkBandwidthLimit(ownerUserId);
-        return toSessionDto(saved, parts, true);
+    private UUID reservePersonalQuota(
+            UUID ownerUserId,
+            SpaceType spaceType,
+            UUID sessionId,
+            long sizeBytes,
+            Instant expiresAt) {
+        return spaceType == SpaceType.PERSONAL
+                ? storageQuotaService.reserve(ownerUserId, "UPLOAD", sessionId, sizeBytes, expiresAt)
+                : null;
+    }
+
+    private void abortInitiatedUpload(ObjectStorageKey storageKey, String uploadId) {
+        try {
+            objectStorageClient.abortMultipartUpload(storageKey, uploadId);
+        } catch (RuntimeException abortFailure) {
+            // 落库已经失败，原异常优先抛出；残留 multipart 由隔离桶过期清理兜底。
+            log.warn("上传会话落库失败后中止 multipart 失败: uploadId={}", uploadId, abortFailure);
+        }
     }
 
     private FileUploadSessionDto createDirectSession(
@@ -302,7 +326,7 @@ public class FileUploadSessionService {
             completion = transactionTemplate.execute(
                     status -> prepareCompletion(ownerUserId, uploadId, request));
         } catch (UploadSessionExpiredException exception) {
-            markExpiredAfterRollback(ownerUserId, uploadId);
+            markSessionExpired(ownerUserId, uploadId);
             throw exception;
         }
         if (completion == null) {
@@ -313,6 +337,10 @@ public class FileUploadSessionService {
         }
         try {
             completeMultipartObject(completion);
+        } catch (UploadContentLostException exception) {
+            // 合并没有产出对象且 multipart 已不存在：重试不可能成功，直接进入终态。
+            markSessionExpired(ownerUserId, uploadId);
+            throw exception;
         } catch (RuntimeException exception) {
             resetFinalizing(ownerUserId, uploadId);
             throw exception;
@@ -386,12 +414,18 @@ public class FileUploadSessionService {
             objectStorageClient.completeMultipartUpload(
                     completion.key(), completion.s3UploadId(), completion.parts());
         } catch (RuntimeException exception) {
-            if (!objectStorageClient.objectExists(completion.key())) {
-                throw exception;
+            if (objectStorageClient.objectExists(completion.key())) {
+                // 上一次已完成合并但收尾事务失败：MinIO 对重复合并返回 NoSuchUpload，
+                // 对象存在即可视为合并成功，继续落业务状态。
+                log.info("分片合并已在上次尝试完成，继续完成会话: uploadId={}", completion.s3UploadId());
+                return;
             }
-            // 上一次已完成合并但收尾事务失败：MinIO 对重复合并返回 NoSuchUpload，
-            // 对象存在即可视为合并成功，继续落业务状态。
-            log.info("分片合并已在上次尝试完成，继续完成会话: uploadId={}", completion.s3UploadId());
+            if (!objectStorageClient.multipartUploadExists(completion.key(), completion.s3UploadId())) {
+                log.warn("分片合并失败且 multipart 与合并结果均不存在: uploadId={}, errorType={}",
+                        completion.s3UploadId(), exception.getClass().getSimpleName());
+                throw new UploadContentLostException();
+            }
+            throw exception;
         }
     }
 
@@ -427,7 +461,7 @@ public class FileUploadSessionService {
         }
     }
 
-    private void markExpiredAfterRollback(UUID ownerUserId, String uploadId) {
+    private void markSessionExpired(UUID ownerUserId, String uploadId) {
         try {
             transactionTemplate.executeWithoutResult(status -> {
                 FileUploadSession session = fileUploadSessionRepository
@@ -484,13 +518,13 @@ public class FileUploadSessionService {
         return stored;
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public void cancelSession(UUID ownerUserId, String uploadId) {
-        FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
+        FileUploadSession session = findSession(ownerUserId, uploadId);
         if (UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
             return;
         }
         ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
+        // 外部中止在数据库事务之外执行：失败时记录保持原样，客户端可重试取消。
         if (isDirectUpload(session)) {
             if (objectStorageClient.objectExists(key)) {
                 objectStorageClient.removeObject(key);
@@ -498,11 +532,19 @@ public class FileUploadSessionService {
         } else {
             objectStorageClient.abortMultipartUpload(key, session.getUploadId());
         }
-        fileUploadPartRepository.deleteByUploadSessionId(session.getId());
-        if (session.getQuotaReservationId() != null) {
-            storageQuotaService.releaseReservation("UPLOAD", session.getId());
-        }
-        fileUploadSessionRepository.delete(session);
+        transactionTemplate.executeWithoutResult(status -> {
+            FileUploadSession current = fileUploadSessionRepository
+                    .findForUpdateByUploadIdAndOwnerUserId(uploadId, ownerUserId)
+                    .orElse(null);
+            if (current == null || UploadStatus.COMPLETED.getValue().equals(current.getStatus())) {
+                return;
+            }
+            fileUploadPartRepository.deleteByUploadSessionId(current.getId());
+            if (current.getQuotaReservationId() != null) {
+                storageQuotaService.releaseReservation("UPLOAD", current.getId());
+            }
+            fileUploadSessionRepository.delete(current);
+        });
     }
 
     /**
@@ -525,7 +567,6 @@ public class FileUploadSessionService {
         return toFileNodeDto(file, mediaAutoImportTaskId);
     }
 
-    @Transactional(rollbackFor = Exception.class, noRollbackFor = UploadSessionExpiredException.class)
     public FileUploadPartDto getPartUrl(UUID ownerUserId, String uploadId, int partNumber) {
         FileUploadSession session = findSession(ownerUserId, uploadId);
         if (isDirectUpload(session)) {
@@ -656,6 +697,15 @@ public class FileUploadSessionService {
     public static final class UploadSessionExpiredException extends BusinessException {
         public UploadSessionExpiredException() {
             super(ErrorCode.FILE_UPLOAD_FAILED, "上传会话已过期");
+        }
+    }
+
+    /**
+     * 分片合并没有产出对象，且 multipart 已不存在：会话无法重试完成。
+     */
+    public static final class UploadContentLostException extends BusinessException {
+        public UploadContentLostException() {
+            super(ErrorCode.FILE_UPLOAD_FAILED, "上传内容已失效，请重新上传");
         }
     }
 

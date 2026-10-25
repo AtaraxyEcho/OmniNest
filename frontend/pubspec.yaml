@@ -100,9 +100,9 @@ flutter:
     - assets/shaders/portal_weather.frag
   fonts:
     # Noto Sans SC 使用单张可变字体：wght 轴覆盖 100-900，替代 4 张静态字面。
-    # 两张 CJK 字体已按 GB2312 + 界面文案子集化（17.0MB → 3.9MB、11.1MB → 2.7MB），
-    # 由 tool/subset_cjk_fonts.py 生成；Flutter 3.41+ 会把 FontWeight 映射到变量轴，
-    # 不要为每个字重重复声明同一文件。
+    # UI 无衬线字体按 GB2312 + 界面文案子集化（17.0MB → 3.9MB），由
+    # tool/subset_cjk_fonts.py 生成；衬线字体保留全量以覆盖阅读器生僻字。
+    # Flutter 3.41+ 会把 FontWeight 映射到变量轴，不要为每个字重重复声明同一文件。
     - family: NotoSansSC
       fonts:
         - asset: assets/fonts/NotoSansSC-VF.ttf

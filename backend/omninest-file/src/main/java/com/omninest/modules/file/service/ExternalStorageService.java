@@ -40,6 +40,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 外部存储核心服务。
@@ -68,6 +69,7 @@ public class ExternalStorageService {
     private final ExternalStorageOAuthService oauthService;
     private final ExternalStorageEndpointGuard endpointGuard;
     private final StorageQuotaService storageQuotaService;
+    private final TransactionTemplate transactionTemplate;
 
     // ========== Remote 生命周期 ==========
 
@@ -363,46 +365,62 @@ public class ExternalStorageService {
     /**
      * 取消或删除导入任务。
      * <p>
-     * 运行中的任务：取消执行并标记为 CANCELLED。
+     * 运行中的任务：先停止 rclone job（网络调用在事务外），再将任务标记为 CANCELLED。
      * 已结束的任务（COMPLETED / FAILED / CANCELLED）：从数据库中删除记录。
      */
-    @Transactional(rollbackFor = Exception.class)
     public void cancelImportTask(UUID ownerUserId, UUID taskId) {
-        StorageImportTask task = importTaskRepository.findByIdAndOwnerUserId(taskId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "导入任务不存在"));
-
-        String status = task.getStatus();
-        boolean isFinished = ImportTaskStatus.COMPLETED.getValue().equals(status)
-                || ImportTaskStatus.FAILED.getValue().equals(status)
-                || ImportTaskStatus.CANCELLED.getValue().equals(status);
-
-        if (isFinished) {
-            // 在途 Worker 尚未结算时，删除任务行会让它再也结算不了（requireTask 抛错进 DLQ），
-            // 预留停留在 RESERVED。删除前无条件释放：对已结算/已过期的预留是空操作。
-            storageQuotaService.releaseReservation("EXTERNAL_IMPORT", taskId);
-            importTaskRepository.delete(task);
-            log.info("导入任务已删除: taskId={}", taskId);
+        ImportCancellation cancellation = transactionTemplate.execute(status -> {
+            StorageImportTask task = importTaskRepository.findByIdAndOwnerUserId(taskId, ownerUserId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "导入任务不存在"));
+            String taskStatus = task.getStatus();
+            if (isFinishedImportStatus(taskStatus)) {
+                // 在途 Worker 尚未结算时，删除任务行会让它再也结算不了（requireTask 抛错进 DLQ），
+                // 预留停留在 RESERVED。删除前无条件释放：对已结算/已过期的预留是空操作。
+                storageQuotaService.releaseReservation("EXTERNAL_IMPORT", taskId);
+                importTaskRepository.delete(task);
+                log.info("导入任务已删除: taskId={}", taskId);
+                return null;
+            }
+            // RUNNING 仅用于兼容历史行；当前执行器只会写 SCANNING/TRANSFERRING/IMPORTING，
+            // 只判 RUNNING 会让传输中的任务依赖 Worker 的下一次轮询（约 2 秒）才停。
+            boolean rcloneActive = ImportTaskStatus.SCANNING.getValue().equals(taskStatus)
+                    || ImportTaskStatus.TRANSFERRING.getValue().equals(taskStatus)
+                    || ImportTaskStatus.RUNNING.getValue().equals(taskStatus);
+            return new ImportCancellation(rcloneActive ? task.getRcloneJobId() : null);
+        });
+        if (cancellation == null) {
             return;
         }
-
-        // 如果 rclone job 正在运行，停止它。
-        // RUNNING 仅用于兼容历史行；当前执行器只会写 SCANNING/TRANSFERRING/IMPORTING，
-        // 只判 RUNNING 会让传输中的任务依赖 Worker 的下一次轮询（约 2 秒）才停。
-        boolean rcloneActive = ImportTaskStatus.SCANNING.getValue().equals(status)
-                || ImportTaskStatus.TRANSFERRING.getValue().equals(status)
-                || ImportTaskStatus.RUNNING.getValue().equals(status);
-        if (task.getRcloneJobId() != null && rcloneActive) {
+        if (cancellation.rcloneJobId() != null) {
             try {
-                rcloneGateway.stopJob(task.getRcloneJobId());
+                rcloneGateway.stopJob(cancellation.rcloneJobId());
             } catch (Exception e) {
-                log.warn("停止 rclone job 失败: jobId={}", task.getRcloneJobId(), e);
+                log.warn("停止 rclone job 失败: jobId={}", cancellation.rcloneJobId(), e);
             }
         }
-
-        task.setStatus(ImportTaskStatus.CANCELLED.getValue());
-        importTaskRepository.save(task);
-        taskRecordService.markCancelled(systemTaskId(task));
+        transactionTemplate.executeWithoutResult(status -> {
+            StorageImportTask task = importTaskRepository.findByIdAndOwnerUserId(taskId, ownerUserId)
+                    .orElse(null);
+            if (task == null || isFinishedImportStatus(task.getStatus())) {
+                return;
+            }
+            task.setStatus(ImportTaskStatus.CANCELLED.getValue());
+            importTaskRepository.save(task);
+            taskRecordService.markCancelled(systemTaskId(task));
+        });
         log.info("导入任务已取消: taskId={}", taskId);
+    }
+
+    private boolean isFinishedImportStatus(String status) {
+        return ImportTaskStatus.COMPLETED.getValue().equals(status)
+                || ImportTaskStatus.FAILED.getValue().equals(status)
+                || ImportTaskStatus.CANCELLED.getValue().equals(status);
+    }
+
+    /**
+     * 取消计划：rclone job 需要在事务外停止。
+     */
+    private record ImportCancellation(Integer rcloneJobId) {
     }
 
     // ========== 内部方法 ==========

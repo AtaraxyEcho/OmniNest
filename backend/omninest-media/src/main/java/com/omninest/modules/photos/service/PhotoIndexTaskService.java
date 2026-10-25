@@ -14,6 +14,7 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import com.omninest.modules.photos.search.PhotoSearchIndexService.PhotoIndexDocument;
+import com.omninest.modules.task.service.TaskDispatchItem;
 import com.omninest.modules.task.service.TaskDispatchService;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -219,10 +220,18 @@ public class PhotoIndexTaskService {
             if (batch.isEmpty()) {
                 break;
             }
+            List<TaskDispatchItem> dispatches = new ArrayList<>(batch.size());
             for (PhotoIndexTargetProjection photo : batch) {
-                scheduleIndexAfterCommit(photo.getOwnerUserId(), photo.getId());
-                dispatched++;
+                dispatches.add(new TaskDispatchItem(
+                        photo.getId(),
+                        new PhotoIndexEvent(photo.getId(), photo.getOwnerUserId())));
             }
+            // 单批一次 Outbox 事务，避免全站重建时逐张照片提交。
+            taskDispatchService.enqueueAll(
+                    QueueNames.TASK_EXCHANGE,
+                    QueueNames.PHOTO_INDEX_ROUTING_KEY,
+                    dispatches);
+            dispatched += dispatches.size();
             afterId = batch.getLast().getId();
             if (batch.size() < REBUILD_BATCH_SIZE) {
                 break;

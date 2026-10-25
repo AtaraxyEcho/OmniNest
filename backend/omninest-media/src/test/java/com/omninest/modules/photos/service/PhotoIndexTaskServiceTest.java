@@ -17,6 +17,7 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import com.omninest.modules.photos.search.PhotoSearchIndexService.PhotoIndexDocument;
+import com.omninest.modules.task.service.TaskDispatchItem;
 import com.omninest.modules.task.service.TaskDispatchService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -249,18 +250,16 @@ class PhotoIndexTaskServiceTest {
         // 否则重投写入的文档会被随后的 deleteAll 一并清掉，表现为重建完仍然搜不到。
         InOrder inOrder = Mockito.inOrder(photoSearchIndexService, taskDispatchService);
         inOrder.verify(photoSearchIndexService).clearAll();
-        inOrder.verify(taskDispatchService).enqueue(
-                eq(firstPhoto),
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TaskDispatchItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        inOrder.verify(taskDispatchService).enqueueAll(
                 eq(QueueNames.TASK_EXCHANGE),
                 eq(QueueNames.PHOTO_INDEX_ROUTING_KEY),
-                eq(new PhotoIndexEvent(firstPhoto, firstOwner))
-        );
-        inOrder.verify(taskDispatchService).enqueue(
-                eq(secondPhoto),
-                eq(QueueNames.TASK_EXCHANGE),
-                eq(QueueNames.PHOTO_INDEX_ROUTING_KEY),
-                eq(new PhotoIndexEvent(secondPhoto, secondOwner))
-        );
+                itemsCaptor.capture());
+        // 单批页内一次 Outbox 写入，避免全站重建逐张提交。
+        assertThat(itemsCaptor.getValue()).containsExactly(
+                new TaskDispatchItem(firstPhoto, new PhotoIndexEvent(firstPhoto, firstOwner)),
+                new TaskDispatchItem(secondPhoto, new PhotoIndexEvent(secondPhoto, secondOwner)));
     }
 
     @Test
@@ -284,6 +283,10 @@ class PhotoIndexTaskServiceTest {
 
         assertThat(dispatched).isEqualTo(fullBatch + 1);
         Mockito.verify(photoItemRepository).findIndexablePhotosAfterId(eq(lastOfFirstPage.getId()), Mockito.any());
+        Mockito.verify(taskDispatchService, Mockito.times(2)).enqueueAll(
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.PHOTO_INDEX_ROUTING_KEY),
+                Mockito.anyList());
     }
 
     private PhotoItem photo(UUID photoId, UUID ownerUserId, UUID fileNodeId) {

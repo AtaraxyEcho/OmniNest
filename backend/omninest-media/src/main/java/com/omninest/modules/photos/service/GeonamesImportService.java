@@ -8,6 +8,7 @@ import com.omninest.common.config.ConfigRefreshEvent;
 import com.omninest.modules.photos.config.GeonamesImportProperties;
 import com.omninest.modules.photos.domain.GeoDataset;
 import com.omninest.modules.photos.repository.GeoCityRepository;
+import com.omninest.modules.photos.repository.GeoCityUpsertRow;
 import com.omninest.modules.photos.repository.GeoDatasetRepository;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.photos.service.GeoNamesParser.Admin1Entry;
@@ -312,33 +313,30 @@ public class GeonamesImportService {
             List<CityRow> buffer,
             Map<String, Admin1Entry> admin1ByCode,
             Map<String, CountryEntry> countryByCode) {
-        int flushed = buffer.size();
-        transactionTemplate.executeWithoutResult(status -> {
-            for (CityRow row : buffer) {
-                Admin1Entry admin1 = row.admin1Code() == null
-                        ? null
-                        : admin1ByCode.get(row.countryCode() + "." + row.admin1Code());
-                String provinceEn = admin1 == null ? row.admin1Code() : admin1.nameEn();
-                CountryEntry country = countryByCode.get(row.countryCode());
-                String countryEn = country == null ? row.countryCode() : country.nameEn();
-                geoCityRepository.upsertCity(
-                        datasetId,
-                        row.geonameId(),
-                        row.name(),
-                        null,
-                        row.countryCode(),
-                        countryEn,
-                        null,
-                        provinceEn,
-                        null,
-                        row.latitude(),
-                        row.longitude(),
-                        row.population(),
-                        row.featureCode());
-            }
-        });
+        List<GeoCityUpsertRow> rows = new ArrayList<>(buffer.size());
+        for (CityRow row : buffer) {
+            Admin1Entry admin1 = row.admin1Code() == null
+                    ? null
+                    : admin1ByCode.get(row.countryCode() + "." + row.admin1Code());
+            String provinceEn = admin1 == null ? row.admin1Code() : admin1.nameEn();
+            CountryEntry country = countryByCode.get(row.countryCode());
+            String countryEn = country == null ? row.countryCode() : country.nameEn();
+            rows.add(new GeoCityUpsertRow(
+                    row.geonameId(),
+                    row.name(),
+                    row.countryCode(),
+                    countryEn,
+                    provinceEn,
+                    row.latitude(),
+                    row.longitude(),
+                    row.population(),
+                    row.featureCode()));
+        }
+        int[] written = {0};
+        transactionTemplate.executeWithoutResult(status ->
+                written[0] = geoCityRepository.upsertCities(datasetId, rows));
         buffer.clear();
-        return flushed;
+        return written[0];
     }
 
     private void broadcastReload(String datasetVersion) {

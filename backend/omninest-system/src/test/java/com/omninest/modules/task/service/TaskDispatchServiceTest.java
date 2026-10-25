@@ -1,13 +1,18 @@
 package com.omninest.modules.task.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.task.config.TaskOutboxProperties;
+import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -84,6 +89,36 @@ class TaskDispatchServiceTest {
 
         assertThat(service.isDeadLetterPending(dispatch)).isTrue();
         assertThat(service.deadLetterErrorCode(dispatch)).isEqualTo("MESSAGE_UNROUTABLE");
+    }
+
+    @Test
+    void enqueueAllWritesOneDispatchPerItemInSingleSaveAll() {
+        UUID first = UUID.fromString("20000000-0000-0000-0000-000000000011");
+        UUID second = UUID.fromString("20000000-0000-0000-0000-000000000012");
+
+        service.enqueueAll("omni.task", "photo.index", List.of(
+                new TaskDispatchItem(first, Map.of("photoId", first.toString())),
+                new TaskDispatchItem(second, Map.of("photoId", second.toString()))));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TaskDispatch>> captor = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(TaskDispatch::getTaskId)
+                .containsExactly(first, second);
+        assertThat(captor.getValue()).allSatisfy(dispatch -> {
+            assertThat(dispatch.getExchangeName()).isEqualTo("omni.task");
+            assertThat(dispatch.getRoutingKey()).isEqualTo("photo.index");
+            assertThat(dispatch.getPayload()).contains("\"photoId\"");
+            assertThat(dispatch.getNextAttemptAt()).isNotNull();
+        });
+    }
+
+    @Test
+    void enqueueAllSkipsEmptyBatch() {
+        service.enqueueAll("omni.task", "photo.index", List.of());
+
+        verify(repository, never()).saveAll(anyList());
     }
 
     private void assertRetryDelay(int previousAttempts, Instant expectedNextAttemptAt, int expectedAttempts) {

@@ -45,6 +45,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -334,6 +335,30 @@ class FileUploadSessionServiceTest {
     }
 
     @Test
+    void createSessionAbortsMultipartWhenSessionPersistenceFails() {
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "video.mp4"))
+                .thenReturn(false);
+        when(objectStorageClient.initiateMultipartUpload(any(), eq("video/mp4"))).thenReturn("upload-123");
+        when(uploadSessionRepository.save(any())).thenThrow(new IllegalStateException("db down"));
+
+        assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                null,
+                "video.mp4",
+                20L * 1024 * 1024,
+                "video/mp4",
+                null,
+                10 * 1024 * 1024,
+                null,
+                null
+        )))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("db down");
+
+        verify(objectStorageClient).abortMultipartUpload(any(), eq("upload-123"));
+    }
+
+    @Test
     void createSession_skipsNameConflictWhenAsVersionOfFile() {
         UUID asVersionOfFileId = UUID.randomUUID();
         FileNode target = new FileNode();
@@ -606,12 +631,42 @@ class FileUploadSessionServiceTest {
         doThrow(new IllegalStateException("MinIO unavailable"))
                 .when(objectStorageClient).completeMultipartUpload(any(), eq("upload-123"), any());
         when(objectStorageClient.objectExists(any())).thenReturn(false);
+        when(objectStorageClient.multipartUploadExists(any(), eq("upload-123"))).thenReturn(true);
 
         assertThatThrownBy(() -> service.completeSession(
                 OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null)))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(session.getStatus()).isEqualTo(UploadStatus.UPLOADING.getValue());
+    }
+
+    @Test
+    void completeSessionMarksExpiredWhenMergedContentIsMissing() {
+        FileUploadSession session = session();
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "demo.pdf")).thenReturn(false);
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new IllegalStateException("NoSuchUpload"))
+                .when(objectStorageClient).completeMultipartUpload(any(), eq("upload-123"), any());
+        when(objectStorageClient.objectExists(any())).thenReturn(false);
+        when(objectStorageClient.multipartUploadExists(any(), eq("upload-123"))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.completeSession(
+                OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null)))
+                .isInstanceOfSatisfying(BusinessException.class, exception -> {
+                    assertThat(exception.errorCode()).isEqualTo(ErrorCode.FILE_UPLOAD_FAILED);
+                    assertThat(exception.getMessage()).contains("上传内容已失效");
+                });
+
+        // 合并结果与 multipart 都不存在：必须落到终态，不能让客户端继续轮询重试。
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.EXPIRED.getValue());
+        verify(objectStorageClient).multipartUploadExists(any(), eq("upload-123"));
     }
 
     @Test
@@ -685,13 +740,7 @@ class FileUploadSessionServiceTest {
         // 验证文件大小超出配额时拒绝创建上传会话
         long oversizedBytes = 100L * 1024 * 1024;
         Mockito.doThrow(new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "存储配额不足"))
-                .when(storageQuotaService).reserve(
-                        eq(OWNER_ID),
-                        eq("UPLOAD"),
-                        any(UUID.class),
-                        eq(oversizedBytes),
-                        any(Instant.class)
-                );
+                .when(storageQuotaService).checkQuota(OWNER_ID, oversizedBytes);
 
         assertThatThrownBy(() -> service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
                 null,
@@ -738,7 +787,7 @@ class FileUploadSessionServiceTest {
     void cancelCompletedSessionIsIdempotent() {
         FileUploadSession session = session();
         session.setStatus(UploadStatus.COMPLETED.getValue());
-        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
 
         service.cancelSession(OWNER_ID, "upload-123");
@@ -748,6 +797,40 @@ class FileUploadSessionServiceTest {
         verify(objectStorageClient, Mockito.never()).objectExists(any());
         verify(objectStorageClient, Mockito.never()).removeObject(any());
         verify(objectStorageClient, Mockito.never()).abortMultipartUpload(any(), any());
+    }
+
+    @Test
+    void cancelSessionAbortsMultipartBeforeDeletingTheSession() {
+        FileUploadSession session = session();
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+
+        service.cancelSession(OWNER_ID, "upload-123");
+
+        InOrder inOrder = Mockito.inOrder(objectStorageClient, uploadSessionRepository);
+        inOrder.verify(objectStorageClient).abortMultipartUpload(any(), eq("upload-123"));
+        inOrder.verify(uploadSessionRepository).delete(session);
+        verify(uploadPartRepository).deleteByUploadSessionId(SESSION_ID);
+        verify(storageQuotaService).releaseReservation("UPLOAD", SESSION_ID);
+    }
+
+    @Test
+    void cancelSessionKeepsRecordWhenObjectStorageAbortFails() {
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session()));
+        Mockito.doThrow(new IllegalStateException("storage unavailable"))
+                .when(objectStorageClient)
+                .abortMultipartUpload(any(), any());
+
+        assertThatThrownBy(() -> service.cancelSession(OWNER_ID, "upload-123"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("storage unavailable");
+
+        verify(uploadPartRepository, Mockito.never()).deleteByUploadSessionId(SESSION_ID);
+        verify(storageQuotaService, Mockito.never()).releaseReservation("UPLOAD", SESSION_ID);
+        verify(uploadSessionRepository, Mockito.never()).delete(any());
     }
 
     @Test

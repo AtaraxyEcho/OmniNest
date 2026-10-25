@@ -92,6 +92,18 @@ public interface ObjectStorageClient {
     void completeMultipartUpload(ObjectStorageKey key, String uploadId, List<ObjectStorageCompletedPart> parts);
 
     /**
+     * 判断分片上传是否仍存在。
+     *
+     * <p>用于区分「合并已完成但收尾失败」与「分片会话已不可重放」：前者对象已存在，
+     * 后者 multipart 已被中止或过期。</p>
+     *
+     * @param key 对象存储键
+     * @param uploadId 上传标识
+     * @return 分片上传仍存在时返回 true
+     */
+    boolean multipartUploadExists(ObjectStorageKey key, String uploadId);
+
+    /**
      * 终止分片上传。
      *
      * @param key 对象存储键

@@ -36,6 +36,9 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * ExternalStorageService 单元测试。
@@ -69,7 +72,7 @@ class ExternalStorageServiceTest {
             rcloneGateway, accountRepository,
             importTaskRepository, remoteMetadataCacheRepository, taskDispatchService, taskRecordService,
             credentialService, sharedSpaceService, importProperties, oauthService, endpointGuard,
-            storageQuotaService
+            storageQuotaService, transactionTemplate()
     );
 
     @org.junit.jupiter.api.BeforeEach
@@ -216,6 +219,12 @@ class ExternalStorageServiceTest {
         // 删除任务行会让在途 Worker 无法结算，预留必须先释放。
         verify(storageQuotaService).releaseReservation("EXTERNAL_IMPORT", importTaskId);
         verify(importTaskRepository).delete(task);
+    }
+
+    private TransactionTemplate transactionTemplate() {
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        return new TransactionTemplate(transactionManager);
     }
 
     /**
