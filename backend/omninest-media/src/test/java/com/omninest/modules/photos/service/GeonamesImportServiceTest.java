@@ -170,6 +170,28 @@ class GeonamesImportServiceTest {
     }
 
     @Test
+    void reportsImportedCityCountAfterFlushingBuffers() {
+        service.executeImportTask(UUID.randomUUID());
+
+        verify(taskRecordService).updateResult(
+                any(),
+                Mockito.argThat(result -> "IMPORTING_CITIES".equals(result.get("phase"))
+                        && Long.valueOf(2L).equals(result.get("citiesImported"))));
+    }
+
+    @Test
+    void missingAlternateNamesFileIsOptional() throws IOException {
+        Files.delete(tempDir.resolve("alternateNamesV2.txt"));
+
+        service.executeImportTask(UUID.randomUUID());
+
+        assertEquals(GeoDataset.STATUS_PUBLISHED, dataset.getStatus());
+        verify(cityRepository, never()).updateCityNameZh(any(), anyLong(), anyString());
+        verify(cityRepository, never()).updateProvinceNameZh(any(), anyString(), anyString());
+        verify(cityRepository, never()).updateCountryNameZh(any(), anyString(), anyString());
+    }
+
+    @Test
     void phaseRecoverySkipsCompletedPhases() {
         when(taskRecordService.taskPhase(any())).thenReturn(
                 GeonamesImportService.PHASE_IMPORTING_ALTERNATE_NAMES);

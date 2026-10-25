@@ -285,6 +285,12 @@ public class FileShareService {
     public FileShareLinkDto createShare(UUID ownerUserId, CreateShareLinkRequest request) {
         FileNode node = fileNodeSupport.findActiveNode(ownerUserId, request.resourceId());
         fileNodeSupport.requireShareable(node);
+        // 共享空间文件夹的子树可能混有其他成员上传的内容，对外分享会越过空间边界；
+        // 成员访问走共享空间权限，不生成公开文件夹链接。
+        if (node.getSpaceType() == SpaceType.SHARED
+                && NodeType.FOLDER.getValue().equals(node.getNodeType())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件夹不能生成对外分享链接");
+        }
         // 资源类型以节点真实类型为准：客户端传反类型会让公开访问按错误语义校验。
         String resourceType = node.getNodeType();
         List<UUID> recipients = normalizeRecipients(ownerUserId, request.recipientUserIds());

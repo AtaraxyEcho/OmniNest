@@ -124,6 +124,22 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID>,
     List<PhotoItem> findByCoverFileIdIn(Collection<UUID> coverFileIds);
 
     /**
+     * 按当前活动文件批量查询照片，供永久删除后的编辑产物引用清理。
+     *
+     * @param activeFileIds 活动文件节点 ID
+     * @return 照片
+     */
+    List<PhotoItem> findByActiveFileIdIn(Collection<UUID> activeFileIds);
+
+    /**
+     * 按运动视频节点批量查询照片，供永久删除后的动态照片引用清理。
+     *
+     * @param motionVideoFileNodeIds 运动视频文件节点 ID
+     * @return 照片
+     */
+    List<PhotoItem> findByMotionVideoFileNodeIdIn(Collection<UUID> motionVideoFileNodeIds);
+
+    /**
      * 统计用户照片数量
      */
     @Query("""

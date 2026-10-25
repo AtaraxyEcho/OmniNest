@@ -559,24 +559,32 @@ public class AuthService {
      * 仅记录调试日志，保证客户端任何状态下都能完成本地登出清理。
      *
      * @param refreshToken 客户端持有的刷新令牌，Web 端为 Cookie 值
+     * @param authenticatedUserId 当前 Bearer 令牌的用户标识，可为空
+     * @param authenticatedSessionId 当前 Bearer 令牌的 sid，可为空
      */
     @Transactional(rollbackFor = Exception.class)
-    public void logout(String refreshToken) {
-        if (refreshToken == null || refreshToken.isBlank()) {
-            return;
-        }
-        UUID userId;
-        UUID sessionId;
-        try {
-            Jwt jwt = jwtDecoder.decode(refreshToken.trim());
-            if (!"refresh".equals(jwt.getClaimAsString("token_use"))) {
-                log.debug("登出令牌类型非 refresh，按幂等成功处理");
-                return;
+    public void logout(String refreshToken, UUID authenticatedUserId, UUID authenticatedSessionId) {
+        UUID userId = null;
+        UUID sessionId = null;
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            try {
+                Jwt jwt = jwtDecoder.decode(refreshToken.trim());
+                if ("refresh".equals(jwt.getClaimAsString("token_use"))) {
+                    userId = parseUserId(jwt.getSubject());
+                    sessionId = parseSessionId(jwt.getClaimAsString("sid"));
+                } else {
+                    log.debug("登出令牌类型非 refresh，按幂等成功处理");
+                }
+            } catch (RuntimeException ex) {
+                log.debug("登出令牌无效，按幂等成功处理: {}", ex.getMessage());
             }
-            userId = parseUserId(jwt.getSubject());
-            sessionId = parseSessionId(jwt.getClaimAsString("sid"));
-        } catch (RuntimeException ex) {
-            log.debug("登出令牌无效，按幂等成功处理: {}", ex.getMessage());
+        }
+        if (userId == null || sessionId == null) {
+            // Cookie 丢失但 Access Token 仍有效：按 sid 吊销当前会话。
+            userId = authenticatedUserId;
+            sessionId = authenticatedSessionId;
+        }
+        if (userId == null || sessionId == null) {
             return;
         }
         if (activeSessionRepository.findByIdAndUserId(sessionId, userId).isEmpty()) {
@@ -584,6 +592,17 @@ public class AuthService {
         }
         sessionRevocationService.revokeSessionAndDeactivate(
                 userId, sessionId, "用户退出登录", authenticationTokenPolicy.refreshTokenTtl());
+        if (authenticatedUserId != null
+                && authenticatedSessionId != null
+                && (!authenticatedSessionId.equals(sessionId) || !authenticatedUserId.equals(userId))) {
+            // 刷新令牌与当前 Access Token 指向不同会话时两者都结束，避免登出后旧令牌仍可用。
+            sessionRevocationService.revokeSessionAndDeactivate(
+                    authenticatedUserId,
+                    authenticatedSessionId,
+                    "用户退出登录",
+                    authenticationTokenPolicy.refreshTokenTtl()
+            );
+        }
     }
 
     private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId) {

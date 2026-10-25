@@ -98,14 +98,21 @@ class AuthClient {
 
   /// 退出登录：吊销服务端刷新会话；Web 端由后端清除 HttpOnly Cookie。
   /// 原生端传入本地保存的刷新令牌，Web 端留空走 Cookie 通道。
-  Future<void> logout({String? refreshToken}) async {
+  /// [accessToken] 用于刷新令牌丢失时按 sid 吊销当前会话。
+  Future<void> logout({String? refreshToken, String? accessToken}) async {
     await _dio.post<Map<String, dynamic>>(
       '/auth/logout',
       data:
           refreshToken == null || refreshToken.isEmpty
               ? null
               : {'refreshToken': refreshToken},
-      options: _credentialOptions(),
+      options: Options(
+        headers: {
+          ...?_credentialOptions().headers,
+          if (accessToken != null && accessToken.isNotEmpty)
+            'Authorization': 'Bearer $accessToken',
+        },
+      ),
     );
   }
 

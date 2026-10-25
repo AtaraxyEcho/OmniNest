@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileBusinessReference;
@@ -113,8 +114,9 @@ public class ReaderFileCleanupService implements
         }
         List<UUID> fullPurgeItemIds = new ArrayList<>();
         List<UUID> removedSourceIds = new ArrayList<>();
+        Map<UUID, List<ReaderItemSource>> sourcesByItem = sourcesByItem(items);
         for (ReaderItem item : items) {
-            List<ReaderItemSource> sources = itemSourceRepository.findByReaderItemId(item.getId());
+            List<ReaderItemSource> sources = sourcesByItem.getOrDefault(item.getId(), List.of());
             if (hasSurvivingSource(sources, purgingFileIds)) {
                 sources.stream()
                         .filter(source -> source.getFileNodeId() != null
@@ -148,8 +150,8 @@ public class ReaderFileCleanupService implements
                     .filter(Objects::nonNull)
                     .toList());
         }
-        for (UUID sourceId : removedSourceIds) {
-            writer.addFileNodeIds(pageAssetRepository.findBySourceId(sourceId).stream()
+        if (!removedSourceIds.isEmpty()) {
+            writer.addFileNodeIds(pageAssetRepository.findBySourceIdIn(removedSourceIds).stream()
                     .map(ReaderPageAsset::getFileNodeId)
                     .toList());
         }
@@ -179,19 +181,16 @@ public class ReaderFileCleanupService implements
                 .map(ReaderItem::getCoverFileId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        Map<UUID, FileDescriptor> coverNodes = fileMetadataQueryService.findByIdIn(candidates);
         return candidates.stream()
                 .filter(coverFileId -> !referencedBySurviving.contains(coverFileId))
-                .filter(this::isDerivedCoverNode)
+                .filter(coverFileId -> {
+                    FileDescriptor node = coverNodes.get(coverFileId);
+                    // 节点已查不到时按可读处理（后续删除本身也是幂等空操作）。
+                    return node == null
+                            || DerivedAssetStorageService.SOURCE_TYPE_DERIVED.equals(node.sourceType());
+                })
                 .toList();
-    }
-
-    /**
-     * 节点是否阅读侧派生封面。节点已查不到时按可读处理（后续删除本身也是幂等空操作）。
-     */
-    private boolean isDerivedCoverNode(UUID coverFileId) {
-        return fileMetadataQueryService.findById(coverFileId)
-                .map(node -> DerivedAssetStorageService.SOURCE_TYPE_DERIVED.equals(node.sourceType()))
-                .orElse(true);
     }
 
     /**
@@ -209,8 +208,9 @@ public class ReaderFileCleanupService implements
         Set<UUID> purgingFileIds = Set.copyOf(fileNodeIds);
         List<ReaderItem> itemsToDelete = new ArrayList<>();
         List<ReaderItem> referencedItems = findReferencedItems(fileNodeIds);
+        Map<UUID, List<ReaderItemSource>> sourcesByItem = sourcesByItem(referencedItems);
         for (ReaderItem item : referencedItems) {
-            List<ReaderItemSource> sources = itemSourceRepository.findByReaderItemId(item.getId());
+            List<ReaderItemSource> sources = sourcesByItem.getOrDefault(item.getId(), List.of());
             if (!hasSurvivingSource(sources, purgingFileIds)) {
                 itemsToDelete.add(item);
                 continue;
@@ -240,8 +240,13 @@ public class ReaderFileCleanupService implements
 
         boolean primaryRemoved = item.getFileNodeId() != null && purgingFileIds.contains(item.getFileNodeId());
         if (primaryRemoved) {
-            List<ReaderItemSource> remaining = new ArrayList<>(itemSourceRepository.findByReaderItemId(item.getId()));
-            remaining.sort(ComicManifestBuilder.SOURCE_ORDER);
+            Set<UUID> removedIds = removedSources.stream()
+                    .map(ReaderItemSource::getId)
+                    .collect(Collectors.toSet());
+            List<ReaderItemSource> remaining = sources.stream()
+                    .filter(source -> !removedIds.contains(source.getId()))
+                    .sorted(ComicManifestBuilder.SOURCE_ORDER)
+                    .toList();
             if (remaining.isEmpty()) {
                 return;
             }
@@ -256,6 +261,19 @@ public class ReaderFileCleanupService implements
         }
         log.info("漫画分卷来源已随文件永久删除: itemId={}, removedSourceCount={}",
                 item.getId(), removedSources.size());
+    }
+
+    /**
+     * 一次加载本批条目的全部来源，避免逐条目查询。
+     */
+    private Map<UUID, List<ReaderItemSource>> sourcesByItem(List<ReaderItem> items) {
+        if (items.isEmpty()) {
+            return Map.of();
+        }
+        return itemSourceRepository.findByReaderItemIdIn(
+                        items.stream().map(ReaderItem::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(ReaderItemSource::getReaderItemId));
     }
 
     private boolean hasSurvivingSource(List<ReaderItemSource> sources, Set<UUID> purgingFileIds) {

@@ -1,16 +1,21 @@
 package com.omninest.modules.user.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.BrowserSecurityPolicy;
 import com.omninest.common.security.ClientIpResolver;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.RegistrationPolicy;
 import com.omninest.modules.user.dto.AuthTokenResponse;
 import com.omninest.modules.user.dto.AuthUserDto;
@@ -19,6 +24,7 @@ import com.omninest.modules.user.dto.RefreshRequest;
 import com.omninest.modules.user.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import java.time.Duration;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +40,7 @@ class AuthControllerCookieTest {
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final RegistrationPolicy registrationPolicy = mock(RegistrationPolicy.class);
     private final ClientIpResolver clientIpResolver = mock(ClientIpResolver.class);
+    private final CurrentUserContext currentUserContext = mock(CurrentUserContext.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AuthController controller;
@@ -46,7 +53,8 @@ class AuthControllerCookieTest {
                 browserSecurityPolicy,
                 rateLimitService,
                 registrationPolicy,
-                clientIpResolver
+                clientIpResolver,
+                currentUserContext
         );
         token = tokenResponse();
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
@@ -94,6 +102,47 @@ class AuthControllerCookieTest {
     }
 
     @Test
+    void refreshRejectsCrossSiteOriginWhenSameSiteIsNotStrict() {
+        when(browserSecurityPolicy.refreshCookieSameSite()).thenReturn("Lax");
+        when(browserSecurityPolicy.allowedOrigins()).thenReturn(List.of("https://nest.example.com"));
+        MockHttpServletRequest servletRequest = request();
+        servletRequest.addHeader("Origin", "https://evil.example.com");
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        assertThatThrownBy(() -> controller.refresh(
+                new RefreshRequest(null), "web", servletRequest, servletResponse))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).errorCode())
+                        .isEqualTo(ErrorCode.FORBIDDEN));
+        verify(authService, never()).refresh(any());
+    }
+
+    @Test
+    void refreshAllowsConfiguredOriginWhenSameSiteIsNotStrict() {
+        when(browserSecurityPolicy.refreshCookieSameSite()).thenReturn("Lax");
+        when(browserSecurityPolicy.allowedOrigins()).thenReturn(List.of("https://nest.example.com"));
+        when(authService.refresh(any())).thenReturn(token);
+        MockHttpServletRequest servletRequest = request();
+        servletRequest.addHeader("Origin", "https://nest.example.com");
+
+        controller.refresh(new RefreshRequest(null), "web", servletRequest,
+                new MockHttpServletResponse());
+
+        verify(authService).refresh(any());
+    }
+
+    @Test
+    void refreshAllowsNativeClientWithoutOriginHeader() {
+        when(browserSecurityPolicy.refreshCookieSameSite()).thenReturn("None");
+        when(authService.refresh(any())).thenReturn(token);
+
+        controller.refresh(new RefreshRequest("refresh-token"), "native", request(),
+                new MockHttpServletResponse());
+
+        verify(authService).refresh(any());
+    }
+
+    @Test
     void webLogoutRevokesSessionFromCookieAndClearsCookie() {
         MockHttpServletResponse servletResponse = new MockHttpServletResponse();
         MockHttpServletRequest servletRequest = request();
@@ -101,7 +150,7 @@ class AuthControllerCookieTest {
 
         controller.logout(new RefreshRequest(null), "web", servletRequest, servletResponse);
 
-        verify(authService).logout("refresh-token");
+        verify(authService).logout("refresh-token", null, null);
         assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE))
                 .contains("omninest_refresh_token=")
                 .contains("Max-Age=0")
@@ -177,7 +226,7 @@ class AuthControllerCookieTest {
                 servletResponse
         );
 
-        verify(authService).logout("refresh-token");
+        verify(authService).logout("refresh-token", null, null);
     }
 
     private MockHttpServletRequest request() {

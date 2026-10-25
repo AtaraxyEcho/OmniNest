@@ -3610,6 +3610,7 @@
   "photosNoChanges": "未做任何修改",
   "photosEditSaved": "编辑已保存",
   "photosSaveFailed": "保存失败，请稍后重试",
+  "photosEditSourceUnavailable": "原图暂不可用，无法编辑",
   "photosEditorCancel": "取消",
   "photosEditorUndo": "撤销",
   "photosEditorRedo": "重做",

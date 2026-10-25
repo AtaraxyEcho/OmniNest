@@ -29,6 +29,15 @@ public interface PhotoContentLabelRepository extends JpaRepository<PhotoContentL
             String state
     );
 
+    /**
+     * 批量查询指定运行下的标签，供索引批处理避免逐张查询。
+     */
+    List<PhotoContentLabel> findByOwnerUserIdAndPhotoIdInAndRunIdIn(
+            UUID ownerUserId,
+            Collection<UUID> photoIds,
+            Collection<UUID> runIds
+    );
+
     List<PhotoContentLabel> findByOwnerUserIdAndPhotoIdInAndStateOrderByNamespaceAscLabelCodeAsc(
             UUID ownerUserId,
             Collection<UUID> photoIds,

@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +46,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 文件上传会话服务测试。
@@ -130,7 +134,8 @@ class FileUploadSessionServiceTest {
                 runtimeConfigCache,
                 sharedSpaceService,
                 sharedSpaceQuotaService,
-                fileContentChangePublisher
+                fileContentChangePublisher,
+                transactionTemplate()
         );
     }
 
@@ -478,6 +483,40 @@ class FileUploadSessionServiceTest {
     }
 
     @Test
+    void completePartPersistsExpiredStatusBeforeThrowing() {
+        FileUploadSession session = session();
+        session.setExpiresAt(Instant.now().minusSeconds(1));
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> service.completePart(
+                OWNER_ID,
+                "upload-123",
+                1,
+                new CompleteFileUploadPartRequest(1, "\"etag-1\"")))
+                .isInstanceOf(FileUploadSessionService.UploadSessionExpiredException.class);
+
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.EXPIRED.getValue());
+        verify(uploadSessionRepository).save(session);
+    }
+
+    @Test
+    void getPartUrlPersistsExpiredStatusBeforeThrowing() {
+        FileUploadSession session = session();
+        session.setExpiresAt(Instant.now().minusSeconds(1));
+        when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> service.getPartUrl(OWNER_ID, "upload-123", 1))
+                .isInstanceOf(FileUploadSessionService.UploadSessionExpiredException.class);
+
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.EXPIRED.getValue());
+        verify(uploadSessionRepository).save(session);
+    }
+
+    @Test
     void completePartStoresETagAndReturnsCompletedPartNumbers() {
         FileUploadSession session = session();
         FileUploadPart part = part(1, "PENDING", null);
@@ -529,6 +568,50 @@ class FileUploadSessionServiceTest {
         verify(fileNodeRepository, Mockito.never()).save(any());
         verify(objectStorageClient, Mockito.never()).copyObject(any(), any());
         verify(storageQuotaService, Mockito.never()).settleReservation(any(), any(), anyLong());
+    }
+
+    @Test
+    void completeSessionRecoversWhenMultipartWasAlreadyMerged() {
+        FileUploadSession session = session();
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "demo.pdf")).thenReturn(false);
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ingressScanTaskService.enqueueScanTask(any(), any(), any(), any())).thenReturn(SCAN_TASK_ID);
+        doThrow(new IllegalStateException("NoSuchUpload"))
+                .when(objectStorageClient).completeMultipartUpload(any(), eq("upload-123"), any());
+        when(objectStorageClient.objectExists(any())).thenReturn(true);
+
+        var result = service.completeSession(
+                OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null));
+
+        assertThat(result.status()).isEqualTo("SCANNING");
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.SCANNING.getValue());
+        verify(objectStorageClient).objectExists(any());
+    }
+
+    @Test
+    void completeSessionRestoresUploadingWhenMultipartFails() {
+        FileUploadSession session = session();
+        FileUploadPart part = part(1, "COMPLETED", "etag-1");
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+        when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "demo.pdf")).thenReturn(false);
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new IllegalStateException("MinIO unavailable"))
+                .when(objectStorageClient).completeMultipartUpload(any(), eq("upload-123"), any());
+        when(objectStorageClient.objectExists(any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.completeSession(
+                OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null)))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(session.getStatus()).isEqualTo(UploadStatus.UPLOADING.getValue());
     }
 
     @Test
@@ -687,6 +770,12 @@ class FileUploadSessionServiceTest {
         assertThat(result.taskId()).isEqualTo(MEDIA_TASK_ID);
         verify(uploadSessionRepository, Mockito.never()).save(any());
         verify(objectStorageClient, Mockito.never()).copyObject(any(), any());
+    }
+
+    private TransactionTemplate transactionTemplate() {
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        return new TransactionTemplate(transactionManager);
     }
 
     private FileUploadSession session() {

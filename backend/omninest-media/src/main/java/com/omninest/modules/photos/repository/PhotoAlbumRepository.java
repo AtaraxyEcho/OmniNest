@@ -25,6 +25,11 @@ public interface PhotoAlbumRepository extends JpaRepository<PhotoAlbum, UUID> {
     Page<PhotoAlbum> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId, Pageable pageable);
 
     /**
+     * 按封面文件批量查询相册，供永久删除后的悬空引用清理。
+     */
+    List<PhotoAlbum> findByCoverFileIdIn(Collection<UUID> coverFileIds);
+
+    /**
      * 按用户和ID查询单个相册
      */
     Optional<PhotoAlbum> findByOwnerUserIdAndId(UUID ownerUserId, UUID id);

@@ -52,6 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.MimeType;
 
 /**
@@ -96,6 +97,7 @@ public class FileUploadSessionService {
     private final SharedSpaceService sharedSpaceService;
     private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final FileContentChangePublisher fileContentChangePublisher;
+    private final TransactionTemplate transactionTemplate;
 
     public FileUploadPolicyDto uploadPolicy() {
         return new FileUploadPolicyDto(
@@ -254,7 +256,7 @@ public class FileUploadSessionService {
         return toPartsDto(session, parts, false);
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = UploadSessionExpiredException.class)
     public FileUploadPartsDto completePart(
             UUID ownerUserId,
             String uploadId,
@@ -283,18 +285,70 @@ public class FileUploadSessionService {
         return toPartsDto(session, parts, false);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public FileUploadCompleteResultDto completeSession(UUID ownerUserId, String uploadId, CompleteFileUploadRequest request) {
+    /**
+     * 完成上传会话。
+     *
+     * <p>分片合并是耗时外部 I/O，不能在持有数据库悲观锁与连接时执行。流程拆为三段：
+     * 短事务校验并置 FINALIZING；无事务执行 MinIO 合并；短事务落扫描/入库状态。
+     * 合并成功但后续事务失败时，重试会凭 {@code NoSuchUpload + objectExists} 幂等恢复。</p>
+     */
+    public FileUploadCompleteResultDto completeSession(
+            UUID ownerUserId,
+            String uploadId,
+            CompleteFileUploadRequest request
+    ) {
+        MultipartCompletion completion;
+        try {
+            completion = transactionTemplate.execute(
+                    status -> prepareCompletion(ownerUserId, uploadId, request));
+        } catch (UploadSessionExpiredException exception) {
+            markExpiredAfterRollback(ownerUserId, uploadId);
+            throw exception;
+        }
+        if (completion == null) {
+            throw new IllegalStateException("上传完成事务未返回结果");
+        }
+        if (completion.immediateResult() != null) {
+            return completion.immediateResult();
+        }
+        try {
+            completeMultipartObject(completion);
+        } catch (RuntimeException exception) {
+            resetFinalizing(ownerUserId, uploadId);
+            throw exception;
+        }
+        try {
+            FileUploadCompleteResultDto result = transactionTemplate.execute(
+                    status -> finalizeCompletion(ownerUserId, uploadId));
+            if (result == null) {
+                throw new IllegalStateException("上传完成事务未返回结果");
+            }
+            return result;
+        } catch (RuntimeException exception) {
+            resetFinalizing(ownerUserId, uploadId);
+            throw exception;
+        }
+    }
+
+    private MultipartCompletion prepareCompletion(
+            UUID ownerUserId,
+            String uploadId,
+            CompleteFileUploadRequest request
+    ) {
         FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
         if (UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
-            return completedResult(session);
+            return new MultipartCompletion(completedResult(session), null, null, List.of());
         }
         if (UploadStatus.SCANNING.getValue().equals(session.getStatus())) {
-            return scanningResult(session);
+            return new MultipartCompletion(scanningResult(session), null, null, List.of());
         }
-        ensureCompletable(session);
+        boolean resuming = UploadStatus.FINALIZING.getValue().equals(session.getStatus());
+        if (!resuming) {
+            ensureCompletable(session);
+        }
         if (isDirectUpload(session)) {
-            return completeDirectSession(ownerUserId, session, request);
+            return new MultipartCompletion(
+                    completeDirectSession(ownerUserId, session, request), null, null, List.of());
         }
         applyCompletedPartRequest(session, request == null ? null : request.parts());
 
@@ -319,9 +373,88 @@ public class FileUploadSessionService {
         ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
         session.setStatus(UploadStatus.FINALIZING.getValue());
         fileUploadSessionRepository.save(session);
-        objectStorageClient.completeMultipartUpload(key, session.getUploadId(), toCompletedParts(parts));
+        return new MultipartCompletion(
+                null,
+                key,
+                session.getUploadId(),
+                toCompletedParts(parts)
+        );
+    }
 
+    private void completeMultipartObject(MultipartCompletion completion) {
+        try {
+            objectStorageClient.completeMultipartUpload(
+                    completion.key(), completion.s3UploadId(), completion.parts());
+        } catch (RuntimeException exception) {
+            if (!objectStorageClient.objectExists(completion.key())) {
+                throw exception;
+            }
+            // 上一次已完成合并但收尾事务失败：MinIO 对重复合并返回 NoSuchUpload，
+            // 对象存在即可视为合并成功，继续落业务状态。
+            log.info("分片合并已在上次尝试完成，继续完成会话: uploadId={}", completion.s3UploadId());
+        }
+    }
+
+    private FileUploadCompleteResultDto finalizeCompletion(UUID ownerUserId, String uploadId) {
+        FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
+        if (UploadStatus.SCANNING.getValue().equals(session.getStatus())) {
+            return scanningResult(session);
+        }
+        if (!UploadStatus.FINALIZING.getValue().equals(session.getStatus())) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话状态不允许完成");
+        }
+        resolveParent(ownerUserId, session.getTargetParentId(), session.getSpaceType());
+        UUID asVersionOfFileId = resolveCompletionVersionTarget(ownerUserId, session, null);
+        if (asVersionOfFileId == null
+                && sameNameExists(ownerUserId, session.getSpaceType(), session.getTargetParentId(), session.getFileName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
+        }
         return dispatchSecurityScan(ownerUserId, session, asVersionOfFileId);
+    }
+
+    private void resetFinalizing(UUID ownerUserId, String uploadId) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
+                if (UploadStatus.FINALIZING.getValue().equals(session.getStatus())) {
+                    session.setStatus(UploadStatus.UPLOADING.getValue());
+                    fileUploadSessionRepository.save(session);
+                }
+            });
+        } catch (RuntimeException exception) {
+            log.warn("上传会话 FINALIZING 状态回退失败: uploadId={}, errorType={}",
+                    uploadId, exception.getClass().getSimpleName());
+        }
+    }
+
+    private void markExpiredAfterRollback(UUID ownerUserId, String uploadId) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                FileUploadSession session = fileUploadSessionRepository
+                        .findByUploadIdAndOwnerUserId(uploadId, ownerUserId)
+                        .orElse(null);
+                if (session != null
+                        && !UploadStatus.COMPLETED.getValue().equals(session.getStatus())
+                        && !UploadStatus.SCANNING.getValue().equals(session.getStatus())) {
+                    session.setStatus(UploadStatus.EXPIRED.getValue());
+                    fileUploadSessionRepository.save(session);
+                }
+            });
+        } catch (RuntimeException exception) {
+            log.warn("上传会话过期状态落库失败: uploadId={}, errorType={}",
+                    uploadId, exception.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 分片合并所需的不可变上下文；immediateResult 非空表示无需外部合并。
+     */
+    private record MultipartCompletion(
+            FileUploadCompleteResultDto immediateResult,
+            ObjectStorageKey key,
+            String s3UploadId,
+            List<ObjectStorageCompletedPart> parts
+    ) {
     }
 
     /**
@@ -392,7 +525,7 @@ public class FileUploadSessionService {
         return toFileNodeDto(file, mediaAutoImportTaskId);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = UploadSessionExpiredException.class)
     public FileUploadPartDto getPartUrl(UUID ownerUserId, String uploadId, int partNumber) {
         FileUploadSession session = findSession(ownerUserId, uploadId);
         if (isDirectUpload(session)) {
@@ -507,10 +640,22 @@ public class FileUploadSessionService {
     private void ensureCompletable(FileUploadSession session) {
         if (Instant.now().isAfter(session.getExpiresAt())) {
             session.setStatus(UploadStatus.EXPIRED.getValue());
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话已过期");
+            // 过期标记必须在抛出业务异常后仍然落库：调用方用 noRollbackFor 放行本异常，
+            // 否则状态会随事务回滚回 INITIATED/UPLOADING。
+            fileUploadSessionRepository.save(session);
+            throw new UploadSessionExpiredException();
         }
         if (!UploadStatus.CREATED.getValue().equals(session.getStatus()) && !UploadStatus.UPLOADING.getValue().equals(session.getStatus())) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话状态不允许完成");
+        }
+    }
+
+    /**
+     * 上传会话过期：调用方以 {@code noRollbackFor} 放行，使 EXPIRED 状态与异常同时生效。
+     */
+    public static final class UploadSessionExpiredException extends BusinessException {
+        public UploadSessionExpiredException() {
+            super(ErrorCode.FILE_UPLOAD_FAILED, "上传会话已过期");
         }
     }
 

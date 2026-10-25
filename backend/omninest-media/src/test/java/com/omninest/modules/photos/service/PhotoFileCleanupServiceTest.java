@@ -81,17 +81,31 @@ class PhotoFileCleanupServiceTest {
         photo.setVersion(3L);
         PhotoItem coverReference = new PhotoItem();
         coverReference.setCoverFileId(FILE_NODE_ID);
+        PhotoItem editedReference = new PhotoItem();
+        editedReference.setActiveFileId(FILE_NODE_ID);
+        PhotoItem motionReference = new PhotoItem();
+        motionReference.setMotionVideoFileNodeId(FILE_NODE_ID);
         PhotoAlbum album = new PhotoAlbum();
         album.setId(ALBUM_ID);
+        PhotoAlbum albumCoverReference = new PhotoAlbum();
+        albumCoverReference.setId(UUID.randomUUID());
+        albumCoverReference.setCoverFileId(FILE_NODE_ID);
         Mockito.when(itemRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
                 .thenReturn(List.of(photo));
         Mockito.when(albumItemRepository.findAlbumIdsByPhotoIdIn(List.of(PHOTO_ID)))
                 .thenReturn(List.of(ALBUM_ID));
         Mockito.when(albumRepository.findAllByIdInAndOwnerUserId(List.of(ALBUM_ID), OWNER_ID))
                 .thenReturn(List.of(album));
-        Mockito.when(albumItemRepository.countActivePhotosByAlbumId(ALBUM_ID)).thenReturn(2L);
+        Mockito.when(albumItemRepository.countActivePhotosByAlbumIds(List.of(ALBUM_ID)))
+                .thenReturn(List.<Object[]>of(new Object[]{ALBUM_ID, 2L}));
         Mockito.when(itemRepository.findByCoverFileIdIn(Set.of(FILE_NODE_ID)))
                 .thenReturn(List.of(coverReference));
+        Mockito.when(itemRepository.findByActiveFileIdIn(Set.of(FILE_NODE_ID)))
+                .thenReturn(List.of(editedReference));
+        Mockito.when(itemRepository.findByMotionVideoFileNodeIdIn(Set.of(FILE_NODE_ID)))
+                .thenReturn(List.of(motionReference));
+        Mockito.when(albumRepository.findByCoverFileIdIn(Set.of(FILE_NODE_ID)))
+                .thenReturn(List.of(albumCoverReference));
 
         service.finalizePurge(purgeContext());
 
@@ -107,6 +121,10 @@ class PhotoFileCleanupServiceTest {
         Mockito.verify(readThroughCache).invalidate("omninest:dashboard:photo:" + OWNER_ID);
         Mockito.verify(itemRepository).deleteAllInBatch(List.of(photo));
         Mockito.verify(albumRepository).saveAll(List.of(album));
+        org.assertj.core.api.Assertions.assertThat(coverReference.getCoverFileId()).isNull();
+        org.assertj.core.api.Assertions.assertThat(editedReference.getActiveFileId()).isNull();
+        org.assertj.core.api.Assertions.assertThat(motionReference.getMotionVideoFileNodeId()).isNull();
+        org.assertj.core.api.Assertions.assertThat(albumCoverReference.getCoverFileId()).isNull();
         Mockito.verify(syncEventService).record(
                 OWNER_ID,
                 SyncScope.PHOTOS,

@@ -236,6 +236,24 @@ class TaskQueryServiceTest {
         }
     }
 
+    @Test
+    @DisplayName("摘要优先任务按状态直接查询，不受最近 50 条窗口限制")
+    void summaryOwned_priorityTaskIsQueriedByStatus() {
+        TaskRecord failedTask = createTaskRecord(TaskStatus.FAILED.getValue());
+        failedTask.setId(UUID.fromString("20000000-0000-0000-0000-000000000001"));
+        when(taskRecordRepository.countByOwnerUserIdAndStatusIn(eq(OWNER_ID), any()))
+                .thenReturn(1L);
+        when(taskRecordRepository.findFirstByOwnerUserIdAndStatusInOrderByCreatedAtDesc(
+                eq(OWNER_ID), any())).thenReturn(Optional.of(failedTask));
+
+        var summary = taskQueryService.summaryOwned(OWNER_ID);
+
+        assertThat(summary.activeCount()).isEqualTo(1);
+        assertThat(summary.failedCount()).isEqualTo(1);
+        assertThat(summary.priorityTask()).isNotNull();
+        assertThat(summary.priorityTask().id()).isEqualTo(failedTask.getId());
+    }
+
     @Nested
     @DisplayName("retryDlqEntry 方法测试")
     class RetryDlqEntryTests {
@@ -249,6 +267,9 @@ class TaskQueryServiceTest {
             dlqTask.setId(taskId);
             dlqTask.setRetryCount(3);
             dlqTask.setErrorMessage("处理失败");
+            dlqTask.setStackSummary("stack");
+            dlqTask.setNextRetryAt(Instant.now());
+            dlqTask.setCompletedAt(Instant.now());
             dlqTask.setRoutingKey(QueueNames.PHOTO_BATCH_ROUTING_KEY);
             dlqTask.setPayload("{\"taskId\":\"" + taskId + "\","
                     + "\"ownerUserId\":\"10000000-0000-0000-0000-000000000001\"}");
@@ -261,6 +282,9 @@ class TaskQueryServiceTest {
             assertThat(dlqTask.getStatus()).isEqualTo("QUEUED");
             assertThat(dlqTask.getRetryCount()).isZero();
             assertThat(dlqTask.getErrorMessage()).isNull();
+            assertThat(dlqTask.getStackSummary()).isNull();
+            assertThat(dlqTask.getNextRetryAt()).isNull();
+            assertThat(dlqTask.getCompletedAt()).isNull();
             verify(taskRecordRepository).save(dlqTask);
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
@@ -370,6 +394,8 @@ class TaskQueryServiceTest {
             task.setRetryCount(2);
             task.setErrorMessage("boom");
             task.setStackSummary("stack");
+            task.setNextRetryAt(Instant.now());
+            task.setCompletedAt(Instant.now());
             task.setRoutingKey(QueueNames.FILE_INDEX_ROUTING_KEY);
             when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(task));
             TaskDispatch dispatch = new TaskDispatch();
@@ -384,6 +410,8 @@ class TaskQueryServiceTest {
             assertThat(task.getRetryCount()).isZero();
             assertThat(task.getErrorMessage()).isNull();
             assertThat(task.getStackSummary()).isNull();
+            assertThat(task.getNextRetryAt()).isNull();
+            assertThat(task.getCompletedAt()).isNull();
             verify(taskRecordRepository).save(task);
             verify(taskDispatchService).enqueue(eq(taskId), any(), any(), any());
         }

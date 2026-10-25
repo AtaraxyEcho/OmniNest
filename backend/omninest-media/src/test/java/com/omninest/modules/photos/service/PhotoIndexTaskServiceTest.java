@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -204,12 +205,16 @@ class PhotoIndexTaskServiceTest {
         alive.setTitle("猫咪");
         PhotoItem trashed = photo(trashedPhotoId, ownerUserId, UUID.randomUUID());
         trashed.setDeletedAt(Instant.now());
-        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, alivePhotoId))
-                .thenReturn(Optional.of(alive));
-        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, trashedPhotoId))
-                .thenReturn(Optional.of(trashed));
-        Mockito.when(fileLifecycleGuard.isOwnedProcessable(ownerUserId, fileNodeId)).thenReturn(true);
-        Mockito.when(photoTagRepository.findByOwnerUserIdAndPhotoId(ownerUserId, alivePhotoId))
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndIdIn(
+                ownerUserId, List.of(alivePhotoId, trashedPhotoId)))
+                .thenReturn(List.of(alive, trashed));
+        Mockito.when(fileLifecycleGuard.filterOwnedProcessable(ownerUserId, List.of(fileNodeId)))
+                .thenReturn(Set.of(fileNodeId));
+        Mockito.when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(
+                ownerUserId, List.of(alivePhotoId))).thenReturn(List.of());
+        Mockito.when(analysisRunRepository
+                .findByOwnerUserIdAndPhotoIdInAndStatusOrderByCreatedAtDesc(
+                        ownerUserId, List.of(alivePhotoId), "SUCCEEDED"))
                 .thenReturn(List.of());
 
         int indexed = service.indexBatchDirect(

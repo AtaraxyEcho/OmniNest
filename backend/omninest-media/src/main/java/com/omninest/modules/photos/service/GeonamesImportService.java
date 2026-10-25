@@ -180,28 +180,27 @@ public class GeonamesImportService {
         long[] written = {0};
         long[] skipped = {0};
         int[] batchesSinceHeartbeat = {0};
-        parser.streamCities(Files.newInputStream(importDir.resolve(CITIES_FILE)), row -> {
-            if (row.countryCode() == null) {
-                skipped[0]++;
-                return;
-            }
-            buffer.add(row);
-            if (buffer.size() >= batchSize) {
-                flushCityBuffer(datasetId, buffer, admin1ByCode, countryByCode);
-                written[0] += buffer.size();
-                buffer.clear();
-                batchesSinceHeartbeat[0]++;
-                if (batchesSinceHeartbeat[0] >= 10) {
-                    // 独立事务更新进度并保活心跳，避免长阶段被误判为心跳超时。
-                    taskRecordService.updateProgressImmediately(taskId, cityPhaseProgress(written[0]));
-                    batchesSinceHeartbeat[0] = 0;
+        try (InputStream citiesInput = Files.newInputStream(importDir.resolve(CITIES_FILE))) {
+            parser.streamCities(citiesInput, row -> {
+                if (row.countryCode() == null) {
+                    skipped[0]++;
+                    return;
                 }
-                ensureNotCancelled(taskId);
-            }
-        });
+                buffer.add(row);
+                if (buffer.size() >= batchSize) {
+                    written[0] += flushCityBuffer(datasetId, buffer, admin1ByCode, countryByCode);
+                    batchesSinceHeartbeat[0]++;
+                    if (batchesSinceHeartbeat[0] >= 10) {
+                        // 独立事务更新进度并保活心跳，避免长阶段被误判为心跳超时。
+                        taskRecordService.updateProgressImmediately(taskId, cityPhaseProgress(written[0]));
+                        batchesSinceHeartbeat[0] = 0;
+                    }
+                    ensureNotCancelled(taskId);
+                }
+            });
+        }
         if (!buffer.isEmpty()) {
-            flushCityBuffer(datasetId, buffer, admin1ByCode, countryByCode);
-            written[0] += buffer.size();
+            written[0] += flushCityBuffer(datasetId, buffer, admin1ByCode, countryByCode);
         }
         if (skipped[0] > 0) {
             log.warn("已跳过缺少国家码的 GeoNames 行: count={}", skipped[0]);
@@ -223,24 +222,39 @@ public class GeonamesImportService {
         countryByCode.forEach((iso, entry) -> countryIsoById.putIfAbsent(entry.geonameId(), iso));
 
         GeoLocationNameSelector selector = new GeoLocationNameSelector();
+        Path alternatesPath = importDir.resolve(ALTERNATES_FILE);
+        if (!Files.isRegularFile(alternatesPath)) {
+            log.info("未检测到可选文件 {}，跳过中文别名补充", ALTERNATES_FILE);
+            taskRecordService.updateResult(taskId, Map.of(
+                    "phase", PHASE_IMPORTING_ALTERNATE_NAMES,
+                    "alternateNamesScanned", 0));
+            return;
+        }
         long[] scanned = {0};
         long[] lastHeartbeatNanos = {System.nanoTime()};
-        parser.streamAlternateNames(Files.newInputStream(importDir.resolve(ALTERNATES_FILE)), candidate -> {
-            long geonameId = candidate.geonameId();
-            if (cityIds.contains(geonameId)
-                    || admin1NameById.containsKey(geonameId)
-                    || countryIsoById.containsKey(geonameId)) {
-                selector.offer(geonameId, candidate.language(), candidate.name(), candidate.preferred(), candidate.historic());
-            }
-            scanned[0]++;
-            // 按时间间隔保活心跳（约 30 秒），避免长扫描阶段被误判为心跳超时。
-            if (System.nanoTime() - lastHeartbeatNanos[0] > 30_000_000_000L) {
-                taskRecordService.updateResult(taskId, Map.of(
-                        "phase", PHASE_IMPORTING_ALTERNATE_NAMES,
-                        "alternateNamesScanned", scanned[0]));
-                lastHeartbeatNanos[0] = System.nanoTime();
-            }
-        });
+        try (InputStream alternatesInput = Files.newInputStream(alternatesPath)) {
+            parser.streamAlternateNames(alternatesInput, candidate -> {
+                long geonameId = candidate.geonameId();
+                if (cityIds.contains(geonameId)
+                        || admin1NameById.containsKey(geonameId)
+                        || countryIsoById.containsKey(geonameId)) {
+                    selector.offer(
+                            geonameId,
+                            candidate.language(),
+                            candidate.name(),
+                            candidate.preferred(),
+                            candidate.historic());
+                }
+                scanned[0]++;
+                // 按时间间隔保活心跳（约 30 秒），避免长扫描阶段被误判为心跳超时。
+                if (System.nanoTime() - lastHeartbeatNanos[0] > 30_000_000_000L) {
+                    taskRecordService.updateResult(taskId, Map.of(
+                            "phase", PHASE_IMPORTING_ALTERNATE_NAMES,
+                            "alternateNamesScanned", scanned[0]));
+                    lastHeartbeatNanos[0] = System.nanoTime();
+                }
+            });
+        }
 
         transactionTemplate.executeWithoutResult(status -> {
             for (Long geonameId : selector.collectedIds()) {
@@ -293,11 +307,12 @@ public class GeonamesImportService {
         });
     }
 
-    private void flushCityBuffer(
+    private int flushCityBuffer(
             UUID datasetId,
             List<CityRow> buffer,
             Map<String, Admin1Entry> admin1ByCode,
             Map<String, CountryEntry> countryByCode) {
+        int flushed = buffer.size();
         transactionTemplate.executeWithoutResult(status -> {
             for (CityRow row : buffer) {
                 Admin1Entry admin1 = row.admin1Code() == null
@@ -323,6 +338,7 @@ public class GeonamesImportService {
             }
         });
         buffer.clear();
+        return flushed;
     }
 
     private void broadcastReload(String datasetVersion) {

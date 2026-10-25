@@ -8423,6 +8423,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosSaveFailed => 'Save failed, please try again later';
 
   @override
+  String get photosEditSourceUnavailable =>
+      'Original file is unavailable for editing';
+
+  @override
   String get photosEditorCancel => 'Cancel';
 
   @override

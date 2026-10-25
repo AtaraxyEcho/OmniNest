@@ -503,22 +503,97 @@ double _fogIntensityForCode(int code) {
   }
 }
 
+const List<String> _compassPoints = [
+  'N',
+  'NNE',
+  'NE',
+  'ENE',
+  'E',
+  'ESE',
+  'SE',
+  'SSE',
+  'S',
+  'SSW',
+  'SW',
+  'WSW',
+  'W',
+  'WNW',
+  'NW',
+  'NNW',
+];
+
+/// 风向对粒子漂移的水平分量；保持既有四方位取值，斜向取中间档。
+const Map<String, double> _windOffsets = {
+  'N': -0.10,
+  'NNE': -0.32,
+  'NE': -0.41,
+  'ENE': -0.54,
+  'E': -0.58,
+  'ESE': -0.54,
+  'SE': -0.41,
+  'SSE': -0.32,
+  'S': 0.10,
+  'SSW': 0.32,
+  'SW': 0.41,
+  'WSW': 0.54,
+  'W': 0.58,
+  'WNW': 0.54,
+  'NW': 0.41,
+  'NNW': 0.32,
+};
+
 double _resolveWind(String windDir) {
-  final lower = windDir.toLowerCase();
-  if (windDir.contains('静') || lower.contains('calm')) {
+  final trimmed = windDir.trim();
+  if (trimmed.isEmpty) {
+    return 0.08;
+  }
+  final lower = trimmed.toLowerCase();
+  if (trimmed.contains('静') || lower.contains('calm')) {
     return 0;
   }
-  if (windDir.contains('东') || lower.contains('east')) {
-    return -0.58;
+  final numeric = RegExp(r'^[-+]?\d+(?:\.\d+)?').firstMatch(trimmed);
+  if (numeric != null) {
+    final angle = double.tryParse(numeric.group(0)!);
+    if (angle != null) {
+      final normalized = ((angle % 360) + 360) % 360;
+      final index = ((normalized + 11.25) ~/ 22.5) % _compassPoints.length;
+      return _windOffsets[_compassPoints[index]] ?? 0.08;
+    }
   }
-  if (windDir.contains('西') || lower.contains('west')) {
-    return 0.58;
+  final compact = lower.replaceAll(RegExp(r'[\s_-]'), '').replaceAll('风', '');
+  final chinese = <String, String>{
+    '东北': 'NE',
+    '东南': 'SE',
+    '西北': 'NW',
+    '西南': 'SW',
+    '东': 'E',
+    '西': 'W',
+    '南': 'S',
+    '北': 'N',
+  };
+  for (final entry in chinese.entries) {
+    if (compact.contains(entry.key)) {
+      return _windOffsets[entry.value] ?? 0.08;
+    }
   }
-  if (windDir.contains('南') || lower.contains('south')) {
-    return 0.10;
+  final english = <String, String>{
+    'northeast': 'NE',
+    'southeast': 'SE',
+    'northwest': 'NW',
+    'southwest': 'SW',
+    'north': 'N',
+    'south': 'S',
+    'east': 'E',
+    'west': 'W',
+  };
+  for (final entry in english.entries) {
+    if (lower.contains(entry.key)) {
+      return _windOffsets[entry.value] ?? 0.08;
+    }
   }
-  if (windDir.contains('北') || lower.contains('north')) {
-    return -0.10;
+  final upper = compact.toUpperCase();
+  if (_windOffsets.containsKey(upper)) {
+    return _windOffsets[upper]!;
   }
   return 0.08;
 }

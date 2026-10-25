@@ -132,12 +132,15 @@ public class FileManagerService {
         UUID resolvedParentId = targetParent != null ? targetParent.getId() : null;
 
         // 共享空间节点的所有者仍是上传者本人：复制必须重新校验共享空间开关与
-        // CAN_UPLOAD 权限矩阵，且不能把共享节点复制到个人根目录。
+        // CAN_UPLOAD 权限矩阵。targetParent 为 null 表示复制到源空间根目录，
+        // copyNodeShape 保持源空间不变，因此这里就是共享空间根目录。
         if (source.getSpaceType() == SpaceType.SHARED) {
-            if (targetParent == null) {
-                throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件不能复制到个人空间根目录");
-            }
             sharedSpaceService.requireSharedWrite(userId);
+            // 复制他人上传的共享内容会生成自己名下的副本；没有下载权限时
+            // 该路径等同于绕过 CAN_DOWNLOAD 获取原始内容。
+            if (!userId.equals(source.getOwnerUserId()) && !sharedSpaceService.canDownload(userId)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无权限下载该共享文件");
+            }
         }
 
         // 校验源文件和目标在同一空间
@@ -160,7 +163,7 @@ public class FileManagerService {
                     ? fileNodeRepository.findBySpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                             SpaceType.SHARED, prefix)
                     : fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                            userId, SpaceType.PERSONAL, prefix);
+                            source.getOwnerUserId(), SpaceType.PERSONAL, prefix);
             subtree.addAll(descendants.stream()
                     // 父节点必须先于子节点建副本，才能按父子映射推导新路径
                     .sorted(Comparator.comparingInt(node -> node.getNormalizedPath().length()))
@@ -258,8 +261,11 @@ public class FileManagerService {
      */
     private boolean copyTargetNameExists(UUID userId, SpaceType spaceType, UUID parentId, String name) {
         if (spaceType == SpaceType.SHARED) {
-            return fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
-                    spaceType, parentId, name);
+            return parentId == null
+                    ? fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                            spaceType, name)
+                    : fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                            spaceType, parentId, name);
         }
         return fileNodeSupport.sameNameExists(userId, spaceType, parentId, name);
     }

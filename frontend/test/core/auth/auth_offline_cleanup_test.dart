@@ -328,7 +328,7 @@ class _RecordingAuthClient extends AuthClient {
   String? lastRefreshToken;
 
   @override
-  Future<void> logout({String? refreshToken}) async {
+  Future<void> logout({String? refreshToken, String? accessToken}) async {
     if (delay != null) {
       await Future<void>.delayed(delay!);
     }
@@ -383,7 +383,8 @@ class _HangingAuthClient extends AuthClient {
   _HangingAuthClient() : super(Dio());
 
   @override
-  Future<void> logout({String? refreshToken}) => Completer<void>().future;
+  Future<void> logout({String? refreshToken, String? accessToken}) =>
+      Completer<void>().future;
 }
 
 class _SlowRefreshAuthClient extends AuthClient {

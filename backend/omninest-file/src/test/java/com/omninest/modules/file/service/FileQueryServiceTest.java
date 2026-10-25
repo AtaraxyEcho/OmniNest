@@ -132,7 +132,8 @@ class FileQueryServiceTest {
                 lookup,
                 assembler,
                 listQueryService,
-                downloadService
+                downloadService,
+                new FileRestoreSupport(fileNodeRepository, lookup)
         );
     }
 
@@ -908,6 +909,21 @@ class FileQueryServiceTest {
     }
 
     @Test
+    void createReadableDownloadUrlRequiresSharedDownloadPermission() {
+        UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000011");
+        FileNode file = node(OTHER_OWNER_ID, null, "FILE", "book.epub", "/book.epub");
+        file.setId(fileId);
+        file.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.of(file));
+        when(sharedSpaceService.canBrowse(OWNER_ID)).thenReturn(true);
+        when(sharedSpaceService.canDownload(OWNER_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> fileQueryService.createReadableDownloadUrl(OWNER_ID, fileId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("无权下载该文件");
+    }
+
+    @Test
     void openReadableFileContentRejectsSharedFileWithoutViewPermission() {
         UUID fileId = UUID.fromString("40000000-0000-0000-0000-000000000010");
         FileNode file = node(OTHER_OWNER_ID, null, "FILE", "private.jpg", "/private.jpg");
@@ -1016,6 +1032,94 @@ class FileQueryServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result).extracting("status").containsExactly("SUCCESS");
         assertThat(result).extracting("id").containsExactly(folderId);
+    }
+
+    @Test
+    void batchRestoreNodesRestoresRemainingSiblingsWhenChildIsListedFirst() {
+        UUID folderId = UUID.fromString("60000000-0000-0000-0000-000000000030");
+        UUID childId = UUID.fromString("60000000-0000-0000-0000-000000000031");
+        UUID siblingId = UUID.fromString("60000000-0000-0000-0000-000000000032");
+        FileNode folder = node(OWNER_ID, null, "FOLDER", "Docs", "/Docs");
+        folder.setId(folderId);
+        folder.setDeleted(true);
+        FileNode child = node(OWNER_ID, folderId, "FILE", "a.txt", "/Docs/a.txt");
+        child.setId(childId);
+        child.setDeleted(true);
+        FileNode sibling = node(OWNER_ID, folderId, "FILE", "c.txt", "/Docs/c.txt");
+        sibling.setId(siblingId);
+        sibling.setDeleted(true);
+        when(fileNodeRepository.findByIdAndOwnerUserId(folderId, OWNER_ID)).thenReturn(Optional.of(folder));
+        when(fileNodeRepository.findByIdAndOwnerUserId(childId, OWNER_ID)).thenReturn(Optional.of(child));
+        when(fileNodeRepository.findById(folderId)).thenReturn(Optional.of(folder));
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, "Docs")).thenReturn(false);
+        when(fileNodeRepository.existsByOwnerUserIdAndSpaceTypeAndParentIdAndNameAndDeletedFalse(
+                OWNER_ID, SpaceType.PERSONAL, folderId, "a.txt")).thenReturn(false);
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "/Docs/a.txt/")).thenReturn(List.of());
+        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedTrue(
+                OWNER_ID, SpaceType.PERSONAL, "/Docs/")).thenReturn(List.of(child, sibling));
+        when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = fileQueryService.batchRestoreNodes(OWNER_ID, List.of(childId, folderId));
+
+        assertThat(result).extracting("status").containsExactly("SUCCESS", "SUCCESS");
+        assertThat(folder.isDeleted()).isFalse();
+        assertThat(child.isDeleted()).isFalse();
+        assertThat(sibling.isDeleted()).isFalse();
+    }
+
+    @Test
+    void batchRestoreNodesChargesSharedQuotaAgainstAccumulatedBatchBytes() {
+        UUID firstId = UUID.fromString("60000000-0000-0000-0000-000000000033");
+        UUID secondId = UUID.fromString("60000000-0000-0000-0000-000000000034");
+        long eightyMegabytes = 80L * 1024 * 1024;
+        FileNode first = node(OTHER_OWNER_ID, null, "FILE", "a.mp4", "/a.mp4");
+        first.setId(firstId);
+        first.setSpaceType(SpaceType.SHARED);
+        first.setUploadedBy(OTHER_OWNER_ID);
+        first.setDeleted(true);
+        first.setDeletedBy(OWNER_ID);
+        first.setSizeBytes(eightyMegabytes);
+        FileNode second = node(OTHER_OWNER_ID, null, "FILE", "b.mp4", "/b.mp4");
+        second.setId(secondId);
+        second.setSpaceType(SpaceType.SHARED);
+        second.setUploadedBy(OTHER_OWNER_ID);
+        second.setDeleted(true);
+        second.setDeletedBy(OWNER_ID);
+        second.setSizeBytes(eightyMegabytes);
+        when(fileNodeRepository.findByIdAndOwnerUserId(firstId, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileNodeRepository.findByIdAndOwnerUserId(secondId, OWNER_ID)).thenReturn(Optional.empty());
+        when(fileNodeRepository.findById(firstId)).thenReturn(Optional.of(first));
+        when(fileNodeRepository.findById(secondId)).thenReturn(Optional.of(second));
+        when(sharedSpaceService.calculateRestoreSubtreeStats(first))
+                .thenReturn(new SharedSpaceService.SubtreeStats(eightyMegabytes, 1L));
+        when(sharedSpaceService.calculateRestoreSubtreeStats(second))
+                .thenReturn(new SharedSpaceService.SubtreeStats(eightyMegabytes, 1L));
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                SpaceType.SHARED, "a.mp4")).thenReturn(false);
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                SpaceType.SHARED, "b.mp4")).thenReturn(false);
+        Mockito.doAnswer(invocation -> {
+            long requested = invocation.getArgument(0);
+            if (requested > 100L * 1024 * 1024) {
+                throw new BusinessException(ErrorCode.FILE_QUOTA_EXCEEDED, "共享空间容量不足");
+            }
+            return null;
+        }).when(sharedSpaceQuotaService).checkQuota(anyLong());
+        when(fileNodeRepository.saveAll(ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = fileQueryService.batchRestoreNodes(OWNER_ID, List.of(firstId, secondId));
+
+        assertThat(result).extracting("status").containsExactly("SUCCESS", "FAILED");
+        assertThat(first.isDeleted()).isFalse();
+        assertThat(second.isDeleted()).isTrue();
+        verify(sharedSpaceQuotaService).checkQuota(eightyMegabytes);
+        verify(sharedSpaceQuotaService).checkQuota(eightyMegabytes * 2);
+        verify(sharedSpaceQuotaService).increaseUsage(eightyMegabytes, 1L);
+        verify(sharedSpaceQuotaService, never()).increaseUsage(eightyMegabytes * 2, 2L);
     }
 
     @Test

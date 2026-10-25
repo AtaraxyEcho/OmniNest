@@ -195,10 +195,8 @@ class ReaderFileCleanupServiceTest {
                 .thenReturn(List.of(item));
         when(itemRepository.findAllById(Set.of(ITEM_ID)))
                 .thenReturn(List.of(item));
-        // 第二次查询发生在删除之后：库里只剩另一卷
-        when(itemSourceRepository.findByReaderItemId(ITEM_ID))
-                .thenReturn(List.of(purged, surviving))
-                .thenReturn(List.of(surviving));
+        when(itemSourceRepository.findByReaderItemIdIn(List.of(ITEM_ID)))
+                .thenReturn(List.of(purged, surviving));
 
         service.finalizePurge(purgeContext());
 
@@ -227,9 +225,10 @@ class ReaderFileCleanupServiceTest {
                 .thenReturn(List.of(item));
         when(itemRepository.findAllById(Set.of(ITEM_ID)))
                 .thenReturn(List.of(item));
-        when(itemSourceRepository.findByReaderItemId(ITEM_ID))
+        when(itemSourceRepository.findByReaderItemIdIn(List.of(ITEM_ID)))
                 .thenReturn(List.of(purged, surviving));
-        when(pageAssetRepository.findBySourceId(PURGED_SOURCE_ID)).thenReturn(List.of(purgedAsset));
+        when(pageAssetRepository.findBySourceIdIn(List.of(PURGED_SOURCE_ID)))
+                .thenReturn(List.of(purgedAsset));
 
         service.contribute(purgeContext(), writer);
 

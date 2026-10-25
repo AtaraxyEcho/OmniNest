@@ -40,7 +40,7 @@ class ResourceShareLinkServiceTest {
 
     private final ShareLinkRepository shareLinkRepository = mock(ShareLinkRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-    private final ShareAccessSessionService sessionService = new ShareAccessSessionService();
+    private final ShareAccessSessionService sessionService = new ShareAccessSessionService("test-share-session-secret-at-least-32-bytes");
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);

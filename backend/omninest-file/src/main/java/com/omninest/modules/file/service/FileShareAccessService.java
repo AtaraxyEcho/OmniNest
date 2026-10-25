@@ -501,6 +501,11 @@ public class FileShareAccessService {
     }
 
     private void acceptFolderShare(UUID userId, FileNode sourceFolder, UUID targetParentId) {
+        // 共享空间文件夹可能混有其他成员的内容，复制到个人空间等于越过空间边界转出；
+        // 共享空间内容应通过成员权限访问，不再生成对外文件夹分享。
+        if (sourceFolder.getSpaceType() != SpaceType.PERSONAL) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "共享空间文件夹不能转存到个人空间");
+        }
         FileNode targetParent = resolveAcceptTargetParent(userId, targetParentId);
         UUID targetParentNodeId = targetParent != null ? targetParent.getId() : null;
         if (fileNodeSupport.sameNameExists(
@@ -524,6 +529,7 @@ public class FileShareAccessService {
         List<FileNode> descendants = fileNodeRepository
                 .findDescendantsByPrefixOrdered(
                         sourceFolder.getOwnerUserId(),
+                        sourceFolder.getSpaceType(),
                         LikePatterns.escapeSpecials(sourceFolder.getNormalizedPath() + "/"));
 
         List<FileNode> pending = new ArrayList<>();
@@ -543,10 +549,16 @@ public class FileShareAccessService {
                 currentPath.append("/").append(segments[i]);
                 parentNode = pathToNewNode.get(currentPath.toString());
                 if (parentNode == null) {
-                    throw new IllegalStateException("文件夹分享子树父节点缺失: " + currentPath);
+                    // 只读/派生节点或异常孤儿不在复制集合内：跳过该分支，
+                    // 不能因为一个不可复制节点让整次转存返回 500。
+                    log.warn("文件夹分享转存跳过父节点缺失的分支: path={}", currentPath);
+                    break;
                 }
             }
 
+            if (parentNode == null) {
+                continue;
+            }
             FileNode newChild = new FileNode();
             newChild.setId(UUID.randomUUID());
             newChild.setOwnerUserId(userId);

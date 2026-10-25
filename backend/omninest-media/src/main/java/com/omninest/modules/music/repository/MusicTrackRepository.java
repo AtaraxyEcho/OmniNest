@@ -211,6 +211,40 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     long countByOwnerUserIdAndArtistId(UUID ownerUserId, UUID artistId);
 
     /**
+     * 批量统计存活专辑的曲目数与总时长。
+     */
+    @Query("""
+            select t.albumId as albumId,
+                   count(t) as trackCount,
+                   coalesce(sum(t.durationSeconds), 0) as totalDuration
+              from MusicTrack t
+             where t.ownerUserId = :ownerUserId
+               and t.albumId in :albumIds
+             group by t.albumId
+            """)
+    List<MusicAlbumTrackStats> findAlbumStatsByOwnerUserIdAndAlbumIdIn(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("albumIds") Collection<UUID> albumIds
+    );
+
+    /**
+     * 批量统计存活艺术家的曲目数与专辑数。
+     */
+    @Query("""
+            select t.artistId as artistId,
+                   count(t) as trackCount,
+                   count(distinct t.albumId) as albumCount
+              from MusicTrack t
+             where t.ownerUserId = :ownerUserId
+               and t.artistId in :artistIds
+             group by t.artistId
+            """)
+    List<MusicArtistTrackStats> findArtistStatsByOwnerUserIdAndArtistIdIn(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistIds") Collection<UUID> artistIds
+    );
+
+    /**
      * 批量查询有曲目的 albumId 集合（避免孤立清理 N+1）。
      */
     @Query("SELECT DISTINCT t.albumId FROM MusicTrack t WHERE t.ownerUserId = :ownerUserId AND t.albumId IN :albumIds")

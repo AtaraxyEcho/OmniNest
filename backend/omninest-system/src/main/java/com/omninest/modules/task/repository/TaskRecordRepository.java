@@ -79,6 +79,14 @@ public interface TaskRecordRepository extends JpaRepository<TaskRecord, UUID> {
      * @param statuses 状态集合
      * @return 匹配数量
      */
+    /**
+     * 取本人指定状态中最新创建的一条，供摘要优先任务使用。
+     */
+    Optional<TaskRecord> findFirstByOwnerUserIdAndStatusInOrderByCreatedAtDesc(
+            UUID ownerUserId,
+            Collection<String> statuses
+    );
+
     long countByOwnerUserIdAndStatusIn(UUID ownerUserId, Collection<String> statuses);
 
     /**

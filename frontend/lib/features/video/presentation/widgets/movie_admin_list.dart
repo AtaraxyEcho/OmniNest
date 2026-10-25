@@ -926,47 +926,56 @@ class _AdminTextAction extends StatelessWidget {
 }
 
 Future<void> _showNfoPreview(BuildContext context, MovieVideoItem item) async {
-  final container = ProviderScope.containerOf(context);
-  final nfoAsync = container.read(movieNfoPreviewProvider(item.id));
   await showWorkstationDialog<void>(
     context: context,
     builder:
         (dialogContext) => AlertDialog(
-          backgroundColor: context.videoColors.surfaceContainerHigh,
+          backgroundColor: dialogContext.videoColors.surfaceContainerHigh,
           title: Text(
-            AppLocalizations.of(context).videoNfoPreviewTitle(item.title),
+            AppLocalizations.of(dialogContext).videoNfoPreviewTitle(item.title),
           ),
           content: SizedBox(
             width: 600,
             height: 500,
-            child: nfoAsync.when(
-              data:
-                  (nfo) => SingleChildScrollView(
-                    child: SelectableText(
-                      nfo.content,
-                      style: TextStyle(
-                        fontFamily: AppTypography.monoFamily,
-                        fontFamilyFallback: AppTypography.monoFamilyFallback,
-                        fontSize: AppTypography.bodySmall,
-                        color: context.videoColors.onSurface,
+            // 弹窗内订阅 autoDispose 提供器：一次性 read 的快照永远停在加载态，
+            // 且没有监听者时提供器会立即销毁。
+            child: Consumer(
+              builder: (dialogContext, dialogRef, _) {
+                final nfoAsync = dialogRef.watch(
+                  movieNfoPreviewProvider(item.id),
+                );
+                return nfoAsync.when(
+                  data:
+                      (nfo) => SingleChildScrollView(
+                        child: SelectableText(
+                          nfo.content,
+                          style: TextStyle(
+                            fontFamily: AppTypography.monoFamily,
+                            fontFamilyFallback:
+                                AppTypography.monoFamilyFallback,
+                            fontSize: AppTypography.bodySmall,
+                            color: dialogContext.videoColors.onSurface,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error:
-                  (e, _) => Center(
-                    child: Text(
-                      AppLocalizations.of(
-                        context,
-                      ).videoLoadFailedWith(e.toString()),
-                    ),
-                  ),
+                  loading:
+                      () => const Center(child: CircularProgressIndicator()),
+                  error:
+                      (e, _) => Center(
+                        child: Text(
+                          AppLocalizations.of(
+                            dialogContext,
+                          ).videoLoadFailedWith(e.toString()),
+                        ),
+                      ),
+                );
+              },
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text(AppLocalizations.of(context).videoClose),
+              child: Text(AppLocalizations.of(dialogContext).videoClose),
             ),
           ],
         ),

@@ -8174,6 +8174,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosSaveFailed => '保存失败，请稍后重试';
 
   @override
+  String get photosEditSourceUnavailable => '原图暂不可用，无法编辑';
+
+  @override
   String get photosEditorCancel => '取消';
 
   @override

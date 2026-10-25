@@ -2,6 +2,7 @@ package com.omninest.modules.file.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.security.HkdfSha256;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -11,7 +12,6 @@ import java.util.Base64;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -36,12 +36,21 @@ public class LocalContentAccessTokenService {
     private final SecretKeySpec signingKey;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    @Autowired
     public LocalContentAccessTokenService(@Value("${omninest.security.jwt-secret}") String secret) {
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("本地内容令牌签名密钥不能为空");
         }
-        this.signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
+        // 本地内容令牌必须使用独立子密钥：直接复用 JWT secret 会让两类 HMAC
+        // 处于同一密钥域，任一用途的实现缺陷都可能波及身份令牌。
+        this.signingKey = new SecretKeySpec(
+                HkdfSha256.deriveKey(
+                        secret.getBytes(StandardCharsets.UTF_8),
+                        HkdfSha256.defaultSalt(),
+                        "omninest-local-content-token-v1",
+                        32
+                ),
+                HMAC_ALGORITHM
+        );
     }
 
     /**

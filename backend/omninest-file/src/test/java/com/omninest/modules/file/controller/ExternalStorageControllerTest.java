@@ -164,6 +164,26 @@ class ExternalStorageControllerTest {
         assertThat(response.getBody()).contains("授权已取消或失败");
         verify(oauthService, never()).handleCallback(
                 anyString(), anyString(), anyString(), anyString());
+        // 限流拒绝不是有效回跳，不能提前清掉合法绑定 Cookie。
+        verify(servletResponse, never()).addHeader(eq(HttpHeaders.SET_COOKIE), anyString());
+    }
+
+    @Test
+    @DisplayName("令牌交换的非业务异常也渲染结果页，不向顶层浏览器返回 JSON 500")
+    void callbackUnexpectedRuntimeFailureRendersResultPage() {
+        setupProperties.setWebBaseUrl("https://nest.example.com");
+        doThrow(new IllegalStateException("upstream unavailable"))
+                .when(oauthService).handleCallback(
+                        CALLBACK_PROVIDER, "state-value", "authorization-code", BINDING_NONCE);
+
+        ResponseEntity<String> response = controller.oauthCallback(
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.getHeaders().getLocation())
+                .hasToString("https://nest.example.com/#/files?oauth=error");
+        verify(servletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), anyString());
     }
 
     @Test

@@ -15359,6 +15359,12 @@ abstract class AppLocalizations {
   /// **'Save failed, please try again later'**
   String get photosSaveFailed;
 
+  /// No description provided for @photosEditSourceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Original file is unavailable for editing'**
+  String get photosEditSourceUnavailable;
+
   /// No description provided for @photosEditorCancel.
   ///
   /// In en, this message translates to:

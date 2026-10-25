@@ -17,9 +17,13 @@ import com.omninest.modules.photos.search.PhotoSearchIndexService.PhotoIndexDocu
 import com.omninest.modules.task.service.TaskDispatchService;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -92,19 +96,82 @@ public class PhotoIndexTaskService {
         if (photoIds == null || photoIds.isEmpty()) {
             return 0;
         }
-        List<PhotoIndexDocument> documents = new ArrayList<>();
+        Map<UUID, PhotoItem> photosById = photoItemRepository
+                .findByOwnerUserIdAndIdIn(ownerUserId, photoIds)
+                .stream()
+                .collect(Collectors.toMap(PhotoItem::getId, photo -> photo, (left, right) -> left));
         List<UUID> removalIds = new ArrayList<>();
+        List<UUID> indexableIds = new ArrayList<>();
+        List<UUID> candidateFileNodeIds = new ArrayList<>();
         for (UUID photoId : photoIds) {
-            PhotoItem photo = photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId).orElse(null);
+            PhotoItem photo = photosById.get(photoId);
             if (photo == null) {
                 continue;
             }
-            if (photo.getDeletedAt() != null
-                    || !fileLifecycleGuard.isOwnedProcessable(ownerUserId, photo.getFileNodeId())) {
+            if (photo.getDeletedAt() != null || photo.getFileNodeId() == null) {
                 removalIds.add(photoId);
                 continue;
             }
-            documents.add(buildDocument(ownerUserId, photo));
+            indexableIds.add(photoId);
+            candidateFileNodeIds.add(photo.getFileNodeId());
+        }
+        Set<UUID> processableFileNodeIds = fileLifecycleGuard
+                .filterOwnedProcessable(ownerUserId, candidateFileNodeIds);
+        indexableIds.removeIf(photoId -> {
+            PhotoItem photo = photosById.get(photoId);
+            if (processableFileNodeIds.contains(photo.getFileNodeId())) {
+                return false;
+            }
+            removalIds.add(photoId);
+            return true;
+        });
+        if (indexableIds.isEmpty()) {
+            photoSearchIndexService.deletePhotos(removalIds);
+            return 0;
+        }
+
+        Map<UUID, List<String>> tagsByPhoto = photoTagRepository
+                .findByOwnerUserIdAndPhotoIdIn(ownerUserId, indexableIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        PhotoTag::getPhotoId,
+                        Collectors.mapping(PhotoTag::getTag, Collectors.toList())
+                ));
+        Map<UUID, UUID> latestRunByPhoto = new LinkedHashMap<>();
+        for (PhotoContentAnalysisRun run : analysisRunRepository
+                .findByOwnerUserIdAndPhotoIdInAndStatusOrderByCreatedAtDesc(
+                        ownerUserId, indexableIds, STATUS_SUCCEEDED)) {
+            latestRunByPhoto.putIfAbsent(run.getPhotoId(), run.getId());
+        }
+        Map<UUID, List<PhotoContentLabel>> labelsByPhoto = latestRunByPhoto.isEmpty()
+                ? Map.of()
+                : contentLabelRepository
+                        .findByOwnerUserIdAndPhotoIdInAndRunIdIn(
+                                ownerUserId,
+                                latestRunByPhoto.keySet(),
+                                latestRunByPhoto.values())
+                        .stream()
+                        .collect(Collectors.groupingBy(PhotoContentLabel::getPhotoId));
+
+        List<PhotoIndexDocument> documents = new ArrayList<>(indexableIds.size());
+        for (UUID photoId : indexableIds) {
+            PhotoItem photo = photosById.get(photoId);
+            List<String> aiLabels = new ArrayList<>();
+            for (PhotoContentLabel label : labelsByPhoto.getOrDefault(photoId, List.of())) {
+                if (!STATE_AUTO.equals(label.getState())) {
+                    continue;
+                }
+                aiLabels.addAll(labelPolicy.expandSearchKeywords(
+                        label.getNamespace(),
+                        label.getLabelCode()
+                ));
+            }
+            aiLabels.addAll(semanticTags(photo));
+            documents.add(buildDocument(
+                    photo,
+                    tagsByPhoto.getOrDefault(photoId, List.of()),
+                    aiLabels
+            ));
         }
         photoSearchIndexService.deletePhotos(removalIds);
         photoSearchIndexService.indexPhotosBatch(documents);
@@ -191,9 +258,17 @@ public class PhotoIndexTaskService {
             }
         }
         aiLabels.addAll(semanticTags(photo));
+        return buildDocument(photo, tags, aiLabels);
+    }
+
+    private PhotoIndexDocument buildDocument(
+            PhotoItem photo,
+            List<String> tags,
+            List<String> aiLabels
+    ) {
         return new PhotoIndexDocument(
                 photo.getId(),
-                ownerUserId,
+                photo.getOwnerUserId(),
                 photo.getTitle(),
                 photo.getDescription(),
                 tags,

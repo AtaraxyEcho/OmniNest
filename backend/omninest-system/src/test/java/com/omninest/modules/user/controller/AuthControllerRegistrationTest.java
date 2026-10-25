@@ -11,6 +11,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.BrowserSecurityPolicy;
 import com.omninest.common.security.ClientIpResolver;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.RegistrationPolicy;
 import com.omninest.modules.user.dto.RegisterRequest;
 import com.omninest.modules.user.service.AuthService;
@@ -32,7 +33,8 @@ class AuthControllerRegistrationTest {
                 browserSecurityPolicy,
                 rateLimitService,
                 registrationPolicy,
-                clientIpResolver
+                clientIpResolver,
+                mock(CurrentUserContext.class)
         );
         doThrow(new BusinessException(ErrorCode.REGISTRATION_DISABLED, "当前实例未开放用户注册"))
                 .when(registrationPolicy)

@@ -115,11 +115,6 @@ public class ExternalStorageController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
-        // 不论结果如何都清除绑定 Cookie；成功回调的一次性凭证不留在浏览器。
-        response.addHeader(
-                HttpHeaders.SET_COOKIE,
-                bindingCookie("", Duration.ZERO).toString()
-        );
         // 匿名端点：按可信代理边界取客户端地址做限流，避免成为可无限重放的探测入口。
         String clientIp = clientIpResolver.resolve(
                 request.getRemoteAddr(),
@@ -131,6 +126,12 @@ public class ExternalStorageController {
                     "ip:" + clientIp + ":external-oauth-callback", 20, Duration.ofMinutes(1))) {
                 throw new BusinessException(ErrorCode.RATE_LIMITED, "OAuth 回调请求过于频繁，请稍后再试");
             }
+            // 限流拒绝不是一次真正的授权回跳，保留 Cookie 让用户稍后重试；
+            // 只有进入业务处理（含三方拒绝）才清除一次性绑定凭证。
+            response.addHeader(
+                    HttpHeaders.SET_COOKIE,
+                    bindingCookie("", Duration.ZERO).toString()
+            );
             if (error != null && !error.isBlank()) {
                 return oauthResultPage("error");
             }
@@ -141,6 +142,12 @@ public class ExternalStorageController {
             // 与三方拒绝都统一回到前端结果页。
             log.warn("OAuth 回调处理失败: providerCode={}, errorCode={}",
                     providerCode, exception.errorCode());
+            return oauthResultPage("error");
+        } catch (RuntimeException exception) {
+            // 令牌交换的网络/TLS 异常不能逃逸成顶层 JSON 500；异常对象可能携带
+            // 授权码或令牌，只记录类型，不打印原始异常内容。
+            log.error("OAuth 回调处理异常: providerCode={}, errorType={}",
+                    providerCode, exception.getClass().getSimpleName());
             return oauthResultPage("error");
         }
     }

@@ -22,6 +22,15 @@ public interface PhotoContentAnalysisRunRepository extends JpaRepository<PhotoCo
             String status
     );
 
+    /**
+     * 批量查询一页照片的分析运行记录，按创建时间倒序，供索引批处理取每张的最新成功运行。
+     */
+    List<PhotoContentAnalysisRun> findByOwnerUserIdAndPhotoIdInAndStatusOrderByCreatedAtDesc(
+            UUID ownerUserId,
+            Collection<UUID> photoIds,
+            String status
+    );
+
     PhotoContentAnalysisRun findTopByOwnerUserIdAndPhotoIdAndStatusOrderByCreatedAtDesc(
             UUID ownerUserId,
             UUID photoId,

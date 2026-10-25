@@ -2915,6 +2915,12 @@ CREATE INDEX "idx_media_movies_owner_updated" ON "omni"."media_movies" USING btr
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+CREATE INDEX "idx_media_movies_poster_file" ON "omni"."media_movies" USING btree (
+  "poster_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE poster_file_id IS NOT NULL;
+CREATE INDEX "idx_media_movies_backdrop_file" ON "omni"."media_movies" USING btree (
+  "backdrop_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE backdrop_file_id IS NOT NULL;
 CREATE UNIQUE INDEX "uk_media_movies_local_identity" ON "omni"."media_movies" USING btree (
   "owner_user_id", "library_source_id", lower(title), COALESCE(release_date, DATE '0001-01-01')
 ) WHERE library_source_id IS NOT NULL;
@@ -2971,6 +2977,9 @@ CREATE INDEX "idx_media_subtitle_tracks_video_order" ON "omni"."media_subtitle_t
   "video_item_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "sort_order" "pg_catalog"."int4_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_media_subtitle_tracks_file_node" ON "omni"."media_subtitle_tracks" USING btree (
+  "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE file_node_id IS NOT NULL;
 
 ALTER TABLE "omni"."media_subtitle_tracks" ADD CONSTRAINT "chk_media_subtitle_tracks_kind" CHECK (track_kind::text = ANY (ARRAY['SUBTITLE'::text, 'CAPTION'::text, 'EXTERNAL'::text]));
 
@@ -2991,12 +3000,18 @@ ALTER TABLE "omni"."media_tv_episodes" ADD CONSTRAINT "chk_media_tv_episodes_rat
 ALTER TABLE "omni"."media_tv_episodes" ADD CONSTRAINT "chk_media_tv_episodes_metadata_status" CHECK (metadata_status::text = ANY (ARRAY['PENDING'::character varying::text, 'MATCHED'::character varying::text, 'MANUAL'::character varying::text, 'FAILED'::character varying::text]));
 
 ALTER TABLE "omni"."media_tv_episodes" ADD CONSTRAINT "media_tv_episodes_pkey" PRIMARY KEY ("id");
+CREATE INDEX "idx_media_tv_episodes_still_file" ON "omni"."media_tv_episodes" USING btree (
+  "still_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE still_file_id IS NOT NULL;
 
 CREATE INDEX "idx_media_tv_seasons_series_number" ON "omni"."media_tv_seasons" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "series_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "season_number" "pg_catalog"."int4_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_media_tv_seasons_poster_file" ON "omni"."media_tv_seasons" USING btree (
+  "poster_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE poster_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."media_tv_seasons" ADD CONSTRAINT "uniq_media_tv_seasons_series_number" UNIQUE ("owner_user_id", "series_id", "season_number");
 
@@ -3015,6 +3030,12 @@ CREATE INDEX "idx_media_tv_series_owner_updated" ON "omni"."media_tv_series" USI
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+CREATE INDEX "idx_media_tv_series_poster_file" ON "omni"."media_tv_series" USING btree (
+  "poster_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE poster_file_id IS NOT NULL;
+CREATE INDEX "idx_media_tv_series_backdrop_file" ON "omni"."media_tv_series" USING btree (
+  "backdrop_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE backdrop_file_id IS NOT NULL;
 CREATE INDEX "idx_media_tv_series_title" ON "omni"."media_tv_series" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "title" "pg_catalog"."text_ops" ASC NULLS LAST
@@ -3059,6 +3080,9 @@ CREATE INDEX "idx_media_video_collections_owner_updated" ON "omni"."media_video_
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+CREATE INDEX "idx_media_video_collections_cover_file" ON "omni"."media_video_collections" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."media_video_collections" ADD CONSTRAINT "chk_media_video_collections_type" CHECK (collection_type::text = ANY (ARRAY['MANUAL'::character varying::text, 'AUTO'::character varying::text]));
 
@@ -3526,6 +3550,9 @@ ALTER TABLE "omni"."reader_item_sources" ADD CONSTRAINT "reader_item_sources_pke
 CREATE INDEX "idx_reader_items_content_hash" ON "omni"."reader_items" USING btree (
   "content_hash" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE content_hash IS NOT NULL;
+CREATE INDEX "idx_reader_items_cover_file" ON "omni"."reader_items" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
 CREATE INDEX "idx_reader_items_owner_title" ON "omni"."reader_items" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "title" "pg_catalog"."text_ops" ASC NULLS LAST
@@ -3579,6 +3606,9 @@ CREATE INDEX "idx_reader_page_assets_item" ON "omni"."reader_page_assets" USING 
 CREATE INDEX "idx_reader_page_assets_source" ON "omni"."reader_page_assets" USING btree (
   "source_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_reader_page_assets_file_node" ON "omni"."reader_page_assets" USING btree (
+  "file_node_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE file_node_id IS NOT NULL;
 CREATE UNIQUE INDEX "uk_reader_page_assets_page_version" ON "omni"."reader_page_assets" USING btree (
   "page_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "manifest_version" "pg_catalog"."int4_ops" ASC NULLS LAST

@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,21 @@ public class FileMetadataQueryService {
     @Transactional(readOnly = true)
     public Optional<FileDescriptor> findById(UUID fileId) {
         return fileNodeRepository.findById(fileId).map(this::toDescriptor);
+    }
+
+    /**
+     * 批量查询文件描述符，供清理路径一次性加载派生引用。
+     *
+     * @param fileIds 文件节点 ID 集合
+     * @return 文件 ID 到描述符的映射；不存在的 ID 不出现在结果中
+     */
+    public Map<UUID, FileDescriptor> findByIdIn(Collection<UUID> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return Map.of();
+        }
+        return fileNodeRepository.findAllById(fileIds).stream()
+                .map(this::toDescriptor)
+                .collect(Collectors.toMap(FileDescriptor::id, descriptor -> descriptor, (left, right) -> left));
     }
 
     /**

@@ -50,6 +50,11 @@ public interface ReaderPageAssetRepository extends JpaRepository<ReaderPageAsset
     List<ReaderPageAsset> findBySourceId(UUID sourceId);
 
     /**
+     * 批量按来源查询页面资产，供永久删除时一次加载多卷的派生文件。
+     */
+    List<ReaderPageAsset> findBySourceIdIn(Collection<UUID> sourceIds);
+
+    /**
      * 删除来源下的所有派生资源。
      *
      * @param sourceId 来源 ID

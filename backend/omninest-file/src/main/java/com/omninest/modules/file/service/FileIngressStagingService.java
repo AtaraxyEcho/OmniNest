@@ -13,6 +13,7 @@ import com.omninest.modules.file.service.FileIngressSafetyService.InspectionResu
 import com.omninest.modules.file.service.FileIngressLifecycleService.IngressCommand;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
@@ -127,8 +128,9 @@ public class FileIngressStagingService {
             tempFile = tempStagingPort.createTempFile(
                     "ingress", "ingress-staged-", safeSuffix(item.getTargetName()));
             try (InputStream inputStream =
-                         objectStorageClient.getObject(quarantineKey(item))) {
-                inputStream.transferTo(Files.newOutputStream(tempFile));
+                         objectStorageClient.getObject(quarantineKey(item));
+                 OutputStream outputStream = Files.newOutputStream(tempFile)) {
+                inputStream.transferTo(outputStream);
             }
             return tempFile;
         } catch (IOException | RuntimeException exception) {

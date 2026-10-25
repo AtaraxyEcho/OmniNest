@@ -99,16 +99,17 @@ flutter:
   shaders:
     - assets/shaders/portal_weather.frag
   fonts:
-    # Noto Sans SC 使用单张可变字体：wght 轴覆盖 100-900，替代 4 张静态字面
-    # （约 42MB → 约 17.8MB）。Flutter 3.41+ 会把 FontWeight 映射到变量轴，
+    # Noto Sans SC 使用单张可变字体：wght 轴覆盖 100-900，替代 4 张静态字面。
+    # 两张 CJK 字体已按 GB2312 + 界面文案子集化（17.0MB → 3.9MB、11.1MB → 2.7MB），
+    # 由 tool/subset_cjk_fonts.py 生成；Flutter 3.41+ 会把 FontWeight 映射到变量轴，
     # 不要为每个字重重复声明同一文件。
     - family: NotoSansSC
       fonts:
         - asset: assets/fonts/NotoSansSC-VF.ttf
     # 衬线档只有 Regular 一张静态字面（该 OTF 无 fvar，不能按权重插值）。
-    # 稿子的标题与面板名写 600，这里不补 SemiBold：单张 CJK 字面 11.6MB，
-    # 为一个字重翻倍不成立。因此衬线档的层级一律靠字号、字距与行高表达，
-    # w600 声明保留（补齐字面即生效，不必改代码）。
+    # 稿子的标题与面板名写 600，这里不补 SemiBold：为一个字重翻倍不成立。
+    # 因此衬线档的层级一律靠字号、字距与行高表达，w600 声明保留
+    # （补齐字面即生效，不必改代码）。
     - family: NotoSerifSC
       fonts:
         - asset: assets/fonts/NotoSerifSC-Regular.otf

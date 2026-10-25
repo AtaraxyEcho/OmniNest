@@ -111,17 +111,19 @@ public class TaskQueryService {
         );
         long active = taskRecordRepository.countByOwnerUserIdAndStatusIn(ownerUserId, activeStatuses);
         long failed = taskRecordRepository.countByOwnerUserIdAndStatusIn(ownerUserId, failedStatuses);
-        List<TaskDto> recent = listOwned(ownerUserId, null, PageRequest.of(0, 50))
-                .getContent();
-        TaskDto priority = recent.stream()
-                .filter(task -> failedStatuses.contains(task.status()))
-                .findFirst()
-                .orElseGet(() -> recent.stream()
-                        .filter(task -> TaskStatus.RUNNING.getValue().equals(task.status()))
-                        .findFirst()
-                        .orElseGet(() -> recent.stream()
-                                .filter(task -> activeStatuses.contains(task.status()))
-                                .findFirst()
+        // 优先任务必须直接按状态查询：限制在最近 50 条全状态记录里过滤，
+        // 会被一批快速完成的小任务挤出窗口，角标有数但摘要卡片为空。
+        TaskDto priority = taskRecordRepository
+                .findFirstByOwnerUserIdAndStatusInOrderByCreatedAtDesc(ownerUserId, failedStatuses)
+                .map(TaskDto::from)
+                .orElseGet(() -> taskRecordRepository
+                        .findFirstByOwnerUserIdAndStatusInOrderByCreatedAtDesc(
+                                ownerUserId, List.of(TaskStatus.RUNNING.getValue()))
+                        .map(TaskDto::from)
+                        .orElseGet(() -> taskRecordRepository
+                                .findFirstByOwnerUserIdAndStatusInOrderByCreatedAtDesc(
+                                        ownerUserId, activeStatuses)
+                                .map(TaskDto::from)
                                 .orElse(null)));
         return new TaskSummaryDto(active, failed, priority);
     }
@@ -175,6 +177,9 @@ public class TaskQueryService {
         task.setStatus(TaskStatus.QUEUED.getValue());
         task.setRetryCount(0);
         task.setErrorMessage(null);
+        task.setStackSummary(null);
+        task.setNextRetryAt(null);
+        task.setCompletedAt(null);
         taskRecordRepository.save(task);
         taskRedispatchService.redispatch(task);
         log.info("重试死信任务并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
@@ -202,6 +207,8 @@ public class TaskQueryService {
         task.setRetryCount(0);
         task.setErrorMessage(null);
         task.setStackSummary(null);
+        task.setNextRetryAt(null);
+        task.setCompletedAt(null);
         taskRecordRepository.save(task);
         taskRedispatchService.redispatch(task);
         log.info("本人任务重试并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());

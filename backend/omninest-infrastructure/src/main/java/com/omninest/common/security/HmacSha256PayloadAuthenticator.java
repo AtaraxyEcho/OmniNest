@@ -1,7 +1,6 @@
 package com.omninest.common.security;
 
 import com.omninest.common.config.SecurityProperties;
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -25,8 +24,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HmacSha256PayloadAuthenticator implements PayloadAuthenticator {
     private static final String HMAC_ALGORITHM = "HmacSHA256";
-    private static final byte[] HKDF_SALT = "omninest-hkdf-salt-v1".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] KEY_INFO = "omninest-payload-hmac-v1".getBytes(StandardCharsets.UTF_8);
+    private static final String KEY_INFO = "omninest-payload-hmac-v1";
     private static final int DERIVED_KEY_LENGTH = 32;
 
     private final SecurityProperties securityProperties;
@@ -53,27 +51,13 @@ public class HmacSha256PayloadAuthenticator implements PayloadAuthenticator {
         return MessageDigest.isEqual(expected, actual);
     }
 
-    private byte[] derivedKey() throws GeneralSecurityException {
-        byte[] ikm = securityProperties.getJwtSecret().getBytes(StandardCharsets.UTF_8);
-
-        // HKDF-Extract：以固定盐提炼主密料
-        Mac extractMac = Mac.getInstance(HMAC_ALGORITHM);
-        extractMac.init(new SecretKeySpec(HKDF_SALT, HMAC_ALGORITHM));
-        byte[] prk = extractMac.doFinal(ikm);
-
-        // HKDF-Expand：按用途标签展开出签名子密钥
-        Mac expandMac = Mac.getInstance(HMAC_ALGORITHM);
-        expandMac.init(new SecretKeySpec(prk, HMAC_ALGORITHM));
-        ByteArrayOutputStream okm = new ByteArrayOutputStream(DERIVED_KEY_LENGTH);
-        byte[] block = new byte[0];
-        int counter = 1;
-        while (okm.size() < DERIVED_KEY_LENGTH) {
-            expandMac.update(block);
-            expandMac.update(KEY_INFO);
-            expandMac.update((byte) counter++);
-            block = expandMac.doFinal();
-            okm.write(block, 0, Math.min(block.length, DERIVED_KEY_LENGTH - okm.size()));
-        }
-        return okm.toByteArray();
+    private byte[] derivedKey() {
+        return HkdfSha256.deriveKey(
+                securityProperties.getJwtSecret().getBytes(StandardCharsets.UTF_8),
+                HkdfSha256.defaultSalt(),
+                KEY_INFO,
+                DERIVED_KEY_LENGTH
+        );
     }
+
 }

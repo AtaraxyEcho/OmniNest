@@ -1037,7 +1037,22 @@ class AuthServiceTest {
             when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
                     .thenReturn(Optional.of(session));
 
-            service.logout("refresh-token");
+            service.logout("refresh-token", null, null);
+
+            verify(sessionRevocationService).revokeSessionAndDeactivate(
+                    user.getId(), sessionId, "用户退出登录", Duration.ofDays(30));
+        }
+
+        @Test
+        @DisplayName("刷新令牌缺失时按 Bearer 的 sid 吊销当前会话")
+        void logoutRevokesAuthenticatedSessionWithoutRefreshToken() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            AuthActiveSession session = activeSession(user.getId());
+            UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+            when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
+                    .thenReturn(Optional.of(session));
+
+            service.logout(null, user.getId(), sessionId);
 
             verify(sessionRevocationService).revokeSessionAndDeactivate(
                     user.getId(), sessionId, "用户退出登录", Duration.ofDays(30));
@@ -1051,7 +1066,7 @@ class AuthServiceTest {
             when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
                     .thenReturn(Optional.empty());
 
-            service.logout("refresh-token");
+            service.logout("refresh-token", null, null);
 
             verifyNoInteractions(sessionRevocationService);
             verify(activeSessionRepository, never()).revokeBySessionId(any(), anyString());
@@ -1060,9 +1075,9 @@ class AuthServiceTest {
         @Test
         @DisplayName("登出幂等：令牌缺失或无效不抛异常、不触碰仓储")
         void logoutIsIdempotentForMissingOrInvalidTokens() {
-            service.logout(null);
-            service.logout("   ");
-            service.logout("not-a-jwt");
+            service.logout(null, null, null);
+            service.logout("   ", null, null);
+            service.logout("not-a-jwt", null, null);
 
             verifyNoInteractions(activeSessionRepository, sessionRevocationService);
         }

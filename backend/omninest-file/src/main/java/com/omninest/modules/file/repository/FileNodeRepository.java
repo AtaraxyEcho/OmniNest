@@ -920,12 +920,15 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.ownerUserId = :ownerUserId
+              AND n.spaceType = :spaceType
               AND n.normalizedPath LIKE CONCAT(:prefix, '%') escape '\\'
               AND n.deleted = false
+              AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
             ORDER BY n.normalizedPath ASC
             """)
     List<FileNode> findDescendantsByPrefixOrdered(
             @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
             @Param("prefix") String prefix
     );
 

@@ -6,6 +6,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.BrowserSecurityPolicy;
 import com.omninest.common.security.ClientIpResolver;
+import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.RegistrationPolicy;
 import com.omninest.modules.user.dto.AuthTokenResponse;
 import com.omninest.modules.user.dto.LoginRequest;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -48,6 +50,7 @@ public class AuthController {
     private final RateLimitService rateLimitService;
     private final RegistrationPolicy registrationPolicy;
     private final ClientIpResolver clientIpResolver;
+    private final CurrentUserContext currentUserContext;
 
     @Operation(summary = "用户注册", description = "新用户注册并返回访问令牌和刷新令牌，按 IP 限流")
     @PostMapping("/api/v1/auth/register")
@@ -192,6 +195,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse response
     ) {
+        requireCookieRequestOrigin(httpRequest);
         String ip = resolveClientIp(httpRequest);
         if (!rateLimitService.tryAcquire("ip:" + ip + ":refresh", 30, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "刷新请求过于频繁");
@@ -208,14 +212,39 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse response
     ) {
+        requireCookieRequestOrigin(httpRequest);
         String ip = resolveClientIp(httpRequest);
         if (!rateLimitService.tryAcquire("ip:" + ip + ":logout", 10, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "退出请求过于频繁，请稍后再试");
         }
         String refreshToken = resolveRefreshToken(clientPlatform, request, httpRequest);
-        authService.logout(refreshToken);
+        // 刷新令牌缺失（Cookie 过期/跨源未携带）时仍要凭当前 Bearer 的 sid 吊销会话；
+        // 否则内存里的 Access Token 在剩余有效期内继续可用。
+        UUID currentSessionId = currentUserContext.currentSessionId();
+        UUID currentUserId = currentSessionId == null
+                ? null
+                : currentUserContext.requireCurrentUserId();
+        authService.logout(refreshToken, currentUserId, currentSessionId);
         clearRefreshCookie(response);
         return ApiResponse.success(null);
+    }
+
+    /**
+     * 刷新/登出依赖 Cookie 鉴权；SameSite 被配置为非 Strict 时，必须用 Origin
+     * 白名单拦住跨站表单。原生客户端不发 Origin，保持放行。
+     */
+    private void requireCookieRequestOrigin(HttpServletRequest request) {
+        String sameSite = browserSecurityPolicy.refreshCookieSameSite();
+        if (sameSite == null || sameSite.isBlank() || "Strict".equalsIgnoreCase(sameSite.trim())) {
+            return;
+        }
+        String origin = request.getHeader("Origin");
+        if (origin == null || origin.isBlank()) {
+            return;
+        }
+        if (!browserSecurityPolicy.allowedOrigins().contains(origin)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "请求来源不被允许");
+        }
     }
 
     private ApiResponse<AuthTokenResponse> issueResponse(

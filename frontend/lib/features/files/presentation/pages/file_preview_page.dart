@@ -684,9 +684,10 @@ class _PdfActionBarState extends State<_PdfActionBar> {
       if (!mounted) {
         return;
       }
+      final detail = describeUserFacingError(error, l10n: l10n).displayMessage;
       showOmniFeedback(
         context,
-        '${l10n.filesDownloadFailed}: $error',
+        '${l10n.filesDownloadFailed}: $detail',
         severity: OmniFeedbackSeverity.error,
       );
     } finally {

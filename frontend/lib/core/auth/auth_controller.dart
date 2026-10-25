@@ -274,11 +274,12 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     // 先拒绝在途写入并落地未认证：后续吊销与本地清理不得阻塞退出登录的
     // 界面切换，也不得被并发刷新写回已登录。
     _rejectSessionWrites = true;
-    final store = ref.read(authSessionStoreProvider);
     // 读 .value 而不是 asData：重载过渡期状态是带前值的 AsyncLoading，asData 为 null
     // 会让 userId 取不到，离线库与密钥的清理被整段跳过——登出看似成功但数据还在设备上。
     final wasAuthenticated = state.value?.isAuthenticated ?? false;
     final userId = state.value?.user?.id;
+    final store = ref.read(authSessionStoreProvider);
+    final accessToken = store.readAccessToken();
     state = const AsyncData(AuthSessionState.unauthenticated());
 
     String? storedRefreshToken;
@@ -297,7 +298,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       try {
         await ref
             .read(authClientProvider)
-            .logout(refreshToken: storedRefreshToken)
+            .logout(refreshToken: storedRefreshToken, accessToken: accessToken)
             .timeout(cleanupStepTimeout);
       } catch (error) {
         if (kDebugMode) {

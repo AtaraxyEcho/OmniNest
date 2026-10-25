@@ -15,7 +15,9 @@ import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicArtist;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.repository.MusicAlbumRepository;
+import com.omninest.modules.music.repository.MusicAlbumTrackStats;
 import com.omninest.modules.music.repository.MusicArtistRepository;
+import com.omninest.modules.music.repository.MusicArtistTrackStats;
 import com.omninest.modules.music.repository.MusicFavoriteRepository;
 import com.omninest.modules.music.repository.MusicPlayHistoryRepository;
 import com.omninest.modules.music.repository.MusicPlaylistItemRepository;
@@ -239,36 +241,104 @@ public class MusicFileCleanupService implements
     private void cleanupOrphanedParents(UUID ownerUserId, Set<UUID> albumIds, Set<UUID> artistIds) {
         Set<UUID> coverFileIds = new LinkedHashSet<>();
         if (!albumIds.isEmpty()) {
+            List<MusicAlbum> albums = albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId);
             Set<UUID> albumsWithTracks = new HashSet<>(
                     trackRepository.findAlbumIdsWithTracks(ownerUserId, albumIds));
-            List<MusicAlbum> orphanAlbums = albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId)
-                    .stream()
+            List<MusicAlbum> orphanAlbums = albums.stream()
                     .filter(album -> !albumsWithTracks.contains(album.getId()))
                     .toList();
+            Set<UUID> orphanAlbumIds = new HashSet<>();
             if (!orphanAlbums.isEmpty()) {
-                orphanAlbums.forEach(album -> coverFileIds.add(album.getCoverFileId()));
+                orphanAlbums.forEach(album -> {
+                    coverFileIds.add(album.getCoverFileId());
+                    orphanAlbumIds.add(album.getId());
+                });
                 albumRepository.deleteByOwnerUserIdAndIdIn(ownerUserId,
                         orphanAlbums.stream().map(MusicAlbum::getId).toList());
                 log.info("已清理孤立专辑: count={}", orphanAlbums.size());
             }
+            refreshSurvivingAlbumStats(ownerUserId, albums, orphanAlbumIds);
         }
 
         if (!artistIds.isEmpty()) {
+            List<MusicArtist> artists = artistRepository.findAllByIdInAndOwnerUserId(artistIds, ownerUserId);
             Set<UUID> artistsWithTracks = new HashSet<>(
                     trackRepository.findArtistIdsWithTracks(ownerUserId, artistIds));
-            List<MusicArtist> orphanArtists = artistRepository.findAllByIdInAndOwnerUserId(artistIds, ownerUserId)
-                    .stream()
+            List<MusicArtist> orphanArtists = artists.stream()
                     .filter(artist -> !artistsWithTracks.contains(artist.getId()))
                     .toList();
+            Set<UUID> orphanArtistIds = new HashSet<>();
             if (!orphanArtists.isEmpty()) {
-                orphanArtists.forEach(artist -> coverFileIds.add(artist.getAvatarFileId()));
+                orphanArtists.forEach(artist -> {
+                    coverFileIds.add(artist.getAvatarFileId());
+                    orphanArtistIds.add(artist.getId());
+                });
                 artistRepository.deleteByOwnerUserIdAndIdIn(ownerUserId,
                         orphanArtists.stream().map(MusicArtist::getId).toList());
                 log.info("已清理孤立艺术家: count={}", orphanArtists.size());
             }
+            refreshSurvivingArtistStats(ownerUserId, artists, orphanArtistIds);
         }
 
         coverRetentionService.releaseUnreferenced(ownerUserId, coverFileIds);
+    }
+
+    /**
+     * 存活专辑的曲目数与总时长必须随永久删除收敛，否则专辑页会长期显示已删曲目。
+     */
+    private void refreshSurvivingAlbumStats(
+            UUID ownerUserId,
+            List<MusicAlbum> albums,
+            Set<UUID> orphanAlbumIds
+    ) {
+        List<MusicAlbum> surviving = albums.stream()
+                .filter(album -> !orphanAlbumIds.contains(album.getId()))
+                .toList();
+        if (surviving.isEmpty()) {
+            return;
+        }
+        Map<UUID, MusicAlbumTrackStats> stats = trackRepository
+                .findAlbumStatsByOwnerUserIdAndAlbumIdIn(
+                        ownerUserId, surviving.stream().map(MusicAlbum::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(MusicAlbumTrackStats::getAlbumId, item -> item));
+        for (MusicAlbum album : surviving) {
+            MusicAlbumTrackStats albumStats = stats.get(album.getId());
+            album.setTrackCount(albumStats == null ? 0 : (int) albumStats.getTrackCount());
+            album.setTotalDuration(albumStats == null ? 0 : boundedDuration(albumStats.getTotalDuration()));
+        }
+        albumRepository.saveAll(surviving);
+    }
+
+    /**
+     * 存活艺术家的作品数同样在永久删除后重算。
+     */
+    private void refreshSurvivingArtistStats(
+            UUID ownerUserId,
+            List<MusicArtist> artists,
+            Set<UUID> orphanArtistIds
+    ) {
+        List<MusicArtist> surviving = artists.stream()
+                .filter(artist -> !orphanArtistIds.contains(artist.getId()))
+                .toList();
+        if (surviving.isEmpty()) {
+            return;
+        }
+        Map<UUID, MusicArtistTrackStats> stats = trackRepository
+                .findArtistStatsByOwnerUserIdAndArtistIdIn(
+                        ownerUserId, surviving.stream().map(MusicArtist::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(MusicArtistTrackStats::getArtistId, item -> item));
+        for (MusicArtist artist : surviving) {
+            MusicArtistTrackStats artistStats = stats.get(artist.getId());
+            artist.setTrackCount(artistStats == null ? 0 : (int) artistStats.getTrackCount());
+            artist.setAlbumCount(artistStats == null ? 0 : (int) artistStats.getAlbumCount());
+        }
+        artistRepository.saveAll(surviving);
+    }
+
+    private int boundedDuration(long seconds) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, seconds));
     }
 
     private void clearDanglingFileReferences(List<UUID> deletedFileIds) {

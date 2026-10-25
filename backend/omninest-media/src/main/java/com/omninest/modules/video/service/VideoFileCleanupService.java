@@ -323,6 +323,11 @@ public class VideoFileCleanupService implements
                     tvSeasonRepository.delete(season);
                     log.info("已清理孤立季: seriesId={}, seasonNumber={}",
                             seriesId, season.getSeasonNumber());
+                } else if (season.getEpisodeCount() == null
+                        || season.getEpisodeCount() != (int) episodeCount) {
+                    // 存活季的集数必须随剧集永久删除收敛，否则详情页长期显示虚高集数。
+                    season.setEpisodeCount((int) episodeCount);
+                    tvSeasonRepository.save(season);
                 }
             }
         }

@@ -106,6 +106,22 @@ class FileShareServiceTest {
     }
 
     @Test
+    @DisplayName("共享空间文件夹不能生成对外分享链接")
+    void createShareRejectsSharedFolder() {
+        FileNode folder = node(FOLDER_ID, "docs", "/docs", NodeType.FOLDER.getValue());
+        folder.setSpaceType(SpaceType.SHARED);
+        when(fileNodeSupport.findActiveNode(OWNER_ID, FOLDER_ID)).thenReturn(folder);
+
+        var request = new CreateShareLinkRequest(
+                FOLDER_ID, NodeType.FOLDER.getValue(), null, false, null, null, List.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.createShare(OWNER_ID, request))
+                .isInstanceOf(com.omninest.common.error.BusinessException.class)
+                .hasMessageContaining("共享空间文件夹");
+    }
+
+    @Test
     @DisplayName("取消级联共享时只清理子树内的自定义权限")
     void toggleSharedRecursive_unshareClearsOnlySubtreePermissions() {
         FileNode folder = node(FOLDER_ID, "docs", "/docs", NodeType.FOLDER.getValue());

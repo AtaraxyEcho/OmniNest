@@ -3736,6 +3736,7 @@
   "photosNoChanges": "No changes made",
   "photosEditSaved": "Edit saved",
   "photosSaveFailed": "Save failed, please try again later",
+  "photosEditSourceUnavailable": "Original file is unavailable for editing",
   "photosEditorCancel": "Cancel",
   "photosEditorUndo": "Undo",
   "photosEditorRedo": "Redo",

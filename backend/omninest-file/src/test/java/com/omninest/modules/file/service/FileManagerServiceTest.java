@@ -654,13 +654,44 @@ class FileManagerServiceTest {
     }
 
     @Test
-    void copyNodeRejectsSharedSourceIntoPersonalRoot() {
+    void copyNodeCopiesSharedSourceToSharedRoot() {
         FileNode source = node("shared.pdf", "application/pdf", 2048);
         source.setSpaceType(SpaceType.SHARED);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(source));
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdIsNullAndNameAndDeletedFalse(
+                SpaceType.SHARED, "shared.pdf")).thenReturn(false);
+        when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> {
+            FileNode saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
 
-        assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, FILE_ID, null))
+        var result = fileManagerService.copyNode(OWNER_ID, FILE_ID, null);
+
+        assertThat(result.spaceType()).isEqualTo(SpaceType.SHARED.getValue());
+        assertThat(result.parentId()).isNull();
+        assertThat(result.name()).isEqualTo("shared.pdf");
+        verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
+    }
+
+    @Test
+    void copyNodeRejectsOtherMembersSharedContentWithoutDownloadPermission() {
+        UUID sourceId = UUID.fromString("60000000-0000-0000-0000-000000000020");
+        FileNode source = node("restricted.pdf", "application/pdf", 2048);
+        source.setId(sourceId);
+        source.setOwnerUserId(UUID.fromString("99999999-1111-1111-1111-111111111111"));
+        source.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(sourceId, OWNER_ID))
+                .thenReturn(Optional.empty());
+        when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(sourceId, SpaceType.SHARED))
+                .thenReturn(Optional.of(source));
+        when(fileNodeSupportSharedSpace.canBrowse(OWNER_ID)).thenReturn(true);
+        when(sharedSpaceService.canDownload(OWNER_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, sourceId, null))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
         verify(fileNodeRepository, Mockito.never()).save(any(FileNode.class));
@@ -741,6 +772,7 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(targetFolderId, SpaceType.SHARED))
                 .thenReturn(Optional.of(targetFolder));
         when(fileNodeSupportSharedSpace.canBrowse(OWNER_ID)).thenReturn(true);
+        when(sharedSpaceService.canDownload(OWNER_ID)).thenReturn(true);
         when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
                 SpaceType.SHARED, targetFolderId, "guide.pdf")).thenReturn(false);
         when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> {

@@ -53,6 +53,13 @@ class FileDownloadContentService {
         if (!NodeType.FILE.getValue().equals(node.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "文件夹不能直接下载");
         }
+        // 受控在线预览（openReadableFileContent）只需要浏览权限；签发原始文件下载地址
+        // 还必须具备共享空间的 CAN_DOWNLOAD，否则浏览权限等于无条件下载。
+        if (node.getSpaceType() == SpaceType.SHARED
+                && !node.getOwnerUserId().equals(userId)
+                && !sharedSpaceService.canDownload(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权下载该文件");
+        }
         return fileContentAccessService.createDownloadUrl(node);
     }
 

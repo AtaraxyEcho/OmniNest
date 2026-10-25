@@ -209,11 +209,18 @@ public class PhotoFileCleanupService implements
         }
         List<PhotoAlbum> albums = albumRepository
                 .findAllByIdInAndOwnerUserId(affectedAlbumIds, ownerUserId);
+        Map<UUID, Long> counts = albumItemRepository
+                .countActivePhotosByAlbumIds(affectedAlbumIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> ((Number) row[1]).longValue(),
+                        (left, right) -> left
+                ));
         for (PhotoAlbum album : albums) {
             // 与 PhotoAlbumService 同一口径：相册计数只算未进回收站且未删除的照片，
-            // 用裸 count 会把回收站里的照片重新算回去。
-            long count = albumItemRepository.countActivePhotosByAlbumId(album.getId());
-            album.setPhotoCount((int) count);
+            // 用裸 count 会把回收站里的照片重新算回去；按相册批量聚合避免逐行 count。
+            album.setPhotoCount(counts.getOrDefault(album.getId(), 0L).intValue());
         }
         if (!albums.isEmpty()) {
             albumRepository.saveAll(albums);
@@ -224,5 +231,13 @@ public class PhotoFileCleanupService implements
         Set<UUID> fileIds = new HashSet<>(deletedFileIds);
         itemRepository.findByCoverFileIdIn(fileIds)
                 .forEach(photo -> photo.setCoverFileId(null));
+        // 活动编辑产物被永久删除后回退到原图（activeFileId 为空即使用 fileNodeId）。
+        itemRepository.findByActiveFileIdIn(fileIds)
+                .forEach(photo -> photo.setActiveFileId(null));
+        // 动态照片运动视频被删除后不再签发播放地址。
+        itemRepository.findByMotionVideoFileNodeIdIn(fileIds)
+                .forEach(photo -> photo.setMotionVideoFileNodeId(null));
+        albumRepository.findByCoverFileIdIn(fileIds)
+                .forEach(album -> album.setCoverFileId(null));
     }
 }

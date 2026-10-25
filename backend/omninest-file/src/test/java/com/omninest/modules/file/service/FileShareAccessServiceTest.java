@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.error.BusinessException;
@@ -12,9 +15,11 @@ import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileNodeDto;
+import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.FileShareChildDto;
 import com.omninest.modules.file.dto.ShareAccessSessionDto;
 import com.omninest.modules.file.repository.FileNodeRepository;
@@ -30,6 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -249,6 +255,42 @@ class FileShareAccessServiceTest {
         // 会话式入口是实际在用的分享访问路径，必须由它触发访问通知。
         Mockito.verify(notificationService).notifyOrLog(
                 eq(OWNER), eq("SHARE_ACCESSED"), anyString(), anyString(), any());
+    }
+
+    @Test
+    void acceptFolderShareSkipsDescendantsWhoseParentIsNotCopied() {
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+        when(shareLinkRepository.findById(SHARE_ID))
+                .thenReturn(Optional.of(share(NodeType.FOLDER.getValue())));
+        FileNode orphan = node(UUID.randomUUID(), "/docs/sub/report.pdf", NodeType.FILE);
+        when(fileNodeRepository.findDescendantsByPrefixOrdered(
+                OWNER, SpaceType.PERSONAL, "/docs/")).thenReturn(List.of(orphan));
+        when(fileNodeRepository.saveAll(Mockito.anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.acceptShare(RECIPIENT, TOKEN, new AcceptShareRequest(null, null));
+
+        ArgumentCaptor<List<FileNode>> saved = ArgumentCaptor.forClass(List.class);
+        verify(fileNodeRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).hasSize(1);
+        assertThat(saved.getValue().getFirst().getName()).isEqualTo("docs");
+    }
+
+    @Test
+    void acceptFolderShareRejectsSharedSpaceFolder() {
+        when(shareLinkRepository.consumeAccess(eq(SHARE_ID), any(Instant.class))).thenReturn(1);
+        when(shareLinkRepository.findById(SHARE_ID))
+                .thenReturn(Optional.of(share(NodeType.FOLDER.getValue())));
+        FileNode sharedFolder = node(ROOT_ID, "/docs", NodeType.FOLDER);
+        sharedFolder.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(ROOT_ID, OWNER))
+                .thenReturn(Optional.of(sharedFolder));
+
+        assertThatThrownBy(() -> service.acceptShare(
+                RECIPIENT, TOKEN, new AcceptShareRequest(null, null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("共享空间文件夹");
+        verify(fileNodeRepository, Mockito.never()).saveAll(Mockito.anyList());
     }
 
     private ShareLink share(String resourceType) {

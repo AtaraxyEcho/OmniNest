@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -50,11 +51,33 @@ class PhotoEditorPage extends ConsumerWidget {
                   )
                   : Scaffold(
                     backgroundColor: context.env.stage,
+                    appBar: AppBar(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: context.env.ink,
+                      leading: IconButton(
+                        tooltip:
+                            AppLocalizations.of(context).photosBackToPhotos,
+                        onPressed: () => context.popOrGo('/photos/$photoId'),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                    ),
                     body: Center(
-                      child: Icon(
-                        Icons.photo_outlined,
-                        color: context.env.ink.withValues(alpha: 0.4),
-                        size: 64,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.photo_outlined,
+                            color: context.env.ink.withValues(alpha: 0.4),
+                            size: 64,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            AppLocalizations.of(
+                              context,
+                            ).photosEditSourceUnavailable,
+                            style: TextStyle(color: context.env.inkMuted),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -92,10 +115,31 @@ class PhotoEditorPage extends ConsumerWidget {
     Uint8List bytes,
   ) async {
     final l10n = AppLocalizations.of(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    // 整图上传可能耗时数秒；保存期间用不可取消的遮罩明确告知正在提交。
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        useRootNavigator: true,
+        builder:
+            (_) => const PopScope(
+              canPop: false,
+              child: Center(child: AppLoading()),
+            ),
+      ),
+    );
+    void dismissSavingOverlay() {
+      if (navigator.mounted) {
+        navigator.pop();
+      }
+    }
+
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
           .applyEditedImage(photoId, bytes);
+      dismissSavingOverlay();
       if (!context.mounted) {
         return;
       }
@@ -105,11 +149,14 @@ class PhotoEditorPage extends ConsumerWidget {
         l10n.photosEditSaved,
         severity: OmniFeedbackSeverity.success,
       );
-    } on Exception {
+    } on Object catch (error) {
+      dismissSavingOverlay();
       if (context.mounted) {
+        final detail =
+            describeUserFacingError(error, l10n: l10n).displayMessage;
         showOmniFeedback(
           context,
-          l10n.photosSaveFailed,
+          '${l10n.photosSaveFailed}: $detail',
           severity: OmniFeedbackSeverity.error,
         );
       }

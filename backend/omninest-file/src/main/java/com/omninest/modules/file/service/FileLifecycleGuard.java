@@ -8,8 +8,11 @@ import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,6 +94,25 @@ public class FileLifecycleGuard {
         return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(fileNodeId, ownerUserId)
                 .map(this::isIdle)
                 .orElse(false);
+    }
+
+    /**
+     * 批量判定文件是否仍允许异步任务处理，供索引批处理避免逐张查询。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileNodeIds 文件节点 ID 集合
+     * @return 仍可处理的文件节点 ID
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> filterOwnedProcessable(UUID ownerUserId, Collection<UUID> fileNodeIds) {
+        if (fileNodeIds == null || fileNodeIds.isEmpty()) {
+            return Set.of();
+        }
+        return fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileNodeIds)
+                .stream()
+                .filter(this::isIdle)
+                .map(FileNode::getId)
+                .collect(Collectors.toSet());
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.omninest.modules.video.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
@@ -8,6 +10,8 @@ import com.omninest.modules.media.domain.MediaPlaybackType;
 import com.omninest.modules.media.service.MediaPlaybackCleanupService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.ContentAsset;
+import com.omninest.modules.video.domain.MediaTvSeason;
+import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.ContentAssetRepository;
 import com.omninest.modules.video.repository.MediaMovieRepository;
@@ -25,6 +29,7 @@ import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -108,6 +113,41 @@ class VideoFileCleanupServiceTest {
         );
         Mockito.verify(contentAssetRepository).deleteAll(List.of(contentAsset));
         Mockito.verify(videoItemRepository).deleteAllInBatch(List.of(videoItem));
+    }
+
+    @Test
+    void hardDeleteUpdatesEpisodeCountOfSurvivingSeason() {
+        UUID seriesId = UUID.randomUUID();
+        UUID seasonId = UUID.randomUUID();
+        MediaVideoItem videoItem = new MediaVideoItem();
+        videoItem.setId(VIDEO_ITEM_ID);
+        videoItem.setOwnerUserId(OWNER_ID);
+        videoItem.setFileNodeId(FILE_NODE_ID);
+        videoItem.setSeriesId(seriesId);
+        MediaTvSeries series = new MediaTvSeries();
+        series.setId(seriesId);
+        series.setOwnerUserId(OWNER_ID);
+        MediaTvSeason season = new MediaTvSeason();
+        season.setId(seasonId);
+        season.setOwnerUserId(OWNER_ID);
+        season.setSeriesId(seriesId);
+        season.setSeasonNumber(1);
+        season.setEpisodeCount(5);
+        Mockito.when(videoItemRepository.findByFileNodeIdIn(List.of(FILE_NODE_ID)))
+                .thenReturn(List.of(videoItem));
+        Mockito.when(videoItemRepository.findSeriesIdsWithItems(OWNER_ID, Set.of(seriesId)))
+                .thenReturn(List.of(seriesId));
+        Mockito.when(tvSeriesRepository.findAllByIdInAndOwnerUserId(Set.of(seriesId), OWNER_ID))
+                .thenReturn(List.of(series));
+        Mockito.when(tvSeasonRepository.findByOwnerUserIdAndSeriesIdOrderBySeasonNumberAsc(
+                OWNER_ID, seriesId)).thenReturn(List.of(season));
+        Mockito.when(videoItemRepository.countByOwnerUserIdAndSeriesIdAndSeasonNumber(
+                OWNER_ID, seriesId, 1)).thenReturn(2L);
+
+        service.finalizePurge(purgeContext());
+
+        assertThat(season.getEpisodeCount()).isEqualTo(2);
+        Mockito.verify(tvSeasonRepository).save(season);
     }
 
     @Test
