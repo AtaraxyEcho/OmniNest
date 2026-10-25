@@ -14,6 +14,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -336,6 +337,28 @@ public class ResourceShareLinkService {
         }
         shareLinkRepository.disableByResourceId(resourceId, Instant.now());
         // 批量撤销同步失效访问缓存，否则持有 token 者最长 5 分钟仍可读取
+        for (ShareLink link : active) {
+            readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
+        }
+        return active.size();
+    }
+
+    /**
+     * 一次性撤销一批资源的全部有效分享链接。
+     *
+     * @param resourceIds 资源 ID 集合
+     * @return 被撤销的链接条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int revokeAllByResourceIds(Collection<UUID> resourceIds) {
+        if (resourceIds == null || resourceIds.isEmpty()) {
+            return 0;
+        }
+        List<ShareLink> active = shareLinkRepository.findByResourceIdInAndDisabledAtIsNull(resourceIds);
+        if (active.isEmpty()) {
+            return 0;
+        }
+        shareLinkRepository.disableByResourceIdIn(resourceIds, Instant.now());
         for (ShareLink link : active) {
             readThroughCache.invalidate("omninest:share:link:" + link.getTokenHash());
         }

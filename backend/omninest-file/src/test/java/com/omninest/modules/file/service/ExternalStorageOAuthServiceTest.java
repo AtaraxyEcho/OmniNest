@@ -179,9 +179,11 @@ class ExternalStorageOAuthServiceTest {
         var response = service.start(OWNER_ID, "GDRIVE", ACCOUNT_ID);
 
         assertThat(response.state()).isNotBlank();
+        assertThat(response.bindingNonce()).isNotBlank();
         assertThat(response.authorizationUrl())
                 .contains("state=" + response.state())
-                .contains("redirect_uri=");
+                .contains("redirect_uri=")
+                .doesNotContain(response.bindingNonce());
     }
 
     @Test
@@ -215,7 +217,7 @@ class ExternalStorageOAuthServiceTest {
         StorageExternalAccount account = buildAccount("{}");
         when(readThroughCache.take("omninest:oauth:state:issued-state"))
                 .thenReturn("{\"userId\":\"" + OWNER_ID + "\",\"accountId\":\"" + ACCOUNT_ID
-                        + "\",\"code\":\"GDRIVE\"}");
+                        + "\",\"code\":\"GDRIVE\",\"bindingNonce\":\"binding-nonce\"}");
         when(oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue("GDRIVE"))
                 .thenReturn(Optional.of(app));
         when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
@@ -228,7 +230,7 @@ class ExternalStorageOAuthServiceTest {
                 ));
         when(credentialService.encrypt(anyString())).thenReturn("encrypted");
 
-        service.handleCallback("GDRIVE", "issued-state", "authorization-code");
+        service.handleCallback("GDRIVE", "issued-state", "authorization-code", "binding-nonce");
 
         assertThat(account.getEncryptedCredentials()).isEqualTo("encrypted");
         assertThat(account.getStatus()).isEqualTo(ExternalStorageStatus.ACTIVE.getValue());
@@ -241,8 +243,21 @@ class ExternalStorageOAuthServiceTest {
     }
 
     @Test
+    @DisplayName("回调浏览器缺少或携带错误绑定随机数时拒绝绑定并恢复 state")
+    void handleCallbackRejectsBrowserThatDidNotStartTheFlow() {
+        when(readThroughCache.take("omninest:oauth:state:issued-state"))
+                .thenReturn("{\"userId\":\"" + OWNER_ID + "\",\"accountId\":\"" + ACCOUNT_ID
+                        + "\",\"code\":\"GDRIVE\",\"bindingNonce\":\"binding-nonce\"}");
+
+        assertThatThrownBy(() -> service.handleCallback(
+                "GDRIVE", "issued-state", "authorization-code", "other-browser-nonce"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("发起浏览器");
+    }
+
+    @Test
     void handleCallbackRejectsUnknownState() {
-        assertThatThrownBy(() -> service.handleCallback("GDRIVE", "never-issued", "authorization-code"))
+        assertThatThrownBy(() -> service.handleCallback("GDRIVE", "never-issued", "authorization-code", "binding-nonce"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
                 .isEqualTo(ErrorCode.PARAM_ERROR);
@@ -252,9 +267,9 @@ class ExternalStorageOAuthServiceTest {
     void handleCallbackRejectsProviderThatDoesNotMatchIssuedState() {
         when(readThroughCache.take("omninest:oauth:state:issued-state"))
                 .thenReturn("{\"userId\":\"" + OWNER_ID + "\",\"accountId\":\"" + ACCOUNT_ID
-                        + "\",\"code\":\"GDRIVE\"}");
+                        + "\",\"code\":\"GDRIVE\",\"bindingNonce\":\"binding-nonce\"}");
 
-        assertThatThrownBy(() -> service.handleCallback("ONEDRIVE", "issued-state", "authorization-code"))
+        assertThatThrownBy(() -> service.handleCallback("ONEDRIVE", "issued-state", "authorization-code", "binding-nonce"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不匹配");
     }

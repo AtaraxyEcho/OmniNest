@@ -125,7 +125,8 @@ public class FileManagerService {
      */
     @Transactional(rollbackFor = Exception.class)
     public FileNodeDto copyNode(UUID userId, UUID sourceId, UUID targetParentId) {
-        FileNode source = fileNodeSupport.findActiveNode(userId, sourceId);
+        // 共享空间内的文件可能由其他成员上传：复制按共享可见性判定，不能只认所有者。
+        FileNode source = fileNodeSupport.findVisibleNode(userId, sourceId);
         fileNodeSupport.requireShareable(source);
         FileNode targetParent = fileNodeSupport.resolveCopyTargetParent(userId, targetParentId);
         UUID resolvedParentId = targetParent != null ? targetParent.getId() : null;
@@ -155,10 +156,12 @@ public class FileManagerService {
         subtree.add(source);
         if (isFolder) {
             String prefix = LikePatterns.escapeSpecials(source.getNormalizedPath() + "/");
-            subtree.addAll(fileNodeRepository
-                    .findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
-                            userId, source.getSpaceType(), prefix)
-                    .stream()
+            List<FileNode> descendants = source.getSpaceType() == SpaceType.SHARED
+                    ? fileNodeRepository.findBySpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                            SpaceType.SHARED, prefix)
+                    : fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                            userId, SpaceType.PERSONAL, prefix);
+            subtree.addAll(descendants.stream()
                     // 父节点必须先于子节点建副本，才能按父子映射推导新路径
                     .sorted(Comparator.comparingInt(node -> node.getNormalizedPath().length()))
                     .toList());

@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,6 +53,7 @@ public class ComicPageAssetService {
     private final FileQueryService fileQueryService;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final ReaderArchiveSafetyPolicy archiveSafetyPolicy;
+    private final ReaderComicArchiveCache archiveCache;
 
     PageDownloadDescriptor preparePageImageDownload(UUID ownerUserId, UUID pageId) {
         ReaderPage page = pageRepository.findById(pageId)
@@ -88,7 +88,9 @@ public class ComicPageAssetService {
                     null,
                     asset.getMimeType(),
                     asset.getByteSize(),
-                    false
+                    false,
+                    0L,
+                    0L
             );
         }
 
@@ -113,7 +115,9 @@ public class ComicPageAssetService {
                 page.getEntryIndex(),
                 mimeType,
                 pageSize,
-                true
+                true,
+                fileNode.sizeBytes(),
+                fileNode.updatedAt() == null ? 0L : fileNode.updatedAt().toEpochMilli()
         );
     }
 
@@ -339,47 +343,37 @@ public class ComicPageAssetService {
                 .orElse(null);
     }
 
+    /**
+     * 从本地缓存归档按中央目录直接定位目标页，避免每次请求顺序解压前序条目。
+     */
     private void streamPageImageFromSourceArchive(
             PageDownloadDescriptor descriptor,
             OutputStream outputStream
     ) throws IOException {
-        ArchiveReadSession session = archiveSafetyPolicy.newReadSession();
-        try (FileContentStream content = fileQueryService.openOwnedFileContent(
-                descriptor.ownerUserId(), descriptor.sourceFileNodeId());
-             ZipInputStream input = new ZipInputStream(content.inputStream())) {
-            ZipEntry entry;
-            int currentEntryIndex = -1;
-            while ((entry = input.getNextEntry()) != null) {
-                currentEntryIndex++;
-                // 按路径定位时允许大小写不敏感回退：EPUB 声明的 href 与真实条目名可能不同大小写，
-                // 精确匹配会让这类书的每一页都 404。带 entryIndex 的 ZIP/CBZ 仍按精确名 + 序号定位。
-                boolean pathMatches = entry.getName().equals(descriptor.sourcePath())
-                        || (descriptor.entryIndex() == null
-                        && entry.getName().equalsIgnoreCase(descriptor.sourcePath()));
-                boolean targetEntry = pathMatches
-                        && (descriptor.entryIndex() == null || currentEntryIndex == descriptor.entryIndex());
-                EntryReadGuard guard = session.beginEntry(
-                        entry,
-                        targetEntry ? processingLimits.getMaxComicPageImageBytes() : Long.MAX_VALUE
-                );
-                if (entry.isDirectory()) {
-                    guard.complete(entry);
-                    continue;
-                }
-                if (targetEntry) {
-                    copyArchiveEntry(input, outputStream, guard, processingLimits.getMaxComicPageImageBytes());
-                    guard.complete(entry);
-                    return;
-                }
-                drainArchiveEntry(input, guard);
-                guard.complete(entry);
+        try (ReaderComicArchiveCache.CachedArchive archive = archiveCache.open(
+                descriptor.ownerUserId(),
+                descriptor.sourceFileNodeId(),
+                descriptor.sourceSizeBytes(),
+                descriptor.sourceUpdatedAtMillis()
+        )) {
+            ZipEntry entry = archive.findEntry(descriptor.sourcePath(), descriptor.entryIndex());
+            if (entry == null) {
+                throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "漫画页面来源条目不存在");
             }
+            ArchiveReadSession session = archiveSafetyPolicy.newReadSession();
+            EntryReadGuard guard = session.beginEntry(
+                    entry,
+                    processingLimits.getMaxComicPageImageBytes()
+            );
+            try (InputStream input = archive.openEntry(entry)) {
+                copyArchiveEntry(input, outputStream, guard, processingLimits.getMaxComicPageImageBytes());
+            }
+            guard.complete(entry);
         }
-        throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "漫画页面来源条目不存在");
     }
 
     private void copyArchiveEntry(
-            ZipInputStream input,
+            InputStream input,
             OutputStream output,
             EntryReadGuard guard,
             long maxBytes
@@ -420,14 +414,6 @@ public class ComicPageAssetService {
         }
     }
 
-    private void drainArchiveEntry(ZipInputStream input, EntryReadGuard guard) throws IOException {
-        byte[] buffer = new byte[8192];
-        int read;
-        while ((read = input.read(buffer)) != -1) {
-            guard.recordBytes(read);
-        }
-    }
-
     static String detectMimeType(String path) {
         if (path == null) {
             return "application/octet-stream";
@@ -465,6 +451,8 @@ public class ComicPageAssetService {
      * @param mimeType 图片媒体类型
      * @param sizeBytes 图片字节数，未知时为 -1
      * @param sourceArchive 是否需要从来源压缩包读取
+     * @param sourceSizeBytes 来源压缩包字节数，用于本地归档缓存定位
+     * @param sourceUpdatedAtMillis 来源压缩包更新时间，用于让替换后的内容重新暂存
      * @author OmniNest
      */
     public record PageDownloadDescriptor(
@@ -475,7 +463,9 @@ public class ComicPageAssetService {
             Integer entryIndex,
             String mimeType,
             long sizeBytes,
-            boolean sourceArchive
+            boolean sourceArchive,
+            long sourceSizeBytes,
+            long sourceUpdatedAtMillis
     ) {
     }
 }

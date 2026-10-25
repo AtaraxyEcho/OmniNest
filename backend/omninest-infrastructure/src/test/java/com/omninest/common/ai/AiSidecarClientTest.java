@@ -7,18 +7,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
 import com.omninest.common.config.AiSidecarProperties;
+import com.omninest.common.processing.TempStagingPort;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * 图像分析侧车客户端请求、解析与容量限制测试。
@@ -26,6 +31,9 @@ import org.junit.jupiter.api.Test;
  * @author OmniNest
  */
 class AiSidecarClientTest {
+
+    @TempDir
+    Path tempDir;
 
     private HttpServer server;
     private String endpoint;
@@ -67,7 +75,7 @@ class AiSidecarClientTest {
                      "semanticTags":["橘猫"],"ocrText":"发票号码 12345"}
                     """);
         });
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         ContentAnalysis result = client.analyzeContent(
                 imageBytes,
@@ -108,7 +116,7 @@ class AiSidecarClientTest {
             requestBody.set(exchange.getRequestBody().readAllBytes());
             respond(exchange, "{\"schemaVersion\":2,\"observations\":[],\"semanticTags\":[]}");
         });
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         client.analyzeContent(imageBytes, "large.jpg", "AUTO", false, endpoint, 5);
 
@@ -118,7 +126,7 @@ class AiSidecarClientTest {
     @Test
     void shouldRejectRequestWhenSidecarSecretIsMissing() {
         properties.setSecret(" ");
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
@@ -131,7 +139,7 @@ class AiSidecarClientTest {
     @Test
     void shouldRejectImageBeforeSendingWhenBytesExceedLimit() {
         properties.setMaxImageBytes(4);
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -143,7 +151,7 @@ class AiSidecarClientTest {
     void shouldRejectOversizedSidecarResponse() {
         properties.setMaxResponseBytes(8);
         server.createContext("/analyze-content", exchange -> respond(exchange, "{\"schemaVersion\":2}"));
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         assertThrows(
                 IllegalStateException.class,
@@ -158,7 +166,7 @@ class AiSidecarClientTest {
                 422,
                 "{\"detail\":\"missing multipart boundary\"}"
         ));
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
@@ -176,7 +184,7 @@ class AiSidecarClientTest {
             requests.incrementAndGet();
             respond(exchange, "{\"status\":\"ok\",\"pipelineVersion\":\"vision-v6-ram_plus_int8+ppocr-v4-onnx-v1\"}");
         });
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         assertEquals(
                 "vision-v6-ram_plus_int8+ppocr-v4-onnx-v1",
@@ -192,7 +200,7 @@ class AiSidecarClientTest {
     @Test
     void shouldReturnNullWhenPipelineProbeFails() {
         server.createContext("/ready", exchange -> respond(exchange, 503, "{}"));
-        AiSidecarClient client = new AiSidecarClient(properties);
+        AiSidecarClient client = new AiSidecarClient(properties, stagingPort());
 
         assertNull(client.fetchRemotePipelineVersion(endpoint, 5));
     }
@@ -212,6 +220,43 @@ class AiSidecarClientTest {
         exchange.sendResponseHeaders(status, response.length);
         exchange.getResponseBody().write(response);
         exchange.close();
+    }
+
+    private TempStagingPort stagingPort() {
+        return new TempStagingPort() {
+            @Override
+            public Path createTempFile(String segment, String prefix, String suffix) {
+                Path directory = ensureDirectory(segment);
+                try {
+                    return Files.createTempFile(directory, prefix, suffix);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            }
+
+            @Override
+            public Path ensureDirectory(String segment) {
+                Path directory = tempDir.resolve(segment);
+                try {
+                    Files.createDirectories(directory);
+                    return directory;
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            }
+
+            @Override
+            public void deleteQuietly(Path path) {
+                if (path == null) {
+                    return;
+                }
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            }
+        };
     }
 
     private boolean containsSequence(byte[] source, byte[] expected) {

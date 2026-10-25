@@ -12,12 +12,15 @@ import com.omninest.common.security.CredentialCipher;
 import com.omninest.common.user.UserAccountQuery;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,12 +40,14 @@ class FileShareServiceTest {
     private static final UUID CHILD_ID = UUID.fromString("a1a1a1a1-0000-0000-0000-000000000003");
 
     private final FileNodeRepository fileNodeRepository = mock(FileNodeRepository.class);
+    private final ShareLinkRepository shareLinkRepository = mock(ShareLinkRepository.class);
     private final FilePermissionService filePermissionService = mock(FilePermissionService.class);
     private final FileNodeSupport fileNodeSupport = mock(FileNodeSupport.class);
     private final FileSyncEventWriter syncEventWriter = mock(FileSyncEventWriter.class);
+    private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final FileShareService service = new FileShareService(
             fileNodeRepository,
-            mock(ShareLinkRepository.class),
+            shareLinkRepository,
             mock(FileShareRecipientRepository.class),
             mock(PasswordEncoder.class),
             filePermissionService,
@@ -50,7 +55,7 @@ class FileShareServiceTest {
             fileNodeSupport,
             syncEventWriter,
             mock(ReadThroughCache.class),
-            mock(CredentialCipher.class)
+            credentialCipher
     );
 
     @Test
@@ -70,6 +75,34 @@ class FileShareServiceTest {
                 any(Instant.class),
                 any(Instant.class));
         assertThat(folder.isShared()).isTrue();
+    }
+
+    @Test
+    @DisplayName("分享资源类型以节点真实类型写入，客户端传反不会改变语义")
+    void createShareUsesNodeTypeAsResourceType() {
+        FileNode file = node(FOLDER_ID, "报告.pdf", "/报告.pdf", NodeType.FILE.getValue());
+        when(fileNodeSupport.findActiveNode(OWNER_ID, FOLDER_ID)).thenReturn(file);
+        when(credentialCipher.encrypt(any())).thenReturn("cipher");
+        when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(invocation -> {
+            ShareLink link = invocation.getArgument(0);
+            link.setId(UUID.randomUUID());
+            link.setCreatedAt(Instant.now());
+            return link;
+        });
+        when(fileNodeRepository.findByIdAndOwnerUserId(FOLDER_ID, OWNER_ID))
+                .thenReturn(Optional.of(file));
+
+        var created = service.createShare(OWNER_ID, new CreateShareLinkRequest(
+                FOLDER_ID,
+                NodeType.FOLDER.getValue(),
+                null,
+                false,
+                null,
+                null,
+                List.of()
+        ));
+
+        assertThat(created.resourceType()).isEqualTo(NodeType.FILE.getValue());
     }
 
     @Test

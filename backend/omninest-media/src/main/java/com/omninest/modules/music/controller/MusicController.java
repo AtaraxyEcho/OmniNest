@@ -56,6 +56,7 @@ import com.omninest.modules.music.service.MusicStreamGatewayService;
 import com.omninest.modules.music.service.platform.MusicPlatformProvider.LyricsResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -300,9 +301,15 @@ public class MusicController {
     ResponseEntity<StreamingResponseBody> playbackSessionStream(
             @PathVariable String sessionId,
             @RequestParam String token,
-            @RequestHeader(value = "Range", required = false) String range
+            @RequestHeader(value = "Range", required = false) String range,
+            HttpServletRequest request
     ) {
-        return musicStreamGatewayService.stream(sessionId, token, range);
+        return musicStreamGatewayService.stream(
+                sessionId,
+                token,
+                range,
+                "HEAD".equalsIgnoreCase(request.getMethod())
+        );
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")

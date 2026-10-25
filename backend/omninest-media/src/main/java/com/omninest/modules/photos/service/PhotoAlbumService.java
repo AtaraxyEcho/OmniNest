@@ -63,6 +63,7 @@ public class PhotoAlbumService {
     private final PhotoAlbumItemRepository albumItemRepository;
     private final PhotoItemRepository photoItemRepository;
     private final PhotoLibraryService libraryService;
+    private final PhotoDtoAssembler photoDtoAssembler;
     private final ResourceShareLinkService resourceShareLinkService;
     private final MediaSyncEventService syncEventService;
     private final RateLimitService rateLimitService;
@@ -127,6 +128,8 @@ public class PhotoAlbumService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteAlbum(UUID ownerUserId, UUID albumId) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
+        // 相册删除后公开链接必须立即失效，否则访客仍能凭 token 读已删除相册。
+        resourceShareLinkService.revokeAll(albumId);
         List<PhotoAlbumItem> items = albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(ownerUserId, albumId);
         albumItemRepository.deleteAll(items);
         albumRepository.delete(album);
@@ -544,48 +547,28 @@ public class PhotoAlbumService {
         if (albums.isEmpty()) {
             return List.of();
         }
-        Map<UUID, String> coverUrls = new HashMap<>();
-        List<UUID> fallbackAlbumIds = new ArrayList<>();
+        Map<UUID, UUID> coverFileIdByAlbum = new HashMap<>();
         for (PhotoAlbum album : albums) {
-            if (album.getCoverFileId() == null) {
-                fallbackAlbumIds.add(album.getId());
-                continue;
-            }
-            try {
-                coverUrls.put(
-                        album.getId(),
-                        libraryService.resolveCoverUrl(album.getOwnerUserId(), album.getCoverFileId())
-                );
-            } catch (Exception ex) {
-                log.warn("相册封面解析失败，尝试从第一张照片获取: albumId={}, error={}",
-                        album.getId(), ex.getMessage());
-                fallbackAlbumIds.add(album.getId());
+            if (album.getCoverFileId() != null) {
+                coverFileIdByAlbum.put(album.getId(), album.getCoverFileId());
             }
         }
-        if (!fallbackAlbumIds.isEmpty()) {
+        Map<UUID, String> coverUrls = new HashMap<>(signCoversByOwner(albums, coverFileIdByAlbum));
+        List<PhotoAlbum> fallbackAlbums = albums.stream()
+                .filter(album -> !coverUrls.containsKey(album.getId()))
+                .toList();
+        if (!fallbackAlbums.isEmpty()) {
             Map<UUID, UUID> fallbackCoverFileIds = albumItemRepository
-                    .findFirstActiveCoverFileIdsByAlbumIds(fallbackAlbumIds)
+                    .findFirstActiveCoverFileIdsByAlbumIds(
+                            fallbackAlbums.stream().map(PhotoAlbum::getId).toList())
                     .stream()
                     .collect(Collectors.toMap(
                             PhotoAlbumFirstCoverProjection::getAlbumId,
                             PhotoAlbumFirstCoverProjection::getCoverFileId,
                             (left, right) -> left
                     ));
-            for (PhotoAlbum album : albums) {
-                UUID coverFileId = fallbackCoverFileIds.get(album.getId());
-                if (coverFileId == null) {
-                    continue;
-                }
-                try {
-                    coverUrls.put(
-                            album.getId(),
-                            libraryService.resolveCoverUrl(album.getOwnerUserId(), coverFileId)
-                    );
-                } catch (Exception ex) {
-                    log.warn("相册第一张照片封面解析失败: albumId={}, error={}",
-                            album.getId(), ex.getMessage());
-                }
-            }
+            Map<UUID, String> fallbackUrls = signCoversByOwner(fallbackAlbums, fallbackCoverFileIds);
+            coverUrls.putAll(fallbackUrls);
         }
         return albums.stream()
                 .map(album -> new PhotoAlbumDto(
@@ -598,6 +581,42 @@ public class PhotoAlbumService {
                         album.getUpdatedAt()
                 ))
                 .toList();
+    }
+
+    /**
+     * 按所有者分组批量签发封面地址，避免逐相册一次文件查询与签名。
+     *
+     * <p>批量签发会跳过缺失或已删除的封面文件；未拿到地址的相册由调用方回退首张照片。</p>
+     */
+    private Map<UUID, String> signCoversByOwner(List<PhotoAlbum> albums, Map<UUID, UUID> coverFileIdByAlbum) {
+        Map<UUID, List<UUID>> fileIdsByOwner = new HashMap<>();
+        for (PhotoAlbum album : albums) {
+            UUID coverFileId = coverFileIdByAlbum.get(album.getId());
+            if (coverFileId == null) {
+                continue;
+            }
+            fileIdsByOwner
+                    .computeIfAbsent(album.getOwnerUserId(), key -> new ArrayList<>())
+                    .add(coverFileId);
+        }
+        if (fileIdsByOwner.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> coverUrls = new HashMap<>();
+        fileIdsByOwner.forEach((ownerUserId, fileIds) -> {
+            Map<UUID, String> signed = photoDtoAssembler.resolveDownloadUrls(ownerUserId, fileIds);
+            for (PhotoAlbum album : albums) {
+                UUID coverFileId = coverFileIdByAlbum.get(album.getId());
+                if (coverFileId == null || !ownerUserId.equals(album.getOwnerUserId())) {
+                    continue;
+                }
+                String url = signed.get(coverFileId);
+                if (url != null) {
+                    coverUrls.put(album.getId(), url);
+                }
+            }
+        });
+        return coverUrls;
     }
 
     private void recordAlbumEvent(UUID ownerUserId, PhotoAlbum album, SyncAction action) {

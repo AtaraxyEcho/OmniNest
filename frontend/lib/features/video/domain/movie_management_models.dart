@@ -533,20 +533,6 @@ class UploadSession {
   }
 }
 
-class FileNodeResult {
-  const FileNodeResult({required this.id, required this.name});
-
-  final String id;
-  final String name;
-
-  factory FileNodeResult.fromJson(Map<String, dynamic> json) {
-    return FileNodeResult(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-    );
-  }
-}
-
 class VideoScrapeCandidate {
   const VideoScrapeCandidate({
     required this.provider,

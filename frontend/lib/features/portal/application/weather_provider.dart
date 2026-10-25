@@ -5,7 +5,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
+import 'package:omninest/features/portal/data/weather_api.dart';
 import 'package:omninest/core/log/dev_log.dart';
+
+/// 天气数据访问入口；应用层不直接持有 Dio。
+final weatherApiProvider = Provider<WeatherApi>((ref) {
+  return WeatherApi(ref.watch(apiClientProvider));
+});
 
 /// 天气图标映射（和风图标代码 → Material 矢量图标）。
 ///
@@ -278,25 +284,27 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
     final location =
         '${position.longitude.toStringAsFixed(2)},${position.latitude.toStringAsFixed(2)}';
 
+    // 跨过定位权限与系统调用后，provider 可能已被自动释放。
+    if (!ref.mounted) {
+      return location;
+    }
     // 上报位置到后端（供桌面端等其他设备共享）
     try {
       final capabilities = ref.read(userCapabilitiesProvider);
       if (!capabilities.canReportLocation) {
         return location;
       }
-      final apiClient = ref.read(apiClientProvider);
-      await apiClient.dio.post(
-        '/weather/location',
-        data: {
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'source':
-              defaultTargetPlatform == TargetPlatform.android ||
-                      defaultTargetPlatform == TargetPlatform.iOS
-                  ? 'mobile'
-                  : 'desktop',
-        },
-      );
+      await ref
+          .read(weatherApiProvider)
+          .reportLocation(
+            latitude: position.latitude,
+            longitude: position.longitude,
+            source:
+                defaultTargetPlatform == TargetPlatform.android ||
+                        defaultTargetPlatform == TargetPlatform.iOS
+                    ? 'mobile'
+                    : 'desktop',
+          );
     } catch (e) {
       devLog('上报位置失败: $e');
     }
@@ -314,6 +322,9 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
 /// 仅在有 GPS 数据时传 location 参数，否则由后端走 fallback 链。
 final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
+  if (!ref.mounted) {
+    return WeatherData.empty();
+  }
   // 后端可能因 GPS 优先而未回填地区名，这里用用户偏好城市兜底。
   final preferredCity = ref.watch(weatherLocationProvider).asData?.value ?? '';
 

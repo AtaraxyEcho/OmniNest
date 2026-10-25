@@ -3,6 +3,7 @@ package com.omninest.modules.user.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Roles;
+import com.omninest.common.user.RoleDeletedEvent;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -21,6 +22,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +56,7 @@ public class AdminRoleService {
     private final UserSessionRevocationService userSessionRevocationService;
     private final AdminActorGuard adminActorGuard;
     private final CurrentUserService currentUserService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public AdminOperationsDto.RoleManagementView roles() {
@@ -201,6 +204,8 @@ public class AdminRoleService {
         int permissionCount = role.getPermissions().size();
         role.getPermissions().clear();
         authRoleRepository.delete(role);
+        // shared_space_permissions 没有外键约束，由文件模块监听事件在同一事务内清理。
+        eventPublisher.publishEvent(new RoleDeletedEvent(role.getId(), normalizedRoleCode));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("code", normalizedRoleCode);
         payload.put("permissionCount", permissionCount);

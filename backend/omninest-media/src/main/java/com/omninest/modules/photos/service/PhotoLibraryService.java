@@ -25,7 +25,6 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoTrashResultDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoTimelineMonthDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoYearGroup;
-import com.omninest.modules.photos.repository.PhotoActiveFileProjection;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoFavoriteRepository;
 import com.omninest.modules.photos.repository.PhotoGroupPreviewProjection;
@@ -39,7 +38,6 @@ import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,9 +65,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PhotoLibraryService {
 
-    private static final int DEFAULT_PAGE_SIZE = 50;
-    /** 列表/回收站单页上限，与全局 PageClamps 一致。 */
-    private static final int LIST_PAGE_MAX = PageClamps.MAX_SIZE;
+    /** 全文索引单次检索上限；相关性分页在内存中完成，必须有界。 */
+    private static final int SEARCH_INDEX_LIMIT = 500;
     /** 时间线/分组预览页上限：卡片预览不宜一次拉过多。 */
     private static final int PREVIEW_PAGE_MAX = 100;
     private static final Map<String, String> SORT_FIELDS = Map.of(
@@ -92,6 +89,8 @@ public class PhotoLibraryService {
     private final PhotoGeoService photoGeoService;
     private final PhotoIndexTaskService photoIndexTaskService;
     private final SystemInstanceConfigService systemInstanceConfigService;
+    private final PhotosRuntimeConfigService photosRuntimeConfigService;
+    private final PhotoDtoAssembler photoDtoAssembler;
 
     /**
      * 照片仪表盘，返回统计数据和近期/收藏照片（缓存 3 分钟）。
@@ -143,8 +142,8 @@ public class PhotoLibraryService {
                 totalAlbums,
                 totalFavorites,
                 trashCount,
-                mapPhotoItemDtos(ownerUserId, recent, recentFavoriteIds),
-                mapPhotoItemDtos(ownerUserId, favorites, favoriteItemIds)
+                photoDtoAssembler.mapPhotoItemDtos(ownerUserId, recent, recentFavoriteIds),
+                photoDtoAssembler.mapPhotoItemDtos(ownerUserId, favorites, favoriteItemIds)
         );
     }
 
@@ -167,11 +166,51 @@ public class PhotoLibraryService {
             String query
     ) {
         Pageable pageable = photoPageable(page, size, sort);
-        String normalizedQuery = normalizeQuery(query);
-        Page<PhotoListItemProjection> result = normalizedQuery == null
-                ? photoItemRepository.findListPage(ownerUserId, pageable)
-                : photoItemRepository.searchListPage(ownerUserId, normalizedQuery, pageable);
-        return mapListPage(ownerUserId, result, false);
+        String trimmedQuery = query == null ? null : query.trim();
+        if (trimmedQuery == null || trimmedQuery.isEmpty()) {
+            return mapListPage(ownerUserId, photoItemRepository.findListPage(ownerUserId, pageable), false);
+        }
+        Page<PhotoListItemDto> indexed = searchIndexedPhotosPage(ownerUserId, trimmedQuery, pageable);
+        if (indexed != null) {
+            return indexed;
+        }
+        return mapListPage(
+                ownerUserId,
+                photoItemRepository.searchListPage(ownerUserId, normalizeQuery(trimmedQuery), pageable),
+                false
+        );
+    }
+
+    /**
+     * 先用 Lucene 取按相关性排序的命中 ID，再按 ID 取回展示投影并切片。
+     *
+     * <p>索引未建立、无命中或命中的文档已全部失效时返回 null，由调用方回退到 SQL。
+     * 命中总数以索引上限为界：搜索结果不做无限翻页，避免一次搜索把整库拉进内存。</p>
+     */
+    private Page<PhotoListItemDto> searchIndexedPhotosPage(
+            UUID ownerUserId,
+            String query,
+            Pageable pageable
+    ) {
+        List<UUID> luceneIds = photoSearchIndexService.search(ownerUserId, query, SEARCH_INDEX_LIMIT);
+        if (luceneIds.isEmpty()) {
+            return null;
+        }
+        Map<UUID, PhotoListItemProjection> projectionsById = photoItemRepository
+                .findListByIds(ownerUserId, luceneIds)
+                .stream()
+                .collect(Collectors.toMap(PhotoListItemProjection::getId, item -> item, (left, right) -> left));
+        List<PhotoListItemProjection> ordered = luceneIds.stream()
+                .map(projectionsById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        if (ordered.isEmpty()) {
+            return null;
+        }
+        int from = (int) Math.min(pageable.getOffset(), ordered.size());
+        int to = Math.min(from + pageable.getPageSize(), ordered.size());
+        List<PhotoListItemDto> content = photoDtoAssembler.mapListItems(ownerUserId, ordered.subList(from, to), false);
+        return new PageImpl<>(content, pageable, ordered.size());
     }
 
     /**
@@ -201,29 +240,6 @@ public class PhotoLibraryService {
     }
 
     /**
-     * 按关键词搜索用户照片，优先使用 Lucene 全文索引，无结果时回退到 SQL LIKE。
-     */
-    @Transactional(readOnly = true)
-    public List<PhotoItemDto> searchPhotos(UUID ownerUserId, String query) {
-        if (query == null || query.isBlank()) {
-            return List.of();
-        }
-        List<UUID> luceneIds = photoSearchIndexService.search(ownerUserId, query, 200);
-        if (!luceneIds.isEmpty()) {
-            List<PhotoItem> items = photoItemRepository
-                    .findActiveByOwnerUserIdAndIdIn(ownerUserId, luceneIds).stream()
-                    .filter(Objects::nonNull)
-                    .toList();
-            return mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
-        }
-        // Lucene 那侧不需要转义；回退到 SQL LIKE 时查询词必须按字面量处理，
-        // 否则用户敲的 % 会变成通配符。
-        List<PhotoItem> fallback = photoItemRepository.searchByOwnerUserIdAndKeyword(
-                ownerUserId, LikePatterns.escapeSpecials(query), PageRequest.of(0, LIST_PAGE_MAX));
-        return mapPhotoItemDtos(ownerUserId, fallback, favoriteIdsFor(ownerUserId, photoIds(fallback)));
-    }
-
-    /**
      * 查询单张照片详情
      */
     @Transactional(readOnly = true)
@@ -243,33 +259,16 @@ public class PhotoLibraryService {
         }
         Set<UUID> favoriteIds = Set.copyOf(
                 favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds));
-        Map<UUID, List<String>> tagsByPhoto = photoTagRepository
-                .findByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        PhotoTag::getPhotoId,
-                        Collectors.mapping(PhotoTag::getTag, Collectors.toList())
-                ));
         Map<UUID, PhotoItem> itemsById = photoItemRepository
                 .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
                 .stream()
                 .collect(Collectors.toMap(PhotoItem::getId, item -> item));
-        Map<UUID, String> coverUrls = resolveDownloadUrls(
-                ownerUserId,
-                itemsById.values().stream()
-                        .map(PhotoItem::getCoverFileId)
-                        .filter(Objects::nonNull)
-                        .toList());
-        return photoIds.stream()
+        List<PhotoItem> orderedItems = photoIds.stream()
                 .map(itemsById::get)
                 .filter(Objects::nonNull)
-                .map(item -> PhotoItemDto.fromEntity(
-                        item,
-                        urlOrNull(coverUrls, item.getCoverFileId()),
-                        favoriteIds.contains(item.getId()),
-                        tagsByPhoto.getOrDefault(item.getId(), List.of())
-                ))
                 .toList();
+        // 公开相册开启原图质量时依赖 sourceUrl/motionVideoUrl，批量签名由组装器统一补齐。
+        return photoDtoAssembler.mapPhotoItemDtos(ownerUserId, orderedItems, favoriteIds);
     }
 
     /**
@@ -517,7 +516,7 @@ public class PhotoLibraryService {
     public List<PhotoItemDto> listFavorites(UUID ownerUserId) {
         List<PhotoItem> photos = findFavoritePhotos(ownerUserId, 0);
         Set<UUID> favoriteIds = photos.stream().map(PhotoItem::getId).collect(Collectors.toSet());
-        return mapPhotoItemDtos(ownerUserId, photos, favoriteIds);
+        return photoDtoAssembler.mapPhotoItemDtos(ownerUserId, photos, favoriteIds);
     }
 
     /**
@@ -538,50 +537,8 @@ public class PhotoLibraryService {
         return limited.stream().map(items::get).filter(Objects::nonNull).toList();
     }
 
-    private Set<UUID> favoriteIdsFor(UUID ownerUserId, List<UUID> photoIds) {
-        if (photoIds == null || photoIds.isEmpty()) {
-            return Set.of();
-        }
-        return Set.copyOf(
-                favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds));
-    }
-
     private List<UUID> photoIds(List<PhotoItem> items) {
         return items.stream().map(PhotoItem::getId).toList();
-    }
-
-    /**
-     * 批量映射照片实体为完整 DTO，避免循环查询标签与封面 URL。
-     */
-    private List<PhotoItemDto> mapPhotoItemDtos(
-            UUID ownerUserId,
-            List<PhotoItem> items,
-            Set<UUID> favoriteIds) {
-        if (items == null || items.isEmpty()) {
-            return List.of();
-        }
-        List<UUID> ids = items.stream().map(PhotoItem::getId).toList();
-        Map<UUID, List<String>> tagsByPhoto = photoTagRepository
-                .findByOwnerUserIdAndPhotoIdIn(ownerUserId, ids)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        PhotoTag::getPhotoId,
-                        Collectors.mapping(PhotoTag::getTag, Collectors.toList())
-                ));
-        Map<UUID, String> coverUrls = resolveDownloadUrls(
-                ownerUserId,
-                items.stream()
-                        .map(PhotoItem::getCoverFileId)
-                        .filter(Objects::nonNull)
-                        .toList());
-        return items.stream()
-                .map(item -> PhotoItemDto.fromEntity(
-                        item,
-                        urlOrNull(coverUrls, item.getCoverFileId()),
-                        favoriteIds.contains(item.getId()),
-                        tagsByPhoto.getOrDefault(item.getId(), List.of())
-                ))
-                .toList();
     }
 
     /**
@@ -589,14 +546,6 @@ public class PhotoLibraryService {
      */
     PhotoItem findPhotoById(UUID photoId) {
         return photoItemRepository.findById(photoId).orElse(null);
-    }
-
-    /**
-     * 解析封面文件的预签名下载URL
-     */
-    String resolveCoverUrl(UUID ownerUserId, UUID coverFileId) {
-        FileDownloadUrlDto url = fileQueryService.createDownloadUrl(ownerUserId, coverFileId);
-        return url.downloadUrl();
     }
 
     /**
@@ -627,7 +576,7 @@ public class PhotoLibraryService {
             months.add(new PhotoMonthGroup(
                     month.month(),
                     month.photoCount(),
-                    month.previewPhotos().stream().map(this::toLegacyPhotoItem).toList()
+                    month.previewPhotos().stream().map(photoDtoAssembler::toLegacyPhotoItem).toList()
             ));
         }
         List<PhotoYearGroup> years = monthsByYear.entrySet().stream()
@@ -760,18 +709,25 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public List<PhotoItemDto> listByTag(UUID ownerUserId, String tag) {
-        List<UUID> photoIds = photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(ownerUserId, tag)
+        List<UUID> photoIds = photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(
+                        ownerUserId,
+                        tag,
+                        PageRequest.of(0, photosRuntimeConfigService.legacyListLimit()))
                 .stream()
                 .map(PhotoTag::getPhotoId)
                 .toList();
         if (photoIds.isEmpty()) {
             return List.of();
         }
-        List<PhotoItem> items = photoItemRepository
+        // IN 查询不保证顺序，按标签行（打标签时间倒序）重排，翻页与预览顺序才稳定。
+        Map<UUID, PhotoItem> itemsById = photoItemRepository
                 .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds).stream()
+                .collect(Collectors.toMap(PhotoItem::getId, item -> item, (left, right) -> left));
+        List<PhotoItem> items = photoIds.stream()
+                .map(itemsById::get)
                 .filter(Objects::nonNull)
                 .toList();
-        return mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
+        return photoDtoAssembler.mapPhotoItemDtos(ownerUserId, items, photoDtoAssembler.favoriteIdsFor(ownerUserId, photoIds(items)));
     }
 
     /**
@@ -804,7 +760,7 @@ public class PhotoLibraryService {
                 .map(itemsById::get)
                 .filter(Objects::nonNull)
                 .toList();
-        List<PhotoItemDto> dtos = mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
+        List<PhotoItemDto> dtos = photoDtoAssembler.mapPhotoItemDtos(ownerUserId, items, photoDtoAssembler.favoriteIdsFor(ownerUserId, photoIds(items)));
         return new PageImpl<>(dtos, tagPage.getPageable(), tagPage.getTotalElements());
     }
 
@@ -917,82 +873,15 @@ public class PhotoLibraryService {
             Page<PhotoListItemProjection> page,
             boolean favoritePage
     ) {
-        List<PhotoListItemDto> items = mapListItems(ownerUserId, page.getContent(), favoritePage);
+        List<PhotoListItemDto> items = photoDtoAssembler.mapListItems(ownerUserId, page.getContent(), favoritePage);
         return new PageImpl<>(items, page.getPageable(), page.getTotalElements());
-    }
-
-    private List<PhotoListItemDto> mapListItems(
-            UUID ownerUserId,
-            List<? extends PhotoListItemProjection> projections,
-            boolean favoritePage
-    ) {
-        List<UUID> photoIds = projections.stream()
-                .map(PhotoListItemProjection::getId)
-                .toList();
-        Set<UUID> favoriteIds = favoritePage || photoIds.isEmpty()
-                ? Set.copyOf(photoIds)
-                : Set.copyOf(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds));
-        Map<UUID, List<String>> tagsByPhoto = photoIds.isEmpty()
-                ? Map.of()
-                : photoTagRepository.findByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds).stream()
-                        .collect(Collectors.groupingBy(
-                                PhotoTag::getPhotoId,
-                                Collectors.mapping(PhotoTag::getTag, Collectors.toList())
-                        ));
-        Map<UUID, String> coverUrls = resolveDownloadUrls(
-                ownerUserId,
-                projections.stream()
-                        .map(PhotoListItemProjection::getCoverFileId)
-                        .filter(Objects::nonNull)
-                        .toList());
-        // 原图地址同样批量签发：逐行 createDownloadUrl 每张照片都要两次单行查询加一次
-        // 签名运算，一屏 200 张就是数百次往返，而列表接口与详情共用同一份投影。
-        // 已编辑的照片要把地址指向编辑产物，否则详情页与幻灯片的「大图」仍是未编辑原图。
-        Map<UUID, UUID> activeFileByPhoto = photoIds.isEmpty()
-                ? Map.of()
-                : photoItemRepository.findActiveFileIds(ownerUserId, photoIds).stream()
-                        .collect(Collectors.toMap(
-                                PhotoActiveFileProjection::getPhotoId,
-                                PhotoActiveFileProjection::getActiveFileId
-                        ));
-        Map<UUID, String> sourceUrls = resolveDownloadUrls(
-                ownerUserId,
-                projections.stream()
-                        .map(item -> {
-                            UUID activeFileId = activeFileByPhoto.get(item.getId());
-                            return activeFileId != null ? activeFileId : item.getFileNodeId();
-                        })
-                        .filter(Objects::nonNull)
-                        .toList());
-        return projections.stream().map(item -> new PhotoListItemDto(
-                item.getId(),
-                item.getFileNodeId(),
-                item.getTitle(),
-                item.getDescription(),
-                item.getWidth(),
-                item.getHeight(),
-                item.getOrientation(),
-                item.getDateTaken(),
-                item.getGpsLatitude() == null ? null : item.getGpsLatitude().doubleValue(),
-                item.getGpsLongitude() == null ? null : item.getGpsLongitude().doubleValue(),
-                item.getGpsLocation(),
-                item.getFormat(),
-                item.getFileSize(),
-                urlOrNull(coverUrls, item.getCoverFileId()),
-                urlOrNull(sourceUrls, activeFileByPhoto.getOrDefault(item.getId(), item.getFileNodeId())),
-                item.getMetadataStatus(),
-                favoriteIds.contains(item.getId()),
-                item.getCreatedAt(),
-                tagsByPhoto.getOrDefault(item.getId(), List.of()),
-                item.getMotionState()
-        )).toList();
     }
 
     private List<PhotoTimelineMonthDto> mapTimelineMonths(
             UUID ownerUserId,
             List<PhotoTimelinePreviewProjection> rows
     ) {
-        List<PhotoListItemDto> previews = mapListItems(ownerUserId, rows, false);
+        List<PhotoListItemDto> previews = photoDtoAssembler.mapListItems(ownerUserId, rows, false);
         Map<UUID, PhotoListItemDto> previewById = previews.stream()
                 .collect(Collectors.toMap(PhotoListItemDto::id, item -> item));
         Map<String, List<PhotoTimelinePreviewProjection>> groupedRows = new LinkedHashMap<>();
@@ -1022,7 +911,7 @@ public class PhotoLibraryService {
             UUID ownerUserId,
             List<PhotoGroupPreviewProjection> rows
     ) {
-        List<PhotoListItemDto> previews = mapListItems(ownerUserId, rows, false);
+        List<PhotoListItemDto> previews = photoDtoAssembler.mapListItems(ownerUserId, rows, false);
         Map<UUID, PhotoListItemDto> previewById = previews.stream()
                 .collect(Collectors.toMap(
                         PhotoListItemDto::id,
@@ -1040,7 +929,7 @@ public class PhotoLibraryService {
                     List<PhotoItemDto> groupPreviews = groupRows.stream()
                             .map(row -> previewById.get(row.getId()))
                             .filter(Objects::nonNull)
-                            .map(this::toLegacyPhotoItem)
+                            .map(photoDtoAssembler::toLegacyPhotoItem)
                             .toList();
                     int photoCount = (int) Math.min(Integer.MAX_VALUE, first.getPhotoCount());
                     return new PhotoGroupDto(first.getGroupKey(), photoCount, groupPreviews);
@@ -1102,31 +991,6 @@ public class PhotoLibraryService {
         }
     }
 
-    /**
-     * 批量解析文件下载地址，避免列表场景逐行回查文件节点与签名。
-     *
-     * <p>批量签发会跳过缺失、已删除或非文件节点，未命中即无地址。</p>
-     */
-    private Map<UUID, String> resolveDownloadUrls(UUID ownerUserId, Collection<UUID> fileIds) {
-        if (fileIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<UUID, String> result = new LinkedHashMap<>();
-        fileQueryService
-                .createDownloadUrls(ownerUserId, fileIds)
-                .forEach((fileId, dto) -> result.put(fileId, dto.downloadUrl()));
-        return result;
-    }
-
-    /// 文件 ID 为空（封面派生未完成/失败）或映射未命中时返回 null；
-    /// Map.of() 不可变映射对 null 键 get() 直接抛 NPE（D-012）。
-    private String urlOrNull(Map<UUID, String> urls, UUID fileId) {
-        if (fileId == null) {
-            return null;
-        }
-        return urls.get(fileId);
-    }
-
     private String resolveSourceUrl(UUID ownerUserId, UUID fileNodeId) {
         try {
             return fileQueryService.createDownloadUrl(ownerUserId, fileNodeId).downloadUrl();
@@ -1136,41 +1000,5 @@ public class PhotoLibraryService {
         }
     }
 
-    private PhotoItemDto toLegacyPhotoItem(PhotoListItemDto item) {
-        return new PhotoItemDto(
-                item.id(),
-                item.fileNodeId(),
-                item.title(),
-                item.description(),
-                item.width(),
-                item.height(),
-                item.orientation(),
-                item.dateTaken(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                item.gpsLatitude(),
-                item.gpsLongitude(),
-                item.gpsLocation(),
-                item.format(),
-                item.fileSize(),
-                item.coverUrl(),
-                null,
-                item.metadataStatus(),
-                item.favorite(),
-                item.createdAt(),
-                item.tags(),
-                Map.of(),
-                null,
-                item.motionState(),
-                null
-        );
-    }
+
 }

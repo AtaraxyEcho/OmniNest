@@ -546,9 +546,11 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       case DailyRecommendationMusicDeckCollection():
         break;
       case AlbumMusicDeckCollection(:final album):
-        ref.read(musicCenterControllerProvider.notifier).openAlbum(album);
+        await ref.read(musicCenterControllerProvider.notifier).openAlbum(album);
       case ArtistMusicDeckCollection(:final artist):
-        ref.read(musicCenterControllerProvider.notifier).openArtist(artist);
+        await ref
+            .read(musicCenterControllerProvider.notifier)
+            .openArtist(artist);
       case OnlineAlbumMusicDeckCollection() ||
           OnlineArtistMusicDeckCollection():
         break;

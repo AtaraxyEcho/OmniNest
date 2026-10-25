@@ -126,6 +126,22 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     );
 
     /**
+     * 按路径前缀读取指定空间内的活动节点（不限定所有者）。
+     *
+     * <p>共享空间节点分属不同上传者，复制整棵子树不能按单一 owner 查询。</p>
+     *
+     * @param spaceType 空间类型
+     * @param prefix 已转义的路径前缀
+     * @return 活动节点列表
+     */
+    @Query("select node from FileNode node where node.spaceType = :spaceType "
+            + "and node.normalizedPath like concat(:prefix, '%') escape '\\' and node.deleted = false")
+    List<FileNode> findBySpaceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+            @Param("spaceType") SpaceType spaceType,
+            @Param("prefix") String prefix
+    );
+
+    /**
      * 按路径前缀读取指定空间内的已软删除节点，口径同上。
      *
      * @param ownerUserId 所有者用户 ID

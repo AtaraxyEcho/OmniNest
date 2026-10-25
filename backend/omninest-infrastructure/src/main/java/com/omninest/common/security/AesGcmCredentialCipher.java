@@ -47,7 +47,11 @@ public class AesGcmCredentialCipher implements CredentialCipher {
         secureRandom.nextBytes(iv);
         try {
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, encryptionKey(), new GCMParameterSpec(TAG_LENGTH_BITS, iv));
+            cipher.init(
+                    Cipher.ENCRYPT_MODE,
+                    encryptionKey(securityProperties.getCredentialEncryptionKeyVersion()),
+                    new GCMParameterSpec(TAG_LENGTH_BITS, iv)
+            );
             byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
             return PAYLOAD_PREFIX + securityProperties.getCredentialEncryptionKeyVersion()
                     + ":" + Base64.getEncoder().encodeToString(iv)
@@ -71,9 +75,6 @@ public class AesGcmCredentialCipher implements CredentialCipher {
             throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据密文格式无效");
         }
         int keyVersion = parseKeyVersion(parts[0]);
-        if (keyVersion != securityProperties.getCredentialEncryptionKeyVersion()) {
-            throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据密钥版本不受支持");
-        }
         try {
             byte[] iv = Base64.getDecoder().decode(parts[1]);
             byte[] encrypted = Base64.getDecoder().decode(parts[2]);
@@ -81,10 +82,41 @@ public class AesGcmCredentialCipher implements CredentialCipher {
                 throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据随机向量长度无效");
             }
             Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, encryptionKey(), new GCMParameterSpec(TAG_LENGTH_BITS, iv));
+            cipher.init(
+                    Cipher.DECRYPT_MODE,
+                    encryptionKey(keyVersion),
+                    new GCMParameterSpec(TAG_LENGTH_BITS, iv)
+            );
             return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (IllegalArgumentException | GeneralSecurityException exception) {
             throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据解密失败");
+        }
+    }
+
+    /**
+     * 解析指定版本密钥：当前版本取主密钥，历史版本取 previousKeys。
+     */
+    private SecretKeySpec encryptionKey(int keyVersion) {
+        int currentVersion = securityProperties.getCredentialEncryptionKeyVersion();
+        String configured = keyVersion == currentVersion
+                ? securityProperties.getCredentialEncryptionKey()
+                : securityProperties.getCredentialEncryptionPreviousKeys().get(keyVersion);
+        if (configured == null || configured.isBlank()) {
+            throw new BusinessException(
+                    ErrorCode.CONFIG_VALUE_INVALID,
+                    keyVersion == currentVersion ? "外部凭据加密密钥未配置" : "外部凭据密钥版本不受支持"
+            );
+        }
+        try {
+            byte[] decoded = Base64.getDecoder().decode(configured.trim());
+            if (decoded.length != KEY_LENGTH_BYTES) {
+                throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据加密密钥必须为 32 字节");
+            }
+            return new SecretKeySpec(decoded, KEY_ALGORITHM);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据加密密钥必须使用 Base64 编码");
         }
     }
 
@@ -96,22 +128,6 @@ public class AesGcmCredentialCipher implements CredentialCipher {
     @Override
     public int currentKeyVersion() {
         return securityProperties.getCredentialEncryptionKeyVersion();
-    }
-
-    private SecretKeySpec encryptionKey() {
-        String configured = securityProperties.getCredentialEncryptionKey();
-        if (configured == null || configured.isBlank()) {
-            throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据加密密钥未配置");
-        }
-        try {
-            byte[] decoded = Base64.getDecoder().decode(configured.trim());
-            if (decoded.length != KEY_LENGTH_BYTES) {
-                throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据加密密钥必须为 32 字节");
-            }
-            return new SecretKeySpec(decoded, KEY_ALGORITHM);
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID, "外部凭据加密密钥必须使用 Base64 编码");
-        }
     }
 
     private int parseKeyVersion(String version) {

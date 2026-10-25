@@ -52,7 +52,7 @@ class MusicStreamGatewayServiceTest {
         server.start();
         try {
             stubLocalSession("http://127.0.0.1:" + server.getAddress().getPort() + "/audio.mp3");
-            ResponseEntity<StreamingResponseBody> response = service.stream(SESSION_ID, TOKEN, null);
+            ResponseEntity<StreamingResponseBody> response = service.stream(SESSION_ID, TOKEN, null, false);
 
             assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -76,7 +76,7 @@ class MusicStreamGatewayServiceTest {
         server.start();
         try {
             stubLocalSession("http://127.0.0.1:" + server.getAddress().getPort() + "/audio.mp3");
-            ResponseEntity<StreamingResponseBody> response = service.stream(SESSION_ID, TOKEN, null);
+            ResponseEntity<StreamingResponseBody> response = service.stream(SESSION_ID, TOKEN, null, false);
             assertThat(response.getBody()).isNotNull();
 
             OutputStream brokenPipe = new OutputStream() {

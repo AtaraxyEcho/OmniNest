@@ -40,6 +40,26 @@ class AesGcmCredentialCipherTest {
                 .hasMessageContaining("密钥版本");
     }
 
+    @Test
+    void decryptAcceptsPreviousKeyVersionAfterRotation() {
+        SecurityProperties rotated = properties(2);
+        CredentialCipher versionOneCipher = new AesGcmCredentialCipher(properties(1));
+        String legacyPayload = versionOneCipher.encrypt("cookie=value");
+        rotated.setCredentialEncryptionPreviousKeys(java.util.Map.of(
+                1, keyBase64()
+        ));
+
+        CredentialCipher rotatedCipher = new AesGcmCredentialCipher(rotated);
+
+        assertThat(rotatedCipher.decrypt(legacyPayload)).isEqualTo("cookie=value");
+        assertThat(rotatedCipher.decrypt(rotatedCipher.encrypt("new-secret"))).isEqualTo("new-secret");
+    }
+
+    private String keyBase64() {
+        byte[] key = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8);
+        return Base64.getEncoder().encodeToString(key);
+    }
+
     private SecurityProperties properties(int version) {
         SecurityProperties properties = new SecurityProperties();
         byte[] key = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8);

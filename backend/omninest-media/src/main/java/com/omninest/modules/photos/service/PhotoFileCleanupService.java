@@ -8,6 +8,7 @@ import com.omninest.modules.file.service.FileBusinessReference;
 import com.omninest.modules.file.service.FilePurgeParticipant;
 import com.omninest.modules.file.service.PurgeContext;
 import com.omninest.modules.file.service.PurgeContributionWriter;
+import com.omninest.modules.file.service.ResourceShareLinkService;
 import com.omninest.modules.media.service.MediaFileVisibilitySyncParticipant;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoAlbum;
@@ -63,6 +64,7 @@ public class PhotoFileCleanupService implements
     private final PhotoSearchIndexService photoSearchIndexService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
+    private final ResourceShareLinkService resourceShareLinkService;
 
     /**
      * 查询目标文件的照片条目引用。
@@ -175,6 +177,8 @@ public class PhotoFileCleanupService implements
             return;
         }
         List<UUID> photoIds = photos.stream().map(PhotoItem::getId).toList();
+        // 照片行删除后公开单图链接必须一起失效，否则 token 仍能读到已永久删除的内容。
+        resourceShareLinkService.revokeAllByResourceIds(photoIds);
         tagRepository.deleteByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds);
         editVersionRepository.deleteByPhotoIdIn(photoIds);
         contentLabelRepository.deleteByPhotoIdIn(photoIds);

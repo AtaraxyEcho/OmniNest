@@ -350,6 +350,9 @@ class SharedSpaceServiceTest {
             assertThat(file.getOwnerUserId()).isEqualTo(USER_A);
             assertThat(file.getUploadedBy()).isNull();
             assertThat(file.getParentId()).isNull();
+            // 换空间后旧公开链接与细粒度授权必须立即失效。
+            verify(shareLinkRepository).disableByResourceIdIn(eq(List.of(FILE_ID)), any(Instant.class));
+            verify(fileNodePermissionRepository).deleteByFileNodeIdIn(List.of(FILE_ID));
         }
 
         @Test

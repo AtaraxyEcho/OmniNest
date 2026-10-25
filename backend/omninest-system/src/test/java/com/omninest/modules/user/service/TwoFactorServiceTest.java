@@ -239,6 +239,26 @@ class TwoFactorServiceTest {
     }
 
     @Test
+    @DisplayName("登录验证：TOTP 密钥无法解密时仍可用备份码完成登录")
+    void verifyCodeFallsBackToBackupCodeWhenSecretCannotBeDecrypted() {
+        AuthTotpCredential credential = new AuthTotpCredential();
+        credential.setId(UUID.randomUUID());
+        credential.setUserId(userId);
+        credential.setSecret("v1:rotated-away");
+        credential.setEnabled(true);
+        when(totpCredentialRepository.findByUserIdAndEnabledTrue(userId)).thenReturn(Optional.of(credential));
+        AuthBackupCode stored = new AuthBackupCode();
+        stored.setId(UUID.randomUUID());
+        stored.setUserId(userId);
+        stored.setCodeHash(payloadAuthenticator.sign("ABCD2345"));
+        when(backupCodeRepository.findByUserIdAndUsedAtIsNull(userId)).thenReturn(List.of(stored));
+        when(backupCodeRepository.consume(eq(stored.getId()), any(Instant.class))).thenReturn(1);
+
+        assertThatCode(() -> service.verifyCode(userId, "abcd-2345")).doesNotThrowAnyException();
+        verify(backupCodeRepository).consume(eq(stored.getId()), any(Instant.class));
+    }
+
+    @Test
     @DisplayName("新用户直落凭据：验证码正确时直接启用并返回备份码")
     void provisionForNewUserConfirmsCredentialDirectly() {
         String secret = TotpUtil.generateSecret();

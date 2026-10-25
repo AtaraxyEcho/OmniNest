@@ -7,6 +7,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.PurgeContext;
+import com.omninest.modules.file.service.ResourceShareLinkService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.domain.PhotoAlbum;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -53,6 +54,8 @@ class PhotoFileCleanupServiceTest {
     private final PhotoSearchIndexService photoSearchIndexService = Mockito.mock(PhotoSearchIndexService.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
+    private final ResourceShareLinkService resourceShareLinkService =
+            Mockito.mock(ResourceShareLinkService.class);
     private final PhotoFileCleanupService service = new PhotoFileCleanupService(
             itemRepository,
             albumItemRepository,
@@ -64,7 +67,8 @@ class PhotoFileCleanupServiceTest {
             contentAnalysisRunRepository,
             photoSearchIndexService,
             syncEventService,
-            readThroughCache
+            readThroughCache,
+            resourceShareLinkService
     );
 
     @Test
@@ -99,6 +103,7 @@ class PhotoFileCleanupServiceTest {
         Mockito.verify(albumItemRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(favoriteRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(photoSearchIndexService).deletePhotos(List.of(PHOTO_ID));
+        Mockito.verify(resourceShareLinkService).revokeAllByResourceIds(List.of(PHOTO_ID));
         Mockito.verify(readThroughCache).invalidate("omninest:dashboard:photo:" + OWNER_ID);
         Mockito.verify(itemRepository).deleteAllInBatch(List.of(photo));
         Mockito.verify(albumRepository).saveAll(List.of(album));

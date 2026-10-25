@@ -188,6 +188,9 @@ omninest:
       max-pending-sessions-per-instance: 64
   security:
     credential-encryption-key-version: 1
+    # 轮换 KEK 时把旧版本密钥按“版本号: Base64”写入 credential-encryption-previous-keys，
+    # 旧密文仍可解密；版本匹配但密钥缺失时按密钥版本不受支持拒绝。
+    credential-encryption-previous-keys: {}
     access-token-ttl: 30m
     refresh-token-ttl: 30d
     refresh-session-max-lifetime: 90d

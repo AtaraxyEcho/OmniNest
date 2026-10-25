@@ -213,15 +213,21 @@ public class TwoFactorService {
         AuthTotpCredential credential = totpCredentialRepository.findByUserIdAndEnabledTrue(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置"));
         long minStep = credential.getLastUsedStep() == null ? Long.MIN_VALUE : credential.getLastUsedStep();
-        String secret = plainSecret(credential);
-        long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
-        if (step != TotpUtil.NO_MATCH) {
-            credential.setLastUsedStep(step);
-            totpCredentialRepository.save(credential);
-            return;
+        String secret = decryptSecretOrNull(credential);
+        if (secret != null) {
+            long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, minStep);
+            if (step != TotpUtil.NO_MATCH) {
+                credential.setLastUsedStep(step);
+                totpCredentialRepository.save(credential);
+                return;
+            }
         }
+        // 备份码不依赖 KEK：即使 TOTP 密钥因轮换而无法解密，也必须保留这条登录降级路径。
         if (consumeBackupCode(userId, code)) {
             return;
+        }
+        if (secret == null) {
+            throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证凭据不可用，需重新开启");
         }
         throw new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误");
     }
@@ -282,6 +288,19 @@ public class TwoFactorService {
         } catch (BusinessException exception) {
             log.warn("两步验证秘钥解密失败: userId={}, reason={}", credential.getUserId(), exception.getMessage());
             throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证凭据不可用，需重新开启");
+        }
+    }
+
+    /**
+     * 解密 TOTP 密钥；密钥轮换或密文损坏时返回 null，让备份码仍可完成登录。
+     */
+    private String decryptSecretOrNull(AuthTotpCredential credential) {
+        try {
+            return credentialCipher.decrypt(credential.getSecret());
+        } catch (BusinessException exception) {
+            log.warn("两步验证秘钥解密失败，保留备份码降级: userId={}, reason={}",
+                    credential.getUserId(), exception.getMessage());
+            return null;
         }
     }
 }

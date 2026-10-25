@@ -10,12 +10,15 @@ import com.omninest.modules.reader.service.ReaderArchiveSafetyPolicy.EntryReadGu
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +36,8 @@ public class ReaderComicArchiveParser {
 
     private static final long MAX_PAGE_IMAGE_SIZE = 20L * 1024 * 1024;
     private static final int IMAGE_HEADER_BYTES = 64 * 1024;
+    /** Windows 压缩工具产出的中文条目名多为 GBK；GB18030 是其超集。 */
+    private static final Charset GB18030 = Charset.forName("GB18030");
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
             ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".avif"
     );
@@ -51,12 +56,26 @@ public class ReaderComicArchiveParser {
      * @return 按文件名自然排序的图片条目
      */
     public List<ImageEntry> parseEntries(FileDescriptor fileNode) {
+        try {
+            return parseEntries(fileNode, StandardCharsets.UTF_8);
+        } catch (ArchiveNameEncodingException exception) {
+            // 非 UTF-8 条目名会以 MALFORMED 或 invalid LOC header 失败；按 Windows 常见 GBK 重扫一次。
+            log.info("漫画归档条目名不是 UTF-8，回退 GB18030 重扫: fileNodeId={}", fileNode.id());
+            try {
+                return parseEntries(fileNode, GB18030);
+            } catch (ArchiveNameEncodingException retryException) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "压缩包条目名编码无法识别");
+            }
+        }
+    }
+
+    private List<ImageEntry> parseEntries(FileDescriptor fileNode, Charset charset) {
         archiveSafetyPolicy.validateArchiveSize(fileNode.sizeBytes());
         ArchiveReadSession session = archiveSafetyPolicy.newReadSession();
         List<ImageEntry> imageEntries = new ArrayList<>();
         try (FileContentStream content = fileQueryService.openOwnedFileContent(
                 fileNode.ownerUserId(), fileNode.id());
-             ZipInputStream input = new ZipInputStream(content.inputStream())) {
+             ZipInputStream input = new ZipInputStream(content.inputStream(), charset)) {
             ZipEntry entry;
             int entryIndex = 0;
             while ((entry = input.getNextEntry()) != null) {
@@ -95,7 +114,16 @@ public class ReaderComicArchiveParser {
                 ));
                 entryIndex++;
             }
+        } catch (ZipException exception) {
+            if (isEntryNameEncodingFailure(exception)) {
+                throw new ArchiveNameEncodingException(exception);
+            }
+            log.warn("漫画归档读取失败: fileNodeId={}, errorType={}",
+                    fileNode.id(), exception.getClass().getSimpleName());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
         } catch (IOException exception) {
+            log.warn("漫画归档读取失败: fileNodeId={}, errorType={}",
+                    fileNode.id(), exception.getClass().getSimpleName());
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件读取失败");
         }
         imageEntries.sort((left, right) -> naturalCompare(left.name(), right.name()));
@@ -110,10 +138,22 @@ public class ReaderComicArchiveParser {
      * @return 封面草稿；读取失败时返回 null
      */
     public ReaderCoverDraft extractCover(FileDescriptor fileNode, ImageEntry coverEntry) {
+        ReaderCoverDraft draft = extractCover(fileNode, coverEntry, StandardCharsets.UTF_8);
+        if (draft != null) {
+            return draft;
+        }
+        return extractCover(fileNode, coverEntry, GB18030);
+    }
+
+    private ReaderCoverDraft extractCover(
+            FileDescriptor fileNode,
+            ImageEntry coverEntry,
+            Charset charset
+    ) {
         ArchiveReadSession session = archiveSafetyPolicy.newReadSession();
         try (FileContentStream content = fileQueryService.openOwnedFileContent(
                 fileNode.ownerUserId(), fileNode.id());
-             ZipInputStream input = new ZipInputStream(content.inputStream())) {
+             ZipInputStream input = new ZipInputStream(content.inputStream(), charset)) {
             ZipEntry entry;
             while ((entry = input.getNextEntry()) != null) {
                 boolean targetEntry = !entry.isDirectory() && coverEntry.name().equals(entry.getName());
@@ -137,6 +177,23 @@ public class ReaderComicArchiveParser {
             log.warn("漫画压缩包封面读取失败: errorType={}", exception.getClass().getSimpleName());
         }
         return null;
+    }
+
+    /**
+     * JDK 对无法按指定字符集解码的条目名会报 "bad entry name"，也可能直接抛 MALFORMED。
+     */
+    private boolean isEntryNameEncodingFailure(ZipException exception) {
+        String message = exception.getMessage();
+        return message != null && message.toLowerCase(Locale.ROOT).contains("entry name");
+    }
+
+    /**
+     * 条目名编码失败信号：仅用于触发一次 GB18030 重扫，不向外暴露。
+     */
+    private static final class ArchiveNameEncodingException extends RuntimeException {
+        private ArchiveNameEncodingException(Throwable cause) {
+            super(cause);
+        }
     }
 
     private boolean isSystemFile(String name) {

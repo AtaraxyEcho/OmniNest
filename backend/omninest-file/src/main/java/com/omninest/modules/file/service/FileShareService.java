@@ -33,7 +33,6 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -284,10 +283,10 @@ public class FileShareService {
      */
     @Transactional(rollbackFor = Exception.class)
     public FileShareLinkDto createShare(UUID ownerUserId, CreateShareLinkRequest request) {
-        String resourceType = normalizeResourceType(request.resourceType());
-
         FileNode node = fileNodeSupport.findActiveNode(ownerUserId, request.resourceId());
         fileNodeSupport.requireShareable(node);
+        // 资源类型以节点真实类型为准：客户端传反类型会让公开访问按错误语义校验。
+        String resourceType = node.getNodeType();
         List<UUID> recipients = normalizeRecipients(ownerUserId, request.recipientUserIds());
         String rawToken = UUID.randomUUID().toString().replace("-", "");
         ShareLink share = new ShareLink();
@@ -688,17 +687,6 @@ public class FileShareService {
                 permission != null ? permission : FilePermission.denyAll(),
                 node.getSharedAt()
         );
-    }
-
-    private String normalizeResourceType(String resourceType) {
-        if (resourceType == null || resourceType.isBlank()) {
-            return "FILE";
-        }
-        String normalized = resourceType.trim().toUpperCase(Locale.ROOT);
-        if (!"FILE".equals(normalized) && !"FOLDER".equals(normalized) && !"PHOTO_ALBUM".equals(normalized)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "分享资源类型不合法");
-        }
-        return normalized;
     }
 
     private String resolveShareStatus(ShareLink share) {

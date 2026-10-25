@@ -3,7 +3,9 @@ package com.omninest.modules.photos.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,10 +16,12 @@ import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDetailDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoItemDto;
+import com.omninest.modules.photos.repository.PhotoAlbumFirstCoverProjection;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -45,6 +49,8 @@ class PhotoAlbumServiceTest {
     private PhotoItemRepository photoItemRepository;
     @Mock
     private PhotoLibraryService libraryService;
+    @Mock
+    private PhotoDtoAssembler photoDtoAssembler;
     @Mock
     private ResourceShareLinkService resourceShareLinkService;
     @Mock
@@ -128,11 +134,15 @@ class PhotoAlbumServiceTest {
         PhotoAlbum second = album();
         second.setId(UUID.fromString("20000000-0000-0000-0000-000000000002"));
         second.setName("Second");
+        when(photoDtoAssembler.resolveDownloadUrls(eq(OWNER), any())).thenReturn(Map.of());
         PageRequest pageable = PageRequest.of(0, 2);
         when(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER, pageable))
                 .thenReturn(new PageImpl<>(List.of(album(), second), pageable, 2));
+        PhotoAlbumFirstCoverProjection fallbackCover = mock(PhotoAlbumFirstCoverProjection.class);
+        when(fallbackCover.getAlbumId()).thenReturn(ALBUM_ID);
+        when(fallbackCover.getCoverFileId()).thenReturn(UUID.randomUUID());
         when(albumItemRepository.findFirstActiveCoverFileIdsByAlbumIds(any()))
-                .thenReturn(List.of());
+                .thenReturn(List.of(fallbackCover));
 
         Page<PhotoAlbumDto> page = service.listAlbumsPage(OWNER, 0, 2);
 
@@ -140,6 +150,22 @@ class PhotoAlbumServiceTest {
         verify(albumItemRepository).findFirstActiveCoverFileIdsByAlbumIds(any());
         verify(albumItemRepository, never())
                 .findActivePhotoIdsByAlbumId(any(), any());
+        // 封面地址按页批量签发：逐相册一次文件查询与签名会随相册数放大。
+        verify(photoDtoAssembler, times(1)).resolveDownloadUrls(eq(OWNER), any());
+    }
+
+    @Test
+    void deleteAlbumRevokesPublicShareLinks() {
+        PhotoAlbum album = album();
+        when(albumRepository.findByOwnerUserIdAndId(OWNER, ALBUM_ID))
+                .thenReturn(Optional.of(album));
+        when(albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(OWNER, ALBUM_ID))
+                .thenReturn(List.of());
+
+        service.deleteAlbum(OWNER, ALBUM_ID);
+
+        verify(resourceShareLinkService).revokeAll(ALBUM_ID);
+        verify(albumRepository).delete(album);
     }
 
     @Test

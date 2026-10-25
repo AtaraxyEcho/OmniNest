@@ -18,6 +18,51 @@ void main() {
     expect(adapter.lastPath, '/video/items/video-1');
   });
 
+  test(
+    'completeUploadSession reads fileNodeId from the shared upload contract',
+    () async {
+      final adapter = _JsonHttpClientAdapter({
+        'code': 200,
+        'message': 'success',
+        'data': {
+          'uploadId': 'upload-1',
+          'status': 'COMPLETED',
+          'taskId': null,
+          'fileNodeId': 'file-node-1',
+        },
+      });
+      final api = MovieApi(_apiClient(adapter));
+
+      final result = await api.completeUploadSession(uploadId: 'upload-1');
+
+      expect(result.isScanning, isFalse);
+      expect(result.fileNodeId, 'file-node-1');
+    },
+  );
+
+  test(
+    'completeUploadSession keeps scanning task id when promotion is pending',
+    () async {
+      final adapter = _JsonHttpClientAdapter({
+        'code': 200,
+        'message': 'success',
+        'data': {
+          'uploadId': 'upload-1',
+          'status': 'SCANNING',
+          'taskId': 'task-1',
+          'fileNodeId': null,
+        },
+      });
+      final api = MovieApi(_apiClient(adapter));
+
+      final result = await api.completeUploadSession(uploadId: 'upload-1');
+
+      expect(result.isScanning, isTrue);
+      expect(result.taskId, 'task-1');
+      expect(result.fileNodeId, isNull);
+    },
+  );
+
   test('subtitle loading truncates oversized responses to two MiB', () async {
     final adapter = _TextHttpClientAdapter(
       List<String>.filled(2 * 1024 * 1024 + 32, 'a').join(),

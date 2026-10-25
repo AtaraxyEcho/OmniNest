@@ -401,12 +401,12 @@ class AuditQueryContractIT {
         var issued = oauthService.start(owner, provider, accountId);
 
         assertThatThrownBy(
-                        () -> oauthService.handleCallback("ONEDRIVE", issued.state(), "code"))
+                        () -> oauthService.handleCallback("ONEDRIVE", issued.state(), "code", issued.bindingNonce()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不匹配");
         // state 已被原子取走：重复回调必须落到“失效”分支，而不是再次比对 provider。
         assertThatThrownBy(
-                        () -> oauthService.handleCallback("ONEDRIVE", issued.state(), "code"))
+                        () -> oauthService.handleCallback("ONEDRIVE", issued.state(), "code", issued.bindingNonce()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("无效或已过期");
     }
@@ -671,7 +671,7 @@ class AuditQueryContractIT {
                     );
                 });
 
-        oauthService.handleCallback(provider, issued.state(), "authorization-code");
+        oauthService.handleCallback(provider, issued.state(), "authorization-code", issued.bindingNonce());
 
         Map<String, Object> stored = jdbcTemplate.queryForMap("""
                 SELECT status, encrypted_credentials FROM omni.storage_external_accounts

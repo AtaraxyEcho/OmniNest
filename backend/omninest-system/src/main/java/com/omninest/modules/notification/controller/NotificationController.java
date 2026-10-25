@@ -1,6 +1,7 @@
 package com.omninest.modules.notification.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
@@ -44,9 +45,13 @@ public class NotificationController {
             @RequestParam(defaultValue = "false") boolean unreadOnly
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        List<NotificationDto> items = notificationService.list(userId, page, size, unreadOnly);
+        // 服务端按 PageClamps 归一化分页；响应元数据必须回写同一组值，
+        // 否则 page=-1/size=10000 会返回与真实窗口不一致的分页信息。
+        int safePage = PageClamps.safePage(page);
+        int safeSize = PageClamps.safeSize(size);
+        List<NotificationDto> items = notificationService.list(userId, safePage, safeSize, unreadOnly);
         long total = notificationService.totalCount(userId, unreadOnly);
-        return ApiResponse.success(PageResponse.of(items, page, size, total));
+        return ApiResponse.success(PageResponse.of(items, safePage, safeSize, total));
     }
 
     @Operation(summary = "查询未读通知数", description = "获取当前用户的未读通知数量")

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -86,6 +87,7 @@ class PhotoLibraryServiceTest {
     private PhotoGeoService photoGeoService;
     private PhotoIndexTaskService photoIndexTaskService;
     private SystemInstanceConfigService systemInstanceConfigService;
+    private PhotosRuntimeConfigService photosRuntimeConfigService;
     private PhotoChangeSideEffects sideEffects;
 
     private PhotoLibraryService service;
@@ -107,6 +109,8 @@ class PhotoLibraryServiceTest {
         photoIndexTaskService = mock(PhotoIndexTaskService.class);
         systemInstanceConfigService = mock(SystemInstanceConfigService.class);
         when(systemInstanceConfigService.timeZone()).thenReturn(ZoneId.systemDefault());
+        photosRuntimeConfigService = mock(PhotosRuntimeConfigService.class);
+        when(photosRuntimeConfigService.legacyListLimit()).thenReturn(200);
         // 副作用组件按真实装配注入：既有断言继续验证相册计数重算、同步事件与索引投递。
         sideEffects = new PhotoChangeSideEffects(
                 albumRepository,
@@ -129,7 +133,14 @@ class PhotoLibraryServiceTest {
                 contentAnalysisService,
                 photoGeoService,
                 photoIndexTaskService,
-                systemInstanceConfigService
+                systemInstanceConfigService,
+                photosRuntimeConfigService,
+                new PhotoDtoAssembler(
+                        photoItemRepository,
+                        favoriteRepository,
+                        photoTagRepository,
+                        fileQueryService
+                )
         );
     }
 
@@ -256,34 +267,62 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
-    void searchPhotos_delegatesToLuceneFirst() {
-        // 验证搜索优先使用 Lucene 全文索引，有结果时不再回退到 SQL
-        PhotoItem photo1 = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "日落风景");
-
-        when(photoSearchIndexService.search(OWNER_ID, "sunset", 200))
-                .thenReturn(List.of(PHOTO_ID_1));
+    void listPhotosByIdsSignsOriginalAndMotionVideoUrls() {
+        PhotoItem photo = photoItem(PHOTO_ID_1, FILE_NODE_ID_1, COVER_FILE_ID_1, "原图照片");
+        UUID motionVideoId = UUID.randomUUID();
+        photo.setMotionState(PhotoMotionVideoService.STATE_READY);
+        photo.setMotionVideoFileNodeId(motionVideoId);
         when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
-                .thenReturn(List.of(photo1));
+                .thenReturn(List.of(photo));
         when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
         when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_1))
-                .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
+        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any())).thenAnswer(invocation -> {
+            Collection<UUID> requested = invocation.getArgument(1);
+            Map<UUID, FileDownloadUrlDto> resolved = new LinkedHashMap<>();
+            if (requested.contains(COVER_FILE_ID_1)) {
+                resolved.put(COVER_FILE_ID_1, downloadUrl(COVER_FILE_ID_1, "cover.jpg", "http://minio/cover"));
+            }
+            if (requested.contains(FILE_NODE_ID_1)) {
+                resolved.put(FILE_NODE_ID_1, downloadUrl(FILE_NODE_ID_1, "source.jpg", "http://minio/source"));
+            }
+            if (requested.contains(motionVideoId)) {
+                resolved.put(motionVideoId, downloadUrl(motionVideoId, "motion.mp4", "http://minio/motion"));
+            }
+            return resolved;
+        });
 
-        List<PhotoItemDto> result = service.searchPhotos(OWNER_ID, "sunset");
+        List<PhotoItemDto> result = service.listPhotosByIds(OWNER_ID, List.of(PHOTO_ID_1));
 
-        // 验证 Lucene 搜索被调用
-        verify(photoSearchIndexService).search(OWNER_ID, "sunset", 200);
+        assertThat(result).singleElement().satisfies(dto -> {
+            assertThat(dto.sourceUrl()).isEqualTo("http://minio/source");
+            assertThat(dto.motionVideoUrl()).isEqualTo("http://minio/motion");
+        });
+    }
 
-        // 验证 SQL 模糊搜索未被调用（Lucene 已返回结果）
-        verify(photoItemRepository, Mockito.never())
-                .searchByOwnerUserIdAndKeyword(any(), any(), any(Pageable.class));
+    @Test
+    void listPhotosPage_usesLuceneHitsInRelevanceOrder() {
+        // 索引命中的 photoId 按 BM25 相关性排序；SQL IN 查询不保序，必须按索引顺序重排。
+        PhotoListItemProjection second = photoProjection(PHOTO_ID_1, "相关性第二");
+        PhotoListItemProjection first = photoProjection(PHOTO_ID_2, "相关性第一");
+        when(photoSearchIndexService.search(OWNER_ID, "sunset", 500))
+                .thenReturn(List.of(PHOTO_ID_2, PHOTO_ID_1));
+        when(photoItemRepository.findListByIds(eq(OWNER_ID), any()))
+                .thenReturn(List.of(second, first));
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any())).thenReturn(Map.of());
 
-        // 验证返回 Lucene 命中的照片
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().id()).isEqualTo(PHOTO_ID_1);
-        assertThat(result.getFirst().title()).isEqualTo("日落风景");
+        Page<PhotoListItemDto> result = service.listPhotosPage(
+                OWNER_ID, 0, 50, "createdAt,desc", " sunset ");
+
+        assertThat(result.getContent()).extracting(PhotoListItemDto::id)
+                .containsExactly(PHOTO_ID_2, PHOTO_ID_1);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(photoItemRepository, Mockito.never()).searchListPage(any(), any(), any(Pageable.class));
     }
 
     @Test
@@ -391,28 +430,15 @@ class PhotoLibraryServiceTest {
     }
 
     @Test
-    void searchPhotosEscapesTheSqlFallbackKeywordButNotTheIndexQuery() {
-        // Lucene 那侧要拿到原样查询词；只有回退到 SQL LIKE 时才转义。
-        when(photoSearchIndexService.search(OWNER_ID, "100% sunset", 200)).thenReturn(List.of());
-        when(photoItemRepository.searchByOwnerUserIdAndKeyword(
-                eq(OWNER_ID), eq("100\\% sunset"), any(Pageable.class)))
-                .thenReturn(List.of());
+    void listPhotosPage_skipsIndexAndFallbackForBlankQuery() {
+        when(photoItemRepository.findListPage(eq(OWNER_ID), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(1), 0));
 
-        service.searchPhotos(OWNER_ID, "100% sunset");
+        assertThat(service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", null).getContent()).isEmpty();
+        assertThat(service.listPhotosPage(OWNER_ID, 0, 50, "createdAt,desc", "   ").getContent()).isEmpty();
 
-        verify(photoItemRepository).searchByOwnerUserIdAndKeyword(
-                eq(OWNER_ID), eq("100\\% sunset"), any(Pageable.class));
-    }
-
-    @Test
-    void searchPhotosStopsBeforeTheFallbackQueryWhenKeywordIsBlank() {
-        // 回退查询词要先经 escapeSpecials，而其约定入参非空：空关键词必须在触达
-        // Lucene 与 SQL 之前就早退，否则 null 关键词会抛 NPE 而不是返回空结果。
-        assertThat(service.searchPhotos(OWNER_ID, null)).isEmpty();
-        assertThat(service.searchPhotos(OWNER_ID, "   ")).isEmpty();
-
-        verify(photoItemRepository, Mockito.never())
-                .searchByOwnerUserIdAndKeyword(any(), any(), any(Pageable.class));
+        verify(photoSearchIndexService, Mockito.never()).search(any(), any(), anyInt());
+        verify(photoItemRepository, Mockito.never()).searchListPage(any(), any(), any(Pageable.class));
     }
 
     @Test

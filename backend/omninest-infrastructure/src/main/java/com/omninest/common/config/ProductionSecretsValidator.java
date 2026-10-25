@@ -37,7 +37,9 @@ public class ProductionSecretsValidator implements ApplicationRunner {
             "CHANGE_ME_JWT_SECRET_AT_LEAST_32_BYTES",
             "CHANGE_ME_AI_SIDECAR_SECRET",
             // dev 模板公开的 32 零字节 Base64 KEK：是合法 AES-256 密钥，必须点名拒绝
-            "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+            "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+            // application-dev.yml 公开的凭据加密 KEK，与零字节密钥同属可用但不应上生产的默认值
+            "b21uaW5lc3QtZGV2LWNyZWRlbnRpYWwta2V5LTAwMDE="
     );
 
     private static final Map<String, String> REQUIRED_SECRETS = new LinkedHashMap<>();

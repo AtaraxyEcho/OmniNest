@@ -8,6 +8,7 @@ import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/network/capability_gate_interceptor.dart';
+import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -898,13 +899,13 @@ class MovieApi {
     );
   }
 
-  Future<FileNodeResult> completeUploadSession({
+  Future<FileUploadCompleteResult> completeUploadSession({
     required String uploadId,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/uploads/$uploadId/complete',
     );
-    return FileNodeResult.fromJson(parseData(response.data));
+    return FileUploadCompleteResult.fromJson(parseData(response.data));
   }
 
   Map<String, dynamic> parseData(Map<String, dynamic>? body) {

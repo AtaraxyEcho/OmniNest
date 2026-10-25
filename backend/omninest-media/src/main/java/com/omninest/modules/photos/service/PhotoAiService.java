@@ -10,7 +10,6 @@ import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,6 +20,7 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
@@ -166,9 +166,11 @@ public class PhotoAiService {
         if (photo.getFileSize() > MAX_DOWNSAMPLE_SOURCE_BYTES && photo.getCoverFileId() != null) {
             return readCover(ownerUserId, photo);
         }
-        byte[] original = readFileBytes(ownerUserId, photo.getFileNodeId(), "照片原图");
+        if (!requiresDownsample(photo)) {
+            return readFileBytes(ownerUserId, photo.getFileNodeId(), "照片原图");
+        }
         try {
-            return maybeDownsample(photo, original);
+            return readDownsampledFromFile(ownerUserId, photo.getFileNodeId(), "照片原图");
         } catch (RuntimeException exception) {
             if (photo.getCoverFileId() == null) {
                 throw exception;
@@ -186,7 +188,24 @@ public class PhotoAiService {
         if (photo.getFileNodeId() == null) {
             throw dependencyNotReady();
         }
-        return maybeDownsample(photo, readFileBytes(ownerUserId, photo.getFileNodeId(), "照片原图"));
+        if (requiresDownsample(photo)) {
+            return readDownsampledFromFile(ownerUserId, photo.getFileNodeId(), "照片原图");
+        }
+        return readFileBytes(ownerUserId, photo.getFileNodeId(), "照片原图");
+    }
+
+    /**
+     * 判断是否需要降采样：大文件或已知长边超过直接分析上限。
+     */
+    private boolean requiresDownsample(PhotoItem photo) {
+        if (photo.getFileSize() > MAX_DIRECT_ORIGINAL_BYTES) {
+            return true;
+        }
+        Integer width = photo.getWidth();
+        Integer height = photo.getHeight();
+        return width != null
+                && height != null
+                && Math.max(width, height) > MAX_DIRECT_ORIGINAL_SIDE;
     }
 
     private byte[] readCover(UUID ownerUserId, PhotoItem photo) {
@@ -201,73 +220,51 @@ public class PhotoAiService {
         return format != null && fileDetector.isRaw("photo." + format);
     }
 
-    private byte[] maybeDownsample(PhotoItem photo, byte[] original) {
-        long longSide = resolveLongSide(photo, original);
-        if (original.length <= MAX_DIRECT_ORIGINAL_BYTES && longSide <= MAX_DIRECT_ORIGINAL_SIDE) {
-            return original;
-        }
-        return downsample(original);
-    }
-
-    private long resolveLongSide(PhotoItem photo, byte[] imageBytes) {
-        if (photo.getWidth() != null && photo.getHeight() != null) {
-            return Math.max(photo.getWidth(), photo.getHeight());
-        }
-        try (ImageInputStream imageInput = ImageIO.createImageInputStream(
-                new ByteArrayInputStream(imageBytes))) {
-            if (imageInput == null) {
-                return Long.MAX_VALUE;
+    /**
+     * 直接从对象内容流解码并抽样，避免先把整张原图读成 byte[] 再展开全尺寸 BufferedImage。
+     */
+    private byte[] readDownsampledFromFile(UUID ownerUserId, UUID fileId, String description) {
+        long maxImageBytes = imageAnalysisGateway.maxImageBytes();
+        try (FileContentStream content = fileQueryService.openOwnedFileContent(ownerUserId, fileId)) {
+            if (content.sizeBytes() > maxImageBytes) {
+                log.warn("照片超过图像分析输入限制: fileId={}, sizeBytes={}, maxBytes={}",
+                        fileId, content.sizeBytes(), maxImageBytes);
+                throw new IllegalStateException(description + "超过图像分析输入大小限制");
             }
-            var readers = ImageIO.getImageReaders(imageInput);
-            if (!readers.hasNext()) {
-                return Long.MAX_VALUE;
-            }
-            ImageReader reader = readers.next();
-            try {
-                reader.setInput(imageInput, true, true);
-                return Math.max(reader.getWidth(0), reader.getHeight(0));
-            } finally {
-                reader.dispose();
-            }
-        } catch (IOException exception) {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    private byte[] downsample(byte[] original) {
-        try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(original))) {
-            if (input == null) {
-                throw new IllegalStateException("照片分析图像下采样失败: 无法读取图像流");
-            }
-            var readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext()) {
-                throw new IllegalStateException("照片分析图像下采样失败: 没有可用解码器");
-            }
-            ImageReader reader = readers.next();
-            try {
-                reader.setInput(input, true, true);
-                int width = reader.getWidth(0);
-                int height = reader.getHeight(0);
-                int step = 1;
-                while (Math.max(width, height) / step > OCR_DOWNSAMPLE_MAX_SIDE) {
-                    step++;
+            try (InputStream stream = content.inputStream();
+                 ImageInputStream input = new MemoryCacheImageInputStream(stream)) {
+                var readers = ImageIO.getImageReaders(input);
+                if (!readers.hasNext()) {
+                    throw new IllegalStateException("照片分析图像下采样失败: 没有可用解码器");
                 }
-                var param = reader.getDefaultReadParam();
-                if (step > 1) {
-                    // 解码阶段直接抽样：避免先在堆内展开全尺寸 BufferedImage 再缩放。
-                    param.setSourceSubsampling(step, step, 0, 0);
+                ImageReader reader = readers.next();
+                try {
+                    reader.setInput(input, true, true);
+                    int width = reader.getWidth(0);
+                    int height = reader.getHeight(0);
+                    int step = 1;
+                    while (Math.max(width, height) / step > OCR_DOWNSAMPLE_MAX_SIDE) {
+                        step++;
+                    }
+                    ImageReadParam param = reader.getDefaultReadParam();
+                    if (step > 1) {
+                        // 解码阶段直接抽样：避免先在堆内展开全尺寸 BufferedImage 再缩放。
+                        param.setSourceSubsampling(step, step, 0, 0);
+                    }
+                    BufferedImage sampled = reader.read(0, param);
+                    ByteArrayOutputStream output = new ByteArrayOutputStream(512 * 1024);
+                    Thumbnails.of(sampled)
+                            .scale(1)
+                            .outputFormat("jpg")
+                            .outputQuality(OCR_DOWNSAMPLE_QUALITY)
+                            .toOutputStream(output);
+                    return output.toByteArray();
+                } finally {
+                    reader.dispose();
                 }
-                BufferedImage sampled = reader.read(0, param);
-                ByteArrayOutputStream output = new ByteArrayOutputStream(512 * 1024);
-                Thumbnails.of(sampled)
-                        .scale(1)
-                        .outputFormat("jpg")
-                        .outputQuality(OCR_DOWNSAMPLE_QUALITY)
-                        .toOutputStream(output);
-                return output.toByteArray();
-            } finally {
-                reader.dispose();
             }
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (IOException exception) {
             throw new IllegalStateException("照片分析图像下采样失败", exception);
         }

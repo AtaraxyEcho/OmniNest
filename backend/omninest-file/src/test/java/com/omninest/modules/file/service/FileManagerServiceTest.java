@@ -143,9 +143,10 @@ class FileManagerServiceTest {
         return null;
     });
 
+    private final SharedSpaceService fileNodeSupportSharedSpace =
+            Mockito.mock(SharedSpaceService.class);
     private final FileNodeSupport fileNodeSupport =
-            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository,
-                    Mockito.mock(SharedSpaceService.class));
+            new FileNodeSupport(userNamesById, mediaCovers, fileNodeRepository, fileNodeSupportSharedSpace);
     private final FileSyncEventWriter syncEventWriter = new FileSyncEventWriter(syncEventRecorder);
     private final FileFavoriteService fileFavoriteService = new FileFavoriteService(
             favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter, sharedSpaceService);
@@ -715,6 +716,48 @@ class FileManagerServiceTest {
         verify(sharedSpaceQuotaService).checkQuota(2048L);
         verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
         verify(storageQuotaService, Mockito.never()).incrementUsage(any(), anyLong());
+    }
+
+    @Test
+    void copyNodeAllowsOtherMembersSharedSourceAndSharedTarget() {
+        UUID otherUser = UUID.fromString("99999999-1111-1111-1111-111111111111");
+        UUID sourceId = UUID.fromString("60000000-0000-0000-0000-000000000010");
+        UUID targetFolderId = UUID.fromString("60000000-0000-0000-0000-000000000011");
+        FileNode source = node("guide.pdf", "application/pdf", 2048);
+        source.setId(sourceId);
+        source.setOwnerUserId(otherUser);
+        source.setUploadedBy(otherUser);
+        source.setSpaceType(SpaceType.SHARED);
+        FileNode targetFolder = node("Shared", null, 0, "FOLDER");
+        targetFolder.setId(targetFolderId);
+        targetFolder.setOwnerUserId(otherUser);
+        targetFolder.setSpaceType(SpaceType.SHARED);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(sourceId, OWNER_ID))
+                .thenReturn(Optional.empty());
+        when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(sourceId, SpaceType.SHARED))
+                .thenReturn(Optional.of(source));
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetFolderId, OWNER_ID))
+                .thenReturn(Optional.empty());
+        when(fileNodeRepository.findByIdAndSpaceTypeAndDeletedFalse(targetFolderId, SpaceType.SHARED))
+                .thenReturn(Optional.of(targetFolder));
+        when(fileNodeSupportSharedSpace.canBrowse(OWNER_ID)).thenReturn(true);
+        when(fileNodeRepository.existsBySpaceTypeAndParentIdAndNameAndDeletedFalse(
+                SpaceType.SHARED, targetFolderId, "guide.pdf")).thenReturn(false);
+        when(fileNodeRepository.save(any(FileNode.class))).thenAnswer(invocation -> {
+            FileNode saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
+
+        var result = fileManagerService.copyNode(OWNER_ID, sourceId, targetFolderId);
+
+        assertThat(result.name()).isEqualTo("guide.pdf");
+        assertThat(result.spaceType()).isEqualTo(SpaceType.SHARED.getValue());
+        assertThat(result.parentId()).isEqualTo(targetFolderId);
+        verify(sharedSpaceService).requireSharedWrite(OWNER_ID);
+        verify(sharedSpaceQuotaService).increaseUsage(2048L, 1L);
     }
 
     @Test

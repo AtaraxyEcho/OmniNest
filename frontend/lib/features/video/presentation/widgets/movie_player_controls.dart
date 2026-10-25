@@ -9,7 +9,7 @@ class MoviePlayerIconButton extends StatelessWidget {
   const MoviePlayerIconButton({
     required this.icon,
     required this.onPressed,
-    this.tooltip,
+    required this.tooltip,
     this.size,
     this.iconSize = 24,
     this.selected = false,
@@ -19,7 +19,9 @@ class MoviePlayerIconButton extends StatelessWidget {
 
   final IconData icon;
   final VoidCallback? onPressed;
-  final String? tooltip;
+
+  /// 图标按钮的可见说明与无障碍标签；调用方必须提供已本地化的文案。
+  final String tooltip;
   final double? size;
   final double iconSize;
   final bool selected;
@@ -70,12 +72,11 @@ class MoviePlayerIconButton extends StatelessWidget {
         }),
       ),
     );
-    // 空 tooltip 会生成空无障碍标签；没有说明时不要包裹 Tooltip。
-    final label = tooltip;
-    if (label == null || label.trim().isEmpty) {
+    // 空字符串仍会生成空无障碍标签；保持无标签的视觉按钮但不制造朗读节点。
+    if (tooltip.trim().isEmpty) {
       return button;
     }
-    return Tooltip(message: label, child: button);
+    return Tooltip(message: tooltip, child: button);
   }
 }
 

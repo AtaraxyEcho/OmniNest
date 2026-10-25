@@ -5,6 +5,7 @@ import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.config.AiSidecarProperties;
 import com.omninest.common.json.JsonSupport;
+import com.omninest.common.processing.TempStagingPort;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,6 +44,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     private static final String SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token";
 
     private final AiSidecarProperties properties;
+    private final TempStagingPort tempStagingPort;
     private final HttpClient httpClient;
     private final Object pipelineVersionLock = new Object();
     private volatile PipelineVersionCache pipelineVersionCache;
@@ -51,9 +53,11 @@ public class AiSidecarClient implements ImageAnalysisGateway {
      * 创建图像分析侧车客户端。
      *
      * @param properties 图像分析侧车配置
+     * @param tempStagingPort 受控临时目录端口，multipart 缓冲不得落在系统临时目录
      */
-    public AiSidecarClient(AiSidecarProperties properties) {
+    public AiSidecarClient(AiSidecarProperties properties, TempStagingPort tempStagingPort) {
         this.properties = properties;
+        this.tempStagingPort = tempStagingPort;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -212,7 +216,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         String boundary = "----OmniNest" + UUID.randomUUID().toString().replace("-", "");
         Path multipartFile = null;
         try {
-            multipartFile = Files.createTempFile("omninest-sidecar-", ".multipart");
+            multipartFile = tempStagingPort.createTempFile("ai-sidecar", "omninest-sidecar-", ".multipart");
             writeMultipart(multipartFile, boundary, imageBytes, filename);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
@@ -225,7 +229,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         } catch (IOException exception) {
             throw new IllegalStateException("图像分析侧车调用失败", exception);
         } finally {
-            deleteQuietly(multipartFile);
+            tempStagingPort.deleteQuietly(multipartFile);
         }
     }
 
@@ -243,17 +247,6 @@ public class AiSidecarClient implements ImageAnalysisGateway {
 
     private void writeUtf8(OutputStream output, String value) throws IOException {
         output.write(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private void deleteQuietly(Path file) {
-        if (file == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException exception) {
-            log.debug("侧车 multipart 临时文件清理失败: errorType={}", exception.getClass().getSimpleName());
-        }
     }
 
     private String sendRequest(HttpRequest request) {

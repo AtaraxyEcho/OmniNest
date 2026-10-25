@@ -127,17 +127,6 @@ class AuthClient {
     return UserProfile.fromJson(_unwrap(response.data));
   }
 
-  /// 修改当前用户密码。
-  Future<void> changePassword({
-    required String oldPassword,
-    required String newPassword,
-  }) async {
-    await _dio.put<Map<String, dynamic>>(
-      '/me/password',
-      data: {'oldPassword': oldPassword, 'newPassword': newPassword},
-    );
-  }
-
   Future<Map<String, dynamic>> _postUnwrapped(
     String path,
     Map<String, dynamic> body,

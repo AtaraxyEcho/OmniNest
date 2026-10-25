@@ -80,10 +80,12 @@ public final class PhotoDtos {
         }
 
         /**
-         * 从照片实体和详情资源地址创建 DTO。
-         * 原图地址只在详情接口生成，避免列表和仪表盘批量签发大文件地址。
+         * 从照片实体和完整资源地址创建 DTO。
          *
-         * @param motionVideoUrl 动态视频地址，仅详情接口且 READY 状态解析，其余传 null
+         * <p>完整 DTO 的 sourceUrl 与 motionVideoUrl 由调用方批量签发：详情接口按单张签发，
+         * 相册、标签分页等列表在各自批量查询里一次签完，不能留空让公开相册的原图下载失效。</p>
+         *
+         * @param motionVideoUrl 动态视频地址，仅 READY 状态解析，其余传 null
          */
         public static PhotoItemDto fromEntity(
                 PhotoItem photo,

@@ -293,12 +293,13 @@ extension MovieCenterCommands on MovieCenterController {
           mimeType: mimeType,
         );
       }
-      final fileNode = await _api.completeUploadSession(
+      final completion = await _api.completeUploadSession(
         uploadId: session.uploadId,
       );
+      final fileNodeId = await _awaitSubtitleFileNodeId(completion);
       await _api.uploadSubtitle(
         videoItemId: videoItemId,
-        fileNodeId: fileNode.id,
+        fileNodeId: fileNodeId,
         language: language,
         label: fileName,
       );
@@ -307,6 +308,48 @@ extension MovieCenterCommands on MovieCenterController {
       _setError(describeUserFacingError(error).message);
       rethrow;
     }
+  }
+
+  /// 等待上传完成后的安全扫描晋升，返回可绑定到影视条目的文件节点。
+  ///
+  /// 扫描中只有 taskId、没有 fileNodeId；直接拿完成响应里的节点字段会让
+  /// 后续绑定恒定收到空 UUID 并返回 400。
+  Future<String> _awaitSubtitleFileNodeId(
+    FileUploadCompleteResult completion,
+  ) async {
+    if (!completion.isScanning) {
+      final fileNodeId = completion.fileNodeId;
+      if (fileNodeId == null || fileNodeId.isEmpty) {
+        throw const AppException(
+          code: 'INVALID_RESPONSE',
+          message: '上传完成但未返回文件节点，请稍后重试',
+        );
+      }
+      return fileNodeId;
+    }
+    final taskId = completion.taskId;
+    if (taskId == null || taskId.isEmpty) {
+      throw completion.scanFailedException('安全扫描任务缺失，请稍后重试');
+    }
+    final task = await centerRef
+        .read(taskApiProvider)
+        .waitForTerminal(
+          taskId,
+          timeout: const Duration(minutes: 2),
+          interval: const Duration(seconds: 1),
+        );
+    if (task.status != 'COMPLETED') {
+      throw completion.scanFailedException(task.errorMessage);
+    }
+    final payload =
+        task.result == null
+            ? const <String, dynamic>{}
+            : jsonDecode(task.result!) as Map<String, dynamic>;
+    final fileNodeId = payload['fileNodeId']?.toString();
+    if (fileNodeId == null || fileNodeId.isEmpty) {
+      throw completion.scanFailedException('安全扫描完成但未返回文件节点');
+    }
+    return fileNodeId;
   }
 
   /// 删除外挂字幕。

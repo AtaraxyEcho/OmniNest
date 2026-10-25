@@ -20,9 +20,14 @@ public interface PhotoTagRepository extends JpaRepository<PhotoTag, UUID> {
     List<PhotoTag> findByOwnerUserIdAndPhotoId(UUID ownerUserId, UUID photoId);
 
     /**
-     * 按用户和标签名查询照片标签，按创建时间倒序
+     * 按用户和标签名分页查询照片标签，按创建时间倒序。
+     *
+     * <p>兼容列表入口没有分页参数，但查询必须有界，避免单个标签命中整库时一次拉全量。</p>
      */
-    List<PhotoTag> findByOwnerUserIdAndTagOrderByCreatedAtDesc(UUID ownerUserId, String tag);
+    List<PhotoTag> findByOwnerUserIdAndTagOrderByCreatedAtDesc(
+            UUID ownerUserId,
+            String tag,
+            Pageable pageable);
 
     /**
      * 分页查询标签下的有效照片标签行：先剔除已删除或进回收站的照片，再分页。

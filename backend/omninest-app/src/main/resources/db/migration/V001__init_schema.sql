@@ -2577,6 +2577,12 @@ CREATE INDEX "idx_sessions_user_platform" ON "omni"."auth_active_sessions" USING
   "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "client_platform" "pg_catalog"."text_ops" ASC NULLS LAST
 ) WHERE revoked_at IS NULL;
+-- 常用设备判重要连已撤销会话一起查，因此不能沿用上面的 revoked_at IS NULL 部分索引。
+CREATE INDEX "idx_sessions_user_platform_device" ON "omni"."auth_active_sessions" USING btree (
+  "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "client_platform" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "device_id" "pg_catalog"."text_ops" ASC NULLS LAST
+);
 
 ALTER TABLE "omni"."auth_active_sessions" ADD CONSTRAINT "auth_active_sessions_pkey" PRIMARY KEY ("id");
 
@@ -3127,6 +3133,10 @@ CREATE INDEX "idx_music_albums_owner_updated" ON "omni"."music_albums" USING btr
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+-- 封面节点被永久删除时需要按 cover_file_id 反查引用，空值占多数用部分索引控制体积。
+CREATE INDEX "idx_music_albums_cover_file" ON "omni"."music_albums" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."music_albums" ADD CONSTRAINT "ck_music_albums_provider_metadata_json_size" CHECK (octet_length(provider_metadata::text) <= 524288);
 ALTER TABLE "omni"."music_albums" ADD CONSTRAINT "ck_music_albums_external_ids_json_size" CHECK (octet_length(external_ids::text) <= 65536);
@@ -3146,6 +3156,9 @@ CREATE INDEX "idx_music_artists_owner_tracks" ON "omni"."music_artists" USING bt
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "track_count" "pg_catalog"."int4_ops" DESC NULLS FIRST
 );
+CREATE INDEX "idx_music_artists_avatar_file" ON "omni"."music_artists" USING btree (
+  "avatar_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE avatar_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."music_artists" ADD CONSTRAINT "ck_music_artists_provider_metadata_json_size" CHECK (octet_length(provider_metadata::text) <= 524288);
 ALTER TABLE "omni"."music_artists" ADD CONSTRAINT "ck_music_artists_external_ids_json_size" CHECK (octet_length(external_ids::text) <= 65536);
@@ -3198,6 +3211,9 @@ CREATE INDEX "idx_music_playlists_owner_updated" ON "omni"."music_playlists" USI
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+CREATE INDEX "idx_music_playlists_cover_file" ON "omni"."music_playlists" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."music_playlists" ADD CONSTRAINT "music_playlists_pkey" PRIMARY KEY ("id");
 
@@ -3232,6 +3248,9 @@ CREATE INDEX "idx_music_tracks_owner_updated" ON "omni"."music_tracks" USING btr
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "updated_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+CREATE INDEX "idx_music_tracks_cover_file" ON "omni"."music_tracks" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."music_tracks" ADD CONSTRAINT "uniq_music_tracks_file" UNIQUE ("file_node_id");
 
@@ -3247,6 +3266,11 @@ CREATE INDEX "idx_notification_messages_recipient_created" ON "omni"."notificati
   "recipient_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
 );
+-- 未读列表与未读计数是通知中心最高频查询，按未读行建部分索引避免全量扫描已读历史。
+CREATE INDEX "idx_notification_messages_recipient_unread" ON "omni"."notification_messages" USING btree (
+  "recipient_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+) WHERE read_at IS NULL;
 
 ALTER TABLE "omni"."notification_messages" ADD CONSTRAINT "ck_notification_messages_metadata_json_size" CHECK (octet_length(metadata::text) <= 65536);
 
@@ -3343,6 +3367,9 @@ CREATE INDEX "idx_photo_items_owner_location_city" ON "omni"."photo_items" USING
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   (gps_location ->> 'city'::text) "pg_catalog"."text_ops" ASC NULLS LAST
 );
+CREATE INDEX "idx_photo_items_cover_file" ON "omni"."photo_items" USING btree (
+  "cover_file_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+) WHERE cover_file_id IS NOT NULL;
 
 ALTER TABLE "omni"."photo_items" ADD CONSTRAINT "uk_photo_items_file_node" UNIQUE ("file_node_id");
 

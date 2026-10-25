@@ -69,7 +69,10 @@ public class SecurityConfig {
                         "/api/v1/s/*/preview",
                         "/api/v1/s/*/children",
                         "/share/**",
-                        "/api/v1/external-connectors/*/oauth/callback"
+                        "/api/v1/external-connectors/*/oauth/callback",
+                        // 播放会话流由查询串中的一次性播放令牌鉴权；浏览器残留的过期 Bearer
+                        // 不应在 JWT 解码阶段把公开媒体请求打成 401。
+                        "/api/v1/music/playback/sessions/*/stream"
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -130,8 +133,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/super-admin").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/2fa/secret").permitAll()
                         .requestMatchers(HttpMethod.GET, "/setup").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/music/playback/sessions/*/stream").permitAll()
-                        .requestMatchers(HttpMethod.HEAD, "/api/v1/music/playback/sessions/*/stream").permitAll()
                         // 外部存储 OAuth 回调由浏览器从三方站点匿名回跳，带不上 Bearer 令牌；
                         // 该端点靠一次性 state 关联授权会话并定位账户，不暴露任何账户数据。
                         .requestMatchers(

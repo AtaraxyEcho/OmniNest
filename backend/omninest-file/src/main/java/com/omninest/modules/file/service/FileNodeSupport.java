@@ -251,10 +251,24 @@ public class FileNodeSupport {
             return null;
         }
         FileNode parent = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(targetParentId, ownerUserId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
+                .orElseGet(() -> resolveSharedCopyTargetParent(ownerUserId, targetParentId));
         if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "目标父级必须是文件夹");
         }
         return parent;
+    }
+
+    /**
+     * 共享空间目录可能由其他成员创建：按可见性查找，并要求当前用户具备浏览与上传能力。
+     */
+    private FileNode resolveSharedCopyTargetParent(UUID ownerUserId, UUID targetParentId) {
+        FileNode shared = fileNodeRepository
+                .findByIdAndSpaceTypeAndDeletedFalse(targetParentId, SpaceType.SHARED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
+        if (!sharedSpaceService.canBrowse(ownerUserId)) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在");
+        }
+        sharedSpaceService.requireSharedWrite(ownerUserId);
+        return shared;
     }
 }

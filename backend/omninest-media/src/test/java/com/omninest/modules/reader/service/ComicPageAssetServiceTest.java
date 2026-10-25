@@ -79,6 +79,9 @@ class ComicPageAssetServiceTest {
     @Mock
     private ReaderArchiveSafetyPolicy archiveSafetyPolicy;
 
+    @Mock
+    private ReaderComicArchiveCache archiveCache;
+
     @org.mockito.Spy
     private MediaProcessingLimitsProperties processingLimits = new MediaProcessingLimitsProperties();
 
@@ -190,14 +193,13 @@ class ComicPageAssetServiceTest {
         verifyNoInteractions(fileQueryService);
 
         byte[] imageBytes = "image".getBytes(StandardCharsets.UTF_8);
-        byte[] archiveBytes = createZip("pages/1.jpg", imageBytes);
-        when(fileQueryService.openOwnedFileContent(ownerUserId, fileNodeId))
-                .thenReturn(new FileContentStream(
-                        new ByteArrayInputStream(archiveBytes),
-                        "comic.cbz",
-                        archiveBytes.length,
-                        "application/vnd.comicbook+zip"
-                ));
+        ZipEntry entry = new ZipEntry("pages/1.jpg");
+        ReaderComicArchiveCache.CachedArchive archive =
+                mock(ReaderComicArchiveCache.CachedArchive.class);
+        when(archiveCache.open(ownerUserId, fileNodeId, 256L, Instant.EPOCH.toEpochMilli()))
+                .thenReturn(archive);
+        when(archive.findEntry("pages/1.jpg", 0)).thenReturn(entry);
+        when(archive.openEntry(entry)).thenReturn(new ByteArrayInputStream(imageBytes));
         ArchiveReadSession session = mock(ArchiveReadSession.class);
         EntryReadGuard guard = mock(EntryReadGuard.class);
         when(archiveSafetyPolicy.newReadSession()).thenReturn(session);
@@ -207,16 +209,7 @@ class ComicPageAssetServiceTest {
         service.streamPageImage(descriptor, output);
 
         assertThat(output.toByteArray()).isEqualTo(imageBytes);
-    }
-
-    private byte[] createZip(String entryName, byte[] bytes) throws Exception {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(output)) {
-            zip.putNextEntry(new ZipEntry(entryName));
-            zip.write(bytes);
-            zip.closeEntry();
-        }
-        return output.toByteArray();
+        verifyNoInteractions(fileQueryService);
     }
 
     @Test

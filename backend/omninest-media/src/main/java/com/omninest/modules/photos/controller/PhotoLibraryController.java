@@ -811,7 +811,7 @@ public class PhotoLibraryController {
     // ─── 管理 ───
 
     @Operation(summary = "扫描照片库", description = "扫描当前用户自己的照片库，检测新增或变更的照片文件")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.PHOTO_ADMIN + "', '" + Permissions.PHOTO_WRITE + "')")
     @PostMapping({"/api/v1/photos/scan", "/api/v1/admin/photos/scan"})
     ApiResponse<PhotoScanJobDto> scanLibrary() {
         UUID userId = currentUserContext.requireCurrentUserId();
@@ -840,7 +840,7 @@ public class PhotoLibraryController {
     }
 
     @Operation(summary = "重建缩略图", description = "创建异步任务重生成当前用户缺失的照片缩略图")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.PHOTO_ADMIN + "', '" + Permissions.PHOTO_WRITE + "')")
     @PostMapping({"/api/v1/photos/thumbnails/regenerate", "/api/v1/admin/photos/thumbnails/regenerate"})
     ApiResponse<Map<String, String>> regenerateThumbnails() {
         UUID userId = currentUserContext.requireCurrentUserId();
@@ -856,7 +856,7 @@ public class PhotoLibraryController {
     }
 
     @Operation(summary = "回扫动态照片", description = "为当前用户历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.PHOTO_ADMIN + "', '" + Permissions.PHOTO_WRITE + "')")
     @PostMapping("/api/v1/admin/photos/motion/reanalyze")
     ApiResponse<Map<String, String>> reanalyzeMotionPhotos() {
         UUID userId = currentUserContext.requireCurrentUserId();

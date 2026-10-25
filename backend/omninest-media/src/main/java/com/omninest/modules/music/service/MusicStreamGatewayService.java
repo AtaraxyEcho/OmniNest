@@ -46,23 +46,36 @@ public class MusicStreamGatewayService {
      * @param sessionId 会话标识
      * @param token 播放令牌
      * @param range Range 请求头
+     * @param headRequest 是否为 HEAD 探测请求
      * @return 音频流响应
      */
-    public ResponseEntity<StreamingResponseBody> stream(String sessionId, String token, String range) {
+    public ResponseEntity<StreamingResponseBody> stream(
+            String sessionId,
+            String token,
+            String range,
+            boolean headRequest
+    ) {
         return sessionService.resolve(sessionId, token)
-                .map(session -> streamResolvedSession(session, range))
+                .map(session -> streamResolvedSession(session, range, headRequest))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
 
     private ResponseEntity<StreamingResponseBody> streamResolvedSession(
             MusicPlaybackSession session,
-            String range
+            String range,
+            boolean headRequest
     ) {
+        HttpResponse<InputStream> upstreamResponse = null;
         try {
-            HttpResponse<InputStream> upstreamResponse = sendWithRedirects(session, range);
-            int statusCode = upstreamResponse.statusCode();
+            upstreamResponse = sendWithRedirects(session, range);
+            if (headRequest) {
+                // HEAD 不会执行 StreamingResponseBody：上游流必须立即关闭，不能挂在响应对象上等回收。
+                closeQuietly(upstreamResponse);
+                return responseBuilder(upstreamResponse, session).build();
+            }
+            HttpResponse<InputStream> openedUpstream = upstreamResponse;
             StreamingResponseBody body = outputStream -> {
-                try (InputStream upstream = upstreamResponse.body()) {
+                try (InputStream upstream = openedUpstream.body()) {
                     byte[] buffer = new byte[BUFFER_SIZE];
                     int bytesRead;
                     while ((bytesRead = upstream.read(buffer)) != -1) {
@@ -83,28 +96,47 @@ public class MusicStreamGatewayService {
                     } else {
                         throw exception;
                     }
-                } finally {
-                    Thread.interrupted();
                 }
             };
-            ResponseEntity.BodyBuilder builder = ResponseEntity.status(statusCode)
-                    .header("Content-Type", contentType(upstreamResponse, session))
-                    .header("Accept-Ranges", "bytes")
-                    .header("Cache-Control", "no-store, no-cache, must-revalidate")
-                    .header("Pragma", "no-cache");
-            contentLength(upstreamResponse).ifPresent(value -> builder.header("Content-Length", value));
-            upstreamResponse.headers().firstValue("Content-Range")
-                    .ifPresent(value -> builder.header("Content-Range", value));
-            return builder.body(body);
+            return responseBuilder(upstreamResponse, session).body(body);
         } catch (BusinessException exception) {
+            closeQuietly(upstreamResponse);
             log.warn("音乐播放流安全校验失败: sessionId={}, message={}", session.sessionId(), exception.getMessage());
             return ResponseEntity.badRequest().build();
         } catch (InterruptedException exception) {
+            closeQuietly(upstreamResponse);
             Thread.currentThread().interrupt();
             return ResponseEntity.internalServerError().build();
         } catch (IOException | IllegalArgumentException exception) {
+            closeQuietly(upstreamResponse);
             log.warn("音乐播放流输出失败: sessionId={}, message={}", session.sessionId(), exception.getMessage());
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    private ResponseEntity.BodyBuilder responseBuilder(
+            HttpResponse<InputStream> upstreamResponse,
+            MusicPlaybackSession session
+    ) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(upstreamResponse.statusCode())
+                .header("Content-Type", contentType(upstreamResponse, session))
+                .header("Accept-Ranges", "bytes")
+                .header("Cache-Control", "no-store, no-cache, must-revalidate")
+                .header("Pragma", "no-cache");
+        contentLength(upstreamResponse).ifPresent(value -> builder.header("Content-Length", value));
+        upstreamResponse.headers().firstValue("Content-Range")
+                .ifPresent(value -> builder.header("Content-Range", value));
+        return builder;
+    }
+
+    private void closeQuietly(HttpResponse<InputStream> upstreamResponse) {
+        if (upstreamResponse == null) {
+            return;
+        }
+        try {
+            upstreamResponse.body().close();
+        } catch (IOException exception) {
+            log.debug("关闭音乐上游流失败: errorType={}", exception.getClass().getSimpleName());
         }
     }
 

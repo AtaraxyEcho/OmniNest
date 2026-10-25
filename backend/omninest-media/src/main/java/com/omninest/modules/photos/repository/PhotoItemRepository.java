@@ -166,22 +166,6 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID>,
     List<PhotoItem> findRecentByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 
     /**
-     * 按关键词搜索用户照片标题（SQL LIKE 模糊匹配）。
-     * 作为 Lucene 全文索引的降级回退，由 PhotoLibraryService.searchPhotos 在索引无结果时调用。
-     */
-    @Query("""
-            SELECT p FROM PhotoItem p
-            JOIN FileNode file ON p.fileNodeId = file.id
-            WHERE p.ownerUserId = :ownerUserId AND file.deleted = false
-              AND p.deletedAt IS NULL
-              AND LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '\\'
-            """)
-    List<PhotoItem> searchByOwnerUserIdAndKeyword(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("keyword") String keyword,
-            Pageable pageable);
-
-    /**
      * 按拍摄时间范围查询用户照片
      */
     @Query("""

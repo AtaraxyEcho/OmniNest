@@ -1,3 +1,4 @@
+import 'package:omninest/core/errors/envelope_guard.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -40,7 +41,8 @@ class AppVersionApi {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/app/version',
     );
-    final data = response.data?['data'];
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '版本信息加载失败');
+    final data = response.data!['data'];
     if (data is! Map) {
       throw const AppException(code: 'INVALID_RESPONSE', message: '版本信息格式不正确');
     }

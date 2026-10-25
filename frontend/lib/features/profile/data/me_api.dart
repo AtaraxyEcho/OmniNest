@@ -114,9 +114,11 @@ class MeApi {
       '/me/sessions',
     );
     final data = response.data;
-    if (data == null) return const [];
-    final list = data['data'];
-    if (list is! List) return const [];
+    ensureEnvelopeSuccess(data, fallbackMessage: '会话列表加载失败');
+    final list = data!['data'];
+    if (list is! List) {
+      throw const FormatException('会话列表格式不正确');
+    }
     return list
         .whereType<Map<String, dynamic>>()
         .map(UserSession.fromJson)

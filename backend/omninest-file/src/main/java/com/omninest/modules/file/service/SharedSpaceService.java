@@ -326,6 +326,10 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
                 .map(FileNode::getId)
                 .toList());
         subtreeIds.add(node.getId());
+        // 与个人 → 共享方向对称：换空间后原有公开链接与细粒度授权必须立即失效，
+        // 否则访客仍能凭旧 token 读取已迁入个人空间的内容。
+        revokeShareLinksForNodes(subtreeIds);
+        revokeFilePermissionsForNodes(subtreeIds);
         node.setSpaceType(SpaceType.PERSONAL);
         node.setOwnerUserId(targetUserId);
         // 个人空间文件不需要 uploaded_by

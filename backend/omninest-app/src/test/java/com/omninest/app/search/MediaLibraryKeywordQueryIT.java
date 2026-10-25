@@ -239,11 +239,32 @@ class MediaLibraryKeywordQueryIT {
         insertPhoto(owner, "70% Sunset");
         insertPhoto(owner, "Plain Sunset");
 
-        List<PhotoItem> items = photoItemRepository.searchByOwnerUserIdAndKeyword(
+        var items = photoItemRepository.searchListPage(
                 owner, "70\\%", PageRequest.of(0, 20));
 
-        assertThat(items).singleElement()
+        assertThat(items.getContent()).singleElement()
                 .satisfies(item -> assertThat(item.getTitle()).isEqualTo("70% Sunset"));
+    }
+
+    @Test
+    @DisplayName("照片：SQL 回退同时命中用户标签")
+    void photoFallbackMatchesUserTags() {
+        UUID owner = UUID.randomUUID();
+        UUID taggedPhoto = insertPhoto(owner, "Sunset");
+        insertPhoto(owner, "Plain");
+        jdbcTemplate.update(
+                "insert into omni.photo_tags (id, owner_user_id, photo_id, tag, updated_at) "
+                        + "values (?, ?, ?, ?, now())",
+                UUID.randomUUID(),
+                owner,
+                taggedPhoto,
+                "旅行"
+        );
+
+        var items = photoItemRepository.searchListPage(owner, "旅行", PageRequest.of(0, 20));
+
+        assertThat(items.getContent()).singleElement()
+                .satisfies(item -> assertThat(item.getId()).isEqualTo(taggedPhoto));
     }
 
     @Test
@@ -333,16 +354,18 @@ class MediaLibraryKeywordQueryIT {
         );
     }
 
-    private void insertPhoto(UUID owner, String title) {
+    private UUID insertPhoto(UUID owner, String title) {
         UUID nodeId = insertFileNode(owner, title + ".jpg", "/photos/" + title + ".jpg");
+        UUID photoId = UUID.randomUUID();
         jdbcTemplate.update(
                 "insert into omni.photo_items (id, owner_user_id, file_node_id, title) "
                         + "values (?, ?, ?, ?)",
-                UUID.randomUUID(),
+                photoId,
                 owner,
                 nodeId,
                 title
         );
+        return photoId;
     }
 
     private UUID insertFileNode(UUID owner, String name, String normalizedPath) {

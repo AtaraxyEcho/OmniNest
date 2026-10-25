@@ -14,16 +14,21 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.BrowserSecurityPolicy;
 import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.modules.file.service.ExternalStorageOAuthService;
 import com.omninest.modules.file.service.ExternalStorageService;
 import com.omninest.modules.user.config.InitialSetupProperties;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Duration;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +41,7 @@ import org.springframework.http.ResponseEntity;
 class ExternalStorageControllerTest {
 
     private static final String CALLBACK_PROVIDER = "ONEDRIVE";
+    private static final String BINDING_NONCE = "binding-nonce";
 
     private final ExternalStorageService externalStorageService =
             mock(ExternalStorageService.class);
@@ -44,7 +50,9 @@ class ExternalStorageControllerTest {
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final ClientIpResolver clientIpResolver = mock(ClientIpResolver.class);
     private final InitialSetupProperties setupProperties = new InitialSetupProperties();
+    private final BrowserSecurityPolicy browserSecurityPolicy = mock(BrowserSecurityPolicy.class);
     private final HttpServletRequest request = mock(HttpServletRequest.class);
+    private final HttpServletResponse servletResponse = mock(HttpServletResponse.class);
 
     private final ExternalStorageController controller = new ExternalStorageController(
             externalStorageService,
@@ -52,7 +60,8 @@ class ExternalStorageControllerTest {
             oauthService,
             rateLimitService,
             clientIpResolver,
-            setupProperties
+            setupProperties,
+            browserSecurityPolicy
     );
 
     @BeforeEach
@@ -63,16 +72,38 @@ class ExternalStorageControllerTest {
     }
 
     @Test
+    @DisplayName("发起授权时向当前浏览器下发与 state 绑定的 HttpOnly Cookie")
+    void oauthStartWritesBindingCookie() {
+        UUID accountId = UUID.randomUUID();
+        when(currentUserContext.requireCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(oauthService.start(any(), eq(CALLBACK_PROVIDER), eq(accountId)))
+                .thenReturn(new ExternalStorageOAuthService.StartedAuthorization(
+                        "https://provider.example/authorize?state=issued", "issued", "binding-nonce"));
+
+        controller.oauthStart(CALLBACK_PROVIDER, accountId, servletResponse);
+
+        ArgumentCaptor<String> cookie = ArgumentCaptor.forClass(String.class);
+        verify(servletResponse).addHeader(eq(HttpHeaders.SET_COOKIE), cookie.capture());
+        assertThat(cookie.getValue())
+                .contains("omninest_oauth_binding=binding-nonce")
+                .contains("HttpOnly")
+                .contains("SameSite=Lax")
+                .contains("Path=/api/v1/external-connectors");
+    }
+
+    @Test
     @DisplayName("已配置前端地址时回调 302 回 /files 并带上结果标记")
     void callbackRedirectsToConfiguredWebOrigin() {
         setupProperties.setWebBaseUrl("https://nest.example.com/");
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=success");
-        verify(oauthService).handleCallback(CALLBACK_PROVIDER, "state-value", "authorization-code");
+        verify(oauthService).handleCallback(
+                CALLBACK_PROVIDER, "state-value", "authorization-code", BINDING_NONCE);
     }
 
     @Test
@@ -81,10 +112,12 @@ class ExternalStorageControllerTest {
         setupProperties.setWebBaseUrl("https://nest.example.com");
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", "access_denied", request);
+                CALLBACK_PROVIDER, "state-value", "authorization-code", "access_denied",
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=error");
-        verify(oauthService, never()).handleCallback(anyString(), anyString(), anyString());
+        verify(oauthService, never()).handleCallback(
+                anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -93,7 +126,8 @@ class ExternalStorageControllerTest {
         setupProperties.setWebBaseUrl(null);
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.TEXT_HTML);
@@ -106,7 +140,8 @@ class ExternalStorageControllerTest {
         setupProperties.setWebBaseUrl("javascript:alert(1)");
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getLocation()).isNull();
@@ -121,12 +156,14 @@ class ExternalStorageControllerTest {
                 .thenReturn(false);
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.TEXT_HTML);
         assertThat(response.getBody()).contains("授权已取消或失败");
-        verify(oauthService, never()).handleCallback(anyString(), anyString(), anyString());
+        verify(oauthService, never()).handleCallback(
+                anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -134,10 +171,12 @@ class ExternalStorageControllerTest {
     void callbackBusinessFailureRedirectsToErrorResult() {
         setupProperties.setWebBaseUrl("https://nest.example.com");
         doThrow(new BusinessException(ErrorCode.VALIDATION_FAILED, "state 已过期"))
-                .when(oauthService).handleCallback(CALLBACK_PROVIDER, "expired-state", "authorization-code");
+                .when(oauthService).handleCallback(
+                        CALLBACK_PROVIDER, "expired-state", "authorization-code", BINDING_NONCE);
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "expired-state", "authorization-code", null, request);
+                CALLBACK_PROVIDER, "expired-state", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation()).hasToString("https://nest.example.com/#/files?oauth=error");
@@ -149,7 +188,8 @@ class ExternalStorageControllerTest {
         setupProperties.setWebBaseUrl("https://nest.example.com");
 
         ResponseEntity<String> response = controller.oauthCallback(
-                CALLBACK_PROVIDER, "state-value", "authorization-code", null, request);
+                CALLBACK_PROVIDER, "state-value", "authorization-code", null,
+                BINDING_NONCE, request, servletResponse);
 
         assertThat(response.getHeaders().getLocation()).isNotNull();
         verify(currentUserContext, never()).requireCurrentUserId();

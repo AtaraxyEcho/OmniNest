@@ -17,15 +17,17 @@ import com.omninest.modules.file.domain.StorageConnectorOAuthApp;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
 import com.omninest.modules.file.dto.ConnectorOAuthAppDto;
-import com.omninest.modules.file.dto.OAuthStartResponse;
 import com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest;
 import com.omninest.modules.file.repository.StorageConnectorOAuthAppRepository;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.quota.port.AdminActorVerifier;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -51,6 +53,8 @@ public class ExternalStorageOAuthService {
 
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
     private static final String STATE_KEY_PREFIX = "omninest:oauth:state:";
+    private static final int BINDING_NONCE_BYTES = 32;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final StorageConnectorOAuthAppRepository oauthAppRepository;
     private final StorageExternalAccountRepository accountRepository;
@@ -136,9 +140,18 @@ public class ExternalStorageOAuthService {
 
     /**
      * 开始 OAuth 授权。
+     *
+     * <p>除了一次性 state 之外再生成一个绑定随机数：它只写入发起请求的浏览器 Cookie，
+     * 不出现在授权 URL 中。收到三方回跳时必须同时持有有效 state 与同一个绑定 Cookie，
+     * 防止攻击者把发给自己的授权链接转给受害者完成跨账号绑定。</p>
+     *
+     * @param ownerUserId 发起授权的用户
+     * @param connectorCode 连接器编码
+     * @param accountId 外部存储账户
+     * @return 授权地址、state 与需要写入 Cookie 的绑定随机数
      */
     @Transactional(readOnly = true)
-    public OAuthStartResponse start(UUID ownerUserId, String connectorCode, UUID accountId) {
+    public StartedAuthorization start(UUID ownerUserId, String connectorCode, UUID accountId) {
         String code = connectorCode.trim().toUpperCase(Locale.ROOT);
         StorageConnectorOAuthApp app = requireApp(code);
         StorageExternalAccount account = accountRepository.findByIdAndOwnerUserId(accountId, ownerUserId)
@@ -146,17 +159,24 @@ public class ExternalStorageOAuthService {
         if (!code.equals(account.getProvider().toUpperCase(Locale.ROOT))) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "连接器与账户类型不一致");
         }
-        String state = UUID.randomUUID().toString().replace("-", "");
+        String state = randomToken();
+        String bindingNonce = randomToken();
         // state 落 Redis：多实例部署或重启后回调仍能定位本次授权，且 TTL 由服务端统一回收。
         OAuthStatePayload payload = new OAuthStatePayload(
-                ownerUserId.toString(), accountId.toString(), code);
+                ownerUserId.toString(), accountId.toString(), code, bindingNonce);
         readThroughCache.getOrLoad(
                 STATE_KEY_PREFIX + state,
                 STATE_TTL,
                 () -> payload,
                 OAuthStatePayload.class
         );
-        return new OAuthStartResponse(buildAuthorizationUrl(code, app, state), state);
+        return new StartedAuthorization(buildAuthorizationUrl(code, app, state), state, bindingNonce);
+    }
+
+    private String randomToken() {
+        byte[] bytes = new byte[BINDING_NONCE_BYTES];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     /**
@@ -172,8 +192,9 @@ public class ExternalStorageOAuthService {
      * @param providerCode 回调路径中的连接器编码
      * @param state OAuth state
      * @param code 授权码
+     * @param bindingNonce 发起授权时写入浏览器的绑定随机数
      */
-    public void handleCallback(String providerCode, String state, String code) {
+    public void handleCallback(String providerCode, String state, String code, String bindingNonce) {
         if (state == null || state.isBlank() || code == null || code.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 回调参数不完整");
         }
@@ -192,6 +213,13 @@ public class ExternalStorageOAuthService {
                 : providerCode.trim().toUpperCase(Locale.ROOT);
         if (!requestedProvider.equals(statePayload.code())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 提供商与发起授权时的连接器不匹配");
+        }
+        if (!bindingMatches(statePayload.bindingNonce(), bindingNonce)) {
+            // 不是发起授权的同一浏览器：恢复 state 让授权者本人仍可重试，再拒绝本次绑定。
+            restoreState(state.trim(), raw);
+            log.warn("OAuth 回调绑定校验失败: connector={}, accountId={}",
+                    requestedProvider, statePayload.accountId());
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 授权会话与发起浏览器不匹配");
         }
         UUID userId = UUID.fromString(statePayload.userId());
         UUID accountId = UUID.fromString(statePayload.accountId());
@@ -226,14 +254,39 @@ public class ExternalStorageOAuthService {
         log.info("OAuth 授权成功: accountId={}, connector={}", accountId, connectorCode);
     }
 
+    private boolean bindingMatches(String expected, String provided) {
+        if (expected == null || expected.isBlank() || provided == null || provided.isBlank()) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.US_ASCII),
+                provided.trim().getBytes(StandardCharsets.US_ASCII)
+        );
+    }
+
+    private void restoreState(String state, String raw) {
+        readThroughCache.getOrLoad(STATE_KEY_PREFIX + state, STATE_TTL, () -> raw, String.class);
+    }
+
     /**
      * 已发起的 OAuth 授权会话。
      *
      * @param userId 发起授权的用户标识
      * @param accountId 外部存储账户标识
      * @param code 连接器编码
+     * @param bindingNonce 发起浏览器持有的绑定随机数
      */
-    private record OAuthStatePayload(String userId, String accountId, String code) {
+    private record OAuthStatePayload(String userId, String accountId, String code, String bindingNonce) {
+    }
+
+    /**
+     * 一次已发起的授权：授权地址、一次性 state 与浏览器绑定随机数。
+     *
+     * @param authorizationUrl 三方授权地址
+     * @param state 一次性 state
+     * @param bindingNonce 只允许写入 Cookie 的绑定随机数
+     */
+    public record StartedAuthorization(String authorizationUrl, String state, String bindingNonce) {
     }
 
     /**

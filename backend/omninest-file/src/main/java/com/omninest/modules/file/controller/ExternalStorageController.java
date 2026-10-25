@@ -5,6 +5,7 @@ import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.BrowserSecurityPolicy;
 import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
@@ -23,6 +24,7 @@ import com.omninest.modules.user.config.InitialSetupProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -33,10 +35,13 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,12 +60,16 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "外部存储", description = "远程来源浏览与导入到受管存储")
 @Slf4j
 public class ExternalStorageController {
+    private static final String OAUTH_BINDING_COOKIE = "omninest_oauth_binding";
+    private static final Duration OAUTH_BINDING_TTL = Duration.ofMinutes(10);
+
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
     private final ExternalStorageOAuthService oauthService;
     private final RateLimitService rateLimitService;
     private final ClientIpResolver clientIpResolver;
     private final InitialSetupProperties setupProperties;
+    private final BrowserSecurityPolicy browserSecurityPolicy;
 
     @Operation(summary = "列出连接器目录", description = "返回可接入的远程存储类型")
     @GetMapping("/api/v1/external-connectors")
@@ -74,10 +83,18 @@ public class ExternalStorageController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<OAuthStartResponse> oauthStart(
             @PathVariable String code,
-            @RequestParam UUID accountId
+            @RequestParam UUID accountId,
+            HttpServletResponse response
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(oauthService.start(ownerUserId, code, accountId));
+        ExternalStorageOAuthService.StartedAuthorization started =
+                oauthService.start(ownerUserId, code, accountId);
+        // 绑定随机数只通过 HttpOnly Cookie 交给发起浏览器，绝不进入授权 URL 或响应体。
+        response.addHeader(
+                HttpHeaders.SET_COOKIE,
+                bindingCookie(started.bindingNonce(), OAUTH_BINDING_TTL).toString()
+        );
+        return ApiResponse.success(new OAuthStartResponse(started.authorizationUrl(), started.state()));
     }
 
     /**
@@ -94,8 +111,15 @@ public class ExternalStorageController {
             @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "code", required = false) String authorizationCode,
             @RequestParam(value = "error", required = false) String error,
-            HttpServletRequest request
+            @CookieValue(value = OAUTH_BINDING_COOKIE, required = false) String bindingNonce,
+            HttpServletRequest request,
+            HttpServletResponse response
     ) {
+        // 不论结果如何都清除绑定 Cookie；成功回调的一次性凭证不留在浏览器。
+        response.addHeader(
+                HttpHeaders.SET_COOKIE,
+                bindingCookie("", Duration.ZERO).toString()
+        );
         // 匿名端点：按可信代理边界取客户端地址做限流，避免成为可无限重放的探测入口。
         String clientIp = clientIpResolver.resolve(
                 request.getRemoteAddr(),
@@ -110,7 +134,7 @@ public class ExternalStorageController {
             if (error != null && !error.isBlank()) {
                 return oauthResultPage("error");
             }
-            oauthService.handleCallback(providerCode, state, authorizationCode);
+            oauthService.handleCallback(providerCode, state, authorizationCode, bindingNonce);
             return oauthResultPage("success");
         } catch (BusinessException exception) {
             // 浏览器顶层标签页拿到 JSON 既无法关闭也无法回跳；过期 state、限流
@@ -119,6 +143,22 @@ public class ExternalStorageController {
                     providerCode, exception.errorCode());
             return oauthResultPage("error");
         }
+    }
+
+    /**
+     * 构建 OAuth 授权绑定 Cookie。
+     *
+     * <p>回调是三方站点发起的一次顶层跨站导航，SameSite 必须为 Lax，Strict 会让 Cookie
+     * 在回跳时不被发送；Path 限定到连接器接口，避免随其他 API 请求外泄。</p>
+     */
+    private ResponseCookie bindingCookie(String value, Duration maxAge) {
+        return ResponseCookie.from(OAUTH_BINDING_COOKIE, value)
+                .httpOnly(true)
+                .secure(browserSecurityPolicy.refreshCookieSecure())
+                .sameSite("Lax")
+                .path("/api/v1/external-connectors")
+                .maxAge(maxAge)
+                .build();
     }
 
     /**

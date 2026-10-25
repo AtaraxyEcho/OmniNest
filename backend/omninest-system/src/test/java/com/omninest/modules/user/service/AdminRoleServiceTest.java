@@ -14,6 +14,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Permissions;
 import com.omninest.common.security.Roles;
+import com.omninest.common.user.RoleDeletedEvent;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 
 /**
@@ -48,6 +50,7 @@ class AdminRoleServiceTest {
             mock(UserSessionRevocationService.class);
     private final AdminActorGuard adminActorGuard = new AdminActorGuard(authUserRepository);
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final AdminRoleService service = new AdminRoleService(
             authRoleRepository,
             authUserRepository,
@@ -55,7 +58,8 @@ class AdminRoleServiceTest {
             auditLogService,
             userSessionRevocationService,
             adminActorGuard,
-            currentUserService
+            currentUserService,
+            eventPublisher
     );
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
@@ -370,6 +374,7 @@ class AdminRoleServiceTest {
 
         assertThat(custom.getPermissions()).isEmpty();
         verify(authRoleRepository).delete(custom);
+        verify(eventPublisher).publishEvent(new RoleDeletedEvent(custom.getId(), "ROLE_MEDIA_CURATOR"));
         ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.captor();
         verify(auditLogService).recordWithPayload(
                 eq(actorUserId), eq("ADMIN_ROLE_DELETE"), eq("auth_roles"), eq(custom.getId()),

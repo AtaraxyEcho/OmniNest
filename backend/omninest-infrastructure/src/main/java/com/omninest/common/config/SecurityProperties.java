@@ -4,7 +4,9 @@ import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.BrowserSecurityPolicy;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -27,6 +29,12 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
     private String credentialEncryptionKey = "";
 
     private int credentialEncryptionKeyVersion = 1;
+
+    /**
+     * 历史凭据加密密钥：版本号到 Base64 密钥。轮换 KEK 后旧密文仍可按其版本解密，
+     * 避免外部存储令牌、分享口令与 TOTP 密钥在轮换瞬间全部不可用。
+     */
+    private Map<Integer, String> credentialEncryptionPreviousKeys = new LinkedHashMap<>();
 
     private Duration accessTokenTtl = Duration.ofMinutes(30);
 
